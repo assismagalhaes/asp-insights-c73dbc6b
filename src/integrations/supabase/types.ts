@@ -14,7 +14,235 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      bankroll_historico: {
+        Row: {
+          banca_atual: number
+          banca_inicial: number
+          created_at: string
+          data: string
+          drawdown: number
+          id: string
+          lucro_acumulado: number
+          roi: number
+          valor_unidade: number
+          yield: number
+        }
+        Insert: {
+          banca_atual: number
+          banca_inicial: number
+          created_at?: string
+          data?: string
+          drawdown?: number
+          id?: string
+          lucro_acumulado?: number
+          roi?: number
+          valor_unidade: number
+          yield?: number
+        }
+        Update: {
+          banca_atual?: number
+          banca_inicial?: number
+          created_at?: string
+          data?: string
+          drawdown?: number
+          id?: string
+          lucro_acumulado?: number
+          roi?: number
+          valor_unidade?: number
+          yield?: number
+        }
+        Relationships: []
+      }
+      configuracoes: {
+        Row: {
+          banca_inicial: number
+          created_at: string
+          esportes_ativos: string[]
+          id: string
+          mercados_ativos: string[]
+          nome_plataforma: string
+          updated_at: string
+          valor_unidade_padrao: number
+        }
+        Insert: {
+          banca_inicial?: number
+          created_at?: string
+          esportes_ativos?: string[]
+          id?: string
+          mercados_ativos?: string[]
+          nome_plataforma?: string
+          updated_at?: string
+          valor_unidade_padrao?: number
+        }
+        Update: {
+          banca_inicial?: number
+          created_at?: string
+          esportes_ativos?: string[]
+          id?: string
+          mercados_ativos?: string[]
+          nome_plataforma?: string
+          updated_at?: string
+          valor_unidade_padrao?: number
+        }
+        Relationships: []
+      }
+      prognosticos: {
+        Row: {
+          created_at: string
+          data: string
+          edge: number
+          esporte: string
+          id: string
+          jogo: string
+          liga: string
+          linha: string | null
+          lucro_prejuizo: number | null
+          mandante: string
+          mercado: string
+          observacoes: string | null
+          odd_ofertada: number
+          odd_valor: number
+          pick: string
+          probabilidade_final: number
+          resultado: string
+          stake: number
+          status_publicacao: string
+          status_validacao: string
+          updated_at: string
+          visitante: string
+        }
+        Insert: {
+          created_at?: string
+          data?: string
+          edge: number
+          esporte: string
+          id?: string
+          jogo: string
+          liga: string
+          linha?: string | null
+          lucro_prejuizo?: number | null
+          mandante: string
+          mercado: string
+          observacoes?: string | null
+          odd_ofertada: number
+          odd_valor: number
+          pick: string
+          probabilidade_final: number
+          resultado?: string
+          stake?: number
+          status_publicacao?: string
+          status_validacao?: string
+          updated_at?: string
+          visitante: string
+        }
+        Update: {
+          created_at?: string
+          data?: string
+          edge?: number
+          esporte?: string
+          id?: string
+          jogo?: string
+          liga?: string
+          linha?: string | null
+          lucro_prejuizo?: number | null
+          mandante?: string
+          mercado?: string
+          observacoes?: string | null
+          odd_ofertada?: number
+          odd_valor?: number
+          pick?: string
+          probabilidade_final?: number
+          resultado?: string
+          stake?: number
+          status_publicacao?: string
+          status_validacao?: string
+          updated_at?: string
+          visitante?: string
+        }
+        Relationships: []
+      }
+      resultados: {
+        Row: {
+          created_at: string
+          data_resultado: string
+          id: string
+          lucro_prejuizo: number
+          odd_fechamento: number | null
+          placar_final: string | null
+          prognostico_id: string
+          resultado: string
+        }
+        Insert: {
+          created_at?: string
+          data_resultado?: string
+          id?: string
+          lucro_prejuizo?: number
+          odd_fechamento?: number | null
+          placar_final?: string | null
+          prognostico_id: string
+          resultado: string
+        }
+        Update: {
+          created_at?: string
+          data_resultado?: string
+          id?: string
+          lucro_prejuizo?: number
+          odd_fechamento?: number | null
+          placar_final?: string | null
+          prognostico_id?: string
+          resultado?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resultados_prognostico_id_fkey"
+            columns: ["prognostico_id"]
+            isOneToOne: false
+            referencedRelation: "prognosticos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      validacoes: {
+        Row: {
+          comentarios_analista: string | null
+          created_at: string
+          decisao: string
+          id: string
+          justificativa: string | null
+          prognostico_id: string
+          riscos_identificados: string | null
+          stake_confirmada: number | null
+        }
+        Insert: {
+          comentarios_analista?: string | null
+          created_at?: string
+          decisao: string
+          id?: string
+          justificativa?: string | null
+          prognostico_id: string
+          riscos_identificados?: string | null
+          stake_confirmada?: number | null
+        }
+        Update: {
+          comentarios_analista?: string | null
+          created_at?: string
+          decisao?: string
+          id?: string
+          justificativa?: string | null
+          prognostico_id?: string
+          riscos_identificados?: string | null
+          stake_confirmada?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "validacoes_prognostico_id_fkey"
+            columns: ["prognostico_id"]
+            isOneToOne: false
+            referencedRelation: "prognosticos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
