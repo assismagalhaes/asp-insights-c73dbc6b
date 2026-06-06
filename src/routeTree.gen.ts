@@ -9,8 +9,44 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ValidacaoRouteImport } from './routes/validacao'
+import { Route as PrognosticosRouteImport } from './routes/prognosticos'
+import { Route as HistoricoRouteImport } from './routes/historico'
+import { Route as EstatisticasRouteImport } from './routes/estatisticas'
+import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
+import { Route as BankrollRouteImport } from './routes/bankroll'
 import { Route as IndexRouteImport } from './routes/index'
 
+const ValidacaoRoute = ValidacaoRouteImport.update({
+  id: '/validacao',
+  path: '/validacao',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrognosticosRoute = PrognosticosRouteImport.update({
+  id: '/prognosticos',
+  path: '/prognosticos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HistoricoRoute = HistoricoRouteImport.update({
+  id: '/historico',
+  path: '/historico',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EstatisticasRoute = EstatisticasRouteImport.update({
+  id: '/estatisticas',
+  path: '/estatisticas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
+  id: '/configuracoes',
+  path: '/configuracoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BankrollRoute = BankrollRouteImport.update({
+  id: '/bankroll',
+  path: '/bankroll',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -19,28 +55,116 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/bankroll': typeof BankrollRoute
+  '/configuracoes': typeof ConfiguracoesRoute
+  '/estatisticas': typeof EstatisticasRoute
+  '/historico': typeof HistoricoRoute
+  '/prognosticos': typeof PrognosticosRoute
+  '/validacao': typeof ValidacaoRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/bankroll': typeof BankrollRoute
+  '/configuracoes': typeof ConfiguracoesRoute
+  '/estatisticas': typeof EstatisticasRoute
+  '/historico': typeof HistoricoRoute
+  '/prognosticos': typeof PrognosticosRoute
+  '/validacao': typeof ValidacaoRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/bankroll': typeof BankrollRoute
+  '/configuracoes': typeof ConfiguracoesRoute
+  '/estatisticas': typeof EstatisticasRoute
+  '/historico': typeof HistoricoRoute
+  '/prognosticos': typeof PrognosticosRoute
+  '/validacao': typeof ValidacaoRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/bankroll'
+    | '/configuracoes'
+    | '/estatisticas'
+    | '/historico'
+    | '/prognosticos'
+    | '/validacao'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/bankroll'
+    | '/configuracoes'
+    | '/estatisticas'
+    | '/historico'
+    | '/prognosticos'
+    | '/validacao'
+  id:
+    | '__root__'
+    | '/'
+    | '/bankroll'
+    | '/configuracoes'
+    | '/estatisticas'
+    | '/historico'
+    | '/prognosticos'
+    | '/validacao'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BankrollRoute: typeof BankrollRoute
+  ConfiguracoesRoute: typeof ConfiguracoesRoute
+  EstatisticasRoute: typeof EstatisticasRoute
+  HistoricoRoute: typeof HistoricoRoute
+  PrognosticosRoute: typeof PrognosticosRoute
+  ValidacaoRoute: typeof ValidacaoRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/validacao': {
+      id: '/validacao'
+      path: '/validacao'
+      fullPath: '/validacao'
+      preLoaderRoute: typeof ValidacaoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/prognosticos': {
+      id: '/prognosticos'
+      path: '/prognosticos'
+      fullPath: '/prognosticos'
+      preLoaderRoute: typeof PrognosticosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/historico': {
+      id: '/historico'
+      path: '/historico'
+      fullPath: '/historico'
+      preLoaderRoute: typeof HistoricoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/estatisticas': {
+      id: '/estatisticas'
+      path: '/estatisticas'
+      fullPath: '/estatisticas'
+      preLoaderRoute: typeof EstatisticasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/configuracoes': {
+      id: '/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof ConfiguracoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/bankroll': {
+      id: '/bankroll'
+      path: '/bankroll'
+      fullPath: '/bankroll'
+      preLoaderRoute: typeof BankrollRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -53,6 +177,12 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BankrollRoute: BankrollRoute,
+  ConfiguracoesRoute: ConfiguracoesRoute,
+  EstatisticasRoute: EstatisticasRoute,
+  HistoricoRoute: HistoricoRoute,
+  PrognosticosRoute: PrognosticosRoute,
+  ValidacaoRoute: ValidacaoRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

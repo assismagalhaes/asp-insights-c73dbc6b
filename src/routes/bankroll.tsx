@@ -1,0 +1,142 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from "recharts";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { StatCard } from "@/components/stat-card";
+import { bankrollHistory, prognosticos } from "@/lib/mock-data";
+import { TrendingDown, TrendingUp, Wallet, Percent, Target, Activity } from "lucide-react";
+import { toast } from "sonner";
+
+export const Route = createFileRoute("/bankroll")({
+  head: () => ({ meta: [{ title: "Bankroll — ASP Insights" }] }),
+  component: Bankroll,
+});
+
+const chartGrid = "oklch(0.28 0.02 250)";
+const axisColor = "oklch(0.68 0.02 250)";
+
+function Bankroll() {
+  const [unidade, setUnidade] = useState(10);
+  const [bancaInicial, setBancaInicial] = useState(1000);
+  const bancaAtual = bankrollHistory[bankrollHistory.length - 1].banca;
+  const lucro = bancaAtual - bancaInicial;
+  const maxBanca = Math.max(...bankrollHistory.map((b) => b.banca));
+  const drawdown = ((maxBanca - bancaAtual) / maxBanca) * 100;
+  const concluidos = prognosticos.filter((p) => p.resultado === "GREEN" || p.resultado === "RED");
+  const greens = prognosticos.filter((p) => p.resultado === "GREEN").length;
+  const winRate = concluidos.length ? (greens / concluidos.length) * 100 : 0;
+  const stakeTotal = concluidos.reduce((s, p) => s + p.stake, 0);
+  const roi = stakeTotal ? ((prognosticos.reduce((s, p) => s + (p.lucro ?? 0), 0)) / stakeTotal) * 100 : 0;
+
+  const stakes = [0.5, 1.0, 1.5, 2.0];
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Bankroll</h1>
+        <p className="text-sm text-muted-foreground">
+          Gestão de banca, unidades e controle de risco.
+        </p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Configurações</h3>
+          <div className="mt-4 grid gap-3">
+            <div>
+              <Label>Valor da unidade (R$)</Label>
+              <Input type="number" value={unidade} onChange={(e) => setUnidade(+e.target.value)} />
+            </div>
+            <div>
+              <Label>Banca inicial (R$)</Label>
+              <Input type="number" value={bancaInicial} onChange={(e) => setBancaInicial(+e.target.value)} />
+            </div>
+            <div>
+              <Label>Banca atual (R$)</Label>
+              <Input type="number" value={bancaAtual.toFixed(2)} readOnly className="font-mono" />
+            </div>
+            <Button onClick={() => toast.success("Configurações salvas")}>Salvar configurações</Button>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Controle por stake
+          </h3>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            {stakes.map((s) => (
+              <div key={s} className="rounded-md border border-border bg-background/50 p-3">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Stake {s.toFixed(1)}u</div>
+                <div className="mt-1 font-mono text-lg font-bold">
+                  R$ {(s * unidade).toFixed(2)}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {((s * unidade / bancaAtual) * 100).toFixed(2)}% da banca
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        <StatCard
+          label="Lucro acumulado"
+          value={`${lucro >= 0 ? "+" : ""}R$ ${lucro.toFixed(2)}`}
+          icon={Wallet}
+          trend={lucro >= 0 ? "up" : "down"}
+        />
+        <StatCard
+          label="Drawdown"
+          value={`${drawdown.toFixed(2)}%`}
+          icon={TrendingDown}
+          trend={drawdown > 0 ? "down" : "neutral"}
+        />
+        <StatCard label="ROI" value={`${roi.toFixed(1)}%`} icon={TrendingUp} trend={roi >= 0 ? "up" : "down"} />
+        <StatCard label="Yield" value={`${roi.toFixed(1)}%`} icon={Percent} />
+        <StatCard label="Win Rate" value={`${winRate.toFixed(1)}%`} icon={Target} />
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <Activity className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Evolução da banca (últimos 30 dias)
+          </h3>
+        </div>
+        <ResponsiveContainer width="100%" height={300}>
+          <AreaChart data={bankrollHistory}>
+            <defs>
+              <linearGradient id="banca" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="oklch(0.72 0.18 155)" stopOpacity={0.5} />
+                <stop offset="95%" stopColor="oklch(0.72 0.18 155)" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
+            <XAxis dataKey="data" stroke={axisColor} fontSize={10} tickFormatter={(d) => d.slice(5)} />
+            <YAxis stroke={axisColor} fontSize={10} />
+            <Tooltip
+              contentStyle={{
+                background: "oklch(0.205 0.018 250)",
+                border: "1px solid oklch(0.28 0.02 250)",
+                borderRadius: 8,
+                fontSize: 12,
+              }}
+            />
+            <Area type="monotone" dataKey="banca" stroke="oklch(0.72 0.18 155)" strokeWidth={2} fill="url(#banca)" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
