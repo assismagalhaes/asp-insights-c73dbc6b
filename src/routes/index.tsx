@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
 import {
   Activity,
   CheckCircle2,
@@ -43,7 +44,11 @@ const chartGrid = "oklch(0.28 0.02 250)";
 const axisColor = "oklch(0.68 0.02 250)";
 
 function Dashboard() {
-  const today = new Date().toISOString().slice(0, 10);
+  const [today, setToday] = useState("");
+  useEffect(() => {
+    setToday(new Date().toISOString().slice(0, 10));
+  }, []);
+
   const hoje = prognosticos.filter((p) => p.data === today);
   const aprovados = prognosticos.filter(
     (p) => p.status === "CONFIRMA" || p.status === "CONFIRMA COM CAUTELA",
