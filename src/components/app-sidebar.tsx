@@ -8,6 +8,7 @@ import {
   BarChart3,
   Settings,
   Activity,
+  Upload,
 } from "lucide-react";
 
 import {
@@ -26,6 +27,7 @@ import {
 const items = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Prognósticos", url: "/prognosticos", icon: ListChecks },
+  { title: "Importar", url: "/importar", icon: Upload },
   { title: "Validação Crítica", url: "/validacao", icon: ShieldCheck },
   { title: "Histórico", url: "/historico", icon: History },
   { title: "Bankroll", url: "/bankroll", icon: Wallet },
