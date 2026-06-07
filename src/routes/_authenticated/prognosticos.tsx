@@ -174,14 +174,14 @@ function Prognosticos() {
             <tbody>
               {isLoading && (
                 <tr>
-                  <td colSpan={15} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={16} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     Carregando...
                   </td>
                 </tr>
               )}
               {!isLoading && sorted.length === 0 && (
                 <tr>
-                  <td colSpan={15} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={16} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     Nenhum prognóstico cadastrado.
                   </td>
                 </tr>
