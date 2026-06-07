@@ -99,7 +99,7 @@ function Validacao() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-muted-foreground">{p.data}</span>
+                    <span className="text-xs font-mono text-muted-foreground">{formatDateBR(p.data)}</span>
                     <span className="text-xs font-mono text-muted-foreground">•</span>
                     <span className="text-xs font-semibold uppercase tracking-wider text-primary">
                       {p.esporte}
