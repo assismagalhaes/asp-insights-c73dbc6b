@@ -25,9 +25,14 @@ const decisoes: { label: Status; color: string }[] = [
 function autoCheck(p: Prognostico) {
   if (p.odd_ofertada < p.odd_valor) return { auto: "PASS" as const, reason: "Odd ofertada menor que odd de valor" };
   if (p.edge < 0) return { auto: "PASS" as const, reason: "Edge negativo" };
-  if (p.probabilidade_final < 0.55) return { auto: "ALERTA" as const, reason: "Probabilidade inferior a 55%" };
-  if (p.probabilidade_final > 0.6) return { auto: "DESTAQUE" as const, reason: "Probabilidade superior a 60%" };
+  if (p.probabilidade_final < 55) return { auto: "ALERTA" as const, reason: "Probabilidade inferior a 55%" };
+  if (p.probabilidade_final > 60) return { auto: "DESTAQUE" as const, reason: "Probabilidade superior a 60%" };
   return null;
+}
+
+function formatDateBR(iso: string): string {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
 }
 
 function Validacao() {
@@ -94,7 +99,7 @@ function Validacao() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-muted-foreground">{p.data}</span>
+                    <span className="text-xs font-mono text-muted-foreground">{formatDateBR(p.data)}</span>
                     <span className="text-xs font-mono text-muted-foreground">•</span>
                     <span className="text-xs font-semibold uppercase tracking-wider text-primary">
                       {p.esporte}
@@ -135,14 +140,15 @@ function Validacao() {
                 <Metric label="Odd Valor" value={p.odd_valor.toFixed(2)} />
                 <Metric
                   label="Probabilidade"
-                  value={`${(p.probabilidade_final * 100).toFixed(1)}%`}
-                  tone={p.probabilidade_final > 0.6 ? "good" : p.probabilidade_final < 0.55 ? "warn" : undefined}
+                  value={`${p.probabilidade_final.toFixed(2)}%`}
+                  tone={p.probabilidade_final > 60 ? "good" : p.probabilidade_final < 55 ? "warn" : undefined}
                 />
                 <Metric
                   label="Edge"
-                  value={`${(p.edge * 100).toFixed(1)}%`}
+                  value={`${p.edge.toFixed(2)}%`}
                   tone={p.edge < 0 ? "bad" : "good"}
                 />
+
                 <Metric label="Stake sugerida" value={`${p.stake.toFixed(1)}u`} />
               </div>
 

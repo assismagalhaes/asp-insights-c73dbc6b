@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { Upload, Plus, FileSpreadsheet, Pencil, Trash2, Trophy, Megaphone, Copy, Ban } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Upload, Plus, FileSpreadsheet, Pencil, Trash2, Trophy, Megaphone, Copy, Ban, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { StatusBadge, ResultBadge, PublicacaoBadge } from "@/components/status-badge";
 import {
@@ -31,6 +32,27 @@ export const Route = createFileRoute("/_authenticated/prognosticos")({
   component: Prognosticos,
 });
 
+type SortKey =
+  | "data"
+  | "esporte"
+  | "liga"
+  | "jogo"
+  | "mercado"
+  | "pick"
+  | "odd_ofertada"
+  | "odd_valor"
+  | "probabilidade_final"
+  | "edge"
+  | "stake"
+  | "status_validacao"
+  | "status_publicacao"
+  | "resultado";
+
+function formatDateBR(iso: string): string {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+}
+
 function Prognosticos() {
   const { data: prognosticos = [], isLoading } = usePrognosticos();
   const { data: cfg } = useConfiguracao();
@@ -42,10 +64,37 @@ function Prognosticos() {
   const [openForm, setOpenForm] = useState(false);
   const [resultadoFor, setResultadoFor] = useState<Prognostico | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Prognostico | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("data");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const toggleSort = (k: SortKey) => {
+    if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(k);
+      setSortDir("asc");
+    }
+  };
+
+  const sorted = useMemo(() => {
+    const arr = [...prognosticos];
+    arr.sort((a, b) => {
+      const av = a[sortKey] as unknown;
+      const bv = b[sortKey] as unknown;
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      let cmp = 0;
+      if (typeof av === "number" && typeof bv === "number") cmp = av - bv;
+      else cmp = String(av).localeCompare(String(bv), "pt-BR", { numeric: true });
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return arr;
+  }, [prognosticos, sortKey, sortDir]);
 
   const podePublicar = (p: Prognostico) =>
     p.status_publicacao === "NAO_PUBLICADO" &&
     (p.status_validacao === "CONFIRMA" || p.status_validacao === "CONFIRMA COM CAUTELA");
+
 
   const copyTip = async (p: Prognostico) => {
     await navigator.clipboard.writeText(p.tip_texto || gerarTipTexto(p));
@@ -104,20 +153,20 @@ function Prognosticos() {
           <table className="w-full text-sm">
             <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th className="px-3 py-2 text-left">Data</th>
-                <th className="px-3 py-2 text-left">Esporte</th>
-                <th className="px-3 py-2 text-left">Liga</th>
-                <th className="px-3 py-2 text-left">Jogo</th>
-                <th className="px-3 py-2 text-left">Mercado</th>
-                <th className="px-3 py-2 text-left">Pick</th>
-                <th className="px-3 py-2 text-right font-mono">Odd Of.</th>
-                <th className="px-3 py-2 text-right font-mono">Odd Val.</th>
-                <th className="px-3 py-2 text-right font-mono">Prob.</th>
-                <th className="px-3 py-2 text-right font-mono">Edge</th>
-                <th className="px-3 py-2 text-right font-mono">Stake</th>
-                <th className="px-3 py-2 text-left">Validação</th>
-                <th className="px-3 py-2 text-left">Publicação</th>
-                <th className="px-3 py-2 text-left">Resultado</th>
+                <SortableTh label="Data" k="data" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Esporte" k="esporte" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Liga" k="liga" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Jogo" k="jogo" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Mercado" k="mercado" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Pick" k="pick" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Odd Of." k="odd_ofertada" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Odd Val." k="odd_valor" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Prob." k="probabilidade_final" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Edge" k="edge" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Stake" k="stake" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Validação" k="status_validacao" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Publicação" k="status_publicacao" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Resultado" k="resultado" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                 <th className="px-3 py-2 text-right">Ações</th>
               </tr>
             </thead>
@@ -129,16 +178,17 @@ function Prognosticos() {
                   </td>
                 </tr>
               )}
-              {!isLoading && prognosticos.length === 0 && (
+              {!isLoading && sorted.length === 0 && (
                 <tr>
                   <td colSpan={15} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     Nenhum prognóstico cadastrado.
                   </td>
                 </tr>
               )}
-              {prognosticos.map((p) => (
+              {sorted.map((p) => (
                 <tr key={p.id} className="border-t border-border hover:bg-muted/30">
-                  <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{p.data}</td>
+                  <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatDateBR(p.data)}</td>
+
                   <td className="px-3 py-2 whitespace-nowrap">{p.esporte}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{p.liga}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{p.jogo}</td>
@@ -257,3 +307,37 @@ function Prognosticos() {
     </div>
   );
 }
+
+function SortableTh({
+  label,
+  k,
+  align,
+  sortKey,
+  sortDir,
+  onClick,
+}: {
+  label: string;
+  k: SortKey;
+  align: "left" | "right";
+  sortKey: SortKey;
+  sortDir: "asc" | "desc";
+  onClick: (k: SortKey) => void;
+}) {
+  const active = sortKey === k;
+  const Icon = !active ? ArrowUpDown : sortDir === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <th className={`px-3 py-2 ${align === "right" ? "text-right" : "text-left"}`}>
+      <button
+        type="button"
+        onClick={() => onClick(k)}
+        className={`inline-flex items-center gap-1 hover:text-foreground transition-colors ${
+          align === "right" ? "flex-row-reverse" : ""
+        } ${active ? "text-foreground" : ""}`}
+      >
+        <span>{label}</span>
+        <Icon className={`h-3 w-3 ${active ? "opacity-100" : "opacity-40"}`} />
+      </button>
+    </th>
+  );
+}
+
