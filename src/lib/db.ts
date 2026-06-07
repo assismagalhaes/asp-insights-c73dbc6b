@@ -9,6 +9,7 @@ export type StatusPublicacao = "NAO_PUBLICADO" | "PUBLICADO" | "FINALIZADO" | "C
 export interface Prognostico {
   id: string;
   data: string;
+  hora: string | null;
   esporte: string;
   liga: string;
   jogo: string;

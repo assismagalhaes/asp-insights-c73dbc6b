@@ -36,6 +36,7 @@ export const Route = createFileRoute("/_authenticated/importar")({
 
 const TARGET_FIELDS = [
   "data",
+  "hora",
   "esporte",
   "liga",
   "jogo",
