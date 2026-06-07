@@ -220,7 +220,7 @@ function PublishDialog({
   const { data: validacao } = useValidacaoByPrognostico(prognostico?.id);
   const [tip, setTip] = useState("");
 
-  useMemo(() => {
+  useEffect(() => {
     if (prognostico) {
       setTip(
         gerarTipTexto(prognostico, {
