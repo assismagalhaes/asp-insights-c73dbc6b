@@ -125,7 +125,7 @@ function Dashboard() {
         <StatCard
           label="Lucro (u)"
           value={`${lucro >= 0 ? "+" : ""}${lucro.toFixed(2)}u`}
-          icon={DollarSign}
+          icon={Activity}
           trend={lucro >= 0 ? "up" : "down"}
         />
         <StatCard label="ROI" value={`${roi.toFixed(1)}%`} icon={TrendingUp} trend={roi >= 0 ? "up" : "down"} />
@@ -138,8 +138,8 @@ function Dashboard() {
         <StatCard label="Pendentes pub." value={String(pendentesPub)} icon={Clock} />
         <StatCard label="Finalizadas" value={String(finalizadas)} icon={Trophy} />
         <StatCard
-          label="Lucro publicadas"
-          value={`${lucroPublicadas >= 0 ? "+" : ""}${lucroPublicadas.toFixed(2)}u`}
+          label="Lucro publicadas (R$)"
+          value={`${lucroPublicadas >= 0 ? "+" : ""}R$ ${(lucroPublicadas * (cfg?.valor_unidade_padrao ?? 10)).toFixed(2)}`}
           icon={DollarSign}
           trend={lucroPublicadas >= 0 ? "up" : "down"}
         />
