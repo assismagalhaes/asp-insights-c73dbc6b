@@ -122,6 +122,7 @@ function Historico() {
                 <th className="px-3 py-2 text-left">Data</th>
                 <th className="px-3 py-2 text-left">Esporte</th>
                 <th className="px-3 py-2 text-left">Jogo</th>
+                <th className="px-3 py-2 text-left">Placar</th>
                 <th className="px-3 py-2 text-left">Mercado</th>
                 <th className="px-3 py-2 text-left">Pick</th>
                 <th className="px-3 py-2 text-right font-mono">Odd</th>
