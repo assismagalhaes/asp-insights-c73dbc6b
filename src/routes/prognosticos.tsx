@@ -71,11 +71,10 @@ function Prognosticos() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => toast.info("Importação CSV/XLSX em breve — schema já preparado.")}
-          >
-            <Upload className="h-4 w-4" /> Importar
+          <Button variant="outline" asChild>
+            <Link to="/importar">
+              <Upload className="h-4 w-4" /> Importar
+            </Link>
           </Button>
           <Button
             onClick={() => {
