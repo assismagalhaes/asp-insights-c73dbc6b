@@ -261,7 +261,7 @@ export function useUpdateConfiguracao() {
 }
 
 // ===== Constantes auxiliares =====
-export const ESPORTES_DEFAULT = ["Futebol", "Basketball", "Baseball", "Futebol Americano", "Hockey no Gelo"];
+export const ESPORTES_DEFAULT = ["Futebol", "Basketball", "Baseball", "American Futebol", "Hockey"];
 export const MERCADOS_DEFAULT = [
   "Resultado Final",
   "Handicap Asiático",
