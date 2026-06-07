@@ -22,7 +22,7 @@ import {
 import { TrendingDown, TrendingUp, Wallet, Percent, Target, Activity } from "lucide-react";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/bankroll")({
+export const Route = createFileRoute("/_authenticated/bankroll")({
   head: () => ({ meta: [{ title: "Bankroll — ASP Insights" }] }),
   component: Bankroll,
 });
