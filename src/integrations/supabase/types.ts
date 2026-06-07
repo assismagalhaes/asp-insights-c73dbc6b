@@ -88,8 +88,10 @@ export type Database = {
       }
       prognosticos: {
         Row: {
+          canal_publicacao: string | null
           created_at: string
           data: string
+          data_publicacao: string | null
           edge: number
           esporte: string
           id: string
@@ -104,16 +106,21 @@ export type Database = {
           odd_valor: number
           pick: string
           probabilidade_final: number
+          publicado_em: string | null
+          publicado_por: string | null
           resultado: string
           stake: number
           status_publicacao: string
           status_validacao: string
+          tip_texto: string | null
           updated_at: string
           visitante: string
         }
         Insert: {
+          canal_publicacao?: string | null
           created_at?: string
           data?: string
+          data_publicacao?: string | null
           edge: number
           esporte: string
           id?: string
@@ -128,16 +135,21 @@ export type Database = {
           odd_valor: number
           pick: string
           probabilidade_final: number
+          publicado_em?: string | null
+          publicado_por?: string | null
           resultado?: string
           stake?: number
           status_publicacao?: string
           status_validacao?: string
+          tip_texto?: string | null
           updated_at?: string
           visitante: string
         }
         Update: {
+          canal_publicacao?: string | null
           created_at?: string
           data?: string
+          data_publicacao?: string | null
           edge?: number
           esporte?: string
           id?: string
@@ -152,10 +164,13 @@ export type Database = {
           odd_valor?: number
           pick?: string
           probabilidade_final?: number
+          publicado_em?: string | null
+          publicado_por?: string | null
           resultado?: string
           stake?: number
           status_publicacao?: string
           status_validacao?: string
+          tip_texto?: string | null
           updated_at?: string
           visitante?: string
         }
