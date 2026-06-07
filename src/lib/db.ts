@@ -1,26 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-export type Status =
-  | "PENDENTE"
-  | "CONFIRMA"
-  | "CONFIRMA COM CAUTELA"
-  | "AGUARDAR NOTÍCIA"
-  | "PASS";
-export type Resultado =
-  | "PENDENTE"
-  | "GREEN"
-  | "RED"
-  | "PUSH"
-  | "VOID"
-  | "HALF GREEN"
-  | "HALF RED";
+export type Status = "PENDENTE" | "CONFIRMA" | "CONFIRMA COM CAUTELA" | "AGUARDAR NOTÍCIA" | "PASS";
+export type Resultado = "PENDENTE" | "GREEN" | "RED" | "PUSH" | "VOID" | "HALF GREEN" | "HALF RED";
 
-export type StatusPublicacao =
-  | "NAO_PUBLICADO"
-  | "PUBLICADO"
-  | "FINALIZADO"
-  | "CANCELADO";
+export type StatusPublicacao = "NAO_PUBLICADO" | "PUBLICADO" | "FINALIZADO" | "CANCELADO";
 
 export interface Prognostico {
   id: string;
@@ -159,12 +143,7 @@ export function useUpdatePrognostico() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...patch }: Partial<Prognostico> & { id: string }) => {
-      const { data, error } = await supabase
-        .from("prognosticos")
-        .update(patch)
-        .eq("id", id)
-        .select()
-        .single();
+      const { data, error } = await supabase.from("prognosticos").update(patch).eq("id", id).select().single();
       if (error) throw error;
       return data;
     },
@@ -273,12 +252,7 @@ export function useUpdateConfiguracao() {
   return useMutation({
     mutationFn: async (patch: Partial<Configuracao> & { id: string }) => {
       const { id, ...rest } = patch;
-      const { data, error } = await supabase
-        .from("configuracoes")
-        .update(rest)
-        .eq("id", id)
-        .select()
-        .single();
+      const { data, error } = await supabase.from("configuracoes").update(rest).eq("id", id).select().single();
       if (error) throw error;
       return data;
     },
@@ -287,7 +261,7 @@ export function useUpdateConfiguracao() {
 }
 
 // ===== Constantes auxiliares =====
-export const ESPORTES_DEFAULT = ["Futebol", "NBA", "WNBA", "MLB", "NFL", "NHL"];
+export const ESPORTES_DEFAULT = ["Futebol", "Basketball", "Baseball", "Futebol Americano", "Hockey no Gelo"];
 export const MERCADOS_DEFAULT = [
   "Resultado Final",
   "Handicap Asiático",
@@ -396,10 +370,7 @@ export function useCancelarPrognostico() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("prognosticos")
-        .update({ status_publicacao: "CANCELADO" })
-        .eq("id", id);
+      const { error } = await supabase.from("prognosticos").update({ status_publicacao: "CANCELADO" }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["prognosticos"] }),
