@@ -7,7 +7,20 @@ export type Status =
   | "CONFIRMA COM CAUTELA"
   | "AGUARDAR NOTÍCIA"
   | "PASS";
-export type Resultado = "PENDENTE" | "GREEN" | "RED" | "PUSH";
+export type Resultado =
+  | "PENDENTE"
+  | "GREEN"
+  | "RED"
+  | "PUSH"
+  | "VOID"
+  | "HALF GREEN"
+  | "HALF RED";
+
+export type StatusPublicacao =
+  | "NAO_PUBLICADO"
+  | "PUBLICADO"
+  | "FINALIZADO"
+  | "CANCELADO";
 
 export interface Prognostico {
   id: string;
@@ -26,10 +39,15 @@ export interface Prognostico {
   edge: number;
   stake: number;
   status_validacao: Status;
-  status_publicacao: string;
+  status_publicacao: StatusPublicacao;
   resultado: Resultado;
   lucro_prejuizo: number | null;
   observacoes: string | null;
+  data_publicacao: string | null;
+  tip_texto: string | null;
+  publicado_em: string | null;
+  publicado_por: string | null;
+  canal_publicacao: string | null;
   created_at: string;
   updated_at: string;
 }
