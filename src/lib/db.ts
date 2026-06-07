@@ -32,6 +32,7 @@ export interface Prognostico {
   publicado_em: string | null;
   publicado_por: string | null;
   canal_publicacao: string | null;
+  placar_final: string | null;
   created_at: string;
   updated_at: string;
 }
