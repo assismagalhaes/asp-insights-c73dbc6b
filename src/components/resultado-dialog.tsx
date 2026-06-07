@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useCreateResultado, type Prognostico, type Resultado } from "@/lib/db";
+import { useCreateResultado, calcLucro, type Prognostico, type Resultado } from "@/lib/db";
 import { toast } from "sonner";
 
 interface Props {
@@ -25,6 +25,8 @@ interface Props {
   prognostico: Prognostico | null;
   valorUnidade?: number;
 }
+
+const RESULTADOS: Resultado[] = ["GREEN", "HALF GREEN", "RED", "HALF RED", "PUSH", "VOID"];
 
 export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade = 10 }: Props) {
   const create = useCreateResultado();
@@ -38,23 +40,13 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
       setResultado("GREEN");
       setPlacar("");
       setOddFech(prognostico.odd_ofertada);
-      // sugestão de lucro em unidades
-      const sugerido =
-        prognostico.stake * (prognostico.odd_ofertada - 1);
-      setLucro(Number(sugerido.toFixed(2)));
+      setLucro(calcLucro("GREEN", prognostico.stake, prognostico.odd_ofertada));
     }
   }, [prognostico, open]);
 
-  // atualiza sugestão conforme resultado
   useEffect(() => {
     if (!prognostico) return;
-    if (resultado === "GREEN") {
-      setLucro(Number((prognostico.stake * (prognostico.odd_ofertada - 1)).toFixed(2)));
-    } else if (resultado === "RED") {
-      setLucro(Number((-prognostico.stake).toFixed(2)));
-    } else {
-      setLucro(0);
-    }
+    setLucro(calcLucro(resultado, prognostico.stake, prognostico.odd_ofertada));
   }, [resultado, prognostico]);
 
   if (!prognostico) return null;
@@ -91,9 +83,9 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
             <Select value={resultado} onValueChange={(v) => setResultado(v as Resultado)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="GREEN">GREEN</SelectItem>
-                <SelectItem value="RED">RED</SelectItem>
-                <SelectItem value="PUSH">PUSH</SelectItem>
+                {RESULTADOS.map((r) => (
+                  <SelectItem key={r} value={r}>{r}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
