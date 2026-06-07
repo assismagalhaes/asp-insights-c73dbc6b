@@ -153,20 +153,20 @@ function Prognosticos() {
           <table className="w-full text-sm">
             <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th className="px-3 py-2 text-left">Data</th>
-                <th className="px-3 py-2 text-left">Esporte</th>
-                <th className="px-3 py-2 text-left">Liga</th>
-                <th className="px-3 py-2 text-left">Jogo</th>
-                <th className="px-3 py-2 text-left">Mercado</th>
-                <th className="px-3 py-2 text-left">Pick</th>
-                <th className="px-3 py-2 text-right font-mono">Odd Of.</th>
-                <th className="px-3 py-2 text-right font-mono">Odd Val.</th>
-                <th className="px-3 py-2 text-right font-mono">Prob.</th>
-                <th className="px-3 py-2 text-right font-mono">Edge</th>
-                <th className="px-3 py-2 text-right font-mono">Stake</th>
-                <th className="px-3 py-2 text-left">Validação</th>
-                <th className="px-3 py-2 text-left">Publicação</th>
-                <th className="px-3 py-2 text-left">Resultado</th>
+                <SortableTh label="Data" k="data" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Esporte" k="esporte" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Liga" k="liga" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Jogo" k="jogo" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Mercado" k="mercado" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Pick" k="pick" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Odd Of." k="odd_ofertada" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Odd Val." k="odd_valor" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Prob." k="probabilidade_final" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Edge" k="edge" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Stake" k="stake" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Validação" k="status_validacao" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Publicação" k="status_publicacao" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableTh label="Resultado" k="resultado" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                 <th className="px-3 py-2 text-right">Ações</th>
               </tr>
             </thead>
@@ -178,16 +178,17 @@ function Prognosticos() {
                   </td>
                 </tr>
               )}
-              {!isLoading && prognosticos.length === 0 && (
+              {!isLoading && sorted.length === 0 && (
                 <tr>
                   <td colSpan={15} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     Nenhum prognóstico cadastrado.
                   </td>
                 </tr>
               )}
-              {prognosticos.map((p) => (
+              {sorted.map((p) => (
                 <tr key={p.id} className="border-t border-border hover:bg-muted/30">
-                  <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{p.data}</td>
+                  <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatDateBR(p.data)}</td>
+
                   <td className="px-3 py-2 whitespace-nowrap">{p.esporte}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{p.liga}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{p.jogo}</td>
