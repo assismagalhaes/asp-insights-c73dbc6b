@@ -145,7 +145,8 @@ export function useUpdatePrognostico() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...patch }: Partial<Prognostico> & { id: string }) => {
-      const { data, error } = await supabase.from("prognosticos").update(patch).eq("id", id).select().single();
+      const { placar_final: _pf, ...rest } = patch;
+      const { data, error } = await supabase.from("prognosticos").update(rest).eq("id", id).select().single();
       if (error) throw error;
       return data;
     },
