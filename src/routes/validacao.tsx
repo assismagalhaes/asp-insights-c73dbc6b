@@ -4,8 +4,9 @@ import { AlertTriangle, Sparkles, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/status-badge";
-import { prognosticos, type Status } from "@/lib/mock-data";
+import { usePrognosticos, useCreateValidacao, type Prognostico, type Status } from "@/lib/db";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -21,27 +22,44 @@ const decisoes: { label: Status; color: string }[] = [
   { label: "PASS", color: "bg-destructive text-destructive-foreground hover:bg-destructive/90" },
 ];
 
-function autoCheck(p: (typeof prognosticos)[number]) {
-  if (p.oddOfertada < p.oddValor) return { auto: "PASS" as const, reason: "Odd ofertada menor que odd de valor" };
+function autoCheck(p: Prognostico) {
+  if (p.odd_ofertada < p.odd_valor) return { auto: "PASS" as const, reason: "Odd ofertada menor que odd de valor" };
   if (p.edge < 0) return { auto: "PASS" as const, reason: "Edge negativo" };
-  if (p.probabilidade < 0.55) return { auto: "ALERTA" as const, reason: "Probabilidade inferior a 55%" };
-  if (p.probabilidade > 0.6) return { auto: "DESTAQUE" as const, reason: "Probabilidade superior a 60%" };
+  if (p.probabilidade_final < 0.55) return { auto: "ALERTA" as const, reason: "Probabilidade inferior a 55%" };
+  if (p.probabilidade_final > 0.6) return { auto: "DESTAQUE" as const, reason: "Probabilidade superior a 60%" };
   return null;
 }
 
 function Validacao() {
+  const { data: prognosticos = [] } = usePrognosticos();
+  const createVal = useCreateValidacao();
   const [justificativas, setJustificativas] = useState<Record<string, string>>({});
   const [riscos, setRiscos] = useState<Record<string, string>>({});
   const [comentarios, setComentarios] = useState<Record<string, string>>({});
+  const [stakes, setStakes] = useState<Record<string, string>>({});
 
-  const pendentes = prognosticos.filter((p) => p.resultado === "PENDENTE");
+  const pendentes = prognosticos.filter(
+    (p) => p.resultado === "PENDENTE" && p.status_validacao === "PENDENTE",
+  );
 
-  const decidir = (id: string, decisao: Status) => {
-    if (!justificativas[id]?.trim()) {
+  const decidir = async (p: Prognostico, decisao: Status) => {
+    if (!justificativas[p.id]?.trim()) {
       toast.error("Justificativa da decisão é obrigatória.");
       return;
     }
-    toast.success(`Decisão registrada: ${decisao}`);
+    try {
+      await createVal.mutateAsync({
+        prognostico_id: p.id,
+        decisao,
+        stake_confirmada: stakes[p.id] ? Number(stakes[p.id]) : p.stake,
+        justificativa: justificativas[p.id] ?? null,
+        riscos_identificados: riscos[p.id] ?? null,
+        comentarios_analista: comentarios[p.id] ?? null,
+      });
+      toast.success(`Decisão registrada: ${decisao}`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
   };
 
   return (
@@ -52,6 +70,12 @@ function Validacao() {
           Segunda análise dos prognósticos gerados pelos modelos antes da publicação.
         </p>
       </div>
+
+      {pendentes.length === 0 && (
+        <div className="rounded-lg border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+          Não há prognósticos pendentes de validação.
+        </div>
+      )}
 
       <div className="space-y-4">
         {pendentes.map((p) => {
@@ -82,7 +106,7 @@ function Validacao() {
                     {p.mercado} — <span className="text-foreground font-medium">{p.pick}</span>
                   </p>
                 </div>
-                <StatusBadge status={p.status} />
+                <StatusBadge status={p.status_validacao} />
               </div>
 
               {check && (
@@ -102,26 +126,24 @@ function Validacao() {
                     <AlertTriangle className="h-3.5 w-3.5" />
                   )}
                   <span className="uppercase tracking-wider">{check.auto}</span>
-                  <span className="text-foreground/80 normal-case tracking-normal">
-                    — {check.reason}
-                  </span>
+                  <span className="text-foreground/80 normal-case tracking-normal">— {check.reason}</span>
                 </div>
               )}
 
               <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
-                <Metric label="Odd Ofertada" value={p.oddOfertada.toFixed(2)} />
-                <Metric label="Odd Valor" value={p.oddValor.toFixed(2)} />
+                <Metric label="Odd Ofertada" value={p.odd_ofertada.toFixed(2)} />
+                <Metric label="Odd Valor" value={p.odd_valor.toFixed(2)} />
                 <Metric
                   label="Probabilidade"
-                  value={`${(p.probabilidade * 100).toFixed(1)}%`}
-                  tone={p.probabilidade > 0.6 ? "good" : p.probabilidade < 0.55 ? "warn" : undefined}
+                  value={`${(p.probabilidade_final * 100).toFixed(1)}%`}
+                  tone={p.probabilidade_final > 0.6 ? "good" : p.probabilidade_final < 0.55 ? "warn" : undefined}
                 />
                 <Metric
                   label="Edge"
                   value={`${(p.edge * 100).toFixed(1)}%`}
                   tone={p.edge < 0 ? "bad" : "good"}
                 />
-                <Metric label="Stake" value={`${p.stake.toFixed(1)}u`} />
+                <Metric label="Stake sugerida" value={`${p.stake.toFixed(1)}u`} />
               </div>
 
               {p.observacoes && (
@@ -130,13 +152,24 @@ function Validacao() {
                 </p>
               )}
 
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div className="mt-4 grid gap-3 md:grid-cols-4">
+                <div>
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                    Stake confirmada
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={stakes[p.id] ?? p.stake}
+                    onChange={(e) => setStakes({ ...stakes, [p.id]: e.target.value })}
+                  />
+                </div>
                 <div>
                   <Label className="text-xs uppercase tracking-wider text-muted-foreground">
                     Justificativa *
                   </Label>
                   <Textarea
-                    rows={3}
+                    rows={2}
                     value={justificativas[p.id] || ""}
                     onChange={(e) => setJustificativas({ ...justificativas, [p.id]: e.target.value })}
                     placeholder="Justificativa da decisão"
@@ -147,21 +180,19 @@ function Validacao() {
                     Riscos identificados
                   </Label>
                   <Textarea
-                    rows={3}
+                    rows={2}
                     value={riscos[p.id] || ""}
                     onChange={(e) => setRiscos({ ...riscos, [p.id]: e.target.value })}
-                    placeholder="Riscos identificados"
                   />
                 </div>
                 <div>
                   <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                    Comentários do analista
+                    Comentários
                   </Label>
                   <Textarea
-                    rows={3}
+                    rows={2}
                     value={comentarios[p.id] || ""}
                     onChange={(e) => setComentarios({ ...comentarios, [p.id]: e.target.value })}
-                    placeholder="Comentários adicionais"
                   />
                 </div>
               </div>
@@ -170,8 +201,9 @@ function Validacao() {
                 {decisoes.map((d) => (
                   <Button
                     key={d.label}
-                    onClick={() => decidir(p.id, d.label)}
+                    onClick={() => decidir(p, d.label)}
                     className={cn("font-semibold", d.color)}
+                    disabled={createVal.isPending}
                   >
                     {d.label}
                   </Button>
