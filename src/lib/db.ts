@@ -101,11 +101,17 @@ export function usePrognosticos() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("prognosticos")
-        .select("*")
+        .select("*, resultados(placar_final, created_at)")
         .order("data", { ascending: false })
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []).map(mapPrognostico);
+      return (data ?? []).map((r: Record<string, unknown>) => {
+        const rs = (r.resultados as Array<{ placar_final: string | null; created_at: string }> | null) ?? [];
+        const last = rs.length
+          ? [...rs].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0]
+          : null;
+        return { ...mapPrognostico(r), placar_final: last?.placar_final ?? null };
+      });
     },
   });
 }
