@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ValidacaoRouteImport } from './routes/validacao'
 import { Route as PrognosticosRouteImport } from './routes/prognosticos'
+import { Route as ImportarRouteImport } from './routes/importar'
 import { Route as HistoricoRouteImport } from './routes/historico'
 import { Route as EstatisticasRouteImport } from './routes/estatisticas'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
@@ -25,6 +26,11 @@ const ValidacaoRoute = ValidacaoRouteImport.update({
 const PrognosticosRoute = PrognosticosRouteImport.update({
   id: '/prognosticos',
   path: '/prognosticos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ImportarRoute = ImportarRouteImport.update({
+  id: '/importar',
+  path: '/importar',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HistoricoRoute = HistoricoRouteImport.update({
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/configuracoes': typeof ConfiguracoesRoute
   '/estatisticas': typeof EstatisticasRoute
   '/historico': typeof HistoricoRoute
+  '/importar': typeof ImportarRoute
   '/prognosticos': typeof PrognosticosRoute
   '/validacao': typeof ValidacaoRoute
 }
@@ -68,6 +75,7 @@ export interface FileRoutesByTo {
   '/configuracoes': typeof ConfiguracoesRoute
   '/estatisticas': typeof EstatisticasRoute
   '/historico': typeof HistoricoRoute
+  '/importar': typeof ImportarRoute
   '/prognosticos': typeof PrognosticosRoute
   '/validacao': typeof ValidacaoRoute
 }
@@ -78,6 +86,7 @@ export interface FileRoutesById {
   '/configuracoes': typeof ConfiguracoesRoute
   '/estatisticas': typeof EstatisticasRoute
   '/historico': typeof HistoricoRoute
+  '/importar': typeof ImportarRoute
   '/prognosticos': typeof PrognosticosRoute
   '/validacao': typeof ValidacaoRoute
 }
@@ -89,6 +98,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/estatisticas'
     | '/historico'
+    | '/importar'
     | '/prognosticos'
     | '/validacao'
   fileRoutesByTo: FileRoutesByTo
@@ -98,6 +108,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/estatisticas'
     | '/historico'
+    | '/importar'
     | '/prognosticos'
     | '/validacao'
   id:
@@ -107,6 +118,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/estatisticas'
     | '/historico'
+    | '/importar'
     | '/prognosticos'
     | '/validacao'
   fileRoutesById: FileRoutesById
@@ -117,6 +129,7 @@ export interface RootRouteChildren {
   ConfiguracoesRoute: typeof ConfiguracoesRoute
   EstatisticasRoute: typeof EstatisticasRoute
   HistoricoRoute: typeof HistoricoRoute
+  ImportarRoute: typeof ImportarRoute
   PrognosticosRoute: typeof PrognosticosRoute
   ValidacaoRoute: typeof ValidacaoRoute
 }
@@ -135,6 +148,13 @@ declare module '@tanstack/react-router' {
       path: '/prognosticos'
       fullPath: '/prognosticos'
       preLoaderRoute: typeof PrognosticosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/importar': {
+      id: '/importar'
+      path: '/importar'
+      fullPath: '/importar'
+      preLoaderRoute: typeof ImportarRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/historico': {
@@ -181,9 +201,20 @@ const rootRouteChildren: RootRouteChildren = {
   ConfiguracoesRoute: ConfiguracoesRoute,
   EstatisticasRoute: EstatisticasRoute,
   HistoricoRoute: HistoricoRoute,
+  ImportarRoute: ImportarRoute,
   PrognosticosRoute: PrognosticosRoute,
   ValidacaoRoute: ValidacaoRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
