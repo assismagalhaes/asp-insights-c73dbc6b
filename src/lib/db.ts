@@ -127,9 +127,19 @@ export function usePrognosticos() {
 
 export type PrognosticoInput = Omit<
   Prognostico,
-  "id" | "created_at" | "updated_at" | "lucro_prejuizo" | "status_publicacao" | "resultado"
+  | "id"
+  | "created_at"
+  | "updated_at"
+  | "lucro_prejuizo"
+  | "status_publicacao"
+  | "resultado"
+  | "data_publicacao"
+  | "tip_texto"
+  | "publicado_em"
+  | "publicado_por"
+  | "canal_publicacao"
 > & {
-  status_publicacao?: string;
+  status_publicacao?: StatusPublicacao;
   resultado?: Resultado;
 };
 
