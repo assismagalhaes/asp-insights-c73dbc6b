@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { Upload, Plus, FileSpreadsheet, Pencil, Trash2, Trophy, Megaphone, Copy, Ban } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Upload, Plus, FileSpreadsheet, Pencil, Trash2, Trophy, Megaphone, Copy, Ban, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { StatusBadge, ResultBadge, PublicacaoBadge } from "@/components/status-badge";
 import {
