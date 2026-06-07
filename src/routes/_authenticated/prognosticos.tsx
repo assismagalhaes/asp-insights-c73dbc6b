@@ -32,6 +32,27 @@ export const Route = createFileRoute("/_authenticated/prognosticos")({
   component: Prognosticos,
 });
 
+type SortKey =
+  | "data"
+  | "esporte"
+  | "liga"
+  | "jogo"
+  | "mercado"
+  | "pick"
+  | "odd_ofertada"
+  | "odd_valor"
+  | "probabilidade_final"
+  | "edge"
+  | "stake"
+  | "status_validacao"
+  | "status_publicacao"
+  | "resultado";
+
+function formatDateBR(iso: string): string {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+}
+
 function Prognosticos() {
   const { data: prognosticos = [], isLoading } = usePrognosticos();
   const { data: cfg } = useConfiguracao();
@@ -43,10 +64,37 @@ function Prognosticos() {
   const [openForm, setOpenForm] = useState(false);
   const [resultadoFor, setResultadoFor] = useState<Prognostico | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Prognostico | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("data");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const toggleSort = (k: SortKey) => {
+    if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(k);
+      setSortDir("asc");
+    }
+  };
+
+  const sorted = useMemo(() => {
+    const arr = [...prognosticos];
+    arr.sort((a, b) => {
+      const av = a[sortKey] as unknown;
+      const bv = b[sortKey] as unknown;
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      let cmp = 0;
+      if (typeof av === "number" && typeof bv === "number") cmp = av - bv;
+      else cmp = String(av).localeCompare(String(bv), "pt-BR", { numeric: true });
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return arr;
+  }, [prognosticos, sortKey, sortDir]);
 
   const podePublicar = (p: Prognostico) =>
     p.status_publicacao === "NAO_PUBLICADO" &&
     (p.status_validacao === "CONFIRMA" || p.status_validacao === "CONFIRMA COM CAUTELA");
+
 
   const copyTip = async (p: Prognostico) => {
     await navigator.clipboard.writeText(p.tip_texto || gerarTipTexto(p));
