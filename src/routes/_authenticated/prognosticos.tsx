@@ -188,7 +188,7 @@ function Prognosticos() {
               )}
               {sorted.map((p) => (
                 <tr key={p.id} className="border-t border-border hover:bg-muted/30">
-                  <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatDateBR(p.data)}</td>
+                  <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatDateBR(p.data)}{p.hora ? ` ${p.hora.slice(0,5)}` : ""}</td>
 
                   <td className="px-3 py-2 whitespace-nowrap">{p.esporte}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{p.liga}</td>

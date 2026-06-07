@@ -37,6 +37,7 @@ interface Props {
 
 const empty: PrognosticoInput = {
   data: new Date().toISOString().slice(0, 10),
+  hora: null,
   esporte: "Futebol",
   liga: "",
   jogo: "",
@@ -69,6 +70,7 @@ export function PrognosticoDialog({
     if (prognostico) {
       setForm({
         data: prognostico.data,
+        hora: prognostico.hora,
         esporte: prognostico.esporte,
         liga: prognostico.liga,
         jogo: prognostico.jogo,
