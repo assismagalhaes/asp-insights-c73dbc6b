@@ -133,6 +133,18 @@ function Dashboard() {
         <StatCard label="Win Rate" value={`${winRate.toFixed(1)}%`} icon={Target} />
       </div>
 
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <StatCard label="Publicadas hoje" value={String(publicadasHoje)} icon={Megaphone} />
+        <StatCard label="Pendentes pub." value={String(pendentesPub)} icon={Clock} />
+        <StatCard label="Finalizadas" value={String(finalizadas)} icon={Trophy} />
+        <StatCard
+          label="Lucro publicadas"
+          value={`${lucroPublicadas >= 0 ? "+" : ""}${lucroPublicadas.toFixed(2)}u`}
+          icon={DollarSign}
+          trend={lucroPublicadas >= 0 ? "up" : "down"}
+        />
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="mb-3 flex items-center justify-between">
