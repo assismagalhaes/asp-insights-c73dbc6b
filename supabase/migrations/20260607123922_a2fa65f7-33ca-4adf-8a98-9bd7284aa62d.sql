@@ -1,0 +1,1 @@
+ALTER TABLE public.prognosticos ADD COLUMN IF NOT EXISTS hora time;

@@ -121,6 +121,7 @@ export type Database = {
           data_publicacao: string | null
           edge: number
           esporte: string
+          hora: string | null
           id: string
           jogo: string
           liga: string
@@ -150,6 +151,7 @@ export type Database = {
           data_publicacao?: string | null
           edge: number
           esporte: string
+          hora?: string | null
           id?: string
           jogo: string
           liga: string
@@ -179,6 +181,7 @@ export type Database = {
           data_publicacao?: string | null
           edge?: number
           esporte?: string
+          hora?: string | null
           id?: string
           jogo?: string
           liga?: string
