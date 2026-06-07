@@ -143,6 +143,13 @@ function parseDate(v: unknown): string | null {
       return `${d.y}-${mm}-${dd}`;
     }
   }
+  if (v instanceof Date) {
+    // Usa UTC para evitar deslocamento de fuso horário
+    const yyyy = v.getUTCFullYear();
+    const mm = String(v.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(v.getUTCDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
   const s = String(v).trim();
   // ISO yyyy-mm-dd
   let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -153,8 +160,14 @@ function parseDate(v: unknown): string | null {
     const yyyy = m[3].length === 2 ? "20" + m[3] : m[3];
     return `${yyyy}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
   }
-  const d = new Date(s);
-  if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  // Fallback: parse como UTC para não cair no dia anterior
+  const d = new Date(s + "T00:00:00Z");
+  if (!isNaN(d.getTime())) {
+    const yyyy = d.getUTCFullYear();
+    const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(d.getUTCDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
   return null;
 }
 
