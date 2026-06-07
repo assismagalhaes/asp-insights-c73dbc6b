@@ -157,6 +157,7 @@ function Prognosticos() {
                 <SortableTh label="Esporte" k="esporte" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                 <SortableTh label="Liga" k="liga" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                 <SortableTh label="Jogo" k="jogo" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <th className="px-3 py-2 text-left text-xs uppercase tracking-wider text-muted-foreground">Placar</th>
                 <SortableTh label="Mercado" k="mercado" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                 <SortableTh label="Pick" k="pick" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                 <SortableTh label="Odd Of." k="odd_ofertada" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
@@ -173,14 +174,14 @@ function Prognosticos() {
             <tbody>
               {isLoading && (
                 <tr>
-                  <td colSpan={15} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={16} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     Carregando...
                   </td>
                 </tr>
               )}
               {!isLoading && sorted.length === 0 && (
                 <tr>
-                  <td colSpan={15} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={16} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     Nenhum prognóstico cadastrado.
                   </td>
                 </tr>
@@ -192,6 +193,7 @@ function Prognosticos() {
                   <td className="px-3 py-2 whitespace-nowrap">{p.esporte}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{p.liga}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{p.jogo}</td>
+                  <td className="px-3 py-2 whitespace-nowrap font-mono text-xs">{p.placar_final ?? "—"}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{p.mercado}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{p.pick}</td>
                   <td className="px-3 py-2 text-right font-mono">{p.odd_ofertada.toFixed(2)}</td>

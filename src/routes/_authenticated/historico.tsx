@@ -122,6 +122,7 @@ function Historico() {
                 <th className="px-3 py-2 text-left">Data</th>
                 <th className="px-3 py-2 text-left">Esporte</th>
                 <th className="px-3 py-2 text-left">Jogo</th>
+                <th className="px-3 py-2 text-left">Placar</th>
                 <th className="px-3 py-2 text-left">Mercado</th>
                 <th className="px-3 py-2 text-left">Pick</th>
                 <th className="px-3 py-2 text-right font-mono">Odd</th>
@@ -138,6 +139,7 @@ function Historico() {
                   <td className="px-3 py-2 font-mono text-xs">{p.data}</td>
                   <td className="px-3 py-2">{p.esporte}</td>
                   <td className="px-3 py-2">{p.jogo}</td>
+                  <td className="px-3 py-2 font-mono text-xs">{p.placar_final ?? "—"}</td>
                   <td className="px-3 py-2 text-muted-foreground">{p.mercado}</td>
                   <td className="px-3 py-2">{p.pick}</td>
                   <td className="px-3 py-2 text-right font-mono">{p.odd_ofertada.toFixed(2)}</td>
@@ -152,7 +154,7 @@ function Historico() {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={12} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     Nenhum prognóstico encontrado com os filtros aplicados.
                   </td>
                 </tr>

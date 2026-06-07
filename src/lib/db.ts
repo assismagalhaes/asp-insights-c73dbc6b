@@ -32,6 +32,7 @@ export interface Prognostico {
   publicado_em: string | null;
   publicado_por: string | null;
   canal_publicacao: string | null;
+  placar_final?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -100,11 +101,17 @@ export function usePrognosticos() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("prognosticos")
-        .select("*")
+        .select("*, resultados(placar_final, created_at)")
         .order("data", { ascending: false })
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []).map(mapPrognostico);
+      return (data ?? []).map((r: Record<string, unknown>) => {
+        const rs = (r.resultados as Array<{ placar_final: string | null; created_at: string }> | null) ?? [];
+        const last = rs.length
+          ? [...rs].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0]
+          : null;
+        return { ...mapPrognostico(r), placar_final: last?.placar_final ?? null };
+      });
     },
   });
 }
@@ -122,6 +129,7 @@ export type PrognosticoInput = Omit<
   | "publicado_em"
   | "publicado_por"
   | "canal_publicacao"
+  | "placar_final"
 > & {
   status_publicacao?: StatusPublicacao;
   resultado?: Resultado;
@@ -143,7 +151,8 @@ export function useUpdatePrognostico() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...patch }: Partial<Prognostico> & { id: string }) => {
-      const { data, error } = await supabase.from("prognosticos").update(patch).eq("id", id).select().single();
+      const { placar_final: _pf, ...rest } = patch;
+      const { data, error } = await supabase.from("prognosticos").update(rest).eq("id", id).select().single();
       if (error) throw error;
       return data;
     },
