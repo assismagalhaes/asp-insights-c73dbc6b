@@ -18,9 +18,26 @@ const statusStyles: Record<string, string> = {
 
 const resultStyles: Record<string, string> = {
   GREEN: "bg-success/15 text-success border-success/30",
+  "HALF GREEN": "bg-success/10 text-success border-success/20",
   RED: "bg-destructive/15 text-destructive border-destructive/30",
+  "HALF RED": "bg-destructive/10 text-destructive border-destructive/20",
   PUSH: "bg-muted text-muted-foreground border-border",
+  VOID: "bg-muted text-muted-foreground border-border",
   PENDENTE: "bg-accent/30 text-muted-foreground border-border",
+};
+
+const publicacaoStyles: Record<string, string> = {
+  NAO_PUBLICADO: "bg-muted text-muted-foreground border-border",
+  PUBLICADO: "bg-primary/15 text-primary border-primary/30",
+  FINALIZADO: "bg-success/15 text-success border-success/30",
+  CANCELADO: "bg-destructive/15 text-destructive border-destructive/30",
+};
+
+const publicacaoLabels: Record<string, string> = {
+  NAO_PUBLICADO: "Não publicado",
+  PUBLICADO: "Publicado",
+  FINALIZADO: "Finalizado",
+  CANCELADO: "Cancelado",
 };
 
 export function StatusBadge({ status }: { status: string }) {
@@ -45,6 +62,19 @@ export function ResultBadge({ result }: { result: string }) {
       )}
     >
       {result}
+    </span>
+  );
+}
+
+export function PublicacaoBadge({ status }: { status: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+        publicacaoStyles[status] ?? publicacaoStyles.NAO_PUBLICADO,
+      )}
+    >
+      {publicacaoLabels[status] ?? status}
     </span>
   );
 }

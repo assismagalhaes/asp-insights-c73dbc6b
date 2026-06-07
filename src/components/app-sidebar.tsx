@@ -9,6 +9,7 @@ import {
   Settings,
   Activity,
   Upload,
+  Megaphone,
 } from "lucide-react";
 
 import {
@@ -29,6 +30,7 @@ const items = [
   { title: "Prognósticos", url: "/prognosticos", icon: ListChecks },
   { title: "Importar", url: "/importar", icon: Upload },
   { title: "Validação Crítica", url: "/validacao", icon: ShieldCheck },
+  { title: "Publicação", url: "/publicacao", icon: Megaphone },
   { title: "Histórico", url: "/historico", icon: History },
   { title: "Bankroll", url: "/bankroll", icon: Wallet },
   { title: "ROI e Estatísticas", url: "/estatisticas", icon: BarChart3 },

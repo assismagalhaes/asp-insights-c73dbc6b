@@ -9,6 +9,9 @@ import {
   Target,
   DollarSign,
   ListChecks,
+  Megaphone,
+  Clock,
+  Trophy,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -51,12 +54,25 @@ function Dashboard() {
   );
   const rejeitados = prognosticos.filter((p) => p.status_validacao === "PASS");
   const lucro = prognosticos.reduce((s, p) => s + (p.lucro_prejuizo ?? 0), 0);
-  const concluidos = prognosticos.filter((p) => p.resultado === "GREEN" || p.resultado === "RED");
-  const greens = prognosticos.filter((p) => p.resultado === "GREEN").length;
+  const concluidos = prognosticos.filter((p) => p.resultado !== "PENDENTE");
+  const greens = prognosticos.filter((p) => p.resultado === "GREEN" || p.resultado === "HALF GREEN").length;
   const winRate = concluidos.length ? (greens / concluidos.length) * 100 : 0;
   const stakeTotal = concluidos.reduce((s, p) => s + p.stake, 0);
   const roi = stakeTotal ? (lucro / stakeTotal) * 100 : 0;
   const yieldVal = roi;
+
+  const publicadasHoje = prognosticos.filter(
+    (p) => p.status_publicacao !== "NAO_PUBLICADO" && p.data_publicacao?.slice(0, 10) === today,
+  ).length;
+  const pendentesPub = prognosticos.filter(
+    (p) =>
+      p.status_publicacao === "NAO_PUBLICADO" &&
+      (p.status_validacao === "CONFIRMA" || p.status_validacao === "CONFIRMA COM CAUTELA"),
+  ).length;
+  const finalizadas = prognosticos.filter((p) => p.status_publicacao === "FINALIZADO").length;
+  const lucroPublicadas = prognosticos
+    .filter((p) => p.status_publicacao === "PUBLICADO" || p.status_publicacao === "FINALIZADO")
+    .reduce((s, p) => s + (p.lucro_prejuizo ?? 0), 0);
 
   const bankrollChart = bankroll.map((b) => ({
     data: b.data,
@@ -115,6 +131,18 @@ function Dashboard() {
         <StatCard label="ROI" value={`${roi.toFixed(1)}%`} icon={TrendingUp} trend={roi >= 0 ? "up" : "down"} />
         <StatCard label="Yield" value={`${yieldVal.toFixed(1)}%`} icon={Percent} />
         <StatCard label="Win Rate" value={`${winRate.toFixed(1)}%`} icon={Target} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <StatCard label="Publicadas hoje" value={String(publicadasHoje)} icon={Megaphone} />
+        <StatCard label="Pendentes pub." value={String(pendentesPub)} icon={Clock} />
+        <StatCard label="Finalizadas" value={String(finalizadas)} icon={Trophy} />
+        <StatCard
+          label="Lucro publicadas"
+          value={`${lucroPublicadas >= 0 ? "+" : ""}${lucroPublicadas.toFixed(2)}u`}
+          icon={DollarSign}
+          trend={lucroPublicadas >= 0 ? "up" : "down"}
+        />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

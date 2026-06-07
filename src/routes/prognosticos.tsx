@@ -1,12 +1,15 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Upload, Plus, FileSpreadsheet, Pencil, Trash2, Trophy } from "lucide-react";
+import { Upload, Plus, FileSpreadsheet, Pencil, Trash2, Trophy, Megaphone, Copy, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { StatusBadge, ResultBadge } from "@/components/status-badge";
+import { StatusBadge, ResultBadge, PublicacaoBadge } from "@/components/status-badge";
 import {
   usePrognosticos,
   useDeletePrognostico,
   useConfiguracao,
+  usePublicarPrognostico,
+  useCancelarPrognostico,
+  gerarTipTexto,
   type Prognostico,
 } from "@/lib/db";
 import { PrognosticoDialog } from "@/components/prognostico-dialog";
@@ -32,11 +35,31 @@ function Prognosticos() {
   const { data: prognosticos = [], isLoading } = usePrognosticos();
   const { data: cfg } = useConfiguracao();
   const del = useDeletePrognostico();
+  const publicar = usePublicarPrognostico();
+  const cancelar = useCancelarPrognostico();
 
   const [editing, setEditing] = useState<Prognostico | null>(null);
   const [openForm, setOpenForm] = useState(false);
   const [resultadoFor, setResultadoFor] = useState<Prognostico | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Prognostico | null>(null);
+
+  const podePublicar = (p: Prognostico) =>
+    p.status_publicacao === "NAO_PUBLICADO" &&
+    (p.status_validacao === "CONFIRMA" || p.status_validacao === "CONFIRMA COM CAUTELA");
+
+  const copyTip = async (p: Prognostico) => {
+    await navigator.clipboard.writeText(p.tip_texto || gerarTipTexto(p));
+    toast.success("TIP copiada");
+  };
+
+  const handlePublicar = async (p: Prognostico) => {
+    if (!podePublicar(p)) {
+      toast.error("Apenas CONFIRMA / CONFIRMA COM CAUTELA podem ser publicados");
+      return;
+    }
+    await publicar.mutateAsync({ id: p.id, tip_texto: gerarTipTexto(p) });
+    toast.success("Pick publicada");
+  };
 
   return (
     <div className="space-y-6">
@@ -48,11 +71,10 @@ function Prognosticos() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => toast.info("Importação CSV/XLSX em breve — schema já preparado.")}
-          >
-            <Upload className="h-4 w-4" /> Importar
+          <Button variant="outline" asChild>
+            <Link to="/importar">
+              <Upload className="h-4 w-4" /> Importar
+            </Link>
           </Button>
           <Button
             onClick={() => {
@@ -93,7 +115,8 @@ function Prognosticos() {
                 <th className="px-3 py-2 text-right font-mono">Prob.</th>
                 <th className="px-3 py-2 text-right font-mono">Edge</th>
                 <th className="px-3 py-2 text-right font-mono">Stake</th>
-                <th className="px-3 py-2 text-left">Status</th>
+                <th className="px-3 py-2 text-left">Validação</th>
+                <th className="px-3 py-2 text-left">Publicação</th>
                 <th className="px-3 py-2 text-left">Resultado</th>
                 <th className="px-3 py-2 text-right">Ações</th>
               </tr>
@@ -101,14 +124,14 @@ function Prognosticos() {
             <tbody>
               {isLoading && (
                 <tr>
-                  <td colSpan={14} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={15} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     Carregando...
                   </td>
                 </tr>
               )}
               {!isLoading && prognosticos.length === 0 && (
                 <tr>
-                  <td colSpan={14} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={15} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     Nenhum prognóstico cadastrado.
                   </td>
                 </tr>
@@ -123,15 +146,34 @@ function Prognosticos() {
                   <td className="px-3 py-2 whitespace-nowrap">{p.pick}</td>
                   <td className="px-3 py-2 text-right font-mono">{p.odd_ofertada.toFixed(2)}</td>
                   <td className="px-3 py-2 text-right font-mono">{p.odd_valor.toFixed(2)}</td>
-                  <td className="px-3 py-2 text-right font-mono">{(p.probabilidade_final * 100).toFixed(1)}%</td>
+                  <td className="px-3 py-2 text-right font-mono">{p.probabilidade_final.toFixed(1)}%</td>
                   <td className={`px-3 py-2 text-right font-mono ${p.edge >= 0 ? "text-success" : "text-destructive"}`}>
-                    {(p.edge * 100).toFixed(1)}%
+                    {p.edge.toFixed(1)}%
                   </td>
                   <td className="px-3 py-2 text-right font-mono">{p.stake.toFixed(1)}u</td>
                   <td className="px-3 py-2"><StatusBadge status={p.status_validacao} /></td>
+                  <td className="px-3 py-2"><PublicacaoBadge status={p.status_publicacao} /></td>
                   <td className="px-3 py-2"><ResultBadge result={p.resultado} /></td>
                   <td className="px-3 py-2 text-right whitespace-nowrap">
                     <div className="flex justify-end gap-1">
+                      {podePublicar(p) && (
+                        <Button size="icon" variant="ghost" title="Publicar" onClick={() => handlePublicar(p)}>
+                          <Megaphone className="h-4 w-4 text-primary" />
+                        </Button>
+                      )}
+                      <Button size="icon" variant="ghost" title="Copiar TIP" onClick={() => copyTip(p)}>
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                      {p.status_publicacao !== "CANCELADO" && p.status_publicacao !== "FINALIZADO" && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          title="Cancelar pick"
+                          onClick={() => cancelar.mutate(p.id)}
+                        >
+                          <Ban className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
                       {p.resultado === "PENDENTE" && (
                         <Button
                           size="icon"

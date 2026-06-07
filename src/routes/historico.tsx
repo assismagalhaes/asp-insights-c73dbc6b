@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { StatusBadge, ResultBadge } from "@/components/status-badge";
+import { StatusBadge, ResultBadge, PublicacaoBadge } from "@/components/status-badge";
 import { usePrognosticos, useConfiguracao, ESPORTES_DEFAULT, MERCADOS_DEFAULT } from "@/lib/db";
 import {
   Select,
@@ -26,6 +26,7 @@ function Historico() {
   const [mercado, setMercado] = useState("all");
   const [status, setStatus] = useState("all");
   const [resultado, setResultado] = useState("all");
+  const [publicacao, setPublicacao] = useState("all");
   const [data, setData] = useState("");
 
   const rows = useMemo(() => {
@@ -34,14 +35,15 @@ function Historico() {
       if (mercado !== "all" && p.mercado !== mercado) return false;
       if (status !== "all" && p.status_validacao !== status) return false;
       if (resultado !== "all" && p.resultado !== resultado) return false;
+      if (publicacao !== "all" && p.status_publicacao !== publicacao) return false;
       if (data && p.data !== data) return false;
       return true;
     });
-  }, [prognosticos, esporte, mercado, status, resultado, data]);
+  }, [prognosticos, esporte, mercado, status, resultado, publicacao, data]);
 
-  const wins = rows.filter((r) => r.resultado === "GREEN").length;
-  const losses = rows.filter((r) => r.resultado === "RED").length;
-  const pushes = rows.filter((r) => r.resultado === "PUSH").length;
+  const wins = rows.filter((r) => r.resultado === "GREEN" || r.resultado === "HALF GREEN").length;
+  const losses = rows.filter((r) => r.resultado === "RED" || r.resultado === "HALF RED").length;
+  const pushes = rows.filter((r) => r.resultado === "PUSH" || r.resultado === "VOID").length;
   const lucro = rows.reduce((s, p) => s + (p.lucro_prejuizo ?? 0), 0);
 
   return (
@@ -53,7 +55,7 @@ function Historico() {
         </p>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-5">
+      <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
         <Input type="date" value={data} onChange={(e) => setData(e.target.value)} />
         <Select value={esporte} onValueChange={setEsporte}>
           <SelectTrigger><SelectValue placeholder="Esporte" /></SelectTrigger>
@@ -70,9 +72,9 @@ function Historico() {
           </SelectContent>
         </Select>
         <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectTrigger><SelectValue placeholder="Validação" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos os status</SelectItem>
+            <SelectItem value="all">Todas as validações</SelectItem>
             <SelectItem value="CONFIRMA">CONFIRMA</SelectItem>
             <SelectItem value="CONFIRMA COM CAUTELA">CONFIRMA COM CAUTELA</SelectItem>
             <SelectItem value="AGUARDAR NOTÍCIA">AGUARDAR NOTÍCIA</SelectItem>
@@ -80,13 +82,26 @@ function Historico() {
             <SelectItem value="PENDENTE">PENDENTE</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={publicacao} onValueChange={setPublicacao}>
+          <SelectTrigger><SelectValue placeholder="Publicação" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as publicações</SelectItem>
+            <SelectItem value="NAO_PUBLICADO">Não publicado</SelectItem>
+            <SelectItem value="PUBLICADO">Publicado</SelectItem>
+            <SelectItem value="FINALIZADO">Finalizado</SelectItem>
+            <SelectItem value="CANCELADO">Cancelado</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={resultado} onValueChange={setResultado}>
           <SelectTrigger><SelectValue placeholder="Resultado" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os resultados</SelectItem>
             <SelectItem value="GREEN">GREEN</SelectItem>
+            <SelectItem value="HALF GREEN">HALF GREEN</SelectItem>
             <SelectItem value="RED">RED</SelectItem>
+            <SelectItem value="HALF RED">HALF RED</SelectItem>
             <SelectItem value="PUSH">PUSH</SelectItem>
+            <SelectItem value="VOID">VOID</SelectItem>
             <SelectItem value="PENDENTE">PENDENTE</SelectItem>
           </SelectContent>
         </Select>
@@ -111,7 +126,8 @@ function Historico() {
                 <th className="px-3 py-2 text-left">Pick</th>
                 <th className="px-3 py-2 text-right font-mono">Odd</th>
                 <th className="px-3 py-2 text-right font-mono">Stake</th>
-                <th className="px-3 py-2 text-left">Status</th>
+                <th className="px-3 py-2 text-left">Validação</th>
+                <th className="px-3 py-2 text-left">Publicação</th>
                 <th className="px-3 py-2 text-left">Resultado</th>
                 <th className="px-3 py-2 text-right font-mono">Lucro</th>
               </tr>
@@ -127,6 +143,7 @@ function Historico() {
                   <td className="px-3 py-2 text-right font-mono">{p.odd_ofertada.toFixed(2)}</td>
                   <td className="px-3 py-2 text-right font-mono">{p.stake.toFixed(1)}u</td>
                   <td className="px-3 py-2"><StatusBadge status={p.status_validacao} /></td>
+                  <td className="px-3 py-2"><PublicacaoBadge status={p.status_publicacao} /></td>
                   <td className="px-3 py-2"><ResultBadge result={p.resultado} /></td>
                   <td className={`px-3 py-2 text-right font-mono ${(p.lucro_prejuizo ?? 0) >= 0 ? "text-success" : "text-destructive"}`}>
                     {p.lucro_prejuizo != null ? `${p.lucro_prejuizo >= 0 ? "+" : ""}${p.lucro_prejuizo.toFixed(2)}u` : "-"}
@@ -135,7 +152,7 @@ function Historico() {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={11} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     Nenhum prognóstico encontrado com os filtros aplicados.
                   </td>
                 </tr>

@@ -7,7 +7,20 @@ export type Status =
   | "CONFIRMA COM CAUTELA"
   | "AGUARDAR NOTÍCIA"
   | "PASS";
-export type Resultado = "PENDENTE" | "GREEN" | "RED" | "PUSH";
+export type Resultado =
+  | "PENDENTE"
+  | "GREEN"
+  | "RED"
+  | "PUSH"
+  | "VOID"
+  | "HALF GREEN"
+  | "HALF RED";
+
+export type StatusPublicacao =
+  | "NAO_PUBLICADO"
+  | "PUBLICADO"
+  | "FINALIZADO"
+  | "CANCELADO";
 
 export interface Prognostico {
   id: string;
@@ -26,10 +39,15 @@ export interface Prognostico {
   edge: number;
   stake: number;
   status_validacao: Status;
-  status_publicacao: string;
+  status_publicacao: StatusPublicacao;
   resultado: Resultado;
   lucro_prejuizo: number | null;
   observacoes: string | null;
+  data_publicacao: string | null;
+  tip_texto: string | null;
+  publicado_em: string | null;
+  publicado_por: string | null;
+  canal_publicacao: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -109,9 +127,19 @@ export function usePrognosticos() {
 
 export type PrognosticoInput = Omit<
   Prognostico,
-  "id" | "created_at" | "updated_at" | "lucro_prejuizo" | "status_publicacao" | "resultado"
+  | "id"
+  | "created_at"
+  | "updated_at"
+  | "lucro_prejuizo"
+  | "status_publicacao"
+  | "resultado"
+  | "data_publicacao"
+  | "tip_texto"
+  | "publicado_em"
+  | "publicado_por"
+  | "canal_publicacao"
 > & {
-  status_publicacao?: string;
+  status_publicacao?: StatusPublicacao;
   resultado?: Resultado;
 };
 
@@ -273,3 +301,107 @@ export const MERCADOS_DEFAULT = [
   "Total de Escanteios",
   "Player Props",
 ];
+
+// ===== Publicação =====
+export function calcLucro(resultado: Resultado, stake: number, odd: number): number {
+  switch (resultado) {
+    case "GREEN":
+      return Number((stake * (odd - 1)).toFixed(2));
+    case "RED":
+      return Number((-stake).toFixed(2));
+    case "HALF GREEN":
+      return Number(((stake * (odd - 1)) / 2).toFixed(2));
+    case "HALF RED":
+      return Number((-stake / 2).toFixed(2));
+    case "PUSH":
+    case "VOID":
+    default:
+      return 0;
+  }
+}
+
+export function gerarTipTexto(
+  p: Prognostico,
+  extras?: { justificativa?: string | null; riscos?: string | null },
+): string {
+  return `🔥 ASP INSIGHTS - PICK CONFIRMADA
+
+🏆 Jogo: ${p.jogo}
+🏟️ Liga: ${p.liga || "—"}
+📊 Esporte: ${p.esporte}
+
+🎯 Mercado: ${p.mercado}${p.linha ? ` (${p.linha})` : ""}
+✅ Pick: ${p.pick}
+📈 Odd: ${p.odd_ofertada.toFixed(2)}
+📉 Odd de Valor: ${p.odd_valor.toFixed(2)}
+📊 Probabilidade: ${p.probabilidade_final.toFixed(1)}%
+⚖️ Edge: ${p.edge.toFixed(2)}%
+💰 Stake: ${p.stake}u
+
+🧠 Base técnica:
+${extras?.justificativa?.trim() || "—"}
+
+⚠️ Riscos:
+${extras?.riscos?.trim() || "—"}
+
+📌 Status: ${p.status_validacao}`;
+}
+
+export function useValidacaoByPrognostico(prognosticoId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["validacao", prognosticoId],
+    enabled: !!prognosticoId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("validacoes")
+        .select("*")
+        .eq("prognostico_id", prognosticoId!)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return (data as Validacao | null) ?? null;
+    },
+  });
+}
+
+export function usePublicarPrognostico() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      id: string;
+      tip_texto: string;
+      canal_publicacao?: string | null;
+      publicado_por?: string | null;
+    }) => {
+      const now = new Date().toISOString();
+      const { error } = await supabase
+        .from("prognosticos")
+        .update({
+          status_publicacao: "PUBLICADO",
+          data_publicacao: now,
+          publicado_em: now,
+          tip_texto: input.tip_texto,
+          canal_publicacao: input.canal_publicacao ?? "MANUAL",
+          publicado_por: input.publicado_por ?? "admin",
+        })
+        .eq("id", input.id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["prognosticos"] }),
+  });
+}
+
+export function useCancelarPrognostico() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("prognosticos")
+        .update({ status_publicacao: "CANCELADO" })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["prognosticos"] }),
+  });
+}
