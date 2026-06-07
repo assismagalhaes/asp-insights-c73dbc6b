@@ -26,7 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/publicacao")({
+export const Route = createFileRoute("/_authenticated/publicacao")({
   head: () => ({ meta: [{ title: "Publicação — ASP Insights" }] }),
   component: PublicacaoPage,
 });

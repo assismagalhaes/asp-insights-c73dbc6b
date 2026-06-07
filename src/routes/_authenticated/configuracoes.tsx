@@ -13,7 +13,7 @@ import {
 import { toast } from "sonner";
 import { Activity } from "lucide-react";
 
-export const Route = createFileRoute("/configuracoes")({
+export const Route = createFileRoute("/_authenticated/configuracoes")({
   head: () => ({ meta: [{ title: "Configurações — ASP Insights" }] }),
   component: Configuracoes,
 });

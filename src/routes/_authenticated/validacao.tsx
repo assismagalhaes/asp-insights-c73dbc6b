@@ -10,7 +10,7 @@ import { usePrognosticos, useCreateValidacao, type Prognostico, type Status } fr
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/validacao")({
+export const Route = createFileRoute("/_authenticated/validacao")({
   head: () => ({ meta: [{ title: "Validação Crítica — ASP Insights" }] }),
   component: Validacao,
 });
