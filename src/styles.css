@@ -51,62 +51,66 @@
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
-/* Dark by default - sports analytics premium theme */
+/* Dark by default - ASP Insights brand: deep navy + electric blue + neon green */
 :root {
   --radius: 0.625rem;
 
-  --background: oklch(0.16 0.015 250);
-  --foreground: oklch(0.96 0.005 250);
+  /* Background — deep brand navy (matches logo backdrop) */
+  --background: oklch(0.14 0.04 255);
+  --foreground: oklch(0.97 0.005 250);
 
-  --card: oklch(0.205 0.018 250);
-  --card-foreground: oklch(0.96 0.005 250);
+  --card: oklch(0.19 0.045 255);
+  --card-foreground: oklch(0.97 0.005 250);
 
-  --popover: oklch(0.205 0.018 250);
-  --popover-foreground: oklch(0.96 0.005 250);
+  --popover: oklch(0.19 0.045 255);
+  --popover-foreground: oklch(0.97 0.005 250);
 
-  --primary: oklch(0.72 0.18 155); /* emerald green */
-  --primary-foreground: oklch(0.16 0.015 250);
+  /* Primary — electric blue (brain in the logo) */
+  --primary: oklch(0.65 0.21 255);
+  --primary-foreground: oklch(0.98 0.005 250);
 
-  --secondary: oklch(0.27 0.02 250);
-  --secondary-foreground: oklch(0.96 0.005 250);
+  --secondary: oklch(0.26 0.04 255);
+  --secondary-foreground: oklch(0.97 0.005 250);
 
-  --muted: oklch(0.24 0.018 250);
-  --muted-foreground: oklch(0.68 0.02 250);
+  --muted: oklch(0.22 0.035 255);
+  --muted-foreground: oklch(0.7 0.025 250);
 
-  --accent: oklch(0.3 0.04 200);
-  --accent-foreground: oklch(0.96 0.005 250);
+  /* Accent — neon green (tagline + circuit lines) */
+  --accent: oklch(0.82 0.22 145);
+  --accent-foreground: oklch(0.14 0.04 255);
 
   --destructive: oklch(0.62 0.23 25);
   --destructive-foreground: oklch(0.98 0 0);
 
-  --success: oklch(0.72 0.18 155);
-  --success-foreground: oklch(0.16 0.015 250);
+  --success: oklch(0.82 0.22 145);
+  --success-foreground: oklch(0.14 0.04 255);
 
-  --warning: oklch(0.82 0.17 90); /* yellow */
-  --warning-foreground: oklch(0.16 0.015 250);
+  --warning: oklch(0.85 0.17 90);
+  --warning-foreground: oklch(0.14 0.04 255);
 
-  --caution: oklch(0.72 0.18 55); /* orange */
-  --caution-foreground: oklch(0.16 0.015 250);
+  --caution: oklch(0.74 0.19 55);
+  --caution-foreground: oklch(0.14 0.04 255);
 
-  --border: oklch(0.28 0.02 250);
-  --input: oklch(0.28 0.02 250);
-  --ring: oklch(0.72 0.18 155);
+  --border: oklch(0.28 0.04 255);
+  --input: oklch(0.26 0.04 255);
+  --ring: oklch(0.65 0.21 255);
 
-  --chart-1: oklch(0.72 0.18 155);
-  --chart-2: oklch(0.7 0.15 220);
-  --chart-3: oklch(0.82 0.17 90);
-  --chart-4: oklch(0.72 0.18 55);
+  --chart-1: oklch(0.65 0.21 255);
+  --chart-2: oklch(0.82 0.22 145);
+  --chart-3: oklch(0.85 0.17 90);
+  --chart-4: oklch(0.74 0.19 55);
   --chart-5: oklch(0.62 0.23 25);
 
-  --sidebar: oklch(0.135 0.015 250);
-  --sidebar-foreground: oklch(0.9 0.01 250);
-  --sidebar-primary: oklch(0.72 0.18 155);
-  --sidebar-primary-foreground: oklch(0.16 0.015 250);
-  --sidebar-accent: oklch(0.22 0.02 250);
-  --sidebar-accent-foreground: oklch(0.96 0.005 250);
-  --sidebar-border: oklch(0.22 0.02 250);
-  --sidebar-ring: oklch(0.72 0.18 155);
+  --sidebar: oklch(0.11 0.04 255);
+  --sidebar-foreground: oklch(0.92 0.01 250);
+  --sidebar-primary: oklch(0.65 0.21 255);
+  --sidebar-primary-foreground: oklch(0.98 0.005 250);
+  --sidebar-accent: oklch(0.2 0.04 255);
+  --sidebar-accent-foreground: oklch(0.97 0.005 250);
+  --sidebar-border: oklch(0.22 0.04 255);
+  --sidebar-ring: oklch(0.65 0.21 255);
 }
+
 
 @layer base {
   * {

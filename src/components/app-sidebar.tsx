@@ -7,10 +7,10 @@ import {
   Wallet,
   BarChart3,
   Settings,
-  Activity,
   Upload,
   Megaphone,
 } from "lucide-react";
+import logo from "@/assets/logo-asp.png.asset.json";
 
 import {
   Sidebar,
@@ -24,6 +24,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+
 
 const items = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
@@ -46,19 +47,25 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border">
         <div className="flex items-center gap-2 px-2 py-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <Activity className="h-4 w-4" />
-          </div>
+          <img
+            src={logo.url}
+            alt="ASP Insights"
+            className="h-9 w-9 shrink-0 rounded-md object-contain"
+          />
           {!collapsed && (
             <div className="flex flex-col leading-tight">
-              <span className="text-sm font-bold tracking-tight">ASP Insights</span>
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+              <span className="text-sm font-bold tracking-tight">
+                <span className="text-foreground">ASP </span>
+                <span className="text-primary">Insights</span>
+              </span>
+              <span className="text-[10px] text-accent uppercase tracking-[0.15em]">
                 AI Sports Predictions
               </span>
             </div>
           )}
         </div>
       </SidebarHeader>
+
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Navegação</SidebarGroupLabel>

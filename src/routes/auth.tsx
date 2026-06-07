@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Loader2, LockKeyhole } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import logo from "@/assets/logo-asp.png.asset.json";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -39,76 +39,61 @@ function AuthPage() {
     navigate({ to: "/" });
   }
 
-  async function handleSignup(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: `${window.location.origin}/` },
-    });
-    setLoading(false);
-    if (error) {
-      toast.error("Falha no cadastro", { description: error.message });
-      return;
-    }
-    toast.success("Administrador criado", { description: "Faça login para continuar." });
-  }
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md border-border/60">
-        <CardHeader className="text-center space-y-2">
-          <div className="mx-auto h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-            <LockKeyhole className="h-6 w-6 text-primary" />
-          </div>
-          <CardTitle className="text-2xl">ASP Insights</CardTitle>
-          <CardDescription>Acesso restrito — administrador</CardDescription>
+    <div className="min-h-screen flex items-center justify-center bg-background p-4 relative overflow-hidden">
+      {/* glow backdrop */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 h-[500px] w-[500px] rounded-full bg-primary/20 blur-[120px]" />
+        <div className="absolute bottom-0 right-0 h-[300px] w-[300px] rounded-full bg-accent/15 blur-[120px]" />
+      </div>
+
+      <Card className="w-full max-w-md border-border/60 backdrop-blur-sm bg-card/80 relative">
+        <CardHeader className="text-center space-y-3">
+          <img
+            src={logo.url}
+            alt="ASP Insights"
+            className="mx-auto h-28 w-28 object-contain"
+          />
+          <CardTitle className="text-2xl tracking-tight">
+            <span className="text-foreground">ASP </span>
+            <span className="text-primary">Insights</span>
+          </CardTitle>
+          <CardDescription className="text-accent uppercase text-[10px] tracking-[0.2em]">
+            AI Sports Predictions
+          </CardDescription>
+          <p className="text-xs text-muted-foreground">Acesso restrito ao administrador</p>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="login">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">Entrar</TabsTrigger>
-              <TabsTrigger value="signup">Criar admin</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="login">
-              <form onSubmit={handleLogin} className="space-y-4 mt-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email-l">E-mail</Label>
-                  <Input id="email-l" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password-l">Senha</Label>
-                  <Input id="password-l" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
-                </div>
-                <Button type="submit" disabled={loading} className="w-full">
-                  {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  Entrar
-                </Button>
-              </form>
-            </TabsContent>
-
-            <TabsContent value="signup">
-              <form onSubmit={handleSignup} className="space-y-4 mt-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email-s">E-mail</Label>
-                  <Input id="email-s" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password-s">Senha (mín. 6 caracteres)</Label>
-                  <Input id="password-s" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} autoComplete="new-password" />
-                </div>
-                <Button type="submit" disabled={loading} className="w-full">
-                  {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  Criar conta admin
-                </Button>
-                <p className="text-xs text-muted-foreground text-center">
-                  Use esta aba apenas para criar o primeiro administrador.
-                </p>
-              </form>
-            </TabsContent>
-          </Tabs>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email-l">E-mail</Label>
+              <Input
+                id="email-l"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+                placeholder="admin@exemplo.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password-l">Senha</Label>
+              <Input
+                id="password-l"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+                placeholder="••••••••"
+              />
+            </div>
+            <Button type="submit" disabled={loading} className="w-full">
+              {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Entrar
+            </Button>
+          </form>
         </CardContent>
       </Card>
     </div>
