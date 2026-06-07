@@ -193,6 +193,7 @@ function Prognosticos() {
                   <td className="px-3 py-2 whitespace-nowrap">{p.esporte}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{p.liga}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{p.jogo}</td>
+                  <td className="px-3 py-2 whitespace-nowrap font-mono text-xs">{p.placar_final ?? "—"}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{p.mercado}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{p.pick}</td>
                   <td className="px-3 py-2 text-right font-mono">{p.odd_ofertada.toFixed(2)}</td>
