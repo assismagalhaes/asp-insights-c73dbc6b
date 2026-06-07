@@ -1,12 +1,15 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Upload, Plus, FileSpreadsheet, Pencil, Trash2, Trophy } from "lucide-react";
+import { Upload, Plus, FileSpreadsheet, Pencil, Trash2, Trophy, Megaphone, Copy, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { StatusBadge, ResultBadge } from "@/components/status-badge";
+import { StatusBadge, ResultBadge, PublicacaoBadge } from "@/components/status-badge";
 import {
   usePrognosticos,
   useDeletePrognostico,
   useConfiguracao,
+  usePublicarPrognostico,
+  useCancelarPrognostico,
+  gerarTipTexto,
   type Prognostico,
 } from "@/lib/db";
 import { PrognosticoDialog } from "@/components/prognostico-dialog";
@@ -32,11 +35,31 @@ function Prognosticos() {
   const { data: prognosticos = [], isLoading } = usePrognosticos();
   const { data: cfg } = useConfiguracao();
   const del = useDeletePrognostico();
+  const publicar = usePublicarPrognostico();
+  const cancelar = useCancelarPrognostico();
 
   const [editing, setEditing] = useState<Prognostico | null>(null);
   const [openForm, setOpenForm] = useState(false);
   const [resultadoFor, setResultadoFor] = useState<Prognostico | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Prognostico | null>(null);
+
+  const podePublicar = (p: Prognostico) =>
+    p.status_publicacao === "NAO_PUBLICADO" &&
+    (p.status_validacao === "CONFIRMA" || p.status_validacao === "CONFIRMA COM CAUTELA");
+
+  const copyTip = async (p: Prognostico) => {
+    await navigator.clipboard.writeText(p.tip_texto || gerarTipTexto(p));
+    toast.success("TIP copiada");
+  };
+
+  const handlePublicar = async (p: Prognostico) => {
+    if (!podePublicar(p)) {
+      toast.error("Apenas CONFIRMA / CONFIRMA COM CAUTELA podem ser publicados");
+      return;
+    }
+    await publicar.mutateAsync({ id: p.id, tip_texto: gerarTipTexto(p) });
+    toast.success("Pick publicada");
+  };
 
   return (
     <div className="space-y-6">
