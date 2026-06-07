@@ -68,7 +68,8 @@ const REQUIRED: Field[] = [
 ];
 
 const ALIASES: Record<Field, string[]> = {
-  data: ["data", "date", "dt", "data_jogo"],
+  data: ["data", "date", "dt", "data_jogo", "data_hora", "datetime", "data_hora_jogo"],
+  hora: ["hora", "time", "horario", "horário"],
   esporte: ["esporte", "sport", "modalidade"],
   liga: ["liga", "league", "campeonato", "competicao", "competição"],
   jogo: ["jogo", "match", "evento", "event", "partida"],
