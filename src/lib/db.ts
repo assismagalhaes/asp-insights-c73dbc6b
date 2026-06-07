@@ -123,6 +123,7 @@ export type PrognosticoInput = Omit<
   | "publicado_em"
   | "publicado_por"
   | "canal_publicacao"
+  | "placar_final"
 > & {
   status_publicacao?: StatusPublicacao;
   resultado?: Resultado;
