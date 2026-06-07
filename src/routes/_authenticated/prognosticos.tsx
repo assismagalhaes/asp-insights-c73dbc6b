@@ -307,3 +307,37 @@ function Prognosticos() {
     </div>
   );
 }
+
+function SortableTh({
+  label,
+  k,
+  align,
+  sortKey,
+  sortDir,
+  onClick,
+}: {
+  label: string;
+  k: SortKey;
+  align: "left" | "right";
+  sortKey: SortKey;
+  sortDir: "asc" | "desc";
+  onClick: (k: SortKey) => void;
+}) {
+  const active = sortKey === k;
+  const Icon = !active ? ArrowUpDown : sortDir === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <th className={`px-3 py-2 ${align === "right" ? "text-right" : "text-left"}`}>
+      <button
+        type="button"
+        onClick={() => onClick(k)}
+        className={`inline-flex items-center gap-1 hover:text-foreground transition-colors ${
+          align === "right" ? "flex-row-reverse" : ""
+        } ${active ? "text-foreground" : ""}`}
+      >
+        <span>{label}</span>
+        <Icon className={`h-3 w-3 ${active ? "opacity-100" : "opacity-40"}`} />
+      </button>
+    </th>
+  );
+}
+
