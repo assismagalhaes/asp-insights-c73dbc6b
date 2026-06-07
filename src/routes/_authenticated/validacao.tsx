@@ -140,14 +140,15 @@ function Validacao() {
                 <Metric label="Odd Valor" value={p.odd_valor.toFixed(2)} />
                 <Metric
                   label="Probabilidade"
-                  value={`${(p.probabilidade_final * 100).toFixed(1)}%`}
-                  tone={p.probabilidade_final > 0.6 ? "good" : p.probabilidade_final < 0.55 ? "warn" : undefined}
+                  value={`${p.probabilidade_final.toFixed(2)}%`}
+                  tone={p.probabilidade_final > 60 ? "good" : p.probabilidade_final < 55 ? "warn" : undefined}
                 />
                 <Metric
                   label="Edge"
-                  value={`${(p.edge * 100).toFixed(1)}%`}
+                  value={`${p.edge.toFixed(2)}%`}
                   tone={p.edge < 0 ? "bad" : "good"}
                 />
+
                 <Metric label="Stake sugerida" value={`${p.stake.toFixed(1)}u`} />
               </div>
 
