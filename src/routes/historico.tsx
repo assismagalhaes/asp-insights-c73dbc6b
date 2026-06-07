@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { StatusBadge, ResultBadge } from "@/components/status-badge";
+import { StatusBadge, ResultBadge, PublicacaoBadge } from "@/components/status-badge";
 import { usePrognosticos, useConfiguracao, ESPORTES_DEFAULT, MERCADOS_DEFAULT } from "@/lib/db";
 import {
   Select,
