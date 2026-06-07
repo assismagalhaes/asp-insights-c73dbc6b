@@ -91,6 +91,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content:
           "Plataforma profissional de gerenciamento, validação e acompanhamento de prognósticos esportivos.",
       },
+      { property: "og:title", content: "ASP Insights — AI Sports Predictions" },
+      { name: "twitter:title", content: "ASP Insights — AI Sports Predictions" },
+      { name: "description", content: "ASP Insights - AI Sports Predictions is a web platform for managing, validating, and tracking AI-generated sports predictions." },
+      { property: "og:description", content: "ASP Insights - AI Sports Predictions is a web platform for managing, validating, and tracking AI-generated sports predictions." },
+      { name: "twitter:description", content: "ASP Insights - AI Sports Predictions is a web platform for managing, validating, and tracking AI-generated sports predictions." },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/51hpxLkxO7XfkSp96ZNusHM8mlH3/social-images/social-1780802982471-Logo_ASP_Insights.webp" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/51hpxLkxO7XfkSp96ZNusHM8mlH3/social-images/social-1780802982471-Logo_ASP_Insights.webp" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { property: "og:type", content: "website" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
