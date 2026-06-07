@@ -9,6 +9,9 @@ import {
   Target,
   DollarSign,
   ListChecks,
+  Megaphone,
+  Clock,
+  Trophy,
 } from "lucide-react";
 import {
   ResponsiveContainer,
