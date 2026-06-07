@@ -127,8 +127,8 @@ function parseProb(v: unknown): number | null {
 function parseEdge(v: unknown): number | null {
   const n = parseNumber(v);
   if (n == null) return null;
-  // edge frequentemente expresso como 0.05 (=5%) ou 5 (=5%)
-  if (n > -1 && n < 1) return Number((n * 100).toFixed(4));
+  // Edge é importado já em pontos percentuais (ex.: 0.3 = 0.3%, 7.08 = 7.08%).
+  // Não aplicamos escala automática para evitar leituras incorretas.
   return n;
 }
 
