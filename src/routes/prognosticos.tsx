@@ -115,7 +115,8 @@ function Prognosticos() {
                 <th className="px-3 py-2 text-right font-mono">Prob.</th>
                 <th className="px-3 py-2 text-right font-mono">Edge</th>
                 <th className="px-3 py-2 text-right font-mono">Stake</th>
-                <th className="px-3 py-2 text-left">Status</th>
+                <th className="px-3 py-2 text-left">Validação</th>
+                <th className="px-3 py-2 text-left">Publicação</th>
                 <th className="px-3 py-2 text-left">Resultado</th>
                 <th className="px-3 py-2 text-right">Ações</th>
               </tr>
@@ -123,14 +124,14 @@ function Prognosticos() {
             <tbody>
               {isLoading && (
                 <tr>
-                  <td colSpan={14} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={15} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     Carregando...
                   </td>
                 </tr>
               )}
               {!isLoading && prognosticos.length === 0 && (
                 <tr>
-                  <td colSpan={14} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={15} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     Nenhum prognóstico cadastrado.
                   </td>
                 </tr>
@@ -145,15 +146,34 @@ function Prognosticos() {
                   <td className="px-3 py-2 whitespace-nowrap">{p.pick}</td>
                   <td className="px-3 py-2 text-right font-mono">{p.odd_ofertada.toFixed(2)}</td>
                   <td className="px-3 py-2 text-right font-mono">{p.odd_valor.toFixed(2)}</td>
-                  <td className="px-3 py-2 text-right font-mono">{(p.probabilidade_final * 100).toFixed(1)}%</td>
+                  <td className="px-3 py-2 text-right font-mono">{p.probabilidade_final.toFixed(1)}%</td>
                   <td className={`px-3 py-2 text-right font-mono ${p.edge >= 0 ? "text-success" : "text-destructive"}`}>
-                    {(p.edge * 100).toFixed(1)}%
+                    {p.edge.toFixed(1)}%
                   </td>
                   <td className="px-3 py-2 text-right font-mono">{p.stake.toFixed(1)}u</td>
                   <td className="px-3 py-2"><StatusBadge status={p.status_validacao} /></td>
+                  <td className="px-3 py-2"><PublicacaoBadge status={p.status_publicacao} /></td>
                   <td className="px-3 py-2"><ResultBadge result={p.resultado} /></td>
                   <td className="px-3 py-2 text-right whitespace-nowrap">
                     <div className="flex justify-end gap-1">
+                      {podePublicar(p) && (
+                        <Button size="icon" variant="ghost" title="Publicar" onClick={() => handlePublicar(p)}>
+                          <Megaphone className="h-4 w-4 text-primary" />
+                        </Button>
+                      )}
+                      <Button size="icon" variant="ghost" title="Copiar TIP" onClick={() => copyTip(p)}>
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                      {p.status_publicacao !== "CANCELADO" && p.status_publicacao !== "FINALIZADO" && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          title="Cancelar pick"
+                          onClick={() => cancelar.mutate(p.id)}
+                        >
+                          <Ban className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
                       {p.resultado === "PENDENTE" && (
                         <Button
                           size="icon"
