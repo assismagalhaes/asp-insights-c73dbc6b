@@ -272,6 +272,8 @@ function ImportarPage() {
 
       const data = parseDate(values.data);
       if (!data) errors.push("data inválida");
+      // hora vem na própria coluna de data (ex.: "2026-06-07 14:35") ou em coluna separada
+      const hora = parseTime(values.hora) ?? parseTime(values.data);
       const esporte = String(values.esporte ?? "").trim();
       if (!esporte) errors.push("esporte vazio");
       let jogo = String(values.jogo ?? "").trim();
@@ -316,6 +318,7 @@ function ImportarPage() {
         raw,
         values: {
           data,
+          hora,
           esporte,
           liga: String(values.liga ?? "").trim() || null,
           jogo,
