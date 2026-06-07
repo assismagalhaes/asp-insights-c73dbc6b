@@ -25,9 +25,14 @@ const decisoes: { label: Status; color: string }[] = [
 function autoCheck(p: Prognostico) {
   if (p.odd_ofertada < p.odd_valor) return { auto: "PASS" as const, reason: "Odd ofertada menor que odd de valor" };
   if (p.edge < 0) return { auto: "PASS" as const, reason: "Edge negativo" };
-  if (p.probabilidade_final < 0.55) return { auto: "ALERTA" as const, reason: "Probabilidade inferior a 55%" };
-  if (p.probabilidade_final > 0.6) return { auto: "DESTAQUE" as const, reason: "Probabilidade superior a 60%" };
+  if (p.probabilidade_final < 55) return { auto: "ALERTA" as const, reason: "Probabilidade inferior a 55%" };
+  if (p.probabilidade_final > 60) return { auto: "DESTAQUE" as const, reason: "Probabilidade superior a 60%" };
   return null;
+}
+
+function formatDateBR(iso: string): string {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
 }
 
 function Validacao() {
