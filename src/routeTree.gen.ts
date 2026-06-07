@@ -9,100 +9,119 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as ValidacaoRouteImport } from './routes/validacao'
-import { Route as PublicacaoRouteImport } from './routes/publicacao'
-import { Route as PrognosticosRouteImport } from './routes/prognosticos'
-import { Route as ImportarRouteImport } from './routes/importar'
-import { Route as HistoricoRouteImport } from './routes/historico'
-import { Route as EstatisticasRouteImport } from './routes/estatisticas'
-import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
-import { Route as BankrollRouteImport } from './routes/bankroll'
-import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedValidacaoRouteImport } from './routes/_authenticated/validacao'
+import { Route as AuthenticatedPublicacaoRouteImport } from './routes/_authenticated/publicacao'
+import { Route as AuthenticatedPrognosticosRouteImport } from './routes/_authenticated/prognosticos'
+import { Route as AuthenticatedImportarRouteImport } from './routes/_authenticated/importar'
+import { Route as AuthenticatedHistoricoRouteImport } from './routes/_authenticated/historico'
+import { Route as AuthenticatedEstatisticasRouteImport } from './routes/_authenticated/estatisticas'
+import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
+import { Route as AuthenticatedBankrollRouteImport } from './routes/_authenticated/bankroll'
 
-const ValidacaoRoute = ValidacaoRouteImport.update({
-  id: '/validacao',
-  path: '/validacao',
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PublicacaoRoute = PublicacaoRouteImport.update({
-  id: '/publicacao',
-  path: '/publicacao',
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PrognosticosRoute = PrognosticosRouteImport.update({
-  id: '/prognosticos',
-  path: '/prognosticos',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ImportarRoute = ImportarRouteImport.update({
-  id: '/importar',
-  path: '/importar',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HistoricoRoute = HistoricoRouteImport.update({
-  id: '/historico',
-  path: '/historico',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const EstatisticasRoute = EstatisticasRouteImport.update({
-  id: '/estatisticas',
-  path: '/estatisticas',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
-  id: '/configuracoes',
-  path: '/configuracoes',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BankrollRoute = BankrollRouteImport.update({
-  id: '/bankroll',
-  path: '/bankroll',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const IndexRoute = IndexRouteImport.update({
+const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedValidacaoRoute = AuthenticatedValidacaoRouteImport.update({
+  id: '/validacao',
+  path: '/validacao',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPublicacaoRoute = AuthenticatedPublicacaoRouteImport.update({
+  id: '/publicacao',
+  path: '/publicacao',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPrognosticosRoute =
+  AuthenticatedPrognosticosRouteImport.update({
+    id: '/prognosticos',
+    path: '/prognosticos',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedImportarRoute = AuthenticatedImportarRouteImport.update({
+  id: '/importar',
+  path: '/importar',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedHistoricoRoute = AuthenticatedHistoricoRouteImport.update({
+  id: '/historico',
+  path: '/historico',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedEstatisticasRoute =
+  AuthenticatedEstatisticasRouteImport.update({
+    id: '/estatisticas',
+    path: '/estatisticas',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedConfiguracoesRoute =
+  AuthenticatedConfiguracoesRouteImport.update({
+    id: '/configuracoes',
+    path: '/configuracoes',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedBankrollRoute = AuthenticatedBankrollRouteImport.update({
+  id: '/bankroll',
+  path: '/bankroll',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/bankroll': typeof BankrollRoute
-  '/configuracoes': typeof ConfiguracoesRoute
-  '/estatisticas': typeof EstatisticasRoute
-  '/historico': typeof HistoricoRoute
-  '/importar': typeof ImportarRoute
-  '/prognosticos': typeof PrognosticosRoute
-  '/publicacao': typeof PublicacaoRoute
-  '/validacao': typeof ValidacaoRoute
+  '/': typeof AuthenticatedIndexRoute
+  '/auth': typeof AuthRoute
+  '/bankroll': typeof AuthenticatedBankrollRoute
+  '/configuracoes': typeof AuthenticatedConfiguracoesRoute
+  '/estatisticas': typeof AuthenticatedEstatisticasRoute
+  '/historico': typeof AuthenticatedHistoricoRoute
+  '/importar': typeof AuthenticatedImportarRoute
+  '/prognosticos': typeof AuthenticatedPrognosticosRoute
+  '/publicacao': typeof AuthenticatedPublicacaoRoute
+  '/validacao': typeof AuthenticatedValidacaoRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/bankroll': typeof BankrollRoute
-  '/configuracoes': typeof ConfiguracoesRoute
-  '/estatisticas': typeof EstatisticasRoute
-  '/historico': typeof HistoricoRoute
-  '/importar': typeof ImportarRoute
-  '/prognosticos': typeof PrognosticosRoute
-  '/publicacao': typeof PublicacaoRoute
-  '/validacao': typeof ValidacaoRoute
+  '/auth': typeof AuthRoute
+  '/bankroll': typeof AuthenticatedBankrollRoute
+  '/configuracoes': typeof AuthenticatedConfiguracoesRoute
+  '/estatisticas': typeof AuthenticatedEstatisticasRoute
+  '/historico': typeof AuthenticatedHistoricoRoute
+  '/importar': typeof AuthenticatedImportarRoute
+  '/prognosticos': typeof AuthenticatedPrognosticosRoute
+  '/publicacao': typeof AuthenticatedPublicacaoRoute
+  '/validacao': typeof AuthenticatedValidacaoRoute
+  '/': typeof AuthenticatedIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/bankroll': typeof BankrollRoute
-  '/configuracoes': typeof ConfiguracoesRoute
-  '/estatisticas': typeof EstatisticasRoute
-  '/historico': typeof HistoricoRoute
-  '/importar': typeof ImportarRoute
-  '/prognosticos': typeof PrognosticosRoute
-  '/publicacao': typeof PublicacaoRoute
-  '/validacao': typeof ValidacaoRoute
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/_authenticated/bankroll': typeof AuthenticatedBankrollRoute
+  '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
+  '/_authenticated/estatisticas': typeof AuthenticatedEstatisticasRoute
+  '/_authenticated/historico': typeof AuthenticatedHistoricoRoute
+  '/_authenticated/importar': typeof AuthenticatedImportarRoute
+  '/_authenticated/prognosticos': typeof AuthenticatedPrognosticosRoute
+  '/_authenticated/publicacao': typeof AuthenticatedPublicacaoRoute
+  '/_authenticated/validacao': typeof AuthenticatedValidacaoRoute
+  '/_authenticated/': typeof AuthenticatedIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/auth'
     | '/bankroll'
     | '/configuracoes'
     | '/estatisticas'
@@ -113,7 +132,7 @@ export interface FileRouteTypes {
     | '/validacao'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/'
+    | '/auth'
     | '/bankroll'
     | '/configuracoes'
     | '/estatisticas'
@@ -122,109 +141,139 @@ export interface FileRouteTypes {
     | '/prognosticos'
     | '/publicacao'
     | '/validacao'
+    | '/'
   id:
     | '__root__'
-    | '/'
-    | '/bankroll'
-    | '/configuracoes'
-    | '/estatisticas'
-    | '/historico'
-    | '/importar'
-    | '/prognosticos'
-    | '/publicacao'
-    | '/validacao'
+    | '/_authenticated'
+    | '/auth'
+    | '/_authenticated/bankroll'
+    | '/_authenticated/configuracoes'
+    | '/_authenticated/estatisticas'
+    | '/_authenticated/historico'
+    | '/_authenticated/importar'
+    | '/_authenticated/prognosticos'
+    | '/_authenticated/publicacao'
+    | '/_authenticated/validacao'
+    | '/_authenticated/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  BankrollRoute: typeof BankrollRoute
-  ConfiguracoesRoute: typeof ConfiguracoesRoute
-  EstatisticasRoute: typeof EstatisticasRoute
-  HistoricoRoute: typeof HistoricoRoute
-  ImportarRoute: typeof ImportarRoute
-  PrognosticosRoute: typeof PrognosticosRoute
-  PublicacaoRoute: typeof PublicacaoRoute
-  ValidacaoRoute: typeof ValidacaoRoute
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  AuthRoute: typeof AuthRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/validacao': {
-      id: '/validacao'
-      path: '/validacao'
-      fullPath: '/validacao'
-      preLoaderRoute: typeof ValidacaoRouteImport
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/publicacao': {
-      id: '/publicacao'
-      path: '/publicacao'
-      fullPath: '/publicacao'
-      preLoaderRoute: typeof PublicacaoRouteImport
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/prognosticos': {
-      id: '/prognosticos'
-      path: '/prognosticos'
-      fullPath: '/prognosticos'
-      preLoaderRoute: typeof PrognosticosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/importar': {
-      id: '/importar'
-      path: '/importar'
-      fullPath: '/importar'
-      preLoaderRoute: typeof ImportarRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/historico': {
-      id: '/historico'
-      path: '/historico'
-      fullPath: '/historico'
-      preLoaderRoute: typeof HistoricoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/estatisticas': {
-      id: '/estatisticas'
-      path: '/estatisticas'
-      fullPath: '/estatisticas'
-      preLoaderRoute: typeof EstatisticasRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/configuracoes': {
-      id: '/configuracoes'
-      path: '/configuracoes'
-      fullPath: '/configuracoes'
-      preLoaderRoute: typeof ConfiguracoesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/bankroll': {
-      id: '/bankroll'
-      path: '/bankroll'
-      fullPath: '/bankroll'
-      preLoaderRoute: typeof BankrollRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/': {
-      id: '/'
+    '/_authenticated/': {
+      id: '/_authenticated/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/validacao': {
+      id: '/_authenticated/validacao'
+      path: '/validacao'
+      fullPath: '/validacao'
+      preLoaderRoute: typeof AuthenticatedValidacaoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/publicacao': {
+      id: '/_authenticated/publicacao'
+      path: '/publicacao'
+      fullPath: '/publicacao'
+      preLoaderRoute: typeof AuthenticatedPublicacaoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/prognosticos': {
+      id: '/_authenticated/prognosticos'
+      path: '/prognosticos'
+      fullPath: '/prognosticos'
+      preLoaderRoute: typeof AuthenticatedPrognosticosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/importar': {
+      id: '/_authenticated/importar'
+      path: '/importar'
+      fullPath: '/importar'
+      preLoaderRoute: typeof AuthenticatedImportarRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/historico': {
+      id: '/_authenticated/historico'
+      path: '/historico'
+      fullPath: '/historico'
+      preLoaderRoute: typeof AuthenticatedHistoricoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/estatisticas': {
+      id: '/_authenticated/estatisticas'
+      path: '/estatisticas'
+      fullPath: '/estatisticas'
+      preLoaderRoute: typeof AuthenticatedEstatisticasRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/configuracoes': {
+      id: '/_authenticated/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof AuthenticatedConfiguracoesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/bankroll': {
+      id: '/_authenticated/bankroll'
+      path: '/bankroll'
+      fullPath: '/bankroll'
+      preLoaderRoute: typeof AuthenticatedBankrollRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
   }
 }
 
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedBankrollRoute: typeof AuthenticatedBankrollRoute
+  AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRoute
+  AuthenticatedEstatisticasRoute: typeof AuthenticatedEstatisticasRoute
+  AuthenticatedHistoricoRoute: typeof AuthenticatedHistoricoRoute
+  AuthenticatedImportarRoute: typeof AuthenticatedImportarRoute
+  AuthenticatedPrognosticosRoute: typeof AuthenticatedPrognosticosRoute
+  AuthenticatedPublicacaoRoute: typeof AuthenticatedPublicacaoRoute
+  AuthenticatedValidacaoRoute: typeof AuthenticatedValidacaoRoute
+  AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+}
+
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedBankrollRoute: AuthenticatedBankrollRoute,
+  AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRoute,
+  AuthenticatedEstatisticasRoute: AuthenticatedEstatisticasRoute,
+  AuthenticatedHistoricoRoute: AuthenticatedHistoricoRoute,
+  AuthenticatedImportarRoute: AuthenticatedImportarRoute,
+  AuthenticatedPrognosticosRoute: AuthenticatedPrognosticosRoute,
+  AuthenticatedPublicacaoRoute: AuthenticatedPublicacaoRoute,
+  AuthenticatedValidacaoRoute: AuthenticatedValidacaoRoute,
+  AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
-  BankrollRoute: BankrollRoute,
-  ConfiguracoesRoute: ConfiguracoesRoute,
-  EstatisticasRoute: EstatisticasRoute,
-  HistoricoRoute: HistoricoRoute,
-  ImportarRoute: ImportarRoute,
-  PrognosticosRoute: PrognosticosRoute,
-  PublicacaoRoute: PublicacaoRoute,
-  ValidacaoRoute: ValidacaoRoute,
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  AuthRoute: AuthRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

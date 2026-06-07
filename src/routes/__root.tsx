@@ -4,16 +4,23 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
+  useNavigate,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Toaster } from "@/components/ui/sonner";
+import { Button } from "@/components/ui/button";
+import { LogOut } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+
 
 function NotFoundComponent() {
   return (
@@ -124,6 +131,39 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const router = useRouter();
+  const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const [email, setEmail] = useState<string | null>(null);
+  const isAuthRoute = pathname === "/auth";
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setEmail(data.session?.user.email ?? null));
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
+      setEmail(session?.user.email ?? null);
+      router.invalidate();
+      if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [router, queryClient]);
+
+  async function handleLogout() {
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    await supabase.auth.signOut();
+    toast.success("Sessão encerrada");
+    navigate({ to: "/auth", replace: true });
+  }
+
+  if (isAuthRoute) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <Outlet />
+        <Toaster />
+      </QueryClientProvider>
+    );
+  }
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -146,6 +186,15 @@ function RootComponent() {
                   <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
                   ONLINE
                 </span>
+                {email && (
+                  <span className="hidden sm:inline text-xs text-muted-foreground max-w-[180px] truncate">
+                    {email}
+                  </span>
+                )}
+                <Button variant="ghost" size="sm" onClick={handleLogout} title="Sair">
+                  <LogOut className="h-4 w-4" />
+                  <span className="hidden sm:inline ml-1.5">Sair</span>
+                </Button>
               </div>
             </header>
             <main className="flex-1 p-4 md:p-6">
@@ -158,3 +207,4 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
+

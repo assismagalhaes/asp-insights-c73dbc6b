@@ -28,7 +28,7 @@ import { StatCard } from "@/components/stat-card";
 import { StatusBadge, ResultBadge } from "@/components/status-badge";
 import { usePrognosticos, useBankroll, useConfiguracao } from "@/lib/db";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
     meta: [
       { title: "Dashboard — ASP Insights" },

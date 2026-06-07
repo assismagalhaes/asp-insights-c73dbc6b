@@ -26,7 +26,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-export const Route = createFileRoute("/prognosticos")({
+export const Route = createFileRoute("/_authenticated/prognosticos")({
   head: () => ({ meta: [{ title: "Prognósticos — ASP Insights" }] }),
   component: Prognosticos,
 });

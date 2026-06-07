@@ -30,7 +30,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/importar")({
+export const Route = createFileRoute("/_authenticated/importar")({
   component: ImportarPage,
 });
 

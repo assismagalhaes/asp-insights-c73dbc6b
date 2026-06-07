@@ -14,7 +14,7 @@ import {
 } from "recharts";
 import { usePrognosticos, useBankroll } from "@/lib/db";
 
-export const Route = createFileRoute("/estatisticas")({
+export const Route = createFileRoute("/_authenticated/estatisticas")({
   head: () => ({ meta: [{ title: "ROI e Estatísticas — ASP Insights" }] }),
   component: Estatisticas,
 });
