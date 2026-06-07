@@ -126,7 +126,8 @@ function Historico() {
                 <th className="px-3 py-2 text-left">Pick</th>
                 <th className="px-3 py-2 text-right font-mono">Odd</th>
                 <th className="px-3 py-2 text-right font-mono">Stake</th>
-                <th className="px-3 py-2 text-left">Status</th>
+                <th className="px-3 py-2 text-left">Validação</th>
+                <th className="px-3 py-2 text-left">Publicação</th>
                 <th className="px-3 py-2 text-left">Resultado</th>
                 <th className="px-3 py-2 text-right font-mono">Lucro</th>
               </tr>
@@ -142,6 +143,7 @@ function Historico() {
                   <td className="px-3 py-2 text-right font-mono">{p.odd_ofertada.toFixed(2)}</td>
                   <td className="px-3 py-2 text-right font-mono">{p.stake.toFixed(1)}u</td>
                   <td className="px-3 py-2"><StatusBadge status={p.status_validacao} /></td>
+                  <td className="px-3 py-2"><PublicacaoBadge status={p.status_publicacao} /></td>
                   <td className="px-3 py-2"><ResultBadge result={p.resultado} /></td>
                   <td className={`px-3 py-2 text-right font-mono ${(p.lucro_prejuizo ?? 0) >= 0 ? "text-success" : "text-destructive"}`}>
                     {p.lucro_prejuizo != null ? `${p.lucro_prejuizo >= 0 ? "+" : ""}${p.lucro_prejuizo.toFixed(2)}u` : "-"}
@@ -150,7 +152,7 @@ function Historico() {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={11} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     Nenhum prognóstico encontrado com os filtros aplicados.
                   </td>
                 </tr>
