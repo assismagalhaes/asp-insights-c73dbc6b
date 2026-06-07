@@ -136,7 +136,7 @@ function Historico() {
             <tbody>
               {rows.map((p) => (
                 <tr key={p.id} className="border-t border-border hover:bg-muted/30">
-                  <td className="px-3 py-2 font-mono text-xs">{p.data}</td>
+                  <td className="px-3 py-2 font-mono text-xs">{p.data}{p.hora ? ` ${p.hora.slice(0,5)}` : ""}</td>
                   <td className="px-3 py-2">{p.esporte}</td>
                   <td className="px-3 py-2">{p.jogo}</td>
                   <td className="px-3 py-2 font-mono text-xs">{p.placar_final ?? "—"}</td>
