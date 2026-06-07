@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useMemo } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -9,8 +10,9 @@ import {
   CartesianGrid,
   LineChart,
   Line,
+  Cell,
 } from "recharts";
-import { sportPerformance, marketPerformance, bankrollHistory } from "@/lib/mock-data";
+import { usePrognosticos, useBankroll } from "@/lib/db";
 
 export const Route = createFileRoute("/estatisticas")({
   head: () => ({ meta: [{ title: "ROI e Estatísticas — ASP Insights" }] }),
@@ -20,16 +22,59 @@ export const Route = createFileRoute("/estatisticas")({
 const chartGrid = "oklch(0.28 0.02 250)";
 const axisColor = "oklch(0.68 0.02 250)";
 
-const monthlyResults = [
-  { mes: "Jan", lucro: 12 },
-  { mes: "Fev", lucro: 8 },
-  { mes: "Mar", lucro: -4 },
-  { mes: "Abr", lucro: 15 },
-  { mes: "Mai", lucro: 22 },
-  { mes: "Jun", lucro: 9 },
-];
+const tooltipStyle = {
+  background: "oklch(0.205 0.018 250)",
+  border: "1px solid oklch(0.28 0.02 250)",
+  borderRadius: 8,
+  fontSize: 12,
+};
 
 function Estatisticas() {
+  const { data: prognosticos = [] } = usePrognosticos();
+  const { data: bankroll = [] } = useBankroll();
+
+  const sportPerformance = useMemo(() => {
+    const map = new Map<string, { lucro: number; stake: number }>();
+    prognosticos.forEach((p) => {
+      if (p.resultado === "PENDENTE") return;
+      const cur = map.get(p.esporte) ?? { lucro: 0, stake: 0 };
+      cur.lucro += p.lucro_prejuizo ?? 0;
+      cur.stake += p.stake;
+      map.set(p.esporte, cur);
+    });
+    return Array.from(map.entries()).map(([esporte, v]) => ({
+      esporte,
+      lucro: Number(v.lucro.toFixed(2)),
+      roi: v.stake ? Number(((v.lucro / v.stake) * 100).toFixed(1)) : 0,
+    }));
+  }, [prognosticos]);
+
+  const marketPerformance = useMemo(() => {
+    const map = new Map<string, number>();
+    prognosticos.forEach((p) => {
+      if (p.resultado === "PENDENTE") return;
+      map.set(p.mercado, (map.get(p.mercado) ?? 0) + (p.lucro_prejuizo ?? 0));
+    });
+    return Array.from(map.entries()).map(([mercado, lucro]) => ({
+      mercado,
+      lucro: Number(lucro.toFixed(2)),
+    }));
+  }, [prognosticos]);
+
+  const monthlyResults = useMemo(() => {
+    const map = new Map<string, number>();
+    prognosticos.forEach((p) => {
+      if (p.resultado === "PENDENTE") return;
+      const mes = p.data.slice(0, 7);
+      map.set(mes, (map.get(mes) ?? 0) + (p.lucro_prejuizo ?? 0));
+    });
+    return Array.from(map.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([mes, lucro]) => ({ mes, lucro: Number(lucro.toFixed(2)) }));
+  }, [prognosticos]);
+
+  const chartBanca = bankroll.map((b) => ({ data: b.data, banca: b.banca_atual }));
+
   return (
     <div className="space-y-6">
       <div>
@@ -85,18 +130,18 @@ function Estatisticas() {
               <Tooltip contentStyle={tooltipStyle} />
               <Bar dataKey="lucro" radius={[4, 4, 0, 0]}>
                 {monthlyResults.map((entry, i) => (
-                  <BarCell key={i} positive={entry.lucro >= 0} />
+                  <Cell key={i} fill={entry.lucro >= 0 ? "oklch(0.72 0.18 155)" : "oklch(0.62 0.23 25)"} />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </Card>
 
-        <Card title="Lucro Acumulado" full>
+        <Card title="Evolução da Banca" full>
           <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={bankrollHistory}>
+            <LineChart data={chartBanca}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
-              <XAxis dataKey="data" stroke={axisColor} fontSize={10} tickFormatter={(d) => d.slice(5)} />
+              <XAxis dataKey="data" stroke={axisColor} fontSize={10} tickFormatter={(d) => String(d).slice(5)} />
               <YAxis stroke={axisColor} fontSize={10} />
               <Tooltip contentStyle={tooltipStyle} />
               <Line type="monotone" dataKey="banca" stroke="oklch(0.72 0.18 155)" strokeWidth={2} dot={false} />
@@ -108,13 +153,6 @@ function Estatisticas() {
   );
 }
 
-const tooltipStyle = {
-  background: "oklch(0.205 0.018 250)",
-  border: "1px solid oklch(0.28 0.02 250)",
-  borderRadius: 8,
-  fontSize: 12,
-};
-
 function Card({ title, children, full }: { title: string; children: React.ReactNode; full?: boolean }) {
   return (
     <div className={`rounded-lg border border-border bg-card p-4 ${full ? "lg:col-span-2" : ""}`}>
@@ -124,10 +162,4 @@ function Card({ title, children, full }: { title: string; children: React.ReactN
       {children}
     </div>
   );
-}
-
-// Recharts Cell helper
-import { Cell } from "recharts";
-function BarCell({ positive }: { positive: boolean }) {
-  return <Cell fill={positive ? "oklch(0.72 0.18 155)" : "oklch(0.62 0.23 25)"} />;
 }

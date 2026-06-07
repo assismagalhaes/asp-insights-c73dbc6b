@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -13,7 +13,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StatCard } from "@/components/stat-card";
-import { bankrollHistory, prognosticos } from "@/lib/mock-data";
+import {
+  useBankroll,
+  useConfiguracao,
+  useUpdateConfiguracao,
+  usePrognosticos,
+} from "@/lib/db";
 import { TrendingDown, TrendingUp, Wallet, Percent, Target, Activity } from "lucide-react";
 import { toast } from "sonner";
 
@@ -26,19 +31,49 @@ const chartGrid = "oklch(0.28 0.02 250)";
 const axisColor = "oklch(0.68 0.02 250)";
 
 function Bankroll() {
+  const { data: bankroll = [] } = useBankroll();
+  const { data: cfg } = useConfiguracao();
+  const { data: prognosticos = [] } = usePrognosticos();
+  const updateCfg = useUpdateConfiguracao();
+
   const [unidade, setUnidade] = useState(10);
   const [bancaInicial, setBancaInicial] = useState(1000);
-  const bancaAtual = bankrollHistory[bankrollHistory.length - 1].banca;
+
+  useEffect(() => {
+    if (cfg) {
+      setUnidade(cfg.valor_unidade_padrao);
+      setBancaInicial(cfg.banca_inicial);
+    }
+  }, [cfg]);
+
+  const bancaAtual = bankroll.length ? bankroll[bankroll.length - 1].banca_atual : bancaInicial;
   const lucro = bancaAtual - bancaInicial;
-  const maxBanca = Math.max(...bankrollHistory.map((b) => b.banca));
-  const drawdown = ((maxBanca - bancaAtual) / maxBanca) * 100;
+  const maxBanca = bankroll.length ? Math.max(...bankroll.map((b) => b.banca_atual)) : bancaInicial;
+  const drawdown = maxBanca > 0 ? ((maxBanca - bancaAtual) / maxBanca) * 100 : 0;
+
   const concluidos = prognosticos.filter((p) => p.resultado === "GREEN" || p.resultado === "RED");
   const greens = prognosticos.filter((p) => p.resultado === "GREEN").length;
   const winRate = concluidos.length ? (greens / concluidos.length) * 100 : 0;
   const stakeTotal = concluidos.reduce((s, p) => s + p.stake, 0);
-  const roi = stakeTotal ? ((prognosticos.reduce((s, p) => s + (p.lucro ?? 0), 0)) / stakeTotal) * 100 : 0;
+  const lucroU = prognosticos.reduce((s, p) => s + (p.lucro_prejuizo ?? 0), 0);
+  const roi = stakeTotal ? (lucroU / stakeTotal) * 100 : 0;
 
   const stakes = [0.5, 1.0, 1.5, 2.0];
+  const chartData = bankroll.map((b) => ({ data: b.data, banca: b.banca_atual }));
+
+  const salvar = async () => {
+    if (!cfg) return;
+    try {
+      await updateCfg.mutateAsync({
+        id: cfg.id,
+        valor_unidade_padrao: unidade,
+        banca_inicial: bancaInicial,
+      });
+      toast.success("Configurações salvas");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -63,9 +98,9 @@ function Bankroll() {
             </div>
             <div>
               <Label>Banca atual (R$)</Label>
-              <Input type="number" value={bancaAtual.toFixed(2)} readOnly className="font-mono" />
+              <Input value={bancaAtual.toFixed(2)} readOnly className="font-mono" />
             </div>
-            <Button onClick={() => toast.success("Configurações salvas")}>Salvar configurações</Button>
+            <Button onClick={salvar} disabled={updateCfg.isPending}>Salvar configurações</Button>
           </div>
         </div>
 
@@ -81,7 +116,7 @@ function Bankroll() {
                   R$ {(s * unidade).toFixed(2)}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {((s * unidade / bancaAtual) * 100).toFixed(2)}% da banca
+                  {bancaAtual > 0 ? ((s * unidade / bancaAtual) * 100).toFixed(2) : "0.00"}% da banca
                 </div>
               </div>
             ))}
@@ -111,11 +146,11 @@ function Bankroll() {
         <div className="mb-3 flex items-center gap-2">
           <Activity className="h-4 w-4 text-primary" />
           <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Evolução da banca (últimos 30 dias)
+            Evolução da banca
           </h3>
         </div>
         <ResponsiveContainer width="100%" height={300}>
-          <AreaChart data={bankrollHistory}>
+          <AreaChart data={chartData}>
             <defs>
               <linearGradient id="banca" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="oklch(0.72 0.18 155)" stopOpacity={0.5} />
@@ -123,7 +158,7 @@ function Bankroll() {
               </linearGradient>
             </defs>
             <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
-            <XAxis dataKey="data" stroke={axisColor} fontSize={10} tickFormatter={(d) => d.slice(5)} />
+            <XAxis dataKey="data" stroke={axisColor} fontSize={10} tickFormatter={(d) => String(d).slice(5)} />
             <YAxis stroke={axisColor} fontSize={10} />
             <Tooltip
               contentStyle={{

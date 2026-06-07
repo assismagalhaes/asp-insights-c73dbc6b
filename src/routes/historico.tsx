@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { StatusBadge, ResultBadge } from "@/components/status-badge";
-import { prognosticos, esportes, mercados } from "@/lib/mock-data";
+import { usePrognosticos, useConfiguracao, ESPORTES_DEFAULT, MERCADOS_DEFAULT } from "@/lib/db";
 import {
   Select,
   SelectContent,
@@ -17,6 +17,11 @@ export const Route = createFileRoute("/historico")({
 });
 
 function Historico() {
+  const { data: prognosticos = [] } = usePrognosticos();
+  const { data: cfg } = useConfiguracao();
+  const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
+  const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
+
   const [esporte, setEsporte] = useState("all");
   const [mercado, setMercado] = useState("all");
   const [status, setStatus] = useState("all");
@@ -27,17 +32,17 @@ function Historico() {
     return prognosticos.filter((p) => {
       if (esporte !== "all" && p.esporte !== esporte) return false;
       if (mercado !== "all" && p.mercado !== mercado) return false;
-      if (status !== "all" && p.status !== status) return false;
+      if (status !== "all" && p.status_validacao !== status) return false;
       if (resultado !== "all" && p.resultado !== resultado) return false;
       if (data && p.data !== data) return false;
       return true;
     });
-  }, [esporte, mercado, status, resultado, data]);
+  }, [prognosticos, esporte, mercado, status, resultado, data]);
 
   const wins = rows.filter((r) => r.resultado === "GREEN").length;
   const losses = rows.filter((r) => r.resultado === "RED").length;
   const pushes = rows.filter((r) => r.resultado === "PUSH").length;
-  const lucro = rows.reduce((s, p) => s + (p.lucro ?? 0), 0);
+  const lucro = rows.reduce((s, p) => s + (p.lucro_prejuizo ?? 0), 0);
 
   return (
     <div className="space-y-6">
@@ -72,6 +77,7 @@ function Historico() {
             <SelectItem value="CONFIRMA COM CAUTELA">CONFIRMA COM CAUTELA</SelectItem>
             <SelectItem value="AGUARDAR NOTÍCIA">AGUARDAR NOTÍCIA</SelectItem>
             <SelectItem value="PASS">PASS</SelectItem>
+            <SelectItem value="PENDENTE">PENDENTE</SelectItem>
           </SelectContent>
         </Select>
         <Select value={resultado} onValueChange={setResultado}>
@@ -118,17 +124,21 @@ function Historico() {
                   <td className="px-3 py-2">{p.jogo}</td>
                   <td className="px-3 py-2 text-muted-foreground">{p.mercado}</td>
                   <td className="px-3 py-2">{p.pick}</td>
-                  <td className="px-3 py-2 text-right font-mono">{p.oddOfertada.toFixed(2)}</td>
+                  <td className="px-3 py-2 text-right font-mono">{p.odd_ofertada.toFixed(2)}</td>
                   <td className="px-3 py-2 text-right font-mono">{p.stake.toFixed(1)}u</td>
-                  <td className="px-3 py-2"><StatusBadge status={p.status} /></td>
+                  <td className="px-3 py-2"><StatusBadge status={p.status_validacao} /></td>
                   <td className="px-3 py-2"><ResultBadge result={p.resultado} /></td>
-                  <td className={`px-3 py-2 text-right font-mono ${(p.lucro ?? 0) >= 0 ? "text-success" : "text-destructive"}`}>
-                    {p.lucro != null ? `${p.lucro >= 0 ? "+" : ""}${p.lucro.toFixed(2)}u` : "-"}
+                  <td className={`px-3 py-2 text-right font-mono ${(p.lucro_prejuizo ?? 0) >= 0 ? "text-success" : "text-destructive"}`}>
+                    {p.lucro_prejuizo != null ? `${p.lucro_prejuizo >= 0 ? "+" : ""}${p.lucro_prejuizo.toFixed(2)}u` : "-"}
                   </td>
                 </tr>
               ))}
               {rows.length === 0 && (
-                <tr><td colSpan={10} className="px-4 py-8 text-center text-sm text-muted-foreground">Nenhum prognóstico encontrado com os filtros aplicados.</td></tr>
+                <tr>
+                  <td colSpan={10} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                    Nenhum prognóstico encontrado com os filtros aplicados.
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
