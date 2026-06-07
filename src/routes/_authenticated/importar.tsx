@@ -146,14 +146,13 @@ function parseDate(v: unknown): string | null {
     }
   }
   if (v instanceof Date) {
-    // Usa UTC para evitar deslocamento de fuso horário
     const yyyy = v.getUTCFullYear();
     const mm = String(v.getUTCMonth() + 1).padStart(2, "0");
     const dd = String(v.getUTCDate()).padStart(2, "0");
     return `${yyyy}-${mm}-${dd}`;
   }
   const s = String(v).trim();
-  // ISO yyyy-mm-dd
+  // ISO yyyy-mm-dd (com ou sem hora)
   let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (m) return `${m[1]}-${m[2]}-${m[3]}`;
   // dd/mm/yyyy or dd-mm-yyyy
@@ -162,7 +161,6 @@ function parseDate(v: unknown): string | null {
     const yyyy = m[3].length === 2 ? "20" + m[3] : m[3];
     return `${yyyy}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
   }
-  // Fallback: parse como UTC para não cair no dia anterior
   const d = new Date(s + "T00:00:00Z");
   if (!isNaN(d.getTime())) {
     const yyyy = d.getUTCFullYear();
@@ -171,6 +169,32 @@ function parseDate(v: unknown): string | null {
     return `${yyyy}-${mm}-${dd}`;
   }
   return null;
+}
+
+function parseTime(v: unknown): string | null {
+  if (v == null || v === "") return null;
+  if (typeof v === "number") {
+    // Excel serial: a parte fracionária representa a hora do dia
+    const frac = v - Math.floor(v);
+    if (frac > 0) {
+      const totalMin = Math.round(frac * 24 * 60);
+      const hh = String(Math.floor(totalMin / 60) % 24).padStart(2, "0");
+      const mm = String(totalMin % 60).padStart(2, "0");
+      return `${hh}:${mm}`;
+    }
+    return null;
+  }
+  if (v instanceof Date) {
+    const hh = String(v.getUTCHours()).padStart(2, "0");
+    const mm = String(v.getUTCMinutes()).padStart(2, "0");
+    return hh === "00" && mm === "00" ? null : `${hh}:${mm}`;
+  }
+  const s = String(v).trim();
+  // procura HH:MM (com segundos opcionais) em qualquer parte da string
+  const m = s.match(/(\d{1,2}):(\d{2})(?::\d{2})?/);
+  if (!m) return null;
+  const hh = String(Math.min(23, Number(m[1]))).padStart(2, "0");
+  return `${hh}:${m[2]}`;
 }
 
 interface ParsedRow {
