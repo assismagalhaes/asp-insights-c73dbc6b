@@ -77,6 +77,15 @@ function Prognosticos() {
   const [sortKey, setSortKey] = useState<SortKey>("data");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
+  const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
+  const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
+  const [fEsporte, setFEsporte] = useState("all");
+  const [fMercado, setFMercado] = useState("all");
+  const [fValidacao, setFValidacao] = useState("all");
+  const [fPublicacao, setFPublicacao] = useState("all");
+  const [fResultado, setFResultado] = useState("all");
+  const [fData, setFData] = useState("");
+
   const toggleSort = (k: SortKey) => {
     if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else {
@@ -86,7 +95,15 @@ function Prognosticos() {
   };
 
   const sorted = useMemo(() => {
-    const arr = [...prognosticos];
+    const arr = prognosticos.filter((p) => {
+      if (fEsporte !== "all" && p.esporte !== fEsporte) return false;
+      if (fMercado !== "all" && p.mercado !== fMercado) return false;
+      if (fValidacao !== "all" && p.status_validacao !== fValidacao) return false;
+      if (fPublicacao !== "all" && p.status_publicacao !== fPublicacao) return false;
+      if (fResultado !== "all" && p.resultado !== fResultado) return false;
+      if (fData && p.data !== fData) return false;
+      return true;
+    });
     arr.sort((a, b) => {
       const av = a[sortKey] as unknown;
       const bv = b[sortKey] as unknown;
@@ -99,7 +116,8 @@ function Prognosticos() {
       return sortDir === "asc" ? cmp : -cmp;
     });
     return arr;
-  }, [prognosticos, sortKey, sortDir]);
+  }, [prognosticos, sortKey, sortDir, fEsporte, fMercado, fValidacao, fPublicacao, fResultado, fData]);
+
 
   const podePublicar = (p: Prognostico) =>
     p.status_publicacao === "NAO_PUBLICADO" &&
