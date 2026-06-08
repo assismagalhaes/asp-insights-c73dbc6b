@@ -3,6 +3,14 @@ import { useMemo, useState } from "react";
 import { Upload, Plus, FileSpreadsheet, Pencil, Trash2, Trophy, Megaphone, Copy, Ban, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { StatusBadge, ResultBadge, PublicacaoBadge } from "@/components/status-badge";
 import {
   usePrognosticos,
@@ -11,6 +19,8 @@ import {
   usePublicarPrognostico,
   useCancelarPrognostico,
   gerarTipTexto,
+  ESPORTES_DEFAULT,
+  MERCADOS_DEFAULT,
   type Prognostico,
 } from "@/lib/db";
 import { PrognosticoDialog } from "@/components/prognostico-dialog";

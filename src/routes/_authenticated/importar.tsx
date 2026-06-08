@@ -425,7 +425,7 @@ function ImportarPage() {
   const downloadTemplate = () => {
     const headers = TARGET_FIELDS.join(",");
     const example = [
-      "2026-06-07 14:35",
+      "2026-06-07",
       "14:35",
       "Futebol",
       "Brasileirão",
