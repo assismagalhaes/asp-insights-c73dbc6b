@@ -165,7 +165,18 @@ function Validacao() {
                 </p>
               )}
 
-              <div className="mt-4 grid gap-3 md:grid-cols-4">
+              <div className="mt-4 grid gap-3 md:grid-cols-5">
+                <div>
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                    Odd ofertada (ajustar)
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={odds[p.id] ?? p.odd_ofertada}
+                    onChange={(e) => setOdds({ ...odds, [p.id]: e.target.value })}
+                  />
+                </div>
                 <div>
                   <Label className="text-xs uppercase tracking-wider text-muted-foreground">
                     Stake confirmada
