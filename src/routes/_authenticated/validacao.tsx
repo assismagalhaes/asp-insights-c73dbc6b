@@ -38,10 +38,12 @@ function formatDateBR(iso: string): string {
 function Validacao() {
   const { data: prognosticos = [] } = usePrognosticos();
   const createVal = useCreateValidacao();
+  const updateProg = useUpdatePrognostico();
   const [justificativas, setJustificativas] = useState<Record<string, string>>({});
   const [riscos, setRiscos] = useState<Record<string, string>>({});
   const [comentarios, setComentarios] = useState<Record<string, string>>({});
   const [stakes, setStakes] = useState<Record<string, string>>({});
+  const [odds, setOdds] = useState<Record<string, string>>({});
 
   const pendentes = prognosticos.filter(
     (p) => p.resultado === "PENDENTE" && p.status_validacao === "PENDENTE",
@@ -53,6 +55,10 @@ function Validacao() {
       return;
     }
     try {
+      const oddAtual = odds[p.id] ? Number(odds[p.id]) : p.odd_ofertada;
+      if (oddAtual && oddAtual !== p.odd_ofertada) {
+        await updateProg.mutateAsync({ id: p.id, odd_ofertada: oddAtual });
+      }
       await createVal.mutateAsync({
         prognostico_id: p.id,
         decisao,
@@ -66,6 +72,7 @@ function Validacao() {
       toast.error((e as Error).message);
     }
   };
+
 
   return (
     <div className="space-y-6">
