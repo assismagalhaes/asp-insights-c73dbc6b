@@ -53,9 +53,11 @@ function Dashboard() {
     (p) => p.status_validacao === "CONFIRMA" || p.status_validacao === "CONFIRMA COM CAUTELA",
   );
   const rejeitados = prognosticos.filter((p) => p.status_validacao === "PASS");
-  const lucro = prognosticos.reduce((s, p) => s + (p.lucro_prejuizo ?? 0), 0);
-  const concluidos = prognosticos.filter((p) => p.resultado !== "PENDENTE");
-  const greens = prognosticos.filter((p) => p.resultado === "GREEN" || p.resultado === "HALF GREEN").length;
+  // Só prognósticos confirmados entram em banca, lucro, ROI, yield, win rate
+  const validados = aprovados;
+  const lucro = validados.reduce((s, p) => s + (p.lucro_prejuizo ?? 0), 0);
+  const concluidos = validados.filter((p) => p.resultado !== "PENDENTE");
+  const greens = validados.filter((p) => p.resultado === "GREEN" || p.resultado === "HALF GREEN").length;
   const winRate = concluidos.length ? (greens / concluidos.length) * 100 : 0;
   const stakeTotal = concluidos.reduce((s, p) => s + p.stake, 0);
   const roi = stakeTotal ? (lucro / stakeTotal) * 100 : 0;
@@ -70,7 +72,7 @@ function Dashboard() {
       (p.status_validacao === "CONFIRMA" || p.status_validacao === "CONFIRMA COM CAUTELA"),
   ).length;
   const finalizadas = prognosticos.filter((p) => p.status_publicacao === "FINALIZADO").length;
-  const lucroPublicadas = prognosticos
+  const lucroPublicadas = validados
     .filter((p) => p.status_publicacao === "PUBLICADO" || p.status_publicacao === "FINALIZADO")
     .reduce((s, p) => s + (p.lucro_prejuizo ?? 0), 0);
 
@@ -83,7 +85,7 @@ function Dashboard() {
 
   const sportPerformance = useMemo(() => {
     const map = new Map<string, { lucro: number; stake: number }>();
-    prognosticos.forEach((p) => {
+    validados.forEach((p) => {
       if (p.resultado === "PENDENTE") return;
       const cur = map.get(p.esporte) ?? { lucro: 0, stake: 0 };
       cur.lucro += p.lucro_prejuizo ?? 0;
@@ -95,11 +97,11 @@ function Dashboard() {
       lucro: Number(v.lucro.toFixed(2)),
       roi: v.stake ? Number(((v.lucro / v.stake) * 100).toFixed(1)) : 0,
     }));
-  }, [prognosticos]);
+  }, [validados]);
 
   const marketPerformance = useMemo(() => {
     const map = new Map<string, number>();
-    prognosticos.forEach((p) => {
+    validados.forEach((p) => {
       if (p.resultado === "PENDENTE") return;
       map.set(p.mercado, (map.get(p.mercado) ?? 0) + (p.lucro_prejuizo ?? 0));
     });
@@ -107,7 +109,8 @@ function Dashboard() {
       mercado,
       lucro: Number(lucro.toFixed(2)),
     }));
-  }, [prognosticos]);
+  }, [validados]);
+
 
   return (
     <div className="space-y-6">

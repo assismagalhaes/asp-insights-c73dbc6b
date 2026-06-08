@@ -3,6 +3,14 @@ import { useMemo, useState } from "react";
 import { Upload, Plus, FileSpreadsheet, Pencil, Trash2, Trophy, Megaphone, Copy, Ban, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { StatusBadge, ResultBadge, PublicacaoBadge } from "@/components/status-badge";
 import {
   usePrognosticos,
@@ -11,6 +19,8 @@ import {
   usePublicarPrognostico,
   useCancelarPrognostico,
   gerarTipTexto,
+  ESPORTES_DEFAULT,
+  MERCADOS_DEFAULT,
   type Prognostico,
 } from "@/lib/db";
 import { PrognosticoDialog } from "@/components/prognostico-dialog";
@@ -67,6 +77,15 @@ function Prognosticos() {
   const [sortKey, setSortKey] = useState<SortKey>("data");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
+  const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
+  const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
+  const [fEsporte, setFEsporte] = useState("all");
+  const [fMercado, setFMercado] = useState("all");
+  const [fValidacao, setFValidacao] = useState("all");
+  const [fPublicacao, setFPublicacao] = useState("all");
+  const [fResultado, setFResultado] = useState("all");
+  const [fData, setFData] = useState("");
+
   const toggleSort = (k: SortKey) => {
     if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else {
@@ -76,7 +95,15 @@ function Prognosticos() {
   };
 
   const sorted = useMemo(() => {
-    const arr = [...prognosticos];
+    const arr = prognosticos.filter((p) => {
+      if (fEsporte !== "all" && p.esporte !== fEsporte) return false;
+      if (fMercado !== "all" && p.mercado !== fMercado) return false;
+      if (fValidacao !== "all" && p.status_validacao !== fValidacao) return false;
+      if (fPublicacao !== "all" && p.status_publicacao !== fPublicacao) return false;
+      if (fResultado !== "all" && p.resultado !== fResultado) return false;
+      if (fData && p.data !== fData) return false;
+      return true;
+    });
     arr.sort((a, b) => {
       const av = a[sortKey] as unknown;
       const bv = b[sortKey] as unknown;
@@ -89,7 +116,8 @@ function Prognosticos() {
       return sortDir === "asc" ? cmp : -cmp;
     });
     return arr;
-  }, [prognosticos, sortKey, sortDir]);
+  }, [prognosticos, sortKey, sortDir, fEsporte, fMercado, fValidacao, fPublicacao, fResultado, fData]);
+
 
   const podePublicar = (p: Prognostico) =>
     p.status_publicacao === "NAO_PUBLICADO" &&
@@ -142,11 +170,64 @@ function Prognosticos() {
           <div className="text-sm">
             <p className="font-medium">Estrutura esperada (CSV / XLSX)</p>
             <p className="mt-1 font-mono text-xs text-muted-foreground">
-              data, esporte, liga, jogo, mandante, visitante, mercado, pick, linha, odd_ofertada, odd_valor, probabilidade_final, edge, stake
+              data, hora, esporte, liga, jogo, mandante, visitante, mercado, pick, linha, odd_ofertada, odd_valor, probabilidade_final, edge, stake
             </p>
           </div>
         </div>
       </div>
+
+      <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
+        <Input type="date" value={fData} onChange={(e) => setFData(e.target.value)} />
+        <Select value={fEsporte} onValueChange={setFEsporte}>
+          <SelectTrigger><SelectValue placeholder="Esporte" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os esportes</SelectItem>
+            {esportes.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={fMercado} onValueChange={setFMercado}>
+          <SelectTrigger><SelectValue placeholder="Mercado" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os mercados</SelectItem>
+            {mercados.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={fValidacao} onValueChange={setFValidacao}>
+          <SelectTrigger><SelectValue placeholder="Validação" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as validações</SelectItem>
+            <SelectItem value="CONFIRMA">CONFIRMA</SelectItem>
+            <SelectItem value="CONFIRMA COM CAUTELA">CONFIRMA COM CAUTELA</SelectItem>
+            <SelectItem value="AGUARDAR NOTÍCIA">AGUARDAR NOTÍCIA</SelectItem>
+            <SelectItem value="PASS">PASS</SelectItem>
+            <SelectItem value="PENDENTE">PENDENTE</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={fPublicacao} onValueChange={setFPublicacao}>
+          <SelectTrigger><SelectValue placeholder="Publicação" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as publicações</SelectItem>
+            <SelectItem value="NAO_PUBLICADO">Não publicado</SelectItem>
+            <SelectItem value="PUBLICADO">Publicado</SelectItem>
+            <SelectItem value="FINALIZADO">Finalizado</SelectItem>
+            <SelectItem value="CANCELADO">Cancelado</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={fResultado} onValueChange={setFResultado}>
+          <SelectTrigger><SelectValue placeholder="Resultado" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os resultados</SelectItem>
+            <SelectItem value="GREEN">GREEN</SelectItem>
+            <SelectItem value="HALF GREEN">HALF GREEN</SelectItem>
+            <SelectItem value="RED">RED</SelectItem>
+            <SelectItem value="HALF RED">HALF RED</SelectItem>
+            <SelectItem value="PUSH">PUSH</SelectItem>
+            <SelectItem value="VOID">VOID</SelectItem>
+            <SelectItem value="PENDENTE">PENDENTE</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
 
       <div className="rounded-lg border border-border bg-card overflow-hidden">
         <div className="overflow-x-auto">

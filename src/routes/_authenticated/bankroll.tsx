@@ -51,11 +51,15 @@ function Bankroll() {
   const maxBanca = bankroll.length ? Math.max(...bankroll.map((b) => b.banca_atual)) : bancaInicial;
   const drawdown = maxBanca > 0 ? ((maxBanca - bancaAtual) / maxBanca) * 100 : 0;
 
-  const concluidos = prognosticos.filter((p) => p.resultado === "GREEN" || p.resultado === "RED");
-  const greens = prognosticos.filter((p) => p.resultado === "GREEN").length;
+  // Apenas confirmados entram em win rate / ROI / lucro
+  const validados = prognosticos.filter(
+    (p) => p.status_validacao === "CONFIRMA" || p.status_validacao === "CONFIRMA COM CAUTELA",
+  );
+  const concluidos = validados.filter((p) => p.resultado === "GREEN" || p.resultado === "RED");
+  const greens = validados.filter((p) => p.resultado === "GREEN").length;
   const winRate = concluidos.length ? (greens / concluidos.length) * 100 : 0;
   const stakeTotal = concluidos.reduce((s, p) => s + p.stake, 0);
-  const lucroU = prognosticos.reduce((s, p) => s + (p.lucro_prejuizo ?? 0), 0);
+  const lucroU = validados.reduce((s, p) => s + (p.lucro_prejuizo ?? 0), 0);
   const roi = stakeTotal ? (lucroU / stakeTotal) * 100 : 0;
 
   const stakes = [0.5, 1.0, 1.5, 2.0];

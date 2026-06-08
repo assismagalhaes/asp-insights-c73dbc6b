@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/status-badge";
-import { usePrognosticos, useCreateValidacao, type Prognostico, type Status } from "@/lib/db";
+import { usePrognosticos, useCreateValidacao, useUpdatePrognostico, type Prognostico, type Status } from "@/lib/db";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -38,10 +38,12 @@ function formatDateBR(iso: string): string {
 function Validacao() {
   const { data: prognosticos = [] } = usePrognosticos();
   const createVal = useCreateValidacao();
+  const updateProg = useUpdatePrognostico();
   const [justificativas, setJustificativas] = useState<Record<string, string>>({});
   const [riscos, setRiscos] = useState<Record<string, string>>({});
   const [comentarios, setComentarios] = useState<Record<string, string>>({});
   const [stakes, setStakes] = useState<Record<string, string>>({});
+  const [odds, setOdds] = useState<Record<string, string>>({});
 
   const pendentes = prognosticos.filter(
     (p) => p.resultado === "PENDENTE" && p.status_validacao === "PENDENTE",
@@ -53,6 +55,10 @@ function Validacao() {
       return;
     }
     try {
+      const oddAtual = odds[p.id] ? Number(odds[p.id]) : p.odd_ofertada;
+      if (oddAtual && oddAtual !== p.odd_ofertada) {
+        await updateProg.mutateAsync({ id: p.id, odd_ofertada: oddAtual });
+      }
       await createVal.mutateAsync({
         prognostico_id: p.id,
         decisao,
@@ -66,6 +72,7 @@ function Validacao() {
       toast.error((e as Error).message);
     }
   };
+
 
   return (
     <div className="space-y-6">
@@ -158,7 +165,18 @@ function Validacao() {
                 </p>
               )}
 
-              <div className="mt-4 grid gap-3 md:grid-cols-4">
+              <div className="mt-4 grid gap-3 md:grid-cols-5">
+                <div>
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                    Odd ofertada (ajustar)
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={odds[p.id] ?? p.odd_ofertada}
+                    onChange={(e) => setOdds({ ...odds, [p.id]: e.target.value })}
+                  />
+                </div>
                 <div>
                   <Label className="text-xs uppercase tracking-wider text-muted-foreground">
                     Stake confirmada
