@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/status-badge";
-import { usePrognosticos, useCreateValidacao, type Prognostico, type Status } from "@/lib/db";
+import { usePrognosticos, useCreateValidacao, useUpdatePrognostico, type Prognostico, type Status } from "@/lib/db";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
