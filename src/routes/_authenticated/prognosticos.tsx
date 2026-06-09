@@ -71,7 +71,9 @@ function Prognosticos() {
   const cancelar = useCancelarPrognostico();
 
   const [editing, setEditing] = useState<Prognostico | null>(null);
+  const [template, setTemplate] = useState<Prognostico | null>(null);
   const [openForm, setOpenForm] = useState(false);
+  const [askRepeat, setAskRepeat] = useState(false);
   const [resultadoFor, setResultadoFor] = useState<Prognostico | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Prognostico | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("data");
@@ -156,7 +158,12 @@ function Prognosticos() {
           <Button
             onClick={() => {
               setEditing(null);
-              setOpenForm(true);
+              if (prognosticos.length > 0) {
+                setAskRepeat(true);
+              } else {
+                setTemplate(null);
+                setOpenForm(true);
+              }
             }}
           >
             <Plus className="h-4 w-4" /> Novo Prognóstico
@@ -347,8 +354,12 @@ function Prognosticos() {
 
       <PrognosticoDialog
         open={openForm}
-        onOpenChange={setOpenForm}
+        onOpenChange={(o) => {
+          setOpenForm(o);
+          if (!o) setTemplate(null);
+        }}
         prognostico={editing}
+        template={editing ? null : template}
         esportes={cfg?.esportes_ativos}
         mercados={cfg?.mercados_ativos}
       />
@@ -383,6 +394,41 @@ function Prognosticos() {
               }}
             >
               Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={askRepeat} onOpenChange={setAskRepeat}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Repetir dados do último prognóstico?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {prognosticos[0] && (
+                <>Último: <span className="font-medium text-foreground">{prognosticos[0].jogo}</span> — {prognosticos[0].mercado} / {prognosticos[0].pick}.</>
+              )}
+              <br />
+              Você pode reaproveitar os dados (times, liga, mercado, etc.) e ajustar o que mudou, ou começar um prognóstico totalmente novo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                setTemplate(null);
+                setAskRepeat(false);
+                setOpenForm(true);
+              }}
+            >
+              Começar novo
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setTemplate(prognosticos[0] ?? null);
+                setAskRepeat(false);
+                setOpenForm(true);
+              }}
+            >
+              Repetir dados
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

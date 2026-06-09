@@ -31,6 +31,7 @@ interface Props {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   prognostico?: Prognostico | null;
+  template?: Prognostico | null;
   esportes?: string[];
   mercados?: string[];
 }
@@ -59,6 +60,7 @@ export function PrognosticoDialog({
   open,
   onOpenChange,
   prognostico,
+  template,
   esportes = ESPORTES_DEFAULT,
   mercados = MERCADOS_DEFAULT,
 }: Props) {
@@ -67,6 +69,7 @@ export function PrognosticoDialog({
   const [form, setForm] = useState<PrognosticoInput>(empty);
 
   useEffect(() => {
+    if (!open) return;
     if (prognostico) {
       setForm({
         data: prognostico.data,
@@ -87,13 +90,43 @@ export function PrognosticoDialog({
         status_validacao: prognostico.status_validacao,
         observacoes: prognostico.observacoes,
       });
+    } else if (template) {
+      setForm({
+        data: new Date().toISOString().slice(0, 10),
+        hora: template.hora,
+        esporte: template.esporte,
+        liga: template.liga,
+        jogo: template.jogo,
+        mandante: template.mandante,
+        visitante: template.visitante,
+        mercado: template.mercado,
+        pick: template.pick,
+        linha: template.linha,
+        odd_ofertada: template.odd_ofertada,
+        odd_valor: template.odd_valor,
+        probabilidade_final: template.probabilidade_final,
+        edge: template.edge,
+        stake: template.stake,
+        status_validacao: "PENDENTE",
+        observacoes: template.observacoes,
+      });
     } else {
       setForm({ ...empty, data: new Date().toISOString().slice(0, 10) });
     }
-  }, [prognostico, open]);
+  }, [prognostico, template, open]);
 
   const set = <K extends keyof PrognosticoInput>(k: K, v: PrognosticoInput[K]) =>
-    setForm((f) => ({ ...f, [k]: v }));
+    setForm((f) => {
+      const next = { ...f, [k]: v } as PrognosticoInput;
+      if (k === "odd_ofertada" || k === "odd_valor") {
+        const of = Number(next.odd_ofertada);
+        const va = Number(next.odd_valor);
+        if (of > 0 && va > 0) {
+          next.edge = Number((((of / va) - 1) * 100).toFixed(2));
+        }
+      }
+      return next;
+    });
 
   const submit = async () => {
     try {
@@ -168,8 +201,8 @@ export function PrognosticoDialog({
           <Field label="Probabilidade (0-1)">
             <Input type="number" step="0.01" value={form.probabilidade_final} onChange={(e) => set("probabilidade_final", +e.target.value)} />
           </Field>
-          <Field label="Edge (-1 a 1)">
-            <Input type="number" step="0.001" value={form.edge} onChange={(e) => set("edge", +e.target.value)} />
+          <Field label="Edge (%) — automático">
+            <Input type="number" step="0.01" value={form.edge} readOnly className="bg-muted/40 cursor-not-allowed" />
           </Field>
           <Field label="Stake (u)">
             <Input type="number" step="0.1" value={form.stake} onChange={(e) => set("stake", +e.target.value)} />
