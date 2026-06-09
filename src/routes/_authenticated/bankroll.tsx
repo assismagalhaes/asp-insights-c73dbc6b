@@ -53,7 +53,7 @@ function Bankroll() {
 
   // Apenas confirmados entram em win rate / ROI / lucro
   const validados = prognosticos.filter(
-    (p) => p.status_validacao === "CONFIRMA" || p.status_validacao === "CONFIRMA COM CAUTELA",
+    (p) => p.status_validacao === "CONFIRMA",
   );
   const concluidos = validados.filter((p) => p.resultado === "GREEN" || p.resultado === "RED");
   const greens = validados.filter((p) => p.resultado === "GREEN").length;

@@ -37,7 +37,7 @@ function Estatisticas() {
   const validados = useMemo(
     () =>
       prognosticos.filter(
-        (p) => p.status_validacao === "CONFIRMA" || p.status_validacao === "CONFIRMA COM CAUTELA",
+        (p) => p.status_validacao === "CONFIRMA",
       ),
     [prognosticos],
   );

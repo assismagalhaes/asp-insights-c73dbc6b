@@ -3,16 +3,12 @@ import { cn } from "@/lib/utils";
 export type Status =
   | "PENDENTE"
   | "CONFIRMA"
-  | "CONFIRMA COM CAUTELA"
-  | "AGUARDAR NOTÍCIA"
-  | "PASS";
+  | "PULAR";
 export type Result = "PENDENTE" | "GREEN" | "RED" | "PUSH";
 
 const statusStyles: Record<string, string> = {
   CONFIRMA: "bg-success/15 text-success border-success/30",
-  "CONFIRMA COM CAUTELA": "bg-warning/15 text-warning border-warning/30",
-  "AGUARDAR NOTÍCIA": "bg-caution/15 text-caution border-caution/30",
-  PASS: "bg-destructive/15 text-destructive border-destructive/30",
+  PULAR: "bg-destructive/15 text-destructive border-destructive/30",
   PENDENTE: "bg-muted text-muted-foreground border-border",
 };
 
