@@ -398,6 +398,41 @@ function Prognosticos() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={askRepeat} onOpenChange={setAskRepeat}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Repetir dados do último prognóstico?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {prognosticos[0] && (
+                <>Último: <span className="font-medium text-foreground">{prognosticos[0].jogo}</span> — {prognosticos[0].mercado} / {prognosticos[0].pick}.</>
+              )}
+              <br />
+              Você pode reaproveitar os dados (times, liga, mercado, etc.) e ajustar o que mudou, ou começar um prognóstico totalmente novo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                setTemplate(null);
+                setAskRepeat(false);
+                setOpenForm(true);
+              }}
+            >
+              Começar novo
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setTemplate(prognosticos[0] ?? null);
+                setAskRepeat(false);
+                setOpenForm(true);
+              }}
+            >
+              Repetir dados
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
