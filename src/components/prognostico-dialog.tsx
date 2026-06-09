@@ -69,6 +69,7 @@ export function PrognosticoDialog({
   const [form, setForm] = useState<PrognosticoInput>(empty);
 
   useEffect(() => {
+    if (!open) return;
     if (prognostico) {
       setForm({
         data: prognostico.data,
@@ -89,10 +90,30 @@ export function PrognosticoDialog({
         status_validacao: prognostico.status_validacao,
         observacoes: prognostico.observacoes,
       });
+    } else if (template) {
+      setForm({
+        data: new Date().toISOString().slice(0, 10),
+        hora: template.hora,
+        esporte: template.esporte,
+        liga: template.liga,
+        jogo: template.jogo,
+        mandante: template.mandante,
+        visitante: template.visitante,
+        mercado: template.mercado,
+        pick: template.pick,
+        linha: template.linha,
+        odd_ofertada: template.odd_ofertada,
+        odd_valor: template.odd_valor,
+        probabilidade_final: template.probabilidade_final,
+        edge: template.edge,
+        stake: template.stake,
+        status_validacao: "PENDENTE",
+        observacoes: template.observacoes,
+      });
     } else {
       setForm({ ...empty, data: new Date().toISOString().slice(0, 10) });
     }
-  }, [prognostico, open]);
+  }, [prognostico, template, open]);
 
   const set = <K extends keyof PrognosticoInput>(k: K, v: PrognosticoInput[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
