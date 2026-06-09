@@ -71,7 +71,9 @@ function Prognosticos() {
   const cancelar = useCancelarPrognostico();
 
   const [editing, setEditing] = useState<Prognostico | null>(null);
+  const [template, setTemplate] = useState<Prognostico | null>(null);
   const [openForm, setOpenForm] = useState(false);
+  const [askRepeat, setAskRepeat] = useState(false);
   const [resultadoFor, setResultadoFor] = useState<Prognostico | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Prognostico | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("data");
