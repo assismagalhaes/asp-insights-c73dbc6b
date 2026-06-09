@@ -46,15 +46,12 @@ function PublicacaoPage() {
       prognosticos.filter(
         (p) =>
           p.status_publicacao === "NAO_PUBLICADO" &&
-          (p.status_validacao === "CONFIRMA" ||
-            p.status_validacao === "CONFIRMA COM CAUTELA" ||
-            p.status_validacao === "AGUARDAR NOTÍCIA"),
+          p.status_validacao === "CONFIRMA",
       ),
     [prognosticos],
   );
 
-  const podePublicar = (p: Prognostico) =>
-    p.status_validacao === "CONFIRMA" || p.status_validacao === "CONFIRMA COM CAUTELA";
+  const podePublicar = (p: Prognostico) => p.status_validacao === "CONFIRMA";
 
   const toggle = (id: string) =>
     setSelected((s) => {
@@ -105,8 +102,7 @@ function PublicacaoPage() {
         <CardHeader>
           <CardTitle>Prognósticos validados pendentes</CardTitle>
           <CardDescription>
-            Apenas <strong>CONFIRMA</strong> e <strong>CONFIRMA COM CAUTELA</strong> podem ser publicados
-            automaticamente. <strong>AGUARDAR NOTÍCIA</strong> requer confirmação manual.
+            Apenas prognósticos com validação <strong>CONFIRMA</strong> podem ser publicados.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
