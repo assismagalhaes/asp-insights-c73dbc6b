@@ -158,7 +158,12 @@ function Prognosticos() {
           <Button
             onClick={() => {
               setEditing(null);
-              setOpenForm(true);
+              if (prognosticos.length > 0) {
+                setAskRepeat(true);
+              } else {
+                setTemplate(null);
+                setOpenForm(true);
+              }
             }}
           >
             <Plus className="h-4 w-4" /> Novo Prognóstico
