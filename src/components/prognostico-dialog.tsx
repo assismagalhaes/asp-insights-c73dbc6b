@@ -31,6 +31,7 @@ interface Props {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   prognostico?: Prognostico | null;
+  template?: Prognostico | null;
   esportes?: string[];
   mercados?: string[];
 }
