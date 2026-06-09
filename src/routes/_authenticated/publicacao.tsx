@@ -130,7 +130,6 @@ function PublicacaoPage() {
                   </tr>
                 )}
                 {elegiveis.map((p) => {
-                  const isAguardar = p.status_validacao === "AGUARDAR NOTÍCIA";
                   const canSelect = podePublicar(p);
                   return (
                     <tr key={p.id} className="border-t border-border hover:bg-muted/30">
