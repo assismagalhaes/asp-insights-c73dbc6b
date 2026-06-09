@@ -171,15 +171,9 @@ function PublicacaoPage() {
                           >
                             <Ban className="h-4 w-4 text-destructive" />
                           </Button>
-                          {isAguardar ? (
-                            <Button size="sm" variant="outline" onClick={() => setPreviewFor(p)}>
-                              Revisar
-                            </Button>
-                          ) : (
-                            <Button size="sm" onClick={() => setPreviewFor(p)}>
-                              <Megaphone className="h-4 w-4 mr-1" /> Publicar
-                            </Button>
-                          )}
+                          <Button size="sm" onClick={() => setPreviewFor(p)}>
+                            <Megaphone className="h-4 w-4 mr-1" /> Publicar
+                          </Button>
                         </div>
                       </td>
                     </tr>
