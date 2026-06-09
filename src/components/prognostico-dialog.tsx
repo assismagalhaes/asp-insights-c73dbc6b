@@ -116,7 +116,17 @@ export function PrognosticoDialog({
   }, [prognostico, template, open]);
 
   const set = <K extends keyof PrognosticoInput>(k: K, v: PrognosticoInput[K]) =>
-    setForm((f) => ({ ...f, [k]: v }));
+    setForm((f) => {
+      const next = { ...f, [k]: v } as PrognosticoInput;
+      if (k === "odd_ofertada" || k === "odd_valor") {
+        const of = Number(next.odd_ofertada);
+        const va = Number(next.odd_valor);
+        if (of > 0 && va > 0) {
+          next.edge = Number((((of / va) - 1) * 100).toFixed(2));
+        }
+      }
+      return next;
+    });
 
   const submit = async () => {
     try {
