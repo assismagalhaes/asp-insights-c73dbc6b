@@ -201,8 +201,8 @@ export function PrognosticoDialog({
           <Field label="Probabilidade (0-1)">
             <Input type="number" step="0.01" value={form.probabilidade_final} onChange={(e) => set("probabilidade_final", +e.target.value)} />
           </Field>
-          <Field label="Edge (-1 a 1)">
-            <Input type="number" step="0.001" value={form.edge} onChange={(e) => set("edge", +e.target.value)} />
+          <Field label="Edge (%) — automático">
+            <Input type="number" step="0.01" value={form.edge} readOnly className="bg-muted/40 cursor-not-allowed" />
           </Field>
           <Field label="Stake (u)">
             <Input type="number" step="0.1" value={form.stake} onChange={(e) => set("stake", +e.target.value)} />
