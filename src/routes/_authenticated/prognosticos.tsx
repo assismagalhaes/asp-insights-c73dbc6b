@@ -354,8 +354,12 @@ function Prognosticos() {
 
       <PrognosticoDialog
         open={openForm}
-        onOpenChange={setOpenForm}
+        onOpenChange={(o) => {
+          setOpenForm(o);
+          if (!o) setTemplate(null);
+        }}
         prognostico={editing}
+        template={editing ? null : template}
         esportes={cfg?.esportes_ativos}
         mercados={cfg?.mercados_ativos}
       />
