@@ -76,9 +76,7 @@ function Historico() {
           <SelectContent>
             <SelectItem value="all">Todas as validações</SelectItem>
             <SelectItem value="CONFIRMA">CONFIRMA</SelectItem>
-            <SelectItem value="CONFIRMA COM CAUTELA">CONFIRMA COM CAUTELA</SelectItem>
-            <SelectItem value="AGUARDAR NOTÍCIA">AGUARDAR NOTÍCIA</SelectItem>
-            <SelectItem value="PASS">PASS</SelectItem>
+            <SelectItem value="PULAR">PULAR</SelectItem>
             <SelectItem value="PENDENTE">PENDENTE</SelectItem>
           </SelectContent>
         </Select>

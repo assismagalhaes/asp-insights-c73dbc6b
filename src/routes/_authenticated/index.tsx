@@ -50,9 +50,9 @@ function Dashboard() {
   const today = new Date().toISOString().slice(0, 10);
   const hoje = prognosticos.filter((p) => p.data === today);
   const aprovados = prognosticos.filter(
-    (p) => p.status_validacao === "CONFIRMA" || p.status_validacao === "CONFIRMA COM CAUTELA",
+    (p) => p.status_validacao === "CONFIRMA",
   );
-  const rejeitados = prognosticos.filter((p) => p.status_validacao === "PASS");
+  const rejeitados = prognosticos.filter((p) => p.status_validacao === "PULAR");
   // Só prognósticos confirmados entram em banca, lucro, ROI, yield, win rate
   const validados = aprovados;
   const lucro = validados.reduce((s, p) => s + (p.lucro_prejuizo ?? 0), 0);
@@ -69,7 +69,7 @@ function Dashboard() {
   const pendentesPub = prognosticos.filter(
     (p) =>
       p.status_publicacao === "NAO_PUBLICADO" &&
-      (p.status_validacao === "CONFIRMA" || p.status_validacao === "CONFIRMA COM CAUTELA"),
+      p.status_validacao === "CONFIRMA",
   ).length;
   const finalizadas = prognosticos.filter((p) => p.status_publicacao === "FINALIZADO").length;
   const lucroPublicadas = validados

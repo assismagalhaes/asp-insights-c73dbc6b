@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-export type Status = "PENDENTE" | "CONFIRMA" | "CONFIRMA COM CAUTELA" | "AGUARDAR NOTÍCIA" | "PASS";
+export type Status = "PENDENTE" | "CONFIRMA" | "PULAR";
 export type Resultado = "PENDENTE" | "GREEN" | "RED" | "PUSH" | "VOID" | "HALF GREEN" | "HALF RED";
 
 export type StatusPublicacao = "NAO_PUBLICADO" | "PUBLICADO" | "FINALIZADO" | "CANCELADO";

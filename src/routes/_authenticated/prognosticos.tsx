@@ -123,7 +123,7 @@ function Prognosticos() {
 
   const podePublicar = (p: Prognostico) =>
     p.status_publicacao === "NAO_PUBLICADO" &&
-    (p.status_validacao === "CONFIRMA" || p.status_validacao === "CONFIRMA COM CAUTELA");
+    p.status_validacao === "CONFIRMA";
 
 
   const copyTip = async (p: Prognostico) => {
@@ -133,7 +133,7 @@ function Prognosticos() {
 
   const handlePublicar = async (p: Prognostico) => {
     if (!podePublicar(p)) {
-      toast.error("Apenas CONFIRMA / CONFIRMA COM CAUTELA podem ser publicados");
+      toast.error("Apenas CONFIRMA pode ser publicado");
       return;
     }
     await publicar.mutateAsync({ id: p.id, tip_texto: gerarTipTexto(p) });
@@ -204,9 +204,7 @@ function Prognosticos() {
           <SelectContent>
             <SelectItem value="all">Todas as validações</SelectItem>
             <SelectItem value="CONFIRMA">CONFIRMA</SelectItem>
-            <SelectItem value="CONFIRMA COM CAUTELA">CONFIRMA COM CAUTELA</SelectItem>
-            <SelectItem value="AGUARDAR NOTÍCIA">AGUARDAR NOTÍCIA</SelectItem>
-            <SelectItem value="PASS">PASS</SelectItem>
+            <SelectItem value="PULAR">PULAR</SelectItem>
             <SelectItem value="PENDENTE">PENDENTE</SelectItem>
           </SelectContent>
         </Select>
