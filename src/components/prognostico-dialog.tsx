@@ -60,6 +60,7 @@ export function PrognosticoDialog({
   open,
   onOpenChange,
   prognostico,
+  template,
   esportes = ESPORTES_DEFAULT,
   mercados = MERCADOS_DEFAULT,
 }: Props) {
