@@ -80,7 +80,6 @@ const ALIASES: Record<Field, string[]> = {
   odd_valor: ["odd_valor", "fair_odd", "odd_justa", "valor_odd"],
   probabilidade_final: ["probabilidade_final", "prob", "probabilidade", "probability", "prob_final"],
   edge: ["edge", "ev", "valor_esperado"],
-  stake: ["stake", "unidades", "units", "u"],
   observacoes: ["observacoes", "observações", "obs", "notes", "notas", "comentarios"],
 };
 
@@ -107,14 +106,6 @@ function parseNumber(v: unknown): number | null {
   return isNaN(n) ? null : n;
 }
 
-function parseStake(v: unknown): number | null {
-  if (v == null || v === "") return null;
-  if (typeof v === "number") return v;
-  const s = String(v).trim().toLowerCase().replace(",", ".");
-  const m = s.match(/(-?\d+(?:\.\d+)?)/);
-  if (!m) return null;
-  return Number(m[1]);
-}
 
 function parseProb(v: unknown): number | null {
   const n = parseNumber(v);
@@ -636,7 +627,7 @@ function ImportarPage() {
                         <TableCell className="text-xs">{String(v.odd_valor ?? "")}</TableCell>
                         <TableCell className="text-xs">{String(v.probabilidade_final ?? "")}</TableCell>
                         <TableCell className="text-xs">{String(v.edge ?? "")}</TableCell>
-                        <TableCell className="text-xs">{String(v.stake ?? "")}</TableCell>
+                        <TableCell className="text-xs">{String((v as Record<string, unknown>).edge ?? "")}</TableCell>
                         <TableCell className="text-xs">
                           {[...r.errors, ...r.warnings, r.duplicate ? "duplicado" : ""]
                             .filter(Boolean)
