@@ -49,7 +49,6 @@ const TARGET_FIELDS = [
   "odd_valor",
   "probabilidade_final",
   "edge",
-  "stake",
   "observacoes",
 ] as const;
 type Field = (typeof TARGET_FIELDS)[number];
@@ -64,7 +63,6 @@ const REQUIRED: Field[] = [
   "odd_valor",
   "probabilidade_final",
   "edge",
-  "stake",
 ];
 
 const ALIASES: Record<Field, string[]> = {
@@ -301,10 +299,6 @@ function ImportarPage() {
       const edge = parseEdge(values.edge);
       if (edge == null) errors.push("edge inválido");
 
-      const stake = parseStake(values.stake);
-      if (stake == null) errors.push("stake inválido");
-      else if (stake <= 0) errors.push("stake deve ser > 0");
-
       if (!String(values.liga ?? "").trim()) warnings.push("liga vazia");
       if (!mandante || !visitante) warnings.push("sem mandante/visitante");
 
@@ -331,9 +325,9 @@ function ImportarPage() {
           odd_valor: oddV,
           probabilidade_final: prob,
           edge,
-          stake,
+          stake: 0,
           observacoes: String(values.observacoes ?? "").trim() || null,
-        } as Record<Field, unknown>,
+        } as Record<string, unknown>,
         errors,
         warnings,
         duplicate,
@@ -439,7 +433,6 @@ function ImportarPage() {
       "1.95",
       "55",
       "5.5",
-      "1u",
       "Exemplo",
     ].join(",");
     const csv = `${headers}\n${example}\n`;
