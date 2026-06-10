@@ -49,7 +49,6 @@ const TARGET_FIELDS = [
   "odd_valor",
   "probabilidade_final",
   "edge",
-  "stake",
   "observacoes",
 ] as const;
 type Field = (typeof TARGET_FIELDS)[number];
@@ -64,7 +63,6 @@ const REQUIRED: Field[] = [
   "odd_valor",
   "probabilidade_final",
   "edge",
-  "stake",
 ];
 
 const ALIASES: Record<Field, string[]> = {
@@ -82,7 +80,6 @@ const ALIASES: Record<Field, string[]> = {
   odd_valor: ["odd_valor", "fair_odd", "odd_justa", "valor_odd"],
   probabilidade_final: ["probabilidade_final", "prob", "probabilidade", "probability", "prob_final"],
   edge: ["edge", "ev", "valor_esperado"],
-  stake: ["stake", "unidades", "units", "u"],
   observacoes: ["observacoes", "observações", "obs", "notes", "notas", "comentarios"],
 };
 
@@ -109,14 +106,6 @@ function parseNumber(v: unknown): number | null {
   return isNaN(n) ? null : n;
 }
 
-function parseStake(v: unknown): number | null {
-  if (v == null || v === "") return null;
-  if (typeof v === "number") return v;
-  const s = String(v).trim().toLowerCase().replace(",", ".");
-  const m = s.match(/(-?\d+(?:\.\d+)?)/);
-  if (!m) return null;
-  return Number(m[1]);
-}
 
 function parseProb(v: unknown): number | null {
   const n = parseNumber(v);
@@ -301,10 +290,6 @@ function ImportarPage() {
       const edge = parseEdge(values.edge);
       if (edge == null) errors.push("edge inválido");
 
-      const stake = parseStake(values.stake);
-      if (stake == null) errors.push("stake inválido");
-      else if (stake <= 0) errors.push("stake deve ser > 0");
-
       if (!String(values.liga ?? "").trim()) warnings.push("liga vazia");
       if (!mandante || !visitante) warnings.push("sem mandante/visitante");
 
@@ -331,9 +316,9 @@ function ImportarPage() {
           odd_valor: oddV,
           probabilidade_final: prob,
           edge,
-          stake,
+          stake: 0,
           observacoes: String(values.observacoes ?? "").trim() || null,
-        } as Record<Field, unknown>,
+        } as Record<string, unknown>,
         errors,
         warnings,
         duplicate,
@@ -439,7 +424,6 @@ function ImportarPage() {
       "1.95",
       "55",
       "5.5",
-      "1u",
       "Exemplo",
     ].join(",");
     const csv = `${headers}\n${example}\n`;
@@ -599,7 +583,6 @@ function ImportarPage() {
                     <TableHead>Valor</TableHead>
                     <TableHead>Prob</TableHead>
                     <TableHead>Edge</TableHead>
-                    <TableHead>Stake</TableHead>
                     <TableHead>Mensagens</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -643,7 +626,6 @@ function ImportarPage() {
                         <TableCell className="text-xs">{String(v.odd_valor ?? "")}</TableCell>
                         <TableCell className="text-xs">{String(v.probabilidade_final ?? "")}</TableCell>
                         <TableCell className="text-xs">{String(v.edge ?? "")}</TableCell>
-                        <TableCell className="text-xs">{String(v.stake ?? "")}</TableCell>
                         <TableCell className="text-xs">
                           {[...r.errors, ...r.warnings, r.duplicate ? "duplicado" : ""]
                             .filter(Boolean)

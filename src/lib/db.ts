@@ -172,6 +172,18 @@ export function useDeletePrognostico() {
   });
 }
 
+export function useBulkDeletePrognosticos() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (!ids.length) return;
+      const { error } = await supabase.from("prognosticos").delete().in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["prognosticos"] }),
+  });
+}
+
 // ===== Validações =====
 export function useCreateValidacao() {
   const qc = useQueryClient();
