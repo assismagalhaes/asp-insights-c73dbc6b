@@ -583,7 +583,6 @@ function ImportarPage() {
                     <TableHead>Valor</TableHead>
                     <TableHead>Prob</TableHead>
                     <TableHead>Edge</TableHead>
-                    <TableHead>Stake</TableHead>
                     <TableHead>Mensagens</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -627,7 +626,6 @@ function ImportarPage() {
                         <TableCell className="text-xs">{String(v.odd_valor ?? "")}</TableCell>
                         <TableCell className="text-xs">{String(v.probabilidade_final ?? "")}</TableCell>
                         <TableCell className="text-xs">{String(v.edge ?? "")}</TableCell>
-                        <TableCell className="text-xs">{String((v as Record<string, unknown>).edge ?? "")}</TableCell>
                         <TableCell className="text-xs">
                           {[...r.errors, ...r.warnings, r.duplicate ? "duplicado" : ""]
                             .filter(Boolean)
