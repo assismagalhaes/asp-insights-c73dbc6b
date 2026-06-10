@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Upload, Plus, FileSpreadsheet, Pencil, Trash2, Trophy, Megaphone, Copy, Ban, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -11,10 +12,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { StatusBadge, ResultBadge, PublicacaoBadge } from "@/components/status-badge";
+import { StatusBadge, ResultBadge } from "@/components/status-badge";
 import {
   usePrognosticos,
   useDeletePrognostico,
+  useBulkDeletePrognosticos,
   useConfiguracao,
   usePublicarPrognostico,
   useCancelarPrognostico,
@@ -44,6 +46,7 @@ export const Route = createFileRoute("/_authenticated/prognosticos")({
 
 type SortKey =
   | "data"
+  | "hora"
   | "esporte"
   | "liga"
   | "jogo"
@@ -55,7 +58,6 @@ type SortKey =
   | "edge"
   | "stake"
   | "status_validacao"
-  | "status_publicacao"
   | "resultado";
 
 function formatDateBR(iso: string): string {
@@ -67,6 +69,7 @@ function Prognosticos() {
   const { data: prognosticos = [], isLoading } = usePrognosticos();
   const { data: cfg } = useConfiguracao();
   const del = useDeletePrognostico();
+  const bulkDel = useBulkDeletePrognosticos();
   const publicar = usePublicarPrognostico();
   const cancelar = useCancelarPrognostico();
 
@@ -76,6 +79,8 @@ function Prognosticos() {
   const [askRepeat, setAskRepeat] = useState(false);
   const [resultadoFor, setResultadoFor] = useState<Prognostico | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Prognostico | null>(null);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>("data");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
@@ -84,7 +89,6 @@ function Prognosticos() {
   const [fEsporte, setFEsporte] = useState("all");
   const [fMercado, setFMercado] = useState("all");
   const [fValidacao, setFValidacao] = useState("all");
-  const [fPublicacao, setFPublicacao] = useState("all");
   const [fResultado, setFResultado] = useState("all");
   const [fData, setFData] = useState("");
 
@@ -101,7 +105,6 @@ function Prognosticos() {
       if (fEsporte !== "all" && p.esporte !== fEsporte) return false;
       if (fMercado !== "all" && p.mercado !== fMercado) return false;
       if (fValidacao !== "all" && p.status_validacao !== fValidacao) return false;
-      if (fPublicacao !== "all" && p.status_publicacao !== fPublicacao) return false;
       if (fResultado !== "all" && p.resultado !== fResultado) return false;
       if (fData && p.data !== fData) return false;
       return true;
@@ -118,13 +121,27 @@ function Prognosticos() {
       return sortDir === "asc" ? cmp : -cmp;
     });
     return arr;
-  }, [prognosticos, sortKey, sortDir, fEsporte, fMercado, fValidacao, fPublicacao, fResultado, fData]);
+  }, [prognosticos, sortKey, sortDir, fEsporte, fMercado, fValidacao, fResultado, fData]);
 
+  const allSelected = sorted.length > 0 && sorted.every((p) => selected.has(p.id));
+  const someSelected = selected.size > 0 && !allSelected;
+
+  const toggleAll = () => {
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(sorted.map((p) => p.id)));
+  };
+  const toggleOne = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const podePublicar = (p: Prognostico) =>
     p.status_publicacao === "NAO_PUBLICADO" &&
     p.status_validacao === "CONFIRMA";
-
 
   const copyTip = async (p: Prognostico) => {
     await navigator.clipboard.writeText(p.tip_texto || gerarTipTexto(p));
@@ -138,6 +155,37 @@ function Prognosticos() {
     }
     await publicar.mutateAsync({ id: p.id, tip_texto: gerarTipTexto(p) });
     toast.success("Pick publicada");
+  };
+
+  // Dual horizontal scrollbar (top + bottom synced)
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const bottomScrollRef = useRef<HTMLDivElement>(null);
+  const tableWidthRef = useRef<HTMLDivElement>(null);
+  const [tableWidth, setTableWidth] = useState(0);
+
+  useEffect(() => {
+    const update = () => {
+      if (tableWidthRef.current) setTableWidth(tableWidthRef.current.scrollWidth);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    if (tableWidthRef.current) ro.observe(tableWidthRef.current);
+    window.addEventListener("resize", update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [sorted.length]);
+
+  const syncFromTop = () => {
+    if (topScrollRef.current && bottomScrollRef.current) {
+      bottomScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+    }
+  };
+  const syncFromBottom = () => {
+    if (topScrollRef.current && bottomScrollRef.current) {
+      topScrollRef.current.scrollLeft = bottomScrollRef.current.scrollLeft;
+    }
   };
 
   return (
@@ -177,13 +225,13 @@ function Prognosticos() {
           <div className="text-sm">
             <p className="font-medium">Estrutura esperada (CSV / XLSX)</p>
             <p className="mt-1 font-mono text-xs text-muted-foreground">
-              data, hora, esporte, liga, jogo, mandante, visitante, mercado, pick, linha, odd_ofertada, odd_valor, probabilidade_final, edge, stake
+              data, hora, esporte, liga, jogo, mandante, visitante, mercado, pick, linha, odd_ofertada, odd_valor, probabilidade_final, edge
             </p>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
+      <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
         <Input type="date" value={fData} onChange={(e) => setFData(e.target.value)} />
         <Select value={fEsporte} onValueChange={setFEsporte}>
           <SelectTrigger><SelectValue placeholder="Esporte" /></SelectTrigger>
@@ -208,16 +256,6 @@ function Prognosticos() {
             <SelectItem value="PENDENTE">PENDENTE</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={fPublicacao} onValueChange={setFPublicacao}>
-          <SelectTrigger><SelectValue placeholder="Publicação" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas as publicações</SelectItem>
-            <SelectItem value="NAO_PUBLICADO">Não publicado</SelectItem>
-            <SelectItem value="PUBLICADO">Publicado</SelectItem>
-            <SelectItem value="FINALIZADO">Finalizado</SelectItem>
-            <SelectItem value="CANCELADO">Cancelado</SelectItem>
-          </SelectContent>
-        </Select>
         <Select value={fResultado} onValueChange={setFResultado}>
           <SelectTrigger><SelectValue placeholder="Resultado" /></SelectTrigger>
           <SelectContent>
@@ -233,120 +271,165 @@ function Prognosticos() {
         </Select>
       </div>
 
+      {selected.size > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm">
+          <span>{selected.size} selecionado(s)</span>
+          <div className="flex gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+              Limpar seleção
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => setConfirmBulkDelete(true)}
+            >
+              <Trash2 className="h-4 w-4" /> Excluir selecionados
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-lg border border-border bg-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
-              <tr>
-                <SortableTh label="Data" k="data" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-                <SortableTh label="Esporte" k="esporte" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-                <SortableTh label="Liga" k="liga" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-                <SortableTh label="Jogo" k="jogo" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-                <th className="px-3 py-2 text-left text-xs uppercase tracking-wider text-muted-foreground">Placar</th>
-                <SortableTh label="Mercado" k="mercado" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-                <SortableTh label="Pick" k="pick" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-                <SortableTh label="Odd Of." k="odd_ofertada" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-                <SortableTh label="Odd Val." k="odd_valor" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-                <SortableTh label="Prob." k="probabilidade_final" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-                <SortableTh label="Edge" k="edge" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-                <SortableTh label="Stake" k="stake" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-                <SortableTh label="Validação" k="status_validacao" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-                <SortableTh label="Publicação" k="status_publicacao" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-                <SortableTh label="Resultado" k="resultado" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-                <th className="px-3 py-2 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading && (
-                <tr>
-                  <td colSpan={16} className="px-4 py-8 text-center text-sm text-muted-foreground">
-                    Carregando...
-                  </td>
-                </tr>
-              )}
-              {!isLoading && sorted.length === 0 && (
-                <tr>
-                  <td colSpan={16} className="px-4 py-8 text-center text-sm text-muted-foreground">
-                    Nenhum prognóstico cadastrado.
-                  </td>
-                </tr>
-              )}
-              {sorted.map((p) => (
-                <tr key={p.id} className="border-t border-border hover:bg-muted/30">
-                  <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatDateBR(p.data)}{p.hora ? ` ${p.hora.slice(0,5)}` : ""}</td>
+        {/* Top horizontal scrollbar */}
+        <div
+          ref={topScrollRef}
+          onScroll={syncFromTop}
+          className="overflow-x-auto overflow-y-hidden"
+        >
+          <div style={{ width: tableWidth, height: 1 }} />
+        </div>
 
-                  <td className="px-3 py-2 whitespace-nowrap">{p.esporte}</td>
-                  <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{p.liga}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{p.jogo}</td>
-                  <td className="px-3 py-2 whitespace-nowrap font-mono text-xs">{p.placar_final ?? "—"}</td>
-                  <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{p.mercado}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{p.pick}</td>
-                  <td className="px-3 py-2 text-right font-mono">{p.odd_ofertada.toFixed(2)}</td>
-                  <td className="px-3 py-2 text-right font-mono">{p.odd_valor.toFixed(2)}</td>
-                  <td className="px-3 py-2 text-right font-mono">{p.probabilidade_final.toFixed(1)}%</td>
-                  <td className={`px-3 py-2 text-right font-mono ${p.edge >= 0 ? "text-success" : "text-destructive"}`}>
-                    {p.edge.toFixed(1)}%
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono">{p.stake.toFixed(1)}u</td>
-                  <td className="px-3 py-2"><StatusBadge status={p.status_validacao} /></td>
-                  <td className="px-3 py-2"><PublicacaoBadge status={p.status_publicacao} /></td>
-                  <td className="px-3 py-2"><ResultBadge result={p.resultado} /></td>
-                  <td className="px-3 py-2 text-right whitespace-nowrap">
-                    <div className="flex justify-end gap-1">
-                      {podePublicar(p) && (
-                        <Button size="icon" variant="ghost" title="Publicar" onClick={() => handlePublicar(p)}>
-                          <Megaphone className="h-4 w-4 text-primary" />
-                        </Button>
-                      )}
-                      <Button size="icon" variant="ghost" title="Copiar TIP" onClick={() => copyTip(p)}>
-                        <Copy className="h-4 w-4" />
-                      </Button>
-                      {p.status_publicacao !== "CANCELADO" && p.status_publicacao !== "FINALIZADO" && (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          title="Cancelar pick"
-                          onClick={() => cancelar.mutate(p.id)}
-                        >
-                          <Ban className="h-4 w-4 text-destructive" />
-                        </Button>
-                      )}
-                      {p.resultado === "PENDENTE" && (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          title="Registrar resultado"
-                          onClick={() => setResultadoFor(p)}
-                        >
-                          <Trophy className="h-4 w-4 text-warning" />
-                        </Button>
-                      )}
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        title="Editar"
-                        onClick={() => {
-                          setEditing(p);
-                          setOpenForm(true);
-                        }}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        title="Excluir"
-                        onClick={() => setConfirmDelete(p)}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  </td>
+        <div
+          ref={bottomScrollRef}
+          onScroll={syncFromBottom}
+          className="overflow-x-auto"
+        >
+          <div ref={tableWidthRef}>
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 w-10">
+                    <Checkbox
+                      checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                      onCheckedChange={toggleAll}
+                      aria-label="Selecionar todos"
+                    />
+                  </th>
+                  <SortableTh label="Data" k="data" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <SortableTh label="Hora" k="hora" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <SortableTh label="Esporte" k="esporte" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <SortableTh label="Liga" k="liga" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <SortableTh label="Jogo" k="jogo" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <th className="px-3 py-2 text-left text-xs uppercase tracking-wider text-muted-foreground">Placar</th>
+                  <SortableTh label="Mercado" k="mercado" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <SortableTh label="Pick" k="pick" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <SortableTh label="Odd Of." k="odd_ofertada" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <SortableTh label="Odd Val." k="odd_valor" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <SortableTh label="Prob." k="probabilidade_final" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <SortableTh label="Edge" k="edge" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <SortableTh label="Stake" k="stake" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <SortableTh label="Validação" k="status_validacao" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <SortableTh label="Resultado" k="resultado" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <th className="px-3 py-2 text-right">Ações</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {isLoading && (
+                  <tr>
+                    <td colSpan={17} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                      Carregando...
+                    </td>
+                  </tr>
+                )}
+                {!isLoading && sorted.length === 0 && (
+                  <tr>
+                    <td colSpan={17} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                      Nenhum prognóstico cadastrado.
+                    </td>
+                  </tr>
+                )}
+                {sorted.map((p) => (
+                  <tr key={p.id} className="border-t border-border hover:bg-muted/30">
+                    <td className="px-3 py-2">
+                      <Checkbox
+                        checked={selected.has(p.id)}
+                        onCheckedChange={() => toggleOne(p.id)}
+                        aria-label="Selecionar"
+                      />
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatDateBR(p.data)}</td>
+                    <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{p.hora ? p.hora.slice(0, 5) : "—"}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{p.esporte}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{p.liga}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{p.jogo}</td>
+                    <td className="px-3 py-2 whitespace-nowrap font-mono text-xs">{p.placar_final ?? "—"}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{p.mercado}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{p.pick}</td>
+                    <td className="px-3 py-2 text-right font-mono">{p.odd_ofertada.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right font-mono">{p.odd_valor.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right font-mono">{p.probabilidade_final.toFixed(1)}%</td>
+                    <td className={`px-3 py-2 text-right font-mono ${p.edge >= 0 ? "text-success" : "text-destructive"}`}>
+                      {p.edge.toFixed(1)}%
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono">{p.stake.toFixed(1)}u</td>
+                    <td className="px-3 py-2"><StatusBadge status={p.status_validacao} /></td>
+                    <td className="px-3 py-2"><ResultBadge result={p.resultado} /></td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      <div className="flex justify-end gap-1">
+                        {podePublicar(p) && (
+                          <Button size="icon" variant="ghost" title="Publicar" onClick={() => handlePublicar(p)}>
+                            <Megaphone className="h-4 w-4 text-primary" />
+                          </Button>
+                        )}
+                        <Button size="icon" variant="ghost" title="Copiar TIP" onClick={() => copyTip(p)}>
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        {p.status_publicacao !== "CANCELADO" && p.status_publicacao !== "FINALIZADO" && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            title="Cancelar pick"
+                            onClick={() => cancelar.mutate(p.id)}
+                          >
+                            <Ban className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
+                        {p.resultado === "PENDENTE" && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            title="Registrar resultado"
+                            onClick={() => setResultadoFor(p)}
+                          >
+                            <Trophy className="h-4 w-4 text-warning" />
+                          </Button>
+                        )}
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          title="Editar"
+                          onClick={() => {
+                            setEditing(p);
+                            setOpenForm(true);
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          title="Excluir"
+                          onClick={() => setConfirmDelete(p)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -389,6 +472,34 @@ function Prognosticos() {
                   toast.error((e as Error).message);
                 }
                 setConfirmDelete(null);
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmBulkDelete} onOpenChange={setConfirmBulkDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir {selected.size} prognóstico(s)?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                try {
+                  await bulkDel.mutateAsync(Array.from(selected));
+                  toast.success(`${selected.size} prognóstico(s) excluído(s)`);
+                  setSelected(new Set());
+                } catch (e) {
+                  toast.error((e as Error).message);
+                }
+                setConfirmBulkDelete(false);
               }}
             >
               Excluir
@@ -467,4 +578,3 @@ function SortableTh({
     </th>
   );
 }
-
