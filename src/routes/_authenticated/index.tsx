@@ -47,7 +47,7 @@ function Dashboard() {
   const { data: cfg } = useConfiguracao();
   const bancaInicial = cfg?.banca_inicial ?? 1000;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayBR();
   const hoje = prognosticos.filter((p) => p.data === today);
   const aprovados = prognosticos.filter(
     (p) => p.status_validacao === "CONFIRMA",
