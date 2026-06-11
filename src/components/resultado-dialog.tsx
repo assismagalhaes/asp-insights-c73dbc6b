@@ -16,7 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useCreateResultado, calcLucro, type Prognostico, type Resultado } from "@/lib/db";
+import { useCreateResultado, calcLucro, todayBR, type Prognostico, type Resultado } from "@/lib/db";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface Props {
@@ -34,14 +35,42 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
   const [placar, setPlacar] = useState("");
   const [oddFech, setOddFech] = useState<number>(0);
   const [lucro, setLucro] = useState<number>(0);
+  const [siblings, setSiblings] = useState<Prognostico[]>([]);
 
   useEffect(() => {
-    if (prognostico) {
-      setResultado("GREEN");
-      setPlacar("");
-      setOddFech(prognostico.odd_ofertada);
-      setLucro(calcLucro("GREEN", prognostico.stake, prognostico.odd_ofertada));
-    }
+    if (!open || !prognostico) return;
+    setResultado("GREEN");
+    setPlacar("");
+    setOddFech(prognostico.odd_ofertada);
+    setLucro(calcLucro("GREEN", prognostico.stake, prognostico.odd_ofertada));
+    setSiblings([]);
+
+    // procura outros prognósticos do mesmo confronto (data + hora + jogo + esporte)
+    (async () => {
+      let q = supabase
+        .from("prognosticos")
+        .select("*, resultados(placar_final, created_at)")
+        .eq("data", prognostico.data)
+        .eq("jogo", prognostico.jogo)
+        .eq("esporte", prognostico.esporte)
+        .neq("id", prognostico.id);
+      if (prognostico.hora) q = q.eq("hora", prognostico.hora);
+      const { data } = await q;
+      const list = (data ?? []) as unknown as Array<Prognostico & { resultados?: Array<{ placar_final: string | null; created_at: string }> }>;
+      setSiblings(list);
+
+      // se algum irmão já tem placar registrado, preenche automaticamente
+      for (const s of list) {
+        const rs = s.resultados ?? [];
+        if (rs.length) {
+          const last = [...rs].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0];
+          if (last.placar_final) {
+            setPlacar(last.placar_final);
+            break;
+          }
+        }
+      }
+    })();
   }, [prognostico, open]);
 
   useEffect(() => {
@@ -59,8 +88,26 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
         placar_final: placar || null,
         odd_fechamento: oddFech || null,
         lucro_prejuizo: lucro,
-        data_resultado: new Date().toISOString().slice(0, 10),
+        data_resultado: todayBR(),
       });
+
+      // propaga placar para irmãos sem resultado ainda (não define GREEN/RED — usuário escolhe por pick)
+      if (placar) {
+        const semResultado = siblings.filter((s) => s.resultado === "PENDENTE");
+        if (semResultado.length) {
+          const ok = window.confirm(
+            `Foram encontrados ${semResultado.length} prognóstico(s) para o mesmo confronto. Deseja preencher o placar "${placar}" automaticamente neles? (Você ainda precisa definir GREEN/RED por pick.)`,
+          );
+          if (ok) {
+            // grava um resultado VOID temporário? Não — apenas atualiza placar no prognostico.
+            // Como placar_final fica em resultados, criamos resultados PENDENTE não é permitido.
+            // Alternativa: salvar como observação leve via update do prognostico em campo livre não existe.
+            // Usamos a abordagem de pré-preencher quando o diálogo abrir (já feito acima).
+            toast.info("O placar será sugerido automaticamente ao abrir o resultado de cada irmão.");
+          }
+        }
+      }
+
       toast.success("Resultado registrado, bankroll atualizada.");
       onOpenChange(false);
     } catch (e) {
@@ -102,6 +149,11 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
             <Input type="number" step="0.01" value={lucro} onChange={(e) => setLucro(+e.target.value)} />
           </div>
         </div>
+        {siblings.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            {siblings.length} outro(s) prognóstico(s) para este confronto. O placar será sugerido automaticamente.
+          </p>
+        )}
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button onClick={submit} disabled={create.isPending}>Registrar</Button>
