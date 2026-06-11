@@ -93,7 +93,7 @@ export function PrognosticoDialog({
       });
     } else if (template) {
       setForm({
-        data: new Date().toISOString().slice(0, 10),
+        data: todayBR(),
         hora: template.hora,
         esporte: template.esporte,
         liga: template.liga,
@@ -112,7 +112,7 @@ export function PrognosticoDialog({
         observacoes: template.observacoes,
       });
     } else {
-      setForm({ ...empty, data: new Date().toISOString().slice(0, 10) });
+      setForm({ ...empty, data: todayBR() });
     }
   }, [prognostico, template, open]);
 
