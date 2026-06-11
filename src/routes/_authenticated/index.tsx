@@ -58,7 +58,7 @@ export const Route = createFileRoute("/_authenticated/")({
 const chartGrid = "oklch(0.28 0.02 250)";
 const axisColor = "oklch(0.68 0.02 250)";
 
-const ESPORTES = ["Todos", "Futebol", "NBA", "WNBA", "MLB", "NFL", "NHL", ...ESPORTES_DEFAULT.filter(e => !["Futebol"].includes(e))];
+const ESPORTES = ["Todos", "Futebol", "NBA", "WNBA", "MLB", "NFL", "NHL"];
 const MERCADOS = ["Todos", ...MERCADOS_DEFAULT];
 const PERIODOS: { v: PeriodoFiltro; label: string }[] = [
   { v: "hoje", label: "Hoje" },
