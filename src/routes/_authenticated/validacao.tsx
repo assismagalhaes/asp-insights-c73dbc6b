@@ -43,9 +43,15 @@ function Validacao() {
   const [stakes, setStakes] = useState<Record<string, string>>({});
   const [odds, setOdds] = useState<Record<string, string>>({});
 
-  const pendentes = prognosticos.filter(
-    (p) => p.resultado === "PENDENTE" && p.status_validacao === "PENDENTE",
-  );
+  const pendentes = prognosticos
+    .filter((p) => p.resultado === "PENDENTE" && p.status_validacao === "PENDENTE")
+    .slice()
+    .sort((a, b) => {
+      if (a.data !== b.data) return a.data < b.data ? -1 : 1;
+      const ha = a.hora ?? "99:99";
+      const hb = b.hora ?? "99:99";
+      return ha < hb ? -1 : ha > hb ? 1 : 0;
+    });
 
   const decidir = async (p: Prognostico, decisao: Status) => {
     if (!justificativas[p.id]?.trim()) {
@@ -105,6 +111,9 @@ function Validacao() {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono text-muted-foreground">{formatDateBR(p.data)}</span>
+                    {p.hora && (
+                      <span className="text-xs font-mono text-muted-foreground">{p.hora}</span>
+                    )}
                     <span className="text-xs font-mono text-muted-foreground">•</span>
                     <span className="text-xs font-semibold uppercase tracking-wider text-primary">
                       {p.esporte}
@@ -140,7 +149,7 @@ function Validacao() {
                 </div>
               )}
 
-              <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
+              <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
                 <Metric label="Odd Ofertada" value={p.odd_ofertada.toFixed(2)} />
                 <Metric label="Odd Valor" value={p.odd_valor.toFixed(2)} />
                 <Metric
@@ -153,8 +162,6 @@ function Validacao() {
                   value={`${p.edge.toFixed(2)}%`}
                   tone={p.edge < 0 ? "bad" : "good"}
                 />
-
-                <Metric label="Stake sugerida" value={`${p.stake.toFixed(1)}u`} />
               </div>
 
               {p.observacoes && (

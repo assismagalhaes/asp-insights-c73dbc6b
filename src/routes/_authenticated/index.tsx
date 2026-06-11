@@ -26,7 +26,7 @@ import {
 } from "recharts";
 import { StatCard } from "@/components/stat-card";
 import { StatusBadge, ResultBadge } from "@/components/status-badge";
-import { usePrognosticos, useBankroll, useConfiguracao } from "@/lib/db";
+import { usePrognosticos, useBankroll, useConfiguracao, todayBR } from "@/lib/db";
 
 export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
@@ -47,7 +47,7 @@ function Dashboard() {
   const { data: cfg } = useConfiguracao();
   const bancaInicial = cfg?.banca_inicial ?? 1000;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayBR();
   const hoje = prognosticos.filter((p) => p.data === today);
   const aprovados = prognosticos.filter(
     (p) => p.status_validacao === "CONFIRMA",

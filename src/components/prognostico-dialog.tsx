@@ -20,6 +20,7 @@ import {
 import {
   ESPORTES_DEFAULT,
   MERCADOS_DEFAULT,
+  todayBR,
   useCreatePrognostico,
   useUpdatePrognostico,
   type Prognostico,
@@ -37,7 +38,7 @@ interface Props {
 }
 
 const empty: PrognosticoInput = {
-  data: new Date().toISOString().slice(0, 10),
+  data: todayBR(),
   hora: null,
   esporte: "Futebol",
   liga: "",
@@ -92,7 +93,7 @@ export function PrognosticoDialog({
       });
     } else if (template) {
       setForm({
-        data: new Date().toISOString().slice(0, 10),
+        data: todayBR(),
         hora: template.hora,
         esporte: template.esporte,
         liga: template.liga,
@@ -111,7 +112,7 @@ export function PrognosticoDialog({
         observacoes: template.observacoes,
       });
     } else {
-      setForm({ ...empty, data: new Date().toISOString().slice(0, 10) });
+      setForm({ ...empty, data: todayBR() });
     }
   }, [prognostico, template, open]);
 
@@ -157,6 +158,13 @@ export function PrognosticoDialog({
         <div className="grid gap-3 md:grid-cols-3">
           <Field label="Data">
             <Input type="date" value={form.data} onChange={(e) => set("data", e.target.value)} />
+          </Field>
+          <Field label="Hora">
+            <Input
+              type="time"
+              value={form.hora ?? ""}
+              onChange={(e) => set("hora", e.target.value || null)}
+            />
           </Field>
           <Field label="Esporte">
             <Select value={form.esporte} onValueChange={(v) => set("esporte", v)}>
