@@ -12,7 +12,8 @@ import {
   Line,
   Cell,
 } from "recharts";
-import { usePrognosticos, useBankroll } from "@/lib/db";
+import { usePrognosticos, useConfiguracao } from "@/lib/db";
+import { bankrollTimeline, lucroUnidades } from "@/lib/metrics";
 
 export const Route = createFileRoute("/_authenticated/estatisticas")({
   head: () => ({ meta: [{ title: "ROI e Estatísticas — ASP Insights" }] }),
@@ -31,23 +32,19 @@ const tooltipStyle = {
 
 function Estatisticas() {
   const { data: prognosticos = [] } = usePrognosticos();
-  const { data: bankroll = [] } = useBankroll();
+  const { data: cfg } = useConfiguracao();
 
   // Apenas prognósticos confirmados contam para as estatísticas
   const validados = useMemo(
-    () =>
-      prognosticos.filter(
-        (p) => p.status_validacao === "CONFIRMA",
-      ),
+    () => prognosticos.filter((p) => p.status_validacao === "CONFIRMA"),
     [prognosticos],
   );
 
   const sportPerformance = useMemo(() => {
     const map = new Map<string, { lucro: number; stake: number }>();
     validados.forEach((p) => {
-      if (p.resultado === "PENDENTE") return;
       const cur = map.get(p.esporte) ?? { lucro: 0, stake: 0 };
-      cur.lucro += p.lucro_prejuizo ?? 0;
+      cur.lucro += lucroUnidades(p);
       cur.stake += p.stake;
       map.set(p.esporte, cur);
     });
@@ -61,8 +58,7 @@ function Estatisticas() {
   const marketPerformance = useMemo(() => {
     const map = new Map<string, number>();
     validados.forEach((p) => {
-      if (p.resultado === "PENDENTE") return;
-      map.set(p.mercado, (map.get(p.mercado) ?? 0) + (p.lucro_prejuizo ?? 0));
+      map.set(p.mercado, (map.get(p.mercado) ?? 0) + lucroUnidades(p));
     });
     return Array.from(map.entries()).map(([mercado, lucro]) => ({
       mercado,
@@ -73,17 +69,18 @@ function Estatisticas() {
   const monthlyResults = useMemo(() => {
     const map = new Map<string, number>();
     validados.forEach((p) => {
-      if (p.resultado === "PENDENTE") return;
       const mes = p.data.slice(0, 7);
-      map.set(mes, (map.get(mes) ?? 0) + (p.lucro_prejuizo ?? 0));
+      map.set(mes, (map.get(mes) ?? 0) + lucroUnidades(p));
     });
     return Array.from(map.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([mes, lucro]) => ({ mes, lucro: Number(lucro.toFixed(2)) }));
   }, [validados]);
 
-
-  const chartBanca = bankroll.map((b) => ({ data: b.data, banca: b.banca_atual }));
+  const chartBanca = useMemo(
+    () => bankrollTimeline(prognosticos, cfg?.banca_inicial ?? 0, cfg?.valor_unidade_padrao ?? 0),
+    [prognosticos, cfg],
+  );
 
   return (
     <div className="space-y-6">

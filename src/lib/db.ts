@@ -73,6 +73,7 @@ export interface BankrollRow {
   created_at: string;
 }
 
+export type TipoStake = "FIXO" | "PERCENTUAL";
 export interface Configuracao {
   id: string;
   nome_plataforma: string;
@@ -80,6 +81,8 @@ export interface Configuracao {
   banca_inicial: number;
   esportes_ativos: string[];
   mercados_ativos: string[];
+  tipo_stake: TipoStake;
+  percentual_unidade: number;
   created_at: string;
   updated_at: string;
 }
@@ -264,6 +267,8 @@ export function useConfiguracao() {
         ...(data as unknown as Configuracao),
         valor_unidade_padrao: Number(data.valor_unidade_padrao),
         banca_inicial: Number(data.banca_inicial),
+        tipo_stake: ((data as Record<string, unknown>).tipo_stake as TipoStake) ?? "FIXO",
+        percentual_unidade: Number((data as Record<string, unknown>).percentual_unidade ?? 1),
       };
     },
   });
@@ -286,13 +291,14 @@ export function useUpdateConfiguracao() {
 export const ESPORTES_DEFAULT = ["Futebol", "Basketball", "Baseball", "American Futebol", "Hockey"];
 export const MERCADOS_DEFAULT = [
   "Resultado Final",
+  "Moneyline",
   "Handicap Asiático",
   "Handicap Europeu",
   "Over/Under",
   "Over/Under Pontos",
+  "Ambas Marcam",
+  "Dupla Chance",
   "Parlay",
-  "BTTS",
-  "Moneyline",
   "Spread",
   "Total de Pontos",
   "Total de Corridas",
