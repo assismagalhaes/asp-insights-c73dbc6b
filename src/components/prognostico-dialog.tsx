@@ -159,6 +159,13 @@ export function PrognosticoDialog({
           <Field label="Data">
             <Input type="date" value={form.data} onChange={(e) => set("data", e.target.value)} />
           </Field>
+          <Field label="Hora">
+            <Input
+              type="time"
+              value={form.hora ?? ""}
+              onChange={(e) => set("hora", e.target.value || null)}
+            />
+          </Field>
           <Field label="Esporte">
             <Select value={form.esporte} onValueChange={(v) => set("esporte", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
