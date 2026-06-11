@@ -34,7 +34,6 @@ import {
   usePrognosticos,
   useConfiguracao,
   MERCADOS_DEFAULT,
-  ESPORTES_DEFAULT,
 } from "@/lib/db";
 import {
   computeMetrics,
