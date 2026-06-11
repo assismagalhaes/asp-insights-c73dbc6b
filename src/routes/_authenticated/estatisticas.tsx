@@ -12,7 +12,8 @@ import {
   Line,
   Cell,
 } from "recharts";
-import { usePrognosticos, useBankroll } from "@/lib/db";
+import { usePrognosticos, useConfiguracao } from "@/lib/db";
+import { bankrollTimeline, lucroUnidades } from "@/lib/metrics";
 
 export const Route = createFileRoute("/_authenticated/estatisticas")({
   head: () => ({ meta: [{ title: "ROI e Estatísticas — ASP Insights" }] }),
