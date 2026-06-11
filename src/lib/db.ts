@@ -291,13 +291,14 @@ export function useUpdateConfiguracao() {
 export const ESPORTES_DEFAULT = ["Futebol", "Basketball", "Baseball", "American Futebol", "Hockey"];
 export const MERCADOS_DEFAULT = [
   "Resultado Final",
+  "Moneyline",
   "Handicap Asiático",
   "Handicap Europeu",
   "Over/Under",
   "Over/Under Pontos",
+  "Ambas Marcam",
+  "Dupla Chance",
   "Parlay",
-  "BTTS",
-  "Moneyline",
   "Spread",
   "Total de Pontos",
   "Total de Corridas",
