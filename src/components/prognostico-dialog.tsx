@@ -20,6 +20,7 @@ import {
 import {
   ESPORTES_DEFAULT,
   MERCADOS_DEFAULT,
+  todayBR,
   useCreatePrognostico,
   useUpdatePrognostico,
   type Prognostico,
@@ -37,7 +38,7 @@ interface Props {
 }
 
 const empty: PrognosticoInput = {
-  data: new Date().toISOString().slice(0, 10),
+  data: todayBR(),
   hora: null,
   esporte: "Futebol",
   liga: "",
