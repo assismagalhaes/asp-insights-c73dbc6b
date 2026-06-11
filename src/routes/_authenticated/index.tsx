@@ -26,7 +26,7 @@ import {
 } from "recharts";
 import { StatCard } from "@/components/stat-card";
 import { StatusBadge, ResultBadge } from "@/components/status-badge";
-import { usePrognosticos, useBankroll, useConfiguracao } from "@/lib/db";
+import { usePrognosticos, useBankroll, useConfiguracao, todayBR } from "@/lib/db";
 
 export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
