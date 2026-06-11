@@ -73,6 +73,7 @@ export interface BankrollRow {
   created_at: string;
 }
 
+export type TipoStake = "FIXO" | "PERCENTUAL";
 export interface Configuracao {
   id: string;
   nome_plataforma: string;
@@ -80,6 +81,8 @@ export interface Configuracao {
   banca_inicial: number;
   esportes_ativos: string[];
   mercados_ativos: string[];
+  tipo_stake: TipoStake;
+  percentual_unidade: number;
   created_at: string;
   updated_at: string;
 }
