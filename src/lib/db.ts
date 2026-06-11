@@ -267,6 +267,8 @@ export function useConfiguracao() {
         ...(data as unknown as Configuracao),
         valor_unidade_padrao: Number(data.valor_unidade_padrao),
         banca_inicial: Number(data.banca_inicial),
+        tipo_stake: ((data as Record<string, unknown>).tipo_stake as TipoStake) ?? "FIXO",
+        percentual_unidade: Number((data as Record<string, unknown>).percentual_unidade ?? 1),
       };
     },
   });
