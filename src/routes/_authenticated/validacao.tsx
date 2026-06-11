@@ -43,9 +43,15 @@ function Validacao() {
   const [stakes, setStakes] = useState<Record<string, string>>({});
   const [odds, setOdds] = useState<Record<string, string>>({});
 
-  const pendentes = prognosticos.filter(
-    (p) => p.resultado === "PENDENTE" && p.status_validacao === "PENDENTE",
-  );
+  const pendentes = prognosticos
+    .filter((p) => p.resultado === "PENDENTE" && p.status_validacao === "PENDENTE")
+    .slice()
+    .sort((a, b) => {
+      if (a.data !== b.data) return a.data < b.data ? -1 : 1;
+      const ha = a.hora ?? "99:99";
+      const hb = b.hora ?? "99:99";
+      return ha < hb ? -1 : ha > hb ? 1 : 0;
+    });
 
   const decidir = async (p: Prognostico, decisao: Status) => {
     if (!justificativas[p.id]?.trim()) {
