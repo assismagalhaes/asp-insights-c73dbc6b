@@ -61,6 +61,8 @@ export type Database = {
           id: string
           mercados_ativos: string[]
           nome_plataforma: string
+          percentual_unidade: number
+          tipo_stake: string
           updated_at: string
           valor_unidade_padrao: number
         }
@@ -71,6 +73,8 @@ export type Database = {
           id?: string
           mercados_ativos?: string[]
           nome_plataforma?: string
+          percentual_unidade?: number
+          tipo_stake?: string
           updated_at?: string
           valor_unidade_padrao?: number
         }
@@ -81,6 +85,8 @@ export type Database = {
           id?: string
           mercados_ativos?: string[]
           nome_plataforma?: string
+          percentual_unidade?: number
+          tipo_stake?: string
           updated_at?: string
           valor_unidade_padrao?: number
         }
