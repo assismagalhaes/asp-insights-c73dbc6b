@@ -111,6 +111,9 @@ function Validacao() {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono text-muted-foreground">{formatDateBR(p.data)}</span>
+                    {p.hora && (
+                      <span className="text-xs font-mono text-muted-foreground">{p.hora}</span>
+                    )}
                     <span className="text-xs font-mono text-muted-foreground">•</span>
                     <span className="text-xs font-semibold uppercase tracking-wider text-primary">
                       {p.esporte}
