@@ -1,17 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
-  Activity,
   CheckCircle2,
   XCircle,
   TrendingUp,
-  Percent,
   Target,
   DollarSign,
   ListChecks,
-  Megaphone,
-  Clock,
-  Trophy,
+  Activity,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -26,7 +22,28 @@ import {
 } from "recharts";
 import { StatCard } from "@/components/stat-card";
 import { StatusBadge, ResultBadge } from "@/components/status-badge";
-import { usePrognosticos, useBankroll, useConfiguracao, todayBR } from "@/lib/db";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  usePrognosticos,
+  useConfiguracao,
+  MERCADOS_DEFAULT,
+  ESPORTES_DEFAULT,
+} from "@/lib/db";
+import {
+  computeMetrics,
+  bankrollTimeline,
+  lucroUnidades,
+  rangeFromPeriodo,
+  dateInRange,
+  type PeriodoFiltro,
+} from "@/lib/metrics";
 
 export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
@@ -41,76 +58,73 @@ export const Route = createFileRoute("/_authenticated/")({
 const chartGrid = "oklch(0.28 0.02 250)";
 const axisColor = "oklch(0.68 0.02 250)";
 
+const ESPORTES = ["Todos", "Futebol", "NBA", "WNBA", "MLB", "NFL", "NHL", ...ESPORTES_DEFAULT.filter(e => !["Futebol"].includes(e))];
+const MERCADOS = ["Todos", ...MERCADOS_DEFAULT];
+const PERIODOS: { v: PeriodoFiltro; label: string }[] = [
+  { v: "hoje", label: "Hoje" },
+  { v: "7d", label: "7 dias" },
+  { v: "30d", label: "30 dias" },
+  { v: "mes", label: "Mês atual" },
+  { v: "ano", label: "Ano atual" },
+  { v: "tudo", label: "Todo o período" },
+  { v: "custom", label: "Personalizado" },
+];
+
 function Dashboard() {
   const { data: prognosticos = [] } = usePrognosticos();
-  const { data: bankroll = [] } = useBankroll();
   const { data: cfg } = useConfiguracao();
-  const bancaInicial = cfg?.banca_inicial ?? 1000;
 
-  const today = todayBR();
-  const hoje = prognosticos.filter((p) => p.data === today);
-  const aprovados = prognosticos.filter(
-    (p) => p.status_validacao === "CONFIRMA",
+  const [periodo, setPeriodo] = useState<PeriodoFiltro>("tudo");
+  const [customIni, setCustomIni] = useState("");
+  const [customFim, setCustomFim] = useState("");
+  const [esporte, setEsporte] = useState("Todos");
+  const [mercado, setMercado] = useState("Todos");
+
+  const { ini, fim } = rangeFromPeriodo(periodo, customIni, customFim);
+
+  const filtrados = useMemo(
+    () =>
+      prognosticos.filter((p) => {
+        if (!dateInRange(p.data, ini, fim)) return false;
+        if (esporte !== "Todos" && p.esporte !== esporte) return false;
+        if (mercado !== "Todos" && p.mercado !== mercado) return false;
+        return true;
+      }),
+    [prognosticos, ini, fim, esporte, mercado],
   );
-  const rejeitados = prognosticos.filter((p) => p.status_validacao === "PULAR");
-  // Só prognósticos confirmados entram em banca, lucro, ROI, yield, win rate
-  const validados = aprovados;
-  const lucro = validados.reduce((s, p) => s + (p.lucro_prejuizo ?? 0), 0);
-  const concluidos = validados.filter((p) => p.resultado !== "PENDENTE");
-  const greens = validados.filter((p) => p.resultado === "GREEN" || p.resultado === "HALF GREEN").length;
-  const winRate = concluidos.length ? (greens / concluidos.length) * 100 : 0;
-  const stakeTotal = concluidos.reduce((s, p) => s + p.stake, 0);
-  const roi = stakeTotal ? (lucro / stakeTotal) * 100 : 0;
-  const yieldVal = roi;
 
-  const publicadasHoje = prognosticos.filter(
-    (p) => p.status_publicacao !== "NAO_PUBLICADO" && p.data_publicacao?.slice(0, 10) === today,
-  ).length;
-  const pendentesPub = prognosticos.filter(
-    (p) =>
-      p.status_publicacao === "NAO_PUBLICADO" &&
-      p.status_validacao === "CONFIRMA",
-  ).length;
-  const finalizadas = prognosticos.filter((p) => p.status_publicacao === "FINALIZADO").length;
-  const lucroPublicadas = validados
-    .filter((p) => p.status_publicacao === "PUBLICADO" || p.status_publicacao === "FINALIZADO")
-    .reduce((s, p) => s + (p.lucro_prejuizo ?? 0), 0);
+  const metrics = useMemo(() => computeMetrics(filtrados, cfg), [filtrados, cfg]);
+  const timeline = useMemo(
+    () => bankrollTimeline(filtrados, cfg?.banca_inicial ?? 0, cfg?.valor_unidade_padrao ?? 0),
+    [filtrados, cfg],
+  );
 
-  const bankrollChart = bankroll.map((b) => ({
-    data: b.data,
-    banca: b.banca_atual,
-    roi: bancaInicial ? ((b.banca_atual - bancaInicial) / bancaInicial) * 100 : 0,
-  }));
-  const ultimoBanca = bankroll.length ? bankroll[bankroll.length - 1].banca_atual : bancaInicial;
-
-  const sportPerformance = useMemo(() => {
+  const sportPerf = useMemo(() => {
     const map = new Map<string, { lucro: number; stake: number }>();
-    validados.forEach((p) => {
-      if (p.resultado === "PENDENTE") return;
-      const cur = map.get(p.esporte) ?? { lucro: 0, stake: 0 };
-      cur.lucro += p.lucro_prejuizo ?? 0;
-      cur.stake += p.stake;
-      map.set(p.esporte, cur);
-    });
+    filtrados
+      .filter((p) => p.status_validacao === "CONFIRMA")
+      .forEach((p) => {
+        const cur = map.get(p.esporte) ?? { lucro: 0, stake: 0 };
+        cur.lucro += lucroUnidades(p);
+        cur.stake += p.stake;
+        map.set(p.esporte, cur);
+      });
     return Array.from(map.entries()).map(([esporte, v]) => ({
       esporte,
       lucro: Number(v.lucro.toFixed(2)),
-      roi: v.stake ? Number(((v.lucro / v.stake) * 100).toFixed(1)) : 0,
     }));
-  }, [validados]);
+  }, [filtrados]);
 
-  const marketPerformance = useMemo(() => {
+  const marketPerf = useMemo(() => {
     const map = new Map<string, number>();
-    validados.forEach((p) => {
-      if (p.resultado === "PENDENTE") return;
-      map.set(p.mercado, (map.get(p.mercado) ?? 0) + (p.lucro_prejuizo ?? 0));
-    });
+    filtrados
+      .filter((p) => p.status_validacao === "CONFIRMA")
+      .forEach((p) => map.set(p.mercado, (map.get(p.mercado) ?? 0) + lucroUnidades(p)));
     return Array.from(map.entries()).map(([mercado, lucro]) => ({
       mercado,
       lucro: Number(lucro.toFixed(2)),
     }));
-  }, [validados]);
-
+  }, [filtrados]);
 
   return (
     <div className="space-y-6">
@@ -121,31 +135,68 @@ function Dashboard() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
-        <StatCard label="Prog. do dia" value={String(hoje.length)} icon={Activity} />
-        <StatCard label="Aprovados" value={String(aprovados.length)} icon={CheckCircle2} trend="up" />
-        <StatCard label="Rejeitados" value={String(rejeitados.length)} icon={XCircle} trend="down" />
-        <StatCard
-          label="Lucro (u)"
-          value={`${lucro >= 0 ? "+" : ""}${lucro.toFixed(2)}u`}
-          icon={Activity}
-          trend={lucro >= 0 ? "up" : "down"}
-        />
-        <StatCard label="ROI" value={`${roi.toFixed(1)}%`} icon={TrendingUp} trend={roi >= 0 ? "up" : "down"} />
-        <StatCard label="Yield" value={`${yieldVal.toFixed(1)}%`} icon={Percent} />
-        <StatCard label="Win Rate" value={`${winRate.toFixed(1)}%`} icon={Target} />
+      {/* Filtros */}
+      <div className="rounded-lg border border-border bg-card p-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Período</label>
+            <Select value={periodo} onValueChange={(v) => setPeriodo(v as PeriodoFiltro)}>
+              <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {PERIODOS.map((p) => <SelectItem key={p.v} value={p.v}>{p.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {periodo === "custom" && (
+            <>
+              <div>
+                <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">De</label>
+                <Input type="date" value={customIni} onChange={(e) => setCustomIni(e.target.value)} className="h-9 w-40" />
+              </div>
+              <div>
+                <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Até</label>
+                <Input type="date" value={customFim} onChange={(e) => setCustomFim(e.target.value)} className="h-9 w-40" />
+              </div>
+            </>
+          )}
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Esporte</label>
+            <Select value={esporte} onValueChange={setEsporte}>
+              <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {ESPORTES.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Mercado</label>
+            <Select value={mercado} onValueChange={setMercado}>
+              <SelectTrigger className="h-9 w-52"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {MERCADOS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard label="Publicadas hoje" value={String(publicadasHoje)} icon={Megaphone} />
-        <StatCard label="Pendentes pub." value={String(pendentesPub)} icon={Clock} />
-        <StatCard label="Finalizadas" value={String(finalizadas)} icon={Trophy} />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <StatCard label="Greens" value={String(metrics.greens)} icon={CheckCircle2} trend="up" />
+        <StatCard label="Reds" value={String(metrics.reds)} icon={XCircle} trend="down" />
         <StatCard
-          label="Lucro publicadas (R$)"
-          value={`${lucroPublicadas >= 0 ? "+" : ""}R$ ${(lucroPublicadas * (cfg?.valor_unidade_padrao ?? 10)).toFixed(2)}`}
-          icon={DollarSign}
-          trend={lucroPublicadas >= 0 ? "up" : "down"}
+          label="Lucro (u)"
+          value={`${metrics.lucroU >= 0 ? "+" : ""}${metrics.lucroU.toFixed(2)}u`}
+          icon={Activity}
+          trend={metrics.lucroU >= 0 ? "up" : "down"}
         />
+        <StatCard
+          label="Lucro Real"
+          value={`${metrics.lucroReais >= 0 ? "+" : ""}R$ ${metrics.lucroReais.toFixed(2)}`}
+          icon={DollarSign}
+          trend={metrics.lucroReais >= 0 ? "up" : "down"}
+        />
+        <StatCard label="ROI" value={`${metrics.roi.toFixed(2)}%`} icon={TrendingUp} trend={metrics.roi >= 0 ? "up" : "down"} />
+        <StatCard label="Win Rate" value={`${metrics.winRate.toFixed(1)}%`} icon={Target} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -155,23 +206,15 @@ function Dashboard() {
               Evolução da Banca
             </h3>
             <span className="font-mono text-xs text-success">
-              {ultimoBanca >= bancaInicial ? "+" : ""}
-              R$ {(ultimoBanca - bancaInicial).toFixed(2)}
+              R$ {metrics.bancaAtual.toFixed(2)}
             </span>
           </div>
           <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={bankrollChart}>
+            <LineChart data={timeline}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis dataKey="data" stroke={axisColor} fontSize={10} tickFormatter={(d) => String(d).slice(5)} />
               <YAxis stroke={axisColor} fontSize={10} />
-              <Tooltip
-                contentStyle={{
-                  background: "oklch(0.205 0.018 250)",
-                  border: "1px solid oklch(0.28 0.02 250)",
-                  borderRadius: 8,
-                  fontSize: 12,
-                }}
-              />
+              <Tooltip contentStyle={{ background: "oklch(0.205 0.018 250)", border: "1px solid oklch(0.28 0.02 250)", borderRadius: 8, fontSize: 12 }} />
               <Line type="monotone" dataKey="banca" stroke="oklch(0.72 0.18 155)" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
@@ -182,18 +225,11 @@ function Dashboard() {
             Evolução do ROI
           </h3>
           <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={bankrollChart}>
+            <LineChart data={timeline}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis dataKey="data" stroke={axisColor} fontSize={10} tickFormatter={(d) => String(d).slice(5)} />
               <YAxis stroke={axisColor} fontSize={10} />
-              <Tooltip
-                contentStyle={{
-                  background: "oklch(0.205 0.018 250)",
-                  border: "1px solid oklch(0.28 0.02 250)",
-                  borderRadius: 8,
-                  fontSize: 12,
-                }}
-              />
+              <Tooltip contentStyle={{ background: "oklch(0.205 0.018 250)", border: "1px solid oklch(0.28 0.02 250)", borderRadius: 8, fontSize: 12 }} />
               <Line type="monotone" dataKey="roi" stroke="oklch(0.7 0.15 220)" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
@@ -201,21 +237,14 @@ function Dashboard() {
 
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Resultado por Esporte
+            Resultado por Esporte (u)
           </h3>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={sportPerformance}>
+            <BarChart data={sportPerf}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis dataKey="esporte" stroke={axisColor} fontSize={10} />
               <YAxis stroke={axisColor} fontSize={10} />
-              <Tooltip
-                contentStyle={{
-                  background: "oklch(0.205 0.018 250)",
-                  border: "1px solid oklch(0.28 0.02 250)",
-                  borderRadius: 8,
-                  fontSize: 12,
-                }}
-              />
+              <Tooltip contentStyle={{ background: "oklch(0.205 0.018 250)", border: "1px solid oklch(0.28 0.02 250)", borderRadius: 8, fontSize: 12 }} />
               <Bar dataKey="lucro" fill="oklch(0.72 0.18 155)" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -223,21 +252,14 @@ function Dashboard() {
 
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Resultado por Mercado
+            Resultado por Mercado (u)
           </h3>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={marketPerformance} layout="vertical">
+            <BarChart data={marketPerf} layout="vertical">
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis type="number" stroke={axisColor} fontSize={10} />
               <YAxis type="category" dataKey="mercado" stroke={axisColor} fontSize={10} width={120} />
-              <Tooltip
-                contentStyle={{
-                  background: "oklch(0.205 0.018 250)",
-                  border: "1px solid oklch(0.28 0.02 250)",
-                  borderRadius: 8,
-                  fontSize: 12,
-                }}
-              />
+              <Tooltip contentStyle={{ background: "oklch(0.205 0.018 250)", border: "1px solid oklch(0.28 0.02 250)", borderRadius: 8, fontSize: 12 }} />
               <Bar dataKey="lucro" fill="oklch(0.7 0.15 220)" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -264,7 +286,7 @@ function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {prognosticos.slice(0, 8).map((p) => (
+              {filtrados.slice(0, 8).map((p) => (
                 <tr key={p.id} className="border-t border-border hover:bg-muted/30">
                   <td className="px-4 py-2 font-mono text-xs">{p.data}</td>
                   <td className="px-4 py-2">{p.esporte}</td>
@@ -276,10 +298,10 @@ function Dashboard() {
                   <td className="px-4 py-2"><ResultBadge result={p.resultado} /></td>
                 </tr>
               ))}
-              {prognosticos.length === 0 && (
+              {filtrados.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-4 py-8 text-center text-sm text-muted-foreground">
-                    Nenhum prognóstico cadastrado ainda.
+                    Nenhum prognóstico para os filtros selecionados.
                   </td>
                 </tr>
               )}
