@@ -133,6 +133,7 @@ function parseDate(v: unknown): string | null {
       const dd = String(d.d).padStart(2, "0");
       return `${d.y}-${mm}-${dd}`;
     }
+    return null;
   }
   if (v instanceof Date) {
     const yyyy = v.getUTCFullYear();
@@ -142,20 +143,26 @@ function parseDate(v: unknown): string | null {
   }
   const s = String(v).trim();
   // ISO yyyy-mm-dd (com ou sem hora)
-  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-  // dd/mm/yyyy or dd-mm-yyyy
-  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
-  if (m) {
-    const yyyy = m[3].length === 2 ? "20" + m[3] : m[3];
-    return `${yyyy}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) {
+    const y = +iso[1];
+    const mo = +iso[2];
+    const da = +iso[3];
+    if (mo < 1 || mo > 12 || da < 1 || da > 31) return null;
+    return `${y}-${String(mo).padStart(2, "0")}-${String(da).padStart(2, "0")}`;
   }
-  const d = new Date(s + "T00:00:00Z");
-  if (!isNaN(d.getTime())) {
-    const yyyy = d.getUTCFullYear();
-    const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-    const dd = String(d.getUTCDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
+  // dd/mm/yyyy ou dd-mm-yyyy (sempre interpretado como DIA/MÊS/ANO — formato brasileiro)
+  const dmy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if (dmy) {
+    const da = +dmy[1];
+    const mo = +dmy[2];
+    let y = +dmy[3];
+    if (y < 100) y += 2000;
+    if (mo < 1 || mo > 12 || da < 1 || da > 31) return null;
+    // valida data real (evita 31/02 etc.)
+    const probe = new Date(Date.UTC(y, mo - 1, da));
+    if (probe.getUTCMonth() !== mo - 1 || probe.getUTCDate() !== da) return null;
+    return `${y}-${String(mo).padStart(2, "0")}-${String(da).padStart(2, "0")}`;
   }
   return null;
 }
