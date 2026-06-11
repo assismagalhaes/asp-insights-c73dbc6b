@@ -289,6 +289,8 @@ export const MERCADOS_DEFAULT = [
   "Handicap Asiático",
   "Handicap Europeu",
   "Over/Under",
+  "Over/Under Pontos",
+  "Parlay",
   "BTTS",
   "Moneyline",
   "Spread",
@@ -297,6 +299,16 @@ export const MERCADOS_DEFAULT = [
   "Total de Escanteios",
   "Player Props",
 ];
+
+// Data atual no fuso de Brasília (America/Sao_Paulo) em YYYY-MM-DD
+export function todayBR(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
 
 // ===== Publicação =====
 export function calcLucro(resultado: Resultado, stake: number, odd: number): number {
