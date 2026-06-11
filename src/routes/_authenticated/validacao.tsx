@@ -149,7 +149,7 @@ function Validacao() {
                 </div>
               )}
 
-              <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
+              <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
                 <Metric label="Odd Ofertada" value={p.odd_ofertada.toFixed(2)} />
                 <Metric label="Odd Valor" value={p.odd_valor.toFixed(2)} />
                 <Metric
@@ -162,8 +162,6 @@ function Validacao() {
                   value={`${p.edge.toFixed(2)}%`}
                   tone={p.edge < 0 ? "bad" : "good"}
                 />
-
-                <Metric label="Stake sugerida" value={`${p.stake.toFixed(1)}u`} />
               </div>
 
               {p.observacoes && (
