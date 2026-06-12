@@ -34,7 +34,9 @@ import {
   usePrognosticos,
   useConfiguracao,
   MERCADOS_DEFAULT,
+  ESPORTES_DEFAULT,
 } from "@/lib/db";
+import { LeagueFilter } from "@/components/league-filter";
 import {
   computeMetrics,
   bankrollTimeline,
@@ -57,7 +59,7 @@ export const Route = createFileRoute("/_authenticated/")({
 const chartGrid = "oklch(0.28 0.02 250)";
 const axisColor = "oklch(0.68 0.02 250)";
 
-const ESPORTES = ["Todos", "Futebol", "NBA", "WNBA", "MLB", "NFL", "NHL"];
+const ESPORTES = ["Todos", ...ESPORTES_DEFAULT];
 const MERCADOS = ["Todos", ...MERCADOS_DEFAULT];
 const PERIODOS: { v: PeriodoFiltro; label: string }[] = [
   { v: "hoje", label: "Hoje" },
