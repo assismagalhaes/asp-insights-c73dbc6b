@@ -172,6 +172,10 @@ function Dashboard() {
             </Select>
           </div>
           <div>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Liga</label>
+            <LeagueFilter sport={esporte === "Todos" ? "all" : esporte} value={liga} onChange={setLiga} className="h-9 w-48" />
+          </div>
+          <div>
             <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Mercado</label>
             <Select value={mercado} onValueChange={setMercado}>
               <SelectTrigger className="h-9 w-52"><SelectValue /></SelectTrigger>
