@@ -6,7 +6,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useLigas } from "@/lib/db";
+import { useLigas, type Liga } from "@/lib/db";
 
 interface Props {
   sport: string; // "all" ou nome do esporte
