@@ -79,6 +79,7 @@ function Dashboard() {
   const [customIni, setCustomIni] = useState("");
   const [customFim, setCustomFim] = useState("");
   const [esporte, setEsporte] = useState("Todos");
+  const [liga, setLiga] = useState("all");
   const [mercado, setMercado] = useState("Todos");
 
   const { ini, fim } = rangeFromPeriodo(periodo, customIni, customFim);
@@ -88,10 +89,11 @@ function Dashboard() {
       prognosticos.filter((p) => {
         if (!dateInRange(p.data, ini, fim)) return false;
         if (esporte !== "Todos" && p.esporte !== esporte) return false;
+        if (liga !== "all" && p.liga !== liga) return false;
         if (mercado !== "Todos" && p.mercado !== mercado) return false;
         return true;
       }),
-    [prognosticos, ini, fim, esporte, mercado],
+    [prognosticos, ini, fim, esporte, liga, mercado],
   );
 
   const metrics = useMemo(() => computeMetrics(filtrados, cfg), [filtrados, cfg]);
