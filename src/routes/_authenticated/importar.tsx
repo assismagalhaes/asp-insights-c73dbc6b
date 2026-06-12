@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { Upload, Download, FileSpreadsheet, AlertTriangle, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -29,6 +30,8 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { normalizeEsporteLiga } from "@/lib/db";
+import { parseBrazilianDate, formatBR } from "@/lib/date-br";
 
 export const Route = createFileRoute("/_authenticated/importar")({
   component: ImportarPage,
@@ -55,7 +58,9 @@ type Field = (typeof TARGET_FIELDS)[number];
 
 const REQUIRED: Field[] = [
   "data",
+  "hora",
   "esporte",
+  "liga",
   "jogo",
   "mercado",
   "pick",
@@ -106,71 +111,20 @@ function parseNumber(v: unknown): number | null {
   return isNaN(n) ? null : n;
 }
 
-
 function parseProb(v: unknown): number | null {
   const n = parseNumber(v);
   if (n == null) return null;
-  // se 0..1 -> *100
   if (n > 0 && n <= 1) return Number((n * 100).toFixed(4));
   return n;
 }
 
 function parseEdge(v: unknown): number | null {
-  const n = parseNumber(v);
-  if (n == null) return null;
-  // Edge é importado já em pontos percentuais (ex.: 0.3 = 0.3%, 7.08 = 7.08%).
-  // Não aplicamos escala automática para evitar leituras incorretas.
-  return n;
-}
-
-function parseDate(v: unknown): string | null {
-  if (v == null || v === "") return null;
-  if (typeof v === "number") {
-    // Excel serial
-    const d = XLSX.SSF.parse_date_code(v);
-    if (d) {
-      const mm = String(d.m).padStart(2, "0");
-      const dd = String(d.d).padStart(2, "0");
-      return `${d.y}-${mm}-${dd}`;
-    }
-    return null;
-  }
-  if (v instanceof Date) {
-    const yyyy = v.getUTCFullYear();
-    const mm = String(v.getUTCMonth() + 1).padStart(2, "0");
-    const dd = String(v.getUTCDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  }
-  const s = String(v).trim();
-  // ISO yyyy-mm-dd (com ou sem hora)
-  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (iso) {
-    const y = +iso[1];
-    const mo = +iso[2];
-    const da = +iso[3];
-    if (mo < 1 || mo > 12 || da < 1 || da > 31) return null;
-    return `${y}-${String(mo).padStart(2, "0")}-${String(da).padStart(2, "0")}`;
-  }
-  // dd/mm/yyyy ou dd-mm-yyyy (sempre interpretado como DIA/MÊS/ANO — formato brasileiro)
-  const dmy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
-  if (dmy) {
-    const da = +dmy[1];
-    const mo = +dmy[2];
-    let y = +dmy[3];
-    if (y < 100) y += 2000;
-    if (mo < 1 || mo > 12 || da < 1 || da > 31) return null;
-    // valida data real (evita 31/02 etc.)
-    const probe = new Date(Date.UTC(y, mo - 1, da));
-    if (probe.getUTCMonth() !== mo - 1 || probe.getUTCDate() !== da) return null;
-    return `${y}-${String(mo).padStart(2, "0")}-${String(da).padStart(2, "0")}`;
-  }
-  return null;
+  return parseNumber(v);
 }
 
 function parseTime(v: unknown): string | null {
   if (v == null || v === "") return null;
   if (typeof v === "number") {
-    // Excel serial: a parte fracionária representa a hora do dia
     const frac = v - Math.floor(v);
     if (frac > 0) {
       const totalMin = Math.round(frac * 24 * 60);
@@ -186,7 +140,6 @@ function parseTime(v: unknown): string | null {
     return hh === "00" && mm === "00" ? null : `${hh}:${mm}`;
   }
   const s = String(v).trim();
-  // procura HH:MM (com segundos opcionais) em qualquer parte da string
   const m = s.match(/(\d{1,2}):(\d{2})(?::\d{2})?/);
   if (!m) return null;
   const hh = String(Math.min(23, Number(m[1]))).padStart(2, "0");
@@ -195,7 +148,7 @@ function parseTime(v: unknown): string | null {
 
 interface ParsedRow {
   raw: Record<string, unknown>;
-  values: Record<Field, unknown>;
+  values: Record<string, unknown>;
   errors: string[];
   warnings: string[];
   duplicate: boolean;
@@ -214,6 +167,7 @@ function ImportarPage() {
   const [existingKeys, setExistingKeys] = useState<Set<string>>(new Set());
   const [dupStrategy, setDupStrategy] = useState<DupStrategy>("skip");
   const [importing, setImporting] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
   const [summary, setSummary] = useState<null | {
     lidas: number;
     importados: number;
@@ -240,7 +194,6 @@ function ImportarPage() {
     setRawRows(json);
     setMapping(autoMap(hdrs));
 
-    // load existing keys for dup check
     const { data } = await supabase
       .from("prognosticos")
       .select("data,esporte,jogo,mercado,pick,linha");
@@ -266,42 +219,50 @@ function ImportarPage() {
       const errors: string[] = [];
       const warnings: string[] = [];
 
-      const data = parseDate(values.data);
-      if (!data) errors.push("data inválida");
-      // hora vem na própria coluna de data (ex.: "2026-06-07 14:35") ou em coluna separada
+      const data = parseBrazilianDate(values.data);
+      if (!data) errors.push("Data inválida");
+
+      // Hora pode vir na própria coluna de data se houver "YYYY-MM-DD HH:MM"
       const hora = parseTime(values.hora) ?? parseTime(values.data);
-      const esporte = String(values.esporte ?? "").trim();
-      if (!esporte) errors.push("esporte vazio");
+      if (!hora) errors.push("Hora obrigatória não informada");
+
+      const normESL = normalizeEsporteLiga({
+        esporte: String(values.esporte ?? ""),
+        liga: String(values.liga ?? ""),
+      });
+      if (!normESL.esporte) errors.push("Esporte vazio");
+      if (!normESL.liga) errors.push("Liga obrigatória não informada");
+
       let jogo = String(values.jogo ?? "").trim();
       const mandante = String(values.mandante ?? "").trim();
       const visitante = String(values.visitante ?? "").trim();
       if (!jogo && mandante && visitante) jogo = `${mandante} x ${visitante}`;
-      if (!jogo) errors.push("jogo vazio");
+      if (!jogo) errors.push("Jogo vazio");
+
       const mercado = String(values.mercado ?? "").trim();
-      if (!mercado) errors.push("mercado vazio");
+      if (!mercado) errors.push("Mercado vazio");
       const pick = String(values.pick ?? "").trim();
-      if (!pick) errors.push("pick vazio");
+      if (!pick) errors.push("Pick vazia");
 
       const oddOf = parseNumber(values.odd_ofertada);
-      if (oddOf == null) errors.push("odd_ofertada inválida");
-      else if (oddOf <= 1) errors.push("odd_ofertada deve ser > 1");
+      if (oddOf == null) errors.push("Odd ofertada inválida");
+      else if (oddOf <= 1) errors.push("Odd ofertada deve ser > 1");
 
       const oddV = parseNumber(values.odd_valor);
-      if (oddV == null) errors.push("odd_valor inválida");
-      else if (oddV <= 1) errors.push("odd_valor deve ser > 1");
+      if (oddV == null) errors.push("Odd valor inválida");
+      else if (oddV <= 1) errors.push("Odd valor deve ser > 1");
 
       const prob = parseProb(values.probabilidade_final);
-      if (prob == null) errors.push("probabilidade inválida");
-      else if (prob < 0 || prob > 100) errors.push("probabilidade fora de 0-100");
+      if (prob == null) errors.push("Probabilidade inválida");
+      else if (prob < 0 || prob > 100) errors.push("Probabilidade fora de 0-100");
 
       const edge = parseEdge(values.edge);
-      if (edge == null) errors.push("edge inválido");
+      if (edge == null) errors.push("Edge inválido");
 
-      if (!String(values.liga ?? "").trim()) warnings.push("liga vazia");
-      if (!mandante || !visitante) warnings.push("sem mandante/visitante");
+      if (!mandante || !visitante) warnings.push("Sem mandante/visitante");
 
       const linha = values.linha == null || values.linha === "" ? null : String(values.linha).trim();
-      const key = [data, esporte, jogo, mercado, pick, linha ?? ""]
+      const key = [data, normESL.esporte, jogo, mercado, pick, linha ?? ""]
         .map((x) => String(x ?? "").toLowerCase().trim())
         .join("||");
       const duplicate = errors.length === 0 && existingKeys.has(key);
@@ -311,8 +272,8 @@ function ImportarPage() {
         values: {
           data,
           hora,
-          esporte,
-          liga: String(values.liga ?? "").trim() || null,
+          esporte: normESL.esporte,
+          liga: normESL.liga,
           jogo,
           mandante: mandante || null,
           visitante: visitante || null,
@@ -325,7 +286,7 @@ function ImportarPage() {
           edge,
           stake: 0,
           observacoes: String(values.observacoes ?? "").trim() || null,
-        } as Record<string, unknown>,
+        },
         errors,
         warnings,
         duplicate,
@@ -333,27 +294,74 @@ function ImportarPage() {
     });
   }, [rawRows, mapping, existingKeys]);
 
+  // Pré-selecionar linhas válidas (sem erro) por padrão
+  useEffect(() => {
+    setSelected(
+      new Set(
+        parsedRows
+          .map((r, i) => ({ r, i }))
+          .filter(({ r }) => r.errors.length === 0)
+          .map(({ i }) => i),
+      ),
+    );
+  }, [parsedRows]);
+
   const stats = useMemo(() => {
     const valid = parsedRows.filter((r) => r.errors.length === 0);
     const dups = valid.filter((r) => r.duplicate).length;
+    const selecionadas = parsedRows.filter((_, i) => selected.has(i)).length;
     return {
       total: parsedRows.length,
       validas: valid.length - dups,
       duplicadas: dups,
       comErro: parsedRows.filter((r) => r.errors.length > 0).length,
       comAlerta: parsedRows.filter((r) => r.errors.length === 0 && r.warnings.length > 0).length,
+      selecionadas,
     };
-  }, [parsedRows]);
+  }, [parsedRows, selected]);
+
+  const toggleRow = (i: number) => {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(i)) n.delete(i);
+      else n.add(i);
+      return n;
+    });
+  };
+
+  const selectableIndexes = useMemo(
+    () => parsedRows.map((r, i) => (r.errors.length === 0 ? i : -1)).filter((i) => i >= 0),
+    [parsedRows],
+  );
+  const allSelectableSelected =
+    selectableIndexes.length > 0 && selectableIndexes.every((i) => selected.has(i));
+
+  const toggleAll = () => {
+    if (allSelectableSelected) setSelected(new Set());
+    else setSelected(new Set(selectableIndexes));
+  };
+  const selectOnlyValid = () => {
+    setSelected(
+      new Set(
+        parsedRows
+          .map((r, i) => ({ r, i }))
+          .filter(({ r }) => r.errors.length === 0 && r.warnings.length === 0 && !r.duplicate)
+          .map(({ i }) => i),
+      ),
+    );
+  };
+  const clearSelection = () => setSelected(new Set());
 
   const handleImport = async () => {
     setImporting(true);
     try {
-      const validRows = parsedRows.filter((r) => r.errors.length === 0);
+      const selectedRows = parsedRows.filter((r, i) => selected.has(i) && r.errors.length === 0);
       const toInsert: Record<string, unknown>[] = [];
       const toUpdate: ParsedRow[] = [];
       let ignorados = 0;
+      const ligasNovas = new Map<string, string>(); // key: esporte||liga
 
-      for (const r of validRows) {
+      for (const r of selectedRows) {
         if (r.duplicate) {
           if (dupStrategy === "skip") {
             ignorados++;
@@ -370,6 +378,19 @@ function ImportarPage() {
           status_publicacao: "NAO_PUBLICADO",
           resultado: "PENDENTE",
         });
+        // coletar liga p/ upsert
+        const liga = r.values.liga as string | null;
+        const esp = r.values.esporte as string;
+        if (liga && esp) ligasNovas.set(`${esp}||${liga}`, liga);
+      }
+
+      // Auto-cadastro de ligas novas
+      const ligasArr = Array.from(ligasNovas.entries()).map(([k]) => {
+        const [esporte, nome] = k.split("||");
+        return { esporte, nome };
+      });
+      if (ligasArr.length) {
+        await supabase.from("ligas").upsert(ligasArr, { onConflict: "esporte,nome", ignoreDuplicates: true });
       }
 
       let importados = 0;
@@ -407,6 +428,7 @@ function ImportarPage() {
       });
       toast.success(`${importados} prognóstico(s) importado(s)`);
       qc.invalidateQueries({ queryKey: ["prognosticos"] });
+      qc.invalidateQueries({ queryKey: ["ligas"] });
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -415,25 +437,15 @@ function ImportarPage() {
   };
 
   const downloadTemplate = () => {
-    const headers = TARGET_FIELDS.join(",");
+    const cols = [
+      "data","hora","esporte","liga","jogo","mandante","visitante",
+      "mercado","pick","linha","odd_ofertada","odd_valor","probabilidade_final","edge","stake","observacoes",
+    ];
     const example = [
-      "2026-06-07",
-      "14:35",
-      "Futebol",
-      "Brasileirão",
-      "Flamengo x Palmeiras",
-      "Flamengo",
-      "Palmeiras",
-      "Resultado Final",
-      "Flamengo",
-      "",
-      "2.10",
-      "1.95",
-      "55",
-      "5.5",
-      "Exemplo",
-    ].join(",");
-    const csv = `${headers}\n${example}\n`;
+      "11/06/2026","14:10","Futebol","Brasileirão","Flamengo x Palmeiras","Flamengo","Palmeiras",
+      "Resultado Final","Flamengo","","2.10","1.95","55","5.5","1","Exemplo",
+    ];
+    const csv = `${cols.join(",")}\n${example.join(",")}\n`;
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -447,6 +459,7 @@ function ImportarPage() {
     setHeaders([]);
     setRawRows([]);
     setMapping({} as Record<Field, string | null>);
+    setSelected(new Set());
     setSummary(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -457,7 +470,7 @@ function ImportarPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Importar Prognósticos</h1>
           <p className="text-sm text-muted-foreground">
-            Faça upload de CSV ou XLSX gerado pelos seus modelos Python.
+            Faça upload de CSV ou XLSX. Datas no formato brasileiro <strong>DD/MM/AAAA</strong>.
           </p>
         </div>
         <div className="flex gap-2">
@@ -542,8 +555,12 @@ function ImportarPage() {
                 <CardTitle>Pré-visualização</CardTitle>
                 <CardDescription>
                   {stats.total} linha(s) · {stats.validas} válidas · {stats.duplicadas} duplicadas ·{" "}
-                  {stats.comAlerta} com alerta · {stats.comErro} com erro
+                  {stats.comAlerta} com alerta · {stats.comErro} com erro · <strong>{stats.selecionadas} selecionada(s)</strong>
                 </CardDescription>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={selectOnlyValid}>Selecionar apenas válidas</Button>
+                <Button size="sm" variant="ghost" onClick={clearSelection}>Limpar seleção</Button>
               </div>
             </div>
           </CardHeader>
@@ -579,10 +596,19 @@ function ImportarPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-8">
+                      <Checkbox
+                        checked={allSelectableSelected}
+                        onCheckedChange={toggleAll}
+                        aria-label="Selecionar todos"
+                      />
+                    </TableHead>
                     <TableHead>#</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Data</TableHead>
+                    <TableHead>Hora</TableHead>
                     <TableHead>Esporte</TableHead>
+                    <TableHead>Liga</TableHead>
                     <TableHead>Jogo</TableHead>
                     <TableHead>Mercado</TableHead>
                     <TableHead>Pick</TableHead>
@@ -595,6 +621,7 @@ function ImportarPage() {
                 </TableHeader>
                 <TableBody>
                   {parsedRows.map((r, i) => {
+                    const canSelect = r.errors.length === 0;
                     const rowClass =
                       r.errors.length > 0
                         ? "bg-destructive/10"
@@ -604,6 +631,14 @@ function ImportarPage() {
                     const v = r.values;
                     return (
                       <TableRow key={i} className={rowClass}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selected.has(i)}
+                            disabled={!canSelect}
+                            onCheckedChange={() => toggleRow(i)}
+                            aria-label={`Selecionar linha ${i + 1}`}
+                          />
+                        </TableCell>
                         <TableCell className="font-mono text-xs">{i + 1}</TableCell>
                         <TableCell>
                           {r.errors.length > 0 ? (
@@ -624,8 +659,10 @@ function ImportarPage() {
                             </Badge>
                           )}
                         </TableCell>
-                        <TableCell className="text-xs">{String(v.data ?? "")}</TableCell>
+                        <TableCell className="text-xs font-mono">{formatBR(v.data as string | null)}</TableCell>
+                        <TableCell className="text-xs font-mono">{String(v.hora ?? "—")}</TableCell>
                         <TableCell className="text-xs">{String(v.esporte ?? "")}</TableCell>
+                        <TableCell className="text-xs">{String(v.liga ?? "")}</TableCell>
                         <TableCell className="text-xs">{String(v.jogo ?? "")}</TableCell>
                         <TableCell className="text-xs">{String(v.mercado ?? "")}</TableCell>
                         <TableCell className="text-xs">{String(v.pick ?? "")}</TableCell>
@@ -649,9 +686,9 @@ function ImportarPage() {
               <Button variant="outline" onClick={reset} disabled={importing}>
                 Cancelar
               </Button>
-              <Button onClick={handleImport} disabled={importing || stats.validas + (dupStrategy !== "skip" ? stats.duplicadas : 0) === 0}>
+              <Button onClick={handleImport} disabled={importing || stats.selecionadas === 0}>
                 {importing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Confirmar Importação
+                Confirmar Importação ({stats.selecionadas})
               </Button>
             </div>
           </CardContent>

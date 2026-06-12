@@ -288,7 +288,8 @@ export function useUpdateConfiguracao() {
 }
 
 // ===== Constantes auxiliares =====
-export const ESPORTES_DEFAULT = ["Futebol", "Basketball", "Baseball", "American Futebol", "Hockey"];
+export const ESPORTES_DEFAULT = ["Futebol", "Basketball", "Baseball", "American Football", "Hockey"];
+
 export const MERCADOS_DEFAULT = [
   "Resultado Final",
   "Moneyline",
@@ -304,7 +305,87 @@ export const MERCADOS_DEFAULT = [
   "Total de Corridas",
   "Total de Escanteios",
   "Player Props",
+  "ASP GoalMatrix",
+  "ASP CornerMatrix",
 ];
+
+// Mapeia esporte "errado" (que é na verdade uma liga) para esporte real + liga
+const LIGA_TO_ESPORTE: Record<string, { esporte: string; liga: string }> = {
+  NBA: { esporte: "Basketball", liga: "NBA" },
+  WNBA: { esporte: "Basketball", liga: "WNBA" },
+  NCAAB: { esporte: "Basketball", liga: "NCAAB" },
+  MLB: { esporte: "Baseball", liga: "MLB" },
+  NFL: { esporte: "American Football", liga: "NFL" },
+  NHL: { esporte: "Hockey", liga: "NHL" },
+};
+
+const ESPORTE_ALIAS: Record<string, string> = {
+  SOCCER: "Futebol",
+  FOOTBALL: "American Football",
+  BASKETBALL: "Basketball",
+  BASEBALL: "Baseball",
+  HOCKEY: "Hockey",
+  "AMERICAN FOOTBALL": "American Football",
+  "FUTEBOL AMERICANO": "American Football",
+};
+
+/** Normaliza par (esporte, liga) para a estrutura oficial. */
+export function normalizeEsporteLiga(input: { esporte?: string | null; liga?: string | null }): { esporte: string; liga: string | null } {
+  const rawEsp = (input.esporte ?? "").trim();
+  const rawLiga = (input.liga ?? "").trim();
+  const upEsp = rawEsp.toUpperCase();
+
+  if (LIGA_TO_ESPORTE[upEsp]) {
+    const mapped = LIGA_TO_ESPORTE[upEsp];
+    return { esporte: mapped.esporte, liga: rawLiga || mapped.liga };
+  }
+  const esporte = ESPORTE_ALIAS[upEsp] ?? rawEsp;
+  return { esporte, liga: rawLiga || null };
+}
+
+// ===== Ligas =====
+export interface Liga {
+  id: string;
+  nome: string;
+  esporte: string;
+  ativo: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export function useLigas() {
+  return useQuery({
+    queryKey: ["ligas"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ligas")
+        .select("*")
+        .order("esporte", { ascending: true })
+        .order("nome", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as unknown as Liga[];
+    },
+  });
+}
+
+export function useUpsertLiga() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { nome: string; esporte: string }) => {
+      const nome = input.nome.trim();
+      const esporte = input.esporte.trim();
+      if (!nome || !esporte) return null;
+      const { data, error } = await supabase
+        .from("ligas")
+        .upsert({ nome, esporte }, { onConflict: "esporte,nome", ignoreDuplicates: true })
+        .select()
+        .maybeSingle();
+      if (error) throw error;
+      return data as unknown as Liga | null;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ligas"] }),
+  });
+}
 
 // Data atual no fuso de Brasília (America/Sao_Paulo) em YYYY-MM-DD
 export function todayBR(): string {

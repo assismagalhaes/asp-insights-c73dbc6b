@@ -92,6 +92,33 @@ export type Database = {
         }
         Relationships: []
       }
+      ligas: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          esporte: string
+          id: string
+          nome: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          esporte: string
+          id?: string
+          nome: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          esporte?: string
+          id?: string
+          nome?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string

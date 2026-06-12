@@ -34,7 +34,9 @@ import {
   usePrognosticos,
   useConfiguracao,
   MERCADOS_DEFAULT,
+  ESPORTES_DEFAULT,
 } from "@/lib/db";
+import { LeagueFilter } from "@/components/league-filter";
 import {
   computeMetrics,
   bankrollTimeline,
@@ -57,7 +59,7 @@ export const Route = createFileRoute("/_authenticated/")({
 const chartGrid = "oklch(0.28 0.02 250)";
 const axisColor = "oklch(0.68 0.02 250)";
 
-const ESPORTES = ["Todos", "Futebol", "NBA", "WNBA", "MLB", "NFL", "NHL"];
+const ESPORTES = ["Todos", ...ESPORTES_DEFAULT];
 const MERCADOS = ["Todos", ...MERCADOS_DEFAULT];
 const PERIODOS: { v: PeriodoFiltro; label: string }[] = [
   { v: "hoje", label: "Hoje" },
@@ -77,6 +79,7 @@ function Dashboard() {
   const [customIni, setCustomIni] = useState("");
   const [customFim, setCustomFim] = useState("");
   const [esporte, setEsporte] = useState("Todos");
+  const [liga, setLiga] = useState("all");
   const [mercado, setMercado] = useState("Todos");
 
   const { ini, fim } = rangeFromPeriodo(periodo, customIni, customFim);
@@ -86,10 +89,11 @@ function Dashboard() {
       prognosticos.filter((p) => {
         if (!dateInRange(p.data, ini, fim)) return false;
         if (esporte !== "Todos" && p.esporte !== esporte) return false;
+        if (liga !== "all" && p.liga !== liga) return false;
         if (mercado !== "Todos" && p.mercado !== mercado) return false;
         return true;
       }),
-    [prognosticos, ini, fim, esporte, mercado],
+    [prognosticos, ini, fim, esporte, liga, mercado],
   );
 
   const metrics = useMemo(() => computeMetrics(filtrados, cfg), [filtrados, cfg]);
@@ -166,6 +170,10 @@ function Dashboard() {
                 {ESPORTES.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}
               </SelectContent>
             </Select>
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Liga</label>
+            <LeagueFilter sport={esporte === "Todos" ? "all" : esporte} value={liga} onChange={setLiga} className="h-9 w-48" />
           </div>
           <div>
             <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Mercado</label>
