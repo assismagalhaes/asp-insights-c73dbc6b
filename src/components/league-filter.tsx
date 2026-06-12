@@ -18,9 +18,9 @@ interface Props {
 
 export function LeagueFilter({ sport, value, onChange, className, placeholder = "Liga" }: Props) {
   const { data: ligas = [] } = useLigas();
-  const filtradas = useMemo(() => {
+  const filtradas = useMemo<Liga[]>(() => {
     const arr = sport && sport !== "all"
-      ? ligas.filter((l) => l.esporte === sport)
+      ? ligas.filter((l: Liga) => l.esporte === sport)
       : ligas;
     return [...arr].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   }, [ligas, sport]);
