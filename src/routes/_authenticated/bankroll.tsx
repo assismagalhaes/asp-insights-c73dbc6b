@@ -137,15 +137,16 @@ function Bankroll() {
           <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             Controle por stake ({tipoStake === "FIXO" ? "valor fixo" : `${percentual}% por unidade`})
           </h3>
+          <p className="mt-1 text-[10px] text-muted-foreground">% calculado sobre a banca inicial (R$ {metrics.bancaInicial.toFixed(2)}).</p>
           <div className="mt-4 grid grid-cols-2 gap-3">
             {stakes.map((s) => {
               const valor = s * valorUnidadeEfetiva;
-              const pct = metrics.bancaAtual > 0 ? (valor / metrics.bancaAtual) * 100 : 0;
+              const pct = metrics.bancaInicial > 0 ? (valor / metrics.bancaInicial) * 100 : 0;
               return (
                 <div key={s} className="rounded-md border border-border bg-background/50 p-3">
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Stake {s.toFixed(1)}u</div>
                   <div className="mt-1 font-mono text-lg font-bold">R$ {valor.toFixed(2)}</div>
-                  <div className="text-xs text-muted-foreground">{pct.toFixed(2)}% da banca</div>
+                  <div className="text-xs text-muted-foreground">{pct.toFixed(2)}% da banca inicial</div>
                 </div>
               );
             })}
