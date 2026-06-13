@@ -7,6 +7,7 @@ import {
   usePublicarPrognostico,
   useCancelarPrognostico,
   useValidacaoByPrognostico,
+  useAnalisesIaByPrognostico,
   gerarTipTexto,
   ESPORTES_DEFAULT,
   MERCADOS_DEFAULT,
@@ -284,6 +285,7 @@ function PublishDialog({
 }) {
   const publicar = usePublicarPrognostico();
   const { data: validacao } = useValidacaoByPrognostico(prognostico?.id);
+  const { data: analises = [] } = useAnalisesIaByPrognostico(prognostico?.id);
   const [tip, setTip] = useState("");
 
   useEffect(() => {
@@ -292,16 +294,20 @@ function PublishDialog({
         validacao?.parecer_validacao?.trim() ||
         validacao?.parecer_ia?.trim() ||
         "";
+      const online = analises.find((a) => a.modo_ia === "online");
       setTip(
         gerarTipTexto(prognostico, {
           parecer,
+          contexto_analise: [prognostico.dados_tecnicos, validacao?.contexto_adicional].filter(Boolean).join("\n\n"),
+          pesquisa_online: online?.parecer_ia,
+          stake_confirmada: validacao?.stake_confirmada,
           justificativa: validacao?.justificativa,
           riscos: validacao?.riscos_identificados,
           comentarios: validacao?.comentarios_analista,
         }),
       );
     }
-  }, [prognostico, validacao]);
+  }, [prognostico, validacao, analises]);
 
   if (!prognostico) return null;
 

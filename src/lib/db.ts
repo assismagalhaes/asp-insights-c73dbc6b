@@ -65,6 +65,80 @@ export interface Validacao {
   created_at: string;
 }
 
+export interface AnaliseIa {
+  id: string;
+  prognostico_id: string;
+  modo_ia: "local" | "online";
+  esporte: string;
+  liga: string;
+  mercado: string;
+  pick: string;
+  linha: string | null;
+  odd_original: number | null;
+  odd_ajustada: number | null;
+  odd_valor: number | null;
+  odd_usada: number | null;
+  probabilidade_final: number | null;
+  edge_original: number | null;
+  edge_ajustado: number | null;
+  edge_usado: number | null;
+  contexto_analisado: string | null;
+  parecer_ia: string | null;
+  decisao_sugerida: "CONFIRMA" | "PULAR" | null;
+  stake_sugerida: number | null;
+  riscos_identificados: string | null;
+  tags_risco: string[] | null;
+  fontes_consultadas: { titulo: string; url: string }[] | null;
+  buscas_realizadas: string[] | null;
+  alertas_online: string[] | null;
+  prompt_versao: string | null;
+  created_at: string;
+}
+
+export interface FeedbackIaResultado {
+  id: string;
+  prognostico_id: string;
+  analise_ia_id: string | null;
+  modo_ia: "local" | "online" | null;
+  decisao_ia_sugerida: "CONFIRMA" | "PULAR" | null;
+  decisao_humana_final: "CONFIRMA" | "PULAR" | null;
+  resultado_real: "GREEN" | "RED" | null;
+  lucro_prejuizo: number | null;
+  lucro_unidades: number | null;
+  esporte: string | null;
+  liga: string | null;
+  mercado: string | null;
+  pick: string | null;
+  linha: string | null;
+  odd_usada: number | null;
+  probabilidade_final: number | null;
+  edge_usado: number | null;
+  tags_risco: string[] | null;
+  fontes_consultadas: { titulo: string; url: string }[] | null;
+  acertou_ia: boolean | null;
+  acertou_humano: boolean | null;
+  divergencia_ia_humano: boolean | null;
+  created_at: string;
+}
+
+export interface ResumoAprendizadoIa {
+  id: string;
+  periodo_inicio: string | null;
+  periodo_fim: string | null;
+  total_analises: number;
+  total_green: number;
+  total_red: number;
+  win_rate: number;
+  roi: number;
+  yield: number;
+  resumo_geral: string | null;
+  aprendizados_por_esporte: Record<string, unknown> | null;
+  aprendizados_por_mercado: Record<string, unknown> | null;
+  alertas_recorrentes: Record<string, unknown> | null;
+  recomendacoes_para_prompt: string | null;
+  created_at: string;
+}
+
 /** Odd efetiva: ajustada se houver, senão a original. */
 export function getOddEfetiva(p: Pick<Prognostico, "odd_ofertada" | "odd_ajustada">): number {
   return p.odd_ajustada != null && p.odd_ajustada > 0 ? p.odd_ajustada : p.odd_ofertada;
@@ -306,6 +380,161 @@ export function useCreateValidacao() {
   });
 }
 
+// ===== Aprendizado da IA =====
+export type AnaliseIaInput = Omit<AnaliseIa, "id" | "created_at">;
+
+const mapAnaliseIa = (r: Record<string, unknown>): AnaliseIa => ({
+  ...(r as unknown as AnaliseIa),
+  odd_original: numOrNull(r.odd_original),
+  odd_ajustada: numOrNull(r.odd_ajustada),
+  odd_valor: numOrNull(r.odd_valor),
+  odd_usada: numOrNull(r.odd_usada),
+  probabilidade_final: numOrNull(r.probabilidade_final),
+  edge_original: numOrNull(r.edge_original),
+  edge_ajustado: numOrNull(r.edge_ajustado),
+  edge_usado: numOrNull(r.edge_usado),
+  stake_sugerida: numOrNull(r.stake_sugerida),
+});
+
+const mapFeedbackIa = (r: Record<string, unknown>): FeedbackIaResultado => ({
+  ...(r as unknown as FeedbackIaResultado),
+  lucro_prejuizo: numOrNull(r.lucro_prejuizo),
+  lucro_unidades: numOrNull(r.lucro_unidades),
+  odd_usada: numOrNull(r.odd_usada),
+  probabilidade_final: numOrNull(r.probabilidade_final),
+  edge_usado: numOrNull(r.edge_usado),
+});
+
+const mapResumoAprendizado = (r: Record<string, unknown>): ResumoAprendizadoIa => ({
+  ...(r as unknown as ResumoAprendizadoIa),
+  total_analises: num(r.total_analises),
+  total_green: num(r.total_green),
+  total_red: num(r.total_red),
+  win_rate: num(r.win_rate),
+  roi: num(r.roi),
+  yield: num(r.yield),
+});
+
+export function useCreateAnaliseIa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: AnaliseIaInput) => {
+      const { data, error } = await (supabase as unknown as {
+        from: (table: "analises_ia") => {
+          insert: (payload: AnaliseIaInput) => {
+            select: () => { single: () => Promise<{ data: Record<string, unknown>; error: Error | null }> };
+          };
+        };
+      })
+        .from("analises_ia")
+        .insert(input)
+        .select()
+        .single();
+      if (error) throw error;
+      return mapAnaliseIa(data);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["analises-ia"] });
+      qc.invalidateQueries({ queryKey: ["aprendizado-ia"] });
+    },
+  });
+}
+
+export function useAnalisesIaByPrognostico(prognosticoId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["analises-ia", prognosticoId],
+    enabled: !!prognosticoId,
+    queryFn: async () => {
+      const { data, error } = await (supabase as unknown as {
+        from: (table: "analises_ia") => {
+          select: (columns: string) => {
+            eq: (column: string, value: string) => {
+              order: (
+                column: string,
+                opts?: { ascending?: boolean },
+              ) => Promise<{ data: Record<string, unknown>[] | null; error: Error | null }>;
+            };
+          };
+        };
+      })
+        .from("analises_ia")
+        .select("*")
+        .eq("prognostico_id", prognosticoId!)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map(mapAnaliseIa);
+    },
+  });
+}
+
+export function useFeedbackIaResultados() {
+  return useQuery({
+    queryKey: ["aprendizado-ia", "feedback"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as unknown as {
+        from: (table: "feedback_ia_resultados") => {
+          select: (columns: string) => {
+            order: (
+              column: string,
+              opts?: { ascending?: boolean },
+            ) => Promise<{ data: Record<string, unknown>[] | null; error: Error | null }>;
+          };
+        };
+      })
+        .from("feedback_ia_resultados")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map(mapFeedbackIa);
+    },
+  });
+}
+
+export function useResumosAprendizadoIa() {
+  return useQuery({
+    queryKey: ["aprendizado-ia", "resumos"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as unknown as {
+        from: (table: "resumos_aprendizado_ia") => {
+          select: (columns: string) => {
+            order: (
+              column: string,
+              opts?: { ascending?: boolean },
+            ) => Promise<{ data: Record<string, unknown>[] | null; error: Error | null }>;
+          };
+        };
+      })
+        .from("resumos_aprendizado_ia")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map(mapResumoAprendizado);
+    },
+  });
+}
+
+export function useCreateResumoAprendizadoIa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: Omit<ResumoAprendizadoIa, "id" | "created_at">) => {
+      const { data, error } = await (supabase as unknown as {
+        from: (table: "resumos_aprendizado_ia") => {
+          insert: (payload: Omit<ResumoAprendizadoIa, "id" | "created_at">) => {
+            select: () => { single: () => Promise<{ data: Record<string, unknown>; error: Error | null }> };
+          };
+        };
+      })
+        .from("resumos_aprendizado_ia")
+        .insert(input)
+        .select()
+        .single();
+      if (error) throw error;
+      return mapResumoAprendizado(data);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["aprendizado-ia"] }),
+  });
+}
+
 // ===== Resultados =====
 export function useCreateResultado() {
   const qc = useQueryClient();
@@ -321,6 +550,7 @@ export function useCreateResultado() {
       qc.invalidateQueries({ queryKey: ["resultados"] });
       qc.invalidateQueries({ queryKey: ["resultados-financeiros"] });
       qc.invalidateQueries({ queryKey: ["bankroll-calculado"] });
+      qc.invalidateQueries({ queryKey: ["aprendizado-ia"] });
     },
   });
 }
@@ -567,7 +797,7 @@ export function calcLucro(resultado: Resultado, stake: number, oddEfetiva: numbe
   }
 }
 
-export function gerarTipTexto(
+export function gerarTipTextoLegado(
   p: Prognostico,
   extras?: {
     parecer?: string | null;
@@ -616,6 +846,68 @@ export function gerarTipTexto(
 ${dados}
 
 📋 Parecer:
+${parecer}
+
+📌 Status: ${p.status_validacao}`;
+}
+
+export function gerarTipTexto(
+  p: Prognostico,
+  extras?: {
+    parecer?: string | null;
+    contexto_analise?: string | null;
+    pesquisa_online?: string | null;
+    stake_confirmada?: number | null;
+    dados_tecnicos?: string | null;
+    justificativa?: string | null;
+    riscos?: string | null;
+    comentarios?: string | null;
+  },
+): string {
+  const linha = (p.linha ?? "").trim();
+  const pickLower = (p.pick ?? "").toLowerCase();
+  const linhaForaDoPick = linha && linha !== "-" && !pickLower.includes(linha.toLowerCase());
+  const oddFinal = getOddEfetiva(p);
+  const edgeFinal = getEdgeEfetivo(p);
+  const contexto = extras?.contexto_analise?.trim() || extras?.dados_tecnicos?.trim() || getDadosTecnicos(p) || "-";
+  const pesquisaOnline = extras?.pesquisa_online?.trim() || "-";
+  const stakeFinal = extras?.stake_confirmada ?? p.stake;
+  const parecerLegado = [
+    extras?.justificativa?.trim(),
+    extras?.riscos?.trim() ? `Riscos: ${extras.riscos.trim()}` : "",
+    extras?.comentarios?.trim(),
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const parecer = extras?.parecer?.trim() || parecerLegado || "-";
+  const formatDateBR = (iso: string) => {
+    const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+  };
+  const hora = p.hora ? p.hora.slice(0, 5) : "-";
+
+  return `🔥 ASP INSIGHTS - PICK CONFIRMADA
+
+🏆 Jogo: ${p.jogo}
+📅 Data/Hora: ${formatDateBR(p.data)} às ${hora}
+📊 Esporte/Liga: ${p.esporte} - ${p.liga || "-"}
+
+🎯 Mercado: ${p.mercado}
+✅ Pick: ${p.pick}
+📌 Linha: ${linhaForaDoPick ? linha : p.linha || "-"}
+📈 Odd: ${oddFinal.toFixed(2)}
+📉 Odd de Valor: ${p.odd_valor.toFixed(2)}
+📊 Probabilidade: ${p.probabilidade_final.toFixed(1)}%
+⚖️ Edge: ${edgeFinal.toFixed(2)}%
+💰 Stake: ${stakeFinal}u
+
+🧠 Contexto da análise:
+${contexto}
+
+🌐 Pesquisa online:
+${pesquisaOnline}
+
+📋 Parecer final:
 ${parecer}
 
 📌 Status: ${p.status_validacao}`;

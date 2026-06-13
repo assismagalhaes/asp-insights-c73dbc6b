@@ -30,6 +30,8 @@ const InputSchema = z.object({
   contexto_adicional: z.string().nullable().optional(),
 });
 
+type PrognosticoPrompt = z.infer<typeof InputSchema>["prognostico"];
+
 const SPORT_CHECKLISTS: Record<string, { label: string; items: string[]; searchTerms: string[] }> = {
   soccer: {
     label: "Futebol / Soccer",
@@ -165,6 +167,9 @@ Limites absolutos:
 - Nao publicar, confirmar ou aprovar automaticamente.
 - A IA apenas sugere decisao; a decisao final continua humana.
 - A decisao sugerida so pode ser CONFIRMA ou PULAR. Se a situacao pedir "aguardar noticia", "pass", reduzir muito ou cautela, traduza para PULAR e explique o motivo.
+- Voce tem acesso a um resumo historico interno da ASP Insights, com analises anteriores e resultados GREEN/RED. Use esse historico apenas como apoio.
+- Nao trate historico curto como verdade estatistica. Se houver menos de 10 amostras semelhantes, diga que o historico interno e insuficiente.
+- Separe claramente dados do modelo, contexto online/manual, historico interno e inferencia.
 
 Politica de pesquisa:
 1. Use o checklist especifico do esporte informado pelo usuario.
@@ -239,14 +244,21 @@ Inferencia 1:
 Base usada:
 Grau de confianca:
 
-F) Riscos principais
+F) Historico interno semelhante
+Amostra:
+GREEN/RED:
+ROI/Yield:
+Padroes observados:
+Limitacao estatistica:
+
+G) Riscos principais
 Risco 1:
 Impacto:
 Risco 2:
 Impacto:
 Possivel dado desatualizado ou fonte insuficiente:
 
-G) Decisao final
+H) Decisao final
 Decisao: CONFIRMA | PULAR
 Stake sugerida: 0.5u | 1.0u | 1.5u
 Justificativa final em 3 a 6 linhas:
@@ -254,7 +266,7 @@ Condicao de invalidacao:`;
 
 function parseDecisao(text: string): { decisao: string | null; stake: number | null } {
   const lower = text.toLowerCase();
-  const fIdx = lower.lastIndexOf("decisao:");
+  const fIdx = Math.max(lower.lastIndexOf("decisao:"), lower.lastIndexOf("decisão:"), lower.lastIndexOf("sugestao:"), lower.lastIndexOf("sugestão:"));
   const slice = fIdx >= 0 ? text.slice(fIdx) : text;
   const s = slice.toLowerCase();
   const decisionMatch = slice.match(/decisao:\s*(confirma|pular|pass|aguardar noticia|cautela)/i);
@@ -277,10 +289,59 @@ function extrairAlertasOnline(text: string): string[] {
   return Array.from(alertas);
 }
 
+async function buildLearningContext(supabase: unknown, p: PrognosticoPrompt) {
+  const client = supabase as {
+    from: (table: string) => {
+      select: (columns: string) => {
+        eq: (column: string, value: string) => {
+          order: (column: string, opts?: { ascending?: boolean }) => {
+            limit: (count: number) => Promise<{ data: Array<Record<string, unknown>> | null; error: Error | null }>;
+          };
+        };
+        order: (column: string, opts?: { ascending?: boolean }) => {
+          limit: (count: number) => Promise<{ data: Array<Record<string, unknown>> | null; error: Error | null }>;
+        };
+      };
+    };
+  };
+
+  const similar = await client
+    .from("feedback_ia_resultados")
+    .select("*")
+    .eq("esporte", p.esporte)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (similar.error) throw similar.error;
+
+  const rows = (similar.data ?? []).filter((r) => r.liga === p.liga || r.mercado === p.mercado);
+  const greens = rows.filter((r) => r.resultado_real === "GREEN").length;
+  const reds = rows.filter((r) => r.resultado_real === "RED").length;
+  const lucro = rows.reduce((s, r) => s + Number(r.lucro_prejuizo ?? 0), 0);
+  const stake = rows.reduce((s, r) => s + Math.abs(Number(r.lucro_unidades ?? 0)), 0);
+  const roi = stake > 0 ? (lucro / stake) * 100 : 0;
+
+  const resumo = await client
+    .from("resumos_aprendizado_ia")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (resumo.error) throw resumo.error;
+
+  const latest = resumo.data?.[0];
+  return `HISTORICO INTERNO ASP INSIGHTS:
+Amostras semelhantes encontradas: ${rows.length}
+GREEN/RED: ${greens} GREEN e ${reds} RED
+ROI aproximado das amostras: ${roi.toFixed(2)}%
+Forca estatistica: ${rows.length >= 30 ? "robusta" : rows.length >= 10 ? "moderada" : "limitada"}
+Regra anti-overfitting: use como sinal auxiliar, nunca como regra absoluta.
+Resumo periodico mais recente:
+${String(latest?.resumo_geral ?? "(nenhum resumo periodico salvo ainda)")}`;
+}
+
 export const analisarValidacaoOnline = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => InputSchema.parse(input))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const key = process.env.LOVABLE_API_KEY;
     if (!key) throw new Error("LOVABLE_API_KEY nao configurada.");
     if (!process.env.FIRECRAWL_API_KEY) {
@@ -301,6 +362,7 @@ export const analisarValidacaoOnline = createServerFn({ method: "POST" })
     const oddFinal = p.odd_ajustada ?? p.odd_original;
     const edgeFinal = p.edge_ajustado ?? p.edge_original;
     const checklist = getSportChecklist(p.esporte, p.liga);
+    const aprendizado = await buildLearningContext(context.supabase, p);
 
     const userPayload = `DADOS DO PROGNOSTICO:
 
@@ -324,6 +386,8 @@ ${data.dados_tecnicos?.trim() || "(nenhum)"}
 
 CONTEXTO ADICIONAL INFORMADO:
 ${data.contexto_adicional?.trim() || "(nenhum)"}
+
+${aprendizado}
 
 CHECKLIST ONLINE OBRIGATORIO PARA ESTE PROGNOSTICO:
 Esporte/checklist: ${checklist.label}

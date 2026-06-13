@@ -20,6 +20,7 @@ import { Route as AuthenticatedHistoricoRouteImport } from './routes/_authentica
 import { Route as AuthenticatedEstatisticasRouteImport } from './routes/_authenticated/estatisticas'
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
 import { Route as AuthenticatedBankrollRouteImport } from './routes/_authenticated/bankroll'
+import { Route as AuthenticatedAprendizadoIaRouteImport } from './routes/_authenticated/aprendizado-ia'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -78,10 +79,17 @@ const AuthenticatedBankrollRoute = AuthenticatedBankrollRouteImport.update({
   path: '/bankroll',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedAprendizadoIaRoute =
+  AuthenticatedAprendizadoIaRouteImport.update({
+    id: '/aprendizado-ia',
+    path: '/aprendizado-ia',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
+  '/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
   '/bankroll': typeof AuthenticatedBankrollRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/estatisticas': typeof AuthenticatedEstatisticasRoute
@@ -93,6 +101,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
+  '/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
   '/bankroll': typeof AuthenticatedBankrollRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/estatisticas': typeof AuthenticatedEstatisticasRoute
@@ -107,6 +116,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/_authenticated/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
   '/_authenticated/bankroll': typeof AuthenticatedBankrollRoute
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/_authenticated/estatisticas': typeof AuthenticatedEstatisticasRoute
@@ -121,6 +131,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/aprendizado-ia'
     | '/auth'
     | '/bankroll'
     | '/configuracoes'
@@ -133,6 +144,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
+    | '/aprendizado-ia'
     | '/bankroll'
     | '/configuracoes'
     | '/estatisticas'
@@ -146,6 +158,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_authenticated'
     | '/auth'
+    | '/_authenticated/aprendizado-ia'
     | '/_authenticated/bankroll'
     | '/_authenticated/configuracoes'
     | '/_authenticated/estatisticas'
@@ -183,6 +196,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/aprendizado-ia': {
+      id: '/_authenticated/aprendizado-ia'
+      path: '/aprendizado-ia'
+      fullPath: '/aprendizado-ia'
+      preLoaderRoute: typeof AuthenticatedAprendizadoIaRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/validacao': {
@@ -245,6 +265,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAprendizadoIaRoute: typeof AuthenticatedAprendizadoIaRoute
   AuthenticatedBankrollRoute: typeof AuthenticatedBankrollRoute
   AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRoute
   AuthenticatedEstatisticasRoute: typeof AuthenticatedEstatisticasRoute
@@ -257,6 +278,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAprendizadoIaRoute: AuthenticatedAprendizadoIaRoute,
   AuthenticatedBankrollRoute: AuthenticatedBankrollRoute,
   AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRoute,
   AuthenticatedEstatisticasRoute: AuthenticatedEstatisticasRoute,
