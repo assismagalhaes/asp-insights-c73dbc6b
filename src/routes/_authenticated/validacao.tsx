@@ -47,9 +47,7 @@ export const Route = createFileRoute("/_authenticated/validacao")({
 
 const decisoes: { label: Status; texto: string; color: string }[] = [
   { label: "CONFIRMA", texto: "CONFIRMA", color: "bg-success text-success-foreground hover:bg-success/90" },
-  { label: "CONFIRMA_CAUTELA", texto: "CONFIRMA C/ CAUTELA", color: "bg-warning text-warning-foreground hover:bg-warning/90" },
-  { label: "PASS", texto: "PASS", color: "bg-destructive text-destructive-foreground hover:bg-destructive/90" },
-  { label: "AGUARDAR_NOTICIA", texto: "AGUARDAR NOTÍCIA", color: "bg-primary text-primary-foreground hover:bg-primary/90" },
+  { label: "PULAR", texto: "PULAR", color: "bg-destructive text-destructive-foreground hover:bg-destructive/90" },
 ];
 
 const STAKES = ["0.5", "1.0", "1.5"];
@@ -75,8 +73,8 @@ interface IAResult {
 }
 
 function autoCheck(p: Prognostico, edgeFinal: number) {
-  if (p.odd_ofertada < p.odd_valor) return { auto: "PASS" as const, reason: "Odd ofertada menor que odd de valor" };
-  if (edgeFinal < 0) return { auto: "PASS" as const, reason: "Edge negativo" };
+  if (p.odd_ofertada < p.odd_valor) return { auto: "PULAR" as const, reason: "Odd ofertada menor que odd de valor" };
+  if (edgeFinal < 0) return { auto: "PULAR" as const, reason: "Edge negativo" };
   if (p.probabilidade_final < 55) return { auto: "ALERTA" as const, reason: "Probabilidade inferior a 55%" };
   if (p.probabilidade_final > 60) return { auto: "DESTAQUE" as const, reason: "Probabilidade superior a 60%" };
   return null;
@@ -302,7 +300,7 @@ function Validacao() {
               key={p.id}
               className={cn(
                 "rounded-lg border bg-card p-5 space-y-4",
-                check?.auto === "PASS" && "border-destructive/40",
+                check?.auto === "PULAR" && "border-destructive/40",
                 check?.auto === "DESTAQUE" && "border-success/40",
                 check?.auto === "ALERTA" && "border-warning/40",
                 !check && "border-border",
@@ -359,7 +357,7 @@ function Validacao() {
                   <div
                     className={cn(
                       "flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-medium",
-                      check.auto === "PASS" && "border-destructive/40 bg-destructive/10 text-destructive",
+                      check.auto === "PULAR" && "border-destructive/40 bg-destructive/10 text-destructive",
                       check.auto === "ALERTA" && "border-warning/40 bg-warning/10 text-warning",
                       check.auto === "DESTAQUE" && "border-success/40 bg-success/10 text-success",
                     )}

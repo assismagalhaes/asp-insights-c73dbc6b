@@ -285,9 +285,7 @@ export function PrognosticoDialog({
               <SelectContent>
                 <SelectItem value="PENDENTE">PENDENTE</SelectItem>
                 <SelectItem value="CONFIRMA">CONFIRMA</SelectItem>
-                <SelectItem value="CONFIRMA_CAUTELA">CONFIRMA C/ CAUTELA</SelectItem>
-                <SelectItem value="PASS">PASS</SelectItem>
-                <SelectItem value="AGUARDAR_NOTICIA">AGUARDAR NOTÍCIA</SelectItem>
+                <SelectItem value="PULAR">PULAR</SelectItem>
               </SelectContent>
             </Select>
           </Field>

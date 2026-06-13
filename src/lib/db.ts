@@ -4,10 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 export type Status =
   | "PENDENTE"
   | "CONFIRMA"
-  | "CONFIRMA_CAUTELA"
-  | "PASS"
-  | "AGUARDAR_NOTICIA"
-  | "PULAR"; // legado
+  | "PULAR";
 export type Resultado = "PENDENTE" | "GREEN" | "RED" | "PUSH" | "VOID" | "HALF GREEN" | "HALF RED";
 
 export type StatusPublicacao = "NAO_PUBLICADO" | "PUBLICADO" | "FINALIZADO" | "CANCELADO";
@@ -248,10 +245,11 @@ export function useCreateValidacao() {
     mutationFn: async (input: ValidacaoInput) => {
       const { data, error } = await supabase.from("validacoes").insert(input).select().single();
       if (error) throw error;
+      const status = input.decisao === "CONFIRMA" ? "CONFIRMA" : "PULAR";
       // espelha decisão no prognóstico
       await supabase
         .from("prognosticos")
-        .update({ status_validacao: input.decisao, stake: input.stake_confirmada ?? undefined })
+        .update({ status_validacao: status, stake: input.stake_confirmada ?? undefined })
         .eq("id", input.prognostico_id);
       return data;
     },
