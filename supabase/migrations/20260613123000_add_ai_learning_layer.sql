@@ -76,6 +76,61 @@ CREATE TABLE IF NOT EXISTS public.resumos_aprendizado_ia (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE public.analises_ia
+  ADD COLUMN IF NOT EXISTS prognostico_id UUID REFERENCES public.prognosticos(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS modo_ia TEXT,
+  ADD COLUMN IF NOT EXISTS esporte TEXT,
+  ADD COLUMN IF NOT EXISTS liga TEXT,
+  ADD COLUMN IF NOT EXISTS mercado TEXT,
+  ADD COLUMN IF NOT EXISTS pick TEXT,
+  ADD COLUMN IF NOT EXISTS linha TEXT,
+  ADD COLUMN IF NOT EXISTS odd_original NUMERIC,
+  ADD COLUMN IF NOT EXISTS odd_ajustada NUMERIC,
+  ADD COLUMN IF NOT EXISTS odd_valor NUMERIC,
+  ADD COLUMN IF NOT EXISTS odd_usada NUMERIC,
+  ADD COLUMN IF NOT EXISTS probabilidade_final NUMERIC,
+  ADD COLUMN IF NOT EXISTS edge_original NUMERIC,
+  ADD COLUMN IF NOT EXISTS edge_ajustado NUMERIC,
+  ADD COLUMN IF NOT EXISTS edge_usado NUMERIC,
+  ADD COLUMN IF NOT EXISTS contexto_analisado TEXT,
+  ADD COLUMN IF NOT EXISTS parecer_ia TEXT,
+  ADD COLUMN IF NOT EXISTS decisao_sugerida TEXT,
+  ADD COLUMN IF NOT EXISTS stake_sugerida NUMERIC,
+  ADD COLUMN IF NOT EXISTS riscos_identificados TEXT,
+  ADD COLUMN IF NOT EXISTS tags_risco TEXT[] DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS fontes_consultadas JSONB,
+  ADD COLUMN IF NOT EXISTS buscas_realizadas JSONB,
+  ADD COLUMN IF NOT EXISTS alertas_online JSONB,
+  ADD COLUMN IF NOT EXISTS prompt_versao TEXT,
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
+ALTER TABLE public.feedback_ia_resultados
+  ADD COLUMN IF NOT EXISTS prognostico_id UUID REFERENCES public.prognosticos(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS analise_ia_id UUID REFERENCES public.analises_ia(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS modo_ia TEXT,
+  ADD COLUMN IF NOT EXISTS decisao_ia_sugerida TEXT,
+  ADD COLUMN IF NOT EXISTS decisao_humana_final TEXT,
+  ADD COLUMN IF NOT EXISTS resultado_real TEXT,
+  ADD COLUMN IF NOT EXISTS lucro_prejuizo NUMERIC,
+  ADD COLUMN IF NOT EXISTS lucro_unidades NUMERIC,
+  ADD COLUMN IF NOT EXISTS esporte TEXT,
+  ADD COLUMN IF NOT EXISTS liga TEXT,
+  ADD COLUMN IF NOT EXISTS mercado TEXT,
+  ADD COLUMN IF NOT EXISTS pick TEXT,
+  ADD COLUMN IF NOT EXISTS linha TEXT,
+  ADD COLUMN IF NOT EXISTS odd_usada NUMERIC,
+  ADD COLUMN IF NOT EXISTS probabilidade_final NUMERIC,
+  ADD COLUMN IF NOT EXISTS edge_usado NUMERIC,
+  ADD COLUMN IF NOT EXISTS tags_risco TEXT[] DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS fontes_consultadas JSONB,
+  ADD COLUMN IF NOT EXISTS acertou_ia BOOLEAN,
+  ADD COLUMN IF NOT EXISTS acertou_humano BOOLEAN,
+  ADD COLUMN IF NOT EXISTS divergencia_ia_humano BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
+CREATE UNIQUE INDEX IF NOT EXISTS feedback_ia_resultados_unique_result_idx
+ON public.feedback_ia_resultados (prognostico_id, analise_ia_id, resultado_real);
+
 ALTER TABLE public.analises_ia ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.feedback_ia_resultados ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.resumos_aprendizado_ia ENABLE ROW LEVEL SECURITY;
@@ -100,6 +155,13 @@ ON public.resumos_aprendizado_ia
 FOR ALL
 USING (public.has_role(auth.uid(), 'admin'))
 WITH CHECK (public.has_role(auth.uid(), 'admin'));
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.analises_ia TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.feedback_ia_resultados TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.resumos_aprendizado_ia TO authenticated;
+GRANT ALL ON public.analises_ia TO service_role;
+GRANT ALL ON public.feedback_ia_resultados TO service_role;
+GRANT ALL ON public.resumos_aprendizado_ia TO service_role;
 
 CREATE INDEX IF NOT EXISTS analises_ia_lookup_idx
 ON public.analises_ia (prognostico_id, modo_ia, created_at DESC);

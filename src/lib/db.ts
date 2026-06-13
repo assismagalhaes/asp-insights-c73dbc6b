@@ -297,7 +297,10 @@ export function usePrognosticos() {
         .select("*")
         .order("data", { ascending: false })
         .order("created_at", { ascending: false });
-      if (fallback.error) throw fallback.error;
+      if (fallback.error) {
+        console.error("Falha ao carregar prognosticos", error, fallback.error);
+        return [];
+      }
       return (fallback.data ?? []).map((r: Record<string, unknown>) => mapPrognosticoComPlacar(r));
     },
   });
@@ -827,7 +830,10 @@ export function useConfiguracao() {
         .order("created_at", { ascending: true })
         .limit(1)
         .maybeSingle();
-      if (error) throw error;
+      if (error) {
+        console.error("Falha ao carregar configuracao", error);
+        return null;
+      }
       if (!data) return null;
       return {
         ...(data as unknown as Configuracao),
@@ -932,7 +938,10 @@ export function useLigas() {
         .select("*")
         .order("esporte", { ascending: true })
         .order("nome", { ascending: true });
-      if (error) throw error;
+      if (error) {
+        console.error("Falha ao carregar ligas", error);
+        return [];
+      }
       return (data ?? []) as unknown as Liga[];
     },
   });
