@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { StatusBadge, ResultBadge, PublicacaoBadge } from "@/components/status-badge";
-import { usePrognosticos, useConfiguracao, ESPORTES_DEFAULT, MERCADOS_DEFAULT } from "@/lib/db";
+import { usePrognosticos, useConfiguracao, useResultadosFinanceiros, ESPORTES_DEFAULT, MERCADOS_DEFAULT } from "@/lib/db";
 import {
   Select,
   SelectContent,
@@ -23,6 +23,7 @@ export const Route = createFileRoute("/_authenticated/historico")({
 
 function Historico() {
   const { data: prognosticos = [] } = usePrognosticos();
+  const { data: resultadosFinanceiros = [] } = useResultadosFinanceiros();
   const { data: cfg } = useConfiguracao();
   const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
   const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
@@ -54,10 +55,23 @@ function Historico() {
     });
   }, [prognosticos, ini, fim, esporte, liga, mercado, status, resultado, publicacao, data]);
 
-  const wins = rows.filter((r) => r.resultado === "GREEN").length;
-  const losses = rows.filter((r) => r.resultado === "RED").length;
+  const financeiros = useMemo(() => {
+    return resultadosFinanceiros.filter((p) => {
+      if (!dateInRange(p.data, ini, fim)) return false;
+      if (esporte !== "all" && p.esporte !== esporte) return false;
+      if (liga !== "all" && p.liga !== liga) return false;
+      if (mercado !== "all" && p.mercado !== mercado) return false;
+      if (status !== "all" && p.status_validacao !== status) return false;
+      if (resultado !== "all" && p.resultado !== resultado) return false;
+      if (data && p.data !== data) return false;
+      return true;
+    });
+  }, [resultadosFinanceiros, ini, fim, esporte, liga, mercado, status, resultado, data]);
+
+  const wins = financeiros.filter((r) => r.resultado === "GREEN").length;
+  const losses = financeiros.filter((r) => r.resultado === "RED").length;
   const pushes = 0;
-  const lucro = rows.reduce((s, p) => s + (p.lucro_prejuizo ?? 0), 0);
+  const lucro = financeiros.reduce((s, p) => s + p.lucro_unidades, 0);
 
   return (
     <div className="space-y-6">
