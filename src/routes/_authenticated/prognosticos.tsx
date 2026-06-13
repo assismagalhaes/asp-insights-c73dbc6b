@@ -24,6 +24,7 @@ import {
   useConfiguracao,
   usePublicarPrognostico,
   useCancelarPrognostico,
+  fetchPrognosticoDetail,
   gerarTipTexto,
   ESPORTES_DEFAULT,
   MERCADOS_DEFAULT,
@@ -32,6 +33,8 @@ import {
 import { PrognosticoDialog } from "@/components/prognostico-dialog";
 import { ResultadoDialog } from "@/components/resultado-dialog";
 import { DadosTecnicosViewer } from "@/components/dados-tecnicos-viewer";
+import { PaginationControls } from "@/components/pagination-controls";
+import { useClientPagination } from "@/lib/pagination";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -145,12 +148,21 @@ function Prognosticos() {
     return arr;
   }, [prognosticos, sortKey, sortDir, ini, fim, fEsporte, fLiga, fMercado, fValidacao, fPublicacao, fResultado, fLinha]);
 
-  const allSelected = sorted.length > 0 && sorted.every((p) => selected.has(p.id));
+  const pagination = useClientPagination(sorted);
+  const visibleRows = pagination.paginatedRows;
+  const allSelected = visibleRows.length > 0 && visibleRows.every((p) => selected.has(p.id));
   const someSelected = selected.size > 0 && !allSelected;
 
   const toggleAll = () => {
-    if (allSelected) setSelected(new Set());
-    else setSelected(new Set(sorted.map((p) => p.id)));
+    if (allSelected) {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        visibleRows.forEach((p) => next.delete(p.id));
+        return next;
+      });
+    } else {
+      setSelected((prev) => new Set([...prev, ...visibleRows.map((p) => p.id)]));
+    }
   };
   const toggleOne = (id: string) => {
     setSelected((prev) => {
@@ -166,7 +178,8 @@ function Prognosticos() {
     p.status_validacao === "CONFIRMA";
 
   const copyTip = async (p: Prognostico) => {
-    await navigator.clipboard.writeText(p.tip_texto || gerarTipTexto(p));
+    const detalhe = await fetchPrognosticoDetail(p.id);
+    await navigator.clipboard.writeText(detalhe.tip_texto || gerarTipTexto(detalhe));
     toast.success("TIP copiada");
   };
 
@@ -175,7 +188,8 @@ function Prognosticos() {
       toast.error("Apenas CONFIRMA pode ser publicado");
       return;
     }
-    await publicar.mutateAsync({ id: p.id, tip_texto: gerarTipTexto(p) });
+    const detalhe = await fetchPrognosticoDetail(p.id);
+    await publicar.mutateAsync({ id: p.id, tip_texto: gerarTipTexto(detalhe) });
     toast.success("Pick publicada");
   };
 
@@ -197,7 +211,7 @@ function Prognosticos() {
       ro.disconnect();
       window.removeEventListener("resize", update);
     };
-  }, [sorted.length]);
+  }, [visibleRows.length]);
 
   const syncFromTop = () => {
     if (topScrollRef.current && bottomScrollRef.current) {
@@ -393,7 +407,7 @@ function Prognosticos() {
                     </td>
                   </tr>
                 )}
-                {sorted.map((p) => (
+                {visibleRows.map((p) => (
                   <tr key={p.id} className="border-t border-border hover:bg-muted/30">
                     <td className="px-3 py-2">
                       <Checkbox
@@ -482,6 +496,14 @@ function Prognosticos() {
             </table>
           </div>
         </div>
+        <PaginationControls
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalPages={pagination.totalPages}
+          totalRows={pagination.totalRows}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+        />
       </div>
 
       <PrognosticoDialog

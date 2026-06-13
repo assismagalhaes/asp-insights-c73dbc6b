@@ -29,6 +29,7 @@ import {
   useUpdatePrognostico,
   useConfiguracao,
   calcEdge,
+  fetchPrognosticoDetail,
   getDadosTecnicos,
   ESPORTES_DEFAULT,
   MERCADOS_DEFAULT,
@@ -41,6 +42,8 @@ import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { DadosTecnicosViewer } from "@/components/dados-tecnicos-viewer";
+import { PaginationControls } from "@/components/pagination-controls";
+import { useClientPagination } from "@/lib/pagination";
 
 export const Route = createFileRoute("/_authenticated/validacao")({
   head: () => ({ meta: [{ title: "Validação Crítica — ASP Insights" }] }),
@@ -139,6 +142,8 @@ function Validacao() {
         }),
     [prognosticos, ini, fim, fEsporte, fLiga, fMercado],
   );
+  const pagination = useClientPagination(pendentes);
+  const visiblePendentes = pagination.paginatedRows;
 
   const getOddAjustadaNum = (p: Prognostico): number | null => {
     const raw = oddsAj[p.id];
@@ -167,7 +172,8 @@ function Validacao() {
   const rodarIA = async (p: Prognostico, modo: "local" | "online") => {
     setIaLoading((s) => ({ ...s, [p.id]: modo }));
     try {
-      const dados = dadosEdit[p.id] ?? getDadosTecnicos(p) ?? "";
+      const detalhe = await fetchPrognosticoDetail(p.id);
+      const dados = dadosEdit[p.id] ?? getDadosTecnicos(detalhe) ?? "";
       const oddAj = getOddAjustadaNum(p);
       const edgeAj = getEdgeAjustado(p);
       const payload = {
@@ -337,7 +343,7 @@ function Validacao() {
       )}
 
       <div className="space-y-4">
-        {pendentes.map((p) => {
+        {visiblePendentes.map((p) => {
           const oddAj = getOddAjustadaNum(p);
           const edgeAj = getEdgeAjustado(p);
           const check = autoCheck(p, edgeAj ?? p.edge);
@@ -666,6 +672,18 @@ function Validacao() {
           );
         })}
       </div>
+      {pendentes.length > 0 && (
+        <div className="rounded-lg border border-border bg-card">
+          <PaginationControls
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            totalPages={pagination.totalPages}
+            totalRows={pagination.totalRows}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+          />
+        </div>
+      )}
     </div>
   );
 }
