@@ -3,13 +3,28 @@ import { cn } from "@/lib/utils";
 export type Status =
   | "PENDENTE"
   | "CONFIRMA"
+  | "CONFIRMA_CAUTELA"
+  | "PASS"
+  | "AGUARDAR_NOTICIA"
   | "PULAR";
 export type Result = "PENDENTE" | "GREEN" | "RED" | "PUSH";
 
 const statusStyles: Record<string, string> = {
   CONFIRMA: "bg-success/15 text-success border-success/30",
+  CONFIRMA_CAUTELA: "bg-warning/15 text-warning border-warning/40",
+  PASS: "bg-destructive/15 text-destructive border-destructive/30",
   PULAR: "bg-destructive/15 text-destructive border-destructive/30",
+  AGUARDAR_NOTICIA: "bg-primary/10 text-primary border-primary/30",
   PENDENTE: "bg-muted text-muted-foreground border-border",
+};
+
+const statusLabels: Record<string, string> = {
+  CONFIRMA: "CONFIRMA",
+  CONFIRMA_CAUTELA: "CONFIRMA C/ CAUTELA",
+  PASS: "PASS",
+  PULAR: "PASS",
+  AGUARDAR_NOTICIA: "AGUARDAR NOTÍCIA",
+  PENDENTE: "PENDENTE",
 };
 
 const resultStyles: Record<string, string> = {
@@ -40,7 +55,7 @@ export function StatusBadge({ status }: { status: string }) {
         statusStyles[status] ?? statusStyles.PENDENTE,
       )}
     >
-      {status}
+      {statusLabels[status] ?? status}
     </span>
   );
 }
