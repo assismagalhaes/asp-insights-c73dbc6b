@@ -70,7 +70,15 @@ export function PrognosticoDialog({
 }: Props) {
   const create = useCreatePrognostico();
   const update = useUpdatePrognostico();
+  const upsertLiga = useUpsertLiga();
+  const { data: ligas = [] } = useLigas();
   const [form, setForm] = useState<PrognosticoInput>(empty);
+  const [novaLiga, setNovaLiga] = useState("");
+
+  const ligasDoEsporte = (ligas as Liga[])
+    .filter((l) => l.esporte === form.esporte)
+    .slice()
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 
   useEffect(() => {
     if (!open) return;
