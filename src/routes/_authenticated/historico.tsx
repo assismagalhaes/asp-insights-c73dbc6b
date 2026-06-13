@@ -33,9 +33,15 @@ function Historico() {
   const [resultado, setResultado] = useState("all");
   const [publicacao, setPublicacao] = useState("all");
   const [data, setData] = useState("");
+  const [periodo, setPeriodo] = useState<PeriodoFiltro>("tudo");
+  const [customIni, setCustomIni] = useState("");
+  const [customFim, setCustomFim] = useState("");
+
+  const { ini, fim } = rangeFromPeriodo(periodo, customIni, customFim);
 
   const rows = useMemo(() => {
     return prognosticos.filter((p) => {
+      if (!dateInRange(p.data, ini, fim)) return false;
       if (esporte !== "all" && p.esporte !== esporte) return false;
       if (liga !== "all" && p.liga !== liga) return false;
       if (mercado !== "all" && p.mercado !== mercado) return false;
@@ -45,7 +51,7 @@ function Historico() {
       if (data && p.data !== data) return false;
       return true;
     });
-  }, [prognosticos, esporte, liga, mercado, status, resultado, publicacao, data]);
+  }, [prognosticos, ini, fim, esporte, liga, mercado, status, resultado, publicacao, data]);
 
   const wins = rows.filter((r) => r.resultado === "GREEN").length;
   const losses = rows.filter((r) => r.resultado === "RED").length;
