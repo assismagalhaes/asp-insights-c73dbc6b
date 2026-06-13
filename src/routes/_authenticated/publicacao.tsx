@@ -56,9 +56,14 @@ function PublicacaoPage() {
   const [fEsporte, setFEsporte] = useState("all");
   const [fLiga, setFLiga] = useState("all");
   const [fMercado, setFMercado] = useState("all");
+  const [periodo, setPeriodo] = useState<PeriodoFiltro>("tudo");
+  const [customIni, setCustomIni] = useState("");
+  const [customFim, setCustomFim] = useState("");
 
   const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
   const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
+
+  const { ini, fim } = rangeFromPeriodo(periodo, customIni, customFim);
 
   const elegiveis = useMemo(
     () =>
@@ -66,11 +71,12 @@ function PublicacaoPage() {
         (p) =>
           p.status_publicacao === "NAO_PUBLICADO" &&
           p.status_validacao === "CONFIRMA" &&
+          dateInRange(p.data, ini, fim) &&
           (fEsporte === "all" || p.esporte === fEsporte) &&
           (fLiga === "all" || p.liga === fLiga) &&
           (fMercado === "all" || p.mercado === fMercado),
       ),
-    [prognosticos, fEsporte, fLiga, fMercado],
+    [prognosticos, ini, fim, fEsporte, fLiga, fMercado],
   );
 
   const podePublicar = (p: Prognostico) => p.status_validacao === "CONFIRMA";
