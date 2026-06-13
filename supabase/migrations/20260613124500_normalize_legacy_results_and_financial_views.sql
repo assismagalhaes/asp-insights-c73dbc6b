@@ -1,6 +1,90 @@
 -- Normalize legacy result labels and make financial views resilient to old data.
 -- No history is deleted or reset.
 
+-- Keep this migration self-contained: some deployed databases did not receive
+-- the AI learning migration before this file tried to backfill feedback.
+CREATE TABLE IF NOT EXISTS public.analises_ia (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  prognostico_id UUID REFERENCES public.prognosticos(id) ON DELETE CASCADE,
+  modo_ia TEXT,
+  esporte TEXT,
+  liga TEXT,
+  mercado TEXT,
+  pick TEXT,
+  linha TEXT,
+  odd_original NUMERIC,
+  odd_ajustada NUMERIC,
+  odd_valor NUMERIC,
+  odd_usada NUMERIC,
+  probabilidade_final NUMERIC,
+  edge_original NUMERIC,
+  edge_ajustado NUMERIC,
+  edge_usado NUMERIC,
+  contexto_analisado TEXT,
+  parecer_ia TEXT,
+  decisao_sugerida TEXT,
+  stake_sugerida NUMERIC,
+  riscos_identificados TEXT,
+  tags_risco JSONB DEFAULT '[]'::jsonb,
+  fontes_consultadas JSONB,
+  buscas_realizadas JSONB,
+  alertas_online JSONB,
+  prompt_versao TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.feedback_ia_resultados (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  prognostico_id UUID REFERENCES public.prognosticos(id) ON DELETE CASCADE,
+  analise_ia_id UUID REFERENCES public.analises_ia(id) ON DELETE SET NULL,
+  modo_ia TEXT,
+  decisao_ia_sugerida TEXT,
+  decisao_humana_final TEXT,
+  resultado_real TEXT,
+  lucro_prejuizo NUMERIC,
+  lucro_unidades NUMERIC,
+  esporte TEXT,
+  liga TEXT,
+  mercado TEXT,
+  pick TEXT,
+  linha TEXT,
+  odd_usada NUMERIC,
+  probabilidade_final NUMERIC,
+  edge_usado NUMERIC,
+  tags_risco JSONB DEFAULT '[]'::jsonb,
+  fontes_consultadas JSONB,
+  acertou_ia BOOLEAN,
+  acertou_humano BOOLEAN,
+  divergencia_ia_humano BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS feedback_ia_resultados_unique_result_idx
+ON public.feedback_ia_resultados (prognostico_id, analise_ia_id, resultado_real);
+
+ALTER TABLE public.analises_ia ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.feedback_ia_resultados ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins can manage analises_ia" ON public.analises_ia;
+CREATE POLICY "Admins can manage analises_ia"
+ON public.analises_ia
+FOR ALL
+USING (public.has_role(auth.uid(), 'admin'))
+WITH CHECK (public.has_role(auth.uid(), 'admin'));
+
+DROP POLICY IF EXISTS "Admins can manage feedback_ia_resultados" ON public.feedback_ia_resultados;
+CREATE POLICY "Admins can manage feedback_ia_resultados"
+ON public.feedback_ia_resultados
+FOR ALL
+USING (public.has_role(auth.uid(), 'admin'))
+WITH CHECK (public.has_role(auth.uid(), 'admin'));
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.analises_ia TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.feedback_ia_resultados TO authenticated;
+GRANT ALL ON public.analises_ia TO service_role;
+GRANT ALL ON public.feedback_ia_resultados TO service_role;
+
 UPDATE public.resultados
 SET resultado = CASE
   WHEN UPPER(TRIM(resultado)) IN ('WIN', 'WINS') THEN 'GREEN'

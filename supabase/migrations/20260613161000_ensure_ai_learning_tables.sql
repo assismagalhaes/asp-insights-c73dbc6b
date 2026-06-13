@@ -149,6 +149,13 @@ FOR ALL
 USING (public.has_role(auth.uid(), 'admin'))
 WITH CHECK (public.has_role(auth.uid(), 'admin'));
 
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.analises_ia TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.feedback_ia_resultados TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.resumos_aprendizado_ia TO authenticated;
+GRANT ALL ON public.analises_ia TO service_role;
+GRANT ALL ON public.feedback_ia_resultados TO service_role;
+GRANT ALL ON public.resumos_aprendizado_ia TO service_role;
+
 CREATE OR REPLACE FUNCTION public.touch_updated_at()
 RETURNS TRIGGER
 LANGUAGE plpgsql
