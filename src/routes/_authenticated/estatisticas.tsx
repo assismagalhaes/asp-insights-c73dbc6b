@@ -13,7 +13,7 @@ import {
   Cell,
 } from "recharts";
 import { usePrognosticos, useConfiguracao, ESPORTES_DEFAULT, MERCADOS_DEFAULT } from "@/lib/db";
-import { bankrollTimeline, lucroUnidades } from "@/lib/metrics";
+import { bankrollTimeline, lucroUnidades, rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
 import {
   Select,
   SelectContent,
@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LeagueFilter } from "@/components/league-filter";
+import { PeriodFilter } from "@/components/period-filter";
 
 export const Route = createFileRoute("/_authenticated/estatisticas")({
   head: () => ({ meta: [{ title: "ROI e Estatísticas — ASP Insights" }] }),
