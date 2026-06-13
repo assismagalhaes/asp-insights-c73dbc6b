@@ -143,13 +143,13 @@ function Validacao() {
     return calcEdge(p.probabilidade_final, odd);
   };
 
-  const rodarIA = async (p: Prognostico) => {
-    setIaLoading((s) => ({ ...s, [p.id]: true }));
+  const rodarIA = async (p: Prognostico, modo: "local" | "online") => {
+    setIaLoading((s) => ({ ...s, [p.id]: modo }));
     try {
       const dados = dadosEdit[p.id] ?? getDadosTecnicos(p) ?? "";
       const oddAj = getOddAjustadaNum(p);
       const edgeAj = getEdgeAjustado(p);
-      const r = (await callIA({
+      const payload = {
         data: {
           prognostico: {
             data: p.data,
@@ -171,13 +171,15 @@ function Validacao() {
           dados_tecnicos: dados,
           contexto_adicional: contextos[p.id] ?? "",
         },
-      })) as IAResult;
+      };
+      const raw = modo === "online" ? await callIAOnline(payload) : await callIA(payload);
+      const r: IAResult = { ...(raw as Omit<IAResult, "modo">), modo };
       setIaResults((s) => ({ ...s, [p.id]: r }));
-      toast.success("Análise gerada pela IA");
+      toast.success(modo === "online" ? "Análise online concluída" : "Análise local gerada");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
-      setIaLoading((s) => ({ ...s, [p.id]: false }));
+      setIaLoading((s) => ({ ...s, [p.id]: null }));
     }
   };
 
