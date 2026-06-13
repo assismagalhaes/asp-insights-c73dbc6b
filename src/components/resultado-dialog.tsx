@@ -43,7 +43,19 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
         .eq("esporte", prognostico.esporte)
         .neq("id", prognostico.id);
       if (prognostico.hora) q = q.eq("hora", prognostico.hora);
-      const { data } = await q;
+      let { data, error } = await q;
+      if (error) {
+        let fallback = supabase
+          .from("prognosticos")
+          .select("*")
+          .eq("data", prognostico.data)
+          .eq("jogo", prognostico.jogo)
+          .eq("esporte", prognostico.esporte)
+          .neq("id", prognostico.id);
+        if (prognostico.hora) fallback = fallback.eq("hora", prognostico.hora);
+        const fallbackResult = await fallback;
+        data = fallbackResult.data;
+      }
       const list = (data ?? []) as unknown as Array<Prognostico & { resultados?: Array<{ placar_final: string | null; created_at: string }> }>;
       setSiblings(list);
       for (const s of list) {

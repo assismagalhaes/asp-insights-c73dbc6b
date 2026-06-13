@@ -254,7 +254,6 @@ const mapPrognostico = (r: Record<string, unknown>): Prognostico => ({
 const PROGNOSTICO_LIST_COLUMNS = `
   id,
   data,
-  hora,
   esporte,
   liga,
   jogo,
@@ -264,23 +263,16 @@ const PROGNOSTICO_LIST_COLUMNS = `
   pick,
   linha,
   odd_ofertada,
-  odd_ajustada,
   odd_valor,
   probabilidade_final,
   edge,
-  edge_ajustado,
   stake,
   status_validacao,
   status_publicacao,
   resultado,
   lucro_prejuizo,
-  data_publicacao,
-  publicado_em,
-  publicado_por,
-  canal_publicacao,
   created_at,
-  updated_at,
-  resultados(placar_final, created_at)
+  updated_at
 `;
 
 export function usePrognosticos() {
@@ -294,14 +286,15 @@ export function usePrognosticos() {
         .select(PROGNOSTICO_LIST_COLUMNS)
         .order("data", { ascending: false })
         .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []).map((r: Record<string, unknown>) => {
-        const rs = (r.resultados as Array<{ placar_final: string | null; created_at: string }> | null) ?? [];
-        const last = rs.length
-          ? [...rs].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0]
-          : null;
-        return { ...mapPrognostico(r), placar_final: last?.placar_final ?? null };
-      });
+      if (!error) return (data ?? []).map((r: Record<string, unknown>) => mapPrognosticoComPlacar(r));
+
+      const fallback = await supabase
+        .from("prognosticos")
+        .select("*")
+        .order("data", { ascending: false })
+        .order("created_at", { ascending: false });
+      if (fallback.error) throw fallback.error;
+      return (fallback.data ?? []).map((r: Record<string, unknown>) => mapPrognosticoComPlacar(r));
     },
   });
 }
@@ -353,13 +346,15 @@ export async function fetchPrognosticoDetail(id: string): Promise<Prognostico> {
     .select("*, resultados(placar_final, created_at)")
     .eq("id", id)
     .single();
-  if (error) throw error;
-  const r = data as Record<string, unknown>;
-  const rs = (r.resultados as Array<{ placar_final: string | null; created_at: string }> | null) ?? [];
-  const last = rs.length
-    ? [...rs].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0]
-    : null;
-  return { ...mapPrognostico(r), placar_final: last?.placar_final ?? null };
+  if (!error) return mapPrognosticoComPlacar(data as Record<string, unknown>);
+
+  const fallback = await supabase
+    .from("prognosticos")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (fallback.error) throw fallback.error;
+  return mapPrognosticoComPlacar(fallback.data as Record<string, unknown>);
 }
 
 export function usePrognosticoDetail(id: string | null | undefined) {
@@ -467,6 +462,14 @@ const mapAnaliseIa = (r: Record<string, unknown>): AnaliseIa => ({
   edge_usado: numOrNull(r.edge_usado),
   stake_sugerida: numOrNull(r.stake_sugerida),
 });
+
+const mapPrognosticoComPlacar = (r: Record<string, unknown>): Prognostico => {
+  const rs = (r.resultados as Array<{ placar_final: string | null; created_at: string }> | null) ?? [];
+  const last = rs.length
+    ? [...rs].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0]
+    : null;
+  return { ...mapPrognostico(r), placar_final: last?.placar_final ?? null };
+};
 
 const mapFeedbackIa = (r: Record<string, unknown>): FeedbackIaResultado => ({
   ...(r as unknown as FeedbackIaResultado),
@@ -674,6 +677,100 @@ type ViewClient = {
   };
 };
 
+const mapResultadoFinanceiro = (r: Record<string, unknown>): ResultadoFinanceiro => ({
+  ...(r as unknown as ResultadoFinanceiro),
+  resultado: normalizeResultado(r.resultado) as "GREEN" | "RED",
+  stake: Number(r.stake),
+  odd_efetiva: Number(r.odd_efetiva),
+  valor_unidade: Number(r.valor_unidade),
+  lucro_unidades: Number(r.lucro_unidades),
+  lucro_reais: Number(r.lucro_reais),
+});
+
+async function fetchResultadosFinanceirosFallback(): Promise<ResultadoFinanceiro[]> {
+  const configPromise = supabase
+    .from("configuracoes")
+    .select("valor_unidade_padrao")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  const prognosticosPromise = supabase
+    .from("prognosticos")
+    .select("*")
+    .order("data", { ascending: true })
+    .order("created_at", { ascending: true });
+  const resultadosPromise = supabase
+    .from("resultados")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  const [configResult, prognosticosResult, resultadosResult] = await Promise.all([
+    configPromise,
+    prognosticosPromise,
+    resultadosPromise,
+  ]);
+  if (prognosticosResult.error) throw prognosticosResult.error;
+
+  const configData = configResult.data as { valor_unidade_padrao?: number | string | null } | null;
+  const valorUnidade = Number(configData?.valor_unidade_padrao ?? 10);
+  const resultadosPorPrognostico = new Map<
+    string,
+    { resultado: Resultado; data_resultado: string | null; id: string | null }
+  >();
+  if (!resultadosResult.error) {
+    for (const row of resultadosResult.data ?? []) {
+      const r = row as Record<string, unknown>;
+      const resultado = normalizeResultado(r.resultado);
+      const prognosticoId = String(r.prognostico_id ?? "");
+      if (!prognosticoId || resultadosPorPrognostico.has(prognosticoId)) continue;
+      if (resultado === "GREEN" || resultado === "RED") {
+        resultadosPorPrognostico.set(prognosticoId, {
+          resultado,
+          data_resultado: String(r.data_resultado ?? ""),
+          id: r.id == null ? null : String(r.id),
+        });
+      }
+    }
+  }
+
+  return (prognosticosResult.data ?? [])
+    .map((r: Record<string, unknown>) => {
+      const p = mapPrognostico(r);
+      const resultadoRegistrado = resultadosPorPrognostico.get(p.id);
+      return {
+        p: resultadoRegistrado ? { ...p, resultado: resultadoRegistrado.resultado } : p,
+        resultadoId: resultadoRegistrado?.id ?? null,
+        dataResultado: resultadoRegistrado?.data_resultado || p.data,
+      };
+    })
+    .filter(({ p }) => p.resultado === "GREEN" || p.resultado === "RED")
+    .map((p) => {
+      const oddEfetiva = getOddEfetiva(p.p);
+      const stake = Number(p.p.stake ?? 0);
+      const lucroUnidades = p.p.resultado === "GREEN" ? stake * (oddEfetiva - 1) : -stake;
+      return {
+        resultado_id: p.resultadoId,
+        prognostico_id: p.p.id,
+        data: p.p.data,
+        data_resultado: p.dataResultado,
+        esporte: p.p.esporte,
+        liga: p.p.liga,
+        mercado: p.p.mercado,
+        jogo: p.p.jogo,
+        pick: p.p.pick,
+        linha: p.p.linha,
+        status_validacao: p.p.status_validacao,
+        decisao_final: p.p.status_validacao,
+        resultado: p.p.resultado as "GREEN" | "RED",
+        stake,
+        odd_efetiva: oddEfetiva,
+        valor_unidade: valorUnidade,
+        lucro_unidades: lucroUnidades,
+        lucro_reais: lucroUnidades * valorUnidade,
+      } satisfies ResultadoFinanceiro;
+    });
+}
+
 export function useResultadosFinanceiros() {
   return useQuery({
     queryKey: ["resultados-financeiros"],
@@ -682,16 +779,12 @@ export function useResultadosFinanceiros() {
         .from("vw_resultados_financeiros")
         .select("*")
         .order("data_resultado", { ascending: true });
-      if (error) throw error;
-      return (data ?? []).map((r) => ({
-        ...(r as unknown as ResultadoFinanceiro),
-        resultado: normalizeResultado(r.resultado) as "GREEN" | "RED",
-        stake: Number(r.stake),
-        odd_efetiva: Number(r.odd_efetiva),
-        valor_unidade: Number(r.valor_unidade),
-        lucro_unidades: Number(r.lucro_unidades),
-        lucro_reais: Number(r.lucro_reais),
-      }));
+      if (!error && data && data.length > 0) {
+        return data
+          .map(mapResultadoFinanceiro)
+          .filter((r) => r.resultado === "GREEN" || r.resultado === "RED");
+      }
+      return fetchResultadosFinanceirosFallback();
     },
   });
 }
