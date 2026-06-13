@@ -87,9 +87,11 @@ export interface PerformanceStats extends Metrics {
   evolucaoBanca: TimelinePoint[];
   evolucaoRoi: TimelinePoint[];
   resultadoPorEsporte: PerformanceBucket[];
+  resultadoPorLiga: PerformanceBucket[];
   resultadoPorMercado: PerformanceBucket[];
   resultadoPorMes: MonthlyPerformance[];
   roiPorEsporte: PerformanceBucket[];
+  roiPorLiga: PerformanceBucket[];
   roiPorMercado: PerformanceBucket[];
 }
 
@@ -130,7 +132,7 @@ function bucketFromRows(nome: string, rows: ResultadoFinanceiro[]): PerformanceB
   };
 }
 
-function groupPerformance(resultados: ResultadoFinanceiro[], key: "esporte" | "mercado"): PerformanceBucket[] {
+function groupPerformance(resultados: ResultadoFinanceiro[], key: "esporte" | "liga" | "mercado"): PerformanceBucket[] {
   const map = new Map<string, ResultadoFinanceiro[]>();
   for (const row of resultados) {
     const name = row[key] || "-";
@@ -190,6 +192,7 @@ export function calculatePerformanceStats(
   }
 
   const resultadoPorEsporte = groupPerformance(filtrados, "esporte");
+  const resultadoPorLiga = groupPerformance(filtrados, "liga");
   const resultadoPorMercado = groupPerformance(filtrados, "mercado");
 
   return {
@@ -210,9 +213,11 @@ export function calculatePerformanceStats(
     evolucaoBanca: timeline,
     evolucaoRoi: timeline,
     resultadoPorEsporte,
+    resultadoPorLiga,
     resultadoPorMercado,
     resultadoPorMes: monthlyPerformance(filtrados),
     roiPorEsporte: resultadoPorEsporte,
+    roiPorLiga: resultadoPorLiga,
     roiPorMercado: resultadoPorMercado,
   };
 }
@@ -254,18 +259,23 @@ export function bankrollTimelineFromFinanceiros(
   resultados: ResultadoFinanceiro[],
   bancaInicial: number,
 ): TimelinePoint[] {
-  const byDate = new Map<string, number>();
+  const byDate = new Map<string, { lucro: number; apostado: number }>();
   for (const p of resultados) {
-    byDate.set(p.data_resultado, (byDate.get(p.data_resultado) ?? 0) + p.lucro_reais);
+    const cur = byDate.get(p.data_resultado) ?? { lucro: 0, apostado: 0 };
+    cur.lucro += p.lucro_reais;
+    cur.apostado += p.stake * p.valor_unidade;
+    byDate.set(p.data_resultado, cur);
   }
   const datas = Array.from(byDate.keys()).sort();
   let banca = bancaInicial;
   let lucroAcum = 0;
+  let apostadoAcum = 0;
   return datas.map((d) => {
-    const delta = byDate.get(d) ?? 0;
-    banca += delta;
-    lucroAcum += delta;
-    const roi = bancaInicial ? (lucroAcum / bancaInicial) * 100 : 0;
+    const delta = byDate.get(d) ?? { lucro: 0, apostado: 0 };
+    banca += delta.lucro;
+    lucroAcum += delta.lucro;
+    apostadoAcum += delta.apostado;
+    const roi = apostadoAcum ? (lucroAcum / apostadoAcum) * 100 : 0;
     return {
       data: d,
       banca: Number(banca.toFixed(2)),

@@ -4,6 +4,8 @@ import {
   ResponsiveContainer,
   AreaChart,
   Area,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
@@ -22,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { StatCard } from "@/components/stat-card";
 import { ChartTooltip } from "@/components/chart-tooltip";
+import { ChartEmptyState } from "@/components/chart-empty-state";
 import {
   useConfiguracao,
   useUpdateConfiguracao,
@@ -75,7 +78,7 @@ function Bankroll() {
   // valor real de 1u, conforme tipo de stake
   const valorUnidadeEfetiva =
     tipoStake === "PERCENTUAL"
-      ? (metrics.bancaAtual * percentual) / 100
+      ? (metrics.bancaInicial * percentual) / 100
       : unidade;
 
   const stakes = [0.5, 1.0, 1.5, 2.0];
@@ -126,10 +129,10 @@ function Bankroll() {
               </div>
             ) : (
               <div>
-                <Label>1u equivale a (% da banca atual)</Label>
+                <Label>1u equivale a (% da banca inicial)</Label>
                 <Input type="number" step="0.1" value={percentual} onChange={(e) => setPercentual(+e.target.value)} />
                 <p className="mt-1 text-xs text-muted-foreground">
-                  1u = R$ {valorUnidadeEfetiva.toFixed(2)} (sobre banca atual de R$ {metrics.bancaAtual.toFixed(2)})
+                  1u = R$ {valorUnidadeEfetiva.toFixed(2)} (sobre banca inicial de R$ {metrics.bancaInicial.toFixed(2)})
                 </p>
               </div>
             )}
@@ -220,64 +223,110 @@ function Bankroll() {
             R$ {metrics.bancaAtual.toFixed(2)} ({withSign(metrics.bancaAtual - metrics.bancaInicial)})
           </span>
         </div>
-        <ResponsiveContainer width="100%" height={300}>
-          <AreaChart data={timeline}>
-            <defs>
-              <linearGradient id="bancaFill" x1="0" y1="0" x2="0" y2="1">
-                <stop
-                  offset="0%"
-                  stopColor={signColor(metrics.bancaAtual - metrics.bancaInicial)}
-                  stopOpacity={0.45}
-                />
-                <stop
-                  offset="100%"
-                  stopColor={signColor(metrics.bancaAtual - metrics.bancaInicial)}
-                  stopOpacity={0}
-                />
-              </linearGradient>
-            </defs>
-            <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
-            <XAxis dataKey="data" stroke={axisColor} fontSize={10} tickFormatter={(d) => String(d).slice(5)} />
-            <YAxis stroke={axisColor} fontSize={10} domain={["auto", "auto"]} />
-            <ReferenceLine
-              y={metrics.bancaInicial}
-              stroke={COLOR_REFERENCE}
-              strokeDasharray="4 4"
-              label={{ value: "Banca inicial", position: "insideTopRight", fill: COLOR_NEUTRAL, fontSize: 10 }}
-            />
-            <Tooltip
-              content={
-                <ChartTooltip
-                  headerFormatter={(d) => formatBR(d)}
-                  formatter={(v, _n, dk) => {
-                    if (dk === "banca") {
-                      return {
-                        label: "Banca",
-                        display: `R$ ${v.toFixed(2)}`,
-                        color: signColor(v - metrics.bancaInicial),
-                      };
-                    }
-                    if (dk === "lucroAcum") {
-                      return {
-                        label: "Lucro acum.",
-                        display: `${v >= 0 ? "+" : "-"}R$ ${Math.abs(v).toFixed(2)}`,
-                      };
-                    }
-                    return { label: dk, display: String(v) };
-                  }}
-                />
-              }
-            />
-            <Area
-              type="monotone"
-              dataKey="banca"
-              stroke={signColor(metrics.bancaAtual - metrics.bancaInicial)}
-              strokeWidth={2.5}
-              fill="url(#bancaFill)"
-              isAnimationActive={false}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
+        {timeline.length ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={timeline}>
+              <defs>
+                <linearGradient id="bancaFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop
+                    offset="0%"
+                    stopColor={signColor(metrics.bancaAtual - metrics.bancaInicial)}
+                    stopOpacity={0.45}
+                  />
+                  <stop
+                    offset="100%"
+                    stopColor={signColor(metrics.bancaAtual - metrics.bancaInicial)}
+                    stopOpacity={0}
+                  />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
+              <XAxis dataKey="data" stroke={axisColor} fontSize={10} tickFormatter={(d) => String(d).slice(5)} />
+              <YAxis stroke={axisColor} fontSize={10} domain={["auto", "auto"]} />
+              <ReferenceLine
+                y={metrics.bancaInicial}
+                stroke={COLOR_REFERENCE}
+                strokeDasharray="4 4"
+                label={{ value: "Banca inicial", position: "insideTopRight", fill: COLOR_NEUTRAL, fontSize: 10 }}
+              />
+              <Tooltip
+                content={
+                  <ChartTooltip
+                    headerFormatter={(d) => formatBR(d)}
+                    formatter={(v, _n, dk) => {
+                      if (dk === "banca") {
+                        return {
+                          label: "Banca",
+                          display: `R$ ${v.toFixed(2)}`,
+                          color: signColor(v - metrics.bancaInicial),
+                        };
+                      }
+                      if (dk === "lucroAcum") {
+                        return {
+                          label: "Lucro acum.",
+                          display: `${v >= 0 ? "+" : "-"}R$ ${Math.abs(v).toFixed(2)}`,
+                        };
+                      }
+                      return { label: dk, display: String(v) };
+                    }}
+                  />
+                }
+              />
+              <Area
+                type="monotone"
+                dataKey="banca"
+                stroke={signColor(metrics.bancaAtual - metrics.bancaInicial)}
+                strokeWidth={2.5}
+                fill="url(#bancaFill)"
+                isAnimationActive={false}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        ) : (
+          <ChartEmptyState height={300} />
+        )}
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-4">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Percent className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Evolução do ROI
+            </h3>
+          </div>
+          <span className="font-mono text-xs" style={{ color: signColor(metrics.roi) }}>
+            {withSign(metrics.roi)}%
+          </span>
+        </div>
+        {timeline.length ? (
+          <ResponsiveContainer width="100%" height={260}>
+            <LineChart data={timeline}>
+              <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
+              <XAxis dataKey="data" stroke={axisColor} fontSize={10} tickFormatter={(d) => String(d).slice(5)} />
+              <YAxis stroke={axisColor} fontSize={10} />
+              <ReferenceLine y={0} stroke={COLOR_REFERENCE} strokeWidth={1.5} />
+              <Tooltip
+                content={
+                  <ChartTooltip
+                    headerFormatter={(d) => formatBR(d)}
+                    formatter={(v) => ({ label: "ROI", display: `${withSign(v)}%`, color: signColor(v) })}
+                  />
+                }
+              />
+              <Line
+                type="monotone"
+                dataKey="roi"
+                stroke={signColor(metrics.roi)}
+                strokeWidth={2.5}
+                dot={false}
+                isAnimationActive={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <ChartEmptyState height={260} />
+        )}
       </div>
     </div>
   );
