@@ -134,27 +134,14 @@ function Dashboard() {
       {/* Filtros */}
       <div className="rounded-lg border border-border bg-card p-3">
         <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Período</label>
-            <Select value={periodo} onValueChange={(v) => setPeriodo(v as PeriodoFiltro)}>
-              <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {PERIODOS.map((p) => <SelectItem key={p.v} value={p.v}>{p.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          {periodo === "custom" && (
-            <>
-              <div>
-                <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">De</label>
-                <Input type="date" value={customIni} onChange={(e) => setCustomIni(e.target.value)} className="h-9 w-40" />
-              </div>
-              <div>
-                <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Até</label>
-                <Input type="date" value={customFim} onChange={(e) => setCustomFim(e.target.value)} className="h-9 w-40" />
-              </div>
-            </>
-          )}
+          <PeriodFilter
+            periodo={periodo}
+            onPeriodoChange={setPeriodo}
+            customIni={customIni}
+            customFim={customFim}
+            onCustomIniChange={setCustomIni}
+            onCustomFimChange={setCustomFim}
+          />
           <div>
             <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Esporte</label>
             <Select value={esporte} onValueChange={setEsporte}>
