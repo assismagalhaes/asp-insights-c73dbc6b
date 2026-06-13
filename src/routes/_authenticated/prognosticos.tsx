@@ -87,6 +87,7 @@ function Prognosticos() {
   const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
   const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
   const [fEsporte, setFEsporte] = useState("all");
+  const [fLiga, setFLiga] = useState("all");
   const [fMercado, setFMercado] = useState("all");
   const [fValidacao, setFValidacao] = useState("all");
   const [fResultado, setFResultado] = useState("all");
