@@ -11,6 +11,8 @@ import {
   LineChart,
   Line,
   Cell,
+  LabelList,
+  ReferenceLine,
 } from "recharts";
 import { usePrognosticos, useConfiguracao, ESPORTES_DEFAULT, MERCADOS_DEFAULT } from "@/lib/db";
 import { bankrollTimeline, lucroUnidades, rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
@@ -23,21 +25,24 @@ import {
 } from "@/components/ui/select";
 import { LeagueFilter } from "@/components/league-filter";
 import { PeriodFilter } from "@/components/period-filter";
+import { ChartTooltip } from "@/components/chart-tooltip";
+import { formatBR } from "@/lib/date-br";
+import {
+  COLOR_GRID,
+  COLOR_AXIS,
+  COLOR_REFERENCE,
+  COLOR_NEUTRAL,
+  signColor,
+  withSign,
+} from "@/lib/chart-colors";
 
 export const Route = createFileRoute("/_authenticated/estatisticas")({
   head: () => ({ meta: [{ title: "ROI e Estatísticas — ASP Insights" }] }),
   component: Estatisticas,
 });
 
-const chartGrid = "oklch(0.28 0.02 250)";
-const axisColor = "oklch(0.68 0.02 250)";
-
-const tooltipStyle = {
-  background: "oklch(0.205 0.018 250)",
-  border: "1px solid oklch(0.28 0.02 250)",
-  borderRadius: 8,
-  fontSize: 12,
-};
+const chartGrid = COLOR_GRID;
+const axisColor = COLOR_AXIS;
 
 function Estatisticas() {
   const { data: prognosticos = [] } = usePrognosticos();
