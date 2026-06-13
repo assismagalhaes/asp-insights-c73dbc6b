@@ -14,6 +14,104 @@ export type Database = {
   }
   public: {
     Tables: {
+      analises_ia: {
+        Row: {
+          alertas_online: Json | null
+          buscas_realizadas: Json | null
+          contexto_analisado: string | null
+          created_at: string
+          decisao_sugerida: string | null
+          edge_ajustado: number | null
+          edge_original: number | null
+          edge_usado: number | null
+          esporte: string | null
+          fontes_consultadas: Json | null
+          id: string
+          liga: string | null
+          linha: string | null
+          mercado: string | null
+          modo_ia: string | null
+          odd_ajustada: number | null
+          odd_original: number | null
+          odd_usada: number | null
+          odd_valor: number | null
+          parecer_ia: string | null
+          pick: string | null
+          probabilidade_final: number | null
+          prognostico_id: string | null
+          prompt_versao: string | null
+          riscos_identificados: string | null
+          stake_sugerida: number | null
+          tags_risco: Json | null
+        }
+        Insert: {
+          alertas_online?: Json | null
+          buscas_realizadas?: Json | null
+          contexto_analisado?: string | null
+          created_at?: string
+          decisao_sugerida?: string | null
+          edge_ajustado?: number | null
+          edge_original?: number | null
+          edge_usado?: number | null
+          esporte?: string | null
+          fontes_consultadas?: Json | null
+          id?: string
+          liga?: string | null
+          linha?: string | null
+          mercado?: string | null
+          modo_ia?: string | null
+          odd_ajustada?: number | null
+          odd_original?: number | null
+          odd_usada?: number | null
+          odd_valor?: number | null
+          parecer_ia?: string | null
+          pick?: string | null
+          probabilidade_final?: number | null
+          prognostico_id?: string | null
+          prompt_versao?: string | null
+          riscos_identificados?: string | null
+          stake_sugerida?: number | null
+          tags_risco?: Json | null
+        }
+        Update: {
+          alertas_online?: Json | null
+          buscas_realizadas?: Json | null
+          contexto_analisado?: string | null
+          created_at?: string
+          decisao_sugerida?: string | null
+          edge_ajustado?: number | null
+          edge_original?: number | null
+          edge_usado?: number | null
+          esporte?: string | null
+          fontes_consultadas?: Json | null
+          id?: string
+          liga?: string | null
+          linha?: string | null
+          mercado?: string | null
+          modo_ia?: string | null
+          odd_ajustada?: number | null
+          odd_original?: number | null
+          odd_usada?: number | null
+          odd_valor?: number | null
+          parecer_ia?: string | null
+          pick?: string | null
+          probabilidade_final?: number | null
+          prognostico_id?: string | null
+          prompt_versao?: string | null
+          riscos_identificados?: string | null
+          stake_sugerida?: number | null
+          tags_risco?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analises_ia_prognostico_id_fkey"
+            columns: ["prognostico_id"]
+            isOneToOne: false
+            referencedRelation: "prognosticos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bankroll_historico: {
         Row: {
           banca_atual: number
@@ -91,6 +189,102 @@ export type Database = {
           valor_unidade_padrao?: number
         }
         Relationships: []
+      }
+      feedback_ia_resultados: {
+        Row: {
+          acertou_humano: boolean | null
+          acertou_ia: boolean | null
+          analise_ia_id: string | null
+          created_at: string
+          decisao_humana_final: string | null
+          decisao_ia_sugerida: string | null
+          divergencia_ia_humano: boolean | null
+          edge_usado: number | null
+          esporte: string | null
+          fontes_consultadas: Json | null
+          id: string
+          liga: string | null
+          linha: string | null
+          lucro_prejuizo: number | null
+          lucro_unidades: number | null
+          mercado: string | null
+          modo_ia: string | null
+          odd_usada: number | null
+          pick: string | null
+          probabilidade_final: number | null
+          prognostico_id: string | null
+          resultado_real: string | null
+          tags_risco: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          acertou_humano?: boolean | null
+          acertou_ia?: boolean | null
+          analise_ia_id?: string | null
+          created_at?: string
+          decisao_humana_final?: string | null
+          decisao_ia_sugerida?: string | null
+          divergencia_ia_humano?: boolean | null
+          edge_usado?: number | null
+          esporte?: string | null
+          fontes_consultadas?: Json | null
+          id?: string
+          liga?: string | null
+          linha?: string | null
+          lucro_prejuizo?: number | null
+          lucro_unidades?: number | null
+          mercado?: string | null
+          modo_ia?: string | null
+          odd_usada?: number | null
+          pick?: string | null
+          probabilidade_final?: number | null
+          prognostico_id?: string | null
+          resultado_real?: string | null
+          tags_risco?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          acertou_humano?: boolean | null
+          acertou_ia?: boolean | null
+          analise_ia_id?: string | null
+          created_at?: string
+          decisao_humana_final?: string | null
+          decisao_ia_sugerida?: string | null
+          divergencia_ia_humano?: boolean | null
+          edge_usado?: number | null
+          esporte?: string | null
+          fontes_consultadas?: Json | null
+          id?: string
+          liga?: string | null
+          linha?: string | null
+          lucro_prejuizo?: number | null
+          lucro_unidades?: number | null
+          mercado?: string | null
+          modo_ia?: string | null
+          odd_usada?: number | null
+          pick?: string | null
+          probabilidade_final?: number | null
+          prognostico_id?: string | null
+          resultado_real?: string | null
+          tags_risco?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedback_ia_resultados_analise_ia_id_fkey"
+            columns: ["analise_ia_id"]
+            isOneToOne: false
+            referencedRelation: "analises_ia"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedback_ia_resultados_prognostico_id_fkey"
+            columns: ["prognostico_id"]
+            isOneToOne: false
+            referencedRelation: "prognosticos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ligas: {
         Row: {
@@ -288,6 +482,60 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      resumos_aprendizado_ia: {
+        Row: {
+          alertas_recorrentes: Json | null
+          aprendizados_por_esporte: Json | null
+          aprendizados_por_mercado: Json | null
+          created_at: string
+          id: string
+          periodo_fim: string | null
+          periodo_inicio: string | null
+          recomendacoes_para_prompt: string | null
+          resumo_geral: string | null
+          roi: number | null
+          total_analises: number | null
+          total_green: number | null
+          total_red: number | null
+          win_rate: number | null
+          yield: number | null
+        }
+        Insert: {
+          alertas_recorrentes?: Json | null
+          aprendizados_por_esporte?: Json | null
+          aprendizados_por_mercado?: Json | null
+          created_at?: string
+          id?: string
+          periodo_fim?: string | null
+          periodo_inicio?: string | null
+          recomendacoes_para_prompt?: string | null
+          resumo_geral?: string | null
+          roi?: number | null
+          total_analises?: number | null
+          total_green?: number | null
+          total_red?: number | null
+          win_rate?: number | null
+          yield?: number | null
+        }
+        Update: {
+          alertas_recorrentes?: Json | null
+          aprendizados_por_esporte?: Json | null
+          aprendizados_por_mercado?: Json | null
+          created_at?: string
+          id?: string
+          periodo_fim?: string | null
+          periodo_inicio?: string | null
+          recomendacoes_para_prompt?: string | null
+          resumo_geral?: string | null
+          roi?: number | null
+          total_analises?: number | null
+          total_green?: number | null
+          total_red?: number | null
+          win_rate?: number | null
+          yield?: number | null
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {
