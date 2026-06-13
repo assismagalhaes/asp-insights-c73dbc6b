@@ -118,6 +118,36 @@ function Validacao() {
         </p>
       </div>
 
+      {/* Filtros */}
+      <div className="rounded-lg border border-border bg-card p-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Esporte</label>
+            <Select value={fEsporte} onValueChange={(v) => { setFEsporte(v); setFLiga("all"); }}>
+              <SelectTrigger className="h-9 w-44"><SelectValue placeholder="Esporte" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os esportes</SelectItem>
+                {esportes.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Liga</label>
+            <LeagueFilter sport={fEsporte} value={fLiga} onChange={setFLiga} className="h-9 w-48" />
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Mercado</label>
+            <Select value={fMercado} onValueChange={setFMercado}>
+              <SelectTrigger className="h-9 w-52"><SelectValue placeholder="Mercado" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os mercados</SelectItem>
+                {mercados.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+
       {pendentes.length === 0 && (
         <div className="rounded-lg border border-border bg-card p-8 text-center text-sm text-muted-foreground">
           Não há prognósticos pendentes de validação.
@@ -127,6 +157,7 @@ function Validacao() {
       <div className="space-y-4">
         {pendentes.map((p) => {
           const check = autoCheck(p);
+          const mostrarLinha = shouldShowLinha(p.pick, p.linha);
           return (
             <div
               key={p.id}
@@ -141,9 +172,9 @@ function Validacao() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-muted-foreground">{formatDateBR(p.data)}</span>
+                    <span className="text-xs font-mono text-muted-foreground">{formatBR(p.data)}</span>
                     {p.hora && (
-                      <span className="text-xs font-mono text-muted-foreground">{p.hora}</span>
+                      <span className="text-xs font-mono text-muted-foreground">às {formatHora(p.hora)}</span>
                     )}
                     <span className="text-xs font-mono text-muted-foreground">•</span>
                     <span className="text-xs font-semibold uppercase tracking-wider text-primary">
@@ -152,12 +183,17 @@ function Validacao() {
                     <span className="text-xs text-muted-foreground">• {p.liga}</span>
                   </div>
                   <h3 className="mt-1 text-lg font-semibold">{p.jogo}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {p.mercado} — <span className="text-foreground font-medium">{p.pick}</span>
-                  </p>
+                  <div className="text-sm text-muted-foreground space-y-0.5">
+                    <p>Mercado: <span className="text-foreground font-medium">{p.mercado}</span></p>
+                    <p>Pick: <span className="text-foreground font-medium">{p.pick}</span></p>
+                    {mostrarLinha && (
+                      <p>Linha: <span className="text-foreground font-medium">{p.linha}</span></p>
+                    )}
+                  </div>
                 </div>
                 <StatusBadge status={p.status_validacao} />
               </div>
+
 
               {check && (
                 <div
