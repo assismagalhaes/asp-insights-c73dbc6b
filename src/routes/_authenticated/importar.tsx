@@ -156,6 +156,66 @@ interface ParsedRow {
 
 type DupStrategy = "skip" | "update" | "force";
 
+/**
+ * Parser CSV simples que preserva TODOS os valores como string crua.
+ * Suporta aspas duplas e separadores , ou ;
+ * Nunca interpreta data — devolve exatamente o que o arquivo trouxer.
+ */
+function parseCsvAsText(text: string): Record<string, string>[] {
+  // Remove BOM
+  const clean = text.replace(/^\uFEFF/, "");
+  // Detecta separador (vírgula ou ponto-e-vírgula)
+  const firstLine = clean.split(/\r?\n/, 1)[0] ?? "";
+  const sep = (firstLine.match(/;/g)?.length ?? 0) > (firstLine.match(/,/g)?.length ?? 0) ? ";" : ",";
+
+  const rows: string[][] = [];
+  let cur: string[] = [];
+  let field = "";
+  let inQuotes = false;
+  for (let i = 0; i < clean.length; i++) {
+    const ch = clean[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (clean[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += ch;
+      }
+    } else {
+      if (ch === '"') inQuotes = true;
+      else if (ch === sep) {
+        cur.push(field);
+        field = "";
+      } else if (ch === "\n" || ch === "\r") {
+        if (ch === "\r" && clean[i + 1] === "\n") i++;
+        cur.push(field);
+        field = "";
+        if (cur.some((c) => c !== "")) rows.push(cur);
+        cur = [];
+      } else {
+        field += ch;
+      }
+    }
+  }
+  if (field !== "" || cur.length) {
+    cur.push(field);
+    if (cur.some((c) => c !== "")) rows.push(cur);
+  }
+  if (!rows.length) return [];
+  const headers = rows[0].map((h) => h.trim());
+  return rows.slice(1).map((r) => {
+    const o: Record<string, string> = {};
+    headers.forEach((h, i) => {
+      o[h] = (r[i] ?? "").trim();
+    });
+    return o;
+  });
+}
+
 function ImportarPage() {
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
