@@ -289,6 +289,16 @@ function extrairAlertasOnline(text: string): string[] {
   return Array.from(alertas);
 }
 
+const HISTORICO_INSUFICIENTE = `HISTORICO INTERNO ASP INSIGHTS:
+Amostras semelhantes encontradas: 0
+GREEN/RED: 0 GREEN e 0 RED
+ROI aproximado das amostras: 0.00%
+Forca estatistica: limitada
+Limitacao estatistica: Historico interno semelhante insuficiente ou inexistente.
+Regra anti-overfitting: use como sinal auxiliar, nunca como regra absoluta.
+Resumo periodico mais recente:
+(nenhum resumo periodico salvo ainda)`;
+
 async function buildLearningContext(supabase: unknown, p: PrognosticoPrompt) {
   const client = supabase as {
     from: (table: string) => {
@@ -311,7 +321,7 @@ async function buildLearningContext(supabase: unknown, p: PrognosticoPrompt) {
     .eq("esporte", p.esporte)
     .order("created_at", { ascending: false })
     .limit(50);
-  if (similar.error) throw similar.error;
+  if (similar.error) return HISTORICO_INSUFICIENTE;
 
   const rows = (similar.data ?? []).filter((r) => r.liga === p.liga || r.mercado === p.mercado);
   const greens = rows.filter((r) => r.resultado_real === "GREEN").length;
@@ -325,9 +335,7 @@ async function buildLearningContext(supabase: unknown, p: PrognosticoPrompt) {
     .select("*")
     .order("created_at", { ascending: false })
     .limit(1);
-  if (resumo.error) throw resumo.error;
-
-  const latest = resumo.data?.[0];
+  const latest = resumo.error ? null : resumo.data?.[0];
   return `HISTORICO INTERNO ASP INSIGHTS:
 Amostras semelhantes encontradas: ${rows.length}
 GREEN/RED: ${greens} GREEN e ${reds} RED

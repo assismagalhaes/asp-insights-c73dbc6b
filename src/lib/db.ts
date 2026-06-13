@@ -230,6 +230,10 @@ export interface Configuracao {
 
 const num = (v: unknown) => (v == null ? 0 : Number(v));
 const numOrNull = (v: unknown) => (v == null ? null : Number(v));
+const stringArrayOrNull = (v: unknown): string[] | null => {
+  if (!Array.isArray(v)) return null;
+  return v.map(String).filter(Boolean);
+};
 export function normalizeResultado(value: unknown): Resultado {
   const s = String(value ?? "PENDENTE").trim().toUpperCase();
   if (s === "GREEN" || s === "WIN" || s === "WINS") return "GREEN";
@@ -461,6 +465,7 @@ const mapAnaliseIa = (r: Record<string, unknown>): AnaliseIa => ({
   edge_ajustado: numOrNull(r.edge_ajustado),
   edge_usado: numOrNull(r.edge_usado),
   stake_sugerida: numOrNull(r.stake_sugerida),
+  tags_risco: stringArrayOrNull(r.tags_risco),
 });
 
 const mapPrognosticoComPlacar = (r: Record<string, unknown>): Prognostico => {
@@ -482,6 +487,7 @@ const mapFeedbackIa = (r: Record<string, unknown>): FeedbackIaResultado => ({
   odd_usada: numOrNull(r.odd_usada),
   probabilidade_final: numOrNull(r.probabilidade_final),
   edge_usado: numOrNull(r.edge_usado),
+  tags_risco: stringArrayOrNull(r.tags_risco),
 });
 
 const mapResumoAprendizado = (r: Record<string, unknown>): ResumoAprendizadoIa => ({
@@ -542,7 +548,7 @@ export function useAnalisesIaByPrognostico(prognosticoId: string | null | undefi
         .select("*")
         .eq("prognostico_id", prognosticoId!)
         .order("created_at", { ascending: false });
-      if (error) throw error;
+      if (error) return [];
       return (data ?? []).map(mapAnaliseIa);
     },
   });
@@ -567,7 +573,7 @@ export function useFeedbackIaResultados() {
         .from("feedback_ia_resultados")
         .select("id, prognostico_id, analise_ia_id, modo_ia, decisao_ia_sugerida, decisao_humana_final, resultado_real, lucro_prejuizo, lucro_unidades, esporte, liga, mercado, pick, linha, odd_usada, probabilidade_final, edge_usado, tags_risco, acertou_ia, acertou_humano, divergencia_ia_humano, created_at")
         .order("created_at", { ascending: false });
-      if (error) throw error;
+      if (error) return [];
       return (data ?? []).map(mapFeedbackIa);
     },
   });
@@ -592,7 +598,7 @@ export function useResumosAprendizadoIa() {
         .from("resumos_aprendizado_ia")
         .select("id, periodo_inicio, periodo_fim, total_analises, total_green, total_red, win_rate, roi, yield, resumo_geral, created_at")
         .order("created_at", { ascending: false });
-      if (error) throw error;
+      if (error) return [];
       return (data ?? []).map(mapResumoAprendizado);
     },
   });

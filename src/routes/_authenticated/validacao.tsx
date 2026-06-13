@@ -201,34 +201,41 @@ function Validacao() {
       };
       const raw = modo === "online" ? await callIAOnline(payload) : await callIA(payload);
       const baseResult = raw as Omit<IAResult, "modo" | "analise_ia_id">;
-      const analise = await createAnaliseIa.mutateAsync({
-        prognostico_id: p.id,
-        modo_ia: modo,
-        esporte: p.esporte,
-        liga: p.liga,
-        mercado: p.mercado,
-        pick: p.pick,
-        linha: p.linha,
-        odd_original: p.odd_ofertada,
-        odd_ajustada: oddAj,
-        odd_valor: p.odd_valor,
-        odd_usada: oddAj ?? p.odd_ofertada,
-        probabilidade_final: p.probabilidade_final,
-        edge_original: p.edge,
-        edge_ajustado: edgeAj,
-        edge_usado: edgeAj ?? p.edge,
-        contexto_analisado: [dados, contextos[p.id] ?? ""].filter(Boolean).join("\n\n"),
-        parecer_ia: baseResult.parecer,
-        decisao_sugerida: baseResult.decisao_sugerida as "CONFIRMA" | "PULAR" | null,
-        stake_sugerida: baseResult.stake_sugerida,
-        riscos_identificados: extractParecerSection(baseResult.parecer, "E) Riscos principais") || extractParecerSection(baseResult.parecer, "G) Riscos principais"),
-        tags_risco: getRiskTags(baseResult.parecer, baseResult.alertas_online),
-        fontes_consultadas: baseResult.fontes_consultadas ?? null,
-        buscas_realizadas: baseResult.buscas_realizadas ?? null,
-        alertas_online: baseResult.alertas_online ?? null,
-        prompt_versao: baseResult.prompt_versao,
-      });
-      const r: IAResult = { ...baseResult, modo, analise_ia_id: analise.id };
+      let analiseId: string | undefined;
+      try {
+        const analise = await createAnaliseIa.mutateAsync({
+          prognostico_id: p.id,
+          modo_ia: modo,
+          esporte: p.esporte,
+          liga: p.liga,
+          mercado: p.mercado,
+          pick: p.pick,
+          linha: p.linha,
+          odd_original: p.odd_ofertada,
+          odd_ajustada: oddAj,
+          odd_valor: p.odd_valor,
+          odd_usada: oddAj ?? p.odd_ofertada,
+          probabilidade_final: p.probabilidade_final,
+          edge_original: p.edge,
+          edge_ajustado: edgeAj,
+          edge_usado: edgeAj ?? p.edge,
+          contexto_analisado: [dados, contextos[p.id] ?? ""].filter(Boolean).join("\n\n"),
+          parecer_ia: baseResult.parecer,
+          decisao_sugerida: baseResult.decisao_sugerida as "CONFIRMA" | "PULAR" | null,
+          stake_sugerida: baseResult.stake_sugerida,
+          riscos_identificados: extractParecerSection(baseResult.parecer, "E) Riscos principais") || extractParecerSection(baseResult.parecer, "G) Riscos principais"),
+          tags_risco: getRiskTags(baseResult.parecer, baseResult.alertas_online),
+          fontes_consultadas: baseResult.fontes_consultadas ?? null,
+          buscas_realizadas: baseResult.buscas_realizadas ?? null,
+          alertas_online: baseResult.alertas_online ?? null,
+          prompt_versao: baseResult.prompt_versao,
+        });
+        analiseId = analise.id;
+      } catch (saveError) {
+        console.warn("Nao foi possivel salvar analise_ia; mantendo parecer gerado.", saveError);
+        toast.warning("Analise gerada, mas o historico da IA ainda nao esta disponivel no banco.");
+      }
+      const r: IAResult = { ...baseResult, modo, analise_ia_id: analiseId };
       setIaResults((s) => ({ ...s, [p.id]: r }));
       toast.success(modo === "online" ? "Análise online concluída" : "Análise local gerada");
     } catch (e) {
