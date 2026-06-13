@@ -31,6 +31,7 @@ import {
 } from "@/lib/db";
 import { PrognosticoDialog } from "@/components/prognostico-dialog";
 import { ResultadoDialog } from "@/components/resultado-dialog";
+import { DadosTecnicosViewer } from "@/components/dados-tecnicos-viewer";
 import { toast } from "sonner";
 import {
   AlertDialog,
