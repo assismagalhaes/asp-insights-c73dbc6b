@@ -234,10 +234,15 @@ export function useBulkDeletePrognosticos() {
 }
 
 // ===== Validações =====
+export type ValidacaoInput = Partial<Omit<Validacao, "id" | "created_at" | "prognostico_id">> & {
+  prognostico_id: string;
+  decisao: string;
+};
+
 export function useCreateValidacao() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: Omit<Validacao, "id" | "created_at">) => {
+    mutationFn: async (input: ValidacaoInput) => {
       const { data, error } = await supabase.from("validacoes").insert(input).select().single();
       if (error) throw error;
       // espelha decisão no prognóstico
