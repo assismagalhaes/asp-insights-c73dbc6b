@@ -25,10 +25,11 @@ import { ChartTooltip } from "@/components/chart-tooltip";
 import {
   useConfiguracao,
   useUpdateConfiguracao,
-  usePrognosticos,
+  useResultadosFinanceiros,
+  useBankrollCalculado,
   type TipoStake,
 } from "@/lib/db";
-import { computeMetrics, bankrollTimeline } from "@/lib/metrics";
+import { computeFinancialMetrics } from "@/lib/metrics";
 import { formatBR } from "@/lib/date-br";
 import {
   COLOR_GRID,
@@ -51,7 +52,8 @@ const axisColor = COLOR_AXIS;
 
 function Bankroll() {
   const { data: cfg } = useConfiguracao();
-  const { data: prognosticos = [] } = usePrognosticos();
+  const { data: resultadosFinanceiros = [] } = useResultadosFinanceiros();
+  const { data: bankrollCalculado = [] } = useBankrollCalculado();
   const updateCfg = useUpdateConfiguracao();
 
   const [unidade, setUnidade] = useState(10);
@@ -68,8 +70,13 @@ function Bankroll() {
     }
   }, [cfg]);
 
-  const metrics = computeMetrics(prognosticos, cfg);
-  const timeline = bankrollTimeline(prognosticos, metrics.bancaInicial, cfg?.valor_unidade_padrao ?? 0);
+  const metrics = computeFinancialMetrics(resultadosFinanceiros, cfg);
+  const timeline = bankrollCalculado.map((p) => ({
+    data: p.data,
+    banca: p.banca,
+    lucroAcum: p.lucro_acum,
+    roi: p.roi,
+  }));
 
   // valor real de 1u, conforme tipo de stake
   const valorUnidadeEfetiva =

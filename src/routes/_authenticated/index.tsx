@@ -45,6 +45,7 @@ import {
 import {
   usePrognosticos,
   useConfiguracao,
+  useResultadosFinanceiros,
   MERCADOS_DEFAULT,
   ESPORTES_DEFAULT,
 } from "@/lib/db";
@@ -52,9 +53,8 @@ import { LeagueFilter } from "@/components/league-filter";
 import { PeriodFilter } from "@/components/period-filter";
 import { formatBR, formatHora } from "@/lib/date-br";
 import {
-  computeMetrics,
-  bankrollTimeline,
-  lucroUnidades,
+  computeFinancialMetrics,
+  bankrollTimelineFromFinanceiros,
   rangeFromPeriodo,
   dateInRange,
   type PeriodoFiltro,
@@ -78,6 +78,7 @@ const MERCADOS = ["Todos", ...MERCADOS_DEFAULT];
 
 function Dashboard() {
   const { data: prognosticos = [] } = usePrognosticos();
+  const { data: resultadosFinanceiros = [] } = useResultadosFinanceiros();
   const { data: cfg } = useConfiguracao();
 
   const [periodo, setPeriodo] = useState<PeriodoFiltro>("tudo");
@@ -101,38 +102,46 @@ function Dashboard() {
     [prognosticos, ini, fim, esporte, liga, mercado],
   );
 
-  const metrics = useMemo(() => computeMetrics(filtrados, cfg), [filtrados, cfg]);
+  const financeirosFiltrados = useMemo(
+    () =>
+      resultadosFinanceiros.filter((p) => {
+        if (!dateInRange(p.data, ini, fim)) return false;
+        if (esporte !== "Todos" && p.esporte !== esporte) return false;
+        if (liga !== "all" && p.liga !== liga) return false;
+        if (mercado !== "Todos" && p.mercado !== mercado) return false;
+        return true;
+      }),
+    [resultadosFinanceiros, ini, fim, esporte, liga, mercado],
+  );
+
+  const metrics = useMemo(() => computeFinancialMetrics(financeirosFiltrados, cfg), [financeirosFiltrados, cfg]);
   const timeline = useMemo(
-    () => bankrollTimeline(filtrados, cfg?.banca_inicial ?? 0, cfg?.valor_unidade_padrao ?? 0),
-    [filtrados, cfg],
+    () => bankrollTimelineFromFinanceiros(financeirosFiltrados, cfg?.banca_inicial ?? 0),
+    [financeirosFiltrados, cfg],
   );
 
   const sportPerf = useMemo(() => {
     const map = new Map<string, { lucro: number; stake: number }>();
-    filtrados
-      .filter((p) => p.status_validacao === "CONFIRMA")
-      .forEach((p) => {
-        const cur = map.get(p.esporte) ?? { lucro: 0, stake: 0 };
-        cur.lucro += lucroUnidades(p);
-        cur.stake += p.stake;
-        map.set(p.esporte, cur);
-      });
+    financeirosFiltrados.forEach((p) => {
+      const cur = map.get(p.esporte) ?? { lucro: 0, stake: 0 };
+      cur.lucro += p.lucro_unidades;
+      cur.stake += p.stake;
+      map.set(p.esporte, cur);
+    });
     return Array.from(map.entries()).map(([esporte, v]) => ({
       esporte,
       lucro: Number(v.lucro.toFixed(2)),
     }));
-  }, [filtrados]);
+  }, [financeirosFiltrados]);
 
   const marketPerf = useMemo(() => {
     const map = new Map<string, number>();
-    filtrados
-      .filter((p) => p.status_validacao === "CONFIRMA")
-      .forEach((p) => map.set(p.mercado, (map.get(p.mercado) ?? 0) + lucroUnidades(p)));
+    financeirosFiltrados.forEach((p) => map.set(p.mercado, (map.get(p.mercado) ?? 0) + p.lucro_unidades));
     return Array.from(map.entries()).map(([mercado, lucro]) => ({
       mercado,
       lucro: Number(lucro.toFixed(2)),
     }));
-  }, [filtrados]);
+  }, [financeirosFiltrados]);
 
   return (
     <div className="space-y-6">

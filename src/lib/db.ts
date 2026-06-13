@@ -5,7 +5,7 @@ export type Status =
   | "PENDENTE"
   | "CONFIRMA"
   | "PULAR";
-export type Resultado = "PENDENTE" | "GREEN" | "RED" | "PUSH" | "VOID" | "HALF GREEN" | "HALF RED";
+export type Resultado = "PENDENTE" | "GREEN" | "RED";
 
 export type StatusPublicacao = "NAO_PUBLICADO" | "PUBLICADO" | "FINALIZADO" | "CANCELADO";
 
@@ -110,6 +110,34 @@ export interface BankrollRow {
   created_at: string;
 }
 
+export interface ResultadoFinanceiro {
+  resultado_id: string;
+  prognostico_id: string;
+  data: string;
+  data_resultado: string;
+  esporte: string;
+  liga: string;
+  mercado: string;
+  jogo: string;
+  pick: string;
+  status_validacao: "CONFIRMA";
+  resultado: "GREEN" | "RED";
+  stake: number;
+  odd_efetiva: number;
+  valor_unidade: number;
+  lucro_unidades: number;
+  lucro_reais: number;
+}
+
+export interface BankrollCalculadoRow {
+  data: string;
+  lucro_dia_reais: number;
+  lucro_acum: number;
+  banca: number;
+  roi: number;
+  drawdown: number;
+}
+
 export type TipoStake = "FIXO" | "PERCENTUAL";
 export interface Configuracao {
   id: string;
@@ -194,6 +222,10 @@ export function useCreatePrognostico() {
       return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["prognosticos"] }),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["resultados-financeiros"] });
+      qc.invalidateQueries({ queryKey: ["bankroll-calculado"] });
+    },
   });
 }
 
@@ -206,7 +238,11 @@ export function useUpdatePrognostico() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["prognosticos"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["prognosticos"] });
+      qc.invalidateQueries({ queryKey: ["resultados-financeiros"] });
+      qc.invalidateQueries({ queryKey: ["bankroll-calculado"] });
+    },
   });
 }
 
@@ -217,7 +253,11 @@ export function useDeletePrognostico() {
       const { error } = await supabase.from("prognosticos").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["prognosticos"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["prognosticos"] });
+      qc.invalidateQueries({ queryKey: ["resultados-financeiros"] });
+      qc.invalidateQueries({ queryKey: ["bankroll-calculado"] });
+    },
   });
 }
 
@@ -229,7 +269,11 @@ export function useBulkDeletePrognosticos() {
       const { error } = await supabase.from("prognosticos").delete().in("id", ids);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["prognosticos"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["prognosticos"] });
+      qc.invalidateQueries({ queryKey: ["resultados-financeiros"] });
+      qc.invalidateQueries({ queryKey: ["bankroll-calculado"] });
+    },
   });
 }
 
@@ -256,6 +300,8 @@ export function useCreateValidacao() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["prognosticos"] });
       qc.invalidateQueries({ queryKey: ["validacoes"] });
+      qc.invalidateQueries({ queryKey: ["resultados-financeiros"] });
+      qc.invalidateQueries({ queryKey: ["bankroll-calculado"] });
     },
   });
 }
@@ -273,6 +319,8 @@ export function useCreateResultado() {
       qc.invalidateQueries({ queryKey: ["prognosticos"] });
       qc.invalidateQueries({ queryKey: ["bankroll"] });
       qc.invalidateQueries({ queryKey: ["resultados"] });
+      qc.invalidateQueries({ queryKey: ["resultados-financeiros"] });
+      qc.invalidateQueries({ queryKey: ["bankroll-calculado"] });
     },
   });
 }
@@ -296,6 +344,60 @@ export function useBankroll() {
         lucro_acumulado: Number(r.lucro_acumulado),
         roi: Number(r.roi),
         yield: Number(r.yield),
+        drawdown: Number(r.drawdown),
+      }));
+    },
+  });
+}
+
+// ===== Views financeiras =====
+type ViewClient = {
+  from: (table: string) => {
+    select: (columns: string) => {
+      order: (
+        column: string,
+        opts?: { ascending?: boolean },
+      ) => Promise<{ data: Record<string, unknown>[] | null; error: Error | null }>;
+    };
+  };
+};
+
+export function useResultadosFinanceiros() {
+  return useQuery({
+    queryKey: ["resultados-financeiros"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as unknown as ViewClient)
+        .from("vw_resultados_financeiros")
+        .select("*")
+        .order("data_resultado", { ascending: true });
+      if (error) throw error;
+      return (data ?? []).map((r) => ({
+        ...(r as unknown as ResultadoFinanceiro),
+        stake: Number(r.stake),
+        odd_efetiva: Number(r.odd_efetiva),
+        valor_unidade: Number(r.valor_unidade),
+        lucro_unidades: Number(r.lucro_unidades),
+        lucro_reais: Number(r.lucro_reais),
+      }));
+    },
+  });
+}
+
+export function useBankrollCalculado() {
+  return useQuery({
+    queryKey: ["bankroll-calculado"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as unknown as ViewClient)
+        .from("vw_bankroll_timeline_calculado")
+        .select("*")
+        .order("data", { ascending: true });
+      if (error) throw error;
+      return (data ?? []).map((r) => ({
+        ...(r as unknown as BankrollCalculadoRow),
+        lucro_dia_reais: Number(r.lucro_dia_reais),
+        lucro_acum: Number(r.lucro_acum),
+        banca: Number(r.banca),
+        roi: Number(r.roi),
         drawdown: Number(r.drawdown),
       }));
     },
@@ -335,7 +437,11 @@ export function useUpdateConfiguracao() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["configuracao"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["configuracao"] });
+      qc.invalidateQueries({ queryKey: ["resultados-financeiros"] });
+      qc.invalidateQueries({ queryKey: ["bankroll-calculado"] });
+    },
   });
 }
 
@@ -450,18 +556,11 @@ export function todayBR(): string {
 }
 
 // ===== Publicação =====
-export function calcLucro(resultado: Resultado, stake: number, odd: number): number {
+export function calcLucro(resultado: Resultado, stake: number, oddEfetiva: number): number {
   switch (resultado) {
     case "GREEN":
-      return Number((stake * (odd - 1)).toFixed(2));
+      return Number((stake * (oddEfetiva - 1)).toFixed(2));
     case "RED":
-      return Number((-stake).toFixed(2));
-    // Resultados legados (mantidos por compatibilidade) convertidos
-    case "HALF GREEN":
-      return Number((stake * (odd - 1)).toFixed(2));
-    case "HALF RED":
-    case "PUSH":
-    case "VOID":
       return Number((-stake).toFixed(2));
     default:
       return 0;
