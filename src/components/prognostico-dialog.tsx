@@ -23,8 +23,11 @@ import {
   todayBR,
   useCreatePrognostico,
   useUpdatePrognostico,
+  useLigas,
+  useUpsertLiga,
   type Prognostico,
   type PrognosticoInput,
+  type Liga,
 } from "@/lib/db";
 import { toast } from "sonner";
 
@@ -67,7 +70,15 @@ export function PrognosticoDialog({
 }: Props) {
   const create = useCreatePrognostico();
   const update = useUpdatePrognostico();
+  const upsertLiga = useUpsertLiga();
+  const { data: ligas = [] } = useLigas();
   const [form, setForm] = useState<PrognosticoInput>(empty);
+  const [novaLiga, setNovaLiga] = useState("");
+
+  const ligasDoEsporte = (ligas as Liga[])
+    .filter((l) => l.esporte === form.esporte)
+    .slice()
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 
   useEffect(() => {
     if (!open) return;
@@ -167,7 +178,7 @@ export function PrognosticoDialog({
             />
           </Field>
           <Field label="Esporte">
-            <Select value={form.esporte} onValueChange={(v) => set("esporte", v)}>
+            <Select value={form.esporte} onValueChange={(v) => { set("esporte", v); set("liga", ""); }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {esportes.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
@@ -175,7 +186,51 @@ export function PrognosticoDialog({
             </Select>
           </Field>
           <Field label="Liga">
-            <Input value={form.liga} onChange={(e) => set("liga", e.target.value)} />
+            <Select value={form.liga || ""} onValueChange={(v) => set("liga", v)}>
+              <SelectTrigger>
+                <SelectValue placeholder={ligasDoEsporte.length ? "Selecione a liga" : "Nenhuma liga cadastrada"} />
+              </SelectTrigger>
+              <SelectContent>
+                {ligasDoEsporte.map((l) => (
+                  <SelectItem key={l.id} value={l.nome}>{l.nome}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Cadastrar nova liga">
+            <div className="flex gap-1">
+              <Input
+                value={novaLiga}
+                onChange={(e) => setNovaLiga(e.target.value)}
+                placeholder={`Nova liga de ${form.esporte}`}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  const nome = novaLiga.trim();
+                  if (!nome) return;
+                  const dup = ligasDoEsporte.find((l) => l.nome.trim().toLowerCase() === nome.toLowerCase());
+                  if (dup) {
+                    set("liga", dup.nome);
+                    setNovaLiga("");
+                    toast.info("Liga já cadastrada — selecionada.");
+                    return;
+                  }
+                  try {
+                    await upsertLiga.mutateAsync({ nome, esporte: form.esporte });
+                    set("liga", nome);
+                    setNovaLiga("");
+                    toast.success("Liga cadastrada");
+                  } catch (e) {
+                    toast.error((e as Error).message);
+                  }
+                }}
+              >
+                +
+              </Button>
+            </div>
           </Field>
           <Field label="Mandante">
             <Input value={form.mandante} onChange={(e) => set("mandante", e.target.value)} />

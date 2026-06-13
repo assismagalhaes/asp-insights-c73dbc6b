@@ -10,6 +10,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { LeagueFilter } from "@/components/league-filter";
+import { formatBR, formatHora } from "@/lib/date-br";
 
 export const Route = createFileRoute("/_authenticated/historico")({
   head: () => ({ meta: [{ title: "Histórico — ASP Insights" }] }),
@@ -23,6 +25,7 @@ function Historico() {
   const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
 
   const [esporte, setEsporte] = useState("all");
+  const [liga, setLiga] = useState("all");
   const [mercado, setMercado] = useState("all");
   const [status, setStatus] = useState("all");
   const [resultado, setResultado] = useState("all");
@@ -32,6 +35,7 @@ function Historico() {
   const rows = useMemo(() => {
     return prognosticos.filter((p) => {
       if (esporte !== "all" && p.esporte !== esporte) return false;
+      if (liga !== "all" && p.liga !== liga) return false;
       if (mercado !== "all" && p.mercado !== mercado) return false;
       if (status !== "all" && p.status_validacao !== status) return false;
       if (resultado !== "all" && p.resultado !== resultado) return false;
@@ -39,7 +43,7 @@ function Historico() {
       if (data && p.data !== data) return false;
       return true;
     });
-  }, [prognosticos, esporte, mercado, status, resultado, publicacao, data]);
+  }, [prognosticos, esporte, liga, mercado, status, resultado, publicacao, data]);
 
   const wins = rows.filter((r) => r.resultado === "GREEN" || r.resultado === "HALF GREEN").length;
   const losses = rows.filter((r) => r.resultado === "RED" || r.resultado === "HALF RED").length;
@@ -55,15 +59,16 @@ function Historico() {
         </p>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
+      <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-7">
         <Input type="date" value={data} onChange={(e) => setData(e.target.value)} />
-        <Select value={esporte} onValueChange={setEsporte}>
+        <Select value={esporte} onValueChange={(v) => { setEsporte(v); setLiga("all"); }}>
           <SelectTrigger><SelectValue placeholder="Esporte" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os esportes</SelectItem>
             {esportes.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
+        <LeagueFilter sport={esporte} value={liga} onChange={setLiga} />
         <Select value={mercado} onValueChange={setMercado}>
           <SelectTrigger><SelectValue placeholder="Mercado" /></SelectTrigger>
           <SelectContent>
@@ -118,7 +123,9 @@ function Historico() {
             <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="px-3 py-2 text-left">Data</th>
+                <th className="px-3 py-2 text-left">Hora</th>
                 <th className="px-3 py-2 text-left">Esporte</th>
+                <th className="px-3 py-2 text-left">Liga</th>
                 <th className="px-3 py-2 text-left">Jogo</th>
                 <th className="px-3 py-2 text-left">Placar</th>
                 <th className="px-3 py-2 text-left">Mercado</th>
@@ -134,8 +141,10 @@ function Historico() {
             <tbody>
               {rows.map((p) => (
                 <tr key={p.id} className="border-t border-border hover:bg-muted/30">
-                  <td className="px-3 py-2 font-mono text-xs">{p.data}{p.hora ? ` ${p.hora.slice(0,5)}` : ""}</td>
+                  <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatBR(p.data)}</td>
+                  <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{p.hora ? formatHora(p.hora) : "—"}</td>
                   <td className="px-3 py-2">{p.esporte}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{p.liga}</td>
                   <td className="px-3 py-2">{p.jogo}</td>
                   <td className="px-3 py-2 font-mono text-xs">{p.placar_final ?? "—"}</td>
                   <td className="px-3 py-2 text-muted-foreground">{p.mercado}</td>
@@ -152,7 +161,7 @@ function Historico() {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={14} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     Nenhum prognóstico encontrado com os filtros aplicados.
                   </td>
                 </tr>

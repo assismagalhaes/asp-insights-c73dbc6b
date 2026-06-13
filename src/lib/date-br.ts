@@ -72,3 +72,24 @@ export function formatHora(h: string | null | undefined): string {
   if (!h) return "";
   return h.slice(0, 5);
 }
+
+/** Formata data + hora "DD/MM/YYYY HH:mm" (ou só data se hora ausente). */
+export function formatDataHora(iso: string | null | undefined, hora?: string | null): string {
+  const d = formatBR(iso ?? "");
+  const h = formatHora(hora ?? null);
+  if (d && h) return `${d} ${h}`;
+  return d || h || "";
+}
+
+/**
+ * Detecta se a linha já está embutida no texto do pick para evitar duplicar
+ * (ex.: pick="Over 2.5 Gols", linha="2.5" → não exibir linha separada).
+ */
+export function shouldShowLinha(pick: string | null | undefined, linha: string | null | undefined): boolean {
+  if (!linha) return false;
+  const l = String(linha).trim();
+  if (!l || l === "-") return false;
+  const p = String(pick ?? "").toLowerCase();
+  if (!p) return true;
+  return !p.includes(l.toLowerCase());
+}

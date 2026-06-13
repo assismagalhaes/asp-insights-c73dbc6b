@@ -419,14 +419,17 @@ export function gerarTipTexto(
   p: Prognostico,
   extras?: { justificativa?: string | null; riscos?: string | null },
 ): string {
+  const linha = (p.linha ?? "").trim();
+  const pickLower = (p.pick ?? "").toLowerCase();
+  const linhaForaDoPick = linha && linha !== "-" && !pickLower.includes(linha.toLowerCase());
   return `🔥 ASP INSIGHTS - PICK CONFIRMADA
 
 🏆 Jogo: ${p.jogo}
 🏟️ Liga: ${p.liga || "—"}
 📊 Esporte: ${p.esporte}
 
-🎯 Mercado: ${p.mercado}${p.linha ? ` (${p.linha})` : ""}
-✅ Pick: ${p.pick}
+🎯 Mercado: ${p.mercado}
+✅ Pick: ${p.pick}${linhaForaDoPick ? `\n📐 Linha: ${linha}` : ""}
 📈 Odd: ${p.odd_ofertada.toFixed(2)}
 📉 Odd de Valor: ${p.odd_valor.toFixed(2)}
 📊 Probabilidade: ${p.probabilidade_final.toFixed(1)}%

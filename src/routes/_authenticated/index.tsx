@@ -37,6 +37,7 @@ import {
   ESPORTES_DEFAULT,
 } from "@/lib/db";
 import { LeagueFilter } from "@/components/league-filter";
+import { formatBR, formatHora } from "@/lib/date-br";
 import {
   computeMetrics,
   bankrollTimeline,
@@ -283,7 +284,9 @@ function Dashboard() {
             <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="px-4 py-2 text-left">Data</th>
+                <th className="px-4 py-2 text-left">Hora</th>
                 <th className="px-4 py-2 text-left">Esporte</th>
+                <th className="px-4 py-2 text-left">Liga</th>
                 <th className="px-4 py-2 text-left">Jogo</th>
                 <th className="px-4 py-2 text-left">Pick</th>
                 <th className="px-4 py-2 text-right font-mono">Odd</th>
@@ -295,8 +298,10 @@ function Dashboard() {
             <tbody>
               {filtrados.slice(0, 8).map((p) => (
                 <tr key={p.id} className="border-t border-border hover:bg-muted/30">
-                  <td className="px-4 py-2 font-mono text-xs">{p.data}</td>
+                  <td className="px-4 py-2 font-mono text-xs whitespace-nowrap">{formatBR(p.data)}</td>
+                  <td className="px-4 py-2 font-mono text-xs whitespace-nowrap">{p.hora ? formatHora(p.hora) : "—"}</td>
                   <td className="px-4 py-2">{p.esporte}</td>
+                  <td className="px-4 py-2 text-muted-foreground">{p.liga}</td>
                   <td className="px-4 py-2">{p.jogo}</td>
                   <td className="px-4 py-2">{p.pick}</td>
                   <td className="px-4 py-2 text-right font-mono">{p.odd_ofertada.toFixed(2)}</td>
@@ -307,7 +312,7 @@ function Dashboard() {
               ))}
               {filtrados.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={10} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     Nenhum prognóstico para os filtros selecionados.
                   </td>
                 </tr>

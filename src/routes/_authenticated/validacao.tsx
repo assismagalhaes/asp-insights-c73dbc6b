@@ -1,12 +1,30 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { AlertTriangle, Sparkles, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { StatusBadge } from "@/components/status-badge";
-import { usePrognosticos, useCreateValidacao, useUpdatePrognostico, type Prognostico, type Status } from "@/lib/db";
+import { LeagueFilter } from "@/components/league-filter";
+import {
+  usePrognosticos,
+  useCreateValidacao,
+  useUpdatePrognostico,
+  useConfiguracao,
+  ESPORTES_DEFAULT,
+  MERCADOS_DEFAULT,
+  type Prognostico,
+  type Status,
+} from "@/lib/db";
+import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -28,30 +46,43 @@ function autoCheck(p: Prognostico) {
   return null;
 }
 
-function formatDateBR(iso: string): string {
-  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
-}
-
 function Validacao() {
   const { data: prognosticos = [] } = usePrognosticos();
+  const { data: cfg } = useConfiguracao();
   const createVal = useCreateValidacao();
   const updateProg = useUpdatePrognostico();
+  const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
+  const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
+
   const [justificativas, setJustificativas] = useState<Record<string, string>>({});
   const [riscos, setRiscos] = useState<Record<string, string>>({});
   const [comentarios, setComentarios] = useState<Record<string, string>>({});
   const [stakes, setStakes] = useState<Record<string, string>>({});
   const [odds, setOdds] = useState<Record<string, string>>({});
 
-  const pendentes = prognosticos
-    .filter((p) => p.resultado === "PENDENTE" && p.status_validacao === "PENDENTE")
-    .slice()
-    .sort((a, b) => {
-      if (a.data !== b.data) return a.data < b.data ? -1 : 1;
-      const ha = a.hora ?? "99:99";
-      const hb = b.hora ?? "99:99";
-      return ha < hb ? -1 : ha > hb ? 1 : 0;
-    });
+  const [fEsporte, setFEsporte] = useState("all");
+  const [fLiga, setFLiga] = useState("all");
+  const [fMercado, setFMercado] = useState("all");
+
+  const pendentes = useMemo(
+    () =>
+      prognosticos
+        .filter((p) => p.resultado === "PENDENTE" && p.status_validacao === "PENDENTE")
+        .filter((p) => {
+          if (fEsporte !== "all" && p.esporte !== fEsporte) return false;
+          if (fLiga !== "all" && p.liga !== fLiga) return false;
+          if (fMercado !== "all" && p.mercado !== fMercado) return false;
+          return true;
+        })
+        .slice()
+        .sort((a, b) => {
+          if (a.data !== b.data) return a.data < b.data ? -1 : 1;
+          const ha = a.hora ?? "99:99";
+          const hb = b.hora ?? "99:99";
+          return ha < hb ? -1 : ha > hb ? 1 : 0;
+        }),
+    [prognosticos, fEsporte, fLiga, fMercado],
+  );
 
   const decidir = async (p: Prognostico, decisao: Status) => {
     if (!justificativas[p.id]?.trim()) {
@@ -87,6 +118,36 @@ function Validacao() {
         </p>
       </div>
 
+      {/* Filtros */}
+      <div className="rounded-lg border border-border bg-card p-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Esporte</label>
+            <Select value={fEsporte} onValueChange={(v) => { setFEsporte(v); setFLiga("all"); }}>
+              <SelectTrigger className="h-9 w-44"><SelectValue placeholder="Esporte" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os esportes</SelectItem>
+                {esportes.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Liga</label>
+            <LeagueFilter sport={fEsporte} value={fLiga} onChange={setFLiga} className="h-9 w-48" />
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Mercado</label>
+            <Select value={fMercado} onValueChange={setFMercado}>
+              <SelectTrigger className="h-9 w-52"><SelectValue placeholder="Mercado" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os mercados</SelectItem>
+                {mercados.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+
       {pendentes.length === 0 && (
         <div className="rounded-lg border border-border bg-card p-8 text-center text-sm text-muted-foreground">
           Não há prognósticos pendentes de validação.
@@ -96,6 +157,7 @@ function Validacao() {
       <div className="space-y-4">
         {pendentes.map((p) => {
           const check = autoCheck(p);
+          const mostrarLinha = shouldShowLinha(p.pick, p.linha);
           return (
             <div
               key={p.id}
@@ -110,9 +172,9 @@ function Validacao() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-muted-foreground">{formatDateBR(p.data)}</span>
+                    <span className="text-xs font-mono text-muted-foreground">{formatBR(p.data)}</span>
                     {p.hora && (
-                      <span className="text-xs font-mono text-muted-foreground">{p.hora}</span>
+                      <span className="text-xs font-mono text-muted-foreground">às {formatHora(p.hora)}</span>
                     )}
                     <span className="text-xs font-mono text-muted-foreground">•</span>
                     <span className="text-xs font-semibold uppercase tracking-wider text-primary">
@@ -121,12 +183,17 @@ function Validacao() {
                     <span className="text-xs text-muted-foreground">• {p.liga}</span>
                   </div>
                   <h3 className="mt-1 text-lg font-semibold">{p.jogo}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {p.mercado} — <span className="text-foreground font-medium">{p.pick}</span>
-                  </p>
+                  <div className="text-sm text-muted-foreground space-y-0.5">
+                    <p>Mercado: <span className="text-foreground font-medium">{p.mercado}</span></p>
+                    <p>Pick: <span className="text-foreground font-medium">{p.pick}</span></p>
+                    {mostrarLinha && (
+                      <p>Linha: <span className="text-foreground font-medium">{p.linha}</span></p>
+                    )}
+                  </div>
                 </div>
                 <StatusBadge status={p.status_validacao} />
               </div>
+
 
               {check && (
                 <div

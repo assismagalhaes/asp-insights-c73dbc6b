@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StatusBadge, ResultBadge } from "@/components/status-badge";
+import { LeagueFilter } from "@/components/league-filter";
 import {
   usePrognosticos,
   useDeletePrognostico,
@@ -87,6 +88,7 @@ function Prognosticos() {
   const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
   const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
   const [fEsporte, setFEsporte] = useState("all");
+  const [fLiga, setFLiga] = useState("all");
   const [fMercado, setFMercado] = useState("all");
   const [fValidacao, setFValidacao] = useState("all");
   const [fResultado, setFResultado] = useState("all");
@@ -103,6 +105,7 @@ function Prognosticos() {
   const sorted = useMemo(() => {
     const arr = prognosticos.filter((p) => {
       if (fEsporte !== "all" && p.esporte !== fEsporte) return false;
+      if (fLiga !== "all" && p.liga !== fLiga) return false;
       if (fMercado !== "all" && p.mercado !== fMercado) return false;
       if (fValidacao !== "all" && p.status_validacao !== fValidacao) return false;
       if (fResultado !== "all" && p.resultado !== fResultado) return false;
@@ -121,7 +124,7 @@ function Prognosticos() {
       return sortDir === "asc" ? cmp : -cmp;
     });
     return arr;
-  }, [prognosticos, sortKey, sortDir, fEsporte, fMercado, fValidacao, fResultado, fData]);
+  }, [prognosticos, sortKey, sortDir, fEsporte, fLiga, fMercado, fValidacao, fResultado, fData]);
 
   const allSelected = sorted.length > 0 && sorted.every((p) => selected.has(p.id));
   const someSelected = selected.size > 0 && !allSelected;
@@ -231,15 +234,16 @@ function Prognosticos() {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
+      <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
         <Input type="date" value={fData} onChange={(e) => setFData(e.target.value)} />
-        <Select value={fEsporte} onValueChange={setFEsporte}>
+        <Select value={fEsporte} onValueChange={(v) => { setFEsporte(v); setFLiga("all"); }}>
           <SelectTrigger><SelectValue placeholder="Esporte" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os esportes</SelectItem>
             {esportes.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
+        <LeagueFilter sport={fEsporte} value={fLiga} onChange={setFLiga} />
         <Select value={fMercado} onValueChange={setFMercado}>
           <SelectTrigger><SelectValue placeholder="Mercado" /></SelectTrigger>
           <SelectContent>

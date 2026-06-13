@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -12,8 +12,16 @@ import {
   Line,
   Cell,
 } from "recharts";
-import { usePrognosticos, useConfiguracao } from "@/lib/db";
+import { usePrognosticos, useConfiguracao, ESPORTES_DEFAULT, MERCADOS_DEFAULT } from "@/lib/db";
 import { bankrollTimeline, lucroUnidades } from "@/lib/metrics";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { LeagueFilter } from "@/components/league-filter";
 
 export const Route = createFileRoute("/_authenticated/estatisticas")({
   head: () => ({ meta: [{ title: "ROI e Estatísticas — ASP Insights" }] }),
@@ -33,11 +41,28 @@ const tooltipStyle = {
 function Estatisticas() {
   const { data: prognosticos = [] } = usePrognosticos();
   const { data: cfg } = useConfiguracao();
+  const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
+  const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
+
+  const [fEsporte, setFEsporte] = useState("all");
+  const [fLiga, setFLiga] = useState("all");
+  const [fMercado, setFMercado] = useState("all");
+
+  const filtrados = useMemo(
+    () =>
+      prognosticos.filter((p) => {
+        if (fEsporte !== "all" && p.esporte !== fEsporte) return false;
+        if (fLiga !== "all" && p.liga !== fLiga) return false;
+        if (fMercado !== "all" && p.mercado !== fMercado) return false;
+        return true;
+      }),
+    [prognosticos, fEsporte, fLiga, fMercado],
+  );
 
   // Apenas prognósticos confirmados contam para as estatísticas
   const validados = useMemo(
-    () => prognosticos.filter((p) => p.status_validacao === "CONFIRMA"),
-    [prognosticos],
+    () => filtrados.filter((p) => p.status_validacao === "CONFIRMA"),
+    [filtrados],
   );
 
   const sportPerformance = useMemo(() => {
@@ -78,8 +103,8 @@ function Estatisticas() {
   }, [validados]);
 
   const chartBanca = useMemo(
-    () => bankrollTimeline(prognosticos, cfg?.banca_inicial ?? 0, cfg?.valor_unidade_padrao ?? 0),
-    [prognosticos, cfg],
+    () => bankrollTimeline(filtrados, cfg?.banca_inicial ?? 0, cfg?.valor_unidade_padrao ?? 0),
+    [filtrados, cfg],
   );
 
   return (
@@ -89,6 +114,36 @@ function Estatisticas() {
         <p className="text-sm text-muted-foreground">
           Análise detalhada de desempenho por esporte, mercado e período.
         </p>
+      </div>
+
+      {/* Filtros */}
+      <div className="rounded-lg border border-border bg-card p-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Esporte</label>
+            <Select value={fEsporte} onValueChange={(v) => { setFEsporte(v); setFLiga("all"); }}>
+              <SelectTrigger className="h-9 w-44"><SelectValue placeholder="Esporte" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os esportes</SelectItem>
+                {esportes.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Liga</label>
+            <LeagueFilter sport={fEsporte} value={fLiga} onChange={setFLiga} className="h-9 w-48" />
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Mercado</label>
+            <Select value={fMercado} onValueChange={setFMercado}>
+              <SelectTrigger className="h-9 w-52"><SelectValue placeholder="Mercado" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os mercados</SelectItem>
+                {mercados.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
