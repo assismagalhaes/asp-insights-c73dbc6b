@@ -231,6 +231,7 @@ function PublicacaoPage() {
                       <td className="px-3 py-2"><StatusBadge status={p.status_validacao} /></td>
                       <td className="px-3 py-2 text-right whitespace-nowrap">
                         <div className="flex justify-end gap-1">
+                          <DadosTecnicosViewer prognostico={p} />
                           <Button
                             size="sm"
                             variant="ghost"
