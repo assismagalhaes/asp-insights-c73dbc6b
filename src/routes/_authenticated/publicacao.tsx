@@ -118,6 +118,36 @@ function PublicacaoPage() {
         </div>
       </div>
 
+      {/* Filtros */}
+      <div className="rounded-lg border border-border bg-card p-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Esporte</Label>
+            <Select value={fEsporte} onValueChange={(v) => { setFEsporte(v); setFLiga("all"); }}>
+              <SelectTrigger className="h-9 w-44"><SelectValue placeholder="Esporte" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os esportes</SelectItem>
+                {esportes.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Liga</Label>
+            <LeagueFilter sport={fEsporte} value={fLiga} onChange={setFLiga} className="h-9 w-48" />
+          </div>
+          <div>
+            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Mercado</Label>
+            <Select value={fMercado} onValueChange={setFMercado}>
+              <SelectTrigger className="h-9 w-52"><SelectValue placeholder="Mercado" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os mercados</SelectItem>
+                {mercados.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>Prognósticos validados pendentes</CardTitle>
@@ -132,9 +162,13 @@ function PublicacaoPage() {
                 <tr>
                   <th className="px-3 py-2 w-8"></th>
                   <th className="px-3 py-2 text-left">Data</th>
+                  <th className="px-3 py-2 text-left">Hora</th>
                   <th className="px-3 py-2 text-left">Esporte</th>
+                  <th className="px-3 py-2 text-left">Liga</th>
                   <th className="px-3 py-2 text-left">Jogo</th>
+                  <th className="px-3 py-2 text-left">Mercado</th>
                   <th className="px-3 py-2 text-left">Pick</th>
+                  <th className="px-3 py-2 text-left">Linha</th>
                   <th className="px-3 py-2 text-right font-mono">Odd</th>
                   <th className="px-3 py-2 text-right font-mono">Stake</th>
                   <th className="px-3 py-2 text-left">Validação</th>
@@ -144,13 +178,14 @@ function PublicacaoPage() {
               <tbody>
                 {elegiveis.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={13} className="px-4 py-8 text-center text-sm text-muted-foreground">
                       Nenhum prognóstico aguardando publicação.
                     </td>
                   </tr>
                 )}
                 {elegiveis.map((p) => {
                   const canSelect = podePublicar(p);
+                  const mostrarLinha = shouldShowLinha(p.pick, p.linha);
                   return (
                     <tr key={p.id} className="border-t border-border hover:bg-muted/30">
                       <td className="px-3 py-2">
@@ -166,10 +201,14 @@ function PublicacaoPage() {
                           )}
                         </button>
                       </td>
-                      <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{p.data}</td>
+                      <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatBR(p.data)}</td>
+                      <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{p.hora ? formatHora(p.hora) : "—"}</td>
                       <td className="px-3 py-2 whitespace-nowrap">{p.esporte}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{p.liga}</td>
                       <td className="px-3 py-2 whitespace-nowrap">{p.jogo}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{p.mercado}</td>
                       <td className="px-3 py-2 whitespace-nowrap">{p.pick}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{mostrarLinha ? p.linha : "—"}</td>
                       <td className="px-3 py-2 text-right font-mono">{p.odd_ofertada.toFixed(2)}</td>
                       <td className="px-3 py-2 text-right font-mono">{p.stake.toFixed(1)}u</td>
                       <td className="px-3 py-2"><StatusBadge status={p.status_validacao} /></td>
