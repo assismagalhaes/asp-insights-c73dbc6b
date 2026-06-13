@@ -38,6 +38,7 @@ import { PeriodFilter } from "@/components/period-filter";
 import { rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
 import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
 import { toast } from "sonner";
+import { DadosTecnicosViewer } from "@/components/dados-tecnicos-viewer";
 
 export const Route = createFileRoute("/_authenticated/publicacao")({
   head: () => ({ meta: [{ title: "Publicação — ASP Insights" }] }),
