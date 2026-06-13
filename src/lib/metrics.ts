@@ -1,11 +1,10 @@
-import { getOddEfetiva, type Prognostico, type Resultado } from "./db";
+import { getOddEfetiva, type Prognostico, type Resultado, type ResultadoFinanceiro } from "./db";
 
-// Picks consideradas "resolvidas" para win-rate (somente GREEN/RED)
 export const PICK_RESOLVIDA: Resultado[] = ["GREEN", "RED"];
 export const PICK_GREEN: Resultado[] = ["GREEN"];
 export const PICK_RED: Resultado[] = ["RED"];
 
-/** Lucro/prejuízo em unidades (independe do valor da unidade) */
+/** Lucro/prejuizo em unidades para um prognostico individual. */
 export function lucroUnidades(p: Pick<Prognostico, "resultado" | "stake" | "odd_ofertada" | "odd_ajustada">): number {
   const { resultado, stake } = p;
   const odd = getOddEfetiva(p);
@@ -30,45 +29,44 @@ export interface Metrics {
   greens: number;
   reds: number;
   resolvidas: number;
-  totalApostadoU: number; // soma stakes das resolvidas
+  totalApostadoU: number;
   totalApostadoR$: number;
   lucroU: number;
   lucroReais: number;
-  roi: number; // %
-  yield: number; // %
-  winRate: number; // %
+  roi: number;
+  yield: number;
+  winRate: number;
   bancaInicial: number;
   bancaAtual: number;
-  drawdown: number; // % (a partir do timeline)
+  drawdown: number;
 }
 
-/** Calcula métricas centralizadas. Considera apenas prognósticos CONFIRMA. */
-export function computeMetrics(
-  prognosticos: Prognostico[],
+export interface TimelinePoint {
+  data: string;
+  banca: number;
+  lucroAcum: number;
+  roi: number;
+}
+
+/** Calcula metricas a partir da view financeira canonica. */
+export function computeFinancialMetrics(
+  resultados: ResultadoFinanceiro[],
   cfg: { banca_inicial: number; valor_unidade_padrao: number } | null | undefined,
 ): Metrics {
   const bancaInicial = cfg?.banca_inicial ?? 0;
-  const valorUnidade = cfg?.valor_unidade_padrao ?? 0;
-
-  const confirma = prognosticos.filter((p) => p.status_validacao === "CONFIRMA");
-  const resolvidas = confirma.filter((p) => PICK_RESOLVIDA.includes(p.resultado));
-
-  const greens = confirma.filter((p) => PICK_GREEN.includes(p.resultado)).length;
-  const reds = confirma.filter((p) => PICK_RED.includes(p.resultado)).length;
-
+  const resolvidas = resultados.filter((p) => PICK_RESOLVIDA.includes(p.resultado));
+  const greens = resultados.filter((p) => PICK_GREEN.includes(p.resultado)).length;
+  const reds = resultados.filter((p) => PICK_RED.includes(p.resultado)).length;
   const totalApostadoU = resolvidas.reduce((s, p) => s + p.stake, 0);
-  const totalApostadoR$ = totalApostadoU * valorUnidade;
-
-  const lucroU = confirma.reduce((s, p) => s + lucroUnidades(p), 0);
-  const lucroR = lucroU * valorUnidade;
-
+  const totalApostadoR$ = resolvidas.reduce((s, p) => s + p.stake * p.valor_unidade, 0);
+  const lucroU = resultados.reduce((s, p) => s + p.lucro_unidades, 0);
+  const lucroR = resultados.reduce((s, p) => s + p.lucro_reais, 0);
   const bancaAtual = bancaInicial + lucroR;
   const roi = totalApostadoR$ > 0 ? (lucroR / totalApostadoR$) * 100 : 0;
-  const yld = roi; // mesma fórmula (lucro / stake)
+  const yld = roi;
   const winRate = resolvidas.length ? (greens / resolvidas.length) * 100 : 0;
 
-  // Drawdown a partir do timeline ordenado por data
-  const timeline = bankrollTimeline(confirma, bancaInicial, valorUnidade);
+  const timeline = bankrollTimelineFromFinanceiros(resultados, bancaInicial);
   let pico = bancaInicial;
   let dd = 0;
   for (const t of timeline) {
@@ -93,17 +91,14 @@ export function computeMetrics(
   };
 }
 
-/** Evolução da banca dia a dia (somente CONFIRMA). */
-export function bankrollTimeline(
-  prognosticos: Prognostico[],
+/** Evolucao da banca por data de resultado a partir da view financeira. */
+export function bankrollTimelineFromFinanceiros(
+  resultados: ResultadoFinanceiro[],
   bancaInicial: number,
-  valorUnidade: number,
-): { data: string; banca: number; lucroAcum: number; roi: number }[] {
-  const confirma = prognosticos.filter((p) => p.status_validacao === "CONFIRMA");
-  // agrupa por data
+): TimelinePoint[] {
   const byDate = new Map<string, number>();
-  for (const p of confirma) {
-    byDate.set(p.data, (byDate.get(p.data) ?? 0) + lucroUnidades(p) * valorUnidade);
+  for (const p of resultados) {
+    byDate.set(p.data_resultado, (byDate.get(p.data_resultado) ?? 0) + p.lucro_reais);
   }
   const datas = Array.from(byDate.keys()).sort();
   let banca = bancaInicial;
@@ -113,11 +108,16 @@ export function bankrollTimeline(
     banca += delta;
     lucroAcum += delta;
     const roi = bancaInicial ? (lucroAcum / bancaInicial) * 100 : 0;
-    return { data: d, banca: Number(banca.toFixed(2)), lucroAcum: Number(lucroAcum.toFixed(2)), roi: Number(roi.toFixed(2)) };
+    return {
+      data: d,
+      banca: Number(banca.toFixed(2)),
+      lucroAcum: Number(lucroAcum.toFixed(2)),
+      roi: Number(roi.toFixed(2)),
+    };
   });
 }
 
-// ===== Filtros de período =====
+// ===== Filtros de periodo =====
 export type PeriodoFiltro = "hoje" | "ontem" | "7d" | "30d" | "mes" | "ano" | "tudo" | "custom";
 
 export function dateInRange(d: string, ini?: string | null, fim?: string | null): boolean {

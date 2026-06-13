@@ -14,8 +14,8 @@ import {
   LabelList,
   ReferenceLine,
 } from "recharts";
-import { usePrognosticos, useConfiguracao, ESPORTES_DEFAULT, MERCADOS_DEFAULT } from "@/lib/db";
-import { bankrollTimeline, lucroUnidades, rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
+import { useResultadosFinanceiros, useConfiguracao, ESPORTES_DEFAULT, MERCADOS_DEFAULT } from "@/lib/db";
+import { bankrollTimelineFromFinanceiros, rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
 import {
   Select,
   SelectContent,
@@ -45,7 +45,7 @@ const chartGrid = COLOR_GRID;
 const axisColor = COLOR_AXIS;
 
 function Estatisticas() {
-  const { data: prognosticos = [] } = usePrognosticos();
+  const { data: resultadosFinanceiros = [] } = useResultadosFinanceiros();
   const { data: cfg } = useConfiguracao();
   const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
   const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
@@ -61,27 +61,21 @@ function Estatisticas() {
 
   const filtrados = useMemo(
     () =>
-      prognosticos.filter((p) => {
+      resultadosFinanceiros.filter((p) => {
         if (!dateInRange(p.data, ini, fim)) return false;
         if (fEsporte !== "all" && p.esporte !== fEsporte) return false;
         if (fLiga !== "all" && p.liga !== fLiga) return false;
         if (fMercado !== "all" && p.mercado !== fMercado) return false;
         return true;
       }),
-    [prognosticos, ini, fim, fEsporte, fLiga, fMercado],
-  );
-
-  // Apenas prognósticos confirmados contam para as estatísticas
-  const validados = useMemo(
-    () => filtrados.filter((p) => p.status_validacao === "CONFIRMA"),
-    [filtrados],
+    [resultadosFinanceiros, ini, fim, fEsporte, fLiga, fMercado],
   );
 
   const sportPerformance = useMemo(() => {
     const map = new Map<string, { lucro: number; stake: number }>();
-    validados.forEach((p) => {
+    filtrados.forEach((p) => {
       const cur = map.get(p.esporte) ?? { lucro: 0, stake: 0 };
-      cur.lucro += lucroUnidades(p);
+      cur.lucro += p.lucro_unidades;
       cur.stake += p.stake;
       map.set(p.esporte, cur);
     });
@@ -90,32 +84,32 @@ function Estatisticas() {
       lucro: Number(v.lucro.toFixed(2)),
       roi: v.stake ? Number(((v.lucro / v.stake) * 100).toFixed(1)) : 0,
     }));
-  }, [validados]);
+  }, [filtrados]);
 
   const marketPerformance = useMemo(() => {
     const map = new Map<string, number>();
-    validados.forEach((p) => {
-      map.set(p.mercado, (map.get(p.mercado) ?? 0) + lucroUnidades(p));
+    filtrados.forEach((p) => {
+      map.set(p.mercado, (map.get(p.mercado) ?? 0) + p.lucro_unidades);
     });
     return Array.from(map.entries()).map(([mercado, lucro]) => ({
       mercado,
       lucro: Number(lucro.toFixed(2)),
     }));
-  }, [validados]);
+  }, [filtrados]);
 
   const monthlyResults = useMemo(() => {
     const map = new Map<string, number>();
-    validados.forEach((p) => {
-      const mes = p.data.slice(0, 7);
-      map.set(mes, (map.get(mes) ?? 0) + lucroUnidades(p));
+    filtrados.forEach((p) => {
+      const mes = p.data_resultado.slice(0, 7);
+      map.set(mes, (map.get(mes) ?? 0) + p.lucro_unidades);
     });
     return Array.from(map.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([mes, lucro]) => ({ mes, lucro: Number(lucro.toFixed(2)) }));
-  }, [validados]);
+  }, [filtrados]);
 
   const chartBanca = useMemo(
-    () => bankrollTimeline(filtrados, cfg?.banca_inicial ?? 0, cfg?.valor_unidade_padrao ?? 0),
+    () => bankrollTimelineFromFinanceiros(filtrados, cfg?.banca_inicial ?? 0),
     [filtrados, cfg],
   );
 
