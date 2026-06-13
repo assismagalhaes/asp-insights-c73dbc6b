@@ -168,54 +168,113 @@ function Bankroll() {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <StatCard
           label="Lucro Real"
-          value={`${metrics.lucroReais >= 0 ? "+" : ""}R$ ${metrics.lucroReais.toFixed(2)}`}
+          value={`${metrics.lucroReais >= 0 ? "+" : "-"}R$ ${Math.abs(metrics.lucroReais).toFixed(2)}`}
           icon={DollarSign}
-          trend={metrics.lucroReais >= 0 ? "up" : "down"}
+          tone={metrics.lucroReais > 0 ? "up" : metrics.lucroReais < 0 ? "down" : "neutral"}
         />
         <StatCard
           label="Lucro (u)"
-          value={`${metrics.lucroU >= 0 ? "+" : ""}${metrics.lucroU.toFixed(2)}u`}
+          value={`${withSign(metrics.lucroU)}u`}
           icon={Wallet}
-          trend={metrics.lucroU >= 0 ? "up" : "down"}
+          tone={metrics.lucroU > 0 ? "up" : metrics.lucroU < 0 ? "down" : "neutral"}
         />
-        <StatCard label="ROI" value={`${metrics.roi.toFixed(2)}%`} icon={TrendingUp} trend={metrics.roi >= 0 ? "up" : "down"} />
-        <StatCard label="Yield" value={`${metrics.yield.toFixed(2)}%`} icon={Percent} />
-        <StatCard label="Win Rate" value={`${metrics.winRate.toFixed(1)}%`} icon={Target} />
+        <StatCard
+          label="ROI"
+          value={`${withSign(metrics.roi)}%`}
+          icon={TrendingUp}
+          tone={metrics.roi > 0 ? "up" : metrics.roi < 0 ? "down" : "neutral"}
+        />
+        <StatCard
+          label="Yield"
+          value={`${withSign(metrics.yield)}%`}
+          icon={Percent}
+          tone={metrics.yield > 0 ? "up" : metrics.yield < 0 ? "down" : "neutral"}
+        />
+        <StatCard
+          label="Win Rate"
+          value={`${metrics.winRate.toFixed(1)}%`}
+          icon={Target}
+          tone={metrics.winRate >= 50 ? "up" : metrics.winRate > 0 ? "down" : "neutral"}
+        />
         <StatCard
           label="Drawdown"
           value={`${metrics.drawdown.toFixed(2)}%`}
           icon={TrendingDown}
-          trend={metrics.drawdown > 0 ? "down" : "neutral"}
+          tone={metrics.drawdown > 0 ? "down" : "neutral"}
         />
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Activity className="h-4 w-4 text-primary" />
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Evolução da banca
-          </h3>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Activity className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Evolução da banca
+            </h3>
+          </div>
+          <span
+            className="font-mono text-xs"
+            style={{ color: signColor(metrics.bancaAtual - metrics.bancaInicial) }}
+          >
+            R$ {metrics.bancaAtual.toFixed(2)} ({withSign(metrics.bancaAtual - metrics.bancaInicial)})
+          </span>
         </div>
         <ResponsiveContainer width="100%" height={300}>
           <AreaChart data={timeline}>
             <defs>
-              <linearGradient id="banca" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="oklch(0.72 0.18 155)" stopOpacity={0.5} />
-                <stop offset="95%" stopColor="oklch(0.72 0.18 155)" stopOpacity={0} />
+              <linearGradient id="bancaFill" x1="0" y1="0" x2="0" y2="1">
+                <stop
+                  offset="0%"
+                  stopColor={signColor(metrics.bancaAtual - metrics.bancaInicial)}
+                  stopOpacity={0.45}
+                />
+                <stop
+                  offset="100%"
+                  stopColor={signColor(metrics.bancaAtual - metrics.bancaInicial)}
+                  stopOpacity={0}
+                />
               </linearGradient>
             </defs>
             <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
             <XAxis dataKey="data" stroke={axisColor} fontSize={10} tickFormatter={(d) => String(d).slice(5)} />
-            <YAxis stroke={axisColor} fontSize={10} />
-            <Tooltip
-              contentStyle={{
-                background: "oklch(0.205 0.018 250)",
-                border: "1px solid oklch(0.28 0.02 250)",
-                borderRadius: 8,
-                fontSize: 12,
-              }}
+            <YAxis stroke={axisColor} fontSize={10} domain={["auto", "auto"]} />
+            <ReferenceLine
+              y={metrics.bancaInicial}
+              stroke={COLOR_REFERENCE}
+              strokeDasharray="4 4"
+              label={{ value: "Banca inicial", position: "insideTopRight", fill: COLOR_NEUTRAL, fontSize: 10 }}
             />
-            <Area type="monotone" dataKey="banca" stroke="oklch(0.72 0.18 155)" strokeWidth={2} fill="url(#banca)" />
+            <Tooltip
+              content={
+                <ChartTooltip
+                  headerFormatter={(d) => formatBR(d)}
+                  formatter={(v, _n, dk) => {
+                    if (dk === "banca") {
+                      return {
+                        label: "Banca",
+                        display: `R$ ${v.toFixed(2)}`,
+                        color: signColor(v - metrics.bancaInicial),
+                      };
+                    }
+                    if (dk === "lucroAcum") {
+                      return {
+                        label: "Lucro acum.",
+                        display: `${v >= 0 ? "+" : "-"}R$ ${Math.abs(v).toFixed(2)}`,
+                      };
+                    }
+                    return { label: dk, display: String(v) };
+                  }}
+                />
+              }
+            />
+            <Area
+              type="monotone"
+              dataKey="banca"
+              stroke={signColor(metrics.bancaAtual - metrics.bancaInicial)}
+              strokeWidth={2.5}
+              fill="url(#bancaFill)"
+              isAnimationActive={false}
+            />
           </AreaChart>
         </ResponsiveContainer>
       </div>
