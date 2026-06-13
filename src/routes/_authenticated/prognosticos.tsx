@@ -234,15 +234,16 @@ function Prognosticos() {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
+      <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
         <Input type="date" value={fData} onChange={(e) => setFData(e.target.value)} />
-        <Select value={fEsporte} onValueChange={setFEsporte}>
+        <Select value={fEsporte} onValueChange={(v) => { setFEsporte(v); setFLiga("all"); }}>
           <SelectTrigger><SelectValue placeholder="Esporte" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os esportes</SelectItem>
             {esportes.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
+        <LeagueFilter sport={fEsporte} value={fLiga} onChange={setFLiga} />
         <Select value={fMercado} onValueChange={setFMercado}>
           <SelectTrigger><SelectValue placeholder="Mercado" /></SelectTrigger>
           <SelectContent>
