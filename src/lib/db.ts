@@ -5,7 +5,7 @@ export type Status =
   | "PENDENTE"
   | "CONFIRMA"
   | "PULAR";
-export type Resultado = "PENDENTE" | "GREEN" | "RED" | "PUSH" | "VOID" | "HALF GREEN" | "HALF RED";
+export type Resultado = "PENDENTE" | "GREEN" | "RED";
 
 export type StatusPublicacao = "NAO_PUBLICADO" | "PUBLICADO" | "FINALIZADO" | "CANCELADO";
 
@@ -450,18 +450,11 @@ export function todayBR(): string {
 }
 
 // ===== Publicação =====
-export function calcLucro(resultado: Resultado, stake: number, odd: number): number {
+export function calcLucro(resultado: Resultado, stake: number, oddEfetiva: number): number {
   switch (resultado) {
     case "GREEN":
-      return Number((stake * (odd - 1)).toFixed(2));
+      return Number((stake * (oddEfetiva - 1)).toFixed(2));
     case "RED":
-      return Number((-stake).toFixed(2));
-    // Resultados legados (mantidos por compatibilidade) convertidos
-    case "HALF GREEN":
-      return Number((stake * (odd - 1)).toFixed(2));
-    case "HALF RED":
-    case "PUSH":
-    case "VOID":
       return Number((-stake).toFixed(2));
     default:
       return 0;

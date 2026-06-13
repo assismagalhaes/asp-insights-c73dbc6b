@@ -1,4 +1,4 @@
-import type { Prognostico, Resultado, Configuracao } from "./db";
+import { getOddEfetiva, type Prognostico, type Resultado } from "./db";
 
 // Picks consideradas "resolvidas" para win-rate (somente GREEN/RED)
 export const PICK_RESOLVIDA: Resultado[] = ["GREEN", "RED"];
@@ -6,19 +6,13 @@ export const PICK_GREEN: Resultado[] = ["GREEN"];
 export const PICK_RED: Resultado[] = ["RED"];
 
 /** Lucro/prejuízo em unidades (independe do valor da unidade) */
-export function lucroUnidades(p: Pick<Prognostico, "resultado" | "stake" | "odd_ofertada">): number {
-  const { resultado, stake, odd_ofertada: odd } = p;
+export function lucroUnidades(p: Pick<Prognostico, "resultado" | "stake" | "odd_ofertada" | "odd_ajustada">): number {
+  const { resultado, stake } = p;
+  const odd = getOddEfetiva(p);
   switch (resultado) {
     case "GREEN":
       return stake * (odd - 1);
     case "RED":
-      return -stake;
-    // Resultados legados convertidos para o modelo simples
-    case "HALF GREEN":
-      return stake * (odd - 1);
-    case "HALF RED":
-    case "PUSH":
-    case "VOID":
       return -stake;
     default:
       return 0;
@@ -26,7 +20,7 @@ export function lucroUnidades(p: Pick<Prognostico, "resultado" | "stake" | "odd_
 }
 
 export function lucroReais(
-  p: Pick<Prognostico, "resultado" | "stake" | "odd_ofertada">,
+  p: Pick<Prognostico, "resultado" | "stake" | "odd_ofertada" | "odd_ajustada">,
   valorUnidade: number,
 ): number {
   return lucroUnidades(p) * valorUnidade;

@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 export type Status = "PENDENTE" | "CONFIRMA" | "PULAR";
-export type Result = "PENDENTE" | "GREEN" | "RED" | "PUSH";
+export type Result = "PENDENTE" | "GREEN" | "RED";
 
 const statusStyles: Record<string, string> = {
   CONFIRMA: "bg-success/15 text-success border-success/30",
