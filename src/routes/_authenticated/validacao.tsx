@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { AlertTriangle, Sparkles, ShieldAlert, Brain, Loader2, Copy, Wand2, RefreshCw, X } from "lucide-react";
+import { AlertTriangle, Sparkles, ShieldAlert, Brain, Loader2, Copy, Wand2, RefreshCw, X, Globe, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -35,6 +35,7 @@ import {
   type Status,
 } from "@/lib/db";
 import { analisarValidacao } from "@/lib/validacao-ia.functions";
+import { analisarValidacaoOnline } from "@/lib/validacao-ia-online.functions";
 import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -68,6 +69,9 @@ interface IAResult {
   decisao_sugerida: string | null;
   stake_sugerida: number | null;
   prompt_versao: string;
+  modo: "local" | "online";
+  fontes_consultadas?: { titulo: string; url: string }[];
+  buscas_realizadas?: string[];
 }
 
 function autoCheck(p: Prognostico, edgeFinal: number) {
@@ -84,6 +88,7 @@ function Validacao() {
   const createVal = useCreateValidacao();
   const updateProg = useUpdatePrognostico();
   const callIA = useServerFn(analisarValidacao);
+  const callIAOnline = useServerFn(analisarValidacaoOnline);
   const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
   const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
 
@@ -94,7 +99,7 @@ function Validacao() {
   const [contextos, setContextos] = useState<Record<string, string>>({});
   const [dadosEdit, setDadosEdit] = useState<Record<string, string>>({});
   const [iaResults, setIaResults] = useState<Record<string, IAResult>>({});
-  const [iaLoading, setIaLoading] = useState<Record<string, boolean>>({});
+  const [iaLoading, setIaLoading] = useState<Record<string, "local" | "online" | null>>({});
 
   const [fEsporte, setFEsporte] = useState("all");
   const [fLiga, setFLiga] = useState("all");
@@ -138,13 +143,13 @@ function Validacao() {
     return calcEdge(p.probabilidade_final, odd);
   };
 
-  const rodarIA = async (p: Prognostico) => {
-    setIaLoading((s) => ({ ...s, [p.id]: true }));
+  const rodarIA = async (p: Prognostico, modo: "local" | "online") => {
+    setIaLoading((s) => ({ ...s, [p.id]: modo }));
     try {
       const dados = dadosEdit[p.id] ?? getDadosTecnicos(p) ?? "";
       const oddAj = getOddAjustadaNum(p);
       const edgeAj = getEdgeAjustado(p);
-      const r = (await callIA({
+      const payload = {
         data: {
           prognostico: {
             data: p.data,
@@ -166,13 +171,15 @@ function Validacao() {
           dados_tecnicos: dados,
           contexto_adicional: contextos[p.id] ?? "",
         },
-      })) as IAResult;
+      };
+      const raw = modo === "online" ? await callIAOnline(payload) : await callIA(payload);
+      const r: IAResult = { ...(raw as Omit<IAResult, "modo">), modo };
       setIaResults((s) => ({ ...s, [p.id]: r }));
-      toast.success("Análise gerada pela IA");
+      toast.success(modo === "online" ? "Análise online concluída" : "Análise local gerada");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
-      setIaLoading((s) => ({ ...s, [p.id]: false }));
+      setIaLoading((s) => ({ ...s, [p.id]: null }));
     }
   };
 
@@ -217,6 +224,9 @@ function Validacao() {
         stake_ia_sugerida: ia?.stake_sugerida ?? null,
         data_analise_ia: ia ? new Date().toISOString() : null,
         prompt_versao: ia?.prompt_versao ?? null,
+        modo_ia: ia?.modo ?? null,
+        fontes_consultadas: ia?.fontes_consultadas ?? null,
+        buscas_realizadas: ia?.buscas_realizadas ?? null,
       });
       toast.success(`Decisão registrada: ${decisao}`);
     } catch (e) {
@@ -395,15 +405,47 @@ function Validacao() {
 
               {/* IA */}
               <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-2">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2 text-sm font-semibold text-primary">
                     <Wand2 className="h-4 w-4" />
                     Análise sugerida pela IA
+                    {ia?.modo === "online" && (
+                      <span className="flex items-center gap-1 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-primary">
+                        <Globe className="h-3 w-3" /> online
+                      </span>
+                    )}
+                    {ia?.modo === "local" && (
+                      <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                        local
+                      </span>
+                    )}
                   </div>
-                  <div className="flex gap-1">
-                    <Button size="sm" onClick={() => rodarIA(p)} disabled={iaLoading[p.id]}>
-                      {iaLoading[p.id] ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Wand2 className="h-3 w-3 mr-1" />}
-                      {ia ? "Regerar análise" : "Analisar com IA"}
+                  <div className="flex flex-wrap gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => rodarIA(p, "local")}
+                      disabled={!!iaLoading[p.id]}
+                    >
+                      {iaLoading[p.id] === "local" ? (
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                      ) : (
+                        <Brain className="h-3 w-3 mr-1" />
+                      )}
+                      IA local
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => rodarIA(p, "online")}
+                      disabled={!!iaLoading[p.id]}
+                      title="Usa Gemini com pesquisa online (Firecrawl) — consome créditos extras"
+                    >
+                      {iaLoading[p.id] === "online" ? (
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                      ) : (
+                        <Globe className="h-3 w-3 mr-1" />
+                      )}
+                      IA + Pesquisa
                     </Button>
                     {ia && (
                       <>
@@ -420,6 +462,11 @@ function Validacao() {
                     )}
                   </div>
                 </div>
+                {iaLoading[p.id] === "online" && (
+                  <p className="text-xs text-primary/80">
+                    Pesquisando notícias, lineups e contexto na web… pode levar 15-40s.
+                  </p>
+                )}
                 {ia ? (
                   <>
                     <div className="flex flex-wrap gap-2 text-xs">
@@ -437,13 +484,48 @@ function Validacao() {
                     <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded border border-border bg-background/60 p-2 font-mono text-xs">
                       {ia.parecer}
                     </pre>
+                    {ia.modo === "online" && (ia.fontes_consultadas?.length || ia.buscas_realizadas?.length) ? (
+                      <div className="rounded border border-border bg-background/60 p-2 space-y-1.5">
+                        {ia.buscas_realizadas && ia.buscas_realizadas.length > 0 && (
+                          <div>
+                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Buscas realizadas</div>
+                            <ul className="mt-0.5 space-y-0.5 text-xs">
+                              {ia.buscas_realizadas.map((q, i) => (
+                                <li key={i} className="text-muted-foreground">• {q}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {ia.fontes_consultadas && ia.fontes_consultadas.length > 0 && (
+                          <div>
+                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Fontes consultadas</div>
+                            <ul className="mt-0.5 space-y-0.5 text-xs">
+                              {ia.fontes_consultadas.map((f, i) => (
+                                <li key={i}>
+                                  <a
+                                    href={f.url}
+                                    target="_blank"
+                                    rel="noreferrer noopener"
+                                    className="inline-flex items-center gap-1 text-primary hover:underline"
+                                  >
+                                    <ExternalLink className="h-3 w-3" />
+                                    {f.titulo}
+                                  </a>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
                   </>
                 ) : (
                   <p className="text-xs text-muted-foreground">
-                    A IA analisa apenas os dados acima e o contexto colado por você. Nenhuma busca online é feita.
+                    <strong>IA local</strong>: analisa apenas os dados acima e o contexto colado. <strong>IA + Pesquisa</strong>: o modelo busca notícias, lineups, lesões e contexto na web automaticamente.
                   </p>
                 )}
               </div>
+
 
               {/* Parecer + decisão */}
               <div className="grid gap-3 md:grid-cols-3">

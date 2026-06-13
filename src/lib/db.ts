@@ -62,6 +62,9 @@ export interface Validacao {
   stake_ia_sugerida: number | null;
   data_analise_ia: string | null;
   prompt_versao: string | null;
+  modo_ia: string | null;
+  fontes_consultadas: { titulo: string; url: string }[] | null;
+  buscas_realizadas: string[] | null;
   created_at: string;
 }
 
