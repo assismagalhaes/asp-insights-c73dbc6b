@@ -150,9 +150,11 @@ export type Database = {
         Row: {
           canal_publicacao: string | null
           created_at: string
+          dados_tecnicos: string | null
           data: string
           data_publicacao: string | null
           edge: number
+          edge_ajustado: number | null
           esporte: string
           hora: string | null
           id: string
@@ -163,6 +165,7 @@ export type Database = {
           mandante: string
           mercado: string
           observacoes: string | null
+          odd_ajustada: number | null
           odd_ofertada: number
           odd_valor: number
           pick: string
@@ -180,9 +183,11 @@ export type Database = {
         Insert: {
           canal_publicacao?: string | null
           created_at?: string
+          dados_tecnicos?: string | null
           data?: string
           data_publicacao?: string | null
           edge: number
+          edge_ajustado?: number | null
           esporte: string
           hora?: string | null
           id?: string
@@ -193,6 +198,7 @@ export type Database = {
           mandante: string
           mercado: string
           observacoes?: string | null
+          odd_ajustada?: number | null
           odd_ofertada: number
           odd_valor: number
           pick: string
@@ -210,9 +216,11 @@ export type Database = {
         Update: {
           canal_publicacao?: string | null
           created_at?: string
+          dados_tecnicos?: string | null
           data?: string
           data_publicacao?: string | null
           edge?: number
+          edge_ajustado?: number | null
           esporte?: string
           hora?: string | null
           id?: string
@@ -223,6 +231,7 @@ export type Database = {
           mandante?: string
           mercado?: string
           observacoes?: string | null
+          odd_ajustada?: number | null
           odd_ofertada?: number
           odd_valor?: number
           pick?: string
@@ -304,33 +313,54 @@ export type Database = {
       validacoes: {
         Row: {
           comentarios_analista: string | null
+          contexto_adicional: string | null
           created_at: string
+          data_analise_ia: string | null
           decisao: string
+          decisao_ia_sugerida: string | null
           id: string
           justificativa: string | null
+          parecer_ia: string | null
+          parecer_validacao: string | null
           prognostico_id: string
+          prompt_versao: string | null
           riscos_identificados: string | null
           stake_confirmada: number | null
+          stake_ia_sugerida: number | null
         }
         Insert: {
           comentarios_analista?: string | null
+          contexto_adicional?: string | null
           created_at?: string
+          data_analise_ia?: string | null
           decisao: string
+          decisao_ia_sugerida?: string | null
           id?: string
           justificativa?: string | null
+          parecer_ia?: string | null
+          parecer_validacao?: string | null
           prognostico_id: string
+          prompt_versao?: string | null
           riscos_identificados?: string | null
           stake_confirmada?: number | null
+          stake_ia_sugerida?: number | null
         }
         Update: {
           comentarios_analista?: string | null
+          contexto_adicional?: string | null
           created_at?: string
+          data_analise_ia?: string | null
           decisao?: string
+          decisao_ia_sugerida?: string | null
           id?: string
           justificativa?: string | null
+          parecer_ia?: string | null
+          parecer_validacao?: string | null
           prognostico_id?: string
+          prompt_versao?: string | null
           riscos_identificados?: string | null
           stake_confirmada?: number | null
+          stake_ia_sugerida?: number | null
         }
         Relationships: [
           {
