@@ -104,6 +104,7 @@ function Prognosticos() {
   const sorted = useMemo(() => {
     const arr = prognosticos.filter((p) => {
       if (fEsporte !== "all" && p.esporte !== fEsporte) return false;
+      if (fLiga !== "all" && p.liga !== fLiga) return false;
       if (fMercado !== "all" && p.mercado !== fMercado) return false;
       if (fValidacao !== "all" && p.status_validacao !== fValidacao) return false;
       if (fResultado !== "all" && p.resultado !== fResultado) return false;
@@ -122,7 +123,7 @@ function Prognosticos() {
       return sortDir === "asc" ? cmp : -cmp;
     });
     return arr;
-  }, [prognosticos, sortKey, sortDir, fEsporte, fMercado, fValidacao, fResultado, fData]);
+  }, [prognosticos, sortKey, sortDir, fEsporte, fLiga, fMercado, fValidacao, fResultado, fData]);
 
   const allSelected = sorted.length > 0 && sorted.every((p) => selected.has(p.id));
   const someSelected = selected.size > 0 && !allSelected;
