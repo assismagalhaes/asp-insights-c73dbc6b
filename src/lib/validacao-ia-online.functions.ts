@@ -46,7 +46,7 @@ Política de pesquisa (use as ferramentas de forma proativa, mas eficiente):
 Regras analíticas:
 - Não reavaliar se a entrada é EV+ (já foi filtrada).
 - Avaliar coerência técnica, matchup, forma, projeções, linha, odd, risco e notícias encontradas.
-- Se houver risco estrutural relevante (lesão chave, lineup desfavorável, clima ruim para a tese), a decisão padrão deve ser PASS ou AGUARDAR NOTÍCIA.
+- Se houver risco estrutural relevante (lesão chave, lineup desfavorável, clima ruim para a tese), a decisão padrão deve ser PULAR.
 - Stake sugerida:
   - 0.5u = baixa confiança, cenário frágil.
   - 1.0u = confiança moderada, tese sólida.
@@ -88,7 +88,7 @@ Risco 3:
 O que faria mudar a decisão:
 
 G) Decisão final
-Decisão: CONFIRMA | CONFIRMA COM CAUTELA | PASS | AGUARDAR NOTÍCIA
+Decisão: CONFIRMA | PULAR
 Stake sugerida: 0.5u | 1.0u | 1.5u
 Justificativa final em 3 a 6 linhas:
 Condição de invalidação:`;
@@ -99,10 +99,8 @@ function parseDecisao(text: string): { decisao: string | null; stake: number | n
   const slice = fIdx >= 0 ? text.slice(fIdx) : text;
   const s = slice.toLowerCase();
   let decisao: string | null = null;
-  if (/\baguardar notícia|aguardar noticia\b/.test(s)) decisao = "AGUARDAR_NOTICIA";
-  else if (/\bconfirma com cautela\b/.test(s)) decisao = "CONFIRMA_CAUTELA";
-  else if (/\bpass\b/.test(s)) decisao = "PASS";
-  else if (/\bconfirma\b/.test(s)) decisao = "CONFIRMA";
+  if (/\bconfirma\b/.test(s) && !/\bconfirma com cautela\b/.test(s)) decisao = "CONFIRMA";
+  else if (/\bpular|pass|aguardar notícia|aguardar noticia|confirma com cautela\b/.test(s)) decisao = "PULAR";
   const stakeMatch = slice.match(/stake[^0-9]*([0-9]+(?:[.,][0-9]+)?)/i);
   const stake = stakeMatch ? Number(stakeMatch[1].replace(",", ".")) : null;
   return { decisao, stake };
