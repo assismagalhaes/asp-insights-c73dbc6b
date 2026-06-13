@@ -469,11 +469,27 @@ export function calcLucro(resultado: Resultado, stake: number, odd: number): num
 
 export function gerarTipTexto(
   p: Prognostico,
-  extras?: { justificativa?: string | null; riscos?: string | null },
+  extras?: {
+    parecer?: string | null;
+    dados_tecnicos?: string | null;
+    /** legados */
+    justificativa?: string | null;
+    riscos?: string | null;
+  },
 ): string {
   const linha = (p.linha ?? "").trim();
   const pickLower = (p.pick ?? "").toLowerCase();
   const linhaForaDoPick = linha && linha !== "-" && !pickLower.includes(linha.toLowerCase());
+  const oddFinal = getOddEfetiva(p);
+  const edgeFinal = getEdgeEfetivo(p);
+  const dados = (extras?.dados_tecnicos?.trim()) || getDadosTecnicos(p) || "—";
+  const parecer =
+    extras?.parecer?.trim() ||
+    [extras?.justificativa?.trim(), extras?.riscos?.trim() ? `Riscos: ${extras.riscos.trim()}` : ""]
+      .filter(Boolean)
+      .join("\n") ||
+    "—";
+
   return `🔥 ASP INSIGHTS - PICK CONFIRMADA
 
 🏆 Jogo: ${p.jogo}
@@ -482,17 +498,17 @@ export function gerarTipTexto(
 
 🎯 Mercado: ${p.mercado}
 ✅ Pick: ${p.pick}${linhaForaDoPick ? `\n📐 Linha: ${linha}` : ""}
-📈 Odd: ${p.odd_ofertada.toFixed(2)}
+📈 Odd: ${oddFinal.toFixed(2)}${p.odd_ajustada != null ? ` (original: ${p.odd_ofertada.toFixed(2)})` : ""}
 📉 Odd de Valor: ${p.odd_valor.toFixed(2)}
 📊 Probabilidade: ${p.probabilidade_final.toFixed(1)}%
-⚖️ Edge: ${p.edge.toFixed(2)}%
+⚖️ Edge: ${edgeFinal.toFixed(2)}%
 💰 Stake: ${p.stake}u
 
-🧠 Base técnica:
-${extras?.justificativa?.trim() || "—"}
+🧠 Dados técnicos:
+${dados}
 
-⚠️ Riscos:
-${extras?.riscos?.trim() || "—"}
+📋 Parecer:
+${parecer}
 
 📌 Status: ${p.status_validacao}`;
 }
