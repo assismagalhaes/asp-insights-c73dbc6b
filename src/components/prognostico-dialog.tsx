@@ -25,6 +25,7 @@ import {
   useUpdatePrognostico,
   useLigas,
   useUpsertLiga,
+  usePrognosticoDetail,
   type Prognostico,
   type PrognosticoInput,
   type Liga,
@@ -75,8 +76,10 @@ export function PrognosticoDialog({
   const update = useUpdatePrognostico();
   const upsertLiga = useUpsertLiga();
   const { data: ligas = [] } = useLigas();
+  const { data: detalhe } = usePrognosticoDetail(open && prognostico ? prognostico.id : null);
   const [form, setForm] = useState<PrognosticoInput>(empty);
   const [novaLiga, setNovaLiga] = useState("");
+  const loadingDetail = !!prognostico && !detalhe;
 
   const ligasDoEsporte = (ligas as Liga[])
     .filter((l) => l.esporte === form.esporte)
@@ -85,28 +88,29 @@ export function PrognosticoDialog({
 
   useEffect(() => {
     if (!open) return;
-    if (prognostico) {
+    const source = detalhe ?? prognostico;
+    if (source) {
       setForm({
-        data: prognostico.data,
-        hora: prognostico.hora,
-        esporte: prognostico.esporte,
-        liga: prognostico.liga,
-        jogo: prognostico.jogo,
-        mandante: prognostico.mandante,
-        visitante: prognostico.visitante,
-        mercado: prognostico.mercado,
-        pick: prognostico.pick,
-        linha: prognostico.linha,
-        odd_ofertada: prognostico.odd_ofertada,
-        odd_valor: prognostico.odd_valor,
-        probabilidade_final: prognostico.probabilidade_final,
-        edge: prognostico.edge,
-        stake: prognostico.stake,
-        status_validacao: prognostico.status_validacao,
-        observacoes: prognostico.observacoes,
-        dados_tecnicos: prognostico.dados_tecnicos,
-        odd_ajustada: prognostico.odd_ajustada,
-        edge_ajustado: prognostico.edge_ajustado,
+        data: source.data,
+        hora: source.hora,
+        esporte: source.esporte,
+        liga: source.liga,
+        jogo: source.jogo,
+        mandante: source.mandante,
+        visitante: source.visitante,
+        mercado: source.mercado,
+        pick: source.pick,
+        linha: source.linha,
+        odd_ofertada: source.odd_ofertada,
+        odd_valor: source.odd_valor,
+        probabilidade_final: source.probabilidade_final,
+        edge: source.edge,
+        stake: source.stake,
+        status_validacao: source.status_validacao,
+        observacoes: source.observacoes,
+        dados_tecnicos: source.dados_tecnicos,
+        odd_ajustada: source.odd_ajustada,
+        edge_ajustado: source.edge_ajustado,
       });
     } else if (template) {
       setForm({
@@ -134,7 +138,7 @@ export function PrognosticoDialog({
     } else {
       setForm({ ...empty, data: todayBR() });
     }
-  }, [prognostico, template, open]);
+  }, [prognostico, detalhe, template, open]);
 
   const set = <K extends keyof PrognosticoInput>(k: K, v: PrognosticoInput[K]) =>
     setForm((f) => {
@@ -302,8 +306,8 @@ export function PrognosticoDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={submit} disabled={create.isPending || update.isPending}>
-            {prognostico ? "Salvar" : "Criar"}
+          <Button onClick={submit} disabled={create.isPending || update.isPending || loadingDetail}>
+            {loadingDetail ? "Carregando..." : prognostico ? "Salvar" : "Criar"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -251,13 +251,47 @@ const mapPrognostico = (r: Record<string, unknown>): Prognostico => ({
 });
 
 // ===== Prognósticos =====
+const PROGNOSTICO_LIST_COLUMNS = `
+  id,
+  data,
+  hora,
+  esporte,
+  liga,
+  jogo,
+  mandante,
+  visitante,
+  mercado,
+  pick,
+  linha,
+  odd_ofertada,
+  odd_ajustada,
+  odd_valor,
+  probabilidade_final,
+  edge,
+  edge_ajustado,
+  stake,
+  status_validacao,
+  status_publicacao,
+  resultado,
+  lucro_prejuizo,
+  data_publicacao,
+  publicado_em,
+  publicado_por,
+  canal_publicacao,
+  created_at,
+  updated_at,
+  resultados(placar_final, created_at)
+`;
+
 export function usePrognosticos() {
   return useQuery({
     queryKey: ["prognosticos"],
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("prognosticos")
-        .select("*, resultados(placar_final, created_at)")
+        .select(PROGNOSTICO_LIST_COLUMNS)
         .order("data", { ascending: false })
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -313,6 +347,31 @@ export function useCreatePrognostico() {
   });
 }
 
+export async function fetchPrognosticoDetail(id: string): Promise<Prognostico> {
+  const { data, error } = await supabase
+    .from("prognosticos")
+    .select("*, resultados(placar_final, created_at)")
+    .eq("id", id)
+    .single();
+  if (error) throw error;
+  const r = data as Record<string, unknown>;
+  const rs = (r.resultados as Array<{ placar_final: string | null; created_at: string }> | null) ?? [];
+  const last = rs.length
+    ? [...rs].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0]
+    : null;
+  return { ...mapPrognostico(r), placar_final: last?.placar_final ?? null };
+}
+
+export function usePrognosticoDetail(id: string | null | undefined) {
+  return useQuery({
+    queryKey: ["prognostico-detail", id],
+    enabled: !!id,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    queryFn: () => fetchPrognosticoDetail(id!),
+  });
+}
+
 export function useUpdatePrognostico() {
   const qc = useQueryClient();
   return useMutation({
@@ -324,6 +383,7 @@ export function useUpdatePrognostico() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["prognosticos"] });
+      qc.invalidateQueries({ queryKey: ["prognostico-detail"] });
       qc.invalidateQueries({ queryKey: ["resultados-financeiros"] });
       qc.invalidateQueries({ queryKey: ["bankroll-calculado"] });
     },
@@ -339,6 +399,7 @@ export function useDeletePrognostico() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["prognosticos"] });
+      qc.invalidateQueries({ queryKey: ["prognostico-detail"] });
       qc.invalidateQueries({ queryKey: ["resultados-financeiros"] });
       qc.invalidateQueries({ queryKey: ["bankroll-calculado"] });
     },
@@ -383,6 +444,7 @@ export function useCreateValidacao() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["prognosticos"] });
+      qc.invalidateQueries({ queryKey: ["prognostico-detail"] });
       qc.invalidateQueries({ queryKey: ["validacoes"] });
       qc.invalidateQueries({ queryKey: ["resultados-financeiros"] });
       qc.invalidateQueries({ queryKey: ["bankroll-calculado"] });
@@ -458,6 +520,8 @@ export function useAnalisesIaByPrognostico(prognosticoId: string | null | undefi
   return useQuery({
     queryKey: ["analises-ia", prognosticoId],
     enabled: !!prognosticoId,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const { data, error } = await (supabase as unknown as {
         from: (table: "analises_ia") => {
@@ -484,6 +548,8 @@ export function useAnalisesIaByPrognostico(prognosticoId: string | null | undefi
 export function useFeedbackIaResultados() {
   return useQuery({
     queryKey: ["aprendizado-ia", "feedback"],
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const { data, error } = await (supabase as unknown as {
         from: (table: "feedback_ia_resultados") => {
@@ -496,7 +562,7 @@ export function useFeedbackIaResultados() {
         };
       })
         .from("feedback_ia_resultados")
-        .select("*")
+        .select("id, prognostico_id, analise_ia_id, modo_ia, decisao_ia_sugerida, decisao_humana_final, resultado_real, lucro_prejuizo, lucro_unidades, esporte, liga, mercado, pick, linha, odd_usada, probabilidade_final, edge_usado, tags_risco, acertou_ia, acertou_humano, divergencia_ia_humano, created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []).map(mapFeedbackIa);
@@ -507,6 +573,8 @@ export function useFeedbackIaResultados() {
 export function useResumosAprendizadoIa() {
   return useQuery({
     queryKey: ["aprendizado-ia", "resumos"],
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const { data, error } = await (supabase as unknown as {
         from: (table: "resumos_aprendizado_ia") => {
@@ -519,7 +587,7 @@ export function useResumosAprendizadoIa() {
         };
       })
         .from("resumos_aprendizado_ia")
-        .select("*")
+        .select("id, periodo_inicio, periodo_fim, total_analises, total_green, total_red, win_rate, roi, yield, resumo_geral, created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []).map(mapResumoAprendizado);
@@ -932,6 +1000,8 @@ export function useValidacaoByPrognostico(prognosticoId: string | null | undefin
   return useQuery({
     queryKey: ["validacao", prognosticoId],
     enabled: !!prognosticoId,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("validacoes")
@@ -969,7 +1039,10 @@ export function usePublicarPrognostico() {
         .eq("id", input.id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["prognosticos"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["prognosticos"] });
+      qc.invalidateQueries({ queryKey: ["prognostico-detail"] });
+    },
   });
 }
 
@@ -980,6 +1053,9 @@ export function useCancelarPrognostico() {
       const { error } = await supabase.from("prognosticos").update({ status_publicacao: "CANCELADO" }).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["prognosticos"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["prognosticos"] });
+      qc.invalidateQueries({ queryKey: ["prognostico-detail"] });
+    },
   });
 }

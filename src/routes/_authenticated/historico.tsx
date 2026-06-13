@@ -15,6 +15,8 @@ import { PeriodFilter } from "@/components/period-filter";
 import { calculatePerformanceStats, rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
 import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
 import { DadosTecnicosViewer } from "@/components/dados-tecnicos-viewer";
+import { PaginationControls } from "@/components/pagination-controls";
+import { useClientPagination } from "@/lib/pagination";
 
 export const Route = createFileRoute("/_authenticated/historico")({
   head: () => ({ meta: [{ title: "Histórico — ASP Insights" }] }),
@@ -70,6 +72,8 @@ function Historico() {
   );
 
   const lucro = stats.lucroU;
+  const pagination = useClientPagination(rows);
+  const visibleRows = pagination.paginatedRows;
 
   return (
     <div className="space-y-6">
@@ -169,7 +173,7 @@ function Historico() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((p) => (
+              {visibleRows.map((p) => (
                 <tr key={p.id} className="border-t border-border hover:bg-muted/30">
                   <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatBR(p.data)}</td>
                   <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{p.hora ? formatHora(p.hora) : "—"}</td>
@@ -201,6 +205,14 @@ function Historico() {
             </tbody>
           </table>
         </div>
+        <PaginationControls
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalPages={pagination.totalPages}
+          totalRows={pagination.totalRows}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+        />
       </div>
     </div>
   );

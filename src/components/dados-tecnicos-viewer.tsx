@@ -14,6 +14,7 @@ import {
   getEdgeEfetivo,
   getOddEfetiva,
   useAnalisesIaByPrognostico,
+  usePrognosticoDetail,
   useValidacaoByPrognostico,
   type AnaliseIa,
   type Prognostico,
@@ -29,8 +30,10 @@ interface Props {
 
 export function DadosTecnicosViewer({ prognostico, variant = "icon", className }: Props) {
   const [open, setOpen] = useState(false);
+  const { data: detalhe } = usePrognosticoDetail(open ? prognostico.id : null);
   const { data: validacao } = useValidacaoByPrognostico(open ? prognostico.id : null);
   const { data: analises = [] } = useAnalisesIaByPrognostico(open ? prognostico.id : null);
+  const p = detalhe ?? prognostico;
   const fallback = validacao?.parecer_ia
     ? ({
         modo_ia: validacao.modo_ia,
@@ -45,10 +48,10 @@ export function DadosTecnicosViewer({ prognostico, variant = "icon", className }
     : null;
   const local = analises.find((a) => a.modo_ia === "local") ?? (fallback?.modo_ia === "local" ? fallback : undefined);
   const online = analises.find((a) => a.modo_ia === "online") ?? (fallback?.modo_ia === "online" ? fallback : undefined);
-  const contexto = [getDadosTecnicos(prognostico), validacao?.contexto_adicional].filter(Boolean).join("\n\n");
-  const oddEfetiva = getOddEfetiva(prognostico);
-  const edgeEfetivo = getEdgeEfetivo(prognostico);
-  const lucroU = prognostico.resultado !== "PENDENTE" ? lucroUnidades(prognostico) : null;
+  const contexto = [getDadosTecnicos(p), validacao?.contexto_adicional].filter(Boolean).join("\n\n");
+  const oddEfetiva = getOddEfetiva(p);
+  const edgeEfetivo = getEdgeEfetivo(p);
+  const lucroU = p.resultado !== "PENDENTE" ? lucroUnidades(p) : null;
 
   return (
     <>
@@ -67,7 +70,7 @@ export function DadosTecnicosViewer({ prognostico, variant = "icon", className }
           <DialogHeader>
             <DialogTitle>Ver Análise Completa</DialogTitle>
             <DialogDescription>
-              {prognostico.jogo} - {prognostico.mercado} / {prognostico.pick}
+              {p.jogo} - {p.mercado} / {p.pick}
             </DialogDescription>
           </DialogHeader>
 
@@ -81,13 +84,13 @@ export function DadosTecnicosViewer({ prognostico, variant = "icon", className }
 
             <TabsContent value="contexto" className="mt-3 space-y-3">
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                <KV label="Mercado" value={prognostico.mercado} />
-                <KV label="Pick" value={prognostico.pick} />
-                <KV label="Linha" value={prognostico.linha || "-"} />
-                <KV label="Odd original" value={prognostico.odd_ofertada.toFixed(2)} />
-                <KV label="Odd ajustada" value={prognostico.odd_ajustada?.toFixed(2) || "-"} />
-                <KV label="Odd de valor" value={prognostico.odd_valor.toFixed(2)} />
-                <KV label="Probabilidade" value={`${prognostico.probabilidade_final.toFixed(2)}%`} />
+                <KV label="Mercado" value={p.mercado} />
+                <KV label="Pick" value={p.pick} />
+                <KV label="Linha" value={p.linha || "-"} />
+                <KV label="Odd original" value={p.odd_ofertada.toFixed(2)} />
+                <KV label="Odd ajustada" value={p.odd_ajustada?.toFixed(2) || "-"} />
+                <KV label="Odd de valor" value={p.odd_valor.toFixed(2)} />
+                <KV label="Probabilidade" value={`${p.probabilidade_final.toFixed(2)}%`} />
                 <KV label="Edge" value={`${edgeEfetivo.toFixed(2)}%`} />
               </div>
               <Section title="Contexto da Análise" text={contexto || "Nenhum contexto informado."} />
@@ -103,11 +106,11 @@ export function DadosTecnicosViewer({ prognostico, variant = "icon", className }
 
             <TabsContent value="decisao" className="mt-3 space-y-3">
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                <KV label="Decisão humana" value={validacao?.decisao || prognostico.status_validacao} />
+                <KV label="Decisão humana" value={validacao?.decisao || p.status_validacao} />
                 <KV label="Stake final" value={validacao?.stake_confirmada != null ? `${validacao.stake_confirmada}u` : "-"} />
-                <KV label="Resultado" value={prognostico.resultado} />
-                <KV label="Placar" value={prognostico.placar_final || "-"} />
-                <KV label="Lucro/prejuízo R$" value={prognostico.lucro_prejuizo != null ? prognostico.lucro_prejuizo.toFixed(2) : "-"} />
+                <KV label="Resultado" value={p.resultado} />
+                <KV label="Placar" value={p.placar_final || "-"} />
+                <KV label="Lucro/prejuízo R$" value={p.lucro_prejuizo != null ? p.lucro_prejuizo.toFixed(2) : "-"} />
                 <KV label="Lucro/prejuízo u" value={lucroU != null ? `${lucroU >= 0 ? "+" : ""}${lucroU.toFixed(2)}u` : "-"} />
                 <KV label="Odd usada" value={oddEfetiva.toFixed(2)} />
               </div>

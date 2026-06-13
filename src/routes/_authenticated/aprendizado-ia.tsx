@@ -19,6 +19,8 @@ import {
   type FeedbackIaResultado,
 } from "@/lib/db";
 import { calculateLearningPerformanceStats } from "@/lib/metrics";
+import { PaginationControls } from "@/components/pagination-controls";
+import { useClientPagination } from "@/lib/pagination";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/aprendizado-ia")({
@@ -70,6 +72,8 @@ function AprendizadoIa() {
   const tagsRed = topTags(filtered.filter((r) => r.resultado_real === "RED"));
   const tagsGreen = topTags(filtered.filter((r) => r.resultado_real === "GREEN"));
   const latestResumo = resumos[0];
+  const pagination = useClientPagination(filtered);
+  const visibleFeedback = pagination.paginatedRows;
 
   const recalcular = async () => {
     const geral = metrics;
@@ -156,6 +160,90 @@ function AprendizadoIa() {
         <Tags title="Tags de risco associadas a RED" tags={tagsRed} />
         <Tags title="Padrões associados a GREEN" tags={tagsGreen} />
       </div>
+      <FeedbackTable
+        rows={visibleFeedback}
+        page={pagination.page}
+        pageSize={pagination.pageSize}
+        totalPages={pagination.totalPages}
+        totalRows={pagination.totalRows}
+        onPageChange={pagination.setPage}
+        onPageSizeChange={pagination.setPageSize}
+      />
+    </div>
+  );
+}
+
+function FeedbackTable({
+  rows,
+  page,
+  pageSize,
+  totalPages,
+  totalRows,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  rows: FeedbackIaResultado[];
+  page: number;
+  pageSize: 25 | 50 | 100;
+  totalPages: number;
+  totalRows: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: 25 | 50 | 100) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-card overflow-hidden">
+      <div className="border-b border-border px-3 py-2 text-sm font-semibold">Amostras filtradas</div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
+            <tr>
+              <th className="px-3 py-2 text-left">Data</th>
+              <th className="px-3 py-2 text-left">Modo</th>
+              <th className="px-3 py-2 text-left">Esporte</th>
+              <th className="px-3 py-2 text-left">Liga</th>
+              <th className="px-3 py-2 text-left">Mercado</th>
+              <th className="px-3 py-2 text-left">Pick</th>
+              <th className="px-3 py-2 text-left">Decisao IA</th>
+              <th className="px-3 py-2 text-left">Decisao humana</th>
+              <th className="px-3 py-2 text-left">Resultado</th>
+              <th className="px-3 py-2 text-right font-mono">Lucro (u)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} className="border-t border-border hover:bg-muted/30">
+                <td className="px-3 py-2 font-mono text-xs">{r.created_at.slice(0, 10)}</td>
+                <td className="px-3 py-2">{r.modo_ia ?? "-"}</td>
+                <td className="px-3 py-2">{r.esporte ?? "-"}</td>
+                <td className="px-3 py-2 text-muted-foreground">{r.liga ?? "-"}</td>
+                <td className="px-3 py-2">{r.mercado ?? "-"}</td>
+                <td className="px-3 py-2">{r.pick ?? "-"}</td>
+                <td className="px-3 py-2">{r.decisao_ia_sugerida ?? "-"}</td>
+                <td className="px-3 py-2">{r.decisao_humana_final ?? "-"}</td>
+                <td className="px-3 py-2">{r.resultado_real ?? "-"}</td>
+                <td className={`px-3 py-2 text-right font-mono ${(r.lucro_unidades ?? 0) >= 0 ? "text-success" : "text-destructive"}`}>
+                  {r.lucro_unidades != null ? `${r.lucro_unidades >= 0 ? "+" : ""}${r.lucro_unidades.toFixed(2)}` : "-"}
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={10} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  Nenhuma amostra encontrada para os filtros selecionados.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <PaginationControls
+        page={page}
+        pageSize={pageSize}
+        totalPages={totalPages}
+        totalRows={totalRows}
+        onPageChange={onPageChange}
+        onPageSizeChange={onPageSizeChange}
+      />
     </div>
   );
 }
