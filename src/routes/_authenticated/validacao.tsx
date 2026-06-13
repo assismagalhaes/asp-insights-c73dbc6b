@@ -70,6 +70,7 @@ interface IAResult {
   modo: "local" | "online";
   fontes_consultadas?: { titulo: string; url: string }[];
   buscas_realizadas?: string[];
+  alertas_online?: string[];
 }
 
 function autoCheck(p: Prognostico, edgeFinal: number) {
@@ -78,6 +79,12 @@ function autoCheck(p: Prognostico, edgeFinal: number) {
   if (p.probabilidade_final < 55) return { auto: "ALERTA" as const, reason: "Probabilidade inferior a 55%" };
   if (p.probabilidade_final > 60) return { auto: "DESTAQUE" as const, reason: "Probabilidade superior a 60%" };
   return null;
+}
+
+function extractParecerSection(text: string, heading: string) {
+  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`${escaped}\\n([\\s\\S]*?)(?=\\n[A-G]\\) |$)`, "i");
+  return text.match(re)?.[1]?.trim() ?? "";
 }
 
 function Validacao() {
@@ -409,7 +416,7 @@ function Validacao() {
                     Análise sugerida pela IA
                     {ia?.modo === "online" && (
                       <span className="flex items-center gap-1 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-primary">
-                        <Globe className="h-3 w-3" /> online
+                        <Globe className="h-3 w-3" /> IA Online
                       </span>
                     )}
                     {ia?.modo === "local" && (
@@ -462,7 +469,7 @@ function Validacao() {
                 </div>
                 {iaLoading[p.id] === "online" && (
                   <p className="text-xs text-primary/80">
-                    Pesquisando notícias, lineups e contexto na web… pode levar 15-40s.
+                    Pesquisando checklist por esporte, fontes recentes e riscos que podem quebrar a tese... pode levar 15-40s.
                   </p>
                 )}
                 {ia ? (
@@ -479,6 +486,39 @@ function Validacao() {
                         </span>
                       )}
                     </div>
+                    {ia.modo === "online" && ia.alertas_online && ia.alertas_online.length > 0 && (
+                      <div className="rounded border border-warning/40 bg-warning/10 p-2">
+                        <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-warning">
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                          Alertas online
+                        </div>
+                        <ul className="space-y-0.5 text-xs text-foreground">
+                          {ia.alertas_online.map((alerta, i) => (
+                            <li key={i}>- {alerta}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {ia.modo === "online" && (
+                      <div className="grid gap-2 lg:grid-cols-3">
+                        {[
+                          ["Checklist online", extractParecerSection(ia.parecer, "B) Checklist online")],
+                          [
+                            "Informações não encontradas",
+                            extractParecerSection(ia.parecer, "D) Informacoes criticas nao encontradas") ||
+                              extractParecerSection(ia.parecer, "D) Informações críticas não encontradas"),
+                          ],
+                          ["Riscos principais", extractParecerSection(ia.parecer, "F) Riscos principais")],
+                        ].map(([titulo, conteudo]) => (
+                          <div key={titulo} className="rounded border border-border bg-background/60 p-2">
+                            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{titulo}</div>
+                            <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap font-mono text-[11px] text-foreground/85">
+                              {conteudo || "Sem item destacado no parecer."}
+                            </pre>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded border border-border bg-background/60 p-2 font-mono text-xs">
                       {ia.parecer}
                     </pre>
