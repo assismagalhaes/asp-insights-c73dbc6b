@@ -1,17 +1,24 @@
-import { getOddEfetiva, type FeedbackIaResultado, type Prognostico, type Resultado, type ResultadoFinanceiro } from "./db";
+import type { Prognostico, Resultado, Configuracao } from "./db";
 
+// Picks consideradas "resolvidas" para win-rate (somente GREEN/RED)
 export const PICK_RESOLVIDA: Resultado[] = ["GREEN", "RED"];
 export const PICK_GREEN: Resultado[] = ["GREEN"];
 export const PICK_RED: Resultado[] = ["RED"];
 
-/** Lucro/prejuizo em unidades para um prognostico individual. */
-export function lucroUnidades(p: Pick<Prognostico, "resultado" | "stake" | "odd_ofertada" | "odd_ajustada">): number {
-  const { resultado, stake } = p;
-  const odd = getOddEfetiva(p);
+/** Lucro/prejuízo em unidades (independe do valor da unidade) */
+export function lucroUnidades(p: Pick<Prognostico, "resultado" | "stake" | "odd_ofertada">): number {
+  const { resultado, stake, odd_ofertada: odd } = p;
   switch (resultado) {
     case "GREEN":
       return stake * (odd - 1);
     case "RED":
+      return -stake;
+    // Resultados legados convertidos para o modelo simples
+    case "HALF GREEN":
+      return stake * (odd - 1);
+    case "HALF RED":
+    case "PUSH":
+    case "VOID":
       return -stake;
     default:
       return 0;
@@ -19,7 +26,7 @@ export function lucroUnidades(p: Pick<Prognostico, "resultado" | "stake" | "odd_
 }
 
 export function lucroReais(
-  p: Pick<Prognostico, "resultado" | "stake" | "odd_ofertada" | "odd_ajustada">,
+  p: Pick<Prognostico, "resultado" | "stake" | "odd_ofertada">,
   valorUnidade: number,
 ): number {
   return lucroUnidades(p) * valorUnidade;
@@ -29,171 +36,51 @@ export interface Metrics {
   greens: number;
   reds: number;
   resolvidas: number;
-  totalApostadoU: number;
+  totalApostadoU: number; // soma stakes das resolvidas
   totalApostadoR$: number;
   lucroU: number;
   lucroReais: number;
-  roi: number;
-  yield: number;
-  winRate: number;
+  roi: number; // %
+  yield: number; // %
+  winRate: number; // %
   bancaInicial: number;
   bancaAtual: number;
-  drawdown: number;
+  drawdown: number; // % (a partir do timeline)
 }
 
-export interface TimelinePoint {
-  data: string;
-  banca: number;
-  lucroAcum: number;
-  roi: number;
-}
-
-export interface PerformanceFilters {
-  ini?: string | null;
-  fim?: string | null;
-  esporte?: string;
-  liga?: string;
-  mercado?: string;
-  resultado?: Resultado | "all";
-  decisaoHumana?: "CONFIRMA" | "PULAR" | "PENDENTE" | "all";
-  modoIa?: "local" | "online" | "all";
-}
-
-export interface PerformanceBucket {
-  nome: string;
-  greens: number;
-  reds: number;
-  resolvidas: number;
-  lucroU: number;
-  lucroReais: number;
-  totalApostadoU: number;
-  totalApostadoR$: number;
-  roi: number;
-  yield: number;
-  winRate: number;
-}
-
-export interface MonthlyPerformance {
-  mes: string;
-  greens: number;
-  reds: number;
-  lucroU: number;
-  lucroReais: number;
-  roi: number;
-}
-
-export interface PerformanceStats extends Metrics {
-  filtrados: ResultadoFinanceiro[];
-  evolucaoBanca: TimelinePoint[];
-  evolucaoRoi: TimelinePoint[];
-  resultadoPorEsporte: PerformanceBucket[];
-  resultadoPorLiga: PerformanceBucket[];
-  resultadoPorMercado: PerformanceBucket[];
-  resultadoPorMes: MonthlyPerformance[];
-  roiPorEsporte: PerformanceBucket[];
-  roiPorLiga: PerformanceBucket[];
-  roiPorMercado: PerformanceBucket[];
-}
-
-function applyPerformanceFilters(resultados: ResultadoFinanceiro[], filters: PerformanceFilters = {}) {
-  return resultados.filter((p) => {
-    if (!dateInRange(p.data, filters.ini, filters.fim)) return false;
-    if (filters.esporte && filters.esporte !== "all" && p.esporte !== filters.esporte) return false;
-    if (filters.liga && filters.liga !== "all" && p.liga !== filters.liga) return false;
-    if (filters.mercado && filters.mercado !== "all" && p.mercado !== filters.mercado) return false;
-    if (filters.resultado && filters.resultado !== "all" && p.resultado !== filters.resultado) return false;
-    if (filters.decisaoHumana && filters.decisaoHumana !== "all" && p.decisao_final !== filters.decisaoHumana && p.status_validacao !== filters.decisaoHumana) return false;
-    return true;
-  });
-}
-
-function bucketFromRows(nome: string, rows: ResultadoFinanceiro[]): PerformanceBucket {
-  const greens = rows.filter((p) => p.resultado === "GREEN").length;
-  const reds = rows.filter((p) => p.resultado === "RED").length;
-  const totalApostadoU = rows.reduce((s, p) => s + p.stake, 0);
-  const totalApostadoR$ = rows.reduce((s, p) => s + p.stake * p.valor_unidade, 0);
-  const lucroU = rows.reduce((s, p) => s + p.lucro_unidades, 0);
-  const lucroReais = rows.reduce((s, p) => s + p.lucro_reais, 0);
-  const resolvidas = greens + reds;
-  const roi = totalApostadoR$ > 0 ? (lucroReais / totalApostadoR$) * 100 : 0;
-  const winRate = resolvidas ? (greens / resolvidas) * 100 : 0;
-  return {
-    nome,
-    greens,
-    reds,
-    resolvidas,
-    lucroU,
-    lucroReais,
-    totalApostadoU,
-    totalApostadoR$,
-    roi,
-    yield: roi,
-    winRate,
-  };
-}
-
-function groupPerformance(resultados: ResultadoFinanceiro[], key: "esporte" | "liga" | "mercado"): PerformanceBucket[] {
-  const map = new Map<string, ResultadoFinanceiro[]>();
-  for (const row of resultados) {
-    const name = row[key] || "-";
-    map.set(name, [...(map.get(name) ?? []), row]);
-  }
-  return Array.from(map.entries())
-    .map(([nome, rows]) => bucketFromRows(nome, rows))
-    .sort((a, b) => Math.abs(b.lucroU) - Math.abs(a.lucroU));
-}
-
-function monthlyPerformance(resultados: ResultadoFinanceiro[]): MonthlyPerformance[] {
-  const map = new Map<string, ResultadoFinanceiro[]>();
-  for (const row of resultados) {
-    const mes = row.data_resultado.slice(0, 7);
-    map.set(mes, [...(map.get(mes) ?? []), row]);
-  }
-  return Array.from(map.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([mes, rows]) => {
-      const bucket = bucketFromRows(mes, rows);
-      return {
-        mes,
-        greens: bucket.greens,
-        reds: bucket.reds,
-        lucroU: Number(bucket.lucroU.toFixed(2)),
-        lucroReais: Number(bucket.lucroReais.toFixed(2)),
-        roi: Number(bucket.roi.toFixed(2)),
-      };
-    });
-}
-
-export function calculatePerformanceStats(
-  resultados: ResultadoFinanceiro[],
+/** Calcula métricas centralizadas. Considera apenas prognósticos CONFIRMA. */
+export function computeMetrics(
+  prognosticos: Prognostico[],
   cfg: { banca_inicial: number; valor_unidade_padrao: number } | null | undefined,
-  filters: PerformanceFilters = {},
-): PerformanceStats {
-  const filtrados = applyPerformanceFilters(resultados, filters);
+): Metrics {
   const bancaInicial = cfg?.banca_inicial ?? 0;
-  const resolvidas = filtrados.filter((p) => PICK_RESOLVIDA.includes(p.resultado));
-  const greens = filtrados.filter((p) => PICK_GREEN.includes(p.resultado)).length;
-  const reds = filtrados.filter((p) => PICK_RED.includes(p.resultado)).length;
+  const valorUnidade = cfg?.valor_unidade_padrao ?? 0;
+
+  const confirma = prognosticos.filter((p) => p.status_validacao === "CONFIRMA");
+  const resolvidas = confirma.filter((p) => PICK_RESOLVIDA.includes(p.resultado));
+
+  const greens = confirma.filter((p) => PICK_GREEN.includes(p.resultado)).length;
+  const reds = confirma.filter((p) => PICK_RED.includes(p.resultado)).length;
+
   const totalApostadoU = resolvidas.reduce((s, p) => s + p.stake, 0);
-  const totalApostadoR$ = resolvidas.reduce((s, p) => s + p.stake * p.valor_unidade, 0);
-  const lucroU = filtrados.reduce((s, p) => s + p.lucro_unidades, 0);
-  const lucroR = filtrados.reduce((s, p) => s + p.lucro_reais, 0);
+  const totalApostadoR$ = totalApostadoU * valorUnidade;
+
+  const lucroU = confirma.reduce((s, p) => s + lucroUnidades(p), 0);
+  const lucroR = lucroU * valorUnidade;
+
   const bancaAtual = bancaInicial + lucroR;
   const roi = totalApostadoR$ > 0 ? (lucroR / totalApostadoR$) * 100 : 0;
-  const yld = roi;
+  const yld = roi; // mesma fórmula (lucro / stake)
   const winRate = resolvidas.length ? (greens / resolvidas.length) * 100 : 0;
 
-  const timeline = bankrollTimelineFromFinanceiros(filtrados, bancaInicial);
+  // Drawdown a partir do timeline ordenado por data
+  const timeline = bankrollTimeline(confirma, bancaInicial, valorUnidade);
   let pico = bancaInicial;
   let dd = 0;
   for (const t of timeline) {
     pico = Math.max(pico, t.banca);
     if (pico > 0) dd = Math.max(dd, ((pico - t.banca) / pico) * 100);
   }
-
-  const resultadoPorEsporte = groupPerformance(filtrados, "esporte");
-  const resultadoPorLiga = groupPerformance(filtrados, "liga");
-  const resultadoPorMercado = groupPerformance(filtrados, "mercado");
 
   return {
     greens,
@@ -209,83 +96,34 @@ export function calculatePerformanceStats(
     bancaInicial,
     bancaAtual,
     drawdown: dd,
-    filtrados,
-    evolucaoBanca: timeline,
-    evolucaoRoi: timeline,
-    resultadoPorEsporte,
-    resultadoPorLiga,
-    resultadoPorMercado,
-    resultadoPorMes: monthlyPerformance(filtrados),
-    roiPorEsporte: resultadoPorEsporte,
-    roiPorLiga: resultadoPorLiga,
-    roiPorMercado: resultadoPorMercado,
   };
 }
 
-/** Compatibilidade: use calculatePerformanceStats em novas telas. */
-export function computeFinancialMetrics(
-  resultados: ResultadoFinanceiro[],
-  cfg: { banca_inicial: number; valor_unidade_padrao: number } | null | undefined,
-): Metrics {
-  return calculatePerformanceStats(resultados, cfg);
-}
-
-export function calculateLearningPerformanceStats(rows: FeedbackIaResultado[], filters: PerformanceFilters = {}) {
-  const filtered = rows.filter((r) => {
-    const d = r.created_at.slice(0, 10);
-    if (!dateInRange(d, filters.ini, filters.fim)) return false;
-    if (filters.esporte && filters.esporte !== "all" && r.esporte !== filters.esporte) return false;
-    if (filters.liga && filters.liga !== "all" && r.liga !== filters.liga) return false;
-    if (filters.mercado && filters.mercado !== "all" && r.mercado !== filters.mercado) return false;
-    if (filters.modoIa && filters.modoIa !== "all" && r.modo_ia !== filters.modoIa) return false;
-    if (filters.resultado && filters.resultado !== "all" && r.resultado_real !== filters.resultado) return false;
-    if (filters.decisaoHumana && filters.decisaoHumana !== "all" && r.decisao_humana_final !== filters.decisaoHumana) return false;
-    return true;
-  });
-  const greens = filtered.filter((r) => r.resultado_real === "GREEN").length;
-  const reds = filtered.filter((r) => r.resultado_real === "RED").length;
-  const withIa = filtered.filter((r) => r.acertou_ia != null);
-  const acertoIa = withIa.length ? (withIa.filter((r) => r.acertou_ia).length / withIa.length) * 100 : 0;
-  const lucroU = filtered.reduce((s, r) => s + Number(r.lucro_unidades ?? 0), 0);
-  const totalApostadoU = filtered.reduce((s, r) => s + Math.abs(Number(r.lucro_unidades ?? 0)), 0);
-  const roi = totalApostadoU > 0 ? (lucroU / totalApostadoU) * 100 : 0;
-  const lucroIaConfirma = filtered.filter((r) => r.decisao_ia_sugerida === "CONFIRMA").reduce((s, r) => s + Number(r.lucro_unidades ?? 0), 0);
-  const lucroDivergente = filtered.filter((r) => r.divergencia_ia_humano).reduce((s, r) => s + Number(r.lucro_unidades ?? 0), 0);
-  return { filtered, greens, reds, totalResolvidos: greens + reds, acertoIa, lucroU, totalApostadoU, roi, yield: roi, lucroIaConfirma, lucroDivergente };
-}
-
-/** Evolucao da banca por data de resultado a partir da view financeira. */
-export function bankrollTimelineFromFinanceiros(
-  resultados: ResultadoFinanceiro[],
+/** Evolução da banca dia a dia (somente CONFIRMA). */
+export function bankrollTimeline(
+  prognosticos: Prognostico[],
   bancaInicial: number,
-): TimelinePoint[] {
-  const byDate = new Map<string, { lucro: number; apostado: number }>();
-  for (const p of resultados) {
-    const cur = byDate.get(p.data_resultado) ?? { lucro: 0, apostado: 0 };
-    cur.lucro += p.lucro_reais;
-    cur.apostado += p.stake * p.valor_unidade;
-    byDate.set(p.data_resultado, cur);
+  valorUnidade: number,
+): { data: string; banca: number; lucroAcum: number; roi: number }[] {
+  const confirma = prognosticos.filter((p) => p.status_validacao === "CONFIRMA");
+  // agrupa por data
+  const byDate = new Map<string, number>();
+  for (const p of confirma) {
+    byDate.set(p.data, (byDate.get(p.data) ?? 0) + lucroUnidades(p) * valorUnidade);
   }
   const datas = Array.from(byDate.keys()).sort();
   let banca = bancaInicial;
   let lucroAcum = 0;
-  let apostadoAcum = 0;
   return datas.map((d) => {
-    const delta = byDate.get(d) ?? { lucro: 0, apostado: 0 };
-    banca += delta.lucro;
-    lucroAcum += delta.lucro;
-    apostadoAcum += delta.apostado;
-    const roi = apostadoAcum ? (lucroAcum / apostadoAcum) * 100 : 0;
-    return {
-      data: d,
-      banca: Number(banca.toFixed(2)),
-      lucroAcum: Number(lucroAcum.toFixed(2)),
-      roi: Number(roi.toFixed(2)),
-    };
+    const delta = byDate.get(d) ?? 0;
+    banca += delta;
+    lucroAcum += delta;
+    const roi = bancaInicial ? (lucroAcum / bancaInicial) * 100 : 0;
+    return { data: d, banca: Number(banca.toFixed(2)), lucroAcum: Number(lucroAcum.toFixed(2)), roi: Number(roi.toFixed(2)) };
   });
 }
 
-// ===== Filtros de periodo =====
+// ===== Filtros de período =====
 export type PeriodoFiltro = "hoje" | "ontem" | "7d" | "30d" | "mes" | "ano" | "tudo" | "custom";
 
 export function dateInRange(d: string, ini?: string | null, fim?: string | null): boolean {

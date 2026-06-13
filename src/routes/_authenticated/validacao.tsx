@@ -25,15 +25,12 @@ import { rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics
 import {
   usePrognosticos,
   useCreateValidacao,
-  useCreateAnaliseIa,
   useUpdatePrognostico,
   useConfiguracao,
   calcEdge,
-  fetchPrognosticoDetail,
   getDadosTecnicos,
   ESPORTES_DEFAULT,
   MERCADOS_DEFAULT,
-  sanitizeOptionList,
   type Prognostico,
   type Status,
 } from "@/lib/db";
@@ -42,9 +39,6 @@ import { analisarValidacaoOnline } from "@/lib/validacao-ia-online.functions";
 import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { DadosTecnicosViewer } from "@/components/dados-tecnicos-viewer";
-import { PaginationControls } from "@/components/pagination-controls";
-import { useClientPagination } from "@/lib/pagination";
 
 export const Route = createFileRoute("/_authenticated/validacao")({
   head: () => ({ meta: [{ title: "Validação Crítica — ASP Insights" }] }),
@@ -52,8 +46,10 @@ export const Route = createFileRoute("/_authenticated/validacao")({
 });
 
 const decisoes: { label: Status; texto: string; color: string }[] = [
-  { label: "CONFIRMA", texto: "Confirmar", color: "bg-success text-success-foreground hover:bg-success/90" },
-  { label: "PULAR", texto: "Pular", color: "bg-destructive text-destructive-foreground hover:bg-destructive/90" },
+  { label: "CONFIRMA", texto: "CONFIRMA", color: "bg-success text-success-foreground hover:bg-success/90" },
+  { label: "CONFIRMA_CAUTELA", texto: "CONFIRMA C/ CAUTELA", color: "bg-warning text-warning-foreground hover:bg-warning/90" },
+  { label: "PASS", texto: "PASS", color: "bg-destructive text-destructive-foreground hover:bg-destructive/90" },
+  { label: "AGUARDAR_NOTICIA", texto: "AGUARDAR NOTÍCIA", color: "bg-primary text-primary-foreground hover:bg-primary/90" },
 ];
 
 const STAKES = ["0.5", "1.0", "1.5"];
@@ -76,34 +72,25 @@ interface IAResult {
   modo: "local" | "online";
   fontes_consultadas?: { titulo: string; url: string }[];
   buscas_realizadas?: string[];
-  alertas_online?: string[];
-  analise_ia_id?: string;
 }
 
 function autoCheck(p: Prognostico, edgeFinal: number) {
-  if (p.odd_ofertada < p.odd_valor) return { auto: "PULAR" as const, reason: "Odd ofertada menor que odd de valor" };
-  if (edgeFinal < 0) return { auto: "PULAR" as const, reason: "Edge negativo" };
+  if (p.odd_ofertada < p.odd_valor) return { auto: "PASS" as const, reason: "Odd ofertada menor que odd de valor" };
+  if (edgeFinal < 0) return { auto: "PASS" as const, reason: "Edge negativo" };
   if (p.probabilidade_final < 55) return { auto: "ALERTA" as const, reason: "Probabilidade inferior a 55%" };
   if (p.probabilidade_final > 60) return { auto: "DESTAQUE" as const, reason: "Probabilidade superior a 60%" };
   return null;
-}
-
-function extractParecerSection(text: string, heading: string) {
-  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const re = new RegExp(`${escaped}\\n([\\s\\S]*?)(?=\\n[A-H]\\) |$)`, "i");
-  return text.match(re)?.[1]?.trim() ?? "";
 }
 
 function Validacao() {
   const { data: prognosticos = [] } = usePrognosticos();
   const { data: cfg } = useConfiguracao();
   const createVal = useCreateValidacao();
-  const createAnaliseIa = useCreateAnaliseIa();
   const updateProg = useUpdatePrognostico();
   const callIA = useServerFn(analisarValidacao);
   const callIAOnline = useServerFn(analisarValidacaoOnline);
-  const esportes = sanitizeOptionList(cfg?.esportes_ativos, ESPORTES_DEFAULT);
-  const mercados = sanitizeOptionList(cfg?.mercados_ativos, MERCADOS_DEFAULT);
+  const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
+  const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
 
   // estado por linha
   const [oddsAj, setOddsAj] = useState<Record<string, string>>({});
@@ -143,8 +130,6 @@ function Validacao() {
         }),
     [prognosticos, ini, fim, fEsporte, fLiga, fMercado],
   );
-  const pagination = useClientPagination(pendentes);
-  const visiblePendentes = pagination.paginatedRows;
 
   const getOddAjustadaNum = (p: Prognostico): number | null => {
     const raw = oddsAj[p.id];
@@ -158,23 +143,10 @@ function Validacao() {
     return calcEdge(p.probabilidade_final, odd);
   };
 
-  const getRiskTags = (text: string, alertas?: string[]) => {
-    const tags = new Set<string>();
-    const source = `${text}\n${(alertas ?? []).join("\n")}`.toLowerCase();
-    if (/lineup|escala|escalação|rotacao|rotação/.test(source)) tags.add("lineup/rotacao");
-    if (/lesao|lesão|injury|questionavel|questionável|out/.test(source)) tags.add("lesao/status");
-    if (/clima|weather|vento|chuva|frio/.test(source)) tags.add("clima");
-    if (/bullpen|starter|pitcher|goalie|goleiro|qb/.test(source)) tags.add("posicao-chave");
-    if (/nao encontrado|não encontrado|incerto|fonte insuficiente/.test(source)) tags.add("informacao-incerta");
-    if (/risco alto|impacto:\s*alto|estrutural/.test(source)) tags.add("risco-alto");
-    return Array.from(tags);
-  };
-
   const rodarIA = async (p: Prognostico, modo: "local" | "online") => {
     setIaLoading((s) => ({ ...s, [p.id]: modo }));
     try {
-      const detalhe = await fetchPrognosticoDetail(p.id);
-      const dados = dadosEdit[p.id] ?? getDadosTecnicos(detalhe) ?? "";
+      const dados = dadosEdit[p.id] ?? getDadosTecnicos(p) ?? "";
       const oddAj = getOddAjustadaNum(p);
       const edgeAj = getEdgeAjustado(p);
       const payload = {
@@ -201,42 +173,7 @@ function Validacao() {
         },
       };
       const raw = modo === "online" ? await callIAOnline(payload) : await callIA(payload);
-      const baseResult = raw as Omit<IAResult, "modo" | "analise_ia_id">;
-      let analiseId: string | undefined;
-      try {
-        const analise = await createAnaliseIa.mutateAsync({
-          prognostico_id: p.id,
-          modo_ia: modo,
-          esporte: p.esporte,
-          liga: p.liga,
-          mercado: p.mercado,
-          pick: p.pick,
-          linha: p.linha,
-          odd_original: p.odd_ofertada,
-          odd_ajustada: oddAj,
-          odd_valor: p.odd_valor,
-          odd_usada: oddAj ?? p.odd_ofertada,
-          probabilidade_final: p.probabilidade_final,
-          edge_original: p.edge,
-          edge_ajustado: edgeAj,
-          edge_usado: edgeAj ?? p.edge,
-          contexto_analisado: [dados, contextos[p.id] ?? ""].filter(Boolean).join("\n\n"),
-          parecer_ia: baseResult.parecer,
-          decisao_sugerida: baseResult.decisao_sugerida as "CONFIRMA" | "PULAR" | null,
-          stake_sugerida: baseResult.stake_sugerida,
-          riscos_identificados: extractParecerSection(baseResult.parecer, "E) Riscos principais") || extractParecerSection(baseResult.parecer, "G) Riscos principais"),
-          tags_risco: getRiskTags(baseResult.parecer, baseResult.alertas_online),
-          fontes_consultadas: baseResult.fontes_consultadas ?? null,
-          buscas_realizadas: baseResult.buscas_realizadas ?? null,
-          alertas_online: baseResult.alertas_online ?? null,
-          prompt_versao: baseResult.prompt_versao,
-        });
-        analiseId = analise?.id;
-      } catch (saveError) {
-        console.warn("Nao foi possivel salvar analise_ia; mantendo parecer gerado.", saveError);
-        toast.warning("Analise gerada, mas o historico da IA ainda nao esta disponivel no banco.");
-      }
-      const r: IAResult = { ...baseResult, modo, analise_ia_id: analiseId };
+      const r: IAResult = { ...(raw as Omit<IAResult, "modo">), modo };
       setIaResults((s) => ({ ...s, [p.id]: r }));
       toast.success(modo === "online" ? "Análise online concluída" : "Análise local gerada");
     } catch (e) {
@@ -265,10 +202,10 @@ function Validacao() {
     try {
       const oddAj = getOddAjustadaNum(p);
       const edgeAj = getEdgeAjustado(p);
-      const stakeNum = decisao === "CONFIRMA" ? (stakes[p.id] ? Number(stakes[p.id]) : p.stake) : null;
+      const stakeNum = stakes[p.id] ? Number(stakes[p.id]) : p.stake;
       const dadosTecnicos = dadosEdit[p.id];
 
-      // atualiza odd/edge ajustados, stake e contexto no prognóstico
+      // atualiza odd/edge ajustados, stake e dados técnicos no prognóstico
       const patch: Partial<Prognostico> & { id: string } = { id: p.id };
       if (oddAj != null && oddAj !== p.odd_ajustada) patch.odd_ajustada = oddAj;
       if (edgeAj != null && edgeAj !== p.edge_ajustado) patch.edge_ajustado = edgeAj;
@@ -351,7 +288,7 @@ function Validacao() {
       )}
 
       <div className="space-y-4">
-        {visiblePendentes.map((p) => {
+        {pendentes.map((p) => {
           const oddAj = getOddAjustadaNum(p);
           const edgeAj = getEdgeAjustado(p);
           const check = autoCheck(p, edgeAj ?? p.edge);
@@ -365,7 +302,7 @@ function Validacao() {
               key={p.id}
               className={cn(
                 "rounded-lg border bg-card p-5 space-y-4",
-                check?.auto === "PULAR" && "border-destructive/40",
+                check?.auto === "PASS" && "border-destructive/40",
                 check?.auto === "DESTAQUE" && "border-success/40",
                 check?.auto === "ALERTA" && "border-warning/40",
                 !check && "border-border",
@@ -383,10 +320,7 @@ function Validacao() {
                   </div>
                   <h3 className="mt-1 text-lg font-semibold">{p.jogo}</h3>
                 </div>
-                <div className="flex items-center gap-2">
-                  <DadosTecnicosViewer prognostico={p} variant="button" />
-                  <StatusBadge status={p.status_validacao} />
-                </div>
+                <StatusBadge status={p.status_validacao} />
               </div>
 
               {/* Bloco de entrada */}
@@ -425,7 +359,7 @@ function Validacao() {
                   <div
                     className={cn(
                       "flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-medium",
-                      check.auto === "PULAR" && "border-destructive/40 bg-destructive/10 text-destructive",
+                      check.auto === "PASS" && "border-destructive/40 bg-destructive/10 text-destructive",
                       check.auto === "ALERTA" && "border-warning/40 bg-warning/10 text-warning",
                       check.auto === "DESTAQUE" && "border-success/40 bg-success/10 text-success",
                     )}
@@ -437,18 +371,18 @@ function Validacao() {
                 )}
               </div>
 
-              {/* Contexto da Análise */}
+              {/* Dados Técnicos */}
               <Collapsible defaultOpen={!!dadosCurrent}>
                 <CollapsibleTrigger asChild>
                   <Button variant="outline" size="sm" className="w-full justify-start">
                     <Brain className="h-4 w-4 mr-2 text-primary" />
-                    Contexto da Análise {dadosCurrent ? `(${dadosCurrent.length} chars)` : "(vazio)"}
+                    Dados Técnicos do Modelo {dadosCurrent ? `(${dadosCurrent.length} chars)` : "(vazio)"}
                   </Button>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="pt-2">
                   <Textarea
                     rows={5}
-                    placeholder="Cole/edite todo o contexto usado na análise: modelo Python, H2H, últimos jogos, projeções, odds, linhas, splits e observações manuais."
+                    placeholder="Cole/edite os dados técnicos exportados pelo modelo (xG, RPI, projeções, tendências, etc.)"
                     value={dadosCurrent}
                     onChange={(e) => setDadosEdit({ ...dadosEdit, [p.id]: e.target.value })}
                     className="font-mono text-xs"
@@ -456,10 +390,10 @@ function Validacao() {
                 </CollapsibleContent>
               </Collapsible>
 
-              {/* Complemento manual */}
+              {/* Contexto adicional */}
               <div>
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Complemento manual do contexto
+                  Contexto adicional para análise
                 </Label>
                 <Textarea
                   rows={3}
@@ -477,7 +411,7 @@ function Validacao() {
                     Análise sugerida pela IA
                     {ia?.modo === "online" && (
                       <span className="flex items-center gap-1 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-primary">
-                        <Globe className="h-3 w-3" /> IA Online
+                        <Globe className="h-3 w-3" /> online
                       </span>
                     )}
                     {ia?.modo === "local" && (
@@ -530,7 +464,7 @@ function Validacao() {
                 </div>
                 {iaLoading[p.id] === "online" && (
                   <p className="text-xs text-primary/80">
-                    Pesquisando checklist por esporte, fontes recentes e riscos que podem quebrar a tese... pode levar 15-40s.
+                    Pesquisando notícias, lineups e contexto na web… pode levar 15-40s.
                   </p>
                 )}
                 {ia ? (
@@ -547,39 +481,6 @@ function Validacao() {
                         </span>
                       )}
                     </div>
-                    {ia.modo === "online" && ia.alertas_online && ia.alertas_online.length > 0 && (
-                      <div className="rounded border border-warning/40 bg-warning/10 p-2">
-                        <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-warning">
-                          <AlertTriangle className="h-3.5 w-3.5" />
-                          Alertas online
-                        </div>
-                        <ul className="space-y-0.5 text-xs text-foreground">
-                          {ia.alertas_online.map((alerta, i) => (
-                            <li key={i}>- {alerta}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {ia.modo === "online" && (
-                      <div className="grid gap-2 lg:grid-cols-3">
-                        {[
-                          ["Checklist online", extractParecerSection(ia.parecer, "B) Checklist online")],
-                          [
-                            "Informações não encontradas",
-                            extractParecerSection(ia.parecer, "D) Informacoes criticas nao encontradas") ||
-                              extractParecerSection(ia.parecer, "D) Informações críticas não encontradas"),
-                          ],
-                          ["Riscos principais", extractParecerSection(ia.parecer, "E) Riscos principais") || extractParecerSection(ia.parecer, "G) Riscos principais")],
-                        ].map(([titulo, conteudo]) => (
-                          <div key={titulo} className="rounded border border-border bg-background/60 p-2">
-                            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{titulo}</div>
-                            <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap font-mono text-[11px] text-foreground/85">
-                              {conteudo || "Sem item destacado no parecer."}
-                            </pre>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                     <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded border border-border bg-background/60 p-2 font-mono text-xs">
                       {ia.parecer}
                     </pre>
@@ -680,18 +581,6 @@ function Validacao() {
           );
         })}
       </div>
-      {pendentes.length > 0 && (
-        <div className="rounded-lg border border-border bg-card">
-          <PaginationControls
-            page={pagination.page}
-            pageSize={pagination.pageSize}
-            totalPages={pagination.totalPages}
-            totalRows={pagination.totalRows}
-            onPageChange={pagination.setPage}
-            onPageSizeChange={pagination.setPageSize}
-          />
-        </div>
-      )}
     </div>
   );
 }

@@ -7,13 +7,9 @@ import {
   usePublicarPrognostico,
   useCancelarPrognostico,
   useValidacaoByPrognostico,
-  useAnalisesIaByPrognostico,
-  usePrognosticoDetail,
-  fetchPrognosticoDetail,
   gerarTipTexto,
   ESPORTES_DEFAULT,
   MERCADOS_DEFAULT,
-  sanitizeOptionList,
   type Prognostico,
 } from "@/lib/db";
 import { StatusBadge, PublicacaoBadge } from "@/components/status-badge";
@@ -43,8 +39,6 @@ import { rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics
 import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
 import { toast } from "sonner";
 import { DadosTecnicosViewer } from "@/components/dados-tecnicos-viewer";
-import { PaginationControls } from "@/components/pagination-controls";
-import { useClientPagination } from "@/lib/pagination";
 
 export const Route = createFileRoute("/_authenticated/publicacao")({
   head: () => ({ meta: [{ title: "Publicação — ASP Insights" }] }),
@@ -67,8 +61,8 @@ function PublicacaoPage() {
   const [customIni, setCustomIni] = useState("");
   const [customFim, setCustomFim] = useState("");
 
-  const esportes = sanitizeOptionList(cfg?.esportes_ativos, ESPORTES_DEFAULT);
-  const mercados = sanitizeOptionList(cfg?.mercados_ativos, MERCADOS_DEFAULT);
+  const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
+  const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
 
   const { ini, fim } = rangeFromPeriodo(periodo, customIni, customFim);
 
@@ -85,8 +79,6 @@ function PublicacaoPage() {
       ),
     [prognosticos, ini, fim, fEsporte, fLiga, fMercado],
   );
-  const pagination = useClientPagination(elegiveis);
-  const visibleElegiveis = pagination.paginatedRows;
 
   const podePublicar = (p: Prognostico) => p.status_validacao === "CONFIRMA";
 
@@ -105,10 +97,9 @@ function PublicacaoPage() {
       return;
     }
     for (const p of alvos) {
-      const detalhe = await fetchPrognosticoDetail(p.id);
       await publicar.mutateAsync({
         id: p.id,
-        tip_texto: gerarTipTexto(detalhe),
+        tip_texto: gerarTipTexto(p),
         canal_publicacao: canal,
       });
     }
@@ -209,7 +200,7 @@ function PublicacaoPage() {
                     </td>
                   </tr>
                 )}
-                {visibleElegiveis.map((p) => {
+                {elegiveis.map((p) => {
                   const canSelect = podePublicar(p);
                   const mostrarLinha = shouldShowLinha(p.pick, p.linha);
                   return (
@@ -268,14 +259,6 @@ function PublicacaoPage() {
               </tbody>
             </table>
           </div>
-          <PaginationControls
-            page={pagination.page}
-            pageSize={pagination.pageSize}
-            totalPages={pagination.totalPages}
-            totalRows={pagination.totalRows}
-            onPageChange={pagination.setPage}
-            onPageSizeChange={pagination.setPageSize}
-          />
         </CardContent>
       </Card>
 
@@ -301,31 +284,24 @@ function PublishDialog({
 }) {
   const publicar = usePublicarPrognostico();
   const { data: validacao } = useValidacaoByPrognostico(prognostico?.id);
-  const { data: analises = [] } = useAnalisesIaByPrognostico(prognostico?.id);
-  const { data: detalhe } = usePrognosticoDetail(prognostico?.id);
   const [tip, setTip] = useState("");
 
   useEffect(() => {
-    const p = detalhe ?? prognostico;
-    if (p) {
+    if (prognostico) {
       const parecer =
         validacao?.parecer_validacao?.trim() ||
         validacao?.parecer_ia?.trim() ||
         "";
-      const online = analises.find((a) => a.modo_ia === "online");
       setTip(
-        gerarTipTexto(p, {
+        gerarTipTexto(prognostico, {
           parecer,
-          contexto_analise: [p.dados_tecnicos, validacao?.contexto_adicional].filter(Boolean).join("\n\n"),
-          pesquisa_online: online?.parecer_ia,
-          stake_confirmada: validacao?.stake_confirmada,
           justificativa: validacao?.justificativa,
           riscos: validacao?.riscos_identificados,
           comentarios: validacao?.comentarios_analista,
         }),
       );
     }
-  }, [prognostico, detalhe, validacao, analises]);
+  }, [prognostico, validacao]);
 
   if (!prognostico) return null;
 

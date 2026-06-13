@@ -25,8 +25,6 @@ import {
   useUpdatePrognostico,
   useLigas,
   useUpsertLiga,
-  usePrognosticoDetail,
-  sanitizeOptionList,
   type Prognostico,
   type PrognosticoInput,
   type Liga,
@@ -77,43 +75,38 @@ export function PrognosticoDialog({
   const update = useUpdatePrognostico();
   const upsertLiga = useUpsertLiga();
   const { data: ligas = [] } = useLigas();
-  const { data: detalhe } = usePrognosticoDetail(open && prognostico ? prognostico.id : null);
   const [form, setForm] = useState<PrognosticoInput>(empty);
   const [novaLiga, setNovaLiga] = useState("");
-  const loadingDetail = !!prognostico && !detalhe;
-  const safeEsportes = sanitizeOptionList(esportes, ESPORTES_DEFAULT);
-  const safeMercados = sanitizeOptionList(mercados, MERCADOS_DEFAULT);
 
   const ligasDoEsporte = (ligas as Liga[])
-    .filter((l) => l.esporte === form.esporte && String(l.nome ?? "").trim())
+    .filter((l) => l.esporte === form.esporte)
     .slice()
-    .sort((a, b) => String(a.nome ?? "").localeCompare(String(b.nome ?? ""), "pt-BR"));
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 
   useEffect(() => {
     if (!open) return;
-    const source = detalhe ?? prognostico;
-    if (source) {
+    if (prognostico) {
       setForm({
-        data: source.data,
-        hora: source.hora,
-        esporte: source.esporte,
-        liga: source.liga,
-        jogo: source.jogo,
-        mandante: source.mandante,
-        visitante: source.visitante,
-        mercado: source.mercado,
-        pick: source.pick,
-        linha: source.linha,
-        odd_ofertada: source.odd_ofertada,
-        odd_valor: source.odd_valor,
-        probabilidade_final: source.probabilidade_final,
-        edge: source.edge,
-        stake: source.stake,
-        status_validacao: source.status_validacao,
-        observacoes: source.observacoes,
-        dados_tecnicos: source.dados_tecnicos,
-        odd_ajustada: source.odd_ajustada,
-        edge_ajustado: source.edge_ajustado,
+        data: prognostico.data,
+        hora: prognostico.hora,
+        esporte: prognostico.esporte,
+        liga: prognostico.liga,
+        jogo: prognostico.jogo,
+        mandante: prognostico.mandante,
+        visitante: prognostico.visitante,
+        mercado: prognostico.mercado,
+        pick: prognostico.pick,
+        linha: prognostico.linha,
+        odd_ofertada: prognostico.odd_ofertada,
+        odd_valor: prognostico.odd_valor,
+        probabilidade_final: prognostico.probabilidade_final,
+        edge: prognostico.edge,
+        stake: prognostico.stake,
+        status_validacao: prognostico.status_validacao,
+        observacoes: prognostico.observacoes,
+        dados_tecnicos: prognostico.dados_tecnicos,
+        odd_ajustada: prognostico.odd_ajustada,
+        edge_ajustado: prognostico.edge_ajustado,
       });
     } else if (template) {
       setForm({
@@ -141,7 +134,7 @@ export function PrognosticoDialog({
     } else {
       setForm({ ...empty, data: todayBR() });
     }
-  }, [prognostico, detalhe, template, open]);
+  }, [prognostico, template, open]);
 
   const set = <K extends keyof PrognosticoInput>(k: K, v: PrognosticoInput[K]) =>
     setForm((f) => {
@@ -197,7 +190,7 @@ export function PrognosticoDialog({
             <Select value={form.esporte} onValueChange={(v) => { set("esporte", v); set("liga", ""); }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {safeEsportes.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                {esportes.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
               </SelectContent>
             </Select>
           </Field>
@@ -208,7 +201,7 @@ export function PrognosticoDialog({
               </SelectTrigger>
               <SelectContent>
                 {ligasDoEsporte.map((l) => (
-                  <SelectItem key={l.id} value={String(l.nome)}>{String(l.nome)}</SelectItem>
+                  <SelectItem key={l.id} value={l.nome}>{l.nome}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -261,7 +254,7 @@ export function PrognosticoDialog({
             <Select value={form.mercado} onValueChange={(v) => set("mercado", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {safeMercados.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                {mercados.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
               </SelectContent>
             </Select>
           </Field>
@@ -292,15 +285,17 @@ export function PrognosticoDialog({
               <SelectContent>
                 <SelectItem value="PENDENTE">PENDENTE</SelectItem>
                 <SelectItem value="CONFIRMA">CONFIRMA</SelectItem>
-                <SelectItem value="PULAR">PULAR</SelectItem>
+                <SelectItem value="CONFIRMA_CAUTELA">CONFIRMA C/ CAUTELA</SelectItem>
+                <SelectItem value="PASS">PASS</SelectItem>
+                <SelectItem value="AGUARDAR_NOTICIA">AGUARDAR NOTÍCIA</SelectItem>
               </SelectContent>
             </Select>
           </Field>
           <div className="md:col-span-3">
-            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Contexto da Análise</Label>
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Dados Técnicos do Modelo</Label>
             <Textarea
               rows={4}
-              placeholder="Cole aqui o contexto usado na análise: modelo Python, H2H, últimos jogos, projeções, odds, linhas, splits e observações."
+              placeholder="Cole aqui dados técnicos do modelo (xG, RPI, projeções, tendências, etc.)"
               value={form.dados_tecnicos ?? form.observacoes ?? ""}
               onChange={(e) => set("dados_tecnicos", e.target.value || null)}
             />
@@ -309,8 +304,8 @@ export function PrognosticoDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={submit} disabled={create.isPending || update.isPending || loadingDetail}>
-            {loadingDetail ? "Carregando..." : prognostico ? "Salvar" : "Criar"}
+          <Button onClick={submit} disabled={create.isPending || update.isPending}>
+            {prognostico ? "Salvar" : "Criar"}
           </Button>
         </DialogFooter>
       </DialogContent>
