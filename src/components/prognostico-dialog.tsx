@@ -58,6 +58,9 @@ const empty: PrognosticoInput = {
   stake: 0,
   status_validacao: "PENDENTE",
   observacoes: null,
+  dados_tecnicos: null,
+  odd_ajustada: null,
+  edge_ajustado: null,
 };
 
 export function PrognosticoDialog({
@@ -101,6 +104,9 @@ export function PrognosticoDialog({
         stake: prognostico.stake,
         status_validacao: prognostico.status_validacao,
         observacoes: prognostico.observacoes,
+        dados_tecnicos: prognostico.dados_tecnicos,
+        odd_ajustada: prognostico.odd_ajustada,
+        edge_ajustado: prognostico.edge_ajustado,
       });
     } else if (template) {
       setForm({
@@ -121,6 +127,9 @@ export function PrognosticoDialog({
         stake: template.stake,
         status_validacao: "PENDENTE",
         observacoes: template.observacoes,
+        dados_tecnicos: template.dados_tecnicos,
+        odd_ajustada: null,
+        edge_ajustado: null,
       });
     } else {
       setForm({ ...empty, data: todayBR() });
@@ -276,16 +285,19 @@ export function PrognosticoDialog({
               <SelectContent>
                 <SelectItem value="PENDENTE">PENDENTE</SelectItem>
                 <SelectItem value="CONFIRMA">CONFIRMA</SelectItem>
-                <SelectItem value="PULAR">PULAR</SelectItem>
+                <SelectItem value="CONFIRMA_CAUTELA">CONFIRMA C/ CAUTELA</SelectItem>
+                <SelectItem value="PASS">PASS</SelectItem>
+                <SelectItem value="AGUARDAR_NOTICIA">AGUARDAR NOTÍCIA</SelectItem>
               </SelectContent>
             </Select>
           </Field>
           <div className="md:col-span-3">
-            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Observações</Label>
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Dados Técnicos do Modelo</Label>
             <Textarea
-              rows={2}
-              value={form.observacoes ?? ""}
-              onChange={(e) => set("observacoes", e.target.value || null)}
+              rows={4}
+              placeholder="Cole aqui dados técnicos do modelo (xG, RPI, projeções, tendências, etc.)"
+              value={form.dados_tecnicos ?? form.observacoes ?? ""}
+              onChange={(e) => set("dados_tecnicos", e.target.value || null)}
             />
           </div>
         </div>
