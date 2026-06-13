@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { AlertTriangle, Sparkles, ShieldAlert } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { AlertTriangle, Sparkles, ShieldAlert, Brain, Loader2, Copy, Wand2, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -12,6 +13,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { StatusBadge } from "@/components/status-badge";
 import { LeagueFilter } from "@/components/league-filter";
 import { PeriodFilter } from "@/components/period-filter";
@@ -21,11 +27,14 @@ import {
   useCreateValidacao,
   useUpdatePrognostico,
   useConfiguracao,
+  calcEdge,
+  getDadosTecnicos,
   ESPORTES_DEFAULT,
   MERCADOS_DEFAULT,
   type Prognostico,
   type Status,
 } from "@/lib/db";
+import { analisarValidacao } from "@/lib/validacao-ia.functions";
 import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -35,14 +44,35 @@ export const Route = createFileRoute("/_authenticated/validacao")({
   component: Validacao,
 });
 
-const decisoes: { label: Status; color: string }[] = [
-  { label: "CONFIRMA", color: "bg-success text-success-foreground hover:bg-success/90" },
-  { label: "PULAR", color: "bg-destructive text-destructive-foreground hover:bg-destructive/90" },
+const decisoes: { label: Status; texto: string; color: string }[] = [
+  { label: "CONFIRMA", texto: "CONFIRMA", color: "bg-success text-success-foreground hover:bg-success/90" },
+  { label: "CONFIRMA_CAUTELA", texto: "CONFIRMA C/ CAUTELA", color: "bg-warning text-warning-foreground hover:bg-warning/90" },
+  { label: "PASS", texto: "PASS", color: "bg-destructive text-destructive-foreground hover:bg-destructive/90" },
+  { label: "AGUARDAR_NOTICIA", texto: "AGUARDAR NOTÍCIA", color: "bg-primary text-primary-foreground hover:bg-primary/90" },
 ];
 
-function autoCheck(p: Prognostico) {
-  if (p.odd_ofertada < p.odd_valor) return { auto: "PULAR" as const, reason: "Odd ofertada menor que odd de valor" };
-  if (p.edge < 0) return { auto: "PULAR" as const, reason: "Edge negativo" };
+const STAKES = ["0.5", "1.0", "1.5"];
+
+const PARECER_TEMPLATE = `Tese:
+
+Riscos:
+
+Condição de invalidação:
+
+Decisão:
+
+Stake:`;
+
+interface IAResult {
+  parecer: string;
+  decisao_sugerida: string | null;
+  stake_sugerida: number | null;
+  prompt_versao: string;
+}
+
+function autoCheck(p: Prognostico, edgeFinal: number) {
+  if (p.odd_ofertada < p.odd_valor) return { auto: "PASS" as const, reason: "Odd ofertada menor que odd de valor" };
+  if (edgeFinal < 0) return { auto: "PASS" as const, reason: "Edge negativo" };
   if (p.probabilidade_final < 55) return { auto: "ALERTA" as const, reason: "Probabilidade inferior a 55%" };
   if (p.probabilidade_final > 60) return { auto: "DESTAQUE" as const, reason: "Probabilidade superior a 60%" };
   return null;
@@ -53,14 +83,18 @@ function Validacao() {
   const { data: cfg } = useConfiguracao();
   const createVal = useCreateValidacao();
   const updateProg = useUpdatePrognostico();
+  const callIA = useServerFn(analisarValidacao);
   const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
   const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
 
-  const [justificativas, setJustificativas] = useState<Record<string, string>>({});
-  const [riscos, setRiscos] = useState<Record<string, string>>({});
-  const [comentarios, setComentarios] = useState<Record<string, string>>({});
+  // estado por linha
+  const [oddsAj, setOddsAj] = useState<Record<string, string>>({});
   const [stakes, setStakes] = useState<Record<string, string>>({});
-  const [odds, setOdds] = useState<Record<string, string>>({});
+  const [pareceres, setPareceres] = useState<Record<string, string>>({});
+  const [contextos, setContextos] = useState<Record<string, string>>({});
+  const [dadosEdit, setDadosEdit] = useState<Record<string, string>>({});
+  const [iaResults, setIaResults] = useState<Record<string, IAResult>>({});
+  const [iaLoading, setIaLoading] = useState<Record<string, boolean>>({});
 
   const [fEsporte, setFEsporte] = useState("all");
   const [fLiga, setFLiga] = useState("all");
@@ -92,23 +126,97 @@ function Validacao() {
     [prognosticos, ini, fim, fEsporte, fLiga, fMercado],
   );
 
+  const getOddAjustadaNum = (p: Prognostico): number | null => {
+    const raw = oddsAj[p.id];
+    if (raw !== undefined && raw !== "") return Number(raw);
+    return p.odd_ajustada;
+  };
+
+  const getEdgeAjustado = (p: Prognostico): number | null => {
+    const odd = getOddAjustadaNum(p);
+    if (odd == null || !odd) return p.edge_ajustado;
+    return calcEdge(p.probabilidade_final, odd);
+  };
+
+  const rodarIA = async (p: Prognostico) => {
+    setIaLoading((s) => ({ ...s, [p.id]: true }));
+    try {
+      const dados = dadosEdit[p.id] ?? getDadosTecnicos(p) ?? "";
+      const oddAj = getOddAjustadaNum(p);
+      const edgeAj = getEdgeAjustado(p);
+      const r = (await callIA({
+        data: {
+          prognostico: {
+            data: p.data,
+            hora: p.hora,
+            esporte: p.esporte,
+            liga: p.liga,
+            jogo: p.jogo,
+            mercado: p.mercado,
+            pick: p.pick,
+            linha: p.linha,
+            odd_original: p.odd_ofertada,
+            odd_ajustada: oddAj,
+            odd_valor: p.odd_valor,
+            probabilidade_final: p.probabilidade_final,
+            edge_original: p.edge,
+            edge_ajustado: edgeAj,
+            stake_sugerida: p.stake,
+          },
+          dados_tecnicos: dados,
+          contexto_adicional: contextos[p.id] ?? "",
+        },
+      })) as IAResult;
+      setIaResults((s) => ({ ...s, [p.id]: r }));
+      toast.success("Análise gerada pela IA");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setIaLoading((s) => ({ ...s, [p.id]: false }));
+    }
+  };
+
+  const aplicarIA = (p: Prognostico) => {
+    const r = iaResults[p.id];
+    if (!r) return;
+    setPareceres((s) => ({ ...s, [p.id]: r.parecer }));
+    if (r.stake_sugerida && STAKES.includes(r.stake_sugerida.toFixed(1))) {
+      setStakes((s) => ({ ...s, [p.id]: r.stake_sugerida!.toFixed(1) }));
+    }
+    toast.success("Parecer da IA aplicado");
+  };
+
   const decidir = async (p: Prognostico, decisao: Status) => {
-    if (!justificativas[p.id]?.trim()) {
-      toast.error("Justificativa da decisão é obrigatória.");
+    const parecer = (pareceres[p.id] ?? "").trim();
+    if (!parecer) {
+      toast.error("Parecer da Validação é obrigatório.");
       return;
     }
     try {
-      const oddAtual = odds[p.id] ? Number(odds[p.id]) : p.odd_ofertada;
-      if (oddAtual && oddAtual !== p.odd_ofertada) {
-        await updateProg.mutateAsync({ id: p.id, odd_ofertada: oddAtual });
-      }
+      const oddAj = getOddAjustadaNum(p);
+      const edgeAj = getEdgeAjustado(p);
+      const stakeNum = stakes[p.id] ? Number(stakes[p.id]) : p.stake;
+      const dadosTecnicos = dadosEdit[p.id];
+
+      // atualiza odd/edge ajustados, stake e dados técnicos no prognóstico
+      const patch: Partial<Prognostico> & { id: string } = { id: p.id };
+      if (oddAj != null && oddAj !== p.odd_ajustada) patch.odd_ajustada = oddAj;
+      if (edgeAj != null && edgeAj !== p.edge_ajustado) patch.edge_ajustado = edgeAj;
+      if (dadosTecnicos !== undefined) patch.dados_tecnicos = dadosTecnicos || null;
+      if (Object.keys(patch).length > 1) await updateProg.mutateAsync(patch);
+
+      const ia = iaResults[p.id];
       await createVal.mutateAsync({
         prognostico_id: p.id,
         decisao,
-        stake_confirmada: stakes[p.id] ? Number(stakes[p.id]) : p.stake,
-        justificativa: justificativas[p.id] ?? null,
-        riscos_identificados: riscos[p.id] ?? null,
-        comentarios_analista: comentarios[p.id] ?? null,
+        stake_confirmada: stakeNum,
+        parecer_validacao: parecer,
+        contexto_adicional: contextos[p.id] ?? null,
+        parecer_ia: ia?.parecer ?? null,
+        decisao_ia_sugerida: ia?.decisao_sugerida ?? null,
+        stake_ia_sugerida: ia?.stake_sugerida ?? null,
+        data_analise_ia: ia ? new Date().toISOString() : null,
+        prompt_versao: ia?.prompt_versao ?? null,
       });
       toast.success(`Decisão registrada: ${decisao}`);
     } catch (e) {
@@ -116,13 +224,12 @@ function Validacao() {
     }
   };
 
-
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Validação Crítica</h1>
         <p className="text-sm text-muted-foreground">
-          Segunda análise dos prognósticos gerados pelos modelos antes da publicação.
+          Segunda camada analítica dos prognósticos gerados pelos modelos.
         </p>
       </div>
 
@@ -138,7 +245,7 @@ function Validacao() {
             onCustomFimChange={setCustomFim}
           />
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Esporte</label>
+            <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Esporte</Label>
             <Select value={fEsporte} onValueChange={(v) => { setFEsporte(v); setFLiga("all"); }}>
               <SelectTrigger className="h-9 w-44"><SelectValue placeholder="Esporte" /></SelectTrigger>
               <SelectContent>
@@ -148,11 +255,11 @@ function Validacao() {
             </Select>
           </div>
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Liga</label>
+            <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Liga</Label>
             <LeagueFilter sport={fEsporte} value={fLiga} onChange={setFLiga} className="h-9 w-48" />
           </div>
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Mercado</label>
+            <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Mercado</Label>
             <Select value={fMercado} onValueChange={setFMercado}>
               <SelectTrigger className="h-9 w-52"><SelectValue placeholder="Mercado" /></SelectTrigger>
               <SelectContent>
@@ -172,154 +279,221 @@ function Validacao() {
 
       <div className="space-y-4">
         {pendentes.map((p) => {
-          const check = autoCheck(p);
+          const oddAj = getOddAjustadaNum(p);
+          const edgeAj = getEdgeAjustado(p);
+          const check = autoCheck(p, edgeAj ?? p.edge);
           const mostrarLinha = shouldShowLinha(p.pick, p.linha);
+          const dadosCurrent = dadosEdit[p.id] ?? getDadosTecnicos(p) ?? "";
+          const parecerCurrent = pareceres[p.id] ?? "";
+          const ia = iaResults[p.id];
+
           return (
             <div
               key={p.id}
               className={cn(
-                "rounded-lg border bg-card p-5",
-                check?.auto === "PULAR" && "border-destructive/40",
+                "rounded-lg border bg-card p-5 space-y-4",
+                check?.auto === "PASS" && "border-destructive/40",
                 check?.auto === "DESTAQUE" && "border-success/40",
                 check?.auto === "ALERTA" && "border-warning/40",
                 !check && "border-border",
               )}
             >
+              {/* Cabeçalho */}
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-muted-foreground">{formatBR(p.data)}</span>
-                    {p.hora && (
-                      <span className="text-xs font-mono text-muted-foreground">às {formatHora(p.hora)}</span>
-                    )}
-                    <span className="text-xs font-mono text-muted-foreground">•</span>
-                    <span className="text-xs font-semibold uppercase tracking-wider text-primary">
-                      {p.esporte}
-                    </span>
-                    <span className="text-xs text-muted-foreground">• {p.liga}</span>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="font-mono text-muted-foreground">{formatBR(p.data)}</span>
+                    {p.hora && <span className="font-mono text-muted-foreground">às {formatHora(p.hora)}</span>}
+                    <span className="text-muted-foreground">•</span>
+                    <span className="font-semibold uppercase tracking-wider text-primary">{p.esporte}</span>
+                    <span className="text-muted-foreground">• {p.liga}</span>
                   </div>
                   <h3 className="mt-1 text-lg font-semibold">{p.jogo}</h3>
-                  <div className="text-sm text-muted-foreground space-y-0.5">
-                    <p>Mercado: <span className="text-foreground font-medium">{p.mercado}</span></p>
-                    <p>Pick: <span className="text-foreground font-medium">{p.pick}</span></p>
-                    {mostrarLinha && (
-                      <p>Linha: <span className="text-foreground font-medium">{p.linha}</span></p>
-                    )}
-                  </div>
                 </div>
                 <StatusBadge status={p.status_validacao} />
               </div>
 
-
-              {check && (
-                <div
-                  className={cn(
-                    "mt-3 flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-medium",
-                    check.auto === "PULAR" && "border-destructive/40 bg-destructive/10 text-destructive",
-                    check.auto === "ALERTA" && "border-warning/40 bg-warning/10 text-warning",
-                    check.auto === "DESTAQUE" && "border-success/40 bg-success/10 text-success",
-                  )}
-                >
-                  {check.auto === "DESTAQUE" ? (
-                    <Sparkles className="h-3.5 w-3.5" />
-                  ) : check.auto === "ALERTA" ? (
-                    <ShieldAlert className="h-3.5 w-3.5" />
-                  ) : (
-                    <AlertTriangle className="h-3.5 w-3.5" />
-                  )}
-                  <span className="uppercase tracking-wider">{check.auto}</span>
-                  <span className="text-foreground/80 normal-case tracking-normal">— {check.reason}</span>
+              {/* Bloco de entrada */}
+              <div className="rounded-md border border-border bg-background/50 p-3 space-y-3">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Dados do prognóstico</div>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+                  <KV label="Mercado" value={p.mercado} />
+                  <KV label="Pick" value={p.pick} />
+                  {mostrarLinha && <KV label="Linha" value={p.linha ?? "—"} />}
+                  <KV label="Stake sugerida" value={`${p.stake}u`} />
                 </div>
-              )}
-
-              <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-                <Metric label="Odd Ofertada" value={p.odd_ofertada.toFixed(2)} />
-                <Metric label="Odd Valor" value={p.odd_valor.toFixed(2)} />
-                <Metric
-                  label="Probabilidade"
-                  value={`${p.probabilidade_final.toFixed(2)}%`}
-                  tone={p.probabilidade_final > 60 ? "good" : p.probabilidade_final < 55 ? "warn" : undefined}
-                />
-                <Metric
-                  label="Edge"
-                  value={`${p.edge.toFixed(2)}%`}
-                  tone={p.edge < 0 ? "bad" : "good"}
-                />
-              </div>
-
-              {p.observacoes && (
-                <p className="mt-3 text-xs text-muted-foreground">
-                  <span className="font-semibold uppercase tracking-wider">Obs:</span> {p.observacoes}
-                </p>
-              )}
-
-              <div className="mt-4 grid gap-3 md:grid-cols-5">
-                <div>
-                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                    Odd ofertada (ajustar)
-                  </Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={odds[p.id] ?? p.odd_ofertada}
-                    onChange={(e) => setOdds({ ...odds, [p.id]: e.target.value })}
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  <Metric label="Odd original" value={p.odd_ofertada.toFixed(2)} />
+                  <div>
+                    <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Odd ajustada</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder={p.odd_ofertada.toFixed(2)}
+                      value={oddsAj[p.id] ?? (p.odd_ajustada != null ? p.odd_ajustada : "")}
+                      onChange={(e) => setOddsAj({ ...oddsAj, [p.id]: e.target.value })}
+                      className="h-8 font-mono"
+                    />
+                  </div>
+                  <Metric label="Odd valor" value={p.odd_valor.toFixed(2)} />
+                  <Metric label="Probabilidade" value={`${p.probabilidade_final.toFixed(2)}%`} tone={p.probabilidade_final > 60 ? "good" : p.probabilidade_final < 55 ? "warn" : undefined} />
+                  <Metric label="Edge original" value={`${p.edge.toFixed(2)}%`} tone={p.edge < 0 ? "bad" : "good"} />
+                  <Metric
+                    label="Edge ajustado"
+                    value={edgeAj != null ? `${edgeAj.toFixed(2)}%` : "—"}
+                    tone={edgeAj == null ? undefined : edgeAj < 0 ? "bad" : "good"}
                   />
                 </div>
-                <div>
-                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                    Stake confirmada
-                  </Label>
-                  <Input
-                    type="number"
-                    step="0.1"
-                    value={stakes[p.id] ?? p.stake}
-                    onChange={(e) => setStakes({ ...stakes, [p.id]: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                    Justificativa *
-                  </Label>
-                  <Textarea
-                    rows={2}
-                    value={justificativas[p.id] || ""}
-                    onChange={(e) => setJustificativas({ ...justificativas, [p.id]: e.target.value })}
-                    placeholder="Justificativa da decisão"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                    Riscos identificados
-                  </Label>
-                  <Textarea
-                    rows={2}
-                    value={riscos[p.id] || ""}
-                    onChange={(e) => setRiscos({ ...riscos, [p.id]: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                    Comentários
-                  </Label>
-                  <Textarea
-                    rows={2}
-                    value={comentarios[p.id] || ""}
-                    onChange={(e) => setComentarios({ ...comentarios, [p.id]: e.target.value })}
-                  />
-                </div>
-              </div>
 
-              <div className="mt-4 flex flex-wrap gap-2">
-                {decisoes.map((d) => (
-                  <Button
-                    key={d.label}
-                    onClick={() => decidir(p, d.label)}
-                    className={cn("font-semibold", d.color)}
-                    disabled={createVal.isPending}
+                {check && (
+                  <div
+                    className={cn(
+                      "flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-medium",
+                      check.auto === "PASS" && "border-destructive/40 bg-destructive/10 text-destructive",
+                      check.auto === "ALERTA" && "border-warning/40 bg-warning/10 text-warning",
+                      check.auto === "DESTAQUE" && "border-success/40 bg-success/10 text-success",
+                    )}
                   >
-                    {d.label}
+                    {check.auto === "DESTAQUE" ? <Sparkles className="h-3.5 w-3.5" /> : check.auto === "ALERTA" ? <ShieldAlert className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
+                    <span className="uppercase tracking-wider">{check.auto}</span>
+                    <span className="text-foreground/80 normal-case tracking-normal">— {check.reason}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Dados Técnicos */}
+              <Collapsible defaultOpen={!!dadosCurrent}>
+                <CollapsibleTrigger asChild>
+                  <Button variant="outline" size="sm" className="w-full justify-start">
+                    <Brain className="h-4 w-4 mr-2 text-primary" />
+                    Dados Técnicos do Modelo {dadosCurrent ? `(${dadosCurrent.length} chars)` : "(vazio)"}
                   </Button>
-                ))}
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-2">
+                  <Textarea
+                    rows={5}
+                    placeholder="Cole/edite os dados técnicos exportados pelo modelo (xG, RPI, projeções, tendências, etc.)"
+                    value={dadosCurrent}
+                    onChange={(e) => setDadosEdit({ ...dadosEdit, [p.id]: e.target.value })}
+                    className="font-mono text-xs"
+                  />
+                </CollapsibleContent>
+              </Collapsible>
+
+              {/* Contexto adicional */}
+              <div>
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Contexto adicional para análise
+                </Label>
+                <Textarea
+                  rows={3}
+                  placeholder="Cole manualmente H2H, últimos jogos, lesões, escalações, clima, notícias ou observações suas. O sistema NÃO busca dados online."
+                  value={contextos[p.id] ?? ""}
+                  onChange={(e) => setContextos({ ...contextos, [p.id]: e.target.value })}
+                />
+              </div>
+
+              {/* IA */}
+              <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-primary">
+                    <Wand2 className="h-4 w-4" />
+                    Análise sugerida pela IA
+                  </div>
+                  <div className="flex gap-1">
+                    <Button size="sm" onClick={() => rodarIA(p)} disabled={iaLoading[p.id]}>
+                      {iaLoading[p.id] ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Wand2 className="h-3 w-3 mr-1" />}
+                      {ia ? "Regerar análise" : "Analisar com IA"}
+                    </Button>
+                    {ia && (
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => aplicarIA(p)}>
+                          Aplicar
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={async () => { await navigator.clipboard.writeText(ia.parecer); toast.success("Copiado"); }}>
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setIaResults((s) => { const n = { ...s }; delete n[p.id]; return n; })}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+                {ia ? (
+                  <>
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      {ia.decisao_sugerida && (
+                        <span className="rounded border border-border bg-background px-2 py-0.5">
+                          Sugerido: <strong>{ia.decisao_sugerida.replace("_", " ")}</strong>
+                        </span>
+                      )}
+                      {ia.stake_sugerida != null && (
+                        <span className="rounded border border-border bg-background px-2 py-0.5">
+                          Stake sugerida: <strong>{ia.stake_sugerida}u</strong>
+                        </span>
+                      )}
+                    </div>
+                    <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded border border-border bg-background/60 p-2 font-mono text-xs">
+                      {ia.parecer}
+                    </pre>
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    A IA analisa apenas os dados acima e o contexto colado por você. Nenhuma busca online é feita.
+                  </p>
+                )}
+              </div>
+
+              {/* Parecer + decisão */}
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="md:col-span-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">Parecer da Validação *</Label>
+                    {!parecerCurrent && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setPareceres((s) => ({ ...s, [p.id]: PARECER_TEMPLATE }))}
+                      >
+                        <RefreshCw className="h-3 w-3 mr-1" /> usar template
+                      </Button>
+                    )}
+                  </div>
+                  <Textarea
+                    rows={8}
+                    placeholder={PARECER_TEMPLATE}
+                    value={parecerCurrent}
+                    onChange={(e) => setPareceres({ ...pareceres, [p.id]: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <div>
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">Stake confirmada (u)</Label>
+                    <Select
+                      value={stakes[p.id] ?? p.stake.toFixed(1)}
+                      onValueChange={(v) => setStakes({ ...stakes, [p.id]: v })}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {STAKES.map((s) => <SelectItem key={s} value={s}>{s}u</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    {decisoes.map((d) => (
+                      <Button
+                        key={d.label}
+                        onClick={() => decidir(p, d.label)}
+                        className={cn("font-semibold w-full", d.color)}
+                        disabled={createVal.isPending}
+                        size="sm"
+                      >
+                        {d.texto}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           );
@@ -329,15 +503,7 @@ function Validacao() {
   );
 }
 
-function Metric({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "good" | "bad" | "warn";
-}) {
+function Metric({ label, value, tone }: { label: string; value: string; tone?: "good" | "bad" | "warn" }) {
   return (
     <div className="rounded-md border border-border bg-background/50 p-2">
       <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
@@ -351,6 +517,15 @@ function Metric({
       >
         {value}
       </div>
+    </div>
+  );
+}
+
+function KV({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-sm font-medium">{value}</div>
     </div>
   );
 }
