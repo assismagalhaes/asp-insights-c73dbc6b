@@ -123,7 +123,9 @@ function Historico() {
             <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="px-3 py-2 text-left">Data</th>
+                <th className="px-3 py-2 text-left">Hora</th>
                 <th className="px-3 py-2 text-left">Esporte</th>
+                <th className="px-3 py-2 text-left">Liga</th>
                 <th className="px-3 py-2 text-left">Jogo</th>
                 <th className="px-3 py-2 text-left">Placar</th>
                 <th className="px-3 py-2 text-left">Mercado</th>
@@ -139,8 +141,10 @@ function Historico() {
             <tbody>
               {rows.map((p) => (
                 <tr key={p.id} className="border-t border-border hover:bg-muted/30">
-                  <td className="px-3 py-2 font-mono text-xs">{p.data}{p.hora ? ` ${p.hora.slice(0,5)}` : ""}</td>
+                  <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatBR(p.data)}</td>
+                  <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{p.hora ? formatHora(p.hora) : "—"}</td>
                   <td className="px-3 py-2">{p.esporte}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{p.liga}</td>
                   <td className="px-3 py-2">{p.jogo}</td>
                   <td className="px-3 py-2 font-mono text-xs">{p.placar_final ?? "—"}</td>
                   <td className="px-3 py-2 text-muted-foreground">{p.mercado}</td>
