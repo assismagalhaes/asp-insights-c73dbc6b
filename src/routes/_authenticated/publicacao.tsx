@@ -51,15 +51,24 @@ function PublicacaoPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [previewFor, setPreviewFor] = useState<Prognostico | null>(null);
   const [canal, setCanal] = useState("Telegram");
+  const [fEsporte, setFEsporte] = useState("all");
+  const [fLiga, setFLiga] = useState("all");
+  const [fMercado, setFMercado] = useState("all");
+
+  const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
+  const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
 
   const elegiveis = useMemo(
     () =>
       prognosticos.filter(
         (p) =>
           p.status_publicacao === "NAO_PUBLICADO" &&
-          p.status_validacao === "CONFIRMA",
+          p.status_validacao === "CONFIRMA" &&
+          (fEsporte === "all" || p.esporte === fEsporte) &&
+          (fLiga === "all" || p.liga === fLiga) &&
+          (fMercado === "all" || p.mercado === fMercado),
       ),
-    [prognosticos],
+    [prognosticos, fEsporte, fLiga, fMercado],
   );
 
   const podePublicar = (p: Prognostico) => p.status_validacao === "CONFIRMA";
