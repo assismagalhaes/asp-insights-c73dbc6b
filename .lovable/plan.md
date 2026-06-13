@@ -1,76 +1,77 @@
-# Plano: Grande atualização do módulo de Validação Crítica
+## Objetivo
 
-Trabalho extenso. Divido em fases entregáveis. Confirme antes de eu começar; depois executo tudo de uma vez.
+Adicionar busca online opcional à Validação Crítica, com dois botões claros:
+- **Analisar com IA (local)** — já existe; usa apenas dados colados, sem internet.
+- **Analisar com IA + Pesquisa online** — novo; Gemini pesquisa na web automaticamente conforme o pick.
 
-## Fase 1 — Banco de dados (migration única)
+## Limitação técnica (importante)
 
-Adicionar em `prognosticos`:
-- `odd_original numeric` (preenchido a partir de `odd_ofertada` existente via backfill)
-- `odd_ajustada numeric null`
-- `edge_original numeric` (backfill de `edge`)
-- `edge_ajustado numeric null`
-- `dados_tecnicos text null` (mantém `observacoes` como fallback de leitura)
+O Lovable AI Gateway é OpenAI-compatível e **não expõe** o `google_search` nativo do Gemini. A pesquisa online será implementada via **tool calling**: o próprio Gemini decide quando precisa buscar e chama uma ferramenta `web_search` que roda no servidor usando **Firecrawl**. O resultado é equivalente — Gemini lê páginas reais e cita fontes — sem exigir chave paga adicional.
 
-Adicionar em `validacoes`:
-- `parecer_validacao text` (backfill concatenando `justificativa` + `riscos_identificados` + `comentarios_analista`)
-- `contexto_adicional text null`
-- `parecer_ia text null`
-- `decisao_ia_sugerida text null`
-- `stake_ia_sugerida numeric null`
-- `data_analise_ia timestamptz null`
-- `prompt_versao text null`
+## O que será implementado
 
-Novo enum `Status` aceita: `CONFIRMA`, `CONFIRMA_CAUTELA`, `PASS`, `AGUARDAR_NOTICIA` (mapeio o antigo `PULAR` → `PASS` em UI; mantém valores antigos como compatíveis).
+### 1. Conector Firecrawl
+- Linkar Firecrawl ao projeto via `standard_connectors--connect` (injeta `FIRECRAWL_API_KEY` no servidor).
+- Se o usuário não quiser linkar, o botão "IA + Pesquisa" fica desabilitado com tooltip explicativo.
 
-Atualizar `apply_resultado` para usar `odd_ajustada ?? odd_original` quando necessário (sem mudar fórmula de lucro, que usa stake×odd no cálculo do `resultado-calc.ts` do cliente — apenas garante leitura consistente).
+### 2. Nova server function `analisarValidacaoOnline`
+Arquivo: `src/lib/validacao-ia-online.functions.ts`
 
-## Fase 2 — Tela Validação Crítica (`validacao.tsx`)
+- Usa `streamText`/`generateText` da AI SDK + provider Lovable Gateway.
+- Modelo: `google/gemini-3-flash-preview` (mais barato) com fallback para `google/gemini-2.5-pro` quando o usuário pedir análise profunda (futuro).
+- Registra duas tools:
+  - `web_search({ query, recency })` → chama Firecrawl `/search` (com `tbs: 'qdr:w'` por padrão) e retorna top 5 resultados (título, url, snippet).
+  - `web_scrape({ url })` → chama Firecrawl `/scrape` em formato markdown para aprofundar em uma fonte específica.
+- `stopWhen: stepCountIs(50)` (loop de agente).
+- System prompt orienta Gemini a buscar **automaticamente conforme o pick**:
+  - **Notícias recentes** do jogo/times (últimas 72h).
+  - **Status do elenco / lineups / lesões** quando o mercado for sensível a isso (player props, handicap, ML).
+  - **Contexto de mercado e jogo** (clima para esportes outdoor, forma recente, polêmicas).
+- Retorna estrutura: `{ parecer, decisao_sugerida, stake_sugerida, fontes: [{titulo, url}], buscas_realizadas: [query] }`.
 
-Reorganizar em blocos:
-1. Cabeçalho (data/hora/esporte/liga/jogo/status)
-2. Dados do prognóstico (mercado, pick, linha, odd original, odd ajustada editável, odd valor, probabilidade, edge original, edge ajustado calculado em tempo real, stake sugerida)
-3. Dados Técnicos do Modelo (expansível, mostra `dados_tecnicos ?? observacoes`)
-4. Contexto adicional para análise (textarea)
-5. IA: botão "Analisar com IA" + painel de resultado com ações (Aplicar/Copiar/Descartar/Regerar) — apenas se LOVABLE_API_KEY presente
-6. Parecer da Validação (textarea grande, template Tese/Riscos/Invalidação/Decisão/Stake)
-7. Decisão final: 4 botões (CONFIRMA / CONFIRMA COM CAUTELA / PASS / AGUARDAR NOTÍCIA) + select stake (0.5/1.0/1.5)
+### 3. Tela `validacao.tsx`
 
-Recalcular `edge_ajustado` no onChange da odd ajustada com a fórmula informada.
+Substituir o atual botão único "Analisar com IA" por **dois botões lado a lado**:
 
-## Fase 3 — Server function de IA
+```
+[ 🧠 IA local ]   [ 🌐 IA + Pesquisa online ]
+```
 
-Criar `src/lib/validacao-ia.functions.ts`:
-- `createServerFn` POST com `requireSupabaseAuth`
-- Recebe `{ prognostico, dados_tecnicos, contexto_adicional }`
-- Chama Lovable AI Gateway (`google/gemini-3-flash-preview`) com o prompt fixo do briefing
-- Retorna `{ parecer, decisao_sugerida, stake_sugerida, prompt_versao }`
-- Sem busca online, apenas analisa o payload recebido
+- Cada um aciona sua server function.
+- Painel de resultado da IA ganha aba/seção extra **"Fontes consultadas"** com lista clicável de URLs e a lista de buscas feitas pelo modelo.
+- Indicador visual `🌐` no parecer da IA quando vier da versão online (para diferenciar no histórico).
+- Toast informando "Pesquisando notícias e contexto…" enquanto roda (pode levar 10-30s).
+- Tratamento de erros 402/429 do gateway e erros do Firecrawl com mensagens claras.
 
-Registrar provider helper em `src/lib/ai-gateway.server.ts` (se não existir).
+### 4. Persistência
 
-## Fase 4 — Propagação nas outras telas
+Estender tabela `validacoes` com:
+- `fontes_consultadas` (jsonb nullable) — array `[{titulo, url}]`.
+- `buscas_realizadas` (jsonb nullable) — array de queries.
+- `modo_ia` (text nullable) — `'local'` ou `'online'`.
 
-- **Prognósticos**: botão/ícone "Dados Técnicos" por linha → Popover/Dialog com conteúdo. Mostrar coluna odd_ajustada quando existir (fallback odd_original).
-- **Publicação**: TIP gerada no novo template com `dados_tecnicos`, `parecer_validacao`, odd/edge ajustados. Manter editor de texto antes de copiar.
-- **Histórico**: mesma coluna/botão Dados Técnicos.
-- **Modal de detalhes** (`prognostico-dialog.tsx`): exibir dados técnicos + parecer + odd original/ajustada.
-- **Importação**: aceitar coluna `dados_tecnicos` (prioridade) + fallback `observacoes`. Atualizar template CSV.
+Mostrar essas infos no `DadosTecnicosViewer` quando existirem.
 
-## Fase 5 — Limpeza e compatibilidade
+### 5. Fluxo de configuração para o usuário
 
-- Em `db.ts`: estender types `Prognostico` e `Validacao`, helper `getDadosTecnicos(p)` e `getOddEfetiva(p)`, `getEdgeEfetivo(p)`.
-- `StatusBadge`: adicionar variantes `CONFIRMA_CAUTELA`, `PASS`, `AGUARDAR_NOTICIA` (PULAR continua existindo para registros antigos).
-- Manter leitura dos campos antigos (`justificativa`, `observacoes`) como fallback exibido se `parecer_validacao`/`dados_tecnicos` vazios.
+Na primeira vez que clicar em "IA + Pesquisa", se Firecrawl não estiver linkado:
+- Modal explicativo: "Para pesquisa online preciso conectar o Firecrawl (grátis para uso moderado)."
+- Botão "Conectar Firecrawl" abre o fluxo de conexão.
 
-## Detalhes técnicos
+## O que NÃO muda
 
-- Edge ajustado calculado client-side via `((prob/100) * odd - 1) * 100`, salvo no submit.
-- IA é **opcional**: se a server function falhar (sem chave, 402, 429), exibo erro inline no painel sem bloquear a decisão manual.
-- Sem mudanças em: importação de datas BR, bankroll, resultado-calc, autenticação, fluxo de publicação atual além do template da TIP.
+- Botão **IA local** continua funcionando exatamente como hoje (sem internet, sem custo de Firecrawl).
+- Decisão final continua humana — IA online só sugere.
+- Importação, parser de datas, GREEN/RED, dashboard, bankroll, publicação: intactos.
+- Estrutura visual e nomenclatura (Dados Técnicos, Parecer da Validação): mantida.
 
-## Fora de escopo (confirme se quer agora)
+## Custo / observações
 
-- Renomear coluna `observacoes` → `dados_tecnicos` no banco (mantenho ambas, leitura prioriza `dados_tecnicos`). Renomear quebra histórico e exportações; prefiro coexistência.
-- Busca online / scraping — explicitamente **não** será implementado conforme briefing.
+- Cada análise online gasta: ~1-3 buscas Firecrawl + ~1-2 scrapes + tokens Gemini Flash (modelo barato).
+- Botão separado garante que você só gasta quando realmente quer pesquisa.
 
-Confirmar para eu executar tudo (migration + código) numa sequência só.
+## Arquivos afetados
+
+- **Criados**: `src/lib/validacao-ia-online.functions.ts`, `src/lib/firecrawl.server.ts`.
+- **Editados**: `src/routes/_authenticated/validacao.tsx`, `src/components/dados-tecnicos-viewer.tsx`, `src/lib/db.ts` (tipos da `Validacao`).
+- **Migração**: novos campos em `public.validacoes`.
