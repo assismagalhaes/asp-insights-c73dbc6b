@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { StatusBadge, ResultBadge, PublicacaoBadge } from "@/components/status-badge";
-import { usePrognosticos, useConfiguracao, useResultadosFinanceiros, ESPORTES_DEFAULT, MERCADOS_DEFAULT } from "@/lib/db";
+import { usePrognosticos, useConfiguracao, useResultadosFinanceiros, ESPORTES_DEFAULT, MERCADOS_DEFAULT, sanitizeOptionList } from "@/lib/db";
 import {
   Select,
   SelectContent,
@@ -27,8 +27,8 @@ function Historico() {
   const { data: prognosticos = [] } = usePrognosticos();
   const { data: resultadosFinanceiros = [] } = useResultadosFinanceiros();
   const { data: cfg } = useConfiguracao();
-  const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
-  const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
+  const esportes = sanitizeOptionList(cfg?.esportes_ativos, ESPORTES_DEFAULT);
+  const mercados = sanitizeOptionList(cfg?.mercados_ativos, MERCADOS_DEFAULT);
 
   const [esporte, setEsporte] = useState("all");
   const [liga, setLiga] = useState("all");

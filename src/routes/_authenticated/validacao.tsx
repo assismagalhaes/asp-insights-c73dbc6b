@@ -33,6 +33,7 @@ import {
   getDadosTecnicos,
   ESPORTES_DEFAULT,
   MERCADOS_DEFAULT,
+  sanitizeOptionList,
   type Prognostico,
   type Status,
 } from "@/lib/db";
@@ -101,8 +102,8 @@ function Validacao() {
   const updateProg = useUpdatePrognostico();
   const callIA = useServerFn(analisarValidacao);
   const callIAOnline = useServerFn(analisarValidacaoOnline);
-  const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
-  const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
+  const esportes = sanitizeOptionList(cfg?.esportes_ativos, ESPORTES_DEFAULT);
+  const mercados = sanitizeOptionList(cfg?.mercados_ativos, MERCADOS_DEFAULT);
 
   // estado por linha
   const [oddsAj, setOddsAj] = useState<Record<string, string>>({});
@@ -230,7 +231,7 @@ function Validacao() {
           alertas_online: baseResult.alertas_online ?? null,
           prompt_versao: baseResult.prompt_versao,
         });
-        analiseId = analise.id;
+        analiseId = analise?.id;
       } catch (saveError) {
         console.warn("Nao foi possivel salvar analise_ia; mantendo parecer gerado.", saveError);
         toast.warning("Analise gerada, mas o historico da IA ainda nao esta disponivel no banco.");

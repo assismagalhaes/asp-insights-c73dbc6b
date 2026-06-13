@@ -58,6 +58,11 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
         <p className="mt-2 text-sm text-muted-foreground">
           Tente novamente ou volte ao dashboard.
         </p>
+        {error.message && (
+          <pre className="mt-4 max-h-40 overflow-auto rounded-md border border-border bg-card p-3 text-left font-mono text-xs text-muted-foreground">
+            {error.message}
+          </pre>
+        )}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {

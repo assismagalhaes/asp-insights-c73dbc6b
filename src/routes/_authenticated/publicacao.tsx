@@ -13,6 +13,7 @@ import {
   gerarTipTexto,
   ESPORTES_DEFAULT,
   MERCADOS_DEFAULT,
+  sanitizeOptionList,
   type Prognostico,
 } from "@/lib/db";
 import { StatusBadge, PublicacaoBadge } from "@/components/status-badge";
@@ -66,8 +67,8 @@ function PublicacaoPage() {
   const [customIni, setCustomIni] = useState("");
   const [customFim, setCustomFim] = useState("");
 
-  const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
-  const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
+  const esportes = sanitizeOptionList(cfg?.esportes_ativos, ESPORTES_DEFAULT);
+  const mercados = sanitizeOptionList(cfg?.mercados_ativos, MERCADOS_DEFAULT);
 
   const { ini, fim } = rangeFromPeriodo(periodo, customIni, customFim);
 
