@@ -161,7 +161,7 @@ function Historico() {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={14} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     Nenhum prognóstico encontrado com os filtros aplicados.
                   </td>
                 </tr>
