@@ -12,8 +12,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { StatusBadge, ResultBadge } from "@/components/status-badge";
+import { StatusBadge, ResultBadge, PublicacaoBadge } from "@/components/status-badge";
 import { LeagueFilter } from "@/components/league-filter";
+import { PeriodFilter } from "@/components/period-filter";
+import { rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
+import { shouldShowLinha } from "@/lib/date-br";
 import {
   usePrognosticos,
   useDeletePrognostico,
@@ -53,12 +56,14 @@ type SortKey =
   | "jogo"
   | "mercado"
   | "pick"
+  | "linha"
   | "odd_ofertada"
   | "odd_valor"
   | "probabilidade_final"
   | "edge"
   | "stake"
   | "status_validacao"
+  | "status_publicacao"
   | "resultado";
 
 function formatDateBR(iso: string): string {
@@ -91,8 +96,12 @@ function Prognosticos() {
   const [fLiga, setFLiga] = useState("all");
   const [fMercado, setFMercado] = useState("all");
   const [fValidacao, setFValidacao] = useState("all");
+  const [fPublicacao, setFPublicacao] = useState("all");
   const [fResultado, setFResultado] = useState("all");
-  const [fData, setFData] = useState("");
+  const [fLinha, setFLinha] = useState("");
+  const [periodo, setPeriodo] = useState<PeriodoFiltro>("tudo");
+  const [customIni, setCustomIni] = useState("");
+  const [customFim, setCustomFim] = useState("");
 
   const toggleSort = (k: SortKey) => {
     if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -102,14 +111,23 @@ function Prognosticos() {
     }
   };
 
+  const { ini, fim } = rangeFromPeriodo(periodo, customIni, customFim);
+
   const sorted = useMemo(() => {
     const arr = prognosticos.filter((p) => {
+      if (!dateInRange(p.data, ini, fim)) return false;
       if (fEsporte !== "all" && p.esporte !== fEsporte) return false;
       if (fLiga !== "all" && p.liga !== fLiga) return false;
       if (fMercado !== "all" && p.mercado !== fMercado) return false;
       if (fValidacao !== "all" && p.status_validacao !== fValidacao) return false;
+      if (fPublicacao !== "all" && p.status_publicacao !== fPublicacao) return false;
       if (fResultado !== "all" && p.resultado !== fResultado) return false;
-      if (fData && p.data !== fData) return false;
+      if (fLinha.trim()) {
+        const q = fLinha.trim().toLowerCase();
+        const inLinha = (p.linha ?? "").toString().toLowerCase().includes(q);
+        const inPick = (p.pick ?? "").toLowerCase().includes(q);
+        if (!inLinha && !inPick) return false;
+      }
       return true;
     });
     arr.sort((a, b) => {
@@ -124,7 +142,7 @@ function Prognosticos() {
       return sortDir === "asc" ? cmp : -cmp;
     });
     return arr;
-  }, [prognosticos, sortKey, sortDir, fEsporte, fLiga, fMercado, fValidacao, fResultado, fData]);
+  }, [prognosticos, sortKey, sortDir, ini, fim, fEsporte, fLiga, fMercado, fValidacao, fPublicacao, fResultado, fLinha]);
 
   const allSelected = sorted.length > 0 && sorted.every((p) => selected.has(p.id));
   const someSelected = selected.size > 0 && !allSelected;
@@ -234,41 +252,65 @@ function Prognosticos() {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
-        <Input type="date" value={fData} onChange={(e) => setFData(e.target.value)} />
-        <Select value={fEsporte} onValueChange={(v) => { setFEsporte(v); setFLiga("all"); }}>
-          <SelectTrigger><SelectValue placeholder="Esporte" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os esportes</SelectItem>
-            {esportes.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <LeagueFilter sport={fEsporte} value={fLiga} onChange={setFLiga} />
-        <Select value={fMercado} onValueChange={setFMercado}>
-          <SelectTrigger><SelectValue placeholder="Mercado" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os mercados</SelectItem>
-            {mercados.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={fValidacao} onValueChange={setFValidacao}>
-          <SelectTrigger><SelectValue placeholder="Validação" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas as validações</SelectItem>
-            <SelectItem value="CONFIRMA">CONFIRMA</SelectItem>
-            <SelectItem value="PULAR">PULAR</SelectItem>
-            <SelectItem value="PENDENTE">PENDENTE</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={fResultado} onValueChange={setFResultado}>
-          <SelectTrigger><SelectValue placeholder="Resultado" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os resultados</SelectItem>
-            <SelectItem value="GREEN">GREEN</SelectItem>
-            <SelectItem value="RED">RED</SelectItem>
-            <SelectItem value="PENDENTE">PENDENTE</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="rounded-lg border border-border bg-card p-3 space-y-3">
+        <PeriodFilter
+          periodo={periodo}
+          onPeriodoChange={setPeriodo}
+          customIni={customIni}
+          customFim={customFim}
+          onCustomIniChange={setCustomIni}
+          onCustomFimChange={setCustomFim}
+        />
+        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-7">
+          <Select value={fEsporte} onValueChange={(v) => { setFEsporte(v); setFLiga("all"); }}>
+            <SelectTrigger><SelectValue placeholder="Esporte" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os esportes</SelectItem>
+              {esportes.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <LeagueFilter sport={fEsporte} value={fLiga} onChange={setFLiga} />
+          <Select value={fMercado} onValueChange={setFMercado}>
+            <SelectTrigger><SelectValue placeholder="Mercado" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os mercados</SelectItem>
+              {mercados.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Input
+            placeholder="Linha (ex: 2.5, +1.5)"
+            value={fLinha}
+            onChange={(e) => setFLinha(e.target.value)}
+          />
+          <Select value={fValidacao} onValueChange={setFValidacao}>
+            <SelectTrigger><SelectValue placeholder="Validação" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as validações</SelectItem>
+              <SelectItem value="CONFIRMA">CONFIRMA</SelectItem>
+              <SelectItem value="PULAR">PULAR</SelectItem>
+              <SelectItem value="PENDENTE">PENDENTE</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={fPublicacao} onValueChange={setFPublicacao}>
+            <SelectTrigger><SelectValue placeholder="Publicação" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as publicações</SelectItem>
+              <SelectItem value="NAO_PUBLICADO">Não publicado</SelectItem>
+              <SelectItem value="PUBLICADO">Publicado</SelectItem>
+              <SelectItem value="FINALIZADO">Finalizado</SelectItem>
+              <SelectItem value="CANCELADO">Cancelado</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={fResultado} onValueChange={setFResultado}>
+            <SelectTrigger><SelectValue placeholder="Resultado" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os resultados</SelectItem>
+              <SelectItem value="GREEN">GREEN</SelectItem>
+              <SelectItem value="RED">RED</SelectItem>
+              <SelectItem value="PENDENTE">PENDENTE</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {selected.size > 0 && (
@@ -323,12 +365,14 @@ function Prognosticos() {
                   <th className="px-3 py-2 text-left text-xs uppercase tracking-wider text-muted-foreground">Placar</th>
                   <SortableTh label="Mercado" k="mercado" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                   <SortableTh label="Pick" k="pick" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <SortableTh label="Linha" k="linha" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                   <SortableTh label="Odd Of." k="odd_ofertada" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                   <SortableTh label="Odd Val." k="odd_valor" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                   <SortableTh label="Prob." k="probabilidade_final" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                   <SortableTh label="Edge" k="edge" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                   <SortableTh label="Stake" k="stake" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                   <SortableTh label="Validação" k="status_validacao" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                  <SortableTh label="Publicação" k="status_publicacao" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                   <SortableTh label="Resultado" k="resultado" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                   <th className="px-3 py-2 text-right">Ações</th>
                 </tr>
@@ -336,14 +380,14 @@ function Prognosticos() {
               <tbody>
                 {isLoading && (
                   <tr>
-                    <td colSpan={17} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={19} className="px-4 py-8 text-center text-sm text-muted-foreground">
                       Carregando...
                     </td>
                   </tr>
                 )}
                 {!isLoading && sorted.length === 0 && (
                   <tr>
-                    <td colSpan={17} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={19} className="px-4 py-8 text-center text-sm text-muted-foreground">
                       Nenhum prognóstico cadastrado.
                     </td>
                   </tr>
@@ -365,6 +409,9 @@ function Prognosticos() {
                     <td className="px-3 py-2 whitespace-nowrap font-mono text-xs">{p.placar_final ?? "—"}</td>
                     <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{p.mercado}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{p.pick}</td>
+                    <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-muted-foreground">
+                      {shouldShowLinha(p.pick, p.linha) ? p.linha : "—"}
+                    </td>
                     <td className="px-3 py-2 text-right font-mono">{p.odd_ofertada.toFixed(2)}</td>
                     <td className="px-3 py-2 text-right font-mono">{p.odd_valor.toFixed(2)}</td>
                     <td className="px-3 py-2 text-right font-mono">{p.probabilidade_final.toFixed(1)}%</td>
@@ -373,6 +420,7 @@ function Prognosticos() {
                     </td>
                     <td className="px-3 py-2 text-right font-mono">{p.stake.toFixed(1)}u</td>
                     <td className="px-3 py-2"><StatusBadge status={p.status_validacao} /></td>
+                    <td className="px-3 py-2"><PublicacaoBadge status={p.status_publicacao} /></td>
                     <td className="px-3 py-2"><ResultBadge result={p.resultado} /></td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
                       <div className="flex justify-end gap-1">

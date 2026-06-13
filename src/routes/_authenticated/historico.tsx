@@ -11,7 +11,9 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { LeagueFilter } from "@/components/league-filter";
-import { formatBR, formatHora } from "@/lib/date-br";
+import { PeriodFilter } from "@/components/period-filter";
+import { rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
+import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
 
 export const Route = createFileRoute("/_authenticated/historico")({
   head: () => ({ meta: [{ title: "Histórico — ASP Insights" }] }),
@@ -31,9 +33,15 @@ function Historico() {
   const [resultado, setResultado] = useState("all");
   const [publicacao, setPublicacao] = useState("all");
   const [data, setData] = useState("");
+  const [periodo, setPeriodo] = useState<PeriodoFiltro>("tudo");
+  const [customIni, setCustomIni] = useState("");
+  const [customFim, setCustomFim] = useState("");
+
+  const { ini, fim } = rangeFromPeriodo(periodo, customIni, customFim);
 
   const rows = useMemo(() => {
     return prognosticos.filter((p) => {
+      if (!dateInRange(p.data, ini, fim)) return false;
       if (esporte !== "all" && p.esporte !== esporte) return false;
       if (liga !== "all" && p.liga !== liga) return false;
       if (mercado !== "all" && p.mercado !== mercado) return false;
@@ -43,7 +51,7 @@ function Historico() {
       if (data && p.data !== data) return false;
       return true;
     });
-  }, [prognosticos, esporte, liga, mercado, status, resultado, publicacao, data]);
+  }, [prognosticos, ini, fim, esporte, liga, mercado, status, resultado, publicacao, data]);
 
   const wins = rows.filter((r) => r.resultado === "GREEN").length;
   const losses = rows.filter((r) => r.resultado === "RED").length;
@@ -59,8 +67,19 @@ function Historico() {
         </p>
       </div>
 
+      <div className="rounded-lg border border-border bg-card p-3">
+        <PeriodFilter
+          periodo={periodo}
+          onPeriodoChange={setPeriodo}
+          customIni={customIni}
+          customFim={customFim}
+          onCustomIniChange={setCustomIni}
+          onCustomFimChange={setCustomFim}
+        />
+      </div>
+
       <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-7">
-        <Input type="date" value={data} onChange={(e) => setData(e.target.value)} />
+        <Input type="date" value={data} onChange={(e) => setData(e.target.value)} placeholder="Data exata" />
         <Select value={esporte} onValueChange={(v) => { setEsporte(v); setLiga("all"); }}>
           <SelectTrigger><SelectValue placeholder="Esporte" /></SelectTrigger>
           <SelectContent>

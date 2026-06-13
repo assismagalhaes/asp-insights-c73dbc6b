@@ -22,7 +22,7 @@ import {
 } from "recharts";
 import { StatCard } from "@/components/stat-card";
 import { StatusBadge, ResultBadge } from "@/components/status-badge";
-import { Input } from "@/components/ui/input";
+
 import {
   Select,
   SelectContent,
@@ -37,6 +37,7 @@ import {
   ESPORTES_DEFAULT,
 } from "@/lib/db";
 import { LeagueFilter } from "@/components/league-filter";
+import { PeriodFilter } from "@/components/period-filter";
 import { formatBR, formatHora } from "@/lib/date-br";
 import {
   computeMetrics,
@@ -62,15 +63,6 @@ const axisColor = "oklch(0.68 0.02 250)";
 
 const ESPORTES = ["Todos", ...ESPORTES_DEFAULT];
 const MERCADOS = ["Todos", ...MERCADOS_DEFAULT];
-const PERIODOS: { v: PeriodoFiltro; label: string }[] = [
-  { v: "hoje", label: "Hoje" },
-  { v: "7d", label: "7 dias" },
-  { v: "30d", label: "30 dias" },
-  { v: "mes", label: "Mês atual" },
-  { v: "ano", label: "Ano atual" },
-  { v: "tudo", label: "Todo o período" },
-  { v: "custom", label: "Personalizado" },
-];
 
 function Dashboard() {
   const { data: prognosticos = [] } = usePrognosticos();
@@ -142,27 +134,14 @@ function Dashboard() {
       {/* Filtros */}
       <div className="rounded-lg border border-border bg-card p-3">
         <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Período</label>
-            <Select value={periodo} onValueChange={(v) => setPeriodo(v as PeriodoFiltro)}>
-              <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {PERIODOS.map((p) => <SelectItem key={p.v} value={p.v}>{p.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          {periodo === "custom" && (
-            <>
-              <div>
-                <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">De</label>
-                <Input type="date" value={customIni} onChange={(e) => setCustomIni(e.target.value)} className="h-9 w-40" />
-              </div>
-              <div>
-                <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Até</label>
-                <Input type="date" value={customFim} onChange={(e) => setCustomFim(e.target.value)} className="h-9 w-40" />
-              </div>
-            </>
-          )}
+          <PeriodFilter
+            periodo={periodo}
+            onPeriodoChange={setPeriodo}
+            customIni={customIni}
+            customFim={customFim}
+            onCustomIniChange={setCustomIni}
+            onCustomFimChange={setCustomFim}
+          />
           <div>
             <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Esporte</label>
             <Select value={esporte} onValueChange={setEsporte}>

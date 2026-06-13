@@ -124,7 +124,7 @@ export function bankrollTimeline(
 }
 
 // ===== Filtros de período =====
-export type PeriodoFiltro = "hoje" | "7d" | "30d" | "mes" | "ano" | "tudo" | "custom";
+export type PeriodoFiltro = "hoje" | "ontem" | "7d" | "30d" | "mes" | "ano" | "tudo" | "custom";
 
 export function dateInRange(d: string, ini?: string | null, fim?: string | null): boolean {
   if (ini && d < ini) return false;
@@ -147,6 +147,11 @@ export function rangeFromPeriodo(p: PeriodoFiltro, customIni?: string, customFim
   const hoje = brNow();
   const f = fmt(hoje);
   if (p === "hoje") return { ini: f, fim: f };
+  if (p === "ontem") {
+    const i = new Date(hoje); i.setDate(i.getDate() - 1);
+    const s = fmt(i);
+    return { ini: s, fim: s };
+  }
   if (p === "7d") {
     const i = new Date(hoje); i.setDate(i.getDate() - 6);
     return { ini: fmt(i), fim: f };
@@ -166,3 +171,14 @@ export function rangeFromPeriodo(p: PeriodoFiltro, customIni?: string, customFim
   if (p === "custom") return { ini: customIni || null, fim: customFim || null };
   return { ini: null, fim: null };
 }
+
+export const PERIODOS_OPCOES: { v: PeriodoFiltro; label: string }[] = [
+  { v: "hoje", label: "Hoje" },
+  { v: "ontem", label: "Ontem" },
+  { v: "7d", label: "Últimos 7 dias" },
+  { v: "30d", label: "Últimos 30 dias" },
+  { v: "mes", label: "Mês atual" },
+  { v: "ano", label: "Ano atual" },
+  { v: "tudo", label: "Todo o período" },
+  { v: "custom", label: "Personalizado" },
+];

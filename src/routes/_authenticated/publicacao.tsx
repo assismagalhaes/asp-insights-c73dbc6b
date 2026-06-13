@@ -34,6 +34,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LeagueFilter } from "@/components/league-filter";
+import { PeriodFilter } from "@/components/period-filter";
+import { rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
 import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
 import { toast } from "sonner";
 
@@ -54,9 +56,14 @@ function PublicacaoPage() {
   const [fEsporte, setFEsporte] = useState("all");
   const [fLiga, setFLiga] = useState("all");
   const [fMercado, setFMercado] = useState("all");
+  const [periodo, setPeriodo] = useState<PeriodoFiltro>("tudo");
+  const [customIni, setCustomIni] = useState("");
+  const [customFim, setCustomFim] = useState("");
 
   const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
   const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
+
+  const { ini, fim } = rangeFromPeriodo(periodo, customIni, customFim);
 
   const elegiveis = useMemo(
     () =>
@@ -64,11 +71,12 @@ function PublicacaoPage() {
         (p) =>
           p.status_publicacao === "NAO_PUBLICADO" &&
           p.status_validacao === "CONFIRMA" &&
+          dateInRange(p.data, ini, fim) &&
           (fEsporte === "all" || p.esporte === fEsporte) &&
           (fLiga === "all" || p.liga === fLiga) &&
           (fMercado === "all" || p.mercado === fMercado),
       ),
-    [prognosticos, fEsporte, fLiga, fMercado],
+    [prognosticos, ini, fim, fEsporte, fLiga, fMercado],
   );
 
   const podePublicar = (p: Prognostico) => p.status_validacao === "CONFIRMA";
@@ -121,6 +129,14 @@ function PublicacaoPage() {
       {/* Filtros */}
       <div className="rounded-lg border border-border bg-card p-3">
         <div className="flex flex-wrap items-end gap-3">
+          <PeriodFilter
+            periodo={periodo}
+            onPeriodoChange={setPeriodo}
+            customIni={customIni}
+            customFim={customFim}
+            onCustomIniChange={setCustomIni}
+            onCustomFimChange={setCustomFim}
+          />
           <div>
             <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Esporte</Label>
             <Select value={fEsporte} onValueChange={(v) => { setFEsporte(v); setFLiga("all"); }}>
