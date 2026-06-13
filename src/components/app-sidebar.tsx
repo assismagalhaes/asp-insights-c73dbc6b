@@ -9,6 +9,7 @@ import {
   Settings,
   Upload,
   Megaphone,
+  BrainCircuit,
 } from "lucide-react";
 import logo from "@/assets/logo-asp.png.asset.json";
 
@@ -35,6 +36,7 @@ const items = [
   { title: "Histórico", url: "/historico", icon: History },
   { title: "Bankroll", url: "/bankroll", icon: Wallet },
   { title: "ROI e Estatísticas", url: "/estatisticas", icon: BarChart3 },
+  { title: "Aprendizado da IA", url: "/aprendizado-ia", icon: BrainCircuit },
   { title: "Configurações", url: "/configuracoes", icon: Settings },
 ];
 

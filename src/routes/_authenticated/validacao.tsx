@@ -25,6 +25,7 @@ import { rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics
 import {
   usePrognosticos,
   useCreateValidacao,
+  useCreateAnaliseIa,
   useUpdatePrognostico,
   useConfiguracao,
   calcEdge,
@@ -39,6 +40,7 @@ import { analisarValidacaoOnline } from "@/lib/validacao-ia-online.functions";
 import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { DadosTecnicosViewer } from "@/components/dados-tecnicos-viewer";
 
 export const Route = createFileRoute("/_authenticated/validacao")({
   head: () => ({ meta: [{ title: "Validação Crítica — ASP Insights" }] }),
@@ -46,8 +48,8 @@ export const Route = createFileRoute("/_authenticated/validacao")({
 });
 
 const decisoes: { label: Status; texto: string; color: string }[] = [
-  { label: "CONFIRMA", texto: "CONFIRMA", color: "bg-success text-success-foreground hover:bg-success/90" },
-  { label: "PULAR", texto: "PULAR", color: "bg-destructive text-destructive-foreground hover:bg-destructive/90" },
+  { label: "CONFIRMA", texto: "Confirmar", color: "bg-success text-success-foreground hover:bg-success/90" },
+  { label: "PULAR", texto: "Pular", color: "bg-destructive text-destructive-foreground hover:bg-destructive/90" },
 ];
 
 const STAKES = ["0.5", "1.0", "1.5"];
@@ -71,6 +73,7 @@ interface IAResult {
   fontes_consultadas?: { titulo: string; url: string }[];
   buscas_realizadas?: string[];
   alertas_online?: string[];
+  analise_ia_id?: string;
 }
 
 function autoCheck(p: Prognostico, edgeFinal: number) {
@@ -83,7 +86,7 @@ function autoCheck(p: Prognostico, edgeFinal: number) {
 
 function extractParecerSection(text: string, heading: string) {
   const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const re = new RegExp(`${escaped}\\n([\\s\\S]*?)(?=\\n[A-G]\\) |$)`, "i");
+  const re = new RegExp(`${escaped}\\n([\\s\\S]*?)(?=\\n[A-H]\\) |$)`, "i");
   return text.match(re)?.[1]?.trim() ?? "";
 }
 
@@ -91,6 +94,7 @@ function Validacao() {
   const { data: prognosticos = [] } = usePrognosticos();
   const { data: cfg } = useConfiguracao();
   const createVal = useCreateValidacao();
+  const createAnaliseIa = useCreateAnaliseIa();
   const updateProg = useUpdatePrognostico();
   const callIA = useServerFn(analisarValidacao);
   const callIAOnline = useServerFn(analisarValidacaoOnline);
@@ -148,6 +152,18 @@ function Validacao() {
     return calcEdge(p.probabilidade_final, odd);
   };
 
+  const getRiskTags = (text: string, alertas?: string[]) => {
+    const tags = new Set<string>();
+    const source = `${text}\n${(alertas ?? []).join("\n")}`.toLowerCase();
+    if (/lineup|escala|escalação|rotacao|rotação/.test(source)) tags.add("lineup/rotacao");
+    if (/lesao|lesão|injury|questionavel|questionável|out/.test(source)) tags.add("lesao/status");
+    if (/clima|weather|vento|chuva|frio/.test(source)) tags.add("clima");
+    if (/bullpen|starter|pitcher|goalie|goleiro|qb/.test(source)) tags.add("posicao-chave");
+    if (/nao encontrado|não encontrado|incerto|fonte insuficiente/.test(source)) tags.add("informacao-incerta");
+    if (/risco alto|impacto:\s*alto|estrutural/.test(source)) tags.add("risco-alto");
+    return Array.from(tags);
+  };
+
   const rodarIA = async (p: Prognostico, modo: "local" | "online") => {
     setIaLoading((s) => ({ ...s, [p.id]: modo }));
     try {
@@ -178,7 +194,35 @@ function Validacao() {
         },
       };
       const raw = modo === "online" ? await callIAOnline(payload) : await callIA(payload);
-      const r: IAResult = { ...(raw as Omit<IAResult, "modo">), modo };
+      const baseResult = raw as Omit<IAResult, "modo" | "analise_ia_id">;
+      const analise = await createAnaliseIa.mutateAsync({
+        prognostico_id: p.id,
+        modo_ia: modo,
+        esporte: p.esporte,
+        liga: p.liga,
+        mercado: p.mercado,
+        pick: p.pick,
+        linha: p.linha,
+        odd_original: p.odd_ofertada,
+        odd_ajustada: oddAj,
+        odd_valor: p.odd_valor,
+        odd_usada: oddAj ?? p.odd_ofertada,
+        probabilidade_final: p.probabilidade_final,
+        edge_original: p.edge,
+        edge_ajustado: edgeAj,
+        edge_usado: edgeAj ?? p.edge,
+        contexto_analisado: [dados, contextos[p.id] ?? ""].filter(Boolean).join("\n\n"),
+        parecer_ia: baseResult.parecer,
+        decisao_sugerida: baseResult.decisao_sugerida as "CONFIRMA" | "PULAR" | null,
+        stake_sugerida: baseResult.stake_sugerida,
+        riscos_identificados: extractParecerSection(baseResult.parecer, "E) Riscos principais") || extractParecerSection(baseResult.parecer, "G) Riscos principais"),
+        tags_risco: getRiskTags(baseResult.parecer, baseResult.alertas_online),
+        fontes_consultadas: baseResult.fontes_consultadas ?? null,
+        buscas_realizadas: baseResult.buscas_realizadas ?? null,
+        alertas_online: baseResult.alertas_online ?? null,
+        prompt_versao: baseResult.prompt_versao,
+      });
+      const r: IAResult = { ...baseResult, modo, analise_ia_id: analise.id };
       setIaResults((s) => ({ ...s, [p.id]: r }));
       toast.success(modo === "online" ? "Análise online concluída" : "Análise local gerada");
     } catch (e) {
@@ -207,10 +251,10 @@ function Validacao() {
     try {
       const oddAj = getOddAjustadaNum(p);
       const edgeAj = getEdgeAjustado(p);
-      const stakeNum = stakes[p.id] ? Number(stakes[p.id]) : p.stake;
+      const stakeNum = decisao === "CONFIRMA" ? (stakes[p.id] ? Number(stakes[p.id]) : p.stake) : null;
       const dadosTecnicos = dadosEdit[p.id];
 
-      // atualiza odd/edge ajustados, stake e dados técnicos no prognóstico
+      // atualiza odd/edge ajustados, stake e contexto no prognóstico
       const patch: Partial<Prognostico> & { id: string } = { id: p.id };
       if (oddAj != null && oddAj !== p.odd_ajustada) patch.odd_ajustada = oddAj;
       if (edgeAj != null && edgeAj !== p.edge_ajustado) patch.edge_ajustado = edgeAj;
@@ -325,7 +369,10 @@ function Validacao() {
                   </div>
                   <h3 className="mt-1 text-lg font-semibold">{p.jogo}</h3>
                 </div>
-                <StatusBadge status={p.status_validacao} />
+                <div className="flex items-center gap-2">
+                  <DadosTecnicosViewer prognostico={p} variant="button" />
+                  <StatusBadge status={p.status_validacao} />
+                </div>
               </div>
 
               {/* Bloco de entrada */}
@@ -376,18 +423,18 @@ function Validacao() {
                 )}
               </div>
 
-              {/* Dados Técnicos */}
+              {/* Contexto da Análise */}
               <Collapsible defaultOpen={!!dadosCurrent}>
                 <CollapsibleTrigger asChild>
                   <Button variant="outline" size="sm" className="w-full justify-start">
                     <Brain className="h-4 w-4 mr-2 text-primary" />
-                    Dados Técnicos do Modelo {dadosCurrent ? `(${dadosCurrent.length} chars)` : "(vazio)"}
+                    Contexto da Análise {dadosCurrent ? `(${dadosCurrent.length} chars)` : "(vazio)"}
                   </Button>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="pt-2">
                   <Textarea
                     rows={5}
-                    placeholder="Cole/edite os dados técnicos exportados pelo modelo (xG, RPI, projeções, tendências, etc.)"
+                    placeholder="Cole/edite todo o contexto usado na análise: modelo Python, H2H, últimos jogos, projeções, odds, linhas, splits e observações manuais."
                     value={dadosCurrent}
                     onChange={(e) => setDadosEdit({ ...dadosEdit, [p.id]: e.target.value })}
                     className="font-mono text-xs"
@@ -395,10 +442,10 @@ function Validacao() {
                 </CollapsibleContent>
               </Collapsible>
 
-              {/* Contexto adicional */}
+              {/* Complemento manual */}
               <div>
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Contexto adicional para análise
+                  Complemento manual do contexto
                 </Label>
                 <Textarea
                   rows={3}
@@ -508,7 +555,7 @@ function Validacao() {
                             extractParecerSection(ia.parecer, "D) Informacoes criticas nao encontradas") ||
                               extractParecerSection(ia.parecer, "D) Informações críticas não encontradas"),
                           ],
-                          ["Riscos principais", extractParecerSection(ia.parecer, "F) Riscos principais")],
+                          ["Riscos principais", extractParecerSection(ia.parecer, "E) Riscos principais") || extractParecerSection(ia.parecer, "G) Riscos principais")],
                         ].map(([titulo, conteudo]) => (
                           <div key={titulo} className="rounded border border-border bg-background/60 p-2">
                             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{titulo}</div>

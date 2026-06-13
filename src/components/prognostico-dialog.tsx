@@ -290,10 +290,10 @@ export function PrognosticoDialog({
             </Select>
           </Field>
           <div className="md:col-span-3">
-            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Dados Técnicos do Modelo</Label>
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Contexto da Análise</Label>
             <Textarea
               rows={4}
-              placeholder="Cole aqui dados técnicos do modelo (xG, RPI, projeções, tendências, etc.)"
+              placeholder="Cole aqui o contexto usado na análise: modelo Python, H2H, últimos jogos, projeções, odds, linhas, splits e observações."
               value={form.dados_tecnicos ?? form.observacoes ?? ""}
               onChange={(e) => set("dados_tecnicos", e.target.value || null)}
             />
