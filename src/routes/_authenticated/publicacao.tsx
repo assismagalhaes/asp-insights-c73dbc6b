@@ -288,10 +288,16 @@ function PublishDialog({
 
   useEffect(() => {
     if (prognostico) {
+      const parecer =
+        validacao?.parecer_validacao?.trim() ||
+        validacao?.parecer_ia?.trim() ||
+        "";
       setTip(
         gerarTipTexto(prognostico, {
+          parecer,
           justificativa: validacao?.justificativa,
           riscos: validacao?.riscos_identificados,
+          comentarios: validacao?.comentarios_analista,
         }),
       );
     }
@@ -319,8 +325,9 @@ function PublishDialog({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Publicar Pick — {prognostico.jogo}</DialogTitle>
-          <DialogDescription>
-            Edite a TIP final antes de copiar/publicar. Canal: <strong>{canal}</strong>
+          <DialogDescription className="flex items-center justify-between gap-2">
+            <span>Edite a TIP final antes de copiar/publicar. Canal: <strong>{canal}</strong></span>
+            <DadosTecnicosViewer prognostico={prognostico} variant="button" />
           </DialogDescription>
         </DialogHeader>
         <Textarea
