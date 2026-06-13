@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -12,8 +12,16 @@ import {
   Line,
   Cell,
 } from "recharts";
-import { usePrognosticos, useConfiguracao } from "@/lib/db";
+import { usePrognosticos, useConfiguracao, ESPORTES_DEFAULT, MERCADOS_DEFAULT } from "@/lib/db";
 import { bankrollTimeline, lucroUnidades } from "@/lib/metrics";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { LeagueFilter } from "@/components/league-filter";
 
 export const Route = createFileRoute("/_authenticated/estatisticas")({
   head: () => ({ meta: [{ title: "ROI e Estatísticas — ASP Insights" }] }),
@@ -33,11 +41,28 @@ const tooltipStyle = {
 function Estatisticas() {
   const { data: prognosticos = [] } = usePrognosticos();
   const { data: cfg } = useConfiguracao();
+  const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
+  const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
+
+  const [fEsporte, setFEsporte] = useState("all");
+  const [fLiga, setFLiga] = useState("all");
+  const [fMercado, setFMercado] = useState("all");
+
+  const filtrados = useMemo(
+    () =>
+      prognosticos.filter((p) => {
+        if (fEsporte !== "all" && p.esporte !== fEsporte) return false;
+        if (fLiga !== "all" && p.liga !== fLiga) return false;
+        if (fMercado !== "all" && p.mercado !== fMercado) return false;
+        return true;
+      }),
+    [prognosticos, fEsporte, fLiga, fMercado],
+  );
 
   // Apenas prognósticos confirmados contam para as estatísticas
   const validados = useMemo(
-    () => prognosticos.filter((p) => p.status_validacao === "CONFIRMA"),
-    [prognosticos],
+    () => filtrados.filter((p) => p.status_validacao === "CONFIRMA"),
+    [filtrados],
   );
 
   const sportPerformance = useMemo(() => {
