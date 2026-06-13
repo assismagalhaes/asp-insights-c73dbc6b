@@ -129,6 +129,14 @@ function PublicacaoPage() {
       {/* Filtros */}
       <div className="rounded-lg border border-border bg-card p-3">
         <div className="flex flex-wrap items-end gap-3">
+          <PeriodFilter
+            periodo={periodo}
+            onPeriodoChange={setPeriodo}
+            customIni={customIni}
+            customFim={customFim}
+            onCustomIniChange={setCustomIni}
+            onCustomFimChange={setCustomFim}
+          />
           <div>
             <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Esporte</Label>
             <Select value={fEsporte} onValueChange={(v) => { setFEsporte(v); setFLiga("all"); }}>
