@@ -312,14 +312,17 @@ export type Database = {
       }
       validacoes: {
         Row: {
+          buscas_realizadas: Json | null
           comentarios_analista: string | null
           contexto_adicional: string | null
           created_at: string
           data_analise_ia: string | null
           decisao: string
           decisao_ia_sugerida: string | null
+          fontes_consultadas: Json | null
           id: string
           justificativa: string | null
+          modo_ia: string | null
           parecer_ia: string | null
           parecer_validacao: string | null
           prognostico_id: string
@@ -329,14 +332,17 @@ export type Database = {
           stake_ia_sugerida: number | null
         }
         Insert: {
+          buscas_realizadas?: Json | null
           comentarios_analista?: string | null
           contexto_adicional?: string | null
           created_at?: string
           data_analise_ia?: string | null
           decisao: string
           decisao_ia_sugerida?: string | null
+          fontes_consultadas?: Json | null
           id?: string
           justificativa?: string | null
+          modo_ia?: string | null
           parecer_ia?: string | null
           parecer_validacao?: string | null
           prognostico_id: string
@@ -346,14 +352,17 @@ export type Database = {
           stake_ia_sugerida?: number | null
         }
         Update: {
+          buscas_realizadas?: Json | null
           comentarios_analista?: string | null
           contexto_adicional?: string | null
           created_at?: string
           data_analise_ia?: string | null
           decisao?: string
           decisao_ia_sugerida?: string | null
+          fontes_consultadas?: Json | null
           id?: string
           justificativa?: string | null
+          modo_ia?: string | null
           parecer_ia?: string | null
           parecer_validacao?: string | null
           prognostico_id?: string
