@@ -8,7 +8,7 @@ type FormatterFn = (value: number, name: string, dataKey: string) => {
   color?: string;
 };
 
-interface Props extends TooltipProps<number, string> {
+interface Props extends Omit<TooltipProps<number, string>, "formatter"> {
   /** Formata o label do header (ex. data). */
   headerFormatter?: (label: string) => string;
   /** Formata cada métrica do payload. */
