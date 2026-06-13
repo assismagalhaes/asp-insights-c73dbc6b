@@ -472,9 +472,10 @@ export function gerarTipTexto(
   extras?: {
     parecer?: string | null;
     dados_tecnicos?: string | null;
-    /** legados */
+    /** legados — usados apenas como fallback se parecer não vier */
     justificativa?: string | null;
     riscos?: string | null;
+    comentarios?: string | null;
   },
 ): string {
   const linha = (p.linha ?? "").trim();
@@ -483,21 +484,28 @@ export function gerarTipTexto(
   const oddFinal = getOddEfetiva(p);
   const edgeFinal = getEdgeEfetivo(p);
   const dados = (extras?.dados_tecnicos?.trim()) || getDadosTecnicos(p) || "—";
-  const parecer =
-    extras?.parecer?.trim() ||
-    [extras?.justificativa?.trim(), extras?.riscos?.trim() ? `Riscos: ${extras.riscos.trim()}` : ""]
-      .filter(Boolean)
-      .join("\n") ||
-    "—";
+  const parecerLegado = [
+    extras?.justificativa?.trim(),
+    extras?.riscos?.trim() ? `Riscos: ${extras.riscos.trim()}` : "",
+    extras?.comentarios?.trim(),
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const parecer = extras?.parecer?.trim() || parecerLegado || "—";
+  const formatDateBR = (iso: string) => {
+    const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+  };
+  const hora = p.hora ? p.hora.slice(0, 5) : "—";
 
   return `🔥 ASP INSIGHTS - PICK CONFIRMADA
 
 🏆 Jogo: ${p.jogo}
-🏟️ Liga: ${p.liga || "—"}
-📊 Esporte: ${p.esporte}
+📅 Data/Hora: ${formatDateBR(p.data)} às ${hora}
+📊 Esporte/Liga: ${p.esporte} - ${p.liga || "—"}
 
 🎯 Mercado: ${p.mercado}
-✅ Pick: ${p.pick}${linhaForaDoPick ? `\n📐 Linha: ${linha}` : ""}
+✅ Pick: ${p.pick}${linhaForaDoPick ? `\n📌 Linha: ${linha}` : ""}
 📈 Odd: ${oddFinal.toFixed(2)}${p.odd_ajustada != null ? ` (original: ${p.odd_ofertada.toFixed(2)})` : ""}
 📉 Odd de Valor: ${p.odd_valor.toFixed(2)}
 📊 Probabilidade: ${p.probabilidade_final.toFixed(1)}%
