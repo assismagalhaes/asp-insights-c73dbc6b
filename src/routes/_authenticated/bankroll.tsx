@@ -8,6 +8,7 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
+  ReferenceLine,
 } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StatCard } from "@/components/stat-card";
+import { ChartTooltip } from "@/components/chart-tooltip";
 import {
   useConfiguracao,
   useUpdateConfiguracao,
@@ -27,6 +29,15 @@ import {
   type TipoStake,
 } from "@/lib/db";
 import { computeMetrics, bankrollTimeline } from "@/lib/metrics";
+import { formatBR } from "@/lib/date-br";
+import {
+  COLOR_GRID,
+  COLOR_AXIS,
+  COLOR_REFERENCE,
+  COLOR_NEUTRAL,
+  signColor,
+  withSign,
+} from "@/lib/chart-colors";
 import { TrendingDown, TrendingUp, Wallet, Percent, Target, Activity, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 
@@ -35,8 +46,8 @@ export const Route = createFileRoute("/_authenticated/bankroll")({
   component: Bankroll,
 });
 
-const chartGrid = "oklch(0.28 0.02 250)";
-const axisColor = "oklch(0.68 0.02 250)";
+const chartGrid = COLOR_GRID;
+const axisColor = COLOR_AXIS;
 
 function Bankroll() {
   const { data: cfg } = useConfiguracao();
