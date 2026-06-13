@@ -404,12 +404,13 @@ export function calcLucro(resultado: Resultado, stake: number, odd: number): num
       return Number((stake * (odd - 1)).toFixed(2));
     case "RED":
       return Number((-stake).toFixed(2));
+    // Resultados legados (mantidos por compatibilidade) convertidos
     case "HALF GREEN":
-      return Number(((stake * (odd - 1)) / 2).toFixed(2));
+      return Number((stake * (odd - 1)).toFixed(2));
     case "HALF RED":
-      return Number((-stake / 2).toFixed(2));
     case "PUSH":
     case "VOID":
+      return Number((-stake).toFixed(2));
     default:
       return 0;
   }

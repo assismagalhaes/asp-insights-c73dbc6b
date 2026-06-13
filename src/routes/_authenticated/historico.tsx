@@ -45,9 +45,9 @@ function Historico() {
     });
   }, [prognosticos, esporte, liga, mercado, status, resultado, publicacao, data]);
 
-  const wins = rows.filter((r) => r.resultado === "GREEN" || r.resultado === "HALF GREEN").length;
-  const losses = rows.filter((r) => r.resultado === "RED" || r.resultado === "HALF RED").length;
-  const pushes = rows.filter((r) => r.resultado === "PUSH" || r.resultado === "VOID").length;
+  const wins = rows.filter((r) => r.resultado === "GREEN").length;
+  const losses = rows.filter((r) => r.resultado === "RED").length;
+  const pushes = 0;
   const lucro = rows.reduce((s, p) => s + (p.lucro_prejuizo ?? 0), 0);
 
   return (
@@ -100,11 +100,7 @@ function Historico() {
           <SelectContent>
             <SelectItem value="all">Todos os resultados</SelectItem>
             <SelectItem value="GREEN">GREEN</SelectItem>
-            <SelectItem value="HALF GREEN">HALF GREEN</SelectItem>
             <SelectItem value="RED">RED</SelectItem>
-            <SelectItem value="HALF RED">HALF RED</SelectItem>
-            <SelectItem value="PUSH">PUSH</SelectItem>
-            <SelectItem value="VOID">VOID</SelectItem>
             <SelectItem value="PENDENTE">PENDENTE</SelectItem>
           </SelectContent>
         </Select>
