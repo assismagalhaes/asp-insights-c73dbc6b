@@ -65,12 +65,18 @@ function Validacao() {
   const [fEsporte, setFEsporte] = useState("all");
   const [fLiga, setFLiga] = useState("all");
   const [fMercado, setFMercado] = useState("all");
+  const [periodo, setPeriodo] = useState<PeriodoFiltro>("tudo");
+  const [customIni, setCustomIni] = useState("");
+  const [customFim, setCustomFim] = useState("");
+
+  const { ini, fim } = rangeFromPeriodo(periodo, customIni, customFim);
 
   const pendentes = useMemo(
     () =>
       prognosticos
         .filter((p) => p.resultado === "PENDENTE" && p.status_validacao === "PENDENTE")
         .filter((p) => {
+          if (!dateInRange(p.data, ini, fim)) return false;
           if (fEsporte !== "all" && p.esporte !== fEsporte) return false;
           if (fLiga !== "all" && p.liga !== fLiga) return false;
           if (fMercado !== "all" && p.mercado !== fMercado) return false;
@@ -83,7 +89,7 @@ function Validacao() {
           const hb = b.hora ?? "99:99";
           return ha < hb ? -1 : ha > hb ? 1 : 0;
         }),
-    [prognosticos, fEsporte, fLiga, fMercado],
+    [prognosticos, ini, fim, fEsporte, fLiga, fMercado],
   );
 
   const decidir = async (p: Prognostico, decisao: Status) => {
