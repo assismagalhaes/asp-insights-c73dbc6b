@@ -263,7 +263,7 @@ function topTags(rows: FeedbackIaResultado[]) {
 }
 
 function uniq(items: Array<string | null | undefined>) {
-  return Array.from(new Set(items.filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b));
+  return Array.from(new Set(items.map((item) => item?.trim()).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b));
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {

@@ -28,6 +28,7 @@ import {
   gerarTipTexto,
   ESPORTES_DEFAULT,
   MERCADOS_DEFAULT,
+  sanitizeOptionList,
   type Prognostico,
 } from "@/lib/db";
 import { PrognosticoDialog } from "@/components/prognostico-dialog";
@@ -94,8 +95,8 @@ function Prognosticos() {
   const [sortKey, setSortKey] = useState<SortKey>("data");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
-  const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
-  const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
+  const esportes = sanitizeOptionList(cfg?.esportes_ativos, ESPORTES_DEFAULT);
+  const mercados = sanitizeOptionList(cfg?.mercados_ativos, MERCADOS_DEFAULT);
   const [fEsporte, setFEsporte] = useState("all");
   const [fLiga, setFLiga] = useState("all");
   const [fMercado, setFMercado] = useState("all");

@@ -26,6 +26,7 @@ import {
   useLigas,
   useUpsertLiga,
   usePrognosticoDetail,
+  sanitizeOptionList,
   type Prognostico,
   type PrognosticoInput,
   type Liga,
@@ -80,11 +81,13 @@ export function PrognosticoDialog({
   const [form, setForm] = useState<PrognosticoInput>(empty);
   const [novaLiga, setNovaLiga] = useState("");
   const loadingDetail = !!prognostico && !detalhe;
+  const safeEsportes = sanitizeOptionList(esportes, ESPORTES_DEFAULT);
+  const safeMercados = sanitizeOptionList(mercados, MERCADOS_DEFAULT);
 
   const ligasDoEsporte = (ligas as Liga[])
-    .filter((l) => l.esporte === form.esporte)
+    .filter((l) => l.esporte === form.esporte && String(l.nome ?? "").trim())
     .slice()
-    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    .sort((a, b) => String(a.nome ?? "").localeCompare(String(b.nome ?? ""), "pt-BR"));
 
   useEffect(() => {
     if (!open) return;
@@ -194,7 +197,7 @@ export function PrognosticoDialog({
             <Select value={form.esporte} onValueChange={(v) => { set("esporte", v); set("liga", ""); }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {esportes.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                {safeEsportes.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
               </SelectContent>
             </Select>
           </Field>
@@ -205,7 +208,7 @@ export function PrognosticoDialog({
               </SelectTrigger>
               <SelectContent>
                 {ligasDoEsporte.map((l) => (
-                  <SelectItem key={l.id} value={l.nome}>{l.nome}</SelectItem>
+                  <SelectItem key={l.id} value={String(l.nome)}>{String(l.nome)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -258,7 +261,7 @@ export function PrognosticoDialog({
             <Select value={form.mercado} onValueChange={(v) => set("mercado", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {mercados.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                {safeMercados.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
               </SelectContent>
             </Select>
           </Field>

@@ -22,7 +22,15 @@ export function LeagueFilter({ sport, value, onChange, className, placeholder = 
     const arr = sport && sport !== "all"
       ? ligas.filter((l: Liga) => l.esporte === sport)
       : ligas;
-    return [...arr].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    const seen = new Set<string>();
+    return [...arr]
+      .filter((l) => {
+        const nome = String(l.nome ?? "").trim();
+        if (!nome || seen.has(nome)) return false;
+        seen.add(nome);
+        return true;
+      })
+      .sort((a, b) => String(a.nome ?? "").localeCompare(String(b.nome ?? ""), "pt-BR"));
   }, [ligas, sport]);
 
   return (
@@ -33,7 +41,7 @@ export function LeagueFilter({ sport, value, onChange, className, placeholder = 
       <SelectContent>
         <SelectItem value="all">Todas as ligas</SelectItem>
         {filtradas.map((l) => (
-          <SelectItem key={l.id} value={l.nome}>{l.nome}</SelectItem>
+          <SelectItem key={l.id} value={String(l.nome)}>{String(l.nome)}</SelectItem>
         ))}
       </SelectContent>
     </Select>

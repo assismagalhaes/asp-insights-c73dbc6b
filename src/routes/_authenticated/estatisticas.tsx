@@ -15,7 +15,7 @@ import {
   LabelList,
   ReferenceLine,
 } from "recharts";
-import { useResultadosFinanceiros, useConfiguracao, ESPORTES_DEFAULT, MERCADOS_DEFAULT } from "@/lib/db";
+import { useResultadosFinanceiros, useConfiguracao, ESPORTES_DEFAULT, MERCADOS_DEFAULT, sanitizeOptionList } from "@/lib/db";
 import { calculatePerformanceStats, rangeFromPeriodo, type PeriodoFiltro } from "@/lib/metrics";
 import {
   Select,
@@ -49,8 +49,8 @@ const axisColor = COLOR_AXIS;
 function Estatisticas() {
   const { data: resultadosFinanceiros = [] } = useResultadosFinanceiros();
   const { data: cfg } = useConfiguracao();
-  const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
-  const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
+  const esportes = sanitizeOptionList(cfg?.esportes_ativos, ESPORTES_DEFAULT);
+  const mercados = sanitizeOptionList(cfg?.mercados_ativos, MERCADOS_DEFAULT);
 
   const [fEsporte, setFEsporte] = useState("all");
   const [fLiga, setFLiga] = useState("all");

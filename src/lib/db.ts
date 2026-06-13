@@ -234,6 +234,25 @@ const stringArrayOrNull = (v: unknown): string[] | null => {
   if (!Array.isArray(v)) return null;
   return v.map(String).filter(Boolean);
 };
+
+export function sanitizeOptionList(values: unknown, fallback: string[] = []): string[] {
+  const source = Array.isArray(values) ? values : fallback;
+  const seen = new Set<string>();
+  const cleaned: string[] = [];
+  for (const item of source) {
+    const value = String(item ?? "").trim();
+    if (!value || value === "all" || value === "__none__" || seen.has(value)) continue;
+    seen.add(value);
+    cleaned.push(value);
+  }
+  return cleaned.length ? cleaned : fallback;
+}
+
+function isMissingSchemaObjectError(error: unknown): boolean {
+  const message = String((error as { message?: unknown } | null)?.message ?? error ?? "");
+  return /schema cache|could not find the table|relation .* does not exist|does not exist/i.test(message);
+}
+
 export function normalizeResultado(value: unknown): Resultado {
   const s = String(value ?? "PENDENTE").trim().toUpperCase();
   if (s === "GREEN" || s === "WIN" || s === "WINS") return "GREEN";
@@ -518,6 +537,10 @@ export function useCreateAnaliseIa() {
         .insert(input)
         .select()
         .single();
+      if (error && isMissingSchemaObjectError(error)) {
+        console.warn("Tabela analises_ia indisponivel; snapshot da IA nao foi salvo.", error);
+        return null;
+      }
       if (error) throw error;
       return mapAnaliseIa(data);
     },
@@ -551,6 +574,7 @@ export function useAnalisesIaByPrognostico(prognosticoId: string | null | undefi
         .select("*")
         .eq("prognostico_id", prognosticoId!)
         .order("created_at", { ascending: false });
+      if (error && isMissingSchemaObjectError(error)) return [];
       if (error) return [];
       return (data ?? []).map(mapAnaliseIa);
     },
@@ -576,6 +600,7 @@ export function useFeedbackIaResultados() {
         .from("feedback_ia_resultados")
         .select("id, prognostico_id, analise_ia_id, modo_ia, decisao_ia_sugerida, decisao_humana_final, resultado_real, lucro_prejuizo, lucro_unidades, esporte, liga, mercado, pick, linha, odd_usada, probabilidade_final, edge_usado, tags_risco, acertou_ia, acertou_humano, divergencia_ia_humano, created_at")
         .order("created_at", { ascending: false });
+      if (error && isMissingSchemaObjectError(error)) return [];
       if (error) return [];
       return (data ?? []).map(mapFeedbackIa);
     },
@@ -601,6 +626,7 @@ export function useResumosAprendizadoIa() {
         .from("resumos_aprendizado_ia")
         .select("id, periodo_inicio, periodo_fim, total_analises, total_green, total_red, win_rate, roi, yield, resumo_geral, created_at")
         .order("created_at", { ascending: false });
+      if (error && isMissingSchemaObjectError(error)) return [];
       if (error) return [];
       return (data ?? []).map(mapResumoAprendizado);
     },
@@ -622,6 +648,10 @@ export function useCreateResumoAprendizadoIa() {
         .insert(input)
         .select()
         .single();
+      if (error && isMissingSchemaObjectError(error)) {
+        console.warn("Tabela resumos_aprendizado_ia indisponivel; resumo nao foi salvo.", error);
+        return null;
+      }
       if (error) throw error;
       return mapResumoAprendizado(data);
     },
