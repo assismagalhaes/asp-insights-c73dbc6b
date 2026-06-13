@@ -52,6 +52,7 @@ const TARGET_FIELDS = [
   "odd_valor",
   "probabilidade_final",
   "edge",
+  "dados_tecnicos",
   "observacoes",
 ] as const;
 type Field = (typeof TARGET_FIELDS)[number];
@@ -85,6 +86,7 @@ const ALIASES: Record<Field, string[]> = {
   odd_valor: ["odd_valor", "fair_odd", "odd_justa", "valor_odd"],
   probabilidade_final: ["probabilidade_final", "prob", "probabilidade", "probability", "prob_final"],
   edge: ["edge", "ev", "valor_esperado"],
+  dados_tecnicos: ["dados_tecnicos", "dados_técnicos", "tecnico", "técnico", "modelo", "tech"],
   observacoes: ["observacoes", "observações", "obs", "notes", "notas", "comentarios"],
 };
 
@@ -356,6 +358,10 @@ function ImportarPage() {
           probabilidade_final: prob,
           edge,
           stake: 0,
+          dados_tecnicos:
+            (String(values.dados_tecnicos ?? "").trim() ||
+              String(values.observacoes ?? "").trim()) ||
+            null,
           observacoes: String(values.observacoes ?? "").trim() || null,
         },
         errors,

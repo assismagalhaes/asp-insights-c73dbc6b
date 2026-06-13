@@ -1,121 +1,76 @@
-# Plano de Ajustes — ASP Insights
+# Plano: Grande atualização do módulo de Validação Crítica
 
-Vou implementar todos os ajustes solicitados em blocos coerentes. Abaixo o escopo completo.
+Trabalho extenso. Divido em fases entregáveis. Confirme antes de eu começar; depois executo tudo de uma vez.
 
-## 1. Banco de dados (migração única)
+## Fase 1 — Banco de dados (migration única)
 
-**Nova tabela `ligas`:**
-- `id`, `nome` (citext único), `esporte`, `ativo` (default true), `created_at`, `updated_at`
-- RLS + GRANTs (authenticated read/write)
+Adicionar em `prognosticos`:
+- `odd_original numeric` (preenchido a partir de `odd_ofertada` existente via backfill)
+- `odd_ajustada numeric null`
+- `edge_original numeric` (backfill de `edge`)
+- `edge_ajustado numeric null`
+- `dados_tecnicos text null` (mantém `observacoes` como fallback de leitura)
 
-**Normalização de dados existentes em `prognosticos`:**
-- `NBA → esporte=Basketball, liga=NBA`
-- `WNBA → Basketball, WNBA`
-- `MLB → Baseball, MLB`
-- `NFL → American Football, NFL`
-- `NHL → Hockey, NHL`
-- Demais valores preservados (Futebol mantém liga existente)
+Adicionar em `validacoes`:
+- `parecer_validacao text` (backfill concatenando `justificativa` + `riscos_identificados` + `comentarios_analista`)
+- `contexto_adicional text null`
+- `parecer_ia text null`
+- `decisao_ia_sugerida text null`
+- `stake_ia_sugerida numeric null`
+- `data_analise_ia timestamptz null`
+- `prompt_versao text null`
 
-**Correção de datas invertidas** da última importação:
-- Identificar prognósticos onde `dia ≤ 12` E `mês ≤ 12` criados recentemente onde provavelmente houve inversão. Como heurística é arriscada, vou aplicar correção apenas em registros importados nos últimos 2 dias onde a data está no futuro do esperado (a partir da `created_at` vs `data`). Vou pedir confirmação na pré-execução listando os registros candidatos via SELECT antes do UPDATE.
+Novo enum `Status` aceita: `CONFIRMA`, `CONFIRMA_CAUTELA`, `PASS`, `AGUARDAR_NOTICIA` (mapeio o antigo `PULAR` → `PASS` em UI; mantém valores antigos como compatíveis).
 
-**Seed inicial de ligas** a partir dos `prognosticos.liga` distintos existentes.
+Atualizar `apply_resultado` para usar `odd_ajustada ?? odd_original` quando necessário (sem mudar fórmula de lucro, que usa stake×odd no cálculo do `resultado-calc.ts` do cliente — apenas garante leitura consistente).
 
-## 2. Lib compartilhada (`src/lib/db.ts`)
+## Fase 2 — Tela Validação Crítica (`validacao.tsx`)
 
-- `ESPORTES_DEFAULT = ["Futebol","Basketball","Baseball","American Football","Hockey"]`
-- `MERCADOS_DEFAULT` adiciona `ASP GoalMatrix` e `ASP CornerMatrix`
-- Mapa `SPORT_FROM_LEAGUE` para normalização (NBA→Basketball, etc.)
-- Hooks: `useLigas()`, `useUpsertLiga()`
-- Helper `normalizeEsporteLiga({esporte, liga})` para usar na importação e em qualquer cadastro
+Reorganizar em blocos:
+1. Cabeçalho (data/hora/esporte/liga/jogo/status)
+2. Dados do prognóstico (mercado, pick, linha, odd original, odd ajustada editável, odd valor, probabilidade, edge original, edge ajustado calculado em tempo real, stake sugerida)
+3. Dados Técnicos do Modelo (expansível, mostra `dados_tecnicos ?? observacoes`)
+4. Contexto adicional para análise (textarea)
+5. IA: botão "Analisar com IA" + painel de resultado com ações (Aplicar/Copiar/Descartar/Regerar) — apenas se LOVABLE_API_KEY presente
+6. Parecer da Validação (textarea grande, template Tese/Riscos/Invalidação/Decisão/Stake)
+7. Decisão final: 4 botões (CONFIRMA / CONFIRMA COM CAUTELA / PASS / AGUARDAR NOTÍCIA) + select stake (0.5/1.0/1.5)
 
-## 3. Parser de data brasileira (`src/lib/date-br.ts` — novo)
+Recalcular `edge_ajustado` no onChange da odd ajustada com a fórmula informada.
 
-`parseBrazilianDate(input)` com prioridade:
-1. `DD/MM/YYYY` ou `D/M/YYYY`
-2. `DD-MM-YYYY`
-3. `YYYY-MM-DD` (ISO)
-4. Serial Excel (number > 59)
+## Fase 3 — Server function de IA
 
-Valida dia 1–31 e mês 1–12. Retorna `YYYY-MM-DD` ou `null`. Helper `formatBR(iso)` para exibição `DD/MM/YYYY`.
+Criar `src/lib/validacao-ia.functions.ts`:
+- `createServerFn` POST com `requireSupabaseAuth`
+- Recebe `{ prognostico, dados_tecnicos, contexto_adicional }`
+- Chama Lovable AI Gateway (`google/gemini-3-flash-preview`) com o prompt fixo do briefing
+- Retorna `{ parecer, decisao_sugerida, stake_sugerida, prompt_versao }`
+- Sem busca online, apenas analisa o payload recebido
 
-Substituir `parseDate` em `importar.tsx` por essa função.
+Registrar provider helper em `src/lib/ai-gateway.server.ts` (se não existir).
 
-## 4. Importação (`src/routes/_authenticated/importar.tsx`)
+## Fase 4 — Propagação nas outras telas
 
-- Template CSV inclui `hora` obrigatória
-- Validação: `data`, `hora`, `esporte`, `liga`, `jogo`, `mercado`, `pick`, `odd_ofertada`, `odd_valor`, `probabilidade_final`, `edge`, `stake` (obrigatórios)
-- Mensagens específicas: "Hora obrigatória não informada", "Liga obrigatória não informada"
-- Aplicar `normalizeEsporteLiga` antes de salvar
-- Auto-cadastro de ligas novas (upsert na tabela `ligas`)
-- **Seleção de linhas**:
-  - Checkbox por linha + cabeçalho "Selecionar todos"
-  - Botões "Selecionar apenas válidas" / "Limpar seleção"
-  - Linhas inválidas não selecionáveis
-  - Linhas válidas pré-selecionadas; com alerta também, mas com destaque
-  - "Confirmar Importação" usa apenas selecionadas
-  - Resumo final conta selecionadas
+- **Prognósticos**: botão/ícone "Dados Técnicos" por linha → Popover/Dialog com conteúdo. Mostrar coluna odd_ajustada quando existir (fallback odd_original).
+- **Publicação**: TIP gerada no novo template com `dados_tecnicos`, `parecer_validacao`, odd/edge ajustados. Manter editor de texto antes de copiar.
+- **Histórico**: mesma coluna/botão Dados Técnicos.
+- **Modal de detalhes** (`prognostico-dialog.tsx`): exibir dados técnicos + parecer + odd original/ajustada.
+- **Importação**: aceitar coluna `dados_tecnicos` (prioridade) + fallback `observacoes`. Atualizar template CSV.
 
-## 5. Componente `LeagueFilter` (novo)
+## Fase 5 — Limpeza e compatibilidade
 
-`<LeagueFilter sport={esporte} value={liga} onChange={...} />` — busca ligas filtradas por esporte (ou todas) e renderiza Select.
+- Em `db.ts`: estender types `Prognostico` e `Validacao`, helper `getDadosTecnicos(p)` e `getOddEfetiva(p)`, `getEdgeEfetivo(p)`.
+- `StatusBadge`: adicionar variantes `CONFIRMA_CAUTELA`, `PASS`, `AGUARDAR_NOTICIA` (PULAR continua existindo para registros antigos).
+- Manter leitura dos campos antigos (`justificativa`, `observacoes`) como fallback exibido se `parecer_validacao`/`dados_tecnicos` vazios.
 
-## 6. Filtros em todas as telas
+## Detalhes técnicos
 
-Adicionar filtro **Liga** (dependente de Esporte) em:
-- Dashboard (`index.tsx`)
-- Prognósticos (`prognosticos.tsx`)
-- Histórico (`historico.tsx`)
-- Estatísticas (`estatisticas.tsx`)
-- Validação (`validacao.tsx`)
-- Publicação (`publicacao.tsx`)
+- Edge ajustado calculado client-side via `((prob/100) * odd - 1) * 100`, salvo no submit.
+- IA é **opcional**: se a server function falhar (sem chave, 402, 429), exibo erro inline no painel sem bloquear a decisão manual.
+- Sem mudanças em: importação de datas BR, bankroll, resultado-calc, autenticação, fluxo de publicação atual além do template da TIP.
 
-Garantir que esporte/liga/mercado/período combinem corretamente.
+## Fora de escopo (confirme se quer agora)
 
-## 7. Exibição data + hora
+- Renomear coluna `observacoes` → `dados_tecnicos` no banco (mantenho ambas, leitura prioriza `dados_tecnicos`). Renomear quebra histórico e exportações; prefiro coexistência.
+- Busca online / scraping — explicitamente **não** será implementado conforme briefing.
 
-Onde já mostra data, adicionar hora ao lado. Telas: Prognósticos, Importação (preview), Validação, Publicação, Histórico, Dashboard (últimos prognósticos).
-
-## 8. Bankroll — Controle por stake
-
-Em `bankroll.tsx`, calcular `% da banca` com base em `bancaInicial` (não `bancaAtual`). Texto também atualizado.
-
-## 9. Validação Crítica — coluna Linha
-
-Em `validacao.tsx`, exibir `Linha` quando `prognostico.linha` estiver preenchido, separado de `Pick`. Se `linha` vazio, omitir. Sem concatenar.
-
-## 10. Configurações
-
-- `mercados_ativos`: incluir `ASP GoalMatrix`, `ASP CornerMatrix` nos defaults
-- `esportes_ativos`: garantir que só os 5 esportes principais estejam disponíveis
-
-## Arquivos a editar/criar
-
-**Novos:**
-- `supabase/migrations/<ts>_ligas_e_normalizacao.sql`
-- `src/lib/date-br.ts`
-- `src/components/league-filter.tsx`
-
-**Editados:**
-- `src/lib/db.ts` (esportes, mercados, mapa normalização, hooks ligas)
-- `src/routes/_authenticated/importar.tsx` (parser BR, seleção, validações, normalização, auto-cadastro liga)
-- `src/routes/_authenticated/index.tsx` (filtro liga, exibe hora)
-- `src/routes/_authenticated/prognosticos.tsx` (filtro liga)
-- `src/routes/_authenticated/historico.tsx` (filtro liga, hora)
-- `src/routes/_authenticated/estatisticas.tsx` (filtro liga)
-- `src/routes/_authenticated/validacao.tsx` (filtro liga, exibe linha, hora)
-- `src/routes/_authenticated/publicacao.tsx` (filtro liga, hora)
-- `src/routes/_authenticated/bankroll.tsx` (% sobre banca inicial)
-- `src/routes/_authenticated/configuracoes.tsx` (lista esportes/mercados atualizada)
-- `src/components/prognostico-dialog.tsx` (usar normalização e ligas dinâmicas)
-
-## Ordem de execução
-
-1. Criar migração (ligas + normalização de dados + seed)
-2. Após aprovação: criar `date-br.ts`, atualizar `db.ts`
-3. Criar `LeagueFilter`
-4. Atualizar `importar.tsx` (mais crítico)
-5. Atualizar telas de filtro (Dashboard, Prognósticos, Histórico, Estatísticas, Validação, Publicação)
-6. Atualizar `bankroll.tsx`, `configuracoes.tsx`, `prognostico-dialog.tsx`
-
-Posso prosseguir?
+Confirmar para eu executar tudo (migration + código) numa sequência só.
