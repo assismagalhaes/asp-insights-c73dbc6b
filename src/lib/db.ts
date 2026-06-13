@@ -174,9 +174,15 @@ export type PrognosticoInput = Omit<
   | "publicado_por"
   | "canal_publicacao"
   | "placar_final"
+  | "odd_ajustada"
+  | "edge_ajustado"
+  | "dados_tecnicos"
 > & {
   status_publicacao?: StatusPublicacao;
   resultado?: Resultado;
+  odd_ajustada?: number | null;
+  edge_ajustado?: number | null;
+  dados_tecnicos?: string | null;
 };
 
 export function useCreatePrognostico() {
