@@ -14,6 +14,7 @@ import { LeagueFilter } from "@/components/league-filter";
 import { PeriodFilter } from "@/components/period-filter";
 import { rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
 import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
+import { DadosTecnicosViewer } from "@/components/dados-tecnicos-viewer";
 
 export const Route = createFileRoute("/_authenticated/historico")({
   head: () => ({ meta: [{ title: "Histórico — ASP Insights" }] }),
@@ -145,12 +146,14 @@ function Historico() {
                 <th className="px-3 py-2 text-left">Placar</th>
                 <th className="px-3 py-2 text-left">Mercado</th>
                 <th className="px-3 py-2 text-left">Pick</th>
+                <th className="px-3 py-2 text-left">Linha</th>
                 <th className="px-3 py-2 text-right font-mono">Odd</th>
                 <th className="px-3 py-2 text-right font-mono">Stake</th>
                 <th className="px-3 py-2 text-left">Validação</th>
                 <th className="px-3 py-2 text-left">Publicação</th>
                 <th className="px-3 py-2 text-left">Resultado</th>
                 <th className="px-3 py-2 text-right font-mono">Lucro</th>
+                <th className="px-3 py-2 text-center">Dados</th>
               </tr>
             </thead>
             <tbody>
@@ -164,6 +167,7 @@ function Historico() {
                   <td className="px-3 py-2 font-mono text-xs">{p.placar_final ?? "—"}</td>
                   <td className="px-3 py-2 text-muted-foreground">{p.mercado}</td>
                   <td className="px-3 py-2">{p.pick}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{shouldShowLinha(p.pick, p.linha) ? p.linha : "—"}</td>
                   <td className="px-3 py-2 text-right font-mono">{p.odd_ofertada.toFixed(2)}</td>
                   <td className="px-3 py-2 text-right font-mono">{p.stake.toFixed(1)}u</td>
                   <td className="px-3 py-2"><StatusBadge status={p.status_validacao} /></td>
@@ -172,11 +176,12 @@ function Historico() {
                   <td className={`px-3 py-2 text-right font-mono ${(p.lucro_prejuizo ?? 0) >= 0 ? "text-success" : "text-destructive"}`}>
                     {p.lucro_prejuizo != null ? `${p.lucro_prejuizo >= 0 ? "+" : ""}${p.lucro_prejuizo.toFixed(2)}u` : "-"}
                   </td>
+                  <td className="px-3 py-2 text-center"><DadosTecnicosViewer prognostico={p} /></td>
                 </tr>
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={14} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={15} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     Nenhum prognóstico encontrado com os filtros aplicados.
                   </td>
                 </tr>

@@ -38,6 +38,7 @@ import { PeriodFilter } from "@/components/period-filter";
 import { rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
 import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
 import { toast } from "sonner";
+import { DadosTecnicosViewer } from "@/components/dados-tecnicos-viewer";
 
 export const Route = createFileRoute("/_authenticated/publicacao")({
   head: () => ({ meta: [{ title: "Publicação — ASP Insights" }] }),
@@ -230,6 +231,7 @@ function PublicacaoPage() {
                       <td className="px-3 py-2"><StatusBadge status={p.status_validacao} /></td>
                       <td className="px-3 py-2 text-right whitespace-nowrap">
                         <div className="flex justify-end gap-1">
+                          <DadosTecnicosViewer prognostico={p} />
                           <Button
                             size="sm"
                             variant="ghost"
@@ -286,10 +288,16 @@ function PublishDialog({
 
   useEffect(() => {
     if (prognostico) {
+      const parecer =
+        validacao?.parecer_validacao?.trim() ||
+        validacao?.parecer_ia?.trim() ||
+        "";
       setTip(
         gerarTipTexto(prognostico, {
+          parecer,
           justificativa: validacao?.justificativa,
           riscos: validacao?.riscos_identificados,
+          comentarios: validacao?.comentarios_analista,
         }),
       );
     }
@@ -317,8 +325,9 @@ function PublishDialog({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Publicar Pick — {prognostico.jogo}</DialogTitle>
-          <DialogDescription>
-            Edite a TIP final antes de copiar/publicar. Canal: <strong>{canal}</strong>
+          <DialogDescription className="flex items-center justify-between gap-2">
+            <span>Edite a TIP final antes de copiar/publicar. Canal: <strong>{canal}</strong></span>
+            <DadosTecnicosViewer prognostico={prognostico} variant="button" />
           </DialogDescription>
         </DialogHeader>
         <Textarea

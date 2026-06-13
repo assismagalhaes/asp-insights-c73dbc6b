@@ -31,6 +31,7 @@ import {
 } from "@/lib/db";
 import { PrognosticoDialog } from "@/components/prognostico-dialog";
 import { ResultadoDialog } from "@/components/resultado-dialog";
+import { DadosTecnicosViewer } from "@/components/dados-tecnicos-viewer";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -424,6 +425,8 @@ function Prognosticos() {
                     <td className="px-3 py-2"><ResultBadge result={p.resultado} /></td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
                       <div className="flex justify-end gap-1">
+                        <DadosTecnicosViewer prognostico={p} />
+
                         {podePublicar(p) && (
                           <Button size="icon" variant="ghost" title="Publicar" onClick={() => handlePublicar(p)}>
                             <Megaphone className="h-4 w-4 text-primary" />
