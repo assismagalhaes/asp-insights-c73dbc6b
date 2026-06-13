@@ -103,8 +103,8 @@ function Estatisticas() {
   }, [validados]);
 
   const chartBanca = useMemo(
-    () => bankrollTimeline(prognosticos, cfg?.banca_inicial ?? 0, cfg?.valor_unidade_padrao ?? 0),
-    [prognosticos, cfg],
+    () => bankrollTimeline(filtrados, cfg?.banca_inicial ?? 0, cfg?.valor_unidade_padrao ?? 0),
+    [filtrados, cfg],
   );
 
   return (
@@ -114,6 +114,36 @@ function Estatisticas() {
         <p className="text-sm text-muted-foreground">
           Análise detalhada de desempenho por esporte, mercado e período.
         </p>
+      </div>
+
+      {/* Filtros */}
+      <div className="rounded-lg border border-border bg-card p-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Esporte</label>
+            <Select value={fEsporte} onValueChange={(v) => { setFEsporte(v); setFLiga("all"); }}>
+              <SelectTrigger className="h-9 w-44"><SelectValue placeholder="Esporte" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os esportes</SelectItem>
+                {esportes.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Liga</label>
+            <LeagueFilter sport={fEsporte} value={fLiga} onChange={setFLiga} className="h-9 w-48" />
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Mercado</label>
+            <Select value={fMercado} onValueChange={setFMercado}>
+              <SelectTrigger className="h-9 w-52"><SelectValue placeholder="Mercado" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os mercados</SelectItem>
+                {mercados.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
