@@ -224,6 +224,9 @@ function Validacao() {
         stake_ia_sugerida: ia?.stake_sugerida ?? null,
         data_analise_ia: ia ? new Date().toISOString() : null,
         prompt_versao: ia?.prompt_versao ?? null,
+        modo_ia: ia?.modo ?? null,
+        fontes_consultadas: ia?.fontes_consultadas ?? null,
+        buscas_realizadas: ia?.buscas_realizadas ?? null,
       });
       toast.success(`Decisão registrada: ${decisao}`);
     } catch (e) {
