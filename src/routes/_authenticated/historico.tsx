@@ -10,6 +10,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { LeagueFilter } from "@/components/league-filter";
+import { formatBR, formatHora } from "@/lib/date-br";
 
 export const Route = createFileRoute("/_authenticated/historico")({
   head: () => ({ meta: [{ title: "Histórico — ASP Insights" }] }),
@@ -23,6 +25,7 @@ function Historico() {
   const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
 
   const [esporte, setEsporte] = useState("all");
+  const [liga, setLiga] = useState("all");
   const [mercado, setMercado] = useState("all");
   const [status, setStatus] = useState("all");
   const [resultado, setResultado] = useState("all");
@@ -32,6 +35,7 @@ function Historico() {
   const rows = useMemo(() => {
     return prognosticos.filter((p) => {
       if (esporte !== "all" && p.esporte !== esporte) return false;
+      if (liga !== "all" && p.liga !== liga) return false;
       if (mercado !== "all" && p.mercado !== mercado) return false;
       if (status !== "all" && p.status_validacao !== status) return false;
       if (resultado !== "all" && p.resultado !== resultado) return false;
@@ -39,7 +43,7 @@ function Historico() {
       if (data && p.data !== data) return false;
       return true;
     });
-  }, [prognosticos, esporte, mercado, status, resultado, publicacao, data]);
+  }, [prognosticos, esporte, liga, mercado, status, resultado, publicacao, data]);
 
   const wins = rows.filter((r) => r.resultado === "GREEN" || r.resultado === "HALF GREEN").length;
   const losses = rows.filter((r) => r.resultado === "RED" || r.resultado === "HALF RED").length;
