@@ -46,30 +46,43 @@ function autoCheck(p: Prognostico) {
   return null;
 }
 
-function formatDateBR(iso: string): string {
-  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
-}
-
 function Validacao() {
   const { data: prognosticos = [] } = usePrognosticos();
+  const { data: cfg } = useConfiguracao();
   const createVal = useCreateValidacao();
   const updateProg = useUpdatePrognostico();
+  const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
+  const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
+
   const [justificativas, setJustificativas] = useState<Record<string, string>>({});
   const [riscos, setRiscos] = useState<Record<string, string>>({});
   const [comentarios, setComentarios] = useState<Record<string, string>>({});
   const [stakes, setStakes] = useState<Record<string, string>>({});
   const [odds, setOdds] = useState<Record<string, string>>({});
 
-  const pendentes = prognosticos
-    .filter((p) => p.resultado === "PENDENTE" && p.status_validacao === "PENDENTE")
-    .slice()
-    .sort((a, b) => {
-      if (a.data !== b.data) return a.data < b.data ? -1 : 1;
-      const ha = a.hora ?? "99:99";
-      const hb = b.hora ?? "99:99";
-      return ha < hb ? -1 : ha > hb ? 1 : 0;
-    });
+  const [fEsporte, setFEsporte] = useState("all");
+  const [fLiga, setFLiga] = useState("all");
+  const [fMercado, setFMercado] = useState("all");
+
+  const pendentes = useMemo(
+    () =>
+      prognosticos
+        .filter((p) => p.resultado === "PENDENTE" && p.status_validacao === "PENDENTE")
+        .filter((p) => {
+          if (fEsporte !== "all" && p.esporte !== fEsporte) return false;
+          if (fLiga !== "all" && p.liga !== fLiga) return false;
+          if (fMercado !== "all" && p.mercado !== fMercado) return false;
+          return true;
+        })
+        .slice()
+        .sort((a, b) => {
+          if (a.data !== b.data) return a.data < b.data ? -1 : 1;
+          const ha = a.hora ?? "99:99";
+          const hb = b.hora ?? "99:99";
+          return ha < hb ? -1 : ha > hb ? 1 : 0;
+        }),
+    [prognosticos, fEsporte, fLiga, fMercado],
+  );
 
   const decidir = async (p: Prognostico, decisao: Status) => {
     if (!justificativas[p.id]?.trim()) {
