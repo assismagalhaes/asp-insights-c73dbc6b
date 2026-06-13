@@ -1,4 +1,4 @@
-import { getOddEfetiva, type Prognostico, type Resultado, type ResultadoFinanceiro } from "./db";
+import { getOddEfetiva, type FeedbackIaResultado, type Prognostico, type Resultado, type ResultadoFinanceiro } from "./db";
 
 export const PICK_RESOLVIDA: Resultado[] = ["GREEN", "RED"];
 export const PICK_GREEN: Resultado[] = ["GREEN"];
@@ -48,31 +48,149 @@ export interface TimelinePoint {
   roi: number;
 }
 
-/** Calcula metricas a partir da view financeira canonica. */
-export function computeFinancialMetrics(
+export interface PerformanceFilters {
+  ini?: string | null;
+  fim?: string | null;
+  esporte?: string;
+  liga?: string;
+  mercado?: string;
+  resultado?: Resultado | "all";
+  decisaoHumana?: "CONFIRMA" | "PULAR" | "PENDENTE" | "all";
+  modoIa?: "local" | "online" | "all";
+}
+
+export interface PerformanceBucket {
+  nome: string;
+  greens: number;
+  reds: number;
+  resolvidas: number;
+  lucroU: number;
+  lucroReais: number;
+  totalApostadoU: number;
+  totalApostadoR$: number;
+  roi: number;
+  yield: number;
+  winRate: number;
+}
+
+export interface MonthlyPerformance {
+  mes: string;
+  greens: number;
+  reds: number;
+  lucroU: number;
+  lucroReais: number;
+  roi: number;
+}
+
+export interface PerformanceStats extends Metrics {
+  filtrados: ResultadoFinanceiro[];
+  evolucaoBanca: TimelinePoint[];
+  evolucaoRoi: TimelinePoint[];
+  resultadoPorEsporte: PerformanceBucket[];
+  resultadoPorMercado: PerformanceBucket[];
+  resultadoPorMes: MonthlyPerformance[];
+  roiPorEsporte: PerformanceBucket[];
+  roiPorMercado: PerformanceBucket[];
+}
+
+function applyPerformanceFilters(resultados: ResultadoFinanceiro[], filters: PerformanceFilters = {}) {
+  return resultados.filter((p) => {
+    if (!dateInRange(p.data, filters.ini, filters.fim)) return false;
+    if (filters.esporte && filters.esporte !== "all" && p.esporte !== filters.esporte) return false;
+    if (filters.liga && filters.liga !== "all" && p.liga !== filters.liga) return false;
+    if (filters.mercado && filters.mercado !== "all" && p.mercado !== filters.mercado) return false;
+    if (filters.resultado && filters.resultado !== "all" && p.resultado !== filters.resultado) return false;
+    if (filters.decisaoHumana && filters.decisaoHumana !== "all" && p.decisao_final !== filters.decisaoHumana && p.status_validacao !== filters.decisaoHumana) return false;
+    return true;
+  });
+}
+
+function bucketFromRows(nome: string, rows: ResultadoFinanceiro[]): PerformanceBucket {
+  const greens = rows.filter((p) => p.resultado === "GREEN").length;
+  const reds = rows.filter((p) => p.resultado === "RED").length;
+  const totalApostadoU = rows.reduce((s, p) => s + p.stake, 0);
+  const totalApostadoR$ = rows.reduce((s, p) => s + p.stake * p.valor_unidade, 0);
+  const lucroU = rows.reduce((s, p) => s + p.lucro_unidades, 0);
+  const lucroReais = rows.reduce((s, p) => s + p.lucro_reais, 0);
+  const resolvidas = greens + reds;
+  const roi = totalApostadoR$ > 0 ? (lucroReais / totalApostadoR$) * 100 : 0;
+  const winRate = resolvidas ? (greens / resolvidas) * 100 : 0;
+  return {
+    nome,
+    greens,
+    reds,
+    resolvidas,
+    lucroU,
+    lucroReais,
+    totalApostadoU,
+    totalApostadoR$,
+    roi,
+    yield: roi,
+    winRate,
+  };
+}
+
+function groupPerformance(resultados: ResultadoFinanceiro[], key: "esporte" | "mercado"): PerformanceBucket[] {
+  const map = new Map<string, ResultadoFinanceiro[]>();
+  for (const row of resultados) {
+    const name = row[key] || "-";
+    map.set(name, [...(map.get(name) ?? []), row]);
+  }
+  return Array.from(map.entries())
+    .map(([nome, rows]) => bucketFromRows(nome, rows))
+    .sort((a, b) => Math.abs(b.lucroU) - Math.abs(a.lucroU));
+}
+
+function monthlyPerformance(resultados: ResultadoFinanceiro[]): MonthlyPerformance[] {
+  const map = new Map<string, ResultadoFinanceiro[]>();
+  for (const row of resultados) {
+    const mes = row.data_resultado.slice(0, 7);
+    map.set(mes, [...(map.get(mes) ?? []), row]);
+  }
+  return Array.from(map.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([mes, rows]) => {
+      const bucket = bucketFromRows(mes, rows);
+      return {
+        mes,
+        greens: bucket.greens,
+        reds: bucket.reds,
+        lucroU: Number(bucket.lucroU.toFixed(2)),
+        lucroReais: Number(bucket.lucroReais.toFixed(2)),
+        roi: Number(bucket.roi.toFixed(2)),
+      };
+    });
+}
+
+export function calculatePerformanceStats(
   resultados: ResultadoFinanceiro[],
   cfg: { banca_inicial: number; valor_unidade_padrao: number } | null | undefined,
-): Metrics {
+  filters: PerformanceFilters = {},
+): PerformanceStats {
+  const filtrados = applyPerformanceFilters(resultados, filters);
   const bancaInicial = cfg?.banca_inicial ?? 0;
-  const resolvidas = resultados.filter((p) => PICK_RESOLVIDA.includes(p.resultado));
-  const greens = resultados.filter((p) => PICK_GREEN.includes(p.resultado)).length;
-  const reds = resultados.filter((p) => PICK_RED.includes(p.resultado)).length;
+  const resolvidas = filtrados.filter((p) => PICK_RESOLVIDA.includes(p.resultado));
+  const greens = filtrados.filter((p) => PICK_GREEN.includes(p.resultado)).length;
+  const reds = filtrados.filter((p) => PICK_RED.includes(p.resultado)).length;
   const totalApostadoU = resolvidas.reduce((s, p) => s + p.stake, 0);
   const totalApostadoR$ = resolvidas.reduce((s, p) => s + p.stake * p.valor_unidade, 0);
-  const lucroU = resultados.reduce((s, p) => s + p.lucro_unidades, 0);
-  const lucroR = resultados.reduce((s, p) => s + p.lucro_reais, 0);
+  const lucroU = filtrados.reduce((s, p) => s + p.lucro_unidades, 0);
+  const lucroR = filtrados.reduce((s, p) => s + p.lucro_reais, 0);
   const bancaAtual = bancaInicial + lucroR;
   const roi = totalApostadoR$ > 0 ? (lucroR / totalApostadoR$) * 100 : 0;
   const yld = roi;
   const winRate = resolvidas.length ? (greens / resolvidas.length) * 100 : 0;
 
-  const timeline = bankrollTimelineFromFinanceiros(resultados, bancaInicial);
+  const timeline = bankrollTimelineFromFinanceiros(filtrados, bancaInicial);
   let pico = bancaInicial;
   let dd = 0;
   for (const t of timeline) {
     pico = Math.max(pico, t.banca);
     if (pico > 0) dd = Math.max(dd, ((pico - t.banca) / pico) * 100);
   }
+
+  const resultadoPorEsporte = groupPerformance(filtrados, "esporte");
+  const resultadoPorMercado = groupPerformance(filtrados, "mercado");
 
   return {
     greens,
@@ -88,7 +206,47 @@ export function computeFinancialMetrics(
     bancaInicial,
     bancaAtual,
     drawdown: dd,
+    filtrados,
+    evolucaoBanca: timeline,
+    evolucaoRoi: timeline,
+    resultadoPorEsporte,
+    resultadoPorMercado,
+    resultadoPorMes: monthlyPerformance(filtrados),
+    roiPorEsporte: resultadoPorEsporte,
+    roiPorMercado: resultadoPorMercado,
   };
+}
+
+/** Compatibilidade: use calculatePerformanceStats em novas telas. */
+export function computeFinancialMetrics(
+  resultados: ResultadoFinanceiro[],
+  cfg: { banca_inicial: number; valor_unidade_padrao: number } | null | undefined,
+): Metrics {
+  return calculatePerformanceStats(resultados, cfg);
+}
+
+export function calculateLearningPerformanceStats(rows: FeedbackIaResultado[], filters: PerformanceFilters = {}) {
+  const filtered = rows.filter((r) => {
+    const d = r.created_at.slice(0, 10);
+    if (!dateInRange(d, filters.ini, filters.fim)) return false;
+    if (filters.esporte && filters.esporte !== "all" && r.esporte !== filters.esporte) return false;
+    if (filters.liga && filters.liga !== "all" && r.liga !== filters.liga) return false;
+    if (filters.mercado && filters.mercado !== "all" && r.mercado !== filters.mercado) return false;
+    if (filters.modoIa && filters.modoIa !== "all" && r.modo_ia !== filters.modoIa) return false;
+    if (filters.resultado && filters.resultado !== "all" && r.resultado_real !== filters.resultado) return false;
+    if (filters.decisaoHumana && filters.decisaoHumana !== "all" && r.decisao_humana_final !== filters.decisaoHumana) return false;
+    return true;
+  });
+  const greens = filtered.filter((r) => r.resultado_real === "GREEN").length;
+  const reds = filtered.filter((r) => r.resultado_real === "RED").length;
+  const withIa = filtered.filter((r) => r.acertou_ia != null);
+  const acertoIa = withIa.length ? (withIa.filter((r) => r.acertou_ia).length / withIa.length) * 100 : 0;
+  const lucroU = filtered.reduce((s, r) => s + Number(r.lucro_unidades ?? 0), 0);
+  const totalApostadoU = filtered.reduce((s, r) => s + Math.abs(Number(r.lucro_unidades ?? 0)), 0);
+  const roi = totalApostadoU > 0 ? (lucroU / totalApostadoU) * 100 : 0;
+  const lucroIaConfirma = filtered.filter((r) => r.decisao_ia_sugerida === "CONFIRMA").reduce((s, r) => s + Number(r.lucro_unidades ?? 0), 0);
+  const lucroDivergente = filtered.filter((r) => r.divergencia_ia_humano).reduce((s, r) => s + Number(r.lucro_unidades ?? 0), 0);
+  return { filtered, greens, reds, totalResolvidos: greens + reds, acertoIa, lucroU, totalApostadoU, roi, yield: roi, lucroIaConfirma, lucroDivergente };
 }
 
 /** Evolucao da banca por data de resultado a partir da view financeira. */

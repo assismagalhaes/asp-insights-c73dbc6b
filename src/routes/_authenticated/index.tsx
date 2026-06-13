@@ -53,8 +53,7 @@ import { LeagueFilter } from "@/components/league-filter";
 import { PeriodFilter } from "@/components/period-filter";
 import { formatBR, formatHora } from "@/lib/date-br";
 import {
-  computeFinancialMetrics,
-  bankrollTimelineFromFinanceiros,
+  calculatePerformanceStats,
   rangeFromPeriodo,
   dateInRange,
   type PeriodoFiltro,
@@ -102,46 +101,28 @@ function Dashboard() {
     [prognosticos, ini, fim, esporte, liga, mercado],
   );
 
-  const financeirosFiltrados = useMemo(
+  const stats = useMemo(
     () =>
-      resultadosFinanceiros.filter((p) => {
-        if (!dateInRange(p.data, ini, fim)) return false;
-        if (esporte !== "Todos" && p.esporte !== esporte) return false;
-        if (liga !== "all" && p.liga !== liga) return false;
-        if (mercado !== "Todos" && p.mercado !== mercado) return false;
-        return true;
+      calculatePerformanceStats(resultadosFinanceiros, cfg, {
+        ini,
+        fim,
+        esporte: esporte === "Todos" ? "all" : esporte,
+        liga,
+        mercado: mercado === "Todos" ? "all" : mercado,
       }),
-    [resultadosFinanceiros, ini, fim, esporte, liga, mercado],
+    [resultadosFinanceiros, cfg, ini, fim, esporte, liga, mercado],
   );
 
-  const metrics = useMemo(() => computeFinancialMetrics(financeirosFiltrados, cfg), [financeirosFiltrados, cfg]);
-  const timeline = useMemo(
-    () => bankrollTimelineFromFinanceiros(financeirosFiltrados, cfg?.banca_inicial ?? 0),
-    [financeirosFiltrados, cfg],
-  );
+  const metrics = stats;
+  const timeline = stats.evolucaoBanca;
 
   const sportPerf = useMemo(() => {
-    const map = new Map<string, { lucro: number; stake: number }>();
-    financeirosFiltrados.forEach((p) => {
-      const cur = map.get(p.esporte) ?? { lucro: 0, stake: 0 };
-      cur.lucro += p.lucro_unidades;
-      cur.stake += p.stake;
-      map.set(p.esporte, cur);
-    });
-    return Array.from(map.entries()).map(([esporte, v]) => ({
-      esporte,
-      lucro: Number(v.lucro.toFixed(2)),
-    }));
-  }, [financeirosFiltrados]);
+    return stats.resultadoPorEsporte.map((p) => ({ esporte: p.nome, lucro: Number(p.lucroU.toFixed(2)) }));
+  }, [stats]);
 
   const marketPerf = useMemo(() => {
-    const map = new Map<string, number>();
-    financeirosFiltrados.forEach((p) => map.set(p.mercado, (map.get(p.mercado) ?? 0) + p.lucro_unidades));
-    return Array.from(map.entries()).map(([mercado, lucro]) => ({
-      mercado,
-      lucro: Number(lucro.toFixed(2)),
-    }));
-  }, [financeirosFiltrados]);
+    return stats.resultadoPorMercado.map((p) => ({ mercado: p.nome, lucro: Number(p.lucroU.toFixed(2)) }));
+  }, [stats]);
 
   return (
     <div className="space-y-6">

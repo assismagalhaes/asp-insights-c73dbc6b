@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { LeagueFilter } from "@/components/league-filter";
 import { PeriodFilter } from "@/components/period-filter";
-import { rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
+import { calculatePerformanceStats, rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
 import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
 import { DadosTecnicosViewer } from "@/components/dados-tecnicos-viewer";
 
@@ -55,23 +55,21 @@ function Historico() {
     });
   }, [prognosticos, ini, fim, esporte, liga, mercado, status, resultado, publicacao, data]);
 
-  const financeiros = useMemo(() => {
-    return resultadosFinanceiros.filter((p) => {
-      if (!dateInRange(p.data, ini, fim)) return false;
-      if (esporte !== "all" && p.esporte !== esporte) return false;
-      if (liga !== "all" && p.liga !== liga) return false;
-      if (mercado !== "all" && p.mercado !== mercado) return false;
-      if (status !== "all" && p.status_validacao !== status) return false;
-      if (resultado !== "all" && p.resultado !== resultado) return false;
-      if (data && p.data !== data) return false;
-      return true;
-    });
-  }, [resultadosFinanceiros, ini, fim, esporte, liga, mercado, status, resultado, data]);
+  const stats = useMemo(
+    () =>
+      calculatePerformanceStats(resultadosFinanceiros, cfg, {
+        ini: data || ini,
+        fim: data || fim,
+        esporte,
+        liga,
+        mercado,
+        resultado: resultado as "GREEN" | "RED" | "PENDENTE" | "all",
+        decisaoHumana: status as "CONFIRMA" | "PULAR" | "PENDENTE" | "all",
+      }),
+    [resultadosFinanceiros, cfg, ini, fim, esporte, liga, mercado, status, resultado, data],
+  );
 
-  const wins = financeiros.filter((r) => r.resultado === "GREEN").length;
-  const losses = financeiros.filter((r) => r.resultado === "RED").length;
-  const pushes = 0;
-  const lucro = financeiros.reduce((s, p) => s + p.lucro_unidades, 0);
+  const lucro = stats.lucroU;
 
   return (
     <div className="space-y-6">
@@ -141,9 +139,9 @@ function Historico() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Wins" value={String(wins)} tone="good" />
-        <Stat label="Losses" value={String(losses)} tone="bad" />
-        <Stat label="Push" value={String(pushes)} />
+        <Stat label="GREEN" value={String(stats.greens)} tone="good" />
+        <Stat label="RED" value={String(stats.reds)} tone="bad" />
+        <Stat label="Resolvidos" value={String(stats.resolvidas)} />
         <Stat label="Lucro" value={`${lucro >= 0 ? "+" : ""}${lucro.toFixed(2)}u`} tone={lucro >= 0 ? "good" : "bad"} />
       </div>
 

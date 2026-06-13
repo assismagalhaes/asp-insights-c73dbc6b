@@ -26,10 +26,9 @@ import {
   useConfiguracao,
   useUpdateConfiguracao,
   useResultadosFinanceiros,
-  useBankrollCalculado,
   type TipoStake,
 } from "@/lib/db";
-import { computeFinancialMetrics } from "@/lib/metrics";
+import { calculatePerformanceStats } from "@/lib/metrics";
 import { formatBR } from "@/lib/date-br";
 import {
   COLOR_GRID,
@@ -53,7 +52,6 @@ const axisColor = COLOR_AXIS;
 function Bankroll() {
   const { data: cfg } = useConfiguracao();
   const { data: resultadosFinanceiros = [] } = useResultadosFinanceiros();
-  const { data: bankrollCalculado = [] } = useBankrollCalculado();
   const updateCfg = useUpdateConfiguracao();
 
   const [unidade, setUnidade] = useState(10);
@@ -70,13 +68,9 @@ function Bankroll() {
     }
   }, [cfg]);
 
-  const metrics = computeFinancialMetrics(resultadosFinanceiros, cfg);
-  const timeline = bankrollCalculado.map((p) => ({
-    data: p.data,
-    banca: p.banca,
-    lucroAcum: p.lucro_acum,
-    roi: p.roi,
-  }));
+  const stats = calculatePerformanceStats(resultadosFinanceiros, cfg);
+  const metrics = stats;
+  const timeline = stats.evolucaoBanca;
 
   // valor real de 1u, conforme tipo de stake
   const valorUnidadeEfetiva =
