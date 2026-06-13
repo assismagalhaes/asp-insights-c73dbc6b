@@ -37,6 +37,7 @@ import {
   ESPORTES_DEFAULT,
 } from "@/lib/db";
 import { LeagueFilter } from "@/components/league-filter";
+import { PeriodFilter } from "@/components/period-filter";
 import { formatBR, formatHora } from "@/lib/date-br";
 import {
   computeMetrics,
@@ -62,15 +63,6 @@ const axisColor = "oklch(0.68 0.02 250)";
 
 const ESPORTES = ["Todos", ...ESPORTES_DEFAULT];
 const MERCADOS = ["Todos", ...MERCADOS_DEFAULT];
-const PERIODOS: { v: PeriodoFiltro; label: string }[] = [
-  { v: "hoje", label: "Hoje" },
-  { v: "7d", label: "7 dias" },
-  { v: "30d", label: "30 dias" },
-  { v: "mes", label: "Mês atual" },
-  { v: "ano", label: "Ano atual" },
-  { v: "tudo", label: "Todo o período" },
-  { v: "custom", label: "Personalizado" },
-];
 
 function Dashboard() {
   const { data: prognosticos = [] } = usePrognosticos();
