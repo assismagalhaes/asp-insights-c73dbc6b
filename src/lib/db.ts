@@ -4,8 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 export type Status =
   | "PENDENTE"
   | "CONFIRMA"
-  | "PULAR";
-export type Resultado = "PENDENTE" | "GREEN" | "RED";
+  | "CONFIRMA_CAUTELA"
+  | "PASS"
+  | "AGUARDAR_NOTICIA"
+  | "PULAR"; // legado
+export type Resultado = "PENDENTE" | "GREEN" | "RED" | "PUSH" | "VOID" | "HALF GREEN" | "HALF RED";
 
 export type StatusPublicacao = "NAO_PUBLICADO" | "PUBLICADO" | "FINALIZADO" | "CANCELADO";
 
@@ -65,80 +68,6 @@ export interface Validacao {
   created_at: string;
 }
 
-export interface AnaliseIa {
-  id: string;
-  prognostico_id: string;
-  modo_ia: "local" | "online";
-  esporte: string;
-  liga: string;
-  mercado: string;
-  pick: string;
-  linha: string | null;
-  odd_original: number | null;
-  odd_ajustada: number | null;
-  odd_valor: number | null;
-  odd_usada: number | null;
-  probabilidade_final: number | null;
-  edge_original: number | null;
-  edge_ajustado: number | null;
-  edge_usado: number | null;
-  contexto_analisado: string | null;
-  parecer_ia: string | null;
-  decisao_sugerida: "CONFIRMA" | "PULAR" | null;
-  stake_sugerida: number | null;
-  riscos_identificados: string | null;
-  tags_risco: string[] | null;
-  fontes_consultadas: { titulo: string; url: string }[] | null;
-  buscas_realizadas: string[] | null;
-  alertas_online: string[] | null;
-  prompt_versao: string | null;
-  created_at: string;
-}
-
-export interface FeedbackIaResultado {
-  id: string;
-  prognostico_id: string;
-  analise_ia_id: string | null;
-  modo_ia: "local" | "online" | null;
-  decisao_ia_sugerida: "CONFIRMA" | "PULAR" | null;
-  decisao_humana_final: "CONFIRMA" | "PULAR" | null;
-  resultado_real: "GREEN" | "RED" | null;
-  lucro_prejuizo: number | null;
-  lucro_unidades: number | null;
-  esporte: string | null;
-  liga: string | null;
-  mercado: string | null;
-  pick: string | null;
-  linha: string | null;
-  odd_usada: number | null;
-  probabilidade_final: number | null;
-  edge_usado: number | null;
-  tags_risco: string[] | null;
-  fontes_consultadas: { titulo: string; url: string }[] | null;
-  acertou_ia: boolean | null;
-  acertou_humano: boolean | null;
-  divergencia_ia_humano: boolean | null;
-  created_at: string;
-}
-
-export interface ResumoAprendizadoIa {
-  id: string;
-  periodo_inicio: string | null;
-  periodo_fim: string | null;
-  total_analises: number;
-  total_green: number;
-  total_red: number;
-  win_rate: number;
-  roi: number;
-  yield: number;
-  resumo_geral: string | null;
-  aprendizados_por_esporte: Record<string, unknown> | null;
-  aprendizados_por_mercado: Record<string, unknown> | null;
-  alertas_recorrentes: Record<string, unknown> | null;
-  recomendacoes_para_prompt: string | null;
-  created_at: string;
-}
-
 /** Odd efetiva: ajustada se houver, senão a original. */
 export function getOddEfetiva(p: Pick<Prognostico, "odd_ofertada" | "odd_ajustada">): number {
   return p.odd_ajustada != null && p.odd_ajustada > 0 ? p.odd_ajustada : p.odd_ofertada;
@@ -184,36 +113,6 @@ export interface BankrollRow {
   created_at: string;
 }
 
-export interface ResultadoFinanceiro {
-  resultado_id: string | null;
-  prognostico_id: string;
-  data: string;
-  data_resultado: string;
-  esporte: string;
-  liga: string;
-  mercado: string;
-  jogo: string;
-  pick: string;
-  linha: string | null;
-  status_validacao: Status;
-  decisao_final: "CONFIRMA" | "PULAR" | "PENDENTE" | null;
-  resultado: "GREEN" | "RED";
-  stake: number;
-  odd_efetiva: number;
-  valor_unidade: number;
-  lucro_unidades: number;
-  lucro_reais: number;
-}
-
-export interface BankrollCalculadoRow {
-  data: string;
-  lucro_dia_reais: number;
-  lucro_acum: number;
-  banca: number;
-  roi: number;
-  drawdown: number;
-}
-
 export type TipoStake = "FIXO" | "PERCENTUAL";
 export interface Configuracao {
   id: string;
@@ -230,39 +129,8 @@ export interface Configuracao {
 
 const num = (v: unknown) => (v == null ? 0 : Number(v));
 const numOrNull = (v: unknown) => (v == null ? null : Number(v));
-const stringArrayOrNull = (v: unknown): string[] | null => {
-  if (!Array.isArray(v)) return null;
-  return v.map(String).filter(Boolean);
-};
-
-export function sanitizeOptionList(values: unknown, fallback: string[] = []): string[] {
-  const source = Array.isArray(values) ? values : fallback;
-  const seen = new Set<string>();
-  const cleaned: string[] = [];
-  for (const item of source) {
-    const value = String(item ?? "").trim();
-    if (!value || value === "all" || value === "__none__" || seen.has(value)) continue;
-    seen.add(value);
-    cleaned.push(value);
-  }
-  return cleaned.length ? cleaned : fallback;
-}
-
-function isMissingSchemaObjectError(error: unknown): boolean {
-  const message = String((error as { message?: unknown } | null)?.message ?? error ?? "");
-  return /schema cache|could not find the table|relation .* does not exist|does not exist/i.test(message);
-}
-
-export function normalizeResultado(value: unknown): Resultado {
-  const s = String(value ?? "PENDENTE").trim().toUpperCase();
-  if (s === "GREEN" || s === "WIN" || s === "WINS") return "GREEN";
-  if (s === "RED" || s === "LOSS" || s === "LOSSES") return "RED";
-  return "PENDENTE";
-}
-
 const mapPrognostico = (r: Record<string, unknown>): Prognostico => ({
   ...(r as unknown as Prognostico),
-  resultado: normalizeResultado(r.resultado),
   odd_ofertada: num(r.odd_ofertada),
   odd_ajustada: numOrNull(r.odd_ajustada),
   odd_valor: num(r.odd_valor),
@@ -274,53 +142,23 @@ const mapPrognostico = (r: Record<string, unknown>): Prognostico => ({
 });
 
 // ===== Prognósticos =====
-const PROGNOSTICO_LIST_COLUMNS = `
-  id,
-  data,
-  esporte,
-  liga,
-  jogo,
-  mandante,
-  visitante,
-  mercado,
-  pick,
-  linha,
-  odd_ofertada,
-  odd_valor,
-  probabilidade_final,
-  edge,
-  stake,
-  status_validacao,
-  status_publicacao,
-  resultado,
-  lucro_prejuizo,
-  created_at,
-  updated_at
-`;
-
 export function usePrognosticos() {
   return useQuery({
     queryKey: ["prognosticos"],
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("prognosticos")
-        .select(PROGNOSTICO_LIST_COLUMNS)
+        .select("*, resultados(placar_final, created_at)")
         .order("data", { ascending: false })
         .order("created_at", { ascending: false });
-      if (!error) return (data ?? []).map((r: Record<string, unknown>) => mapPrognosticoComPlacar(r));
-
-      const fallback = await supabase
-        .from("prognosticos")
-        .select("*")
-        .order("data", { ascending: false })
-        .order("created_at", { ascending: false });
-      if (fallback.error) {
-        console.error("Falha ao carregar prognosticos", error, fallback.error);
-        return [];
-      }
-      return (fallback.data ?? []).map((r: Record<string, unknown>) => mapPrognosticoComPlacar(r));
+      if (error) throw error;
+      return (data ?? []).map((r: Record<string, unknown>) => {
+        const rs = (r.resultados as Array<{ placar_final: string | null; created_at: string }> | null) ?? [];
+        const last = rs.length
+          ? [...rs].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0]
+          : null;
+        return { ...mapPrognostico(r), placar_final: last?.placar_final ?? null };
+      });
     },
   });
 }
@@ -359,37 +197,6 @@ export function useCreatePrognostico() {
       return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["prognosticos"] }),
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: ["resultados-financeiros"] });
-      qc.invalidateQueries({ queryKey: ["bankroll-calculado"] });
-    },
-  });
-}
-
-export async function fetchPrognosticoDetail(id: string): Promise<Prognostico> {
-  const { data, error } = await supabase
-    .from("prognosticos")
-    .select("*, resultados(placar_final, created_at)")
-    .eq("id", id)
-    .single();
-  if (!error) return mapPrognosticoComPlacar(data as Record<string, unknown>);
-
-  const fallback = await supabase
-    .from("prognosticos")
-    .select("*")
-    .eq("id", id)
-    .single();
-  if (fallback.error) throw fallback.error;
-  return mapPrognosticoComPlacar(fallback.data as Record<string, unknown>);
-}
-
-export function usePrognosticoDetail(id: string | null | undefined) {
-  return useQuery({
-    queryKey: ["prognostico-detail", id],
-    enabled: !!id,
-    staleTime: 5 * 60_000,
-    refetchOnWindowFocus: false,
-    queryFn: () => fetchPrognosticoDetail(id!),
   });
 }
 
@@ -402,12 +209,7 @@ export function useUpdatePrognostico() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["prognosticos"] });
-      qc.invalidateQueries({ queryKey: ["prognostico-detail"] });
-      qc.invalidateQueries({ queryKey: ["resultados-financeiros"] });
-      qc.invalidateQueries({ queryKey: ["bankroll-calculado"] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["prognosticos"] }),
   });
 }
 
@@ -418,12 +220,7 @@ export function useDeletePrognostico() {
       const { error } = await supabase.from("prognosticos").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["prognosticos"] });
-      qc.invalidateQueries({ queryKey: ["prognostico-detail"] });
-      qc.invalidateQueries({ queryKey: ["resultados-financeiros"] });
-      qc.invalidateQueries({ queryKey: ["bankroll-calculado"] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["prognosticos"] }),
   });
 }
 
@@ -435,11 +232,7 @@ export function useBulkDeletePrognosticos() {
       const { error } = await supabase.from("prognosticos").delete().in("id", ids);
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["prognosticos"] });
-      qc.invalidateQueries({ queryKey: ["resultados-financeiros"] });
-      qc.invalidateQueries({ queryKey: ["bankroll-calculado"] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["prognosticos"] }),
   });
 }
 
@@ -455,207 +248,17 @@ export function useCreateValidacao() {
     mutationFn: async (input: ValidacaoInput) => {
       const { data, error } = await supabase.from("validacoes").insert(input).select().single();
       if (error) throw error;
-      const status = input.decisao === "CONFIRMA" ? "CONFIRMA" : "PULAR";
       // espelha decisão no prognóstico
       await supabase
         .from("prognosticos")
-        .update({ status_validacao: status, stake: input.stake_confirmada ?? undefined })
+        .update({ status_validacao: input.decisao, stake: input.stake_confirmada ?? undefined })
         .eq("id", input.prognostico_id);
       return data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["prognosticos"] });
-      qc.invalidateQueries({ queryKey: ["prognostico-detail"] });
       qc.invalidateQueries({ queryKey: ["validacoes"] });
-      qc.invalidateQueries({ queryKey: ["resultados-financeiros"] });
-      qc.invalidateQueries({ queryKey: ["bankroll-calculado"] });
     },
-  });
-}
-
-// ===== Aprendizado da IA =====
-export type AnaliseIaInput = Omit<AnaliseIa, "id" | "created_at">;
-
-const mapAnaliseIa = (r: Record<string, unknown>): AnaliseIa => ({
-  ...(r as unknown as AnaliseIa),
-  odd_original: numOrNull(r.odd_original),
-  odd_ajustada: numOrNull(r.odd_ajustada),
-  odd_valor: numOrNull(r.odd_valor),
-  odd_usada: numOrNull(r.odd_usada),
-  probabilidade_final: numOrNull(r.probabilidade_final),
-  edge_original: numOrNull(r.edge_original),
-  edge_ajustado: numOrNull(r.edge_ajustado),
-  edge_usado: numOrNull(r.edge_usado),
-  stake_sugerida: numOrNull(r.stake_sugerida),
-  tags_risco: stringArrayOrNull(r.tags_risco),
-});
-
-const mapPrognosticoComPlacar = (r: Record<string, unknown>): Prognostico => {
-  const rs = (r.resultados as Array<{ placar_final: string | null; created_at: string }> | null) ?? [];
-  const last = rs.length
-    ? [...rs].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0]
-    : null;
-  return { ...mapPrognostico(r), placar_final: last?.placar_final ?? null };
-};
-
-const mapFeedbackIa = (r: Record<string, unknown>): FeedbackIaResultado => ({
-  ...(r as unknown as FeedbackIaResultado),
-  resultado_real:
-    normalizeResultado(r.resultado_real) === "PENDENTE"
-      ? null
-      : (normalizeResultado(r.resultado_real) as "GREEN" | "RED"),
-  lucro_prejuizo: numOrNull(r.lucro_prejuizo),
-  lucro_unidades: numOrNull(r.lucro_unidades),
-  odd_usada: numOrNull(r.odd_usada),
-  probabilidade_final: numOrNull(r.probabilidade_final),
-  edge_usado: numOrNull(r.edge_usado),
-  tags_risco: stringArrayOrNull(r.tags_risco),
-});
-
-const mapResumoAprendizado = (r: Record<string, unknown>): ResumoAprendizadoIa => ({
-  ...(r as unknown as ResumoAprendizadoIa),
-  total_analises: num(r.total_analises),
-  total_green: num(r.total_green),
-  total_red: num(r.total_red),
-  win_rate: num(r.win_rate),
-  roi: num(r.roi),
-  yield: num(r.yield),
-});
-
-export function useCreateAnaliseIa() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: AnaliseIaInput) => {
-      const { data, error } = await (supabase as unknown as {
-        from: (table: "analises_ia") => {
-          insert: (payload: AnaliseIaInput) => {
-            select: () => { single: () => Promise<{ data: Record<string, unknown>; error: Error | null }> };
-          };
-        };
-      })
-        .from("analises_ia")
-        .insert(input)
-        .select()
-        .single();
-      if (error && isMissingSchemaObjectError(error)) {
-        console.warn("Tabela analises_ia indisponivel; snapshot da IA nao foi salvo.", error);
-        return null;
-      }
-      if (error) throw error;
-      return mapAnaliseIa(data);
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["analises-ia"] });
-      qc.invalidateQueries({ queryKey: ["aprendizado-ia"] });
-    },
-  });
-}
-
-export function useAnalisesIaByPrognostico(prognosticoId: string | null | undefined) {
-  return useQuery({
-    queryKey: ["analises-ia", prognosticoId],
-    enabled: !!prognosticoId,
-    staleTime: 5 * 60_000,
-    refetchOnWindowFocus: false,
-    queryFn: async () => {
-      const { data, error } = await (supabase as unknown as {
-        from: (table: "analises_ia") => {
-          select: (columns: string) => {
-            eq: (column: string, value: string) => {
-              order: (
-                column: string,
-                opts?: { ascending?: boolean },
-              ) => Promise<{ data: Record<string, unknown>[] | null; error: Error | null }>;
-            };
-          };
-        };
-      })
-        .from("analises_ia")
-        .select("*")
-        .eq("prognostico_id", prognosticoId!)
-        .order("created_at", { ascending: false });
-      if (error && isMissingSchemaObjectError(error)) return [];
-      if (error) return [];
-      return (data ?? []).map(mapAnaliseIa);
-    },
-  });
-}
-
-export function useFeedbackIaResultados() {
-  return useQuery({
-    queryKey: ["aprendizado-ia", "feedback"],
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
-    queryFn: async () => {
-      const { data, error } = await (supabase as unknown as {
-        from: (table: "feedback_ia_resultados") => {
-          select: (columns: string) => {
-            order: (
-              column: string,
-              opts?: { ascending?: boolean },
-            ) => Promise<{ data: Record<string, unknown>[] | null; error: Error | null }>;
-          };
-        };
-      })
-        .from("feedback_ia_resultados")
-        .select("id, prognostico_id, analise_ia_id, modo_ia, decisao_ia_sugerida, decisao_humana_final, resultado_real, lucro_prejuizo, lucro_unidades, esporte, liga, mercado, pick, linha, odd_usada, probabilidade_final, edge_usado, tags_risco, acertou_ia, acertou_humano, divergencia_ia_humano, created_at")
-        .order("created_at", { ascending: false });
-      if (error && isMissingSchemaObjectError(error)) return [];
-      if (error) return [];
-      return (data ?? []).map(mapFeedbackIa);
-    },
-  });
-}
-
-export function useResumosAprendizadoIa() {
-  return useQuery({
-    queryKey: ["aprendizado-ia", "resumos"],
-    staleTime: 5 * 60_000,
-    refetchOnWindowFocus: false,
-    queryFn: async () => {
-      const { data, error } = await (supabase as unknown as {
-        from: (table: "resumos_aprendizado_ia") => {
-          select: (columns: string) => {
-            order: (
-              column: string,
-              opts?: { ascending?: boolean },
-            ) => Promise<{ data: Record<string, unknown>[] | null; error: Error | null }>;
-          };
-        };
-      })
-        .from("resumos_aprendizado_ia")
-        .select("id, periodo_inicio, periodo_fim, total_analises, total_green, total_red, win_rate, roi, yield, resumo_geral, created_at")
-        .order("created_at", { ascending: false });
-      if (error && isMissingSchemaObjectError(error)) return [];
-      if (error) return [];
-      return (data ?? []).map(mapResumoAprendizado);
-    },
-  });
-}
-
-export function useCreateResumoAprendizadoIa() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: Omit<ResumoAprendizadoIa, "id" | "created_at">) => {
-      const { data, error } = await (supabase as unknown as {
-        from: (table: "resumos_aprendizado_ia") => {
-          insert: (payload: Omit<ResumoAprendizadoIa, "id" | "created_at">) => {
-            select: () => { single: () => Promise<{ data: Record<string, unknown>; error: Error | null }> };
-          };
-        };
-      })
-        .from("resumos_aprendizado_ia")
-        .insert(input)
-        .select()
-        .single();
-      if (error && isMissingSchemaObjectError(error)) {
-        console.warn("Tabela resumos_aprendizado_ia indisponivel; resumo nao foi salvo.", error);
-        return null;
-      }
-      if (error) throw error;
-      return mapResumoAprendizado(data);
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["aprendizado-ia"] }),
   });
 }
 
@@ -672,9 +275,6 @@ export function useCreateResultado() {
       qc.invalidateQueries({ queryKey: ["prognosticos"] });
       qc.invalidateQueries({ queryKey: ["bankroll"] });
       qc.invalidateQueries({ queryKey: ["resultados"] });
-      qc.invalidateQueries({ queryKey: ["resultados-financeiros"] });
-      qc.invalidateQueries({ queryKey: ["bankroll-calculado"] });
-      qc.invalidateQueries({ queryKey: ["aprendizado-ia"] });
     },
   });
 }
@@ -704,151 +304,6 @@ export function useBankroll() {
   });
 }
 
-// ===== Views financeiras =====
-type ViewClient = {
-  from: (table: string) => {
-    select: (columns: string) => {
-      order: (
-        column: string,
-        opts?: { ascending?: boolean },
-      ) => Promise<{ data: Record<string, unknown>[] | null; error: Error | null }>;
-    };
-  };
-};
-
-const mapResultadoFinanceiro = (r: Record<string, unknown>): ResultadoFinanceiro => ({
-  ...(r as unknown as ResultadoFinanceiro),
-  resultado: normalizeResultado(r.resultado) as "GREEN" | "RED",
-  stake: Number(r.stake),
-  odd_efetiva: Number(r.odd_efetiva),
-  valor_unidade: Number(r.valor_unidade),
-  lucro_unidades: Number(r.lucro_unidades),
-  lucro_reais: Number(r.lucro_reais),
-});
-
-async function fetchResultadosFinanceirosFallback(): Promise<ResultadoFinanceiro[]> {
-  const configPromise = supabase
-    .from("configuracoes")
-    .select("valor_unidade_padrao")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  const prognosticosPromise = supabase
-    .from("prognosticos")
-    .select("*")
-    .order("data", { ascending: true })
-    .order("created_at", { ascending: true });
-  const resultadosPromise = supabase
-    .from("resultados")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  const [configResult, prognosticosResult, resultadosResult] = await Promise.all([
-    configPromise,
-    prognosticosPromise,
-    resultadosPromise,
-  ]);
-  if (prognosticosResult.error) throw prognosticosResult.error;
-
-  const configData = configResult.data as { valor_unidade_padrao?: number | string | null } | null;
-  const valorUnidade = Number(configData?.valor_unidade_padrao ?? 10);
-  const resultadosPorPrognostico = new Map<
-    string,
-    { resultado: Resultado; data_resultado: string | null; id: string | null }
-  >();
-  if (!resultadosResult.error) {
-    for (const row of resultadosResult.data ?? []) {
-      const r = row as Record<string, unknown>;
-      const resultado = normalizeResultado(r.resultado);
-      const prognosticoId = String(r.prognostico_id ?? "");
-      if (!prognosticoId || resultadosPorPrognostico.has(prognosticoId)) continue;
-      if (resultado === "GREEN" || resultado === "RED") {
-        resultadosPorPrognostico.set(prognosticoId, {
-          resultado,
-          data_resultado: String(r.data_resultado ?? ""),
-          id: r.id == null ? null : String(r.id),
-        });
-      }
-    }
-  }
-
-  return (prognosticosResult.data ?? [])
-    .map((r: Record<string, unknown>) => {
-      const p = mapPrognostico(r);
-      const resultadoRegistrado = resultadosPorPrognostico.get(p.id);
-      return {
-        p: resultadoRegistrado ? { ...p, resultado: resultadoRegistrado.resultado } : p,
-        resultadoId: resultadoRegistrado?.id ?? null,
-        dataResultado: resultadoRegistrado?.data_resultado || p.data,
-      };
-    })
-    .filter(({ p }) => p.resultado === "GREEN" || p.resultado === "RED")
-    .map((p) => {
-      const oddEfetiva = getOddEfetiva(p.p);
-      const stake = Number(p.p.stake ?? 0);
-      const lucroUnidades = p.p.resultado === "GREEN" ? stake * (oddEfetiva - 1) : -stake;
-      return {
-        resultado_id: p.resultadoId,
-        prognostico_id: p.p.id,
-        data: p.p.data,
-        data_resultado: p.dataResultado,
-        esporte: p.p.esporte,
-        liga: p.p.liga,
-        mercado: p.p.mercado,
-        jogo: p.p.jogo,
-        pick: p.p.pick,
-        linha: p.p.linha,
-        status_validacao: p.p.status_validacao,
-        decisao_final: p.p.status_validacao,
-        resultado: p.p.resultado as "GREEN" | "RED",
-        stake,
-        odd_efetiva: oddEfetiva,
-        valor_unidade: valorUnidade,
-        lucro_unidades: lucroUnidades,
-        lucro_reais: lucroUnidades * valorUnidade,
-      } satisfies ResultadoFinanceiro;
-    });
-}
-
-export function useResultadosFinanceiros() {
-  return useQuery({
-    queryKey: ["resultados-financeiros"],
-    queryFn: async () => {
-      const { data, error } = await (supabase as unknown as ViewClient)
-        .from("vw_resultados_financeiros")
-        .select("*")
-        .order("data_resultado", { ascending: true });
-      if (!error && data && data.length > 0) {
-        return data
-          .map(mapResultadoFinanceiro)
-          .filter((r) => r.resultado === "GREEN" || r.resultado === "RED");
-      }
-      return fetchResultadosFinanceirosFallback();
-    },
-  });
-}
-
-export function useBankrollCalculado() {
-  return useQuery({
-    queryKey: ["bankroll-calculado"],
-    queryFn: async () => {
-      const { data, error } = await (supabase as unknown as ViewClient)
-        .from("vw_bankroll_timeline_calculado")
-        .select("*")
-        .order("data", { ascending: true });
-      if (error) throw error;
-      return (data ?? []).map((r) => ({
-        ...(r as unknown as BankrollCalculadoRow),
-        lucro_dia_reais: Number(r.lucro_dia_reais),
-        lucro_acum: Number(r.lucro_acum),
-        banca: Number(r.banca),
-        roi: Number(r.roi),
-        drawdown: Number(r.drawdown),
-      }));
-    },
-  });
-}
-
 // ===== Configurações =====
 export function useConfiguracao() {
   return useQuery({
@@ -860,10 +315,7 @@ export function useConfiguracao() {
         .order("created_at", { ascending: true })
         .limit(1)
         .maybeSingle();
-      if (error) {
-        console.error("Falha ao carregar configuracao", error);
-        return null;
-      }
+      if (error) throw error;
       if (!data) return null;
       return {
         ...(data as unknown as Configuracao),
@@ -885,11 +337,7 @@ export function useUpdateConfiguracao() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["configuracao"] });
-      qc.invalidateQueries({ queryKey: ["resultados-financeiros"] });
-      qc.invalidateQueries({ queryKey: ["bankroll-calculado"] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["configuracao"] }),
   });
 }
 
@@ -968,10 +416,7 @@ export function useLigas() {
         .select("*")
         .order("esporte", { ascending: true })
         .order("nome", { ascending: true });
-      if (error) {
-        console.error("Falha ao carregar ligas", error);
-        return [];
-      }
+      if (error) throw error;
       return (data ?? []) as unknown as Liga[];
     },
   });
@@ -1007,18 +452,25 @@ export function todayBR(): string {
 }
 
 // ===== Publicação =====
-export function calcLucro(resultado: Resultado, stake: number, oddEfetiva: number): number {
+export function calcLucro(resultado: Resultado, stake: number, odd: number): number {
   switch (resultado) {
     case "GREEN":
-      return Number((stake * (oddEfetiva - 1)).toFixed(2));
+      return Number((stake * (odd - 1)).toFixed(2));
     case "RED":
+      return Number((-stake).toFixed(2));
+    // Resultados legados (mantidos por compatibilidade) convertidos
+    case "HALF GREEN":
+      return Number((stake * (odd - 1)).toFixed(2));
+    case "HALF RED":
+    case "PUSH":
+    case "VOID":
       return Number((-stake).toFixed(2));
     default:
       return 0;
   }
 }
 
-export function gerarTipTextoLegado(
+export function gerarTipTexto(
   p: Prognostico,
   extras?: {
     parecer?: string | null;
@@ -1072,74 +524,10 @@ ${parecer}
 📌 Status: ${p.status_validacao}`;
 }
 
-export function gerarTipTexto(
-  p: Prognostico,
-  extras?: {
-    parecer?: string | null;
-    contexto_analise?: string | null;
-    pesquisa_online?: string | null;
-    stake_confirmada?: number | null;
-    dados_tecnicos?: string | null;
-    justificativa?: string | null;
-    riscos?: string | null;
-    comentarios?: string | null;
-  },
-): string {
-  const linha = (p.linha ?? "").trim();
-  const pickLower = (p.pick ?? "").toLowerCase();
-  const linhaForaDoPick = linha && linha !== "-" && !pickLower.includes(linha.toLowerCase());
-  const oddFinal = getOddEfetiva(p);
-  const edgeFinal = getEdgeEfetivo(p);
-  const contexto = extras?.contexto_analise?.trim() || extras?.dados_tecnicos?.trim() || getDadosTecnicos(p) || "-";
-  const pesquisaOnline = extras?.pesquisa_online?.trim() || "-";
-  const stakeFinal = extras?.stake_confirmada ?? p.stake;
-  const parecerLegado = [
-    extras?.justificativa?.trim(),
-    extras?.riscos?.trim() ? `Riscos: ${extras.riscos.trim()}` : "",
-    extras?.comentarios?.trim(),
-  ]
-    .filter(Boolean)
-    .join("\n");
-  const parecer = extras?.parecer?.trim() || parecerLegado || "-";
-  const formatDateBR = (iso: string) => {
-    const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
-  };
-  const hora = p.hora ? p.hora.slice(0, 5) : "-";
-
-  return `🔥 ASP INSIGHTS - PICK CONFIRMADA
-
-🏆 Jogo: ${p.jogo}
-📅 Data/Hora: ${formatDateBR(p.data)} às ${hora}
-📊 Esporte/Liga: ${p.esporte} - ${p.liga || "-"}
-
-🎯 Mercado: ${p.mercado}
-✅ Pick: ${p.pick}
-📌 Linha: ${linhaForaDoPick ? linha : p.linha || "-"}
-📈 Odd: ${oddFinal.toFixed(2)}
-📉 Odd de Valor: ${p.odd_valor.toFixed(2)}
-📊 Probabilidade: ${p.probabilidade_final.toFixed(1)}%
-⚖️ Edge: ${edgeFinal.toFixed(2)}%
-💰 Stake: ${stakeFinal}u
-
-🧠 Contexto da análise:
-${contexto}
-
-🌐 Pesquisa online:
-${pesquisaOnline}
-
-📋 Parecer final:
-${parecer}
-
-📌 Status: ${p.status_validacao}`;
-}
-
 export function useValidacaoByPrognostico(prognosticoId: string | null | undefined) {
   return useQuery({
     queryKey: ["validacao", prognosticoId],
     enabled: !!prognosticoId,
-    staleTime: 5 * 60_000,
-    refetchOnWindowFocus: false,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("validacoes")
@@ -1177,10 +565,7 @@ export function usePublicarPrognostico() {
         .eq("id", input.id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["prognosticos"] });
-      qc.invalidateQueries({ queryKey: ["prognostico-detail"] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["prognosticos"] }),
   });
 }
 
@@ -1191,9 +576,6 @@ export function useCancelarPrognostico() {
       const { error } = await supabase.from("prognosticos").update({ status_publicacao: "CANCELADO" }).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["prognosticos"] });
-      qc.invalidateQueries({ queryKey: ["prognostico-detail"] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["prognosticos"] }),
   });
 }

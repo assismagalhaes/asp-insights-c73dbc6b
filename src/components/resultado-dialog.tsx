@@ -9,7 +9,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { useCreateResultado, calcLucro, getOddEfetiva, todayBR, type Prognostico, type Resultado } from "@/lib/db";
+import { useCreateResultado, calcLucro, todayBR, type Prognostico, type Resultado } from "@/lib/db";
 import { lucroUnidades } from "@/lib/metrics";
 import { parsePlacar, calcularResultadoAuto, extrairLinha } from "@/lib/resultado-calc";
 import { supabase } from "@/integrations/supabase/client";
@@ -43,19 +43,7 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
         .eq("esporte", prognostico.esporte)
         .neq("id", prognostico.id);
       if (prognostico.hora) q = q.eq("hora", prognostico.hora);
-      let { data, error } = await q;
-      if (error) {
-        let fallback = supabase
-          .from("prognosticos")
-          .select("*")
-          .eq("data", prognostico.data)
-          .eq("jogo", prognostico.jogo)
-          .eq("esporte", prognostico.esporte)
-          .neq("id", prognostico.id);
-        if (prognostico.hora) fallback = fallback.eq("hora", prognostico.hora);
-        const fallbackResult = await fallback;
-        data = fallbackResult.data;
-      }
+      const { data } = await q;
       const list = (data ?? []) as unknown as Array<Prognostico & { resultados?: Array<{ placar_final: string | null; created_at: string }> }>;
       setSiblings(list);
       for (const s of list) {
@@ -88,8 +76,7 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
 
   if (!prognostico) return null;
 
-  const oddEfetiva = getOddEfetiva(prognostico);
-  const lucroU = resultadoFinal ? lucroUnidades({ ...prognostico, resultado: resultadoFinal }) : 0;
+  const lucroU = resultadoFinal ? lucroUnidades({ resultado: resultadoFinal, stake: prognostico.stake, odd_ofertada: prognostico.odd_ofertada }) : 0;
   const lucroR = lucroU * valorUnidade;
 
   const submit = async () => {
@@ -103,7 +90,7 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
         resultado: resultadoFinal,
         placar_final: placar || null,
         odd_fechamento: null,
-        lucro_prejuizo: calcLucro(resultadoFinal, prognostico.stake, oddEfetiva),
+        lucro_prejuizo: calcLucro(resultadoFinal, prognostico.stake, prognostico.odd_ofertada),
         data_resultado: todayBR(),
       });
 
@@ -124,7 +111,7 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
           <DialogTitle>Registrar resultado — {prognostico.jogo}</DialogTitle>
         </DialogHeader>
         <div className="text-xs text-muted-foreground">
-          {prognostico.mercado} · {prognostico.pick} · Odd {oddEfetiva.toFixed(2)} · Stake {prognostico.stake.toFixed(1)}u · Unidade R$ {valorUnidade.toFixed(2)}
+          {prognostico.mercado} · {prognostico.pick} · Stake {prognostico.stake.toFixed(1)}u · Unidade R$ {valorUnidade.toFixed(2)}
         </div>
 
         <div>

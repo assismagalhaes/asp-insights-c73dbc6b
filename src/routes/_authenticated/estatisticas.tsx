@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import type { ReactNode } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -15,8 +14,8 @@ import {
   LabelList,
   ReferenceLine,
 } from "recharts";
-import { useResultadosFinanceiros, useConfiguracao, ESPORTES_DEFAULT, MERCADOS_DEFAULT, sanitizeOptionList } from "@/lib/db";
-import { calculatePerformanceStats, rangeFromPeriodo, type PeriodoFiltro } from "@/lib/metrics";
+import { usePrognosticos, useConfiguracao, ESPORTES_DEFAULT, MERCADOS_DEFAULT } from "@/lib/db";
+import { bankrollTimeline, lucroUnidades, rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
 import {
   Select,
   SelectContent,
@@ -27,7 +26,6 @@ import {
 import { LeagueFilter } from "@/components/league-filter";
 import { PeriodFilter } from "@/components/period-filter";
 import { ChartTooltip } from "@/components/chart-tooltip";
-import { ChartEmptyState } from "@/components/chart-empty-state";
 import { formatBR } from "@/lib/date-br";
 import {
   COLOR_GRID,
@@ -47,10 +45,10 @@ const chartGrid = COLOR_GRID;
 const axisColor = COLOR_AXIS;
 
 function Estatisticas() {
-  const { data: resultadosFinanceiros = [] } = useResultadosFinanceiros();
+  const { data: prognosticos = [] } = usePrognosticos();
   const { data: cfg } = useConfiguracao();
-  const esportes = sanitizeOptionList(cfg?.esportes_ativos, ESPORTES_DEFAULT);
-  const mercados = sanitizeOptionList(cfg?.mercados_ativos, MERCADOS_DEFAULT);
+  const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
+  const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
 
   const [fEsporte, setFEsporte] = useState("all");
   const [fLiga, setFLiga] = useState("all");
@@ -61,47 +59,65 @@ function Estatisticas() {
 
   const { ini, fim } = rangeFromPeriodo(periodo, customIni, customFim);
 
-  const stats = useMemo(
+  const filtrados = useMemo(
     () =>
-      calculatePerformanceStats(resultadosFinanceiros, cfg, {
-        ini,
-        fim,
-        esporte: fEsporte,
-        liga: fLiga,
-        mercado: fMercado,
+      prognosticos.filter((p) => {
+        if (!dateInRange(p.data, ini, fim)) return false;
+        if (fEsporte !== "all" && p.esporte !== fEsporte) return false;
+        if (fLiga !== "all" && p.liga !== fLiga) return false;
+        if (fMercado !== "all" && p.mercado !== fMercado) return false;
+        return true;
       }),
-    [resultadosFinanceiros, cfg, ini, fim, fEsporte, fLiga, fMercado],
+    [prognosticos, ini, fim, fEsporte, fLiga, fMercado],
+  );
+
+  // Apenas prognósticos confirmados contam para as estatísticas
+  const validados = useMemo(
+    () => filtrados.filter((p) => p.status_validacao === "CONFIRMA"),
+    [filtrados],
   );
 
   const sportPerformance = useMemo(() => {
-    return stats.resultadoPorEsporte.map((p) => ({
-      esporte: p.nome,
-      lucro: Number(p.lucroU.toFixed(2)),
-      roi: Number(p.roi.toFixed(1)),
+    const map = new Map<string, { lucro: number; stake: number }>();
+    validados.forEach((p) => {
+      const cur = map.get(p.esporte) ?? { lucro: 0, stake: 0 };
+      cur.lucro += lucroUnidades(p);
+      cur.stake += p.stake;
+      map.set(p.esporte, cur);
+    });
+    return Array.from(map.entries()).map(([esporte, v]) => ({
+      esporte,
+      lucro: Number(v.lucro.toFixed(2)),
+      roi: v.stake ? Number(((v.lucro / v.stake) * 100).toFixed(1)) : 0,
     }));
-  }, [stats]);
+  }, [validados]);
 
   const marketPerformance = useMemo(() => {
-    return stats.resultadoPorMercado.map((p) => ({
-      mercado: p.nome,
-      lucro: Number(p.lucroU.toFixed(2)),
-      roi: Number(p.roi.toFixed(1)),
+    const map = new Map<string, number>();
+    validados.forEach((p) => {
+      map.set(p.mercado, (map.get(p.mercado) ?? 0) + lucroUnidades(p));
+    });
+    return Array.from(map.entries()).map(([mercado, lucro]) => ({
+      mercado,
+      lucro: Number(lucro.toFixed(2)),
     }));
-  }, [stats]);
-
-  const leaguePerformance = useMemo(() => {
-    return stats.resultadoPorLiga.map((p) => ({
-      liga: p.nome,
-      lucro: Number(p.lucroU.toFixed(2)),
-      roi: Number(p.roi.toFixed(1)),
-    }));
-  }, [stats]);
+  }, [validados]);
 
   const monthlyResults = useMemo(() => {
-    return stats.resultadoPorMes.map((p) => ({ mes: p.mes, lucro: p.lucroU }));
-  }, [stats]);
+    const map = new Map<string, number>();
+    validados.forEach((p) => {
+      const mes = p.data.slice(0, 7);
+      map.set(mes, (map.get(mes) ?? 0) + lucroUnidades(p));
+    });
+    return Array.from(map.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([mes, lucro]) => ({ mes, lucro: Number(lucro.toFixed(2)) }));
+  }, [validados]);
 
-  const chartBanca = stats.evolucaoBanca;
+  const chartBanca = useMemo(
+    () => bankrollTimeline(filtrados, cfg?.banca_inicial ?? 0, cfg?.valor_unidade_padrao ?? 0),
+    [filtrados, cfg],
+  );
 
   return (
     <div className="space-y-6">
@@ -152,9 +168,8 @@ function Estatisticas() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Resultado por Esporte (u)">
-          {sportPerformance.length ? (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={sportPerformance} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={sportPerformance} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis dataKey="esporte" stroke={axisColor} fontSize={10} />
               <YAxis stroke={axisColor} fontSize={10} />
@@ -176,17 +191,13 @@ function Estatisticas() {
                   style={{ fontSize: 10, fontFamily: "ui-monospace, monospace", fill: COLOR_AXIS }}
                 />
               </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <ChartEmptyState height={260} />
-          )}
+            </BarChart>
+          </ResponsiveContainer>
         </Card>
 
         <Card title="ROI por Esporte (%)">
-          {sportPerformance.length ? (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={sportPerformance} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={sportPerformance} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis dataKey="esporte" stroke={axisColor} fontSize={10} />
               <YAxis stroke={axisColor} fontSize={10} />
@@ -208,17 +219,13 @@ function Estatisticas() {
                   style={{ fontSize: 10, fontFamily: "ui-monospace, monospace", fill: COLOR_AXIS }}
                 />
               </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <ChartEmptyState height={260} />
-          )}
+            </BarChart>
+          </ResponsiveContainer>
         </Card>
 
         <Card title="Resultado por Mercado (u)">
-          {marketPerformance.length ? (
-            <ResponsiveContainer width="100%" height={Math.max(260, marketPerformance.length * 32 + 40)}>
-              <BarChart data={marketPerformance} layout="vertical" margin={{ top: 8, right: 48, left: 0, bottom: 8 }}>
+          <ResponsiveContainer width="100%" height={Math.max(260, marketPerformance.length * 32 + 40)}>
+            <BarChart data={marketPerformance} layout="vertical" margin={{ top: 8, right: 48, left: 0, bottom: 8 }}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis type="number" stroke={axisColor} fontSize={10} />
               <YAxis type="category" dataKey="mercado" stroke={axisColor} fontSize={10} width={140} />
@@ -240,81 +247,13 @@ function Estatisticas() {
                   style={{ fontSize: 10, fontFamily: "ui-monospace, monospace", fill: COLOR_AXIS }}
                 />
               </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <ChartEmptyState height={260} />
-          )}
-        </Card>
-
-        <Card title="ROI por Mercado (%)">
-          {marketPerformance.length ? (
-            <ResponsiveContainer width="100%" height={Math.max(260, marketPerformance.length * 32 + 40)}>
-              <BarChart data={marketPerformance} layout="vertical" margin={{ top: 8, right: 48, left: 0, bottom: 8 }}>
-                <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
-                <XAxis type="number" stroke={axisColor} fontSize={10} />
-                <YAxis type="category" dataKey="mercado" stroke={axisColor} fontSize={10} width={140} />
-                <ReferenceLine x={0} stroke={COLOR_REFERENCE} />
-                <Tooltip
-                  cursor={{ fill: "oklch(0.28 0.02 250 / 0.3)" }}
-                  content={
-                    <ChartTooltip formatter={(v) => ({ label: "ROI", display: `${withSign(v, 1)}%`, color: signColor(v) })} />
-                  }
-                />
-                <Bar dataKey="roi" radius={[0, 4, 4, 0]}>
-                  {marketPerformance.map((d, i) => (
-                    <Cell key={i} fill={signColor(d.roi)} />
-                  ))}
-                  <LabelList
-                    dataKey="roi"
-                    position="right"
-                    formatter={(v: number) => `${withSign(v, 1)}%`}
-                    style={{ fontSize: 10, fontFamily: "ui-monospace, monospace", fill: COLOR_AXIS }}
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <ChartEmptyState height={260} />
-          )}
-        </Card>
-
-        <Card title="Resultado por Liga (u)">
-          {leaguePerformance.length ? (
-            <ResponsiveContainer width="100%" height={Math.max(260, leaguePerformance.length * 32 + 40)}>
-              <BarChart data={leaguePerformance} layout="vertical" margin={{ top: 8, right: 48, left: 0, bottom: 8 }}>
-                <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
-                <XAxis type="number" stroke={axisColor} fontSize={10} />
-                <YAxis type="category" dataKey="liga" stroke={axisColor} fontSize={10} width={140} />
-                <ReferenceLine x={0} stroke={COLOR_REFERENCE} />
-                <Tooltip
-                  cursor={{ fill: "oklch(0.28 0.02 250 / 0.3)" }}
-                  content={
-                    <ChartTooltip formatter={(v) => ({ label: "Lucro", display: `${withSign(v)}u`, color: signColor(v) })} />
-                  }
-                />
-                <Bar dataKey="lucro" radius={[0, 4, 4, 0]}>
-                  {leaguePerformance.map((d, i) => (
-                    <Cell key={i} fill={signColor(d.lucro)} />
-                  ))}
-                  <LabelList
-                    dataKey="lucro"
-                    position="right"
-                    formatter={(v: number) => `${withSign(v)}u`}
-                    style={{ fontSize: 10, fontFamily: "ui-monospace, monospace", fill: COLOR_AXIS }}
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <ChartEmptyState height={260} />
-          )}
+            </BarChart>
+          </ResponsiveContainer>
         </Card>
 
         <Card title="Resultado por Mês (u)">
-          {monthlyResults.length ? (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={monthlyResults} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={monthlyResults} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis dataKey="mes" stroke={axisColor} fontSize={10} />
               <YAxis stroke={axisColor} fontSize={10} />
@@ -336,17 +275,13 @@ function Estatisticas() {
                   style={{ fontSize: 10, fontFamily: "ui-monospace, monospace", fill: COLOR_AXIS }}
                 />
               </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <ChartEmptyState height={260} />
-          )}
+            </BarChart>
+          </ResponsiveContainer>
         </Card>
 
         <Card title="Evolução da Banca" full>
-          {chartBanca.length ? (
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={chartBanca}>
+          <ResponsiveContainer width="100%" height={280}>
+            <LineChart data={chartBanca}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis dataKey="data" stroke={axisColor} fontSize={10} tickFormatter={(d) => String(d).slice(5)} />
               <YAxis stroke={axisColor} fontSize={10} />
@@ -377,49 +312,15 @@ function Estatisticas() {
                 dot={false}
                 isAnimationActive={false}
               />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <ChartEmptyState height={280} />
-          )}
-        </Card>
-
-        <Card title="Evolução do ROI" full>
-          {chartBanca.length ? (
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={chartBanca}>
-                <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
-                <XAxis dataKey="data" stroke={axisColor} fontSize={10} tickFormatter={(d) => String(d).slice(5)} />
-                <YAxis stroke={axisColor} fontSize={10} />
-                <ReferenceLine y={0} stroke={COLOR_REFERENCE} strokeWidth={1.5} />
-                <Tooltip
-                  content={
-                    <ChartTooltip
-                      headerFormatter={(d) => formatBR(d)}
-                      formatter={(v) => ({ label: "ROI", display: `${withSign(v)}%`, color: signColor(v) })}
-                    />
-                  }
-                />
-                <Line
-                  type="monotone"
-                  dataKey="roi"
-                  stroke={signColor(stats.roi)}
-                  strokeWidth={2.5}
-                  dot={false}
-                  isAnimationActive={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <ChartEmptyState height={280} />
-          )}
+            </LineChart>
+          </ResponsiveContainer>
         </Card>
       </div>
     </div>
   );
 }
 
-function Card({ title, children, full }: { title: string; children: ReactNode; full?: boolean }) {
+function Card({ title, children, full }: { title: string; children: React.ReactNode; full?: boolean }) {
   return (
     <div className={`rounded-lg border border-border bg-card p-4 ${full ? "lg:col-span-2" : ""}`}>
       <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
