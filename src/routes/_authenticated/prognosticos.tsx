@@ -265,11 +265,7 @@ function Prognosticos() {
           <SelectContent>
             <SelectItem value="all">Todos os resultados</SelectItem>
             <SelectItem value="GREEN">GREEN</SelectItem>
-            <SelectItem value="HALF GREEN">HALF GREEN</SelectItem>
             <SelectItem value="RED">RED</SelectItem>
-            <SelectItem value="HALF RED">HALF RED</SelectItem>
-            <SelectItem value="PUSH">PUSH</SelectItem>
-            <SelectItem value="VOID">VOID</SelectItem>
             <SelectItem value="PENDENTE">PENDENTE</SelectItem>
           </SelectContent>
         </Select>

@@ -1,9 +1,9 @@
 import type { Prognostico, Resultado, Configuracao } from "./db";
 
-// Picks consideradas "resolvidas" para win-rate
-export const PICK_RESOLVIDA: Resultado[] = ["GREEN", "HALF GREEN", "RED", "HALF RED"];
-export const PICK_GREEN: Resultado[] = ["GREEN", "HALF GREEN"];
-export const PICK_RED: Resultado[] = ["RED", "HALF RED"];
+// Picks consideradas "resolvidas" para win-rate (somente GREEN/RED)
+export const PICK_RESOLVIDA: Resultado[] = ["GREEN", "RED"];
+export const PICK_GREEN: Resultado[] = ["GREEN"];
+export const PICK_RED: Resultado[] = ["RED"];
 
 /** Lucro/prejuízo em unidades (independe do valor da unidade) */
 export function lucroUnidades(p: Pick<Prognostico, "resultado" | "stake" | "odd_ofertada">): number {
@@ -11,14 +11,15 @@ export function lucroUnidades(p: Pick<Prognostico, "resultado" | "stake" | "odd_
   switch (resultado) {
     case "GREEN":
       return stake * (odd - 1);
-    case "HALF GREEN":
-      return (stake * (odd - 1)) / 2;
     case "RED":
       return -stake;
+    // Resultados legados convertidos para o modelo simples
+    case "HALF GREEN":
+      return stake * (odd - 1);
     case "HALF RED":
-      return -stake / 2;
     case "PUSH":
     case "VOID":
+      return -stake;
     default:
       return 0;
   }

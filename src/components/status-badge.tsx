@@ -14,11 +14,7 @@ const statusStyles: Record<string, string> = {
 
 const resultStyles: Record<string, string> = {
   GREEN: "bg-success/15 text-success border-success/30",
-  "HALF GREEN": "bg-success/10 text-success border-success/20",
   RED: "bg-destructive/15 text-destructive border-destructive/30",
-  "HALF RED": "bg-destructive/10 text-destructive border-destructive/20",
-  PUSH: "bg-muted text-muted-foreground border-border",
-  VOID: "bg-muted text-muted-foreground border-border",
   PENDENTE: "bg-accent/30 text-muted-foreground border-border",
 };
 
