@@ -11,6 +11,8 @@ import {
   LineChart,
   Line,
   Cell,
+  LabelList,
+  ReferenceLine,
 } from "recharts";
 import { usePrognosticos, useConfiguracao, ESPORTES_DEFAULT, MERCADOS_DEFAULT } from "@/lib/db";
 import { bankrollTimeline, lucroUnidades, rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
@@ -23,21 +25,24 @@ import {
 } from "@/components/ui/select";
 import { LeagueFilter } from "@/components/league-filter";
 import { PeriodFilter } from "@/components/period-filter";
+import { ChartTooltip } from "@/components/chart-tooltip";
+import { formatBR } from "@/lib/date-br";
+import {
+  COLOR_GRID,
+  COLOR_AXIS,
+  COLOR_REFERENCE,
+  COLOR_NEUTRAL,
+  signColor,
+  withSign,
+} from "@/lib/chart-colors";
 
 export const Route = createFileRoute("/_authenticated/estatisticas")({
   head: () => ({ meta: [{ title: "ROI e Estatísticas — ASP Insights" }] }),
   component: Estatisticas,
 });
 
-const chartGrid = "oklch(0.28 0.02 250)";
-const axisColor = "oklch(0.68 0.02 250)";
-
-const tooltipStyle = {
-  background: "oklch(0.205 0.018 250)",
-  border: "1px solid oklch(0.28 0.02 250)",
-  borderRadius: 8,
-  fontSize: 12,
-};
+const chartGrid = COLOR_GRID;
+const axisColor = COLOR_AXIS;
 
 function Estatisticas() {
   const { data: prognosticos = [] } = usePrognosticos();
@@ -162,66 +167,151 @@ function Estatisticas() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Resultado por Esporte">
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={sportPerformance}>
-              <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
-              <XAxis dataKey="esporte" stroke={axisColor} fontSize={10} />
-              <YAxis stroke={axisColor} fontSize={10} />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Bar dataKey="lucro" fill="oklch(0.72 0.18 155)" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-
-        <Card title="ROI por Esporte">
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={sportPerformance}>
-              <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
-              <XAxis dataKey="esporte" stroke={axisColor} fontSize={10} />
-              <YAxis stroke={axisColor} fontSize={10} />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Bar dataKey="roi" fill="oklch(0.7 0.15 220)" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-
-        <Card title="Resultado por Mercado">
+        <Card title="Resultado por Esporte (u)">
           <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={marketPerformance} layout="vertical">
+            <BarChart data={sportPerformance} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
+              <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
+              <XAxis dataKey="esporte" stroke={axisColor} fontSize={10} />
+              <YAxis stroke={axisColor} fontSize={10} />
+              <ReferenceLine y={0} stroke={COLOR_REFERENCE} />
+              <Tooltip
+                cursor={{ fill: "oklch(0.28 0.02 250 / 0.3)" }}
+                content={
+                  <ChartTooltip formatter={(v) => ({ label: "Lucro", display: `${withSign(v)}u`, color: signColor(v) })} />
+                }
+              />
+              <Bar dataKey="lucro" radius={[4, 4, 0, 0]}>
+                {sportPerformance.map((d, i) => (
+                  <Cell key={i} fill={signColor(d.lucro)} />
+                ))}
+                <LabelList
+                  dataKey="lucro"
+                  position="top"
+                  formatter={(v: number) => `${withSign(v)}u`}
+                  style={{ fontSize: 10, fontFamily: "ui-monospace, monospace", fill: COLOR_AXIS }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+
+        <Card title="ROI por Esporte (%)">
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={sportPerformance} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
+              <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
+              <XAxis dataKey="esporte" stroke={axisColor} fontSize={10} />
+              <YAxis stroke={axisColor} fontSize={10} />
+              <ReferenceLine y={0} stroke={COLOR_REFERENCE} />
+              <Tooltip
+                cursor={{ fill: "oklch(0.28 0.02 250 / 0.3)" }}
+                content={
+                  <ChartTooltip formatter={(v) => ({ label: "ROI", display: `${withSign(v, 1)}%`, color: signColor(v) })} />
+                }
+              />
+              <Bar dataKey="roi" radius={[4, 4, 0, 0]}>
+                {sportPerformance.map((d, i) => (
+                  <Cell key={i} fill={signColor(d.roi)} />
+                ))}
+                <LabelList
+                  dataKey="roi"
+                  position="top"
+                  formatter={(v: number) => `${withSign(v, 1)}%`}
+                  style={{ fontSize: 10, fontFamily: "ui-monospace, monospace", fill: COLOR_AXIS }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+
+        <Card title="Resultado por Mercado (u)">
+          <ResponsiveContainer width="100%" height={Math.max(260, marketPerformance.length * 32 + 40)}>
+            <BarChart data={marketPerformance} layout="vertical" margin={{ top: 8, right: 48, left: 0, bottom: 8 }}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis type="number" stroke={axisColor} fontSize={10} />
-              <YAxis type="category" dataKey="mercado" stroke={axisColor} fontSize={10} width={120} />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Bar dataKey="lucro" fill="oklch(0.82 0.17 90)" radius={[0, 4, 4, 0]} />
+              <YAxis type="category" dataKey="mercado" stroke={axisColor} fontSize={10} width={140} />
+              <ReferenceLine x={0} stroke={COLOR_REFERENCE} />
+              <Tooltip
+                cursor={{ fill: "oklch(0.28 0.02 250 / 0.3)" }}
+                content={
+                  <ChartTooltip formatter={(v) => ({ label: "Lucro", display: `${withSign(v)}u`, color: signColor(v) })} />
+                }
+              />
+              <Bar dataKey="lucro" radius={[0, 4, 4, 0]}>
+                {marketPerformance.map((d, i) => (
+                  <Cell key={i} fill={signColor(d.lucro)} />
+                ))}
+                <LabelList
+                  dataKey="lucro"
+                  position="right"
+                  formatter={(v: number) => `${withSign(v)}u`}
+                  style={{ fontSize: 10, fontFamily: "ui-monospace, monospace", fill: COLOR_AXIS }}
+                />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </Card>
 
-        <Card title="Resultado por Mês">
+        <Card title="Resultado por Mês (u)">
           <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={monthlyResults}>
+            <BarChart data={monthlyResults} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis dataKey="mes" stroke={axisColor} fontSize={10} />
               <YAxis stroke={axisColor} fontSize={10} />
-              <Tooltip contentStyle={tooltipStyle} />
+              <ReferenceLine y={0} stroke={COLOR_REFERENCE} />
+              <Tooltip
+                cursor={{ fill: "oklch(0.28 0.02 250 / 0.3)" }}
+                content={
+                  <ChartTooltip formatter={(v) => ({ label: "Lucro", display: `${withSign(v)}u`, color: signColor(v) })} />
+                }
+              />
               <Bar dataKey="lucro" radius={[4, 4, 0, 0]}>
                 {monthlyResults.map((entry, i) => (
-                  <Cell key={i} fill={entry.lucro >= 0 ? "oklch(0.72 0.18 155)" : "oklch(0.62 0.23 25)"} />
+                  <Cell key={i} fill={signColor(entry.lucro)} />
                 ))}
+                <LabelList
+                  dataKey="lucro"
+                  position="top"
+                  formatter={(v: number) => `${withSign(v)}u`}
+                  style={{ fontSize: 10, fontFamily: "ui-monospace, monospace", fill: COLOR_AXIS }}
+                />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </Card>
 
         <Card title="Evolução da Banca" full>
-          <ResponsiveContainer width="100%" height={260}>
+          <ResponsiveContainer width="100%" height={280}>
             <LineChart data={chartBanca}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis dataKey="data" stroke={axisColor} fontSize={10} tickFormatter={(d) => String(d).slice(5)} />
               <YAxis stroke={axisColor} fontSize={10} />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Line type="monotone" dataKey="banca" stroke="oklch(0.72 0.18 155)" strokeWidth={2} dot={false} />
+              <ReferenceLine
+                y={cfg?.banca_inicial ?? 0}
+                stroke={COLOR_REFERENCE}
+                strokeDasharray="4 4"
+                label={{ value: "Banca inicial", position: "insideTopRight", fill: COLOR_NEUTRAL, fontSize: 10 }}
+              />
+              <Tooltip
+                content={
+                  <ChartTooltip
+                    headerFormatter={(d) => formatBR(d)}
+                    formatter={(v, _n, dk) => {
+                      if (dk === "banca") {
+                        return { label: "Banca", display: `R$ ${v.toFixed(2)}`, color: signColor(v - (cfg?.banca_inicial ?? 0)) };
+                      }
+                      return { label: dk, display: String(v) };
+                    }}
+                  />
+                }
+              />
+              <Line
+                type="monotone"
+                dataKey="banca"
+                stroke={signColor((chartBanca.at(-1)?.banca ?? cfg?.banca_inicial ?? 0) - (cfg?.banca_inicial ?? 0))}
+                strokeWidth={2.5}
+                dot={false}
+                isAnimationActive={false}
+              />
             </LineChart>
           </ResponsiveContainer>
         </Card>
