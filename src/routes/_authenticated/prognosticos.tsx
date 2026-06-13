@@ -111,14 +111,23 @@ function Prognosticos() {
     }
   };
 
+  const { ini, fim } = rangeFromPeriodo(periodo, customIni, customFim);
+
   const sorted = useMemo(() => {
     const arr = prognosticos.filter((p) => {
+      if (!dateInRange(p.data, ini, fim)) return false;
       if (fEsporte !== "all" && p.esporte !== fEsporte) return false;
       if (fLiga !== "all" && p.liga !== fLiga) return false;
       if (fMercado !== "all" && p.mercado !== fMercado) return false;
       if (fValidacao !== "all" && p.status_validacao !== fValidacao) return false;
+      if (fPublicacao !== "all" && p.status_publicacao !== fPublicacao) return false;
       if (fResultado !== "all" && p.resultado !== fResultado) return false;
-      if (fData && p.data !== fData) return false;
+      if (fLinha.trim()) {
+        const q = fLinha.trim().toLowerCase();
+        const inLinha = (p.linha ?? "").toString().toLowerCase().includes(q);
+        const inPick = (p.pick ?? "").toLowerCase().includes(q);
+        if (!inLinha && !inPick) return false;
+      }
       return true;
     });
     arr.sort((a, b) => {
@@ -133,7 +142,7 @@ function Prognosticos() {
       return sortDir === "asc" ? cmp : -cmp;
     });
     return arr;
-  }, [prognosticos, sortKey, sortDir, fEsporte, fLiga, fMercado, fValidacao, fResultado, fData]);
+  }, [prognosticos, sortKey, sortDir, ini, fim, fEsporte, fLiga, fMercado, fValidacao, fPublicacao, fResultado, fLinha]);
 
   const allSelected = sorted.length > 0 && sorted.every((p) => selected.has(p.id));
   const someSelected = selected.size > 0 && !allSelected;
