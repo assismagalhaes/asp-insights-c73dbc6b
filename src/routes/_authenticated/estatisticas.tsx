@@ -48,16 +48,22 @@ function Estatisticas() {
   const [fEsporte, setFEsporte] = useState("all");
   const [fLiga, setFLiga] = useState("all");
   const [fMercado, setFMercado] = useState("all");
+  const [periodo, setPeriodo] = useState<PeriodoFiltro>("tudo");
+  const [customIni, setCustomIni] = useState("");
+  const [customFim, setCustomFim] = useState("");
+
+  const { ini, fim } = rangeFromPeriodo(periodo, customIni, customFim);
 
   const filtrados = useMemo(
     () =>
       prognosticos.filter((p) => {
+        if (!dateInRange(p.data, ini, fim)) return false;
         if (fEsporte !== "all" && p.esporte !== fEsporte) return false;
         if (fLiga !== "all" && p.liga !== fLiga) return false;
         if (fMercado !== "all" && p.mercado !== fMercado) return false;
         return true;
       }),
-    [prognosticos, fEsporte, fLiga, fMercado],
+    [prognosticos, ini, fim, fEsporte, fLiga, fMercado],
   );
 
   // Apenas prognósticos confirmados contam para as estatísticas
