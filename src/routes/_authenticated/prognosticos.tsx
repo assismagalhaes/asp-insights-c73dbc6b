@@ -409,6 +409,9 @@ function Prognosticos() {
                     <td className="px-3 py-2 whitespace-nowrap font-mono text-xs">{p.placar_final ?? "—"}</td>
                     <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{p.mercado}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{p.pick}</td>
+                    <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-muted-foreground">
+                      {shouldShowLinha(p.pick, p.linha) ? p.linha : "—"}
+                    </td>
                     <td className="px-3 py-2 text-right font-mono">{p.odd_ofertada.toFixed(2)}</td>
                     <td className="px-3 py-2 text-right font-mono">{p.odd_valor.toFixed(2)}</td>
                     <td className="px-3 py-2 text-right font-mono">{p.probabilidade_final.toFixed(1)}%</td>
@@ -417,6 +420,7 @@ function Prognosticos() {
                     </td>
                     <td className="px-3 py-2 text-right font-mono">{p.stake.toFixed(1)}u</td>
                     <td className="px-3 py-2"><StatusBadge status={p.status_validacao} /></td>
+                    <td className="px-3 py-2"><PublicacaoBadge status={p.status_publicacao} /></td>
                     <td className="px-3 py-2"><ResultBadge result={p.resultado} /></td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
                       <div className="flex justify-end gap-1">
