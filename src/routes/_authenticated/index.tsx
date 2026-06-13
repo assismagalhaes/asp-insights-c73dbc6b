@@ -70,8 +70,8 @@ export const Route = createFileRoute("/_authenticated/")({
   component: Dashboard,
 });
 
-const chartGrid = "oklch(0.28 0.02 250)";
-const axisColor = "oklch(0.68 0.02 250)";
+const chartGrid = COLOR_GRID;
+const axisColor = COLOR_AXIS;
 
 const ESPORTES = ["Todos", ...ESPORTES_DEFAULT];
 const MERCADOS = ["Todos", ...MERCADOS_DEFAULT];
