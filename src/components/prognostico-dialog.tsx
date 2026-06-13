@@ -23,8 +23,11 @@ import {
   todayBR,
   useCreatePrognostico,
   useUpdatePrognostico,
+  useLigas,
+  useUpsertLiga,
   type Prognostico,
   type PrognosticoInput,
+  type Liga,
 } from "@/lib/db";
 import { toast } from "sonner";
 
