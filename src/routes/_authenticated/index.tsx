@@ -24,6 +24,7 @@ import {
   ReferenceLine,
 } from "recharts";
 import { ChartTooltip } from "@/components/chart-tooltip";
+import { ChartEmptyState } from "@/components/chart-empty-state";
 import {
   COLOR_GRID,
   COLOR_AXIS,
@@ -53,8 +54,7 @@ import { LeagueFilter } from "@/components/league-filter";
 import { PeriodFilter } from "@/components/period-filter";
 import { formatBR, formatHora } from "@/lib/date-br";
 import {
-  computeFinancialMetrics,
-  bankrollTimelineFromFinanceiros,
+  calculatePerformanceStats,
   rangeFromPeriodo,
   dateInRange,
   type PeriodoFiltro,
@@ -102,46 +102,28 @@ function Dashboard() {
     [prognosticos, ini, fim, esporte, liga, mercado],
   );
 
-  const financeirosFiltrados = useMemo(
+  const stats = useMemo(
     () =>
-      resultadosFinanceiros.filter((p) => {
-        if (!dateInRange(p.data, ini, fim)) return false;
-        if (esporte !== "Todos" && p.esporte !== esporte) return false;
-        if (liga !== "all" && p.liga !== liga) return false;
-        if (mercado !== "Todos" && p.mercado !== mercado) return false;
-        return true;
+      calculatePerformanceStats(resultadosFinanceiros, cfg, {
+        ini,
+        fim,
+        esporte: esporte === "Todos" ? "all" : esporte,
+        liga,
+        mercado: mercado === "Todos" ? "all" : mercado,
       }),
-    [resultadosFinanceiros, ini, fim, esporte, liga, mercado],
+    [resultadosFinanceiros, cfg, ini, fim, esporte, liga, mercado],
   );
 
-  const metrics = useMemo(() => computeFinancialMetrics(financeirosFiltrados, cfg), [financeirosFiltrados, cfg]);
-  const timeline = useMemo(
-    () => bankrollTimelineFromFinanceiros(financeirosFiltrados, cfg?.banca_inicial ?? 0),
-    [financeirosFiltrados, cfg],
-  );
+  const metrics = stats;
+  const timeline = stats.evolucaoBanca;
 
   const sportPerf = useMemo(() => {
-    const map = new Map<string, { lucro: number; stake: number }>();
-    financeirosFiltrados.forEach((p) => {
-      const cur = map.get(p.esporte) ?? { lucro: 0, stake: 0 };
-      cur.lucro += p.lucro_unidades;
-      cur.stake += p.stake;
-      map.set(p.esporte, cur);
-    });
-    return Array.from(map.entries()).map(([esporte, v]) => ({
-      esporte,
-      lucro: Number(v.lucro.toFixed(2)),
-    }));
-  }, [financeirosFiltrados]);
+    return stats.resultadoPorEsporte.map((p) => ({ esporte: p.nome, lucro: Number(p.lucroU.toFixed(2)) }));
+  }, [stats]);
 
   const marketPerf = useMemo(() => {
-    const map = new Map<string, number>();
-    financeirosFiltrados.forEach((p) => map.set(p.mercado, (map.get(p.mercado) ?? 0) + p.lucro_unidades));
-    return Array.from(map.entries()).map(([mercado, lucro]) => ({
-      mercado,
-      lucro: Number(lucro.toFixed(2)),
-    }));
-  }, [financeirosFiltrados]);
+    return stats.resultadoPorMercado.map((p) => ({ mercado: p.nome, lucro: Number(p.lucroU.toFixed(2)) }));
+  }, [stats]);
 
   return (
     <div className="space-y-6">
@@ -165,7 +147,7 @@ function Dashboard() {
           />
           <div>
             <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Esporte</label>
-            <Select value={esporte} onValueChange={setEsporte}>
+            <Select value={esporte} onValueChange={(v) => { setEsporte(v); setLiga("all"); }}>
               <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {ESPORTES.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}
@@ -230,8 +212,9 @@ function Dashboard() {
               R$ {metrics.bancaAtual.toFixed(2)}
             </span>
           </div>
-          <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={timeline}>
+          {timeline.length ? (
+            <ResponsiveContainer width="100%" height={240}>
+              <LineChart data={timeline}>
               <defs>
                 <linearGradient id="bancaPos" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={signColor(1)} stopOpacity={0.35} />
@@ -276,8 +259,11 @@ function Dashboard() {
                 isAnimationActive={false}
               />
               <Line type="monotone" dataKey="lucroAcum" hide />
-            </LineChart>
-          </ResponsiveContainer>
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <ChartEmptyState height={240} />
+          )}
         </div>
 
         <div className="rounded-lg border border-border bg-card p-4">
@@ -289,8 +275,9 @@ function Dashboard() {
               {withSign(metrics.roi)}%
             </span>
           </div>
-          <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={timeline}>
+          {timeline.length ? (
+            <ResponsiveContainer width="100%" height={240}>
+              <LineChart data={timeline}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis dataKey="data" stroke={axisColor} fontSize={10} tickFormatter={(d) => String(d).slice(5)} />
               <YAxis stroke={axisColor} fontSize={10} />
@@ -311,16 +298,20 @@ function Dashboard() {
                 dot={false}
                 isAnimationActive={false}
               />
-            </LineChart>
-          </ResponsiveContainer>
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <ChartEmptyState height={240} />
+          )}
         </div>
 
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             Resultado por Esporte (u)
           </h3>
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={sportPerf} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
+          {sportPerf.length ? (
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={sportPerf} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis dataKey="esporte" stroke={axisColor} fontSize={10} />
               <YAxis stroke={axisColor} fontSize={10} />
@@ -344,16 +335,20 @@ function Dashboard() {
                   style={{ fontSize: 10, fontFamily: "ui-monospace, monospace", fill: COLOR_AXIS }}
                 />
               </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <ChartEmptyState height={240} />
+          )}
         </div>
 
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             Resultado por Mercado (u)
           </h3>
-          <ResponsiveContainer width="100%" height={Math.max(240, marketPerf.length * 32 + 40)}>
-            <BarChart data={marketPerf} layout="vertical" margin={{ top: 8, right: 48, left: 0, bottom: 8 }}>
+          {marketPerf.length ? (
+            <ResponsiveContainer width="100%" height={Math.max(240, marketPerf.length * 32 + 40)}>
+              <BarChart data={marketPerf} layout="vertical" margin={{ top: 8, right: 48, left: 0, bottom: 8 }}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis type="number" stroke={axisColor} fontSize={10} />
               <YAxis type="category" dataKey="mercado" stroke={axisColor} fontSize={10} width={140} />
@@ -377,8 +372,11 @@ function Dashboard() {
                   style={{ fontSize: 10, fontFamily: "ui-monospace, monospace", fill: COLOR_AXIS }}
                 />
               </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <ChartEmptyState height={240} />
+          )}
         </div>
       </div>
 

@@ -185,7 +185,7 @@ export interface BankrollRow {
 }
 
 export interface ResultadoFinanceiro {
-  resultado_id: string;
+  resultado_id: string | null;
   prognostico_id: string;
   data: string;
   data_resultado: string;
@@ -194,7 +194,9 @@ export interface ResultadoFinanceiro {
   mercado: string;
   jogo: string;
   pick: string;
-  status_validacao: "CONFIRMA";
+  linha: string | null;
+  status_validacao: Status;
+  decisao_final: "CONFIRMA" | "PULAR" | "PENDENTE" | null;
   resultado: "GREEN" | "RED";
   stake: number;
   odd_efetiva: number;
@@ -228,8 +230,16 @@ export interface Configuracao {
 
 const num = (v: unknown) => (v == null ? 0 : Number(v));
 const numOrNull = (v: unknown) => (v == null ? null : Number(v));
+export function normalizeResultado(value: unknown): Resultado {
+  const s = String(value ?? "PENDENTE").trim().toUpperCase();
+  if (s === "GREEN" || s === "WIN" || s === "WINS") return "GREEN";
+  if (s === "RED" || s === "LOSS" || s === "LOSSES") return "RED";
+  return "PENDENTE";
+}
+
 const mapPrognostico = (r: Record<string, unknown>): Prognostico => ({
   ...(r as unknown as Prognostico),
+  resultado: normalizeResultado(r.resultado),
   odd_ofertada: num(r.odd_ofertada),
   odd_ajustada: numOrNull(r.odd_ajustada),
   odd_valor: num(r.odd_valor),
@@ -398,6 +408,10 @@ const mapAnaliseIa = (r: Record<string, unknown>): AnaliseIa => ({
 
 const mapFeedbackIa = (r: Record<string, unknown>): FeedbackIaResultado => ({
   ...(r as unknown as FeedbackIaResultado),
+  resultado_real:
+    normalizeResultado(r.resultado_real) === "PENDENTE"
+      ? null
+      : (normalizeResultado(r.resultado_real) as "GREEN" | "RED"),
   lucro_prejuizo: numOrNull(r.lucro_prejuizo),
   lucro_unidades: numOrNull(r.lucro_unidades),
   odd_usada: numOrNull(r.odd_usada),
@@ -603,6 +617,7 @@ export function useResultadosFinanceiros() {
       if (error) throw error;
       return (data ?? []).map((r) => ({
         ...(r as unknown as ResultadoFinanceiro),
+        resultado: normalizeResultado(r.resultado) as "GREEN" | "RED",
         stake: Number(r.stake),
         odd_efetiva: Number(r.odd_efetiva),
         valor_unidade: Number(r.valor_unidade),

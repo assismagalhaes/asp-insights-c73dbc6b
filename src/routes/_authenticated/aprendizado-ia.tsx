@@ -18,6 +18,7 @@ import {
   useResumosAprendizadoIa,
   type FeedbackIaResultado,
 } from "@/lib/db";
+import { calculateLearningPerformanceStats } from "@/lib/metrics";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/aprendizado-ia")({
@@ -40,25 +41,27 @@ function AprendizadoIa() {
   const [decisaoHumana, setDecisaoHumana] = useState("all");
   const [resultado, setResultado] = useState("all");
 
-  const filtered = useMemo(() => {
-    return feedback.filter((r) => {
-      const d = r.created_at.slice(0, 10);
-      if (inicio && d < inicio) return false;
-      if (fim && d > fim) return false;
-      if (esporte !== "all" && r.esporte !== esporte) return false;
-      if (liga !== "all" && r.liga !== liga) return false;
-      if (mercado !== "all" && r.mercado !== mercado) return false;
-      if (modo !== "all" && r.modo_ia !== modo) return false;
-      if (decisaoIa !== "all" && r.decisao_ia_sugerida !== decisaoIa) return false;
-      if (decisaoHumana !== "all" && r.decisao_humana_final !== decisaoHumana) return false;
-      if (resultado !== "all" && r.resultado_real !== resultado) return false;
-      return true;
-    });
-  }, [feedback, inicio, fim, esporte, liga, mercado, modo, decisaoIa, decisaoHumana, resultado]);
-
-  const metrics = useMemo(() => computeMetrics(filtered), [filtered]);
-  const localMetrics = useMemo(() => computeMetrics(filtered.filter((r) => r.modo_ia === "local")), [filtered]);
-  const onlineMetrics = useMemo(() => computeMetrics(filtered.filter((r) => r.modo_ia === "online")), [filtered]);
+  const baseLearningStats = useMemo(
+    () =>
+      calculateLearningPerformanceStats(feedback, {
+        ini: inicio || null,
+        fim: fim || null,
+        esporte,
+        liga,
+        mercado,
+        modoIa: modo as "local" | "online" | "all",
+        resultado: resultado as "GREEN" | "RED" | "PENDENTE" | "all",
+        decisaoHumana: decisaoHumana as "CONFIRMA" | "PULAR" | "PENDENTE" | "all",
+      }),
+    [feedback, inicio, fim, esporte, liga, mercado, modo, decisaoHumana, resultado],
+  );
+  const filtered = useMemo(
+    () => baseLearningStats.filtered.filter((r) => decisaoIa === "all" || r.decisao_ia_sugerida === decisaoIa),
+    [baseLearningStats, decisaoIa],
+  );
+  const metrics = useMemo(() => calculateLearningPerformanceStats(filtered), [filtered]);
+  const localMetrics = useMemo(() => calculateLearningPerformanceStats(filtered.filter((r) => r.modo_ia === "local")), [filtered]);
+  const onlineMetrics = useMemo(() => calculateLearningPerformanceStats(filtered.filter((r) => r.modo_ia === "online")), [filtered]);
   const esportes = uniq(feedback.map((r) => r.esporte));
   const ligas = uniq(feedback.filter((r) => esporte === "all" || r.esporte === esporte).map((r) => r.liga));
   const mercados = uniq(feedback.map((r) => r.mercado));
@@ -69,7 +72,7 @@ function AprendizadoIa() {
   const latestResumo = resumos[0];
 
   const recalcular = async () => {
-    const geral = computeMetrics(filtered);
+    const geral = metrics;
     const resumo = [
       `${filtered.length} feedback(s) avaliados.`,
       `${geral.greens} GREEN e ${geral.reds} RED.`,
@@ -157,23 +160,10 @@ function AprendizadoIa() {
   );
 }
 
-function computeMetrics(rows: FeedbackIaResultado[]) {
-  const greens = rows.filter((r) => r.resultado_real === "GREEN").length;
-  const reds = rows.filter((r) => r.resultado_real === "RED").length;
-  const withIa = rows.filter((r) => r.acertou_ia != null);
-  const acertoIa = withIa.length ? (withIa.filter((r) => r.acertou_ia).length / withIa.length) * 100 : 0;
-  const lucro = rows.reduce((s, r) => s + Number(r.lucro_unidades ?? 0), 0);
-  const stake = rows.reduce((s, r) => s + Math.abs(Number(r.lucro_unidades ?? 0)), 0);
-  const roi = stake > 0 ? (lucro / stake) * 100 : 0;
-  const lucroIaConfirma = rows.filter((r) => r.decisao_ia_sugerida === "CONFIRMA").reduce((s, r) => s + Number(r.lucro_unidades ?? 0), 0);
-  const lucroDivergente = rows.filter((r) => r.divergencia_ia_humano).reduce((s, r) => s + Number(r.lucro_unidades ?? 0), 0);
-  return { greens, reds, acertoIa, roi, lucroIaConfirma, lucroDivergente };
-}
-
 function groupBy(rows: FeedbackIaResultado[], key: "esporte" | "mercado") {
-  const out: Record<string, ReturnType<typeof computeMetrics>> = {};
+  const out: Record<string, ReturnType<typeof calculateLearningPerformanceStats>> = {};
   for (const name of uniq(rows.map((r) => r[key]))) {
-    out[name] = computeMetrics(rows.filter((r) => r[key] === name));
+    out[name] = calculateLearningPerformanceStats(rows.filter((r) => r[key] === name));
   }
   return out;
 }
@@ -213,7 +203,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "go
   );
 }
 
-function Panel({ title, data }: { title: string; data: Record<string, ReturnType<typeof computeMetrics>> }) {
+function Panel({ title, data }: { title: string; data: Record<string, ReturnType<typeof calculateLearningPerformanceStats>> }) {
   const rows = Object.entries(data);
   return (
     <div className="rounded-lg border border-border bg-card p-3">
