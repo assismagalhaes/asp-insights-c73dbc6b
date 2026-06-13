@@ -1,12 +1,30 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { AlertTriangle, Sparkles, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { StatusBadge } from "@/components/status-badge";
-import { usePrognosticos, useCreateValidacao, useUpdatePrognostico, type Prognostico, type Status } from "@/lib/db";
+import { LeagueFilter } from "@/components/league-filter";
+import {
+  usePrognosticos,
+  useCreateValidacao,
+  useUpdatePrognostico,
+  useConfiguracao,
+  ESPORTES_DEFAULT,
+  MERCADOS_DEFAULT,
+  type Prognostico,
+  type Status,
+} from "@/lib/db";
+import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
