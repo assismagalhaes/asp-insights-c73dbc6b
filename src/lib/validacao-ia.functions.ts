@@ -108,55 +108,8 @@ Regra anti-overfitting: use como sinal auxiliar, nunca como regra absoluta.
 Resumo periodico mais recente:
 (nenhum resumo periodico salvo ainda)`;
 
-async function buildLearningContext(supabase: unknown, p: PrognosticoPrompt) {
-  const client = supabase as {
-    from: (table: string) => {
-      select: (columns: string) => {
-        eq: (column: string, value: string) => {
-          order: (column: string, opts?: { ascending?: boolean }) => {
-            limit: (count: number) => Promise<{ data: Array<Record<string, unknown>> | null; error: Error | null }>;
-          };
-        };
-        order: (column: string, opts?: { ascending?: boolean }) => {
-          limit: (count: number) => Promise<{ data: Array<Record<string, unknown>> | null; error: Error | null }>;
-        };
-      };
-    };
-  };
-
-  const similar = await client
-    .from("feedback_ia_resultados")
-    .select("*")
-    .eq("esporte", p.esporte)
-    .order("created_at", { ascending: false })
-    .limit(50);
-  if (similar.error) return HISTORICO_INSUFICIENTE;
-
-  const rows = (similar.data ?? []).filter((r) => {
-    const sameLeague = r.liga === p.liga;
-    const sameMarket = r.mercado === p.mercado;
-    return sameLeague || sameMarket;
-  });
-  const greens = rows.filter((r) => r.resultado_real === "GREEN").length;
-  const reds = rows.filter((r) => r.resultado_real === "RED").length;
-  const lucro = rows.reduce((s, r) => s + Number(r.lucro_prejuizo ?? 0), 0);
-  const stake = rows.reduce((s, r) => s + Math.abs(Number(r.lucro_unidades ?? 0)), 0);
-  const roi = stake > 0 ? (lucro / stake) * 100 : 0;
-
-  const resumo = await client
-    .from("resumos_aprendizado_ia")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(1);
-  const latest = resumo.error ? null : resumo.data?.[0];
-  return `HISTORICO INTERNO ASP INSIGHTS:
-Amostras semelhantes encontradas: ${rows.length}
-GREEN/RED: ${greens} GREEN e ${reds} RED
-ROI aproximado das amostras: ${roi.toFixed(2)}%
-Forca estatistica: ${rows.length >= 30 ? "robusta" : rows.length >= 10 ? "moderada" : "limitada"}
-Regra anti-overfitting: use como sinal auxiliar, nunca como regra absoluta.
-Resumo periodico mais recente:
-${String(latest?.resumo_geral ?? "(nenhum resumo periodico salvo ainda)")}`;
+function buildLearningContext(_supabase: unknown, _p: PrognosticoPrompt) {
+  return HISTORICO_INSUFICIENTE;
 }
 
 export const analisarValidacao = createServerFn({ method: "POST" })
