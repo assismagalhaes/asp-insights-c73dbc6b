@@ -124,7 +124,7 @@ export function bankrollTimeline(
 }
 
 // ===== Filtros de período =====
-export type PeriodoFiltro = "hoje" | "ontem" | "7d" | "15d" | "30d" | "mes" | "ano" | "tudo" | "custom";
+export type PeriodoFiltro = "hoje" | "ontem" | "7d" | "30d" | "mes" | "ano" | "tudo" | "custom";
 
 export function dateInRange(d: string, ini?: string | null, fim?: string | null): boolean {
   if (ini && d < ini) return false;
@@ -154,10 +154,6 @@ export function rangeFromPeriodo(p: PeriodoFiltro, customIni?: string, customFim
   }
   if (p === "7d") {
     const i = new Date(hoje); i.setDate(i.getDate() - 6);
-    return { ini: fmt(i), fim: f };
-  }
-  if (p === "15d") {
-    const i = new Date(hoje); i.setDate(i.getDate() - 14);
     return { ini: fmt(i), fim: f };
   }
   if (p === "30d") {
