@@ -146,12 +146,14 @@ function Historico() {
                 <th className="px-3 py-2 text-left">Placar</th>
                 <th className="px-3 py-2 text-left">Mercado</th>
                 <th className="px-3 py-2 text-left">Pick</th>
+                <th className="px-3 py-2 text-left">Linha</th>
                 <th className="px-3 py-2 text-right font-mono">Odd</th>
                 <th className="px-3 py-2 text-right font-mono">Stake</th>
                 <th className="px-3 py-2 text-left">Validação</th>
                 <th className="px-3 py-2 text-left">Publicação</th>
                 <th className="px-3 py-2 text-left">Resultado</th>
                 <th className="px-3 py-2 text-right font-mono">Lucro</th>
+                <th className="px-3 py-2 text-center">Dados</th>
               </tr>
             </thead>
             <tbody>
