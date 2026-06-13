@@ -252,41 +252,65 @@ function Prognosticos() {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
-        <Input type="date" value={fData} onChange={(e) => setFData(e.target.value)} />
-        <Select value={fEsporte} onValueChange={(v) => { setFEsporte(v); setFLiga("all"); }}>
-          <SelectTrigger><SelectValue placeholder="Esporte" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os esportes</SelectItem>
-            {esportes.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <LeagueFilter sport={fEsporte} value={fLiga} onChange={setFLiga} />
-        <Select value={fMercado} onValueChange={setFMercado}>
-          <SelectTrigger><SelectValue placeholder="Mercado" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os mercados</SelectItem>
-            {mercados.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={fValidacao} onValueChange={setFValidacao}>
-          <SelectTrigger><SelectValue placeholder="Validação" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas as validações</SelectItem>
-            <SelectItem value="CONFIRMA">CONFIRMA</SelectItem>
-            <SelectItem value="PULAR">PULAR</SelectItem>
-            <SelectItem value="PENDENTE">PENDENTE</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={fResultado} onValueChange={setFResultado}>
-          <SelectTrigger><SelectValue placeholder="Resultado" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os resultados</SelectItem>
-            <SelectItem value="GREEN">GREEN</SelectItem>
-            <SelectItem value="RED">RED</SelectItem>
-            <SelectItem value="PENDENTE">PENDENTE</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="rounded-lg border border-border bg-card p-3 space-y-3">
+        <PeriodFilter
+          periodo={periodo}
+          onPeriodoChange={setPeriodo}
+          customIni={customIni}
+          customFim={customFim}
+          onCustomIniChange={setCustomIni}
+          onCustomFimChange={setCustomFim}
+        />
+        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-7">
+          <Select value={fEsporte} onValueChange={(v) => { setFEsporte(v); setFLiga("all"); }}>
+            <SelectTrigger><SelectValue placeholder="Esporte" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os esportes</SelectItem>
+              {esportes.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <LeagueFilter sport={fEsporte} value={fLiga} onChange={setFLiga} />
+          <Select value={fMercado} onValueChange={setFMercado}>
+            <SelectTrigger><SelectValue placeholder="Mercado" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os mercados</SelectItem>
+              {mercados.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Input
+            placeholder="Linha (ex: 2.5, +1.5)"
+            value={fLinha}
+            onChange={(e) => setFLinha(e.target.value)}
+          />
+          <Select value={fValidacao} onValueChange={setFValidacao}>
+            <SelectTrigger><SelectValue placeholder="Validação" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as validações</SelectItem>
+              <SelectItem value="CONFIRMA">CONFIRMA</SelectItem>
+              <SelectItem value="PULAR">PULAR</SelectItem>
+              <SelectItem value="PENDENTE">PENDENTE</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={fPublicacao} onValueChange={setFPublicacao}>
+            <SelectTrigger><SelectValue placeholder="Publicação" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as publicações</SelectItem>
+              <SelectItem value="NAO_PUBLICADO">Não publicado</SelectItem>
+              <SelectItem value="PUBLICADO">Publicado</SelectItem>
+              <SelectItem value="FINALIZADO">Finalizado</SelectItem>
+              <SelectItem value="CANCELADO">Cancelado</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={fResultado} onValueChange={setFResultado}>
+            <SelectTrigger><SelectValue placeholder="Resultado" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os resultados</SelectItem>
+              <SelectItem value="GREEN">GREEN</SelectItem>
+              <SelectItem value="RED">RED</SelectItem>
+              <SelectItem value="PENDENTE">PENDENTE</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {selected.size > 0 && (
