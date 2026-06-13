@@ -11,7 +11,9 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { LeagueFilter } from "@/components/league-filter";
-import { formatBR, formatHora } from "@/lib/date-br";
+import { PeriodFilter } from "@/components/period-filter";
+import { rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
+import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
 
 export const Route = createFileRoute("/_authenticated/historico")({
   head: () => ({ meta: [{ title: "Histórico — ASP Insights" }] }),
