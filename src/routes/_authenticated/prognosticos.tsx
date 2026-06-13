@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StatusBadge, ResultBadge } from "@/components/status-badge";
+import { LeagueFilter } from "@/components/league-filter";
 import {
   usePrognosticos,
   useDeletePrognostico,
