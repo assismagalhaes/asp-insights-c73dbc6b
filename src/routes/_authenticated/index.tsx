@@ -180,22 +180,32 @@ function Dashboard() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <StatCard label="Greens" value={String(metrics.greens)} icon={CheckCircle2} trend="up" />
-        <StatCard label="Reds" value={String(metrics.reds)} icon={XCircle} trend="down" />
+        <StatCard label="Greens" value={String(metrics.greens)} icon={CheckCircle2} tone="up" />
+        <StatCard label="Reds" value={String(metrics.reds)} icon={XCircle} tone="down" />
         <StatCard
           label="Lucro (u)"
-          value={`${metrics.lucroU >= 0 ? "+" : ""}${metrics.lucroU.toFixed(2)}u`}
+          value={`${withSign(metrics.lucroU)}u`}
           icon={Activity}
-          trend={metrics.lucroU >= 0 ? "up" : "down"}
+          tone={metrics.lucroU > 0 ? "up" : metrics.lucroU < 0 ? "down" : "neutral"}
         />
         <StatCard
           label="Lucro Real"
-          value={`${metrics.lucroReais >= 0 ? "+" : ""}R$ ${metrics.lucroReais.toFixed(2)}`}
+          value={`${metrics.lucroReais >= 0 ? "+" : "-"}R$ ${Math.abs(metrics.lucroReais).toFixed(2)}`}
           icon={DollarSign}
-          trend={metrics.lucroReais >= 0 ? "up" : "down"}
+          tone={metrics.lucroReais > 0 ? "up" : metrics.lucroReais < 0 ? "down" : "neutral"}
         />
-        <StatCard label="ROI" value={`${metrics.roi.toFixed(2)}%`} icon={TrendingUp} trend={metrics.roi >= 0 ? "up" : "down"} />
-        <StatCard label="Win Rate" value={`${metrics.winRate.toFixed(1)}%`} icon={Target} />
+        <StatCard
+          label="ROI"
+          value={`${withSign(metrics.roi)}%`}
+          icon={TrendingUp}
+          tone={metrics.roi > 0 ? "up" : metrics.roi < 0 ? "down" : "neutral"}
+        />
+        <StatCard
+          label="Win Rate"
+          value={`${metrics.winRate.toFixed(1)}%`}
+          icon={Target}
+          tone={metrics.winRate >= 50 ? "up" : metrics.winRate > 0 ? "down" : "neutral"}
+        />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -204,8 +214,70 @@ function Dashboard() {
             <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
               Evolução da Banca
             </h3>
-            <span className="font-mono text-xs text-success">
+            <span
+              className="font-mono text-xs"
+              style={{ color: signColor(metrics.bancaAtual - metrics.bancaInicial) }}
+            >
               R$ {metrics.bancaAtual.toFixed(2)}
+            </span>
+          </div>
+          <ResponsiveContainer width="100%" height={240}>
+            <LineChart data={timeline}>
+              <defs>
+                <linearGradient id="bancaPos" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={signColor(1)} stopOpacity={0.35} />
+                  <stop offset="100%" stopColor={signColor(1)} stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="bancaNeg" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={signColor(-1)} stopOpacity={0.35} />
+                  <stop offset="100%" stopColor={signColor(-1)} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
+              <XAxis dataKey="data" stroke={axisColor} fontSize={10} tickFormatter={(d) => String(d).slice(5)} />
+              <YAxis stroke={axisColor} fontSize={10} domain={["auto", "auto"]} />
+              <ReferenceLine
+                y={metrics.bancaInicial}
+                stroke={COLOR_REFERENCE}
+                strokeDasharray="4 4"
+                label={{ value: "Banca inicial", position: "insideTopRight", fill: COLOR_NEUTRAL, fontSize: 10 }}
+              />
+              <Tooltip
+                content={
+                  <ChartTooltip
+                    headerFormatter={(d) => formatBR(d)}
+                    formatter={(v, _n, dk) => {
+                      if (dk === "banca") {
+                        return { label: "Banca", display: `R$ ${v.toFixed(2)}`, color: signColor(v - metrics.bancaInicial) };
+                      }
+                      if (dk === "lucroAcum") {
+                        return { label: "Lucro acum.", display: `${v >= 0 ? "+" : "-"}R$ ${Math.abs(v).toFixed(2)}` };
+                      }
+                      return { label: dk, display: String(v) };
+                    }}
+                  />
+                }
+              />
+              <Line
+                type="monotone"
+                dataKey="banca"
+                stroke={signColor(metrics.bancaAtual - metrics.bancaInicial)}
+                strokeWidth={2.5}
+                dot={false}
+                isAnimationActive={false}
+              />
+              <Line type="monotone" dataKey="lucroAcum" hide />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Evolução do ROI
+            </h3>
+            <span className="font-mono text-xs" style={{ color: signColor(metrics.roi) }}>
+              {withSign(metrics.roi)}%
             </span>
           </div>
           <ResponsiveContainer width="100%" height={240}>
@@ -213,23 +285,23 @@ function Dashboard() {
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis dataKey="data" stroke={axisColor} fontSize={10} tickFormatter={(d) => String(d).slice(5)} />
               <YAxis stroke={axisColor} fontSize={10} />
-              <Tooltip contentStyle={{ background: "oklch(0.205 0.018 250)", border: "1px solid oklch(0.28 0.02 250)", borderRadius: 8, fontSize: 12 }} />
-              <Line type="monotone" dataKey="banca" stroke="oklch(0.72 0.18 155)" strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Evolução do ROI
-          </h3>
-          <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={timeline}>
-              <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
-              <XAxis dataKey="data" stroke={axisColor} fontSize={10} tickFormatter={(d) => String(d).slice(5)} />
-              <YAxis stroke={axisColor} fontSize={10} />
-              <Tooltip contentStyle={{ background: "oklch(0.205 0.018 250)", border: "1px solid oklch(0.28 0.02 250)", borderRadius: 8, fontSize: 12 }} />
-              <Line type="monotone" dataKey="roi" stroke="oklch(0.7 0.15 220)" strokeWidth={2} dot={false} />
+              <ReferenceLine y={0} stroke={COLOR_REFERENCE} strokeWidth={1.5} />
+              <Tooltip
+                content={
+                  <ChartTooltip
+                    headerFormatter={(d) => formatBR(d)}
+                    formatter={(v) => ({ label: "ROI", display: `${withSign(v)}%`, color: signColor(v) })}
+                  />
+                }
+              />
+              <Line
+                type="monotone"
+                dataKey="roi"
+                stroke={signColor(metrics.roi)}
+                strokeWidth={2.5}
+                dot={false}
+                isAnimationActive={false}
+              />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -238,13 +310,31 @@ function Dashboard() {
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             Resultado por Esporte (u)
           </h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={sportPerf}>
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={sportPerf} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis dataKey="esporte" stroke={axisColor} fontSize={10} />
               <YAxis stroke={axisColor} fontSize={10} />
-              <Tooltip contentStyle={{ background: "oklch(0.205 0.018 250)", border: "1px solid oklch(0.28 0.02 250)", borderRadius: 8, fontSize: 12 }} />
-              <Bar dataKey="lucro" fill="oklch(0.72 0.18 155)" radius={[4, 4, 0, 0]} />
+              <ReferenceLine y={0} stroke={COLOR_REFERENCE} />
+              <Tooltip
+                cursor={{ fill: "oklch(0.28 0.02 250 / 0.3)" }}
+                content={
+                  <ChartTooltip
+                    formatter={(v) => ({ label: "Lucro", display: `${withSign(v)}u`, color: signColor(v) })}
+                  />
+                }
+              />
+              <Bar dataKey="lucro" radius={[4, 4, 0, 0]}>
+                {sportPerf.map((d, i) => (
+                  <Cell key={i} fill={signColor(d.lucro)} />
+                ))}
+                <LabelList
+                  dataKey="lucro"
+                  position="top"
+                  formatter={(v: number) => `${withSign(v)}u`}
+                  style={{ fontSize: 10, fontFamily: "ui-monospace, monospace", fill: COLOR_AXIS }}
+                />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -253,13 +343,31 @@ function Dashboard() {
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             Resultado por Mercado (u)
           </h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={marketPerf} layout="vertical">
+          <ResponsiveContainer width="100%" height={Math.max(240, marketPerf.length * 32 + 40)}>
+            <BarChart data={marketPerf} layout="vertical" margin={{ top: 8, right: 48, left: 0, bottom: 8 }}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis type="number" stroke={axisColor} fontSize={10} />
-              <YAxis type="category" dataKey="mercado" stroke={axisColor} fontSize={10} width={120} />
-              <Tooltip contentStyle={{ background: "oklch(0.205 0.018 250)", border: "1px solid oklch(0.28 0.02 250)", borderRadius: 8, fontSize: 12 }} />
-              <Bar dataKey="lucro" fill="oklch(0.7 0.15 220)" radius={[0, 4, 4, 0]} />
+              <YAxis type="category" dataKey="mercado" stroke={axisColor} fontSize={10} width={140} />
+              <ReferenceLine x={0} stroke={COLOR_REFERENCE} />
+              <Tooltip
+                cursor={{ fill: "oklch(0.28 0.02 250 / 0.3)" }}
+                content={
+                  <ChartTooltip
+                    formatter={(v) => ({ label: "Lucro", display: `${withSign(v)}u`, color: signColor(v) })}
+                  />
+                }
+              />
+              <Bar dataKey="lucro" radius={[0, 4, 4, 0]}>
+                {marketPerf.map((d, i) => (
+                  <Cell key={i} fill={signColor(d.lucro)} />
+                ))}
+                <LabelList
+                  dataKey="lucro"
+                  position="right"
+                  formatter={(v: number) => `${withSign(v)}u`}
+                  style={{ fontSize: 10, fontFamily: "ui-monospace, monospace", fill: COLOR_AXIS }}
+                />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
