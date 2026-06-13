@@ -19,7 +19,19 @@ import {
   CartesianGrid,
   BarChart,
   Bar,
+  Cell,
+  LabelList,
+  ReferenceLine,
 } from "recharts";
+import { ChartTooltip } from "@/components/chart-tooltip";
+import {
+  COLOR_GRID,
+  COLOR_AXIS,
+  COLOR_NEUTRAL,
+  COLOR_REFERENCE,
+  signColor,
+  withSign,
+} from "@/lib/chart-colors";
 import { StatCard } from "@/components/stat-card";
 import { StatusBadge, ResultBadge } from "@/components/status-badge";
 
