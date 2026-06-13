@@ -1,7 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-export type Status = "PENDENTE" | "CONFIRMA" | "PULAR";
+export type Status =
+  | "PENDENTE"
+  | "CONFIRMA"
+  | "CONFIRMA_CAUTELA"
+  | "PASS"
+  | "AGUARDAR_NOTICIA"
+  | "PULAR"; // legado
 export type Resultado = "PENDENTE" | "GREEN" | "RED" | "PUSH" | "VOID" | "HALF GREEN" | "HALF RED";
 
 export type StatusPublicacao = "NAO_PUBLICADO" | "PUBLICADO" | "FINALIZADO" | "CANCELADO";
@@ -19,15 +25,18 @@ export interface Prognostico {
   pick: string;
   linha: string | null;
   odd_ofertada: number;
+  odd_ajustada: number | null;
   odd_valor: number;
   probabilidade_final: number;
   edge: number;
+  edge_ajustado: number | null;
   stake: number;
   status_validacao: Status;
   status_publicacao: StatusPublicacao;
   resultado: Resultado;
   lucro_prejuizo: number | null;
   observacoes: string | null;
+  dados_tecnicos: string | null;
   data_publicacao: string | null;
   tip_texto: string | null;
   publicado_em: string | null;
@@ -46,7 +55,35 @@ export interface Validacao {
   justificativa: string | null;
   riscos_identificados: string | null;
   comentarios_analista: string | null;
+  parecer_validacao: string | null;
+  contexto_adicional: string | null;
+  parecer_ia: string | null;
+  decisao_ia_sugerida: string | null;
+  stake_ia_sugerida: number | null;
+  data_analise_ia: string | null;
+  prompt_versao: string | null;
   created_at: string;
+}
+
+/** Odd efetiva: ajustada se houver, senão a original. */
+export function getOddEfetiva(p: Pick<Prognostico, "odd_ofertada" | "odd_ajustada">): number {
+  return p.odd_ajustada != null && p.odd_ajustada > 0 ? p.odd_ajustada : p.odd_ofertada;
+}
+
+/** Edge efetivo: ajustado se houver, senão o original. */
+export function getEdgeEfetivo(p: Pick<Prognostico, "edge" | "edge_ajustado">): number {
+  return p.edge_ajustado != null ? p.edge_ajustado : p.edge;
+}
+
+/** Calcula edge a partir de prob (%) e odd. */
+export function calcEdge(probabilidadePct: number, odd: number): number {
+  if (!probabilidadePct || !odd) return 0;
+  return Number((((probabilidadePct / 100) * odd - 1) * 100).toFixed(2));
+}
+
+/** Dados técnicos efetivos: dados_tecnicos se houver, senão observacoes (legado). */
+export function getDadosTecnicos(p: Pick<Prognostico, "dados_tecnicos" | "observacoes">): string | null {
+  return (p.dados_tecnicos && p.dados_tecnicos.trim()) || (p.observacoes && p.observacoes.trim()) || null;
 }
 
 export interface ResultadoRow {
@@ -88,12 +125,15 @@ export interface Configuracao {
 }
 
 const num = (v: unknown) => (v == null ? 0 : Number(v));
+const numOrNull = (v: unknown) => (v == null ? null : Number(v));
 const mapPrognostico = (r: Record<string, unknown>): Prognostico => ({
   ...(r as unknown as Prognostico),
   odd_ofertada: num(r.odd_ofertada),
+  odd_ajustada: numOrNull(r.odd_ajustada),
   odd_valor: num(r.odd_valor),
   probabilidade_final: num(r.probabilidade_final),
   edge: num(r.edge),
+  edge_ajustado: numOrNull(r.edge_ajustado),
   stake: num(r.stake),
   lucro_prejuizo: r.lucro_prejuizo == null ? null : Number(r.lucro_prejuizo),
 });
