@@ -59,15 +59,16 @@ function Historico() {
         </p>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
+      <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-7">
         <Input type="date" value={data} onChange={(e) => setData(e.target.value)} />
-        <Select value={esporte} onValueChange={setEsporte}>
+        <Select value={esporte} onValueChange={(v) => { setEsporte(v); setLiga("all"); }}>
           <SelectTrigger><SelectValue placeholder="Esporte" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os esportes</SelectItem>
             {esportes.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
+        <LeagueFilter sport={esporte} value={liga} onChange={setLiga} />
         <Select value={mercado} onValueChange={setMercado}>
           <SelectTrigger><SelectValue placeholder="Mercado" /></SelectTrigger>
           <SelectContent>
