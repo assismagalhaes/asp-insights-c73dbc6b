@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { AlertTriangle, Sparkles, ShieldAlert, Brain, Loader2, Copy, Wand2, RefreshCw, X } from "lucide-react";
+import { AlertTriangle, Sparkles, ShieldAlert, Brain, Loader2, Copy, Wand2, RefreshCw, X, Globe, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -35,6 +35,7 @@ import {
   type Status,
 } from "@/lib/db";
 import { analisarValidacao } from "@/lib/validacao-ia.functions";
+import { analisarValidacaoOnline } from "@/lib/validacao-ia-online.functions";
 import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -68,6 +69,9 @@ interface IAResult {
   decisao_sugerida: string | null;
   stake_sugerida: number | null;
   prompt_versao: string;
+  modo: "local" | "online";
+  fontes_consultadas?: { titulo: string; url: string }[];
+  buscas_realizadas?: string[];
 }
 
 function autoCheck(p: Prognostico, edgeFinal: number) {
@@ -84,6 +88,7 @@ function Validacao() {
   const createVal = useCreateValidacao();
   const updateProg = useUpdatePrognostico();
   const callIA = useServerFn(analisarValidacao);
+  const callIAOnline = useServerFn(analisarValidacaoOnline);
   const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
   const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
 
@@ -94,7 +99,7 @@ function Validacao() {
   const [contextos, setContextos] = useState<Record<string, string>>({});
   const [dadosEdit, setDadosEdit] = useState<Record<string, string>>({});
   const [iaResults, setIaResults] = useState<Record<string, IAResult>>({});
-  const [iaLoading, setIaLoading] = useState<Record<string, boolean>>({});
+  const [iaLoading, setIaLoading] = useState<Record<string, "local" | "online" | null>>({});
 
   const [fEsporte, setFEsporte] = useState("all");
   const [fLiga, setFLiga] = useState("all");
