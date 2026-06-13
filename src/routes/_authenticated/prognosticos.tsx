@@ -60,8 +60,22 @@ type SortKey =
   | "odd_valor"
   | "probabilidade_final"
   | "edge"
+type SortKey =
+  | "data"
+  | "hora"
+  | "esporte"
+  | "liga"
+  | "jogo"
+  | "mercado"
+  | "pick"
+  | "linha"
+  | "odd_ofertada"
+  | "odd_valor"
+  | "probabilidade_final"
+  | "edge"
   | "stake"
   | "status_validacao"
+  | "status_publicacao"
   | "resultado";
 
 function formatDateBR(iso: string): string {
