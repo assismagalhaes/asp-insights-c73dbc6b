@@ -96,8 +96,12 @@ function Prognosticos() {
   const [fLiga, setFLiga] = useState("all");
   const [fMercado, setFMercado] = useState("all");
   const [fValidacao, setFValidacao] = useState("all");
+  const [fPublicacao, setFPublicacao] = useState("all");
   const [fResultado, setFResultado] = useState("all");
-  const [fData, setFData] = useState("");
+  const [fLinha, setFLinha] = useState("");
+  const [periodo, setPeriodo] = useState<PeriodoFiltro>("tudo");
+  const [customIni, setCustomIni] = useState("");
+  const [customFim, setCustomFim] = useState("");
 
   const toggleSort = (k: SortKey) => {
     if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
