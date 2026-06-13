@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/select";
 import { StatusBadge } from "@/components/status-badge";
 import { LeagueFilter } from "@/components/league-filter";
+import { PeriodFilter } from "@/components/period-filter";
+import { rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
 import {
   usePrognosticos,
   useCreateValidacao,
