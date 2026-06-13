@@ -178,13 +178,24 @@ function ImportarPage() {
 
   const handleFile = async (file: File) => {
     setSummary(null);
-    const buf = await file.arrayBuffer();
-    const wb = XLSX.read(buf, { type: "array", cellDates: false });
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
-      defval: "",
-      raw: true,
-    });
+    const isCsv = /\.csv$/i.test(file.name) || file.type === "text/csv";
+    let json: Record<string, unknown>[] = [];
+
+    if (isCsv) {
+      // Parse CSV manually como TEXTO puro — nunca deixar XLSX/JS interpretar datas.
+      const text = await file.text();
+      json = parseCsvAsText(text);
+    } else {
+      const buf = await file.arrayBuffer();
+      // cellDates:false + raw:false → todas as células chegam como strings, sem conversão para Date.
+      const wb = XLSX.read(buf, { type: "array", cellDates: false, raw: false });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
+        defval: "",
+        raw: false,
+      });
+    }
+
     if (!json.length) {
       toast.error("Arquivo vazio");
       return;
