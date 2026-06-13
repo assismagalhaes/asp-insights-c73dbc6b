@@ -67,8 +67,19 @@ function Historico() {
         </p>
       </div>
 
+      <div className="rounded-lg border border-border bg-card p-3">
+        <PeriodFilter
+          periodo={periodo}
+          onPeriodoChange={setPeriodo}
+          customIni={customIni}
+          customFim={customFim}
+          onCustomIniChange={setCustomIni}
+          onCustomFimChange={setCustomFim}
+        />
+      </div>
+
       <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-7">
-        <Input type="date" value={data} onChange={(e) => setData(e.target.value)} />
+        <Input type="date" value={data} onChange={(e) => setData(e.target.value)} placeholder="Data exata" />
         <Select value={esporte} onValueChange={(v) => { setEsporte(v); setLiga("all"); }}>
           <SelectTrigger><SelectValue placeholder="Esporte" /></SelectTrigger>
           <SelectContent>
