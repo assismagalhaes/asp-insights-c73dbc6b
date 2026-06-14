@@ -18,9 +18,9 @@ import { Route as AuthenticatedPrognosticosRouteImport } from './routes/_authent
 import { Route as AuthenticatedImportarRouteImport } from './routes/_authenticated/importar'
 import { Route as AuthenticatedHistoricoRouteImport } from './routes/_authenticated/historico'
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
+import { Route as AuthenticatedColetaDadosRouteImport } from './routes/_authenticated/coleta-dados'
 import { Route as AuthenticatedBankrollRouteImport } from './routes/_authenticated/bankroll'
 import { Route as AuthenticatedAprendizadoIaRouteImport } from './routes/_authenticated/aprendizado-ia'
-import { Route as AuthenticatedColetaDadosRouteImport } from './routes/_authenticated/coleta-dados'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -68,6 +68,12 @@ const AuthenticatedConfiguracoesRoute =
     path: '/configuracoes',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedColetaDadosRoute =
+  AuthenticatedColetaDadosRouteImport.update({
+    id: '/coleta-dados',
+    path: '/coleta-dados',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedBankrollRoute = AuthenticatedBankrollRouteImport.update({
   id: '/bankroll',
   path: '/bankroll',
@@ -77,12 +83,6 @@ const AuthenticatedAprendizadoIaRoute =
   AuthenticatedAprendizadoIaRouteImport.update({
     id: '/aprendizado-ia',
     path: '/aprendizado-ia',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedColetaDadosRoute =
-  AuthenticatedColetaDadosRouteImport.update({
-    id: '/coleta-dados',
-    path: '/coleta-dados',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 
@@ -240,6 +240,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedConfiguracoesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/coleta-dados': {
+      id: '/_authenticated/coleta-dados'
+      path: '/coleta-dados'
+      fullPath: '/coleta-dados'
+      preLoaderRoute: typeof AuthenticatedColetaDadosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/bankroll': {
       id: '/_authenticated/bankroll'
       path: '/bankroll'
@@ -252,13 +259,6 @@ declare module '@tanstack/react-router' {
       path: '/aprendizado-ia'
       fullPath: '/aprendizado-ia'
       preLoaderRoute: typeof AuthenticatedAprendizadoIaRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/coleta-dados': {
-      id: '/_authenticated/coleta-dados'
-      path: '/coleta-dados'
-      fullPath: '/coleta-dados'
-      preLoaderRoute: typeof AuthenticatedColetaDadosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
   }
@@ -300,3 +300,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
