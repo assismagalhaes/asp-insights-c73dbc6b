@@ -27,7 +27,7 @@ import {
   RadioGroup,
   RadioGroupItem,
 } from "@/components/ui/radio-group";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase-public";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { normalizeEsporteLiga } from "@/lib/db";
