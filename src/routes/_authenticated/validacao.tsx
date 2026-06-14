@@ -141,7 +141,7 @@ function Validacao() {
   );
 
   const getContextoAnalise = (p: Prognostico): string =>
-    contextos[p.id] ?? p.dados_tecnicos?.trim() ?? p.observacoes?.trim() ?? "";
+    contextos[p.id] ?? "";
 
   const isMesmoJogo = (a: Prognostico, b: Prognostico): boolean =>
     a.data === b.data &&
@@ -152,12 +152,12 @@ function Validacao() {
 
   const setContextoAnalise = (p: Prognostico, value: string) => {
     setContextos((prev) => {
-      const previous = prev[p.id] ?? p.dados_tecnicos?.trim() ?? p.observacoes?.trim() ?? "";
+      const previous = prev[p.id] ?? "";
       const next = { ...prev, [p.id]: value };
 
       for (const other of pendentes) {
         if (other.id === p.id || !isMesmoJogo(p, other)) continue;
-        const current = prev[other.id] ?? other.dados_tecnicos?.trim() ?? other.observacoes?.trim() ?? "";
+        const current = prev[other.id] ?? "";
         if (!current || current === previous) next[other.id] = value;
       }
 
@@ -238,12 +238,13 @@ function Validacao() {
       const edgeAj = getEdgeAjustado(p);
       const stakeNum = stakes[p.id] ? Number(stakes[p.id]) : p.stake;
       const contextoAnalise = getContextoAnalise(p).trim();
+      const contextoFoiEditado = Object.prototype.hasOwnProperty.call(contextos, p.id);
 
       // atualiza odd/edge ajustados e contexto no prognostico
       const patch: Partial<Prognostico> & { id: string } = { id: p.id };
       if (oddAj != null && oddAj !== p.odd_ajustada) patch.odd_ajustada = oddAj;
       if (edgeAj != null && edgeAj !== p.edge_ajustado) patch.edge_ajustado = edgeAj;
-      patch.dados_tecnicos = contextoAnalise || null;
+      if (contextoFoiEditado) patch.dados_tecnicos = contextoAnalise || null;
       if (Object.keys(patch).length > 1) await updateProg.mutateAsync(patch);
 
       const ia = iaResults[p.id];
@@ -358,24 +359,29 @@ function Validacao() {
               </div>
 
               {/* Bloco de entrada */}
-              <div className="rounded-md border border-border bg-background/50 p-3 space-y-3">
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Dados do prognóstico</div>
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+              <div className="rounded-md border border-border bg-background/50 p-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Dados do prognóstico</div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Odd em uso: <span className="font-mono font-semibold text-foreground">{(oddAj ?? p.odd_ofertada).toFixed(2)}</span>
+                  </div>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                   <KV label="Mercado" value={p.mercado} />
                   <KV label="Pick" value={p.pick} />
                   {mostrarLinha && <KV label="Linha" value={p.linha ?? "—"} />}
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
                   <Metric label="Odd original" value={p.odd_ofertada.toFixed(2)} />
                   <div>
-                    <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Odd ajustada</Label>
+                    <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Odd ajustada</Label>
                     <Input
                       type="number"
                       step="0.01"
                       placeholder={p.odd_ofertada.toFixed(2)}
                       value={oddsAj[p.id] ?? (p.odd_ajustada != null ? p.odd_ajustada : p.odd_ofertada)}
                       onChange={(e) => setOddsAj({ ...oddsAj, [p.id]: e.target.value })}
-                      className="h-8 font-mono"
+                      className="mt-1 h-[51px] rounded-md border-border bg-background/50 font-mono text-base font-bold"
                     />
                   </div>
                   <Metric label="Odd valor" value={p.odd_valor.toFixed(2)} />
@@ -616,11 +622,11 @@ function Validacao() {
 
 function Metric({ label, value, tone }: { label: string; value: string; tone?: "good" | "bad" | "warn" }) {
   return (
-    <div className="rounded-md border border-border bg-background/50 p-2">
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+    <div className="min-h-[72px] rounded-md border border-border bg-background/50 p-2.5">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
       <div
         className={cn(
-          "mt-0.5 font-mono text-base font-bold",
+          "mt-1 font-mono text-base font-bold",
           tone === "good" && "text-success",
           tone === "bad" && "text-destructive",
           tone === "warn" && "text-warning",
@@ -634,9 +640,9 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: "
 
 function KV({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="text-sm font-medium">{value}</div>
+    <div className="min-h-[62px] rounded-md border border-border bg-background/50 p-2.5">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="mt-1 break-words text-sm font-semibold">{value}</div>
     </div>
   );
 }
