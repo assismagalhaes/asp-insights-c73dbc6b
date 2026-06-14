@@ -212,7 +212,12 @@ export type Database = {
           pick: string | null
           probabilidade_final: number | null
           prognostico_id: string | null
+          conta_bankroll: boolean | null
+          resultado_financeiro: string | null
           resultado_real: string | null
+          resultado_teorico: string | null
+          lucro_financeiro_unidades: number | null
+          lucro_teorico_unidades: number | null
           stake_humana_final: number | null
           stake_ia_sugerida: number | null
           tags_risco: Json | null
@@ -242,7 +247,12 @@ export type Database = {
           pick?: string | null
           probabilidade_final?: number | null
           prognostico_id?: string | null
+          conta_bankroll?: boolean | null
+          resultado_financeiro?: string | null
           resultado_real?: string | null
+          resultado_teorico?: string | null
+          lucro_financeiro_unidades?: number | null
+          lucro_teorico_unidades?: number | null
           stake_humana_final?: number | null
           stake_ia_sugerida?: number | null
           tags_risco?: Json | null
@@ -272,7 +282,12 @@ export type Database = {
           pick?: string | null
           probabilidade_final?: number | null
           prognostico_id?: string | null
+          conta_bankroll?: boolean | null
+          resultado_financeiro?: string | null
           resultado_real?: string | null
+          resultado_teorico?: string | null
+          lucro_financeiro_unidades?: number | null
+          lucro_teorico_unidades?: number | null
           stake_humana_final?: number | null
           stake_ia_sugerida?: number | null
           tags_risco?: Json | null

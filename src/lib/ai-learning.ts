@@ -66,14 +66,14 @@ export async function getSimilarAiHistory(prognostico: Prognostico): Promise<Sim
     return Math.abs(targetLine - rowLine) <= 0.5;
   });
 
-  const greens = rows.filter((r) => r.resultado_real === "GREEN").length;
-  const reds = rows.filter((r) => r.resultado_real === "RED").length;
-  const lucro = rows.reduce((sum, r) => sum + Number(r.lucro_unidades ?? 0), 0);
+  const greens = rows.filter((r) => getOutcome(r) === "GREEN").length;
+  const reds = rows.filter((r) => getOutcome(r) === "RED").length;
+  const lucro = rows.reduce((sum, r) => sum + Number(r.lucro_teorico_unidades ?? r.lucro_unidades ?? 0), 0);
   const stake = rows.reduce((sum, r) => sum + Math.abs(Number(r.stake_humana_final ?? r.stake_ia_sugerida ?? 0)), 0);
   const roi = stake > 0 ? (lucro / stake) * 100 : 0;
   const winRate = greens + reds > 0 ? (greens / (greens + reds)) * 100 : 0;
-  const redRows = rows.filter((r) => r.resultado_real === "RED");
-  const greenRows = rows.filter((r) => r.resultado_real === "GREEN");
+  const redRows = rows.filter((r) => getOutcome(r) === "RED");
+  const greenRows = rows.filter((r) => getOutcome(r) === "GREEN");
 
   return {
     total: rows.length,
@@ -91,6 +91,10 @@ export async function getSimilarAiHistory(prognostico: Prognostico): Promise<Sim
         ? "Histórico interno insuficiente para conclusão estatística."
         : `Histórico semelhante com ${rows.length} casos, ${winRate.toFixed(1)}% de acerto e ${lucro.toFixed(2)}u.`,
   };
+}
+
+function getOutcome(row: FeedbackIaResultado): string | null {
+  return row.resultado_teorico ?? row.resultado_real ?? null;
 }
 
 function emptySimilarSummary(): SimilarAiHistorySummary {

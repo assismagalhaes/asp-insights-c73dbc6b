@@ -98,7 +98,11 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
       if (placar && siblings.some((s) => s.resultado === "PENDENTE")) {
         toast.info("O placar será sugerido automaticamente ao abrir o resultado dos demais prognósticos deste confronto.");
       }
-      toast.success("Resultado registrado, bankroll atualizada.");
+      toast.success(
+        prognostico.status_validacao === "CONFIRMA"
+          ? "Resultado financeiro registrado, bankroll atualizada."
+          : "Resultado teórico registrado para aprendizado da IA.",
+      );
       onOpenChange(false);
     } catch (e) {
       toast.error((e as Error).message);
