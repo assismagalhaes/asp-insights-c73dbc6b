@@ -183,6 +183,19 @@ function Validacao() {
       const contextoAnalise = getContextoAnalise(p);
       const oddAj = getOddAjustadaNum(p);
       const edgeAj = getEdgeAjustado(p);
+      const prognosticosCorrelacionados = pendentes
+        .filter((other) => other.id !== p.id && isMesmoJogo(p, other))
+        .slice(0, 8)
+        .map((other) => ({
+          mercado: other.mercado,
+          pick: other.pick,
+          linha: other.linha,
+          odd_original: other.odd_ofertada,
+          odd_ajustada: getOddAjustadaNum(other),
+          probabilidade_final: other.probabilidade_final,
+          edge_original: other.edge,
+          edge_ajustado: getEdgeAjustado(other),
+        }));
       const payload = {
         data: {
           prognostico: {
@@ -202,6 +215,7 @@ function Validacao() {
             edge_ajustado: edgeAj,
             stake_sugerida: p.stake,
           },
+          prognosticos_correlacionados: prognosticosCorrelacionados,
           dados_tecnicos: contextoAnalise,
           contexto_adicional: contextoAnalise,
         },
