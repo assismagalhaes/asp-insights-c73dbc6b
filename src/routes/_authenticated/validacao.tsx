@@ -110,6 +110,7 @@ function Validacao() {
   const { data: cfg } = useConfiguracao();
   const createVal = useCreateValidacao();
   const updateProg = useUpdatePrognostico();
+  const deleteProg = useDeletePrognostico();
   const callIA = useServerFn(analisarValidacao);
   const callIAOnline = useServerFn(analisarValidacaoOnline);
   const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
