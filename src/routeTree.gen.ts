@@ -17,7 +17,6 @@ import { Route as AuthenticatedPublicacaoRouteImport } from './routes/_authentic
 import { Route as AuthenticatedPrognosticosRouteImport } from './routes/_authenticated/prognosticos'
 import { Route as AuthenticatedImportarRouteImport } from './routes/_authenticated/importar'
 import { Route as AuthenticatedHistoricoRouteImport } from './routes/_authenticated/historico'
-import { Route as AuthenticatedEstatisticasRouteImport } from './routes/_authenticated/estatisticas'
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
 import { Route as AuthenticatedBankrollRouteImport } from './routes/_authenticated/bankroll'
 
@@ -61,12 +60,6 @@ const AuthenticatedHistoricoRoute = AuthenticatedHistoricoRouteImport.update({
   path: '/historico',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedEstatisticasRoute =
-  AuthenticatedEstatisticasRouteImport.update({
-    id: '/estatisticas',
-    path: '/estatisticas',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 const AuthenticatedConfiguracoesRoute =
   AuthenticatedConfiguracoesRouteImport.update({
     id: '/configuracoes',
@@ -84,7 +77,6 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/bankroll': typeof AuthenticatedBankrollRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
-  '/estatisticas': typeof AuthenticatedEstatisticasRoute
   '/historico': typeof AuthenticatedHistoricoRoute
   '/importar': typeof AuthenticatedImportarRoute
   '/prognosticos': typeof AuthenticatedPrognosticosRoute
@@ -95,7 +87,6 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/bankroll': typeof AuthenticatedBankrollRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
-  '/estatisticas': typeof AuthenticatedEstatisticasRoute
   '/historico': typeof AuthenticatedHistoricoRoute
   '/importar': typeof AuthenticatedImportarRoute
   '/prognosticos': typeof AuthenticatedPrognosticosRoute
@@ -109,7 +100,6 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/bankroll': typeof AuthenticatedBankrollRoute
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
-  '/_authenticated/estatisticas': typeof AuthenticatedEstatisticasRoute
   '/_authenticated/historico': typeof AuthenticatedHistoricoRoute
   '/_authenticated/importar': typeof AuthenticatedImportarRoute
   '/_authenticated/prognosticos': typeof AuthenticatedPrognosticosRoute
@@ -124,7 +114,6 @@ export interface FileRouteTypes {
     | '/auth'
     | '/bankroll'
     | '/configuracoes'
-    | '/estatisticas'
     | '/historico'
     | '/importar'
     | '/prognosticos'
@@ -135,7 +124,6 @@ export interface FileRouteTypes {
     | '/auth'
     | '/bankroll'
     | '/configuracoes'
-    | '/estatisticas'
     | '/historico'
     | '/importar'
     | '/prognosticos'
@@ -148,7 +136,6 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/bankroll'
     | '/_authenticated/configuracoes'
-    | '/_authenticated/estatisticas'
     | '/_authenticated/historico'
     | '/_authenticated/importar'
     | '/_authenticated/prognosticos'
@@ -220,13 +207,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedHistoricoRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/estatisticas': {
-      id: '/_authenticated/estatisticas'
-      path: '/estatisticas'
-      fullPath: '/estatisticas'
-      preLoaderRoute: typeof AuthenticatedEstatisticasRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/configuracoes': {
       id: '/_authenticated/configuracoes'
       path: '/configuracoes'
@@ -247,7 +227,6 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedBankrollRoute: typeof AuthenticatedBankrollRoute
   AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRoute
-  AuthenticatedEstatisticasRoute: typeof AuthenticatedEstatisticasRoute
   AuthenticatedHistoricoRoute: typeof AuthenticatedHistoricoRoute
   AuthenticatedImportarRoute: typeof AuthenticatedImportarRoute
   AuthenticatedPrognosticosRoute: typeof AuthenticatedPrognosticosRoute
@@ -259,7 +238,6 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBankrollRoute: AuthenticatedBankrollRoute,
   AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRoute,
-  AuthenticatedEstatisticasRoute: AuthenticatedEstatisticasRoute,
   AuthenticatedHistoricoRoute: AuthenticatedHistoricoRoute,
   AuthenticatedImportarRoute: AuthenticatedImportarRoute,
   AuthenticatedPrognosticosRoute: AuthenticatedPrognosticosRoute,
@@ -278,13 +256,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

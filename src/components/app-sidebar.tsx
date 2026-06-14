@@ -5,7 +5,7 @@ import {
   ShieldCheck,
   History,
   Wallet,
-  BarChart3,
+  
   Settings,
   Upload,
   Megaphone,
@@ -34,7 +34,7 @@ const items = [
   { title: "Publicação", url: "/publicacao", icon: Megaphone },
   { title: "Histórico", url: "/historico", icon: History },
   { title: "Bankroll", url: "/bankroll", icon: Wallet },
-  { title: "ROI e Estatísticas", url: "/estatisticas", icon: BarChart3 },
+  
   { title: "Configurações", url: "/configuracoes", icon: Settings },
 ];
 

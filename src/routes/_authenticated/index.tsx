@@ -6,7 +6,6 @@ import {
   TrendingUp,
   Target,
   DollarSign,
-  ListChecks,
   Activity,
 } from "lucide-react";
 import {
@@ -33,7 +32,7 @@ import {
   withSign,
 } from "@/lib/chart-colors";
 import { StatCard } from "@/components/stat-card";
-import { StatusBadge, ResultBadge } from "@/components/status-badge";
+
 
 import {
   Select,
@@ -50,7 +49,7 @@ import {
 } from "@/lib/db";
 import { LeagueFilter } from "@/components/league-filter";
 import { PeriodFilter } from "@/components/period-filter";
-import { formatBR, formatHora } from "@/lib/date-br";
+import { formatBR } from "@/lib/date-br";
 import {
   computeMetrics,
   bankrollTimeline,
@@ -121,6 +120,35 @@ function Dashboard() {
       esporte,
       lucro: Number(v.lucro.toFixed(2)),
     }));
+  }, [filtrados]);
+
+  const sportPerfRoi = useMemo(() => {
+    const map = new Map<string, { lucro: number; stake: number }>();
+    filtrados
+      .filter((p) => p.status_validacao === "CONFIRMA")
+      .forEach((p) => {
+        const cur = map.get(p.esporte) ?? { lucro: 0, stake: 0 };
+        cur.lucro += lucroUnidades(p);
+        cur.stake += p.stake;
+        map.set(p.esporte, cur);
+      });
+    return Array.from(map.entries()).map(([esporte, v]) => ({
+      esporte,
+      roi: v.stake ? Number(((v.lucro / v.stake) * 100).toFixed(1)) : 0,
+    }));
+  }, [filtrados]);
+
+  const monthlyResults = useMemo(() => {
+    const map = new Map<string, number>();
+    filtrados
+      .filter((p) => p.status_validacao === "CONFIRMA")
+      .forEach((p) => {
+        const mes = p.data.slice(0, 7);
+        map.set(mes, (map.get(mes) ?? 0) + lucroUnidades(p));
+      });
+    return Array.from(map.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([mes, lucro]) => ({ mes, lucro: Number(lucro.toFixed(2)) }));
   }, [filtrados]);
 
   const marketPerf = useMemo(() => {
@@ -371,53 +399,69 @@ function Dashboard() {
             </BarChart>
           </ResponsiveContainer>
         </div>
-      </div>
 
-      <div className="rounded-lg border border-border bg-card">
-        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-          <ListChecks className="h-4 w-4 text-primary" />
-          <h3 className="text-sm font-semibold uppercase tracking-wider">Últimos Prognósticos</h3>
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            ROI por Esporte (%)
+          </h3>
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={sportPerfRoi} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
+              <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
+              <XAxis dataKey="esporte" stroke={axisColor} fontSize={10} />
+              <YAxis stroke={axisColor} fontSize={10} />
+              <ReferenceLine y={0} stroke={COLOR_REFERENCE} />
+              <Tooltip
+                cursor={{ fill: "oklch(0.28 0.02 250 / 0.3)" }}
+                content={
+                  <ChartTooltip
+                    formatter={(v) => ({ label: "ROI", display: `${withSign(v, 1)}%`, color: signColor(v) })}
+                  />
+                }
+              />
+              <Bar dataKey="roi" radius={[4, 4, 0, 0]}>
+                {sportPerfRoi.map((d, i) => (
+                  <Cell key={i} fill={signColor(d.roi)} />
+                ))}
+                <LabelList
+                  dataKey="roi"
+                  position="top"
+                  formatter={(v: number) => `${withSign(v, 1)}%`}
+                  style={{ fontSize: 10, fontFamily: "ui-monospace, monospace", fill: COLOR_AXIS }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
-              <tr>
-                <th className="px-4 py-2 text-left">Data</th>
-                <th className="px-4 py-2 text-left">Hora</th>
-                <th className="px-4 py-2 text-left">Esporte</th>
-                <th className="px-4 py-2 text-left">Liga</th>
-                <th className="px-4 py-2 text-left">Jogo</th>
-                <th className="px-4 py-2 text-left">Pick</th>
-                <th className="px-4 py-2 text-right font-mono">Odd</th>
-                <th className="px-4 py-2 text-right font-mono">Stake</th>
-                <th className="px-4 py-2 text-left">Status</th>
-                <th className="px-4 py-2 text-left">Resultado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtrados.slice(0, 8).map((p) => (
-                <tr key={p.id} className="border-t border-border hover:bg-muted/30">
-                  <td className="px-4 py-2 font-mono text-xs whitespace-nowrap">{formatBR(p.data)}</td>
-                  <td className="px-4 py-2 font-mono text-xs whitespace-nowrap">{p.hora ? formatHora(p.hora) : "—"}</td>
-                  <td className="px-4 py-2">{p.esporte}</td>
-                  <td className="px-4 py-2 text-muted-foreground">{p.liga}</td>
-                  <td className="px-4 py-2">{p.jogo}</td>
-                  <td className="px-4 py-2">{p.pick}</td>
-                  <td className="px-4 py-2 text-right font-mono">{p.odd_ofertada.toFixed(2)}</td>
-                  <td className="px-4 py-2 text-right font-mono">{p.stake.toFixed(1)}u</td>
-                  <td className="px-4 py-2"><StatusBadge status={p.status_validacao} /></td>
-                  <td className="px-4 py-2"><ResultBadge result={p.resultado} /></td>
-                </tr>
-              ))}
-              {filtrados.length === 0 && (
-                <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-sm text-muted-foreground">
-                    Nenhum prognóstico para os filtros selecionados.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+
+        <div className="rounded-lg border border-border bg-card p-4 lg:col-span-2">
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Resultado por Mês (u)
+          </h3>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={monthlyResults} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
+              <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
+              <XAxis dataKey="mes" stroke={axisColor} fontSize={10} />
+              <YAxis stroke={axisColor} fontSize={10} />
+              <ReferenceLine y={0} stroke={COLOR_REFERENCE} />
+              <Tooltip
+                cursor={{ fill: "oklch(0.28 0.02 250 / 0.3)" }}
+                content={
+                  <ChartTooltip formatter={(v) => ({ label: "Lucro", display: `${withSign(v)}u`, color: signColor(v) })} />
+                }
+              />
+              <Bar dataKey="lucro" radius={[4, 4, 0, 0]}>
+                {monthlyResults.map((entry, i) => (
+                  <Cell key={i} fill={signColor(entry.lucro)} />
+                ))}
+                <LabelList
+                  dataKey="lucro"
+                  position="top"
+                  formatter={(v: number) => `${withSign(v)}u`}
+                  style={{ fontSize: 10, fontFamily: "ui-monospace, monospace", fill: COLOR_AXIS }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </div>
     </div>
