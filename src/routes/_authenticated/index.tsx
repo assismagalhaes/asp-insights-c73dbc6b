@@ -6,7 +6,6 @@ import {
   TrendingUp,
   Target,
   DollarSign,
-  ListChecks,
   Activity,
 } from "lucide-react";
 import {
