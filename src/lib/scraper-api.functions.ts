@@ -17,6 +17,7 @@ const JobIdSchema = z.object({
 });
 
 type ScraperPayload = Record<string, unknown>;
+type JsonValue = string | number | boolean | null | { [k: string]: JsonValue } | JsonValue[];
 
 function getScraperConfig() {
   const baseUrl = process.env.SCRAPER_API_URL?.replace(/\/+$/, "");
@@ -95,7 +96,7 @@ export const createScrapingJob = createServerFn({ method: "POST" })
     });
     return {
       job_id: extractJobId(payload),
-      payload,
+      payload: payload as JsonValue,
     };
   });
 
@@ -106,7 +107,7 @@ export const getScrapingJobStatus = createServerFn({ method: "POST" })
     const payload = await scraperRequest(`/scraping/jobs/${encodeURIComponent(data.job_id)}/status`);
     return {
       job_id: data.job_id,
-      payload,
+      payload: payload as JsonValue,
     };
   });
 
@@ -117,8 +118,8 @@ export const getScrapingJobRaw = createServerFn({ method: "POST" })
     const payload = await scraperRequest(`/scraping/jobs/${encodeURIComponent(data.job_id)}/raw`);
     return {
       job_id: data.job_id,
-      raw_json: pickPayload(payload),
-      payload,
+      raw_json: pickPayload(payload) as JsonValue,
+      payload: payload as JsonValue,
     };
   });
 
@@ -129,7 +130,7 @@ export const getScrapingJobNormalized = createServerFn({ method: "POST" })
     const payload = await scraperRequest(`/scraping/jobs/${encodeURIComponent(data.job_id)}/normalized`);
     return {
       job_id: data.job_id,
-      normalized_json: pickPayload(payload),
-      payload,
+      normalized_json: pickPayload(payload) as JsonValue,
+      payload: payload as JsonValue,
     };
   });
