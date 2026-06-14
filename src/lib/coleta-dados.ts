@@ -31,6 +31,7 @@ export interface NormalizedCollection {
 
 export interface ColetaOdds {
   id: string;
+  job_id: string | null;
   status: string;
   esporte: string | null;
   liga: string | null;
@@ -268,10 +269,93 @@ export async function saveCollection(raw: unknown, normalized: NormalizedCollect
   return coleta as ColetaOdds;
 }
 
+export async function createRemoteCollection(params: {
+  job_id: string;
+  esporte: string;
+  liga?: string | null;
+  data_inicio?: string | null;
+  data_fim?: string | null;
+  mercados?: string[];
+  bookmaker?: string | null;
+  fonte?: string | null;
+}) {
+  const { data, error } = await coletaDb
+    .from("coletas_odds")
+    .insert({
+      job_id: params.job_id,
+      status: "PENDENTE",
+      esporte: params.esporte,
+      liga: params.liga || null,
+      data_inicio: params.data_inicio || null,
+      data_fim: params.data_fim || null,
+      mercados: params.mercados ?? [],
+      parametros: {
+        origem: "api_vm",
+        esporte: params.esporte,
+        liga: params.liga || null,
+        data_inicio: params.data_inicio || null,
+        data_fim: params.data_fim || null,
+        mercados: params.mercados ?? [],
+        bookmaker: params.bookmaker || null,
+        fonte: params.fonte || null,
+      },
+      total_jogos: 0,
+      total_odds: 0,
+      erro: null,
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as ColetaOdds;
+}
+
+export async function updateCollectionStatus(id: string, status: string, erro?: string | null) {
+  const { error } = await coletaDb
+    .from("coletas_odds")
+    .update({ status, erro: erro ?? null, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function completeRemoteCollection(
+  coletaId: string,
+  raw: unknown,
+  normalized: NormalizedCollection,
+  status = "CONCLUIDA",
+) {
+  const { error } = await coletaDb
+    .from("coletas_odds")
+    .update({
+      status,
+      esporte: normalized.esporte,
+      liga: normalized.liga,
+      data_inicio: normalized.data_inicio,
+      data_fim: normalized.data_fim,
+      mercados: normalized.mercados,
+      raw_json: raw,
+      normalized_json: normalized.rows,
+      total_jogos: normalized.total_jogos,
+      total_odds: normalized.total_odds,
+      erro: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", coletaId);
+  if (error) throw error;
+
+  const { error: deleteError } = await coletaDb.from("odds_jogos").delete().eq("coleta_id", coletaId);
+  if (deleteError) throw deleteError;
+
+  if (normalized.rows.length) {
+    const payload = normalized.rows.map((row) => ({ ...row, coleta_id: coletaId }));
+    const { error: rowsError } = await coletaDb.from("odds_jogos").insert(payload);
+    if (rowsError) throw rowsError;
+  }
+}
+
 export async function fetchCollections(): Promise<ColetaOdds[]> {
   const { data, error } = await coletaDb
     .from("coletas_odds")
-    .select("id,status,esporte,liga,data_inicio,data_fim,mercados,parametros,total_jogos,total_odds,erro,created_at,updated_at")
+    .select("id,job_id,status,esporte,liga,data_inicio,data_fim,mercados,parametros,total_jogos,total_odds,erro,created_at,updated_at")
     .order("created_at", { ascending: false })
     .limit(50);
   if (error) throw error;
