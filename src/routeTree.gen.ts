@@ -81,8 +81,8 @@ const AuthenticatedAprendizadoIaRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
-  '/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
   '/auth': typeof AuthRoute
+  '/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
   '/bankroll': typeof AuthenticatedBankrollRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/historico': typeof AuthenticatedHistoricoRoute
@@ -92,8 +92,8 @@ export interface FileRoutesByFullPath {
   '/validacao': typeof AuthenticatedValidacaoRoute
 }
 export interface FileRoutesByTo {
-  '/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
   '/auth': typeof AuthRoute
+  '/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
   '/bankroll': typeof AuthenticatedBankrollRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/historico': typeof AuthenticatedHistoricoRoute
@@ -106,8 +106,8 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
-  '/_authenticated/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
   '/auth': typeof AuthRoute
+  '/_authenticated/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
   '/_authenticated/bankroll': typeof AuthenticatedBankrollRoute
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/_authenticated/historico': typeof AuthenticatedHistoricoRoute
@@ -121,8 +121,8 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/aprendizado-ia'
     | '/auth'
+    | '/aprendizado-ia'
     | '/bankroll'
     | '/configuracoes'
     | '/historico'
@@ -132,8 +132,8 @@ export interface FileRouteTypes {
     | '/validacao'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/aprendizado-ia'
     | '/auth'
+    | '/aprendizado-ia'
     | '/bankroll'
     | '/configuracoes'
     | '/historico'
@@ -145,8 +145,8 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_authenticated'
-    | '/_authenticated/aprendizado-ia'
     | '/auth'
+    | '/_authenticated/aprendizado-ia'
     | '/_authenticated/bankroll'
     | '/_authenticated/configuracoes'
     | '/_authenticated/historico'
@@ -192,13 +192,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedValidacaoRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/aprendizado-ia': {
-      id: '/_authenticated/aprendizado-ia'
-      path: '/aprendizado-ia'
-      fullPath: '/aprendizado-ia'
-      preLoaderRoute: typeof AuthenticatedAprendizadoIaRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/publicacao': {
       id: '/_authenticated/publicacao'
       path: '/publicacao'
@@ -239,6 +232,13 @@ declare module '@tanstack/react-router' {
       path: '/bankroll'
       fullPath: '/bankroll'
       preLoaderRoute: typeof AuthenticatedBankrollRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/aprendizado-ia': {
+      id: '/_authenticated/aprendizado-ia'
+      path: '/aprendizado-ia'
+      fullPath: '/aprendizado-ia'
+      preLoaderRoute: typeof AuthenticatedAprendizadoIaRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
   }
