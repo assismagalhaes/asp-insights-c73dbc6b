@@ -515,7 +515,7 @@ export function gerarTipTexto(
 ⚖️ Edge: ${edgeFinal.toFixed(2)}%
 💰 Stake: ${p.stake}u
 
-🧠 Dados técnicos:
+🧠 Contexto da análise:
 ${dados}
 
 📋 Parecer:

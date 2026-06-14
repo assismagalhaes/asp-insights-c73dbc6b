@@ -11,19 +11,19 @@ export type Result = "PENDENTE" | "GREEN" | "RED" | "PUSH";
 
 const statusStyles: Record<string, string> = {
   CONFIRMA: "bg-success/15 text-success border-success/30",
-  CONFIRMA_CAUTELA: "bg-warning/15 text-warning border-warning/40",
+  CONFIRMA_CAUTELA: "bg-destructive/15 text-destructive border-destructive/30",
   PASS: "bg-destructive/15 text-destructive border-destructive/30",
   PULAR: "bg-destructive/15 text-destructive border-destructive/30",
-  AGUARDAR_NOTICIA: "bg-primary/10 text-primary border-primary/30",
+  AGUARDAR_NOTICIA: "bg-destructive/15 text-destructive border-destructive/30",
   PENDENTE: "bg-muted text-muted-foreground border-border",
 };
 
 const statusLabels: Record<string, string> = {
   CONFIRMA: "CONFIRMA",
-  CONFIRMA_CAUTELA: "CONFIRMA C/ CAUTELA",
-  PASS: "PASS",
-  PULAR: "PASS",
-  AGUARDAR_NOTICIA: "AGUARDAR NOTÍCIA",
+  CONFIRMA_CAUTELA: "PULAR",
+  PASS: "PULAR",
+  PULAR: "PULAR",
+  AGUARDAR_NOTICIA: "PULAR",
   PENDENTE: "PENDENTE",
 };
 

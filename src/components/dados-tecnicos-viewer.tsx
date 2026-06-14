@@ -29,22 +29,22 @@ export function DadosTecnicosViewer({ prognostico, variant = "icon", className }
         variant="ghost"
         disabled={disabled}
         onClick={() => setOpen(true)}
-        title={disabled ? "Sem dados técnicos" : "Ver dados técnicos do modelo"}
+        title={disabled ? "Sem contexto da análise" : "Ver contexto da análise"}
         className={cn(className)}
       >
         <Brain className={cn("h-4 w-4", !disabled && "text-primary")} />
-        {variant === "button" && <span className="ml-1 text-xs">Dados técnicos</span>}
+        {variant === "button" && <span className="ml-1 text-xs">Contexto</span>}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Dados Técnicos do Modelo</DialogTitle>
+            <DialogTitle>Contexto da Análise</DialogTitle>
             <DialogDescription>
               {prognostico.jogo} — {prognostico.mercado} / {prognostico.pick}
             </DialogDescription>
           </DialogHeader>
           <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 font-mono text-xs">
-            {dados || "Nenhum dado técnico informado."}
+            {dados || "Nenhum contexto informado."}
           </pre>
         </DialogContent>
       </Dialog>

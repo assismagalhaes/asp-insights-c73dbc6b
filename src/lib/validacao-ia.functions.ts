@@ -36,7 +36,7 @@ Regras:
 - Não inventar informações externas.
 - Analisar apenas os dados fornecidos.
 - Avaliar coerência técnica, matchup, forma, projeções, linha, odd, risco e contexto colado pelo usuário.
-- Se houver bom argumento, mas risco estrutural relevante, a decisão padrão deve ser PASS.
+- Se houver bom argumento, mas risco estrutural relevante, a decisão padrão deve ser PULAR.
 - Stake sugerida:
   - 0.5u = baixa confiança, cenário frágil ou dependente de informação ausente.
   - 1.0u = confiança moderada, tese sólida com riscos normais.
@@ -49,13 +49,13 @@ Pick:
 Linha e odd:
 Tese da aposta:
 
-B) Dados técnicos
+B) Contexto da análise
 Matchup e vantagem estrutural:
 Tendências consistentes vs ruído:
 Aderência ao mercado:
 Sinais de alerta estatísticos:
 
-C) Contexto adicional informado
+C) Informações manuais consideradas
 O que foi considerado:
 Informações ausentes ou incertas:
 Impacto prático:
@@ -72,7 +72,7 @@ Risco 3:
 O que faria mudar a decisão:
 
 F) Decisão final
-Decisão: CONFIRMA | CONFIRMA COM CAUTELA | PASS | AGUARDAR NOTÍCIA
+Decisão: CONFIRMA | PULAR
 Stake sugerida: 0.5u | 1.0u | 1.5u
 Justificativa final em 3 a 6 linhas:
 Condição de invalidação:`;
@@ -83,9 +83,7 @@ function parseDecisao(text: string): { decisao: string | null; stake: number | n
   const slice = fIdx >= 0 ? text.slice(fIdx) : text;
   const s = slice.toLowerCase();
   let decisao: string | null = null;
-  if (/\baguardar notícia|aguardar noticia\b/.test(s)) decisao = "AGUARDAR_NOTICIA";
-  else if (/\bconfirma com cautela\b/.test(s)) decisao = "CONFIRMA_CAUTELA";
-  else if (/\bpass\b/.test(s)) decisao = "PASS";
+  if (/\bpular|pass|aguardar notícia|aguardar noticia|confirma com cautela\b/.test(s)) decisao = "PULAR";
   else if (/\bconfirma\b/.test(s)) decisao = "CONFIRMA";
   const stakeMatch = slice.match(/stake[^0-9]*([0-9]+(?:[.,][0-9]+)?)/i);
   const stake = stakeMatch ? Number(stakeMatch[1].replace(",", ".")) : null;
@@ -127,11 +125,8 @@ Edge ajustado: ${p.edge_ajustado != null ? p.edge_ajustado.toFixed(2) + "%" : "�
 Edge em uso para análise: ${edgeFinal.toFixed(2)}%
 Stake sugerida pelo sistema: ${p.stake_sugerida}u
 
-DADOS TÉCNICOS DO MODELO:
-${data.dados_tecnicos?.trim() || "(nenhum dado técnico fornecido — trate como informação ausente)"}
-
-CONTEXTO ADICIONAL INFORMADO PELO USUÁRIO:
-${data.contexto_adicional?.trim() || "(nenhum contexto adicional informado — trate como informação ausente)"}
+CONTEXTO DA ANÁLISE:
+${data.contexto_adicional?.trim() || data.dados_tecnicos?.trim() || "(nenhum contexto informado — trate como informação ausente)"}
 `;
 
     try {

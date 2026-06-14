@@ -46,7 +46,7 @@ Política de pesquisa (use as ferramentas de forma proativa, mas eficiente):
 Regras analíticas:
 - Não reavaliar se a entrada é EV+ (já foi filtrada).
 - Avaliar coerência técnica, matchup, forma, projeções, linha, odd, risco e notícias encontradas.
-- Se houver risco estrutural relevante (lesão chave, lineup desfavorável, clima ruim para a tese), a decisão padrão deve ser PASS ou AGUARDAR NOTÍCIA.
+- Se houver risco estrutural relevante (lesão chave, lineup desfavorável, clima ruim para a tese), a decisão padrão deve ser PULAR.
 - Stake sugerida:
   - 0.5u = baixa confiança, cenário frágil.
   - 1.0u = confiança moderada, tese sólida.
@@ -59,13 +59,13 @@ Pick:
 Linha e odd:
 Tese da aposta:
 
-B) Dados técnicos
+B) Contexto da análise
 Matchup e vantagem estrutural:
 Tendências consistentes vs ruído:
 Aderência ao mercado:
 Sinais de alerta estatísticos:
 
-C) Contexto adicional informado
+C) Informações manuais consideradas
 O que foi considerado:
 Informações ausentes ou incertas:
 Impacto prático:
@@ -88,7 +88,7 @@ Risco 3:
 O que faria mudar a decisão:
 
 G) Decisão final
-Decisão: CONFIRMA | CONFIRMA COM CAUTELA | PASS | AGUARDAR NOTÍCIA
+Decisão: CONFIRMA | PULAR
 Stake sugerida: 0.5u | 1.0u | 1.5u
 Justificativa final em 3 a 6 linhas:
 Condição de invalidação:`;
@@ -99,9 +99,7 @@ function parseDecisao(text: string): { decisao: string | null; stake: number | n
   const slice = fIdx >= 0 ? text.slice(fIdx) : text;
   const s = slice.toLowerCase();
   let decisao: string | null = null;
-  if (/\baguardar notícia|aguardar noticia\b/.test(s)) decisao = "AGUARDAR_NOTICIA";
-  else if (/\bconfirma com cautela\b/.test(s)) decisao = "CONFIRMA_CAUTELA";
-  else if (/\bpass\b/.test(s)) decisao = "PASS";
+  if (/\bpular|pass|aguardar notícia|aguardar noticia|confirma com cautela\b/.test(s)) decisao = "PULAR";
   else if (/\bconfirma\b/.test(s)) decisao = "CONFIRMA";
   const stakeMatch = slice.match(/stake[^0-9]*([0-9]+(?:[.,][0-9]+)?)/i);
   const stake = stakeMatch ? Number(stakeMatch[1].replace(",", ".")) : null;
@@ -148,11 +146,8 @@ Probabilidade final: ${p.probabilidade_final.toFixed(2)}%
 Edge: ${edgeFinal.toFixed(2)}%
 Stake sugerida: ${p.stake_sugerida}u
 
-DADOS TÉCNICOS DO MODELO:
-${data.dados_tecnicos?.trim() || "(nenhum)"}
-
-CONTEXTO ADICIONAL INFORMADO:
-${data.contexto_adicional?.trim() || "(nenhum)"}
+CONTEXTO DA ANÁLISE:
+${data.contexto_adicional?.trim() || data.dados_tecnicos?.trim() || "(nenhum)"}
 
 Faça pesquisas online conforme a política descrita e produza o parecer no formato exigido.`;
 

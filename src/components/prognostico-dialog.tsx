@@ -63,6 +63,12 @@ const empty: PrognosticoInput = {
   edge_ajustado: null,
 };
 
+function normalizeStatusValidacao(status: PrognosticoInput["status_validacao"]): PrognosticoInput["status_validacao"] {
+  return status === "CONFIRMA_CAUTELA" || status === "PASS" || status === "AGUARDAR_NOTICIA"
+    ? "PULAR"
+    : status;
+}
+
 export function PrognosticoDialog({
   open,
   onOpenChange,
@@ -102,7 +108,7 @@ export function PrognosticoDialog({
         probabilidade_final: prognostico.probabilidade_final,
         edge: prognostico.edge,
         stake: prognostico.stake,
-        status_validacao: prognostico.status_validacao,
+        status_validacao: normalizeStatusValidacao(prognostico.status_validacao),
         observacoes: prognostico.observacoes,
         dados_tecnicos: prognostico.dados_tecnicos,
         odd_ajustada: prognostico.odd_ajustada,
@@ -285,17 +291,15 @@ export function PrognosticoDialog({
               <SelectContent>
                 <SelectItem value="PENDENTE">PENDENTE</SelectItem>
                 <SelectItem value="CONFIRMA">CONFIRMA</SelectItem>
-                <SelectItem value="CONFIRMA_CAUTELA">CONFIRMA C/ CAUTELA</SelectItem>
-                <SelectItem value="PASS">PASS</SelectItem>
-                <SelectItem value="AGUARDAR_NOTICIA">AGUARDAR NOTÍCIA</SelectItem>
+                <SelectItem value="PULAR">PULAR</SelectItem>
               </SelectContent>
             </Select>
           </Field>
           <div className="md:col-span-3">
-            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Dados Técnicos do Modelo</Label>
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Contexto da Análise</Label>
             <Textarea
               rows={4}
-              placeholder="Cole aqui dados técnicos do modelo (xG, RPI, projeções, tendências, etc.)"
+              placeholder="Cole aqui o contexto usado na análise: H2H, últimos jogos, projeções, odds, linhas, splits e informações adicionais."
               value={form.dados_tecnicos ?? form.observacoes ?? ""}
               onChange={(e) => set("dados_tecnicos", e.target.value || null)}
             />

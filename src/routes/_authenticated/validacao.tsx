@@ -13,11 +13,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import { StatusBadge } from "@/components/status-badge";
 import { LeagueFilter } from "@/components/league-filter";
 import { PeriodFilter } from "@/components/period-filter";
@@ -28,7 +23,6 @@ import {
   useUpdatePrognostico,
   useConfiguracao,
   calcEdge,
-  getDadosTecnicos,
   ESPORTES_DEFAULT,
   MERCADOS_DEFAULT,
   type Prognostico,
@@ -46,10 +40,8 @@ export const Route = createFileRoute("/_authenticated/validacao")({
 });
 
 const decisoes: { label: Status; texto: string; color: string }[] = [
-  { label: "CONFIRMA", texto: "CONFIRMA", color: "bg-success text-success-foreground hover:bg-success/90" },
-  { label: "CONFIRMA_CAUTELA", texto: "CONFIRMA C/ CAUTELA", color: "bg-warning text-warning-foreground hover:bg-warning/90" },
-  { label: "PASS", texto: "PASS", color: "bg-destructive text-destructive-foreground hover:bg-destructive/90" },
-  { label: "AGUARDAR_NOTICIA", texto: "AGUARDAR NOTÍCIA", color: "bg-primary text-primary-foreground hover:bg-primary/90" },
+  { label: "CONFIRMA", texto: "Confirmar", color: "bg-success text-success-foreground hover:bg-success/90" },
+  { label: "PULAR", texto: "Pular", color: "bg-destructive text-destructive-foreground hover:bg-destructive/90" },
 ];
 
 const STAKES = ["0.5", "1.0", "1.5"];
@@ -75,8 +67,8 @@ interface IAResult {
 }
 
 function autoCheck(p: Prognostico, edgeFinal: number) {
-  if (p.odd_ofertada < p.odd_valor) return { auto: "PASS" as const, reason: "Odd ofertada menor que odd de valor" };
-  if (edgeFinal < 0) return { auto: "PASS" as const, reason: "Edge negativo" };
+  if (p.odd_ofertada < p.odd_valor) return { auto: "PULAR" as const, reason: "Odd ofertada menor que odd de valor" };
+  if (edgeFinal < 0) return { auto: "PULAR" as const, reason: "Edge negativo" };
   if (p.probabilidade_final < 55) return { auto: "ALERTA" as const, reason: "Probabilidade inferior a 55%" };
   if (p.probabilidade_final > 60) return { auto: "DESTAQUE" as const, reason: "Probabilidade superior a 60%" };
   return null;
@@ -97,7 +89,6 @@ function Validacao() {
   const [stakes, setStakes] = useState<Record<string, string>>({});
   const [pareceres, setPareceres] = useState<Record<string, string>>({});
   const [contextos, setContextos] = useState<Record<string, string>>({});
-  const [dadosEdit, setDadosEdit] = useState<Record<string, string>>({});
   const [iaResults, setIaResults] = useState<Record<string, IAResult>>({});
   const [iaLoading, setIaLoading] = useState<Record<string, "local" | "online" | null>>({});
 
@@ -131,10 +122,35 @@ function Validacao() {
     [prognosticos, ini, fim, fEsporte, fLiga, fMercado],
   );
 
+  const getContextoAnalise = (p: Prognostico): string =>
+    contextos[p.id] ?? p.dados_tecnicos?.trim() ?? p.observacoes?.trim() ?? "";
+
+  const isMesmoJogo = (a: Prognostico, b: Prognostico): boolean =>
+    a.data === b.data &&
+    (a.hora ?? "") === (b.hora ?? "") &&
+    a.esporte === b.esporte &&
+    a.liga === b.liga &&
+    a.jogo === b.jogo;
+
+  const setContextoAnalise = (p: Prognostico, value: string) => {
+    setContextos((prev) => {
+      const previous = prev[p.id] ?? p.dados_tecnicos?.trim() ?? p.observacoes?.trim() ?? "";
+      const next = { ...prev, [p.id]: value };
+
+      for (const other of pendentes) {
+        if (other.id === p.id || !isMesmoJogo(p, other)) continue;
+        const current = prev[other.id] ?? other.dados_tecnicos?.trim() ?? other.observacoes?.trim() ?? "";
+        if (!current || current === previous) next[other.id] = value;
+      }
+
+      return next;
+    });
+  };
+
   const getOddAjustadaNum = (p: Prognostico): number | null => {
     const raw = oddsAj[p.id];
     if (raw !== undefined && raw !== "") return Number(raw);
-    return p.odd_ajustada;
+    return p.odd_ajustada ?? p.odd_ofertada;
   };
 
   const getEdgeAjustado = (p: Prognostico): number | null => {
@@ -146,7 +162,7 @@ function Validacao() {
   const rodarIA = async (p: Prognostico, modo: "local" | "online") => {
     setIaLoading((s) => ({ ...s, [p.id]: modo }));
     try {
-      const dados = dadosEdit[p.id] ?? getDadosTecnicos(p) ?? "";
+      const contextoAnalise = getContextoAnalise(p);
       const oddAj = getOddAjustadaNum(p);
       const edgeAj = getEdgeAjustado(p);
       const payload = {
@@ -168,8 +184,8 @@ function Validacao() {
             edge_ajustado: edgeAj,
             stake_sugerida: p.stake,
           },
-          dados_tecnicos: dados,
-          contexto_adicional: contextos[p.id] ?? "",
+          dados_tecnicos: contextoAnalise,
+          contexto_adicional: contextoAnalise,
         },
       };
       const raw = modo === "online" ? await callIAOnline(payload) : await callIA(payload);
@@ -203,22 +219,22 @@ function Validacao() {
       const oddAj = getOddAjustadaNum(p);
       const edgeAj = getEdgeAjustado(p);
       const stakeNum = stakes[p.id] ? Number(stakes[p.id]) : p.stake;
-      const dadosTecnicos = dadosEdit[p.id];
+      const contextoAnalise = getContextoAnalise(p).trim();
 
-      // atualiza odd/edge ajustados, stake e dados técnicos no prognóstico
+      // atualiza odd/edge ajustados e contexto no prognostico
       const patch: Partial<Prognostico> & { id: string } = { id: p.id };
       if (oddAj != null && oddAj !== p.odd_ajustada) patch.odd_ajustada = oddAj;
       if (edgeAj != null && edgeAj !== p.edge_ajustado) patch.edge_ajustado = edgeAj;
-      if (dadosTecnicos !== undefined) patch.dados_tecnicos = dadosTecnicos || null;
+      patch.dados_tecnicos = contextoAnalise || null;
       if (Object.keys(patch).length > 1) await updateProg.mutateAsync(patch);
 
       const ia = iaResults[p.id];
       await createVal.mutateAsync({
         prognostico_id: p.id,
         decisao,
-        stake_confirmada: stakeNum,
+        stake_confirmada: decisao === "CONFIRMA" ? stakeNum : 0,
         parecer_validacao: parecer,
-        contexto_adicional: contextos[p.id] ?? null,
+        contexto_adicional: contextoAnalise || null,
         parecer_ia: ia?.parecer ?? null,
         decisao_ia_sugerida: ia?.decisao_sugerida ?? null,
         stake_ia_sugerida: ia?.stake_sugerida ?? null,
@@ -293,7 +309,7 @@ function Validacao() {
           const edgeAj = getEdgeAjustado(p);
           const check = autoCheck(p, edgeAj ?? p.edge);
           const mostrarLinha = shouldShowLinha(p.pick, p.linha);
-          const dadosCurrent = dadosEdit[p.id] ?? getDadosTecnicos(p) ?? "";
+          const contextoAnalise = getContextoAnalise(p);
           const parecerCurrent = pareceres[p.id] ?? "";
           const ia = iaResults[p.id];
 
@@ -302,7 +318,7 @@ function Validacao() {
               key={p.id}
               className={cn(
                 "rounded-lg border bg-card p-5 space-y-4",
-                check?.auto === "PASS" && "border-destructive/40",
+                check?.auto === "PULAR" && "border-destructive/40",
                 check?.auto === "DESTAQUE" && "border-success/40",
                 check?.auto === "ALERTA" && "border-warning/40",
                 !check && "border-border",
@@ -330,7 +346,6 @@ function Validacao() {
                   <KV label="Mercado" value={p.mercado} />
                   <KV label="Pick" value={p.pick} />
                   {mostrarLinha && <KV label="Linha" value={p.linha ?? "—"} />}
-                  <KV label="Stake sugerida" value={`${p.stake}u`} />
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                   <Metric label="Odd original" value={p.odd_ofertada.toFixed(2)} />
@@ -340,7 +355,7 @@ function Validacao() {
                       type="number"
                       step="0.01"
                       placeholder={p.odd_ofertada.toFixed(2)}
-                      value={oddsAj[p.id] ?? (p.odd_ajustada != null ? p.odd_ajustada : "")}
+                      value={oddsAj[p.id] ?? (p.odd_ajustada != null ? p.odd_ajustada : p.odd_ofertada)}
                       onChange={(e) => setOddsAj({ ...oddsAj, [p.id]: e.target.value })}
                       className="h-8 font-mono"
                     />
@@ -359,7 +374,7 @@ function Validacao() {
                   <div
                     className={cn(
                       "flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-medium",
-                      check.auto === "PASS" && "border-destructive/40 bg-destructive/10 text-destructive",
+                      check.auto === "PULAR" && "border-destructive/40 bg-destructive/10 text-destructive",
                       check.auto === "ALERTA" && "border-warning/40 bg-warning/10 text-warning",
                       check.auto === "DESTAQUE" && "border-success/40 bg-success/10 text-success",
                     )}
@@ -371,35 +386,16 @@ function Validacao() {
                 )}
               </div>
 
-              {/* Dados Técnicos */}
-              <Collapsible defaultOpen={!!dadosCurrent}>
-                <CollapsibleTrigger asChild>
-                  <Button variant="outline" size="sm" className="w-full justify-start">
-                    <Brain className="h-4 w-4 mr-2 text-primary" />
-                    Dados Técnicos do Modelo {dadosCurrent ? `(${dadosCurrent.length} chars)` : "(vazio)"}
-                  </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="pt-2">
-                  <Textarea
-                    rows={5}
-                    placeholder="Cole/edite os dados técnicos exportados pelo modelo (xG, RPI, projeções, tendências, etc.)"
-                    value={dadosCurrent}
-                    onChange={(e) => setDadosEdit({ ...dadosEdit, [p.id]: e.target.value })}
-                    className="font-mono text-xs"
-                  />
-                </CollapsibleContent>
-              </Collapsible>
-
-              {/* Contexto adicional */}
+              {/* Contexto da analise */}
               <div>
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Contexto adicional para análise
+                  Contexto da Análise
                 </Label>
                 <Textarea
-                  rows={3}
-                  placeholder="Cole manualmente H2H, últimos jogos, lesões, escalações, clima, notícias ou observações suas. O sistema NÃO busca dados online."
-                  value={contextos[p.id] ?? ""}
-                  onChange={(e) => setContextos({ ...contextos, [p.id]: e.target.value })}
+                  rows={6}
+                  placeholder="Cole H2H, últimos jogos, projeções, odds, linhas, splits, lesões, escalações, clima, notícias ou observações usadas na análise. O conteúdo será reaproveitado nos outros mercados da mesma partida."
+                  value={contextoAnalise}
+                  onChange={(e) => setContextoAnalise(p, e.target.value)}
                 />
               </div>
 
