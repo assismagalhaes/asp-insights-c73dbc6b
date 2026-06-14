@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Upload, Plus, FileSpreadsheet, Pencil, Trash2, Trophy, Megaphone, Copy, Ban, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+import { Upload, Plus, Pencil, Trash2, Trophy, Megaphone, Copy, Ban, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { StatusBadge, ResultBadge, PublicacaoBadge } from "@/components/status-badge";
+import { StatusBadge, ResultBadge } from "@/components/status-badge";
 import { LeagueFilter } from "@/components/league-filter";
 import { PeriodFilter } from "@/components/period-filter";
 import { rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
@@ -25,6 +25,8 @@ import {
   usePublicarPrognostico,
   useCancelarPrognostico,
   gerarTipTexto,
+  getOddEfetiva,
+  getEdgeEfetivo,
   ESPORTES_DEFAULT,
   MERCADOS_DEFAULT,
   type Prognostico,
@@ -64,8 +66,9 @@ type SortKey =
   | "edge"
   | "stake"
   | "status_validacao"
-  | "status_publicacao"
   | "resultado";
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 
 function formatDateBR(iso: string): string {
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -103,6 +106,8 @@ function Prognosticos() {
   const [periodo, setPeriodo] = useState<PeriodoFiltro>("tudo");
   const [customIni, setCustomIni] = useState("");
   const [customFim, setCustomFim] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(10);
 
   const toggleSort = (k: SortKey) => {
     if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -132,6 +137,14 @@ function Prognosticos() {
       return true;
     });
     arr.sort((a, b) => {
+      if (sortKey === "odd_ofertada") {
+        const cmp = getOddEfetiva(a) - getOddEfetiva(b);
+        return sortDir === "asc" ? cmp : -cmp;
+      }
+      if (sortKey === "edge") {
+        const cmp = getEdgeEfetivo(a) - getEdgeEfetivo(b);
+        return sortDir === "asc" ? cmp : -cmp;
+      }
       const av = a[sortKey] as unknown;
       const bv = b[sortKey] as unknown;
       if (av == null && bv == null) return 0;
@@ -145,12 +158,34 @@ function Prognosticos() {
     return arr;
   }, [prognosticos, sortKey, sortDir, ini, fim, fEsporte, fLiga, fMercado, fValidacao, fPublicacao, fResultado, fLinha]);
 
-  const allSelected = sorted.length > 0 && sorted.every((p) => selected.has(p.id));
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const paginated = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return sorted.slice(start, start + pageSize);
+  }, [sorted, currentPage, pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [ini, fim, fEsporte, fLiga, fMercado, fValidacao, fPublicacao, fResultado, fLinha, pageSize]);
+
+  const allSelected = paginated.length > 0 && paginated.every((p) => selected.has(p.id));
   const someSelected = selected.size > 0 && !allSelected;
 
   const toggleAll = () => {
-    if (allSelected) setSelected(new Set());
-    else setSelected(new Set(sorted.map((p) => p.id)));
+    if (allSelected) {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        paginated.forEach((p) => next.delete(p.id));
+        return next;
+      });
+    } else {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        paginated.forEach((p) => next.add(p.id));
+        return next;
+      });
+    }
   };
   const toggleOne = (id: string) => {
     setSelected((prev) => {
@@ -197,7 +232,7 @@ function Prognosticos() {
       ro.disconnect();
       window.removeEventListener("resize", update);
     };
-  }, [sorted.length]);
+  }, [paginated.length]);
 
   const syncFromTop = () => {
     if (topScrollRef.current && bottomScrollRef.current) {
@@ -241,18 +276,6 @@ function Prognosticos() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-dashed border-border bg-card/50 p-4">
-        <div className="flex items-start gap-3">
-          <FileSpreadsheet className="mt-0.5 h-5 w-5 text-primary" />
-          <div className="text-sm">
-            <p className="font-medium">Estrutura esperada (CSV / XLSX)</p>
-            <p className="mt-1 font-mono text-xs text-muted-foreground">
-              data, hora, esporte, liga, jogo, mandante, visitante, mercado, pick, linha, odd_ofertada, odd_valor, probabilidade_final, edge
-            </p>
-          </div>
-        </div>
-      </div>
-
       <div className="rounded-lg border border-border bg-card p-3 space-y-3">
         <PeriodFilter
           periodo={periodo}
@@ -262,23 +285,24 @@ function Prognosticos() {
           onCustomIniChange={setCustomIni}
           onCustomFimChange={setCustomFim}
         />
-        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-7">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <Select value={fEsporte} onValueChange={(v) => { setFEsporte(v); setFLiga("all"); }}>
-            <SelectTrigger><SelectValue placeholder="Esporte" /></SelectTrigger>
+            <SelectTrigger className="h-10 w-full"><SelectValue placeholder="Esporte" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os esportes</SelectItem>
               {esportes.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
-          <LeagueFilter sport={fEsporte} value={fLiga} onChange={setFLiga} />
+          <LeagueFilter sport={fEsporte} value={fLiga} onChange={setFLiga} className="h-10 w-full" />
           <Select value={fMercado} onValueChange={setFMercado}>
-            <SelectTrigger><SelectValue placeholder="Mercado" /></SelectTrigger>
+            <SelectTrigger className="h-10 w-full"><SelectValue placeholder="Mercado" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os mercados</SelectItem>
               {mercados.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
             </SelectContent>
           </Select>
           <Input
+            className="h-10"
             placeholder="Linha (ex: 2.5, +1.5)"
             value={fLinha}
             onChange={(e) => setFLinha(e.target.value)}
@@ -303,7 +327,7 @@ function Prognosticos() {
             </SelectContent>
           </Select>
           <Select value={fResultado} onValueChange={setFResultado}>
-            <SelectTrigger><SelectValue placeholder="Resultado" /></SelectTrigger>
+            <SelectTrigger className="h-10 w-full"><SelectValue placeholder="Resultado" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os resultados</SelectItem>
               <SelectItem value="GREEN">GREEN</SelectItem>
@@ -373,7 +397,6 @@ function Prognosticos() {
                   <SortableTh label="Edge" k="edge" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                   <SortableTh label="Stake" k="stake" align="right" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                   <SortableTh label="Validação" k="status_validacao" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-                  <SortableTh label="Publicação" k="status_publicacao" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                   <SortableTh label="Resultado" k="resultado" align="left" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                   <th className="px-3 py-2 text-right">Ações</th>
                 </tr>
@@ -381,19 +404,22 @@ function Prognosticos() {
               <tbody>
                 {isLoading && (
                   <tr>
-                    <td colSpan={19} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={18} className="px-4 py-8 text-center text-sm text-muted-foreground">
                       Carregando...
                     </td>
                   </tr>
                 )}
                 {!isLoading && sorted.length === 0 && (
                   <tr>
-                    <td colSpan={19} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={18} className="px-4 py-8 text-center text-sm text-muted-foreground">
                       Nenhum prognóstico cadastrado.
                     </td>
                   </tr>
                 )}
-                {sorted.map((p) => (
+                {paginated.map((p) => {
+                  const oddEfetiva = getOddEfetiva(p);
+                  const edgeEfetivo = getEdgeEfetivo(p);
+                  return (
                   <tr key={p.id} className="border-t border-border hover:bg-muted/30">
                     <td className="px-3 py-2">
                       <Checkbox
@@ -413,15 +439,18 @@ function Prognosticos() {
                     <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-muted-foreground">
                       {shouldShowLinha(p.pick, p.linha) ? p.linha : "—"}
                     </td>
-                    <td className="px-3 py-2 text-right font-mono">{p.odd_ofertada.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right font-mono">
+                      {oddEfetiva.toFixed(2)}
+                      {p.odd_ajustada != null && <span className="ml-1 text-[10px] text-muted-foreground">aj.</span>}
+                    </td>
                     <td className="px-3 py-2 text-right font-mono">{p.odd_valor.toFixed(2)}</td>
                     <td className="px-3 py-2 text-right font-mono">{p.probabilidade_final.toFixed(1)}%</td>
-                    <td className={`px-3 py-2 text-right font-mono ${p.edge >= 0 ? "text-success" : "text-destructive"}`}>
-                      {p.edge.toFixed(1)}%
+                    <td className={`px-3 py-2 text-right font-mono ${edgeEfetivo >= 0 ? "text-success" : "text-destructive"}`}>
+                      {edgeEfetivo.toFixed(1)}%
+                      {p.edge_ajustado != null && <span className="ml-1 text-[10px] text-muted-foreground">aj.</span>}
                     </td>
                     <td className="px-3 py-2 text-right font-mono">{p.stake.toFixed(1)}u</td>
                     <td className="px-3 py-2"><StatusBadge status={p.status_validacao} /></td>
-                    <td className="px-3 py-2"><PublicacaoBadge status={p.status_publicacao} /></td>
                     <td className="px-3 py-2"><ResultBadge result={p.resultado} /></td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
                       <div className="flex justify-end gap-1">
@@ -477,10 +506,34 @@ function Prognosticos() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+        <div>
+          Mostrando {sorted.length ? (currentPage - 1) * pageSize + 1 : 0}
+          {"-"}
+          {Math.min(currentPage * pageSize, sorted.length)} de {sorted.length} prognóstico(s)
+        </div>
+        <div className="flex items-center gap-2">
+          <span>Exibir</span>
+          <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v) as typeof pageSize)}>
+            <SelectTrigger className="h-9 w-24"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {PAGE_SIZE_OPTIONS.map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={currentPage <= 1}>
+            Anterior
+          </Button>
+          <span className="font-mono text-xs">Página {currentPage}/{totalPages}</span>
+          <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage >= totalPages}>
+            Próxima
+          </Button>
         </div>
       </div>
 

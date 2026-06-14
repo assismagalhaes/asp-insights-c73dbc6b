@@ -9,7 +9,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { useCreateResultado, calcLucro, todayBR, type Prognostico, type Resultado } from "@/lib/db";
+import { useCreateResultado, calcLucro, todayBR, getOddEfetiva, type Prognostico, type Resultado } from "@/lib/db";
 import { lucroUnidades } from "@/lib/metrics";
 import { parsePlacar, calcularResultadoAuto, extrairLinha } from "@/lib/resultado-calc";
 import { supabase } from "@/integrations/supabase/client";
@@ -76,7 +76,8 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
 
   if (!prognostico) return null;
 
-  const lucroU = resultadoFinal ? lucroUnidades({ resultado: resultadoFinal, stake: prognostico.stake, odd_ofertada: prognostico.odd_ofertada }) : 0;
+  const oddEfetiva = getOddEfetiva(prognostico);
+  const lucroU = resultadoFinal ? lucroUnidades({ resultado: resultadoFinal, stake: prognostico.stake, odd_ofertada: oddEfetiva }) : 0;
   const lucroR = lucroU * valorUnidade;
 
   const submit = async () => {
@@ -90,7 +91,7 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
         resultado: resultadoFinal,
         placar_final: placar || null,
         odd_fechamento: null,
-        lucro_prejuizo: calcLucro(resultadoFinal, prognostico.stake, prognostico.odd_ofertada),
+        lucro_prejuizo: calcLucro(resultadoFinal, prognostico.stake, oddEfetiva),
         data_resultado: todayBR(),
       });
 
@@ -110,6 +111,9 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
         <DialogHeader>
           <DialogTitle>Registrar resultado — {prognostico.jogo}</DialogTitle>
         </DialogHeader>
+        <div className="text-xs text-muted-foreground">
+          {linhaInfo ? `Linha ${linhaInfo} · ` : ""}Odd usada {oddEfetiva.toFixed(2)}
+        </div>
         <div className="text-xs text-muted-foreground">
           {prognostico.mercado} · {prognostico.pick} · Stake {prognostico.stake.toFixed(1)}u · Unidade R$ {valorUnidade.toFixed(2)}
         </div>
