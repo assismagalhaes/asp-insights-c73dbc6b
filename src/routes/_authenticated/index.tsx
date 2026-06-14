@@ -236,7 +236,7 @@ function Dashboard() {
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 grid-cols-1">
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
@@ -249,7 +249,7 @@ function Dashboard() {
               R$ {metrics.bancaAtual.toFixed(2)}
             </span>
           </div>
-          <ResponsiveContainer width="100%" height={240}>
+          <ResponsiveContainer width="100%" height={340}>
             <LineChart data={timeline}>
               <defs>
                 <linearGradient id="bancaPos" x1="0" y1="0" x2="0" y2="1">
@@ -308,7 +308,7 @@ function Dashboard() {
               {withSign(metrics.roi)}%
             </span>
           </div>
-          <ResponsiveContainer width="100%" height={240}>
+          <ResponsiveContainer width="100%" height={340}>
             <LineChart data={timeline}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis dataKey="data" stroke={axisColor} fontSize={10} tickFormatter={(d) => String(d).slice(5)} />
@@ -338,7 +338,7 @@ function Dashboard() {
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             Resultado por Esporte (u)
           </h3>
-          <ResponsiveContainer width="100%" height={240}>
+          <ResponsiveContainer width="100%" height={340}>
             <BarChart data={sportPerf} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis dataKey="esporte" stroke={axisColor} fontSize={10} />
@@ -371,7 +371,7 @@ function Dashboard() {
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             Resultado por Mercado (u)
           </h3>
-          <ResponsiveContainer width="100%" height={Math.max(240, marketPerf.length * 32 + 40)}>
+          <ResponsiveContainer width="100%" height={Math.max(340, marketPerf.length * 44 + 60)}>
             <BarChart data={marketPerf} layout="vertical" margin={{ top: 8, right: 48, left: 0, bottom: 8 }}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis type="number" stroke={axisColor} fontSize={10} />
@@ -404,7 +404,7 @@ function Dashboard() {
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             ROI por Esporte (%)
           </h3>
-          <ResponsiveContainer width="100%" height={240}>
+          <ResponsiveContainer width="100%" height={340}>
             <BarChart data={sportPerfRoi} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis dataKey="esporte" stroke={axisColor} fontSize={10} />
