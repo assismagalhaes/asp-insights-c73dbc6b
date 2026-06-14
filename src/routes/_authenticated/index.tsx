@@ -236,7 +236,7 @@ function Dashboard() {
         />
       </div>
 
-      <div className="grid gap-4 grid-cols-1">
+      <div className="flex flex-col gap-4">
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
@@ -433,7 +433,7 @@ function Dashboard() {
           </ResponsiveContainer>
         </div>
 
-        <div className="rounded-lg border border-border bg-card p-4 lg:col-span-2">
+        <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             Resultado por Mês (u)
           </h3>
