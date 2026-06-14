@@ -20,6 +20,7 @@ import { Route as AuthenticatedHistoricoRouteImport } from './routes/_authentica
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
 import { Route as AuthenticatedBankrollRouteImport } from './routes/_authenticated/bankroll'
 import { Route as AuthenticatedAprendizadoIaRouteImport } from './routes/_authenticated/aprendizado-ia'
+import { Route as AuthenticatedColetaDadosRouteImport } from './routes/_authenticated/coleta-dados'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -78,12 +79,19 @@ const AuthenticatedAprendizadoIaRoute =
     path: '/aprendizado-ia',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedColetaDadosRoute =
+  AuthenticatedColetaDadosRouteImport.update({
+    id: '/coleta-dados',
+    path: '/coleta-dados',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
   '/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
   '/bankroll': typeof AuthenticatedBankrollRoute
+  '/coleta-dados': typeof AuthenticatedColetaDadosRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/historico': typeof AuthenticatedHistoricoRoute
   '/importar': typeof AuthenticatedImportarRoute
@@ -95,6 +103,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
   '/bankroll': typeof AuthenticatedBankrollRoute
+  '/coleta-dados': typeof AuthenticatedColetaDadosRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/historico': typeof AuthenticatedHistoricoRoute
   '/importar': typeof AuthenticatedImportarRoute
@@ -109,6 +118,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
   '/_authenticated/bankroll': typeof AuthenticatedBankrollRoute
+  '/_authenticated/coleta-dados': typeof AuthenticatedColetaDadosRoute
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/_authenticated/historico': typeof AuthenticatedHistoricoRoute
   '/_authenticated/importar': typeof AuthenticatedImportarRoute
@@ -124,6 +134,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/aprendizado-ia'
     | '/bankroll'
+    | '/coleta-dados'
     | '/configuracoes'
     | '/historico'
     | '/importar'
@@ -135,6 +146,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/aprendizado-ia'
     | '/bankroll'
+    | '/coleta-dados'
     | '/configuracoes'
     | '/historico'
     | '/importar'
@@ -148,6 +160,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/aprendizado-ia'
     | '/_authenticated/bankroll'
+    | '/_authenticated/coleta-dados'
     | '/_authenticated/configuracoes'
     | '/_authenticated/historico'
     | '/_authenticated/importar'
@@ -241,12 +254,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAprendizadoIaRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/coleta-dados': {
+      id: '/_authenticated/coleta-dados'
+      path: '/coleta-dados'
+      fullPath: '/coleta-dados'
+      preLoaderRoute: typeof AuthenticatedColetaDadosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAprendizadoIaRoute: typeof AuthenticatedAprendizadoIaRoute
   AuthenticatedBankrollRoute: typeof AuthenticatedBankrollRoute
+  AuthenticatedColetaDadosRoute: typeof AuthenticatedColetaDadosRoute
   AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRoute
   AuthenticatedHistoricoRoute: typeof AuthenticatedHistoricoRoute
   AuthenticatedImportarRoute: typeof AuthenticatedImportarRoute
@@ -259,6 +280,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAprendizadoIaRoute: AuthenticatedAprendizadoIaRoute,
   AuthenticatedBankrollRoute: AuthenticatedBankrollRoute,
+  AuthenticatedColetaDadosRoute: AuthenticatedColetaDadosRoute,
   AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRoute,
   AuthenticatedHistoricoRoute: AuthenticatedHistoricoRoute,
   AuthenticatedImportarRoute: AuthenticatedImportarRoute,
