@@ -66,6 +66,24 @@ interface IAResult {
   buscas_realizadas?: string[];
 }
 
+function getOnlineAlertas(parecer: string): string[] {
+  const text = parecer.toLowerCase();
+  const alertas: string[] = [];
+  if (/aguardar confirma|não confirmad|nao confirmad|incert|não encontrado|nao encontrado/.test(text)) {
+    alertas.push("Informação crítica não confirmada");
+  }
+  if (/risco alto|impacto na aposta:\s*alto/.test(text)) {
+    alertas.push("Risco alto");
+  }
+  if (/fonte insuficiente|sem fonte confiável|sem fonte confiavel|fonte não confiável|fonte nao confiavel/.test(text)) {
+    alertas.push("Fonte insuficiente");
+  }
+  if (/desatualizad|notícia antiga|noticia antiga|sem data/.test(text)) {
+    alertas.push("Possível dado desatualizado");
+  }
+  return Array.from(new Set(alertas));
+}
+
 function autoCheck(p: Prognostico, edgeFinal: number) {
   if (p.odd_ofertada < p.odd_valor) return { auto: "PULAR" as const, reason: "Odd ofertada menor que odd de valor" };
   if (edgeFinal < 0) return { auto: "PULAR" as const, reason: "Edge negativo" };
@@ -477,6 +495,21 @@ function Validacao() {
                         </span>
                       )}
                     </div>
+                    {ia.modo === "online" && getOnlineAlertas(ia.parecer).length > 0 && (
+                      <div className="rounded border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+                        <div className="mb-1 flex items-center gap-1 font-semibold">
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                          Alertas da pesquisa online
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {getOnlineAlertas(ia.parecer).map((alerta) => (
+                            <span key={alerta} className="rounded border border-warning/30 bg-background/50 px-2 py-0.5">
+                              {alerta}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded border border-border bg-background/60 p-2 font-mono text-xs">
                       {ia.parecer}
                     </pre>
