@@ -5,6 +5,7 @@ import {
   ShieldCheck,
   History,
   Wallet,
+  BrainCircuit,
   
   Settings,
   Upload,
@@ -34,6 +35,7 @@ const items = [
   { title: "Publicação", url: "/publicacao", icon: Megaphone },
   { title: "Histórico", url: "/historico", icon: History },
   { title: "Bankroll", url: "/bankroll", icon: Wallet },
+  { title: "Aprendizado da IA", url: "/aprendizado-ia", icon: BrainCircuit },
   
   { title: "Configurações", url: "/configuracoes", icon: Settings },
 ];
