@@ -122,6 +122,35 @@ function Dashboard() {
     }));
   }, [filtrados]);
 
+  const sportPerfRoi = useMemo(() => {
+    const map = new Map<string, { lucro: number; stake: number }>();
+    filtrados
+      .filter((p) => p.status_validacao === "CONFIRMA")
+      .forEach((p) => {
+        const cur = map.get(p.esporte) ?? { lucro: 0, stake: 0 };
+        cur.lucro += lucroUnidades(p);
+        cur.stake += p.stake;
+        map.set(p.esporte, cur);
+      });
+    return Array.from(map.entries()).map(([esporte, v]) => ({
+      esporte,
+      roi: v.stake ? Number(((v.lucro / v.stake) * 100).toFixed(1)) : 0,
+    }));
+  }, [filtrados]);
+
+  const monthlyResults = useMemo(() => {
+    const map = new Map<string, number>();
+    filtrados
+      .filter((p) => p.status_validacao === "CONFIRMA")
+      .forEach((p) => {
+        const mes = p.data.slice(0, 7);
+        map.set(mes, (map.get(mes) ?? 0) + lucroUnidades(p));
+      });
+    return Array.from(map.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([mes, lucro]) => ({ mes, lucro: Number(lucro.toFixed(2)) }));
+  }, [filtrados]);
+
   const marketPerf = useMemo(() => {
     const map = new Map<string, number>();
     filtrados
