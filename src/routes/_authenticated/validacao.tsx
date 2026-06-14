@@ -409,7 +409,17 @@ function Validacao() {
                   </div>
                   <h3 className="mt-1 text-lg font-semibold">{p.jogo}</h3>
                 </div>
-                <StatusBadge status={p.status_validacao} />
+                <div className="flex items-center gap-2">
+                  <StatusBadge status={p.status_validacao} />
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    title="Excluir prognóstico"
+                    onClick={() => setConfirmDelete(p)}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
               </div>
 
               {/* Bloco de entrada */}
