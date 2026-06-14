@@ -31,6 +31,7 @@ import {
   usePrognosticos,
   useCreateValidacao,
   useUpdatePrognostico,
+  useDeletePrognostico,
   useConfiguracao,
   calcEdge,
   saveAnaliseIaSnapshot,
