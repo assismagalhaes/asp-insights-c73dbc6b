@@ -17,6 +17,7 @@ const JobIdSchema = z.object({
 });
 
 type ScraperPayload = Record<string, unknown>;
+type JsonValue = string | number | boolean | null | { [k: string]: JsonValue } | JsonValue[];
 
 function getScraperConfig() {
   const baseUrl = process.env.SCRAPER_API_URL?.replace(/\/+$/, "");
