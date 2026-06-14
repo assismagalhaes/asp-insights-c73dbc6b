@@ -3,7 +3,18 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { generateText, tool, stepCountIs } from "ai";
 import { z } from "zod";
 
-export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v3-risk-auditor";
+export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v4-risk-gates";
+
+const CorrelatedPickSchema = z.object({
+  mercado: z.string(),
+  pick: z.string(),
+  linha: z.string().nullable().optional(),
+  odd_original: z.number(),
+  odd_ajustada: z.number().nullable().optional(),
+  probabilidade_final: z.number(),
+  edge_original: z.number(),
+  edge_ajustado: z.number().nullable().optional(),
+});
 
 const InputSchema = z.object({
   prognostico: z.object({
@@ -23,6 +34,7 @@ const InputSchema = z.object({
     edge_ajustado: z.number().nullable().optional(),
     stake_sugerida: z.number(),
   }),
+  prognosticos_correlacionados: z.array(CorrelatedPickSchema).optional(),
   dados_tecnicos: z.string().nullable().optional(),
   contexto_adicional: z.string().nullable().optional(),
 });
@@ -102,6 +114,7 @@ Regras analíticas:
 - Trate PULAR como decisão válida e esperada, não como exceção.
 - Não use frases genéricas como "boa entrada", "valor positivo" ou "dados sustentam" sem apontar evidências concretas.
 - Sempre escreva uma seção chamada "Tese contra a entrada".
+- Use os gates objetivos de decisão. A IA só pode sugerir CONFIRMA se todos os gates obrigatórios forem aprovados.
 - Não reavaliar se a entrada é EV+ (já foi filtrada).
 - Não recalcular EV, não otimizar linha e não substituir os dados do modelo Python/contexto manual.
 - A IA apenas sugere decisão. A decisão final continua humana.
@@ -114,6 +127,14 @@ Regras analíticas:
   - 0.5u = baixa confiança, cenário frágil.
   - 1.0u = confiança moderada, tese sólida.
   - 1.5u = use apenas em cenário raro, com múltiplas confirmações concretas, fontes boas e poucos pontos de falha.
+
+Gates obrigatórios:
+- Gate 1 — Coerência técnica: tese precisa estar coerente com mercado, pick, linha, probabilidade, edge ajustado/original, contexto informado, esporte e liga. Conflito técnico relevante = PULAR.
+- Gate 2 — Risco estrutural: risco estrutural alto = PULAR. Exemplos: MLB starter incerto/bullpen desgastado/lineup alternativo; NBA/WNBA estrela questionável/rotação incerta/back-to-back forte; NHL goalie não confirmado em pick sensível; NFL QB questionável/clima forte/desfalques OL/defesa; Futebol escalação rodada/mata-mata incerto/desfalques-chave.
+- Gate 3 — Informação crítica ausente: se informação crítica necessária não estiver disponível = PULAR; no máximo CONFIRMA 0.5u apenas se a informação ausente não for determinante.
+- Gate 4 — Fonte online fraca: se fontes forem antigas, genéricas ou não confirmarem o ponto crítico, sinalize e tenda para PULAR.
+- Gate 5 — Risco > benefício: se houver 2 ou mais riscos relevantes, PULAR.
+- Gate 6 — Duplicidade/correlação: se houver outras picks do mesmo jogo e mesmo grupo de mercado, não confirme todas automaticamente. Compare e escolha a melhor ou recomende PULAR nas redundantes.
 
 Regras por informação crítica:
 - MLB: starter não confirmado → se muito crítico, PULAR; se não, destacar AGUARDAR CONFIRMAÇÃO. Bullpen muito usado e pick depende de under → risco alto.
@@ -184,20 +205,25 @@ Risco alto:
 Fonte insuficiente:
 Possível dado desatualizado:
 
-L) Decisão final
-Decisão: CONFIRMA | PULAR
+L) Gates objetivos
+gate_tecnico: aprovado/reprovado - motivo:
+gate_risco: aprovado/reprovado - motivo:
+gate_info_critica: aprovado/reprovado - motivo:
+gate_fontes: aprovado/reprovado - motivo:
+gate_duplicidade: aprovado/reprovado - motivo:
+gate_risco_beneficio: aprovado/reprovado - motivo:
+
+M) Decisão final
+Decisão final: CONFIRMA | PULAR
 Stake sugerida: 0.5u | 1.0u | 1.5u
 Justificativa final em 3 a 6 linhas:
 Condição de invalidação:`;
 
 function parseDecisao(text: string): { decisao: string | null; stake: number | null } {
-  const lower = text.toLowerCase();
-  const fIdx = lower.lastIndexOf("decisão:");
-  const slice = fIdx >= 0 ? text.slice(fIdx) : text;
-  const s = slice.toLowerCase();
-  let decisao: string | null = "PULAR";
-  if (/\bpular|pass|aguardar notícia|aguardar noticia|confirma com cautela\b/.test(s)) decisao = "PULAR";
-  else if (/\bconfirma\b/.test(s)) decisao = "CONFIRMA";
+  const decisionMatch = text.match(/decis[aã]o(?:\s+final)?\s*:\s*(confirma|confirmar|pular|pass|aguardar not[ií]cia|confirma com cautela)/i);
+  const slice = decisionMatch?.index != null ? text.slice(decisionMatch.index) : text;
+  const decisionText = decisionMatch?.[1]?.toLowerCase() ?? "pular";
+  const decisao: string | null = /\bconfirma|confirmar\b/.test(decisionText) ? "CONFIRMA" : "PULAR";
   const stakeMatch = slice.match(/stake[^0-9]*([0-9]+(?:[.,][0-9]+)?)/i);
   const stake = stakeMatch ? Number(stakeMatch[1].replace(",", ".")) : decisao === "PULAR" ? 0.5 : null;
   return { decisao, stake };
@@ -227,6 +253,16 @@ export const analisarValidacaoOnline = createServerFn({ method: "POST" })
     const oddFinal = p.odd_ajustada ?? p.odd_original;
     const edgeFinal = p.edge_ajustado ?? p.edge_original;
     const checklistEsporte = getSportChecklist(p.esporte);
+    const correlacionados = data.prognosticos_correlacionados ?? [];
+    const correlacionadosTexto = correlacionados.length
+      ? correlacionados
+          .map((c, index) => {
+            const odd = c.odd_ajustada ?? c.odd_original;
+            const edge = c.edge_ajustado ?? c.edge_original;
+            return `${index + 1}. Mercado: ${c.mercado} | Pick: ${c.pick} | Linha: ${c.linha ?? "-"} | Odd usada: ${odd.toFixed(3)} | Prob: ${c.probabilidade_final.toFixed(2)}% | Edge: ${edge.toFixed(2)}%`;
+          })
+          .join("\n")
+      : "(nenhuma outra pick pendente do mesmo jogo informada)";
 
     const userPayload = `DADOS DO PROGNÓSTICO:
 
@@ -247,6 +283,9 @@ Stake sugerida: ${p.stake_sugerida}u
 
 CONTEXTO DA ANÁLISE:
 ${data.contexto_adicional?.trim() || data.dados_tecnicos?.trim() || "(nenhum)"}
+
+OUTRAS PICKS PENDENTES DO MESMO JOGO PARA GATE DE DUPLICIDADE/CORRELAÇÃO:
+${correlacionadosTexto}
 
 CHECKLIST ESPECÍFICO DO ESPORTE:
 ${checklistEsporte}
