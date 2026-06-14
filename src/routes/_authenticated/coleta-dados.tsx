@@ -136,9 +136,12 @@ function ColetaDadosPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Coleta de Dados</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-2xl font-bold tracking-tight">Coleta de Dados</h1>
+          <Badge variant="outline">Manual</Badge>
+        </div>
         <p className="text-sm text-muted-foreground">
-          Upload manual de JSON dos scrapers Python, normalização e persistência de odds.
+          Upload manual de JSON dos scrapers Python para normalização, exportação e persistência de odds.
         </p>
       </div>
 

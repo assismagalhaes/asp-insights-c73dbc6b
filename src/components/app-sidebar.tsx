@@ -32,7 +32,7 @@ const items = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Prognósticos", url: "/prognosticos", icon: ListChecks },
   { title: "Importar", url: "/importar", icon: Upload },
-  { title: "Coleta de Dados", url: "/coleta-dados", icon: Database },
+  { title: "Coleta de Odds", url: "/coleta-dados", icon: Database },
   { title: "Validação Crítica", url: "/validacao", icon: ShieldCheck },
   { title: "Publicação", url: "/publicacao", icon: Megaphone },
   { title: "Histórico", url: "/historico", icon: History },
