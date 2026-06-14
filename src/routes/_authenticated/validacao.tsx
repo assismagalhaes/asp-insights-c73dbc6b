@@ -680,6 +680,34 @@ function Validacao() {
           );
         })}
       </div>
+
+      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir prognóstico?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDelete?.jogo} — {confirmDelete?.pick}. Esta ação não pode ser desfeita e removerá o prognóstico também da aba de Prognósticos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (!confirmDelete) return;
+                try {
+                  await deleteProg.mutateAsync(confirmDelete.id);
+                  toast.success("Prognóstico excluído");
+                } catch (e) {
+                  toast.error((e as Error).message);
+                }
+                setConfirmDelete(null);
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
