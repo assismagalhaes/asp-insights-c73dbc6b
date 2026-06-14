@@ -68,6 +68,66 @@ export interface Validacao {
   created_at: string;
 }
 
+export interface AnaliseIa {
+  id: string;
+  prognostico_id: string | null;
+  validacao_id: string | null;
+  modo_ia: "local" | "online" | string;
+  esporte: string | null;
+  liga: string | null;
+  mercado: string | null;
+  pick: string | null;
+  linha: string | null;
+  jogo: string | null;
+  data_evento: string | null;
+  hora_evento: string | null;
+  odd_usada: number | null;
+  probabilidade_final: number | null;
+  edge_usado: number | null;
+  contexto_analisado: string | null;
+  parecer_ia: string | null;
+  decisao_sugerida: string | null;
+  stake_sugerida: number | null;
+  riscos_identificados: string | null;
+  tags_risco: string[] | null;
+  fontes_consultadas: { titulo: string; url: string }[] | null;
+  buscas_realizadas: string[] | null;
+  prompt_versao: string | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface FeedbackIaResultado {
+  id: string;
+  prognostico_id: string | null;
+  analise_ia_id: string | null;
+  modo_ia: "local" | "online" | string | null;
+  esporte: string | null;
+  liga: string | null;
+  mercado: string | null;
+  pick: string | null;
+  linha: string | null;
+  jogo: string | null;
+  decisao_ia_sugerida: string | null;
+  stake_ia_sugerida: number | null;
+  decisao_humana_final: string | null;
+  stake_humana_final: number | null;
+  resultado_real: "GREEN" | "RED" | string | null;
+  lucro_prejuizo: number | null;
+  lucro_unidades: number | null;
+  odd_usada: number | null;
+  probabilidade_final: number | null;
+  edge_usado: number | null;
+  tags_risco: string[] | null;
+  fontes_consultadas: { titulo: string; url: string }[] | null;
+  buscas_realizadas: string[] | null;
+  acertou_ia: boolean | null;
+  acertou_humano: boolean | null;
+  divergencia_ia_humano: boolean | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
 /** Odd efetiva: ajustada se houver, senão a original. */
 export function getOddEfetiva(p: Pick<Prognostico, "odd_ofertada" | "odd_ajustada">): number {
   return p.odd_ajustada != null && p.odd_ajustada > 0 ? p.odd_ajustada : p.odd_ofertada;
@@ -87,6 +147,143 @@ export function calcEdge(probabilidadePct: number, odd: number): number {
 /** Dados técnicos efetivos: dados_tecnicos se houver, senão observacoes (legado). */
 export function getDadosTecnicos(p: Pick<Prognostico, "dados_tecnicos" | "observacoes">): string | null {
   return (p.dados_tecnicos && p.dados_tecnicos.trim()) || (p.observacoes && p.observacoes.trim()) || null;
+}
+
+const aiDb = supabase as unknown as {
+  from: (table: string) => {
+    select: (columns?: string) => any;
+    insert: (values: Record<string, unknown> | Record<string, unknown>[]) => any;
+    upsert: (values: Record<string, unknown> | Record<string, unknown>[], opts?: Record<string, unknown>) => any;
+    update: (values: Record<string, unknown>) => any;
+  };
+};
+
+export function normalizeAiDecision(decision: string | null | undefined): "CONFIRMAR" | "PULAR" | null {
+  if (!decision) return null;
+  const d = decision.toUpperCase().trim();
+  if (d.includes("PULAR") || d.includes("PASS") || d.includes("AGUARDAR")) return "PULAR";
+  if (d.includes("CONFIRMA")) return "CONFIRMAR";
+  return null;
+}
+
+export function extractRiskTags(text: string | null | undefined): string[] {
+  const s = (text ?? "").toLowerCase();
+  const tags: string[] = [];
+  const checks: Array<[string, RegExp]> = [
+    ["info_ausente", /não encontrado|nao encontrado|ausente|incert|não confirmad|nao confirmad/],
+    ["risco_estrutural", /risco estrutural|lineup|escalação|escalacao|rotação|rotacao|desfalque|lesão|lesao|questionável|questionavel/],
+    ["fonte_fraca", /fonte insuficiente|fonte fraca|sem fonte|desatualizad|notícia antiga|noticia antiga/],
+    ["duplicidade", /duplicidade|correlaç|correlac|redundan/],
+    ["volatilidade", /volátil|volatil|variância|variancia|mercado volátil|mercado volatil/],
+    ["clima", /clima|vento|chuva|temperatura|weather/],
+  ];
+  for (const [tag, pattern] of checks) {
+    if (pattern.test(s)) tags.push(tag);
+  }
+  return tags;
+}
+
+export type AnaliseIaInput = Omit<Partial<AnaliseIa>, "id" | "created_at" | "updated_at"> & {
+  prognostico_id: string;
+  modo_ia: string;
+};
+
+export async function saveAnaliseIaSnapshot(input: AnaliseIaInput): Promise<AnaliseIa | null> {
+  const payload = {
+    ...input,
+    decisao_sugerida: normalizeAiDecision(input.decisao_sugerida) ?? input.decisao_sugerida ?? null,
+    tags_risco: input.tags_risco ?? extractRiskTags(input.parecer_ia),
+  };
+  const { data, error } = await aiDb
+    .from("analises_ia")
+    .insert(payload as Record<string, unknown>)
+    .select("*")
+    .single();
+  if (error) {
+    console.warn("[Aprendizado IA] Snapshot não salvo:", error.message);
+    return null;
+  }
+  return data as AnaliseIa;
+}
+
+async function createAiFeedbackForResultado(input: Omit<ResultadoRow, "id" | "created_at">): Promise<void> {
+  if (input.resultado !== "GREEN" && input.resultado !== "RED") return;
+
+  const { data: prognostico, error: progError } = await supabase
+    .from("prognosticos")
+    .select("*")
+    .eq("id", input.prognostico_id)
+    .maybeSingle();
+  if (progError || !prognostico) {
+    if (progError) console.warn("[Aprendizado IA] Prognóstico não carregado:", progError.message);
+    return;
+  }
+
+  const p = mapPrognostico(prognostico as Record<string, unknown>);
+  if (p.status_validacao !== "CONFIRMA") return;
+
+  const { data: validacao } = await supabase
+    .from("validacoes")
+    .select("*")
+    .eq("prognostico_id", input.prognostico_id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { data: analises, error: analisesError } = await aiDb
+    .from("analises_ia")
+    .select("*")
+    .eq("prognostico_id", input.prognostico_id);
+  if (analisesError) {
+    console.warn("[Aprendizado IA] Análises não carregadas:", analisesError.message);
+    return;
+  }
+
+  const rows = ((analises ?? []) as AnaliseIa[]).filter((a) => a.decisao_sugerida);
+  if (!rows.length) return;
+
+  const decisaoHumana = normalizeAiDecision((validacao as Validacao | null)?.decisao ?? p.status_validacao);
+  const stakeHumana = Number((validacao as Validacao | null)?.stake_confirmada ?? p.stake ?? 0);
+  const oddUsada = getOddEfetiva(p);
+  const edgeUsado = getEdgeEfetivo(p);
+  const feedbackRows = rows.map((a) => {
+    const decisaoIa = normalizeAiDecision(a.decisao_sugerida);
+    const acertouIa = decisaoIa === "CONFIRMAR" ? input.resultado === "GREEN" : null;
+    const acertouHumano = decisaoHumana === "CONFIRMAR" ? input.resultado === "GREEN" : null;
+    return {
+      prognostico_id: input.prognostico_id,
+      analise_ia_id: a.id,
+      modo_ia: a.modo_ia,
+      esporte: p.esporte,
+      liga: p.liga,
+      mercado: p.mercado,
+      pick: p.pick,
+      linha: p.linha,
+      jogo: p.jogo,
+      decisao_ia_sugerida: decisaoIa,
+      stake_ia_sugerida: a.stake_sugerida,
+      decisao_humana_final: decisaoHumana,
+      stake_humana_final: stakeHumana,
+      resultado_real: input.resultado,
+      lucro_prejuizo: input.lucro_prejuizo,
+      lucro_unidades: input.lucro_prejuizo,
+      odd_usada: oddUsada,
+      probabilidade_final: p.probabilidade_final,
+      edge_usado: edgeUsado,
+      tags_risco: a.tags_risco ?? extractRiskTags(a.parecer_ia),
+      fontes_consultadas: a.fontes_consultadas,
+      buscas_realizadas: a.buscas_realizadas,
+      acertou_ia: acertouIa,
+      acertou_humano: acertouHumano,
+      divergencia_ia_humano: decisaoIa != null && decisaoHumana != null ? decisaoIa !== decisaoHumana : null,
+      updated_at: new Date().toISOString(),
+    };
+  });
+
+  const { error } = await aiDb
+    .from("feedback_ia_resultados")
+    .upsert(feedbackRows as Record<string, unknown>[], { onConflict: "prognostico_id,analise_ia_id" });
+  if (error) console.warn("[Aprendizado IA] Feedback não salvo:", error.message);
 }
 
 export interface ResultadoRow {
@@ -269,12 +466,14 @@ export function useCreateResultado() {
     mutationFn: async (input: Omit<ResultadoRow, "id" | "created_at">) => {
       const { data, error } = await supabase.from("resultados").insert(input).select().single();
       if (error) throw error;
+      await createAiFeedbackForResultado(input);
       return data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["prognosticos"] });
       qc.invalidateQueries({ queryKey: ["bankroll"] });
       qc.invalidateQueries({ queryKey: ["resultados"] });
+      qc.invalidateQueries({ queryKey: ["ai-learning"] });
     },
   });
 }

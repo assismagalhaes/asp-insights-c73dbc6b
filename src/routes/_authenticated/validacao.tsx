@@ -23,6 +23,7 @@ import {
   useUpdatePrognostico,
   useConfiguracao,
   calcEdge,
+  saveAnaliseIaSnapshot,
   ESPORTES_DEFAULT,
   MERCADOS_DEFAULT,
   type Prognostico,
@@ -222,6 +223,29 @@ function Validacao() {
       };
       const raw = modo === "online" ? await callIAOnline(payload) : await callIA(payload);
       const r: IAResult = { ...(raw as Omit<IAResult, "modo">), modo };
+      await saveAnaliseIaSnapshot({
+        prognostico_id: p.id,
+        modo_ia: modo,
+        esporte: p.esporte,
+        liga: p.liga,
+        mercado: p.mercado,
+        pick: p.pick,
+        linha: p.linha,
+        jogo: p.jogo,
+        data_evento: p.data,
+        hora_evento: p.hora,
+        odd_usada: oddAj ?? p.odd_ofertada,
+        probabilidade_final: p.probabilidade_final,
+        edge_usado: edgeAj ?? p.edge,
+        contexto_analisado: contextoAnalise,
+        parecer_ia: r.parecer,
+        decisao_sugerida: r.decisao_sugerida,
+        stake_sugerida: r.stake_sugerida,
+        riscos_identificados: r.parecer,
+        fontes_consultadas: r.fontes_consultadas ?? null,
+        buscas_realizadas: r.buscas_realizadas ?? null,
+        prompt_versao: r.prompt_versao,
+      });
       setIaResults((s) => ({ ...s, [p.id]: r }));
       toast.success(modo === "online" ? "Análise online concluída" : "Análise local gerada");
     } catch (e) {

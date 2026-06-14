@@ -19,6 +19,7 @@ import { Route as AuthenticatedImportarRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedHistoricoRouteImport } from './routes/_authenticated/historico'
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
 import { Route as AuthenticatedBankrollRouteImport } from './routes/_authenticated/bankroll'
+import { Route as AuthenticatedAprendizadoIaRouteImport } from './routes/_authenticated/aprendizado-ia'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -71,9 +72,16 @@ const AuthenticatedBankrollRoute = AuthenticatedBankrollRouteImport.update({
   path: '/bankroll',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedAprendizadoIaRoute =
+  AuthenticatedAprendizadoIaRouteImport.update({
+    id: '/aprendizado-ia',
+    path: '/aprendizado-ia',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
+  '/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
   '/auth': typeof AuthRoute
   '/bankroll': typeof AuthenticatedBankrollRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
@@ -84,6 +92,7 @@ export interface FileRoutesByFullPath {
   '/validacao': typeof AuthenticatedValidacaoRoute
 }
 export interface FileRoutesByTo {
+  '/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
   '/auth': typeof AuthRoute
   '/bankroll': typeof AuthenticatedBankrollRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
@@ -97,6 +106,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/_authenticated/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
   '/auth': typeof AuthRoute
   '/_authenticated/bankroll': typeof AuthenticatedBankrollRoute
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
@@ -111,6 +121,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/aprendizado-ia'
     | '/auth'
     | '/bankroll'
     | '/configuracoes'
@@ -121,6 +132,7 @@ export interface FileRouteTypes {
     | '/validacao'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/aprendizado-ia'
     | '/auth'
     | '/bankroll'
     | '/configuracoes'
@@ -133,6 +145,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_authenticated'
+    | '/_authenticated/aprendizado-ia'
     | '/auth'
     | '/_authenticated/bankroll'
     | '/_authenticated/configuracoes'
@@ -177,6 +190,13 @@ declare module '@tanstack/react-router' {
       path: '/validacao'
       fullPath: '/validacao'
       preLoaderRoute: typeof AuthenticatedValidacaoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/aprendizado-ia': {
+      id: '/_authenticated/aprendizado-ia'
+      path: '/aprendizado-ia'
+      fullPath: '/aprendizado-ia'
+      preLoaderRoute: typeof AuthenticatedAprendizadoIaRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/publicacao': {
@@ -225,6 +245,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAprendizadoIaRoute: typeof AuthenticatedAprendizadoIaRoute
   AuthenticatedBankrollRoute: typeof AuthenticatedBankrollRoute
   AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRoute
   AuthenticatedHistoricoRoute: typeof AuthenticatedHistoricoRoute
@@ -236,6 +257,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAprendizadoIaRoute: AuthenticatedAprendizadoIaRoute,
   AuthenticatedBankrollRoute: AuthenticatedBankrollRoute,
   AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRoute,
   AuthenticatedHistoricoRoute: AuthenticatedHistoricoRoute,
