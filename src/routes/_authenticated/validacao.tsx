@@ -31,6 +31,7 @@ import {
 } from "@/lib/db";
 import { analisarValidacao } from "@/lib/validacao-ia.functions";
 import { analisarValidacaoOnline } from "@/lib/validacao-ia-online.functions";
+import { getAiCalibrationSummary } from "@/lib/ai-learning";
 import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -184,6 +185,7 @@ function Validacao() {
       const contextoAnalise = getContextoAnalise(p);
       const oddAj = getOddAjustadaNum(p);
       const edgeAj = getEdgeAjustado(p);
+      const calibracao = await getAiCalibrationSummary(p);
       const prognosticosCorrelacionados = pendentes
         .filter((other) => other.id !== p.id && isMesmoJogo(p, other))
         .slice(0, 8)
@@ -219,6 +221,7 @@ function Validacao() {
           prognosticos_correlacionados: prognosticosCorrelacionados,
           dados_tecnicos: contextoAnalise,
           contexto_adicional: contextoAnalise,
+          calibracao_interna: calibracao.texto,
         },
       };
       const raw = modo === "online" ? await callIAOnline(payload) : await callIA(payload);
