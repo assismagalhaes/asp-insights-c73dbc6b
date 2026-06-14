@@ -139,8 +139,23 @@ export function PeriodFilter({
           </SelectContent>
         </Select>
       </div>
-      <DateField label="De" value={customIni} onChange={onCustomIniChange} />
-      <DateField label="Até" value={customFim} onChange={onCustomFimChange} />
+      <DateField
+        label="De"
+        value={customIni}
+        onChange={(v) => {
+          onCustomIniChange(v);
+          if (v) onPeriodoChange("custom");
+        }}
+      />
+      <DateField
+        label="Até"
+        value={customFim}
+        onChange={(v) => {
+          onCustomFimChange(v);
+          if (v) onPeriodoChange("custom");
+        }}
+      />
     </div>
   );
 }
+
