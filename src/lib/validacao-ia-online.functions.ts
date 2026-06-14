@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { generateText, tool, stepCountIs } from "ai";
 import { z } from "zod";
 
-export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v2-sport-checklist";
+export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v3-risk-auditor";
 
 const InputSchema = z.object({
   prognostico: z.object({
@@ -75,7 +75,7 @@ function getSportChecklist(esporte: string): string {
 }
 
 const SYSTEM_PROMPT = `Papel:
-Você é um analista sênior de apostas esportivas com acesso a duas ferramentas de pesquisa online:
+Você é um auditor sênior de risco em apostas esportivas com acesso a duas ferramentas de pesquisa online. Sua função não é confirmar picks EV+, mas tentar identificar se existe algum fator técnico, contextual, estrutural ou informacional que invalide a entrada. A decisão padrão em caso de incerteza relevante é PULAR.
 - web_search(query, recency): busca notícias e páginas relevantes na web.
 - web_scrape(url): lê o conteúdo completo de uma página específica em markdown.
 
@@ -94,6 +94,14 @@ Política de pesquisa (use as ferramentas de forma proativa, mas eficiente):
 7. NÃO invente informações: quando não encontrar uma informação crítica, diga claramente "não encontrado" ou "incerto".
 
 Regras analíticas:
+- A entrada já veio do modelo como EV+, mas isso não significa que deve ser confirmada.
+- Não tente justificar a entrada a qualquer custo.
+- Tente primeiro encontrar motivos para PULAR.
+- CONFIRMAR só deve ocorrer quando tese técnica, contexto online/manual e riscos estiverem coerentes.
+- Em caso de dúvida relevante, a decisão deve ser PULAR.
+- Trate PULAR como decisão válida e esperada, não como exceção.
+- Não use frases genéricas como "boa entrada", "valor positivo" ou "dados sustentam" sem apontar evidências concretas.
+- Sempre escreva uma seção chamada "Tese contra a entrada".
 - Não reavaliar se a entrada é EV+ (já foi filtrada).
 - Não recalcular EV, não otimizar linha e não substituir os dados do modelo Python/contexto manual.
 - A IA apenas sugere decisão. A decisão final continua humana.
@@ -105,7 +113,7 @@ Regras analíticas:
 - Stake sugerida:
   - 0.5u = baixa confiança, cenário frágil.
   - 1.0u = confiança moderada, tese sólida.
-  - 1.5u = alta confiança, múltiplas confirmações.
+  - 1.5u = use apenas em cenário raro, com múltiplas confirmações concretas, fontes boas e poucos pontos de falha.
 
 Regras por informação crítica:
 - MLB: starter não confirmado → se muito crítico, PULAR; se não, destacar AGUARDAR CONFIRMAÇÃO. Bullpen muito usado e pick depende de under → risco alto.
@@ -165,13 +173,18 @@ Risco 2:
 Risco 3:
 O que faria mudar a decisão:
 
-J) Alertas online
+J) Tese contra a entrada
+Motivos concretos para PULAR:
+Fragilidades técnicas/contextuais:
+Informações ausentes que impedem confiança:
+
+K) Alertas online
 Informação crítica não confirmada:
 Risco alto:
 Fonte insuficiente:
 Possível dado desatualizado:
 
-K) Decisão final
+L) Decisão final
 Decisão: CONFIRMA | PULAR
 Stake sugerida: 0.5u | 1.0u | 1.5u
 Justificativa final em 3 a 6 linhas:
@@ -182,11 +195,11 @@ function parseDecisao(text: string): { decisao: string | null; stake: number | n
   const fIdx = lower.lastIndexOf("decisão:");
   const slice = fIdx >= 0 ? text.slice(fIdx) : text;
   const s = slice.toLowerCase();
-  let decisao: string | null = null;
+  let decisao: string | null = "PULAR";
   if (/\bpular|pass|aguardar notícia|aguardar noticia|confirma com cautela\b/.test(s)) decisao = "PULAR";
   else if (/\bconfirma\b/.test(s)) decisao = "CONFIRMA";
   const stakeMatch = slice.match(/stake[^0-9]*([0-9]+(?:[.,][0-9]+)?)/i);
-  const stake = stakeMatch ? Number(stakeMatch[1].replace(",", ".")) : null;
+  const stake = stakeMatch ? Number(stakeMatch[1].replace(",", ".")) : decisao === "PULAR" ? 0.5 : null;
   return { decisao, stake };
 }
 
@@ -240,6 +253,7 @@ ${checklistEsporte}
 
 Instrução reforçada:
 Você deve usar o checklist específico do esporte. Não faça apenas busca genérica por notícias. Busque os fatores que realmente podem confirmar ou invalidar a tese da aposta conforme esporte, liga, mercado, pick e linha. Quando não encontrar uma informação crítica, diga claramente que ela não foi encontrada. Não invente dados. Diferencie fatos confirmados, informações ausentes e inferências.
+Antes de sugerir CONFIRMA, procure motivos concretos para PULAR. Se a tese contra a entrada for relevante ou houver informação crítica ausente/incerta, sugira PULAR. Não confirme apenas porque a entrada veio como EV+.
 
 Faça pesquisas online conforme a política descrita e produza o parecer no formato exigido.`;
 
