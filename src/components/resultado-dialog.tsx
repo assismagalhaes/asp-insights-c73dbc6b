@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { useCreateResultado, calcLucro, todayBR, getOddEfetiva, type Prognostico, type Resultado } from "@/lib/db";
 import { lucroUnidades } from "@/lib/metrics";
 import { parsePlacar, calcularResultadoAuto, extrairLinha } from "@/lib/resultado-calc";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase-public";
 import { toast } from "sonner";
 
 interface Props {
