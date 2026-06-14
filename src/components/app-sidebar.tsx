@@ -10,6 +10,7 @@ import {
   Settings,
   Upload,
   Megaphone,
+  Database,
 } from "lucide-react";
 import logo from "@/assets/logo-asp.png.asset.json";
 
@@ -31,6 +32,7 @@ const items = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Prognósticos", url: "/prognosticos", icon: ListChecks },
   { title: "Importar", url: "/importar", icon: Upload },
+  { title: "Coleta de Odds", url: "/coleta-dados", icon: Database },
   { title: "Validação Crítica", url: "/validacao", icon: ShieldCheck },
   { title: "Publicação", url: "/publicacao", icon: Megaphone },
   { title: "Histórico", url: "/historico", icon: History },
