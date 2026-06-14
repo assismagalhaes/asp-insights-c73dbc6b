@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Database, Download, FileJson, FileSpreadsheet, Save, Upload } from "lucide-react";
+import { CloudDownload, Database, Download, FileJson, FileSpreadsheet, RefreshCw, Save, Upload } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -15,14 +15,23 @@ import { PeriodFilter } from "@/components/period-filter";
 import { dateInRange, rangeFromPeriodo, type PeriodoFiltro } from "@/lib/metrics";
 import {
   downloadText,
+  completeRemoteCollection,
+  createRemoteCollection,
   fetchCollections,
   fetchOddsRows,
   normalizeOddsJson,
   saveCollection,
   toCsv,
+  updateCollectionStatus,
   type NormalizedCollection,
   type NormalizedOdd,
+  type ColetaOdds,
 } from "@/lib/coleta-dados";
+import {
+  createScrapingJob,
+  getScrapingJobRaw,
+  getScrapingJobStatus,
+} from "@/lib/scraper-api.functions";
 
 export const Route = createFileRoute("/_authenticated/coleta-dados")({
   component: ColetaDadosPage,
@@ -36,6 +45,16 @@ function ColetaDadosPage() {
   const [normalized, setNormalized] = useState<NormalizedCollection | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [remoteBusy, setRemoteBusy] = useState<string | null>(null);
+  const [remoteParams, setRemoteParams] = useState({
+    esporte: "Baseball",
+    liga: "",
+    data_inicio: "",
+    data_fim: "",
+    mercados: "",
+    bookmaker: "",
+    fonte: "",
+  });
   const [periodo, setPeriodo] = useState<PeriodoFiltro>("tudo");
   const [customIni, setCustomIni] = useState("");
   const [customFim, setCustomFim] = useState("");
@@ -92,6 +111,15 @@ function ColetaDadosPage() {
     };
   }, [normalized, oddsRows, coletas]);
 
+  const remoteMercados = useMemo(
+    () =>
+      remoteParams.mercados
+        .split(",")
+        .map((m) => m.trim())
+        .filter(Boolean),
+    [remoteParams.mercados],
+  );
+
   const handleFile = async (file: File | null) => {
     if (!file) return;
     setFileName(file.name);
@@ -131,6 +159,73 @@ function ColetaDadosPage() {
     }
   };
 
+  const executarColeta = async () => {
+    setRemoteBusy("create");
+    try {
+      const params = {
+        esporte: remoteParams.esporte,
+        liga: remoteParams.liga || null,
+        data_inicio: remoteParams.data_inicio || null,
+        data_fim: remoteParams.data_fim || null,
+        mercados: remoteMercados,
+        bookmaker: remoteParams.bookmaker || null,
+        fonte: remoteParams.fonte || null,
+      };
+      const result = await createScrapingJob({ data: params });
+      await createRemoteCollection({ ...params, job_id: result.job_id });
+      await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
+      toast.success(`Coleta enviada para VM: ${result.job_id}`);
+    } catch (e) {
+      toast.error(formatVmError(e));
+    } finally {
+      setRemoteBusy(null);
+    }
+  };
+
+  const atualizarStatus = async (coleta: ColetaOdds) => {
+    if (!coleta.job_id) return;
+    setRemoteBusy(`status:${coleta.id}`);
+    try {
+      const result = await getScrapingJobStatus({ data: { job_id: coleta.job_id } });
+      const { status, erro } = extractVmStatus(result.payload);
+      await updateCollectionStatus(coleta.id, status, erro);
+      await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
+      toast.success(`Status atualizado: ${status}`);
+    } catch (e) {
+      await updateCollectionStatus(coleta.id, "ERRO", formatVmError(e)).catch(() => null);
+      await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
+      toast.error(formatVmError(e));
+    } finally {
+      setRemoteBusy(null);
+    }
+  };
+
+  const importarResultadoVm = async (coleta: ColetaOdds) => {
+    if (!coleta.job_id) return;
+    setRemoteBusy(`raw:${coleta.id}`);
+    try {
+      const result = await getScrapingJobRaw({ data: { job_id: coleta.job_id } });
+      const raw = result.raw_json;
+      const normalizedData = normalizeOddsJson(raw, { esporte: coleta.esporte });
+      if (!normalizedData.total_odds) {
+        throw new Error("JSON retornado pela VM não gerou odds normalizadas.");
+      }
+      await completeRemoteCollection(coleta.id, raw, normalizedData);
+      await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
+      await qc.invalidateQueries({ queryKey: ["odds-jogos"] });
+      setRawJson(raw);
+      setRawText(JSON.stringify(raw, null, 2));
+      setNormalized(normalizedData);
+      toast.success(`${normalizedData.total_odds} odds importadas da VM`);
+    } catch (e) {
+      await updateCollectionStatus(coleta.id, "ERRO", formatVmError(e)).catch(() => null);
+      await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
+      toast.error(formatVmError(e));
+    } finally {
+      setRemoteBusy(null);
+    }
+  };
+
   const exportRows: NormalizedOdd[] = normalized?.rows.length ? normalized.rows : filteredOdds;
 
   return (
@@ -139,11 +234,52 @@ function ColetaDadosPage() {
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-bold tracking-tight">Coleta de Dados</h1>
           <Badge variant="outline">Manual</Badge>
+          <Badge variant="outline">VM</Badge>
         </div>
         <p className="text-sm text-muted-foreground">
           Upload manual de JSON dos scrapers Python para normalização, exportação e persistência de odds.
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <CloudDownload className="h-4 w-4" /> Executar Coleta na VM
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div>
+              <Label>Esporte</Label>
+              <Select value={remoteParams.esporte} onValueChange={(v) => setRemoteParams((p) => ({ ...p, esporte: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Futebol">Futebol</SelectItem>
+                  <SelectItem value="Basketball">Basketball</SelectItem>
+                  <SelectItem value="Baseball">Baseball</SelectItem>
+                  <SelectItem value="American Football">American Football</SelectItem>
+                  <SelectItem value="Hockey">Hockey</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Field label="Liga" value={remoteParams.liga} onChange={(liga) => setRemoteParams((p) => ({ ...p, liga }))} placeholder="Ex.: MLB, NBA, Premier League" />
+            <Field label="Data início" type="date" value={remoteParams.data_inicio} onChange={(data_inicio) => setRemoteParams((p) => ({ ...p, data_inicio }))} />
+            <Field label="Data fim" type="date" value={remoteParams.data_fim} onChange={(data_fim) => setRemoteParams((p) => ({ ...p, data_fim }))} />
+            <Field label="Mercados" value={remoteParams.mercados} onChange={(mercados) => setRemoteParams((p) => ({ ...p, mercados }))} placeholder="Moneyline, Over/Under, Handicap" />
+            <Field label="Bookmaker" value={remoteParams.bookmaker} onChange={(bookmaker) => setRemoteParams((p) => ({ ...p, bookmaker }))} placeholder="Ex.: betano.br" />
+            <Field label="Fonte" value={remoteParams.fonte} onChange={(fonte) => setRemoteParams((p) => ({ ...p, fonte }))} placeholder="Ex.: flashscore" />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={executarColeta} disabled={remoteBusy === "create" || !remoteParams.esporte}>
+              <CloudDownload className="mr-2 h-4 w-4" />
+              {remoteBusy === "create" ? "Enviando..." : "Executar Coleta"}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              A chave da VM fica protegida no servidor via SCRAPER_API_URL e SCRAPER_API_KEY.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -216,8 +352,10 @@ function ColetaDadosPage() {
                     <th className="px-3 py-2 text-left">Data</th>
                     <th className="px-3 py-2 text-left">Status</th>
                     <th className="px-3 py-2 text-left">Esporte/Liga</th>
+                    <th className="px-3 py-2 text-left">Job</th>
                     <th className="px-3 py-2 text-right">Jogos</th>
                     <th className="px-3 py-2 text-right">Odds</th>
+                    <th className="px-3 py-2 text-right">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -226,11 +364,22 @@ function ColetaDadosPage() {
                       <td className="px-3 py-2 font-mono text-xs">{coleta.created_at.slice(0, 10)}</td>
                       <td className="px-3 py-2"><Badge variant={coleta.erro ? "destructive" : "outline"}>{coleta.status}</Badge></td>
                       <td className="px-3 py-2">{coleta.esporte ?? "-"} / <span className="text-muted-foreground">{coleta.liga ?? "múltiplas"}</span></td>
+                      <td className="px-3 py-2 font-mono text-xs">{coleta.job_id ?? "-"}</td>
                       <td className="px-3 py-2 text-right font-mono">{coleta.total_jogos}</td>
                       <td className="px-3 py-2 text-right font-mono">{coleta.total_odds}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="outline" disabled={!coleta.job_id || remoteBusy === `status:${coleta.id}`} onClick={() => atualizarStatus(coleta)}>
+                            <RefreshCw className="mr-1 h-3 w-3" /> Status
+                          </Button>
+                          <Button size="sm" variant="outline" disabled={!coleta.job_id || coleta.status !== "CONCLUIDA" || remoteBusy === `raw:${coleta.id}`} onClick={() => importarResultadoVm(coleta)}>
+                            <CloudDownload className="mr-1 h-3 w-3" /> Importar
+                          </Button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
-                  {!filteredCollections.length && <EmptyRow cols={5} />}
+                  {!filteredCollections.length && <EmptyRow cols={8} />}
                 </tbody>
               </table>
             </div>
@@ -288,6 +437,27 @@ function Info({ label, value }: { label: string; value: string | number }) {
   );
 }
 
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  type?: string;
+}) {
+  return (
+    <div>
+      <Label>{label}</Label>
+      <Input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+    </div>
+  );
+}
+
 function Preview({ title, icon: Icon, value }: { title: string; icon: LucideIcon; value: string }) {
   return (
     <div className="space-y-2">
@@ -295,6 +465,36 @@ function Preview({ title, icon: Icon, value }: { title: string; icon: LucideIcon
       <Textarea value={value} readOnly className="h-72 resize-none font-mono text-xs" />
     </div>
   );
+}
+
+function extractVmStatus(payload: unknown) {
+  const root = isObj(payload) ? payload : {};
+  const data = isObj(root.data) ? root.data : isObj(root.result) ? root.result : root;
+  const raw = String(data.status ?? data.state ?? data.situacao ?? "").toUpperCase();
+  const erro = data.erro ?? data.error ?? data.message;
+  const status =
+    raw.includes("RUN") || raw.includes("ROD") || raw.includes("PROCESS")
+      ? "RODANDO"
+      : raw.includes("DONE") || raw.includes("CONCL") || raw.includes("SUCCESS") || raw.includes("FINISH")
+        ? "CONCLUIDA"
+        : raw.includes("ERR") || raw.includes("FAIL")
+          ? "ERRO"
+          : raw.includes("PEND") || raw.includes("QUEUE")
+            ? "PENDENTE"
+            : raw || "PENDENTE";
+  return { status, erro: erro ? String(erro) : null };
+}
+
+function isObj(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === "object" && !Array.isArray(value);
+}
+
+function formatVmError(e: unknown) {
+  const message = e instanceof Error ? e.message : String(e);
+  if (/failed to fetch|network/i.test(message)) return "VM offline ou indisponível.";
+  if (/401|403|api key|unauthorized|forbidden/i.test(message)) return "API key da VM inválida ou sem permissão.";
+  if (/timeout/i.test(message)) return "Timeout ao chamar API da VM.";
+  return message || "Erro ao chamar API da VM.";
 }
 
 function Filter({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
