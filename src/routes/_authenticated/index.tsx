@@ -49,7 +49,7 @@ import {
 } from "@/lib/db";
 import { LeagueFilter } from "@/components/league-filter";
 import { PeriodFilter } from "@/components/period-filter";
-import { formatBR, formatHora } from "@/lib/date-br";
+import { formatBR } from "@/lib/date-br";
 import {
   computeMetrics,
   bankrollTimeline,
