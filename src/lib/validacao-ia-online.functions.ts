@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { generateText, tool, stepCountIs } from "ai";
 import { z } from "zod";
 
-export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v1";
+export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v2-sport-checklist";
 
 const InputSchema = z.object({
   prognostico: z.object({
@@ -27,30 +27,97 @@ const InputSchema = z.object({
   contexto_adicional: z.string().nullable().optional(),
 });
 
+const MAX_BUSCAS_ONLINE = 5;
+const MAX_SCRAPES_ONLINE = 3;
+
+function getSportChecklist(esporte: string): string {
+  const normalized = esporte.toLowerCase();
+  if (/baseball|mlb/.test(normalized)) {
+    return `Baseball / MLB:
+- Arremessador: starter confirmado, handedness, splits por mão, pitch mix vs lineup, limite de arremessos, opener ou bullpen game.
+- Bullpen: uso nos últimos dias, closers indisponíveis, leverage arms cansados, sequência de jogos.
+- Lineup: lineup confirmado ou provável, descanso de titulares, DH, matchups L/R, lesões relevantes.
+- Condições: vento, temperatura, park factor, estádio favorável a HR, umpire quando houver fonte confiável.
+- Riscos: bullpen game, opener, pitch count limitado, defesa/erros, lineup B, bullpen cansado, vento forte alterando total.
+- Buscas sugeridas: probable pitchers, confirmed starter, starting lineup, MLB lineups, bullpen usage, injury report, weather, park factor, umpire, game preview.`;
+  }
+  if (/basket|nba|wnba|fiba/.test(normalized)) {
+    return `Basketball / NBA / WNBA / FIBA:
+- Eficiência: ORtg, DRtg, eFG%, TOV%, rebotes ofensivos/defensivos, FTr.
+- Ritmo: pace, perfil de arremesso, 3PTA rate, dependência de estrelas.
+- Calendário: back-to-back, 3 jogos em 4 noites, 4 jogos em 6 noites, viagem, altitude, minutos recentes dos principais jogadores.
+- Riscos: foul trouble, blowout/garbage time, rotação anunciada, estrela questionável, descanso de titular, matchup defensivo desfavorável.
+- Buscas sugeridas: injury report, probable starters, starting lineup, minutes restriction, rest, back to back, questionable, out, game preview.`;
+  }
+  if (/american football|football|nfl|ncaa/.test(normalized)) {
+    return `American Football / NFL / NCAA:
+- Trenches: pass rush vs offensive line, proteção do QB, pressão permitida, sacks, lesões na OL/DL.
+- Eficiência: EPA/play ou proxies, third down, red zone, explosive plays, turnovers.
+- Saúde: status do QB, offensive line, defensive backs, skill players limitados.
+- Clima: vento, chuva, frio, condições que afetem passe/kicking.
+- Riscos: turnovers de alta variância, special teams, game script invertido, QB limitado, clima extremo.
+- Buscas sugeridas: injury report, quarterback status, offensive line injuries, weather, game preview, depth chart, inactive list.`;
+  }
+  if (/hockey|nhl/.test(normalized)) {
+    return `Hockey / NHL:
+- Qualidade: xG share, chances perigosas, shot share, PDO, variância recente.
+- Goleiro: starter confirmado, forma recente, descanso do goalie, back-to-back de goleiro.
+- Situação: travel, back-to-back, home stand, matchup de linhas, power play / penalty kill.
+- Riscos: alta variância, empty net, power play swing, goalie não confirmado, rotação de linhas.
+- Buscas sugeridas: starting goalie, confirmed goalie, projected lineup, injury report, game preview, line combinations, back to back.`;
+  }
+  return `Futebol / Soccer:
+- Produção e concessão: xG/xGA se disponível, finalizações, grandes chances, eficiência ofensiva/defensiva, tendência recente.
+- Estilo de jogo: bloco alto/baixo, transições, bolas paradas, vulnerabilidade a contra-ataques, postura casa/fora.
+- Situação do jogo: mando, gramado, viagem, necessidade de resultado, mata-mata, ida/volta, rotação por calendário.
+- Riscos: gol cedo, cartão vermelho, rotação, postura após sair na frente, desfalques relevantes, escalação alternativa.
+- Buscas sugeridas: provável escalação, desfalques, lesionados, suspensão, preview, team news, predicted lineup, injury news.`;
+}
+
 const SYSTEM_PROMPT = `Papel:
 Você é um analista sênior de apostas esportivas com acesso a duas ferramentas de pesquisa online:
 - web_search(query, recency): busca notícias e páginas relevantes na web.
 - web_scrape(url): lê o conteúdo completo de uma página específica em markdown.
 
 Política de pesquisa (use as ferramentas de forma proativa, mas eficiente):
-1. SEMPRE faça pelo menos 1 busca por notícias recentes do confronto (ex: "<time A> vs <time B> news", "<time A> injuries", "<jogo> probable lineup").
-2. Conforme o mercado, busque o que for relevante:
-   - Player props, handicap, ML → status do elenco, lineups confirmadas, lesões e suspensões.
-   - Esportes outdoor (MLB, NFL, futebol) → clima/condições do local quando relevante.
-   - Total de pontos/runs/gols → ritmo recente, lineups, clima, parque (MLB).
-3. Use no máximo 4 buscas e 2 scrapes para não desperdiçar créditos.
-4. Priorize fontes confiáveis (ESPN, MLB.com, sites oficiais, Rotowire, BBC, Globo Esporte, etc.).
-5. Use recency "day" para lineups/lesões do dia do jogo, "week" para forma recente.
-6. NÃO invente informações: se a busca não trouxer nada relevante, declare "informação não encontrada".
+1. Você deve usar o checklist específico do esporte informado no payload. Não faça apenas busca genérica por notícias.
+2. Busque fatores que podem confirmar ou invalidar a tese conforme esporte, liga, mercado, pick e linha.
+3. Faça no máximo 5 buscas e no máximo 3 scrapes. Evite scrape se o resultado de busca já trouxer informação suficiente.
+4. Priorize fontes confiáveis: sites oficiais de ligas/times, injury reports oficiais, páginas reconhecidas de lineups, previews de veículos esportivos confiáveis e clima de fonte meteorológica confiável.
+5. Evite usar como fonte principal: fórum aleatório, postagem sem contexto, site de baixa qualidade, conteúdo sem data, notícia antiga sem relação com o jogo.
+6. Janelas de recência:
+   - Notícias: últimas 24 a 72 horas.
+   - Lineups/starters/goalies: priorizar o dia do jogo.
+   - Clima: priorizar o dia do jogo.
+   - Forma recente: últimos 5 a 10 jogos quando disponível.
+   - Dados estruturais, como park factor ou estilo de time: podem usar janela maior, mas informe que são estruturais.
+7. NÃO invente informações: quando não encontrar uma informação crítica, diga claramente "não encontrado" ou "incerto".
 
 Regras analíticas:
 - Não reavaliar se a entrada é EV+ (já foi filtrada).
+- Não recalcular EV, não otimizar linha e não substituir os dados do modelo Python/contexto manual.
+- A IA apenas sugere decisão. A decisão final continua humana.
 - Avaliar coerência técnica, matchup, forma, projeções, linha, odd, risco e notícias encontradas.
-- Se houver risco estrutural relevante (lesão chave, lineup desfavorável, clima ruim para a tese), a decisão padrão deve ser PULAR.
+- Se informação crítica estiver ausente/incerta, sinalize claramente.
+- Se a informação crítica for muito determinante para a aposta, sugira PULAR.
+- Se a informação crítica exigir confirmação mas não invalidar totalmente a tese, destaque de forma visível: "AGUARDAR CONFIRMAÇÃO: ..." e use no máximo 0.5u.
+- Se houver boa tese técnica, mas risco estrutural relevante, a decisão sugerida deve ser conservadora: PULAR ou máximo 0.5u.
 - Stake sugerida:
   - 0.5u = baixa confiança, cenário frágil.
   - 1.0u = confiança moderada, tese sólida.
   - 1.5u = alta confiança, múltiplas confirmações.
+
+Regras por informação crítica:
+- MLB: starter não confirmado → se muito crítico, PULAR; se não, destacar AGUARDAR CONFIRMAÇÃO. Bullpen muito usado e pick depende de under → risco alto.
+- NBA/WNBA: estrela questionável em spread/total → se muito crítico, PULAR; se não, destacar AGUARDAR CONFIRMAÇÃO.
+- NHL: goalie não confirmado → se muito crítico, PULAR; se não, destacar AGUARDAR CONFIRMAÇÃO.
+- NFL/NCAA: QB questionável ou clima extremo → se muito crítico, PULAR; se não, destacar AGUARDAR CONFIRMAÇÃO.
+- Futebol: escalação muito rodada ou mata-mata com postura incerta → reduzir stake para 0.5u ou sugerir PULAR.
+
+Separe sempre:
+- Fatos encontrados: informações confirmadas com fonte.
+- Informações não encontradas: o que foi buscado mas não localizado em fonte confiável.
+- Inferências da IA: conclusões a partir dos dados. Nunca apresente inferência como notícia confirmada.
 
 Formato OBRIGATÓRIO da resposta final (texto puro, sem markdown):
 
@@ -70,24 +137,41 @@ O que foi considerado:
 Informações ausentes ou incertas:
 Impacto prático:
 
-D) Notícias e contexto online encontrados
+D) Checklist online por esporte
+Item analisado | Informação encontrada | Fonte | Impacto na aposta: Baixo/Médio/Alto | Status: Confirmado/Não encontrado/Incerto
+
+E) Fatos encontrados
 Lineups/lesões:
 Notícias recentes relevantes:
 Clima/condições (se aplicável):
 Outras informações:
 
-E) Fatores qualitativos
+F) Informações críticas não encontradas
+O que foi buscado e não localizado:
+Possível impacto:
+
+G) Inferências da IA
+Conclusões inferidas a partir dos fatos:
+Limites dessas inferências:
+
+H) Fatores qualitativos
 Leitura provável do jogo:
 Motivação/contexto competitivo:
 Pontos que favorecem a tese:
 
-F) Riscos potenciais
+I) Riscos principais
 Risco 1:
 Risco 2:
 Risco 3:
 O que faria mudar a decisão:
 
-G) Decisão final
+J) Alertas online
+Informação crítica não confirmada:
+Risco alto:
+Fonte insuficiente:
+Possível dado desatualizado:
+
+K) Decisão final
 Decisão: CONFIRMA | PULAR
 Stake sugerida: 0.5u | 1.0u | 1.5u
 Justificativa final em 3 a 6 linhas:
@@ -124,10 +208,12 @@ export const analisarValidacaoOnline = createServerFn({ method: "POST" })
 
     const buscasRealizadas: string[] = [];
     const fontesConsultadas: { titulo: string; url: string }[] = [];
+    let scrapeCount = 0;
 
     const p = data.prognostico;
     const oddFinal = p.odd_ajustada ?? p.odd_original;
     const edgeFinal = p.edge_ajustado ?? p.edge_original;
+    const checklistEsporte = getSportChecklist(p.esporte);
 
     const userPayload = `DADOS DO PROGNÓSTICO:
 
@@ -149,6 +235,12 @@ Stake sugerida: ${p.stake_sugerida}u
 CONTEXTO DA ANÁLISE:
 ${data.contexto_adicional?.trim() || data.dados_tecnicos?.trim() || "(nenhum)"}
 
+CHECKLIST ESPECÍFICO DO ESPORTE:
+${checklistEsporte}
+
+Instrução reforçada:
+Você deve usar o checklist específico do esporte. Não faça apenas busca genérica por notícias. Busque os fatores que realmente podem confirmar ou invalidar a tese da aposta conforme esporte, liga, mercado, pick e linha. Quando não encontrar uma informação crítica, diga claramente que ela não foi encontrada. Não invente dados. Diferencie fatos confirmados, informações ausentes e inferências.
+
 Faça pesquisas online conforme a política descrita e produza o parecer no formato exigido.`;
 
     try {
@@ -166,6 +258,15 @@ Faça pesquisas online conforme a política descrita e produza o parecer no form
               recency: z.enum(["day", "week", "month"]).optional(),
             }),
             execute: async ({ query, recency }) => {
+              if (buscasRealizadas.length >= MAX_BUSCAS_ONLINE) {
+                return [
+                  {
+                    url: "",
+                    title: "Limite de buscas atingido",
+                    snippet: `Limite de ${MAX_BUSCAS_ONLINE} buscas online por análise atingido. Continue com as fontes já coletadas e sinalize informações ausentes.`,
+                  },
+                ];
+              }
               buscasRealizadas.push(query);
               const results = await firecrawlSearch(query, { limit: 5, recency });
               for (const r of results) {
@@ -186,6 +287,14 @@ Faça pesquisas online conforme a política descrita e produza o parecer no form
               url: z.string().url(),
             }),
             execute: async ({ url }) => {
+              if (scrapeCount >= MAX_SCRAPES_ONLINE) {
+                return {
+                  url,
+                  title: "Limite de páginas aprofundadas atingido",
+                  markdown: `Limite de ${MAX_SCRAPES_ONLINE} páginas aprofundadas por análise atingido. Use os snippets e fontes já coletados; sinalize se faltar informação crítica.`,
+                };
+              }
+              scrapeCount += 1;
               const { markdown, title } = await firecrawlScrape(url);
               if (!fontesConsultadas.some((f) => f.url === url)) {
                 fontesConsultadas.push({ titulo: title || url, url });
