@@ -5,7 +5,7 @@ import {
   ShieldCheck,
   History,
   Wallet,
-  BarChart3,
+  
   Settings,
   Upload,
   Megaphone,
