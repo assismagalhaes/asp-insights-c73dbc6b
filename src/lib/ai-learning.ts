@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase-public";
 import { getEdgeEfetivo, getOddEfetiva, type FeedbackIaResultado, type Prognostico } from "@/lib/db";
 
 const aiDb = supabase as unknown as {
