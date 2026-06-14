@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { generateText, tool, stepCountIs } from "ai";
 import { z } from "zod";
 
-export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v4-risk-gates";
+export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v5-stake-discipline";
 
 const CorrelatedPickSchema = z.object({
   mercado: z.string(),
@@ -123,10 +123,13 @@ Regras analíticas:
 - Se a informação crítica for muito determinante para a aposta, sugira PULAR.
 - Se a informação crítica exigir confirmação mas não invalidar totalmente a tese, destaque de forma visível: "AGUARDAR CONFIRMAÇÃO: ..." e use no máximo 0.5u.
 - Se houver boa tese técnica, mas risco estrutural relevante, a decisão sugerida deve ser conservadora: PULAR ou máximo 0.5u.
-- Stake sugerida:
-  - 0.5u = baixa confiança, cenário frágil.
-  - 1.0u = confiança moderada, tese sólida.
-  - 1.5u = use apenas em cenário raro, com múltiplas confirmações concretas, fontes boas e poucos pontos de falha.
+- Regra de stake: 1.0u NÃO é padrão automático.
+  - PULAR: use quando houver risco relevante, informação crítica ausente, tese fraca, fonte online insuficiente, pick redundante, contexto contraditório ou risco estrutural alto.
+  - CONFIRMA 0.5u: use quando a tese é boa, mas há incerteza moderada, contexto online não é perfeito, há risco normal do esporte, amostra pequena ou mercado volátil.
+  - CONFIRMA 1.0u: use apenas quando a tese técnica é consistente, não há risco estrutural relevante, contexto online/manual não contradiz a entrada, a fonte crítica está confirmada e não há pick melhor concorrente no mesmo mercado.
+  - CONFIRMA 1.5u: use raramente, somente quando a tese técnica é forte, múltiplos sinais confirmam, risco estrutural é baixo, contexto online é favorável ou neutro, não há informação crítica ausente e histórico interno semelhante é positivo com amostra suficiente quando esse histórico estiver disponível.
+  - Quando estiver em dúvida entre 1.0u e 0.5u, use 0.5u.
+  - Quando estiver em dúvida entre 0.5u e PULAR, use PULAR.
 
 Gates obrigatórios:
 - Gate 1 — Coerência técnica: tese precisa estar coerente com mercado, pick, linha, probabilidade, edge ajustado/original, contexto informado, esporte e liga. Conflito técnico relevante = PULAR.
@@ -293,6 +296,7 @@ ${checklistEsporte}
 Instrução reforçada:
 Você deve usar o checklist específico do esporte. Não faça apenas busca genérica por notícias. Busque os fatores que realmente podem confirmar ou invalidar a tese da aposta conforme esporte, liga, mercado, pick e linha. Quando não encontrar uma informação crítica, diga claramente que ela não foi encontrada. Não invente dados. Diferencie fatos confirmados, informações ausentes e inferências.
 Antes de sugerir CONFIRMA, procure motivos concretos para PULAR. Se a tese contra a entrada for relevante ou houver informação crítica ausente/incerta, sugira PULAR. Não confirme apenas porque a entrada veio como EV+.
+Não use 1.0u como stake padrão. Se houver qualquer dúvida entre 1.0u e 0.5u, use 0.5u. Se houver dúvida entre 0.5u e PULAR, use PULAR.
 
 Faça pesquisas online conforme a política descrita e produza o parecer no formato exigido.`;
 
