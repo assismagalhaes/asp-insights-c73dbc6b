@@ -37,6 +37,7 @@ const InputSchema = z.object({
   prognosticos_correlacionados: z.array(CorrelatedPickSchema).optional(),
   dados_tecnicos: z.string().nullable().optional(),
   contexto_adicional: z.string().nullable().optional(),
+  calibracao_interna: z.string().nullable().optional(),
 });
 
 const MAX_BUSCAS_ONLINE = 5;
@@ -130,6 +131,9 @@ Regras analíticas:
   - CONFIRMA 1.5u: use raramente, somente quando a tese técnica é forte, múltiplos sinais confirmam, risco estrutural é baixo, contexto online é favorável ou neutro, não há informação crítica ausente e histórico interno semelhante é positivo com amostra suficiente quando esse histórico estiver disponível.
   - Quando estiver em dúvida entre 1.0u e 0.5u, use 0.5u.
   - Quando estiver em dúvida entre 0.5u e PULAR, use PULAR.
+- Use a calibração interna ASP Insights apenas como apoio. Não trate histórico curto como verdade estatística.
+- Se a calibração informar taxa recente de confirmação acima de 85%, reforce a auditoria de risco e procure motivos reais para PULAR.
+- Não use a calibração para confirmar automaticamente. Ela é um sinal auxiliar, inferior aos dados do prognóstico, contexto, pesquisa online e gates de risco.
 
 Gates obrigatórios:
 - Gate 1 — Coerência técnica: tese precisa estar coerente com mercado, pick, linha, probabilidade, edge ajustado/original, contexto informado, esporte e liga. Conflito técnico relevante = PULAR.
@@ -261,6 +265,9 @@ Stake sugerida: ${p.stake_sugerida}u
 
 CONTEXTO DA ANÁLISE:
 ${data.contexto_adicional?.trim() || data.dados_tecnicos?.trim() || "(nenhum)"}
+
+CALIBRAÇÃO INTERNA ASP INSIGHTS:
+${data.calibracao_interna?.trim() || "(histórico interno insuficiente ou indisponível)"}
 
 OUTRAS PICKS PENDENTES DO MESMO JOGO PARA GATE DE DUPLICIDADE/CORRELAÇÃO:
 ${correlacionadosTexto}
