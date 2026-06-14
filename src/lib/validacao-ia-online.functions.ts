@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { generateText, tool, stepCountIs } from "ai";
 import { z } from "zod";
 
-export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v5-stake-discipline";
+export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v6-pro-contra";
 
 const CorrelatedPickSchema = z.object({
   mercado: z.string(),
@@ -153,74 +153,49 @@ Separe sempre:
 
 Formato OBRIGATÓRIO da resposta final (texto puro, sem markdown):
 
-A) Mercado avaliado
+A) Entrada avaliada
+Jogo:
+Mercado:
 Pick:
-Linha e odd:
-Tese da aposta:
+Linha:
+Odd:
+Probabilidade:
+Edge:
 
-B) Contexto da análise
-Matchup e vantagem estrutural:
-Tendências consistentes vs ruído:
-Aderência ao mercado:
-Sinais de alerta estatísticos:
+B) Tese a favor
+Liste os principais argumentos concretos que sustentam a entrada. Inclua fatos online com fonte quando existirem. Não use frases genéricas sem evidência.
 
-C) Informações manuais consideradas
-O que foi considerado:
-Informações ausentes ou incertas:
-Impacto prático:
+C) Tese contra a entrada
+Liste os principais argumentos contra a entrada. É obrigatório ter pelo menos 2 pontos críticos reais ou escrever claramente:
+"Nenhum ponto crítico forte encontrado, mas estes são os principais riscos residuais."
+Inclua informações críticas não encontradas, fontes fracas, dado desatualizado ou inferências frágeis quando existirem.
 
-D) Checklist online por esporte
-Item analisado | Informação encontrada | Fonte | Impacto na aposta: Baixo/Médio/Alto | Status: Confirmado/Não encontrado/Incerto
+D) Gates de validação
+Coerência técnica: aprovado/reprovado - motivo:
+Informação crítica: aprovado/reprovado - motivo:
+Risco estrutural: aprovado/reprovado - motivo:
+Contexto online/manual: aprovado/reprovado - motivo:
+Duplicidade/correlação: aprovado/reprovado - motivo:
 
-E) Fatos encontrados
-Lineups/lesões:
-Notícias recentes relevantes:
-Clima/condições (se aplicável):
-Outras informações:
+E) Riscos principais
+Liste de 3 a 5 riscos objetivos.
 
-F) Informações críticas não encontradas
-O que foi buscado e não localizado:
-Possível impacto:
+F) Histórico interno semelhante
+Amostra:
+Greens/Reds:
+ROI/Yield:
+Conclusão:
+Se houver menos de 10 casos semelhantes, escreva exatamente:
+"Histórico interno insuficiente para conclusão estatística."
 
-G) Inferências da IA
-Conclusões inferidas a partir dos fatos:
-Limites dessas inferências:
+G) Decisão final
+Decisão: CONFIRMAR | PULAR
+Stake sugerida: 0.5u | 1.0u | 1.5u, apenas se CONFIRMAR
+Justificativa final objetiva:
+Condição que faria mudar a decisão:
 
-H) Fatores qualitativos
-Leitura provável do jogo:
-Motivação/contexto competitivo:
-Pontos que favorecem a tese:
-
-I) Riscos principais
-Risco 1:
-Risco 2:
-Risco 3:
-O que faria mudar a decisão:
-
-J) Tese contra a entrada
-Motivos concretos para PULAR:
-Fragilidades técnicas/contextuais:
-Informações ausentes que impedem confiança:
-
-K) Alertas online
-Informação crítica não confirmada:
-Risco alto:
-Fonte insuficiente:
-Possível dado desatualizado:
-
-L) Gates objetivos
-gate_tecnico: aprovado/reprovado - motivo:
-gate_risco: aprovado/reprovado - motivo:
-gate_info_critica: aprovado/reprovado - motivo:
-gate_fontes: aprovado/reprovado - motivo:
-gate_duplicidade: aprovado/reprovado - motivo:
-gate_risco_beneficio: aprovado/reprovado - motivo:
-
-M) Decisão final
-Decisão final: CONFIRMA | PULAR
-Stake sugerida: 0.5u | 1.0u | 1.5u
-Justificativa final em 3 a 6 linhas:
-Condição de invalidação:`;
+Checklist online por esporte:
+Ao longo das seções B, C, D e E, inclua resumidamente os itens do checklist online mais relevantes, com informação encontrada, fonte, impacto e status. Não omita informações críticas não encontradas.`;
 
 function parseDecisao(text: string): { decisao: string | null; stake: number | null } {
   const decisionMatch = text.match(/decis[aã]o(?:\s+final)?\s*:\s*(confirma|confirmar|pular|pass|aguardar not[ií]cia|confirma com cautela)/i);
@@ -228,7 +203,7 @@ function parseDecisao(text: string): { decisao: string | null; stake: number | n
   const decisionText = decisionMatch?.[1]?.toLowerCase() ?? "pular";
   const decisao: string | null = /\bconfirma|confirmar\b/.test(decisionText) ? "CONFIRMA" : "PULAR";
   const stakeMatch = slice.match(/stake[^0-9]*([0-9]+(?:[.,][0-9]+)?)/i);
-  const stake = stakeMatch ? Number(stakeMatch[1].replace(",", ".")) : decisao === "PULAR" ? 0.5 : null;
+  const stake = decisao === "CONFIRMA" && stakeMatch ? Number(stakeMatch[1].replace(",", ".")) : null;
   return { decisao, stake };
 }
 

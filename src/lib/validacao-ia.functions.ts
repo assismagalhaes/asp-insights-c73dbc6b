@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { generateText } from "ai";
 import { z } from "zod";
 
-export const PROMPT_VERSAO = "validacao-critica-v4-stake-discipline";
+export const PROMPT_VERSAO = "validacao-critica-v5-pro-contra";
 
 const CorrelatedPickSchema = z.object({
   mercado: z.string(),
@@ -76,51 +76,45 @@ Gates obrigatórios:
 
 Formato OBRIGATÓRIO da resposta (use exatamente estes cabeçalhos em texto puro, sem markdown):
 
-A) Mercado avaliado
+A) Entrada avaliada
+Jogo:
+Mercado:
 Pick:
-Linha e odd:
-Tese da aposta:
+Linha:
+Odd:
+Probabilidade:
+Edge:
 
-B) Contexto da análise
-Matchup e vantagem estrutural:
-Tendências consistentes vs ruído:
-Aderência ao mercado:
-Sinais de alerta estatísticos:
+B) Tese a favor
+Liste os principais argumentos concretos que sustentam a entrada. Não use frases genéricas sem evidência.
 
-C) Informações manuais consideradas
-O que foi considerado:
-Informações ausentes ou incertas:
-Impacto prático:
+C) Tese contra a entrada
+Liste os principais argumentos contra a entrada. É obrigatório ter pelo menos 2 pontos críticos reais ou escrever claramente:
+"Nenhum ponto crítico forte encontrado, mas estes são os principais riscos residuais."
 
-D) Fatores qualitativos
-Leitura provável do jogo:
-Motivação/contexto competitivo:
-Pontos que favorecem a tese:
+D) Gates de validação
+Coerência técnica: aprovado/reprovado - motivo:
+Informação crítica: aprovado/reprovado - motivo:
+Risco estrutural: aprovado/reprovado - motivo:
+Contexto online/manual: aprovado/reprovado - motivo:
+Duplicidade/correlação: aprovado/reprovado - motivo:
 
-E) Tese contra a entrada
-Motivos concretos para PULAR:
-Fragilidades técnicas/contextuais:
-Informações ausentes que impedem confiança:
+E) Riscos principais
+Liste de 3 a 5 riscos objetivos.
 
-F) Riscos potenciais
-Risco 1:
-Risco 2:
-Risco 3:
-O que faria mudar a decisão:
+F) Histórico interno semelhante
+Amostra:
+Greens/Reds:
+ROI/Yield:
+Conclusão:
+Se houver menos de 10 casos semelhantes, escreva exatamente:
+"Histórico interno insuficiente para conclusão estatística."
 
-G) Gates objetivos
-gate_tecnico: aprovado/reprovado - motivo:
-gate_risco: aprovado/reprovado - motivo:
-gate_info_critica: aprovado/reprovado - motivo:
-gate_fontes: aprovado/reprovado - motivo:
-gate_duplicidade: aprovado/reprovado - motivo:
-gate_risco_beneficio: aprovado/reprovado - motivo:
-
-H) Decisão final
-Decisão final: CONFIRMA | PULAR
-Stake sugerida: 0.5u | 1.0u | 1.5u
-Justificativa final em 3 a 6 linhas:
-Condição de invalidação:`;
+G) Decisão final
+Decisão: CONFIRMAR | PULAR
+Stake sugerida: 0.5u | 1.0u | 1.5u, apenas se CONFIRMAR
+Justificativa final objetiva:
+Condição que faria mudar a decisão:`;
 
 function parseDecisao(text: string): { decisao: string | null; stake: number | null } {
   const decisionMatch = text.match(/decis[aã]o(?:\s+final)?\s*:\s*(confirma|confirmar|pular|pass|aguardar not[ií]cia|confirma com cautela)/i);
@@ -128,7 +122,7 @@ function parseDecisao(text: string): { decisao: string | null; stake: number | n
   const decisionText = decisionMatch?.[1]?.toLowerCase() ?? "pular";
   const decisao: string | null = /\bconfirma|confirmar\b/.test(decisionText) ? "CONFIRMA" : "PULAR";
   const stakeMatch = slice.match(/stake[^0-9]*([0-9]+(?:[.,][0-9]+)?)/i);
-  const stake = stakeMatch ? Number(stakeMatch[1].replace(",", ".")) : decisao === "PULAR" ? 0.5 : null;
+  const stake = decisao === "CONFIRMA" && stakeMatch ? Number(stakeMatch[1].replace(",", ".")) : null;
   return { decisao, stake };
 }
 
