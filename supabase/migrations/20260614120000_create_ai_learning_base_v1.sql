@@ -46,8 +46,13 @@ CREATE TABLE IF NOT EXISTS public.feedback_ia_resultados (
   decisao_humana_final text NULL,
   stake_humana_final numeric NULL,
   resultado_real text NULL,
+  resultado_teorico text NULL,
+  resultado_financeiro text NULL,
+  conta_bankroll boolean DEFAULT false,
   lucro_prejuizo numeric NULL,
   lucro_unidades numeric NULL,
+  lucro_teorico_unidades numeric NULL,
+  lucro_financeiro_unidades numeric NULL,
   odd_usada numeric NULL,
   probabilidade_final numeric NULL,
   edge_usado numeric NULL,
@@ -91,6 +96,9 @@ CREATE INDEX IF NOT EXISTS idx_feedback_ia_resultados_esporte ON public.feedback
 CREATE INDEX IF NOT EXISTS idx_feedback_ia_resultados_liga ON public.feedback_ia_resultados(liga);
 CREATE INDEX IF NOT EXISTS idx_feedback_ia_resultados_mercado ON public.feedback_ia_resultados(mercado);
 CREATE INDEX IF NOT EXISTS idx_feedback_ia_resultados_resultado_real ON public.feedback_ia_resultados(resultado_real);
+CREATE INDEX IF NOT EXISTS idx_feedback_ia_resultados_resultado_teorico ON public.feedback_ia_resultados(resultado_teorico);
+CREATE INDEX IF NOT EXISTS idx_feedback_ia_resultados_resultado_financeiro ON public.feedback_ia_resultados(resultado_financeiro);
+CREATE INDEX IF NOT EXISTS idx_feedback_ia_resultados_conta_bankroll ON public.feedback_ia_resultados(conta_bankroll);
 CREATE INDEX IF NOT EXISTS idx_feedback_ia_resultados_decisao_ia_sugerida ON public.feedback_ia_resultados(decisao_ia_sugerida);
 CREATE INDEX IF NOT EXISTS idx_feedback_ia_resultados_decisao_humana_final ON public.feedback_ia_resultados(decisao_humana_final);
 CREATE INDEX IF NOT EXISTS idx_feedback_ia_resultados_created_at ON public.feedback_ia_resultados(created_at);

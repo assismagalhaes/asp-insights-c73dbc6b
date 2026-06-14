@@ -113,8 +113,13 @@ export interface FeedbackIaResultado {
   decisao_humana_final: string | null;
   stake_humana_final: number | null;
   resultado_real: "GREEN" | "RED" | string | null;
+  resultado_teorico: "GREEN" | "RED" | string | null;
+  resultado_financeiro: "GREEN" | "RED" | string | null;
+  conta_bankroll: boolean | null;
   lucro_prejuizo: number | null;
   lucro_unidades: number | null;
+  lucro_teorico_unidades: number | null;
+  lucro_financeiro_unidades: number | null;
   odd_usada: number | null;
   probabilidade_final: number | null;
   edge_usado: number | null;
@@ -163,6 +168,13 @@ export function normalizeAiDecision(decision: string | null | undefined): "CONFI
   const d = decision.toUpperCase().trim();
   if (d.includes("PULAR") || d.includes("PASS") || d.includes("AGUARDAR")) return "PULAR";
   if (d.includes("CONFIRMA")) return "CONFIRMAR";
+  return null;
+}
+
+function decisionHit(decision: "CONFIRMAR" | "PULAR" | null, resultado: Resultado): boolean | null {
+  if (resultado !== "GREEN" && resultado !== "RED") return null;
+  if (decision === "CONFIRMAR") return resultado === "GREEN";
+  if (decision === "PULAR") return resultado === "RED";
   return null;
 }
 
@@ -220,7 +232,7 @@ async function createAiFeedbackForResultado(input: Omit<ResultadoRow, "id" | "cr
   }
 
   const p = mapPrognostico(prognostico as Record<string, unknown>);
-  if (p.status_validacao !== "CONFIRMA") return;
+  const contaBankroll = p.status_validacao === "CONFIRMA";
 
   const { data: validacao } = await supabase
     .from("validacoes")
@@ -246,10 +258,13 @@ async function createAiFeedbackForResultado(input: Omit<ResultadoRow, "id" | "cr
   const stakeHumana = Number((validacao as Validacao | null)?.stake_confirmada ?? p.stake ?? 0);
   const oddUsada = getOddEfetiva(p);
   const edgeUsado = getEdgeEfetivo(p);
+  const lucroTeorico = input.lucro_prejuizo;
+  const lucroFinanceiro = contaBankroll ? input.lucro_prejuizo : 0;
+  const resultadoFinanceiro = contaBankroll ? input.resultado : null;
   const feedbackRows = rows.map((a) => {
     const decisaoIa = normalizeAiDecision(a.decisao_sugerida);
-    const acertouIa = decisaoIa === "CONFIRMAR" ? input.resultado === "GREEN" : null;
-    const acertouHumano = decisaoHumana === "CONFIRMAR" ? input.resultado === "GREEN" : null;
+    const acertouIa = decisionHit(decisaoIa, input.resultado);
+    const acertouHumano = decisionHit(decisaoHumana, input.resultado);
     return {
       prognostico_id: input.prognostico_id,
       analise_ia_id: a.id,
@@ -265,8 +280,13 @@ async function createAiFeedbackForResultado(input: Omit<ResultadoRow, "id" | "cr
       decisao_humana_final: decisaoHumana,
       stake_humana_final: stakeHumana,
       resultado_real: input.resultado,
-      lucro_prejuizo: input.lucro_prejuizo,
-      lucro_unidades: input.lucro_prejuizo,
+      resultado_teorico: input.resultado,
+      resultado_financeiro: resultadoFinanceiro,
+      conta_bankroll: contaBankroll,
+      lucro_prejuizo: lucroFinanceiro,
+      lucro_unidades: lucroTeorico,
+      lucro_teorico_unidades: lucroTeorico,
+      lucro_financeiro_unidades: lucroFinanceiro,
       odd_usada: oddUsada,
       probabilidade_final: p.probabilidade_final,
       edge_usado: edgeUsado,

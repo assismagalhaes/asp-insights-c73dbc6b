@@ -100,7 +100,7 @@ function AprendizadoIaPage() {
         if (modoIa !== "all" && f.modo_ia !== modoIa) return false;
         if (decisaoIa !== "all" && normalizeAiDecision(f.decisao_ia_sugerida) !== decisaoIa) return false;
         if (decisaoHumana !== "all" && normalizeAiDecision(f.decisao_humana_final) !== decisaoHumana) return false;
-        if (resultado !== "all" && f.resultado_real !== resultado) return false;
+        if (resultado !== "all" && getOutcome(f) !== resultado) return false;
         return true;
       }),
     [feedback, ini, fim, esporte, liga, mercado, modoIa, decisaoIa, decisaoHumana, resultado],
@@ -108,8 +108,14 @@ function AprendizadoIaPage() {
 
   const iaConfirmadas = filteredAnalises.filter((a) => normalizeAiDecision(a.decisao_sugerida) === "CONFIRMAR");
   const feedbackConfirmadasIa = filteredFeedback.filter((f) => normalizeAiDecision(f.decisao_ia_sugerida) === "CONFIRMAR");
-  const acertosIa = feedbackConfirmadasIa.filter((f) => f.acertou_ia === true).length;
-  const lucroUnidadesIa = feedbackConfirmadasIa.reduce((sum, f) => sum + Number(f.lucro_unidades ?? 0), 0);
+  const feedbackPuladasIa = filteredFeedback.filter((f) => normalizeAiDecision(f.decisao_ia_sugerida) === "PULAR");
+  const acertosIa = filteredFeedback.filter((f) => f.acertou_ia === true).length;
+  const confirmadasGreen = feedbackConfirmadasIa.filter((f) => getOutcome(f) === "GREEN").length;
+  const confirmadasRed = feedbackConfirmadasIa.filter((f) => getOutcome(f) === "RED").length;
+  const puladasGreen = feedbackPuladasIa.filter((f) => getOutcome(f) === "GREEN").length;
+  const puladasRed = feedbackPuladasIa.filter((f) => getOutcome(f) === "RED").length;
+  const lucroUnidadesIa = feedbackConfirmadasIa.reduce((sum, f) => sum + getFinancialUnits(f), 0);
+  const stakeConfirmadaIa = feedbackConfirmadasIa.reduce((sum, f) => sum + Number(f.stake_humana_final ?? f.stake_ia_sugerida ?? 0), 0);
   const divergencias = filteredFeedback.filter((f) => f.divergencia_ia_humano).length;
 
   const stats = {
@@ -117,7 +123,16 @@ function AprendizadoIaPage() {
     local: filteredAnalises.filter((a) => a.modo_ia === "local").length,
     online: filteredAnalises.filter((a) => a.modo_ia === "online").length,
     taxaConfirmacao: filteredAnalises.length ? (iaConfirmadas.length / filteredAnalises.length) * 100 : 0,
-    taxaAcerto: feedbackConfirmadasIa.length ? (acertosIa / feedbackConfirmadasIa.length) * 100 : 0,
+    taxaAcerto: filteredFeedback.length ? (acertosIa / filteredFeedback.length) * 100 : 0,
+    confirmadasGreen,
+    confirmadasRed,
+    puladasGreen,
+    puladasRed,
+    confirmarCorreto: confirmadasGreen,
+    confirmarIncorreto: confirmadasRed,
+    pularCorreto: puladasRed,
+    pularIncorreto: puladasGreen,
+    roiConfirmadasIa: stakeConfirmadaIa > 0 ? (lucroUnidadesIa / stakeConfirmadaIa) * 100 : 0,
     lucroUnidades: lucroUnidadesIa,
     lucroReal: lucroUnidadesIa * valorUnidade,
     divergencias,
@@ -125,8 +140,8 @@ function AprendizadoIaPage() {
 
   const acertoPorEsporte = rateBy(filteredFeedback, "esporte");
   const acertoPorMercado = rateBy(filteredFeedback, "mercado");
-  const lucroPorEsporte = sumBy(feedbackConfirmadasIa, "esporte", "lucro_unidades");
-  const lucroPorMercado = sumBy(feedbackConfirmadasIa, "mercado", "lucro_unidades");
+  const lucroPorEsporte = sumFinancialBy(feedbackConfirmadasIa, "esporte");
+  const lucroPorMercado = sumFinancialBy(feedbackConfirmadasIa, "mercado");
   const modoComparativo = rateBy(filteredFeedback, "modo_ia");
   const tagsRed = tagsByRed(filteredFeedback);
 
@@ -169,7 +184,14 @@ function AprendizadoIaPage() {
         <StatCard label="IA local" value={String(stats.local)} icon={Activity} />
         <StatCard label="IA online" value={String(stats.online)} icon={Activity} />
         <StatCard label="Taxa de confirmação IA" value={`${stats.taxaConfirmacao.toFixed(1)}%`} icon={Target} />
-        <StatCard label="Acerto IA confirmadas" value={`${stats.taxaAcerto.toFixed(1)}%`} icon={TrendingUp} />
+        <StatCard label="Acerto geral IA" value={`${stats.taxaAcerto.toFixed(1)}%`} icon={TrendingUp} />
+        <StatCard label="Confirmadas IA GREEN/RED" value={`${stats.confirmadasGreen}/${stats.confirmadasRed}`} icon={Target} />
+        <StatCard label="ROI confirmadas IA" value={`${stats.roiConfirmadasIa.toFixed(1)}%`} icon={TrendingUp} trend={stats.roiConfirmadasIa >= 0 ? "up" : "down"} />
+        <StatCard label="Puladas IA GREEN/RED" value={`${stats.puladasGreen}/${stats.puladasRed}`} icon={Split} />
+        <StatCard label="Pular correto" value={String(stats.pularCorreto)} icon={Split} trend="up" />
+        <StatCard label="Pular incorreto" value={String(stats.pularIncorreto)} icon={Split} trend={stats.pularIncorreto > 0 ? "down" : "neutral"} />
+        <StatCard label="Confirmar correto" value={String(stats.confirmarCorreto)} icon={Target} trend="up" />
+        <StatCard label="Confirmar incorreto" value={String(stats.confirmarIncorreto)} icon={Target} trend={stats.confirmarIncorreto > 0 ? "down" : "neutral"} />
         <StatCard label="Lucro real IA" value={`R$ ${stats.lucroReal.toFixed(2)}`} icon={Scale} trend={stats.lucroReal >= 0 ? "up" : "down"} />
         <StatCard label="Lucro (u) IA" value={`${stats.lucroUnidades.toFixed(2)}u`} icon={Scale} trend={stats.lucroUnidades >= 0 ? "up" : "down"} />
         <StatCard label="Divergências IA x humano" value={String(stats.divergencias)} icon={Split} />
@@ -262,7 +284,7 @@ function rateBy(rows: FeedbackIaResultado[], field: keyof FeedbackIaResultado): 
   for (const row of rows) {
     const key = String(row[field] ?? "Sem dado");
     const current = map.get(key) ?? { ok: 0, total: 0 };
-    if (normalizeAiDecision(row.decisao_ia_sugerida) === "CONFIRMAR") {
+    if (row.acertou_ia != null) {
       current.total += 1;
       if (row.acertou_ia) current.ok += 1;
     }
@@ -286,14 +308,34 @@ function sumBy(rows: FeedbackIaResultado[], field: keyof FeedbackIaResultado, su
     .sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
 }
 
+function sumFinancialBy(rows: FeedbackIaResultado[], field: keyof FeedbackIaResultado): BarRow[] {
+  const map = new Map<string, number>();
+  for (const row of rows) {
+    const key = String(row[field] ?? "Sem dado");
+    map.set(key, (map.get(key) ?? 0) + getFinancialUnits(row));
+  }
+  const max = Math.max(1, ...[...map.values()].map((v) => Math.abs(v)));
+  return [...map.entries()]
+    .map(([label, value]) => ({ label, value, percent: (Math.abs(value) / max) * 100 }))
+    .sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+}
+
 function tagsByRed(rows: FeedbackIaResultado[]): BarRow[] {
   const map = new Map<string, number>();
   for (const row of rows) {
-    if (row.resultado_real !== "RED") continue;
+    if (getOutcome(row) !== "RED") continue;
     for (const tag of row.tags_risco ?? []) map.set(tag, (map.get(tag) ?? 0) + 1);
   }
   const max = Math.max(1, ...map.values());
   return [...map.entries()]
     .map(([label, value]) => ({ label, value, percent: (value / max) * 100 }))
     .sort((a, b) => b.value - a.value);
+}
+
+function getOutcome(row: FeedbackIaResultado): string | null {
+  return row.resultado_teorico ?? row.resultado_real ?? null;
+}
+
+function getFinancialUnits(row: FeedbackIaResultado): number {
+  return Number(row.lucro_financeiro_unidades ?? (row.conta_bankroll === false ? 0 : row.lucro_unidades ?? 0));
 }
