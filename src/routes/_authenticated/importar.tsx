@@ -358,10 +358,7 @@ function ImportarPage() {
           probabilidade_final: prob,
           edge,
           stake: 0,
-          dados_tecnicos:
-            (String(values.dados_tecnicos ?? "").trim() ||
-              String(values.observacoes ?? "").trim()) ||
-            null,
+          dados_tecnicos: String(values.dados_tecnicos ?? "").trim() || null,
           observacoes: String(values.observacoes ?? "").trim() || null,
         },
         errors,
@@ -516,11 +513,11 @@ function ImportarPage() {
   const downloadTemplate = () => {
     const cols = [
       "data","hora","esporte","liga","jogo","mandante","visitante",
-      "mercado","pick","linha","odd_ofertada","odd_valor","probabilidade_final","edge","stake","observacoes",
+      "mercado","pick","linha","odd_ofertada","odd_valor","probabilidade_final","edge","stake",
     ];
     const example = [
       "11/06/2026","14:10","Futebol","Brasileirão","Flamengo x Palmeiras","Flamengo","Palmeiras",
-      "Resultado Final","Flamengo","","2.10","1.95","55","5.5","1","Exemplo",
+      "Resultado Final","Flamengo","","2.10","1.95","55","5.5","1",
     ];
     const csv = `${cols.join(",")}\n${example.join(",")}\n`;
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
