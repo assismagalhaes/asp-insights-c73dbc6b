@@ -123,6 +123,7 @@ function Validacao() {
   const [contextos, setContextos] = useState<Record<string, string>>({});
   const [iaResults, setIaResults] = useState<Record<string, IAResult>>({});
   const [iaLoading, setIaLoading] = useState<Record<string, "local" | "online" | null>>({});
+  const [confirmDelete, setConfirmDelete] = useState<Prognostico | null>(null);
 
   const [fEsporte, setFEsporte] = useState("all");
   const [fLiga, setFLiga] = useState("all");
