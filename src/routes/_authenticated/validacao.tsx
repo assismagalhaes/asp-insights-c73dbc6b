@@ -1,11 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { AlertTriangle, Sparkles, ShieldAlert, Brain, Loader2, Copy, Wand2, RefreshCw, X, Globe, ExternalLink } from "lucide-react";
+import { AlertTriangle, Sparkles, ShieldAlert, Brain, Loader2, Copy, Wand2, RefreshCw, X, Globe, ExternalLink, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -21,6 +31,7 @@ import {
   usePrognosticos,
   useCreateValidacao,
   useUpdatePrognostico,
+  useDeletePrognostico,
   useConfiguracao,
   calcEdge,
   saveAnaliseIaSnapshot,
@@ -99,6 +110,7 @@ function Validacao() {
   const { data: cfg } = useConfiguracao();
   const createVal = useCreateValidacao();
   const updateProg = useUpdatePrognostico();
+  const deleteProg = useDeletePrognostico();
   const callIA = useServerFn(analisarValidacao);
   const callIAOnline = useServerFn(analisarValidacaoOnline);
   const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
@@ -111,6 +123,7 @@ function Validacao() {
   const [contextos, setContextos] = useState<Record<string, string>>({});
   const [iaResults, setIaResults] = useState<Record<string, IAResult>>({});
   const [iaLoading, setIaLoading] = useState<Record<string, "local" | "online" | null>>({});
+  const [confirmDelete, setConfirmDelete] = useState<Prognostico | null>(null);
 
   const [fEsporte, setFEsporte] = useState("all");
   const [fLiga, setFLiga] = useState("all");
@@ -396,7 +409,17 @@ function Validacao() {
                   </div>
                   <h3 className="mt-1 text-lg font-semibold">{p.jogo}</h3>
                 </div>
-                <StatusBadge status={p.status_validacao} />
+                <div className="flex items-center gap-2">
+                  <StatusBadge status={p.status_validacao} />
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    title="Excluir prognóstico"
+                    onClick={() => setConfirmDelete(p)}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
               </div>
 
               {/* Bloco de entrada */}
@@ -657,6 +680,34 @@ function Validacao() {
           );
         })}
       </div>
+
+      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir prognóstico?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDelete?.jogo} — {confirmDelete?.pick}. Esta ação não pode ser desfeita e removerá o prognóstico também da aba de Prognósticos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (!confirmDelete) return;
+                try {
+                  await deleteProg.mutateAsync(confirmDelete.id);
+                  toast.success("Prognóstico excluído");
+                } catch (e) {
+                  toast.error((e as Error).message);
+                }
+                setConfirmDelete(null);
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
