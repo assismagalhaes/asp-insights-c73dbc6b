@@ -19,6 +19,7 @@ import {
   createRemoteCollection,
   fetchCollections,
   fetchOddsRows,
+  normalizeVmNormalizedPayload,
   normalizeOddsJson,
   saveCollection,
   toCsv,
@@ -29,7 +30,7 @@ import {
 } from "@/lib/coleta-dados";
 import {
   createScrapingJob,
-  getScrapingJobRaw,
+  getScrapingJobNormalized,
   getScrapingJobStatus,
 } from "@/lib/scraper-api.functions";
 
@@ -46,6 +47,7 @@ function ColetaDadosPage() {
   const [erro, setErro] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [remoteBusy, setRemoteBusy] = useState<string | null>(null);
+  const [remoteStatus, setRemoteStatus] = useState<string | null>(null);
   const [remoteParams, setRemoteParams] = useState({
     esporte: "Baseball",
     liga: "",
@@ -160,7 +162,10 @@ function ColetaDadosPage() {
   };
 
   const executarColeta = async () => {
-    setRemoteBusy("create");
+    setRemoteBusy("pipeline");
+    setRemoteStatus("Criando job na VM...");
+    setErro(null);
+    let coletaCriada: ColetaOdds | null = null;
     try {
       const scraperPayload = {
         esporte: remoteParams.esporte,
@@ -175,18 +180,45 @@ function ColetaDadosPage() {
       }
       console.info("[Coleta VM] Payload POST /scraping/jobs", scraperPayload);
       const result = await createScrapingJob({ data: scraperPayload });
-      await createRemoteCollection({
+      const coleta = await createRemoteCollection({
         ...scraperPayload,
         job_id: result.job_id,
         bookmaker: remoteParams.bookmaker || null,
         fonte: remoteParams.fonte || null,
       });
+      coletaCriada = coleta;
       await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
       toast.success(`Coleta enviada para VM: ${result.job_id}`);
+      const finalStatus = await pollVmJob(coleta.id, result.job_id, setRemoteStatus);
+      if (finalStatus !== "CONCLUIDA") {
+        throw new Error(`Coleta encerrada com status ${finalStatus}.`);
+      }
+      setRemoteStatus("Buscando dados normalizados...");
+      const normalizedResult = await getScrapingJobNormalized({ data: { job_id: result.job_id } });
+      const raw = normalizedResult.normalized_json;
+      const normalizedData = normalizeVmNormalizedPayload(raw, { esporte: scraperPayload.esporte });
+      if (!normalizedData.total_odds) {
+        throw new Error("Retorno /normalized da VM nao trouxe odds para importar.");
+      }
+      setRemoteStatus("Salvando odds no banco...");
+      const imported = await completeRemoteCollection(coleta.id, raw, normalizedData);
+      await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
+      await qc.invalidateQueries({ queryKey: ["odds-jogos"] });
+      setRawJson(raw);
+      setRawText(JSON.stringify(raw, null, 2));
+      setNormalized(normalizedData);
+      toast.success(`${imported.inserted} odds importadas da VM${imported.duplicated ? ` (${imported.duplicated} duplicadas ignoradas)` : ""}`);
     } catch (e) {
-      toast.error(formatVmError(e));
+      const message = formatVmError(e);
+      setErro(message);
+      if (coletaCriada) {
+        await updateCollectionStatus(coletaCriada.id, "ERRO", message).catch(() => null);
+        await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
+      }
+      toast.error(message);
     } finally {
       setRemoteBusy(null);
+      setRemoteStatus(null);
     }
   };
 
@@ -210,21 +242,21 @@ function ColetaDadosPage() {
 
   const importarResultadoVm = async (coleta: ColetaOdds) => {
     if (!coleta.job_id) return;
-    setRemoteBusy(`raw:${coleta.id}`);
+    setRemoteBusy(`normalized:${coleta.id}`);
     try {
-      const result = await getScrapingJobRaw({ data: { job_id: coleta.job_id } });
-      const raw = result.raw_json;
-      const normalizedData = normalizeOddsJson(raw, { esporte: coleta.esporte });
+      const result = await getScrapingJobNormalized({ data: { job_id: coleta.job_id } });
+      const raw = result.normalized_json;
+      const normalizedData = normalizeVmNormalizedPayload(raw, { esporte: coleta.esporte });
       if (!normalizedData.total_odds) {
         throw new Error("JSON retornado pela VM não gerou odds normalizadas.");
       }
-      await completeRemoteCollection(coleta.id, raw, normalizedData);
+      const imported = await completeRemoteCollection(coleta.id, raw, normalizedData);
       await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
       await qc.invalidateQueries({ queryKey: ["odds-jogos"] });
       setRawJson(raw);
       setRawText(JSON.stringify(raw, null, 2));
       setNormalized(normalizedData);
-      toast.success(`${normalizedData.total_odds} odds importadas da VM`);
+      toast.success(`${imported.inserted} odds importadas da VM${imported.duplicated ? ` (${imported.duplicated} duplicadas ignoradas)` : ""}`);
     } catch (e) {
       await updateCollectionStatus(coleta.id, "ERRO", formatVmError(e)).catch(() => null);
       await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
@@ -278,14 +310,24 @@ function ColetaDadosPage() {
             <Field label="Fonte" value={remoteParams.fonte} onChange={(fonte) => setRemoteParams((p) => ({ ...p, fonte }))} placeholder="Ex.: flashscore" />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={executarColeta} disabled={remoteBusy === "create" || !remoteParams.esporte}>
+            <Button onClick={executarColeta} disabled={remoteBusy === "pipeline" || !remoteParams.esporte}>
               <CloudDownload className="mr-2 h-4 w-4" />
-              {remoteBusy === "create" ? "Enviando..." : "Executar Coleta"}
+              {remoteBusy === "pipeline" ? "Coletando..." : "Executar Coleta"}
             </Button>
             <p className="text-xs text-muted-foreground">
               A chave da VM fica protegida no servidor via SCRAPER_API_URL e SCRAPER_API_KEY.
             </p>
           </div>
+          {remoteStatus && (
+            <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">
+              {remoteStatus}
+            </div>
+          )}
+          {erro && (
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {erro}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -380,7 +422,7 @@ function ColetaDadosPage() {
                           <Button size="sm" variant="outline" disabled={!coleta.job_id || remoteBusy === `status:${coleta.id}`} onClick={() => atualizarStatus(coleta)}>
                             <RefreshCw className="mr-1 h-3 w-3" /> Status
                           </Button>
-                          <Button size="sm" variant="outline" disabled={!coleta.job_id || coleta.status !== "CONCLUIDA" || remoteBusy === `raw:${coleta.id}`} onClick={() => importarResultadoVm(coleta)}>
+                          <Button size="sm" variant="outline" disabled={!coleta.job_id || coleta.status !== "CONCLUIDA" || remoteBusy === `normalized:${coleta.id}`} onClick={() => importarResultadoVm(coleta)}>
                             <CloudDownload className="mr-1 h-3 w-3" /> Importar
                           </Button>
                         </div>
@@ -491,6 +533,33 @@ function extractVmStatus(payload: unknown) {
             ? "PENDENTE"
             : raw || "PENDENTE";
   return { status, erro: erro ? String(erro) : null };
+}
+
+async function pollVmJob(
+  coletaId: string,
+  jobId: string,
+  onStatus: (status: string) => void,
+  maxAttempts = 40,
+) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    onStatus(`Coleta em andamento na VM... tentativa ${attempt}/${maxAttempts}`);
+    const result = await getScrapingJobStatus({ data: { job_id: jobId } });
+    const { status, erro } = extractVmStatus(result.payload);
+    await updateCollectionStatus(coletaId, status, erro);
+
+    if (status === "CONCLUIDA") return status;
+    if (status === "ERRO") {
+      throw new Error(erro || "Job da VM retornou ERRO.");
+    }
+
+    await sleep(3000);
+  }
+
+  throw new Error("Timeout aguardando conclusao da coleta na VM.");
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => globalThis.setTimeout(resolve, ms));
 }
 
 function isObj(value: unknown): value is Record<string, unknown> {
