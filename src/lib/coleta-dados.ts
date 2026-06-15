@@ -29,6 +29,11 @@ export interface NormalizedCollection {
   rows: NormalizedOdd[];
 }
 
+export interface ImportResult {
+  inserted: number;
+  duplicated: number;
+}
+
 export interface ColetaOdds {
   id: string;
   job_id: string | null;
@@ -113,6 +118,16 @@ function getGames(raw: unknown): Array<Record<string, unknown>> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value != null && typeof value === "object" && !Array.isArray(value);
+}
+
+function toText(value: unknown): string | null {
+  if (value == null || value === "") return null;
+  return String(value);
+}
+
+function requiredText(value: unknown, fallback: string): string {
+  const text = toText(value)?.trim();
+  return text || fallback;
 }
 
 function invertLine(line: string | null): string | null {
@@ -223,6 +238,88 @@ export function normalizeOddsJson(raw: unknown, opts?: { esporte?: string | null
   };
 }
 
+export function normalizeVmNormalizedPayload(payload: unknown, opts?: { esporte?: string | null }): NormalizedCollection {
+  const root = isRecord(payload) ? payload : {};
+  const nested = isRecord(root.data) ? root.data : isRecord(root.result) ? root.result : root;
+  const linhas = Array.isArray(nested.linhas)
+    ? nested.linhas
+    : Array.isArray(nested.rows)
+      ? nested.rows
+      : Array.isArray(nested.normalized_json)
+        ? nested.normalized_json
+        : Array.isArray(payload)
+          ? payload
+          : [];
+
+  const rows = linhas
+    .filter(isRecord)
+    .map((row) => normalizeVmRow(row, opts?.esporte))
+    .filter((row) => row.odd > 0);
+  const dates = rows.map((row) => row.data).filter(Boolean).sort() as string[];
+  const mercados = [...new Set(rows.map((row) => row.mercado).filter(Boolean))].sort();
+  const ligas = [...new Set(rows.map((row) => row.liga).filter(Boolean))];
+  const esportes = [...new Set(rows.map((row) => row.esporte).filter(Boolean))];
+  const jogos = new Set(rows.map((row) => `${row.data ?? ""}|${row.jogo}`).filter(Boolean));
+
+  return {
+    esporte: esportes.length === 1 ? esportes[0] : opts?.esporte ?? null,
+    liga: ligas.length === 1 ? ligas[0] : null,
+    data_inicio: dates[0] ?? null,
+    data_fim: dates[dates.length - 1] ?? null,
+    mercados,
+    total_jogos: jogos.size,
+    total_odds: rows.length,
+    rows,
+  };
+}
+
+function normalizeVmRow(row: Record<string, unknown>, esporteHint?: string | null): NormalizedOdd {
+  const mandante = requiredText(row.mandante ?? row.home ?? row.casa, "");
+  const visitante = requiredText(row.visitante ?? row.away ?? row.fora, "");
+  return {
+    data: parseDate(row.data ?? row.date),
+    hora: parseTime(row.hora ?? row.hour ?? row.time),
+    esporte: normalizeSport(toText(row.esporte ?? row.sport) ?? esporteHint ?? null, row),
+    liga: toText(row.liga ?? row.league),
+    jogo: requiredText(row.jogo ?? row.game, mandante && visitante ? `${mandante} vs ${visitante}` : "Jogo sem nome"),
+    mandante,
+    visitante,
+    mercado: requiredText(row.mercado ?? row.market, "Mercado"),
+    pick: requiredText(row.pick ?? row.selecao ?? row.selection, "Pick"),
+    linha: toText(row.linha ?? row.line),
+    odd: toNumber(row.odd ?? row.price ?? row.odds) ?? 0,
+    bookmaker: toText(row.bookmaker ?? row.book ?? row.casa_aposta),
+    fonte: toText(row.fonte ?? row.source),
+    capturado_em: toText(row.capturado_em ?? row.captured_at) ?? parseCapturedAt(row.att),
+    raw_ref: isRecord(row.raw_ref) ? row.raw_ref : { vm_row: row },
+  };
+}
+
+function dedupeRows(rows: NormalizedOdd[]): { rows: NormalizedOdd[]; duplicated: number } {
+  const seen = new Set<string>();
+  const uniqueRows: NormalizedOdd[] = [];
+
+  for (const row of rows) {
+    const key = [
+      row.data ?? "",
+      row.hora ?? "",
+      row.esporte ?? "",
+      row.liga ?? "",
+      row.jogo,
+      row.mercado,
+      row.pick,
+      row.linha ?? "",
+      row.bookmaker ?? "",
+      row.odd,
+    ].join("|").toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    uniqueRows.push(row);
+  }
+
+  return { rows: uniqueRows, duplicated: rows.length - uniqueRows.length };
+}
+
 export function toCsv(rows: NormalizedOdd[]): string {
   const headers = ["data", "hora", "esporte", "liga", "jogo", "mandante", "visitante", "mercado", "pick", "linha", "odd", "bookmaker", "fonte", "capturado_em"];
   const escape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
@@ -240,6 +337,7 @@ export function downloadText(filename: string, content: string, type = "text/csv
 }
 
 export async function saveCollection(raw: unknown, normalized: NormalizedCollection, parametros: Record<string, unknown>) {
+  const deduped = dedupeRows(normalized.rows);
   const { data: coleta, error } = await coletaDb
     .from("coletas_odds")
     .insert({
@@ -251,17 +349,17 @@ export async function saveCollection(raw: unknown, normalized: NormalizedCollect
       mercados: normalized.mercados,
       parametros,
       raw_json: raw,
-      normalized_json: normalized.rows,
+      normalized_json: deduped.rows,
       total_jogos: normalized.total_jogos,
-      total_odds: normalized.total_odds,
+      total_odds: deduped.rows.length,
       erro: null,
     })
     .select("*")
     .single();
   if (error) throw error;
 
-  if (normalized.rows.length) {
-    const payload = normalized.rows.map((row) => ({ ...row, coleta_id: coleta.id }));
+  if (deduped.rows.length) {
+    const payload = deduped.rows.map((row) => ({ ...row, coleta_id: coleta.id }));
     const { error: rowsError } = await coletaDb.from("odds_jogos").insert(payload);
     if (rowsError) throw rowsError;
   }
@@ -322,7 +420,8 @@ export async function completeRemoteCollection(
   raw: unknown,
   normalized: NormalizedCollection,
   status = "CONCLUIDA",
-) {
+): Promise<ImportResult> {
+  const deduped = dedupeRows(normalized.rows);
   const { error } = await coletaDb
     .from("coletas_odds")
     .update({
@@ -333,9 +432,9 @@ export async function completeRemoteCollection(
       data_fim: normalized.data_fim,
       mercados: normalized.mercados,
       raw_json: raw,
-      normalized_json: normalized.rows,
+      normalized_json: deduped.rows,
       total_jogos: normalized.total_jogos,
-      total_odds: normalized.total_odds,
+      total_odds: deduped.rows.length,
       erro: null,
       updated_at: new Date().toISOString(),
     })
@@ -345,11 +444,13 @@ export async function completeRemoteCollection(
   const { error: deleteError } = await coletaDb.from("odds_jogos").delete().eq("coleta_id", coletaId);
   if (deleteError) throw deleteError;
 
-  if (normalized.rows.length) {
-    const payload = normalized.rows.map((row) => ({ ...row, coleta_id: coletaId }));
+  if (deduped.rows.length) {
+    const payload = deduped.rows.map((row) => ({ ...row, coleta_id: coletaId }));
     const { error: rowsError } = await coletaDb.from("odds_jogos").insert(payload);
     if (rowsError) throw rowsError;
   }
+
+  return { inserted: deduped.rows.length, duplicated: deduped.duplicated };
 }
 
 export async function fetchCollections(): Promise<ColetaOdds[]> {
