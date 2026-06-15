@@ -4,12 +4,10 @@ import { requireSupabaseAuth } from "@/lib/auth-middleware-public";
 
 const JobParamsSchema = z.object({
   esporte: z.string().min(1),
-  liga: z.string().optional().nullable(),
-  data_inicio: z.string().optional().nullable(),
-  data_fim: z.string().optional().nullable(),
-  mercados: z.array(z.string()).optional().default([]),
-  bookmaker: z.string().optional().nullable(),
-  fonte: z.string().optional().nullable(),
+  liga: z.string().min(1),
+  data_inicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  data_fim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  mercados: z.array(z.string().min(1)).min(1),
 });
 
 const JobIdSchema = z.object({
@@ -31,6 +29,14 @@ function pickPayload(payload: unknown): unknown {
   if (!payload || typeof payload !== "object") return payload;
   const obj = payload as ScraperPayload;
   return obj.data ?? obj.result ?? obj.raw_json ?? obj.normalized_json ?? payload;
+}
+
+function stringifyDebug(value: unknown) {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
 }
 
 function extractJobId(payload: unknown): string {
@@ -69,10 +75,20 @@ async function scraperRequest(path: string, init?: RequestInit) {
       }
     }
     if (!res.ok) {
+      const requestBody =
+        typeof init?.body === "string" ? init.body : init?.body ? "[body não textual]" : "(sem body)";
+      console.error("[Scraper API] Erro na chamada", {
+        status: res.status,
+        path,
+        requestBody,
+        response: payload,
+      });
       const message =
-        payload && typeof payload === "object" && "message" in payload
-          ? String((payload as ScraperPayload).message)
-          : `Erro HTTP ${res.status} ao chamar API da VM.`;
+        res.status === 422
+          ? `HTTP 422 ao chamar API da VM (${path}). Payload enviado: ${requestBody}. Resposta da VM: ${stringifyDebug(payload)}`
+          : payload && typeof payload === "object" && "message" in payload
+            ? String((payload as ScraperPayload).message)
+            : `Erro HTTP ${res.status} ao chamar API da VM. Resposta: ${stringifyDebug(payload)}`;
       throw new Error(message);
     }
     return payload;
