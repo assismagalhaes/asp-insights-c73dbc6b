@@ -53,6 +53,63 @@ export type Database = {
         }
         Relationships: []
       }
+      coletas_odds: {
+        Row: {
+          created_at: string
+          data_fim: string | null
+          data_inicio: string | null
+          erro: string | null
+          esporte: string | null
+          id: string
+          job_id: string | null
+          liga: string | null
+          mercados: Json | null
+          normalized_json: Json | null
+          parametros: Json | null
+          raw_json: Json | null
+          status: string
+          total_jogos: number
+          total_odds: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          data_fim?: string | null
+          data_inicio?: string | null
+          erro?: string | null
+          esporte?: string | null
+          id?: string
+          job_id?: string | null
+          liga?: string | null
+          mercados?: Json | null
+          normalized_json?: Json | null
+          parametros?: Json | null
+          raw_json?: Json | null
+          status?: string
+          total_jogos?: number
+          total_odds?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          data_fim?: string | null
+          data_inicio?: string | null
+          erro?: string | null
+          esporte?: string | null
+          id?: string
+          job_id?: string | null
+          liga?: string | null
+          mercados?: Json | null
+          normalized_json?: Json | null
+          parametros?: Json | null
+          raw_json?: Json | null
+          status?: string
+          total_jogos?: number
+          total_odds?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       configuracoes: {
         Row: {
           banca_inicial: number
@@ -118,6 +175,77 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      odds_jogos: {
+        Row: {
+          bookmaker: string | null
+          capturado_em: string | null
+          coleta_id: string | null
+          created_at: string
+          data: string | null
+          esporte: string | null
+          fonte: string | null
+          hora: string | null
+          id: string
+          jogo: string | null
+          liga: string | null
+          linha: string | null
+          mandante: string | null
+          mercado: string | null
+          odd: number | null
+          pick: string | null
+          raw_ref: Json | null
+          visitante: string | null
+        }
+        Insert: {
+          bookmaker?: string | null
+          capturado_em?: string | null
+          coleta_id?: string | null
+          created_at?: string
+          data?: string | null
+          esporte?: string | null
+          fonte?: string | null
+          hora?: string | null
+          id?: string
+          jogo?: string | null
+          liga?: string | null
+          linha?: string | null
+          mandante?: string | null
+          mercado?: string | null
+          odd?: number | null
+          pick?: string | null
+          raw_ref?: Json | null
+          visitante?: string | null
+        }
+        Update: {
+          bookmaker?: string | null
+          capturado_em?: string | null
+          coleta_id?: string | null
+          created_at?: string
+          data?: string | null
+          esporte?: string | null
+          fonte?: string | null
+          hora?: string | null
+          id?: string
+          jogo?: string | null
+          liga?: string | null
+          linha?: string | null
+          mandante?: string | null
+          mercado?: string | null
+          odd?: number | null
+          pick?: string | null
+          raw_ref?: Json | null
+          visitante?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "odds_jogos_coleta_id_fkey"
+            columns: ["coleta_id"]
+            isOneToOne: false
+            referencedRelation: "coletas_odds"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
