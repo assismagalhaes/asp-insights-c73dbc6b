@@ -162,17 +162,25 @@ function ColetaDadosPage() {
   const executarColeta = async () => {
     setRemoteBusy("create");
     try {
-      const params = {
+      const scraperPayload = {
         esporte: remoteParams.esporte,
-        liga: remoteParams.liga || null,
-        data_inicio: remoteParams.data_inicio || null,
-        data_fim: remoteParams.data_fim || null,
+        liga: remoteParams.liga.trim(),
+        data_inicio: remoteParams.data_inicio,
+        data_fim: remoteParams.data_fim,
         mercados: remoteMercados,
+      };
+      if (!scraperPayload.liga || !scraperPayload.data_inicio || !scraperPayload.data_fim || !scraperPayload.mercados.length) {
+        toast.error("Informe liga, data início, data fim e ao menos um mercado.");
+        return;
+      }
+      console.info("[Coleta VM] Payload POST /scraping/jobs", scraperPayload);
+      const result = await createScrapingJob({ data: scraperPayload });
+      await createRemoteCollection({
+        ...scraperPayload,
+        job_id: result.job_id,
         bookmaker: remoteParams.bookmaker || null,
         fonte: remoteParams.fonte || null,
-      };
-      const result = await createScrapingJob({ data: params });
-      await createRemoteCollection({ ...params, job_id: result.job_id });
+      });
       await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
       toast.success(`Coleta enviada para VM: ${result.job_id}`);
     } catch (e) {

@@ -17,10 +17,10 @@ app = FastAPI(title="ASP Insights Scraper API", version="1.0.0")
 
 class ScrapingJobRequest(BaseModel):
     esporte: str = Field(..., min_length=1)
-    liga: str | None = None
-    data_inicio: str | None = None
-    data_fim: str | None = None
-    mercados: list[str] = Field(default_factory=list)
+    liga: str = Field(..., min_length=1)
+    data_inicio: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    data_fim: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    mercados: list[str] = Field(..., min_length=1)
     bookmaker: str | None = None
     fonte: str | None = None
 
