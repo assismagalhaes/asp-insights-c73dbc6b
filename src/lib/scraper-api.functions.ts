@@ -39,6 +39,14 @@ function stringifyDebug(value: unknown) {
   }
 }
 
+const EXPECTED_JOB_PAYLOAD = {
+  esporte: "Baseball",
+  liga: "MLB",
+  data_inicio: "2026-06-13",
+  data_fim: "2026-06-13",
+  mercados: ["Moneyline", "Total de Corridas"],
+};
+
 function extractJobId(payload: unknown): string {
   if (!payload || typeof payload !== "object") {
     throw new Error("Resposta da VM não trouxe job_id.");
@@ -82,10 +90,11 @@ async function scraperRequest(path: string, init?: RequestInit) {
         path,
         requestBody,
         response: payload,
+        expectedPayload: EXPECTED_JOB_PAYLOAD,
       });
       const message =
         res.status === 422
-          ? `HTTP 422 ao chamar API da VM (${path}). Payload enviado: ${requestBody}. Resposta da VM: ${stringifyDebug(payload)}`
+          ? `HTTP 422 ao chamar API da VM (${path}). Payload enviado: ${requestBody}. JSON esperado: ${stringifyDebug(EXPECTED_JOB_PAYLOAD)}. Resposta da VM: ${stringifyDebug(payload)}`
           : payload && typeof payload === "object" && "message" in payload
             ? String((payload as ScraperPayload).message)
             : `Erro HTTP ${res.status} ao chamar API da VM. Resposta: ${stringifyDebug(payload)}`;

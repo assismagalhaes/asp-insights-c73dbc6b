@@ -498,11 +498,35 @@ function isObj(value: unknown): value is Record<string, unknown> {
 }
 
 function formatVmError(e: unknown) {
-  const message = e instanceof Error ? e.message : String(e);
+  const message = extractErrorMessage(e);
   if (/failed to fetch|network/i.test(message)) return "VM offline ou indisponível.";
   if (/401|403|api key|unauthorized|forbidden/i.test(message)) return "API key da VM inválida ou sem permissão.";
   if (/timeout/i.test(message)) return "Timeout ao chamar API da VM.";
   return message || "Erro ao chamar API da VM.";
+}
+
+function extractErrorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === "string") return e;
+  if (isObj(e)) {
+    const direct = e.message ?? e.error ?? e.detail ?? e.statusText;
+    if (typeof direct === "string") return direct;
+    if (Array.isArray(e.detail)) {
+      return e.detail
+        .map((item) => {
+          if (!isObj(item)) return String(item);
+          const loc = Array.isArray(item.loc) ? item.loc.join(".") : "";
+          return `${loc ? `${loc}: ` : ""}${String(item.msg ?? item.message ?? item.type ?? "erro")}`;
+        })
+        .join("; ");
+    }
+    try {
+      return JSON.stringify(e);
+    } catch {
+      return String(e);
+    }
+  }
+  return String(e);
 }
 
 function Filter({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
