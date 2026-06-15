@@ -548,7 +548,27 @@ function ImportarPage() {
             Faça upload de CSV ou XLSX. Datas no formato brasileiro <strong>DD/MM/AAAA</strong>.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <ScraperApiDialog
+            onRowsReady={async (hdrs, rows) => {
+              setSummary(null);
+              setHeaders(hdrs);
+              setRawRows(rows);
+              setMapping(autoMap(hdrs));
+              const { data } = await supabase
+                .from("prognosticos")
+                .select("data,esporte,jogo,mercado,pick,linha");
+              const set = new Set<string>();
+              (data ?? []).forEach((r: Record<string, unknown>) => {
+                set.add(
+                  [r.data, r.esporte, r.jogo, r.mercado, r.pick, r.linha ?? ""]
+                    .map((x) => String(x ?? "").toLowerCase().trim())
+                    .join("||"),
+                );
+              });
+              setExistingKeys(set);
+            }}
+          />
           <Button variant="outline" onClick={downloadTemplate}>
             <Download className="h-4 w-4 mr-2" /> Baixar Modelo CSV
           </Button>
