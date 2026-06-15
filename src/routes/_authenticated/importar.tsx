@@ -32,6 +32,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { normalizeEsporteLiga } from "@/lib/db";
 import { parseBrazilianDate, formatBR } from "@/lib/date-br";
+import { ScraperApiDialog } from "@/components/scraper-api-dialog";
 
 export const Route = createFileRoute("/_authenticated/importar")({
   component: ImportarPage,
