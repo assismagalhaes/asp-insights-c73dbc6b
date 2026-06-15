@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase-public";
 
 export interface NormalizedOdd {
   data: string | null;
