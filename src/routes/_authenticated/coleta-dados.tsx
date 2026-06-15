@@ -161,6 +161,26 @@ function ColetaDadosPage() {
     }
   };
 
+  const importarNormalizedDaVm = async (coleta: ColetaOdds) => {
+    if (!coleta.job_id) throw new Error("Coleta sem job_id para consultar na VM.");
+    setRemoteStatus("Buscando dados normalizados...");
+    const result = await getScrapingJobNormalized({ data: { job_id: coleta.job_id } });
+    const raw = result.normalized_json;
+    const normalizedData = normalizeVmNormalizedPayload(raw, { esporte: coleta.esporte });
+    if (!normalizedData.total_odds) {
+      throw new Error("Retorno /normalized da VM nao trouxe odds para importar.");
+    }
+
+    setRemoteStatus("Salvando odds no banco...");
+    const imported = await completeRemoteCollection(coleta.id, raw, normalizedData);
+    await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
+    await qc.invalidateQueries({ queryKey: ["odds-jogos"] });
+    setRawJson(raw);
+    setRawText(JSON.stringify(raw, null, 2));
+    setNormalized(normalizedData);
+    toast.success(`${imported.inserted} odds importadas da VM${imported.duplicated ? ` (${imported.duplicated} duplicadas ignoradas)` : ""}`);
+  };
+
   const executarColeta = async () => {
     setRemoteBusy("pipeline");
     setRemoteStatus("Criando job na VM...");
@@ -190,24 +210,12 @@ function ColetaDadosPage() {
       await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
       toast.success(`Coleta enviada para VM: ${result.job_id}`);
       const finalStatus = await pollVmJob(coleta.id, result.job_id, setRemoteStatus);
-      if (finalStatus !== "CONCLUIDA") {
-        throw new Error(`Coleta encerrada com status ${finalStatus}.`);
+      if (finalStatus === "CONCLUIDA") {
+        await importarNormalizedDaVm(coleta);
+      } else {
+        await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
+        toast.info("Coleta em andamento na VM. Você pode sair da tela e voltar depois.");
       }
-      setRemoteStatus("Buscando dados normalizados...");
-      const normalizedResult = await getScrapingJobNormalized({ data: { job_id: result.job_id } });
-      const raw = normalizedResult.normalized_json;
-      const normalizedData = normalizeVmNormalizedPayload(raw, { esporte: scraperPayload.esporte });
-      if (!normalizedData.total_odds) {
-        throw new Error("Retorno /normalized da VM nao trouxe odds para importar.");
-      }
-      setRemoteStatus("Salvando odds no banco...");
-      const imported = await completeRemoteCollection(coleta.id, raw, normalizedData);
-      await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
-      await qc.invalidateQueries({ queryKey: ["odds-jogos"] });
-      setRawJson(raw);
-      setRawText(JSON.stringify(raw, null, 2));
-      setNormalized(normalizedData);
-      toast.success(`${imported.inserted} odds importadas da VM${imported.duplicated ? ` (${imported.duplicated} duplicadas ignoradas)` : ""}`);
     } catch (e) {
       const message = formatVmError(e);
       setErro(message);
@@ -225,18 +233,27 @@ function ColetaDadosPage() {
   const atualizarStatus = async (coleta: ColetaOdds) => {
     if (!coleta.job_id) return;
     setRemoteBusy(`status:${coleta.id}`);
+    setErro(null);
     try {
       const result = await getScrapingJobStatus({ data: { job_id: coleta.job_id } });
       const { status, erro } = extractVmStatus(result.payload);
       await updateCollectionStatus(coleta.id, status, erro);
       await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
       toast.success(`Status atualizado: ${status}`);
+      if (status === "CONCLUIDA") {
+        await importarNormalizedDaVm(coleta);
+      }
+      if (status === "ERRO" && erro) {
+        setErro(erro);
+        toast.error(erro);
+      }
     } catch (e) {
       await updateCollectionStatus(coleta.id, "ERRO", formatVmError(e)).catch(() => null);
       await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
       toast.error(formatVmError(e));
     } finally {
       setRemoteBusy(null);
+      setRemoteStatus(null);
     }
   };
 
@@ -263,6 +280,32 @@ function ColetaDadosPage() {
       toast.error(formatVmError(e));
     } finally {
       setRemoteBusy(null);
+      setRemoteStatus(null);
+    }
+  };
+
+  const retomarColeta = async (coleta: ColetaOdds) => {
+    if (!coleta.job_id) return;
+    setRemoteBusy(`resume:${coleta.id}`);
+    setRemoteStatus("Coleta em andamento na VM. Você pode sair da tela e voltar depois.");
+    setErro(null);
+    try {
+      const finalStatus = await pollVmJob(coleta.id, coleta.job_id, setRemoteStatus);
+      if (finalStatus === "CONCLUIDA") {
+        await importarNormalizedDaVm(coleta);
+      } else {
+        await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
+        toast.info("Coleta em andamento na VM. Você pode sair da tela e voltar depois.");
+      }
+    } catch (e) {
+      const message = formatVmError(e);
+      setErro(message);
+      await updateCollectionStatus(coleta.id, "ERRO", message).catch(() => null);
+      await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
+      toast.error(message);
+    } finally {
+      setRemoteBusy(null);
+      setRemoteStatus(null);
     }
   };
 
@@ -422,6 +465,9 @@ function ColetaDadosPage() {
                           <Button size="sm" variant="outline" disabled={!coleta.job_id || remoteBusy === `status:${coleta.id}`} onClick={() => atualizarStatus(coleta)}>
                             <RefreshCw className="mr-1 h-3 w-3" /> Status
                           </Button>
+                          <Button size="sm" variant="outline" disabled={!coleta.job_id || !isRunningStatus(coleta.status) || remoteBusy === `resume:${coleta.id}`} onClick={() => retomarColeta(coleta)}>
+                            <RefreshCw className="mr-1 h-3 w-3" /> Retomar
+                          </Button>
                           <Button size="sm" variant="outline" disabled={!coleta.job_id || coleta.status !== "CONCLUIDA" || remoteBusy === `normalized:${coleta.id}`} onClick={() => importarResultadoVm(coleta)}>
                             <CloudDownload className="mr-1 h-3 w-3" /> Importar
                           </Button>
@@ -539,12 +585,14 @@ async function pollVmJob(
   coletaId: string,
   jobId: string,
   onStatus: (status: string) => void,
-  maxAttempts = 40,
+  maxAttempts = 120,
 ) {
+  let latestStatus = "PENDENTE";
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    onStatus(`Coleta em andamento na VM... tentativa ${attempt}/${maxAttempts}`);
+    onStatus(`Coleta em andamento na VM. Você pode sair da tela e voltar depois. Tentativa ${attempt}/${maxAttempts}`);
     const result = await getScrapingJobStatus({ data: { job_id: jobId } });
     const { status, erro } = extractVmStatus(result.payload);
+    latestStatus = status;
     await updateCollectionStatus(coletaId, status, erro);
 
     if (status === "CONCLUIDA") return status;
@@ -552,14 +600,19 @@ async function pollVmJob(
       throw new Error(erro || "Job da VM retornou ERRO.");
     }
 
-    await sleep(3000);
+    await sleep(15000);
   }
 
-  throw new Error("Timeout aguardando conclusao da coleta na VM.");
+  return latestStatus;
 }
 
 function sleep(ms: number) {
   return new Promise((resolve) => globalThis.setTimeout(resolve, ms));
+}
+
+function isRunningStatus(status: string | null | undefined) {
+  const normalized = String(status ?? "").toUpperCase();
+  return normalized === "PENDENTE" || normalized === "RODANDO";
 }
 
 function isObj(value: unknown): value is Record<string, unknown> {
