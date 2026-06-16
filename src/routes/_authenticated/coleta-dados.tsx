@@ -171,7 +171,7 @@ function ColetaDadosPage() {
     let coletaCriada: ColetaOdds | null = null;
     try {
       const scraperPayload = {
-        sport: sportSlug(remoteParams.esporte),
+        esporte: scraperSportName(remoteParams.esporte),
         leagues: selectedLeagueValues(remoteParams.esporte, remoteParams.leagues),
         data_inicio: remoteParams.data_inicio,
         data_fim: remoteParams.data_fim,
@@ -795,13 +795,9 @@ function toggleLeague(current: string[], value: string, checked: boolean) {
   return next.length ? next : [ALL_LEAGUES_VALUE];
 }
 
-function sportSlug(esporte: string) {
-  if (esporte === "Futebol") return "football";
-  if (esporte === "Basketball") return "basketball";
-  if (esporte === "Baseball") return "baseball";
-  if (esporte === "American Football") return "american-football";
-  if (esporte === "Hockey") return "hockey";
-  return esporte.toLowerCase();
+function scraperSportName(esporte: string) {
+  if (esporte === "Futebol") return "Football";
+  return esporte;
 }
 
 function inferSportFromFilename(name: string) {
