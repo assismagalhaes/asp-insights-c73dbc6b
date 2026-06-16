@@ -35,6 +35,7 @@ import {
   useDeletePrognostico,
   useConfiguracao,
   calcEdge,
+  getDadosTecnicos,
   saveAnaliseIaSnapshot,
   ESPORTES_DEFAULT,
   MERCADOS_DEFAULT,
@@ -177,6 +178,14 @@ function findAiChosenOption(g: ValidationGroup, ia: IAResult): Prognostico | nul
   );
 }
 
+function getContextoInicialGrupo(g: ValidationGroup): string {
+  for (const option of g.opcoes) {
+    const dados = getDadosTecnicos(option);
+    if (dados?.trim()) return dados.trim();
+  }
+  return "";
+}
+
 function getOnlineAlertas(parecer: string): string[] {
   const text = parecer.toLowerCase();
   const alertas: string[] = [];
@@ -257,7 +266,7 @@ function Validacao() {
   const grupos = useMemo(() => groupPendentes(pendentes), [pendentes]);
 
   const getContextoGrupo = (g: ValidationGroup): string =>
-    contextos[g.key] ?? "";
+    contextos[g.key] ?? getContextoInicialGrupo(g);
 
   const setContextoGrupo = (g: ValidationGroup, value: string) => {
     setContextos((prev) => ({ ...prev, [g.key]: value }));
@@ -739,7 +748,7 @@ function Validacao() {
               {/* Contexto da analise */}
               <div>
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Contexto da Análise
+                  Dados Técnicos / Contexto da Análise
                 </Label>
                 <Textarea
                   rows={6}
