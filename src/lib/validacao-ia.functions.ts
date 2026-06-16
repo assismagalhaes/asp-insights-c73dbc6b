@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/lib/auth-middleware-public";
 import { generateText } from "ai";
 import { z } from "zod";
 
-export const PROMPT_VERSAO = "validacao-critica-v6-grupo-mercado";
+export const PROMPT_VERSAO = "validacao-critica-v7-grupo-correlato";
 
 const CorrelatedPickSchema = z.object({
   mercado: z.string(),
@@ -18,6 +18,7 @@ const CorrelatedPickSchema = z.object({
 
 const GroupOptionSchema = z.object({
   prognostico_id: z.string(),
+  mercado: z.string().optional(),
   pick: z.string(),
   linha: z.string().nullable().optional(),
   odd_original: z.number(),
@@ -83,12 +84,14 @@ Regras:
 - Se a calibração informar taxa recente de confirmação acima de 85%, reforce a auditoria de risco e procure motivos reais para PULAR.
 - Não use a calibração para confirmar automaticamente. Ela é um sinal auxiliar, inferior aos dados do prognóstico, contexto e gates de risco.
 
-Regras para grupo de opções do mesmo mercado:
-- Quando houver uma lista de opções concorrentes do mesmo jogo e mercado, você está validando o grupo inteiro, não apenas a primeira opção.
+Regras para grupo de opções concorrentes:
+- Quando houver uma lista de opções concorrentes do mesmo jogo e mercado/família de mercado, você está validando o grupo inteiro, não apenas a primeira opção.
+- A opção selecionada na interface serve apenas para ajuste de odd pelo usuário. Não trate essa seleção como preferência ou decisão prévia.
 - Sua tarefa não é recalcular EV. Sua tarefa é comparar as opções disponíveis e decidir se existe uma opção tecnicamente superior para confirmação.
 - Escolha no máximo uma opção do grupo. Nunca confirme mais de uma opção.
 - Não escolha automaticamente a maior probabilidade, o maior edge ou a maior odd.
 - Compare linha, odd, probabilidade, edge, contexto técnico, risco e coerência do mercado.
+- Moneyline/1X2, Handicap e Dupla Chance podem representar a mesma tese de resultado/proteção. Compare proteção da linha, risco/retorno e exposição duplicada, e escolha somente uma entrada principal quando forem correlatas.
 - Se nenhuma opção tiver sustentação técnica suficiente, retorne PULAR.
 - Se houver risco estrutural relevante, prefira PULAR.
 
@@ -190,7 +193,7 @@ export const analisarValidacao = createServerFn({ method: "POST" })
           .map((c, index) => {
             const odd = c.odd_ajustada ?? c.odd_original;
             const edge = c.edge_ajustado ?? c.edge_original;
-            return `${index + 1}. ID: ${c.prognostico_id} | Pick: ${c.pick} | Linha: ${c.linha ?? "-"} | Odd original: ${c.odd_original.toFixed(3)} | Odd usada: ${odd.toFixed(3)} | Odd valor: ${c.odd_valor.toFixed(3)} | Prob: ${c.probabilidade.toFixed(2)}% | Edge: ${edge.toFixed(2)}%`;
+            return `${index + 1}. ID: ${c.prognostico_id} | Mercado: ${c.mercado ?? p.mercado} | Pick: ${c.pick} | Linha: ${c.linha ?? "-"} | Odd original: ${c.odd_original.toFixed(3)} | Odd usada: ${odd.toFixed(3)} | Odd valor: ${c.odd_valor.toFixed(3)} | Prob: ${c.probabilidade.toFixed(2)}% | Edge: ${edge.toFixed(2)}%`;
           })
           .join("\n")
       : "(nenhuma lista explicita de opcoes do grupo foi informada)";
@@ -230,16 +233,17 @@ ${data.contexto_adicional?.trim() || data.dados_tecnicos?.trim() || "(nenhum con
 CALIBRAÇÃO INTERNA ASP INSIGHTS:
 ${data.calibracao_interna?.trim() || "(histórico interno insuficiente ou indisponível)"}
 
-OPÇÕES CONCORRENTES DO MESMO JOGO E MESMO MERCADO:
+OPÇÕES CONCORRENTES DO MESMO JOGO E MESMA FAMÍLIA DE MERCADO:
 ${opcoesMesmoMercadoTexto}
 
-OUTRAS OPÇÕES PENDENTES DO MESMO JOGO E MESMO MERCADO:
+OUTRAS OPÇÕES PENDENTES DO MESMO JOGO E MESMA FAMÍLIA DE MERCADO:
 ${correlacionadosTexto}
 
 INSTRUÇÃO DE AUDITORIA:
 Antes de sugerir CONFIRMA, procure motivos concretos para PULAR. Se a tese contra a entrada for relevante ou houver informação importante ausente, sugira PULAR. Não confirme apenas porque a entrada veio como EV+.
 Não use 1.0u como stake padrão. Se houver qualquer dúvida entre 1.0u e 0.5u, use 0.5u. Se houver dúvida entre 0.5u e PULAR, use PULAR.
-Se houver opcoes concorrentes listadas acima, compare linhas, odds, probabilidade e edge. A resposta deve indicar a melhor opcao para CONFIRMAR ou recomendar PULAR o grupo inteiro. Nunca confirme mais de uma opcao do mesmo jogo e mercado.
+Se houver opcoes concorrentes listadas acima, compare mercado, linhas, odds, probabilidade, edge, protecao da linha e risco/retorno. A resposta deve indicar a melhor opcao para CONFIRMAR ou recomendar PULAR o grupo inteiro. Nunca confirme mais de uma opcao do mesmo jogo e mesma familia de mercado.
+Nao use a opcao selecionada na interface como preferencia. Ela serve apenas para ajuste de odd; sua decisao deve comparar todas as opcoes concorrentes.
 Se sugerir CONFIRMA, devolva obrigatoriamente o campo prognostico_id_escolhido com um ID exato da lista OPÇÕES CONCORRENTES. Se sugerir PULAR, use prognostico_id_escolhido: null.
 `;
 
