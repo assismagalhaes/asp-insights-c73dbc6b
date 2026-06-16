@@ -31,6 +31,7 @@ import {
 } from "@/lib/coleta-dados";
 import {
   createScrapingJob,
+  getScrapingJobCsv,
   getScrapingJobNormalized,
   getScrapingJobStatus,
 } from "@/lib/scraper-api.functions";
@@ -268,6 +269,23 @@ function ColetaDadosPage() {
     }
   };
 
+  const baixarCsvVm = async (coleta: ColetaOdds) => {
+    if (!coleta.job_id) return;
+    setRemoteBusy(`csv:${coleta.id}`);
+    setErro(null);
+    try {
+      const result = await getScrapingJobCsv({ data: { job_id: coleta.job_id } });
+      downloadText(`coleta_odds_${coleta.job_id}.csv`, result.csv, "text/csv;charset=utf-8");
+      toast.success("CSV da coleta baixado");
+    } catch (e) {
+      const message = formatVmError(e);
+      setErro(message);
+      toast.error(message);
+    } finally {
+      setRemoteBusy(null);
+    }
+  };
+
   const retomarColeta = async (coleta: ColetaOdds) => {
     if (!coleta.job_id) return;
     setRemoteBusy(`resume:${coleta.id}`);
@@ -453,6 +471,9 @@ function ColetaDadosPage() {
                           </Button>
                           <Button size="sm" variant="outline" disabled={!coleta.job_id || coleta.status !== "CONCLUIDA" || remoteBusy === `normalized:${coleta.id}`} onClick={() => importarResultadoVm(coleta)}>
                             <CloudDownload className="mr-1 h-3 w-3" /> Importar
+                          </Button>
+                          <Button size="sm" variant="outline" disabled={!coleta.job_id || coleta.status !== "CONCLUIDA" || remoteBusy === `csv:${coleta.id}`} onClick={() => baixarCsvVm(coleta)}>
+                            <Download className="mr-1 h-3 w-3" /> Baixar CSV
                           </Button>
                         </div>
                       </td>
