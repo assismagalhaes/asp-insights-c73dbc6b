@@ -76,6 +76,9 @@ interface IAResult {
   stake_sugerida: number | null;
   prompt_versao: string;
   modo: "local" | "online";
+  prognostico_id_escolhido?: string | null;
+  pick_escolhida?: string | null;
+  aviso_opcao?: string | null;
   fontes_consultadas?: { titulo: string; url: string }[];
   buscas_realizadas?: string[];
 }
@@ -147,6 +150,31 @@ function groupPendentes(prognosticos: Prognostico[]): ValidationGroup[] {
       return pa.localeCompare(pb);
     }),
   }));
+}
+
+function normalizeAiChoice(value: unknown): string {
+  return normalizeGroupValue(value)
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function findAiChosenOption(g: ValidationGroup, ia: IAResult): Prognostico | null {
+  const id = ia.prognostico_id_escolhido?.trim();
+  if (id && id.toLowerCase() !== "null") {
+    const byId = g.opcoes.find((p) => p.id === id);
+    if (byId) return byId;
+  }
+
+  const pick = normalizeAiChoice(ia.pick_escolhida);
+  if (!pick || pick === "null") return null;
+
+  return (
+    g.opcoes.find((p) => {
+      const optionLabel = normalizeAiChoice(`${p.pick} ${p.linha ?? ""}`);
+      const optionPick = normalizeAiChoice(p.pick);
+      return optionLabel === pick || optionPick === pick || optionLabel.includes(pick);
+    }) ?? null
+  );
 }
 
 function getOnlineAlertas(parecer: string): string[] {
@@ -285,6 +313,17 @@ function Validacao() {
       const oddAj = getOddAjustadaNum(p);
       const edgeAj = getEdgeAjustado(p);
       const calibracao = await getAiCalibrationSummary(p);
+      const opcoesMesmoMercado = g.opcoes.map((option) => ({
+        prognostico_id: option.id,
+        pick: option.pick,
+        linha: option.linha,
+        odd_original: option.odd_ofertada,
+        odd_ajustada: getOddAjustadaNum(option),
+        odd_valor: option.odd_valor,
+        probabilidade: option.probabilidade_final,
+        edge_original: option.edge,
+        edge_ajustado: getEdgeAjustado(option),
+      }));
       const prognosticosCorrelacionados = g.opcoes
         .filter((other) => other.id !== p.id)
         .map((other) => ({
@@ -316,6 +355,7 @@ function Validacao() {
             edge_ajustado: edgeAj,
             stake_sugerida: p.stake,
           },
+          opcoes_mesmo_mercado: opcoesMesmoMercado,
           prognosticos_correlacionados: prognosticosCorrelacionados,
           dados_tecnicos: contextoAnalise,
           contexto_adicional: contextoAnalise,
@@ -324,30 +364,54 @@ function Validacao() {
       };
       const raw = modo === "online" ? await callIAOnline(payload) : await callIA(payload);
       const r: IAResult = { ...(raw as Omit<IAResult, "modo">), modo };
+      const chosenByIa = r.decisao_sugerida === "CONFIRMA" ? findAiChosenOption(g, r) : null;
+      const rWithAviso: IAResult = {
+        ...r,
+        aviso_opcao:
+          r.decisao_sugerida === "CONFIRMA" && !chosenByIa
+            ? "A IA sugeriu confirmar, mas nao foi possivel identificar uma opcao valida do grupo. Selecione manualmente antes de confirmar."
+            : null,
+      };
+      if (chosenByIa) {
+        setSelectedByGroup((prev) => ({ ...prev, [g.key]: chosenByIa.id }));
+      } else if (r.decisao_sugerida === "PULAR" && g.opcoes.length > 1) {
+        setSelectedByGroup((prev) => {
+          const next = { ...prev };
+          delete next[g.key];
+          return next;
+        });
+      }
+      setPareceres((s) => ({ ...s, [g.key]: r.parecer }));
+      if (chosenByIa && r.stake_sugerida && STAKES.includes(r.stake_sugerida.toFixed(1))) {
+        setStakes((s) => ({ ...s, [chosenByIa.id]: r.stake_sugerida!.toFixed(1) }));
+      }
+      const snapshotOption = chosenByIa ?? p;
+      const snapshotOdd = getOddAjustadaNum(snapshotOption);
+      const snapshotEdge = getEdgeAjustado(snapshotOption);
       await saveAnaliseIaSnapshot({
-        prognostico_id: p.id,
+        prognostico_id: snapshotOption.id,
         modo_ia: modo,
-        esporte: p.esporte,
-        liga: p.liga,
-        mercado: p.mercado,
-        pick: p.pick,
-        linha: p.linha,
-        jogo: p.jogo,
-        data_evento: p.data,
-        hora_evento: p.hora,
-        odd_usada: oddAj ?? p.odd_ofertada,
-        probabilidade_final: p.probabilidade_final,
-        edge_usado: edgeAj ?? p.edge,
+        esporte: snapshotOption.esporte,
+        liga: snapshotOption.liga,
+        mercado: snapshotOption.mercado,
+        pick: snapshotOption.pick,
+        linha: snapshotOption.linha,
+        jogo: snapshotOption.jogo,
+        data_evento: snapshotOption.data,
+        hora_evento: snapshotOption.hora,
+        odd_usada: snapshotOdd ?? snapshotOption.odd_ofertada,
+        probabilidade_final: snapshotOption.probabilidade_final,
+        edge_usado: snapshotEdge ?? snapshotOption.edge,
         contexto_analisado: contextoAnalise,
-        parecer_ia: r.parecer,
-        decisao_sugerida: r.decisao_sugerida,
-        stake_sugerida: r.stake_sugerida,
-        riscos_identificados: r.parecer,
-        fontes_consultadas: r.fontes_consultadas ?? null,
-        buscas_realizadas: r.buscas_realizadas ?? null,
-        prompt_versao: r.prompt_versao,
+        parecer_ia: rWithAviso.parecer,
+        decisao_sugerida: rWithAviso.decisao_sugerida,
+        stake_sugerida: rWithAviso.stake_sugerida,
+        riscos_identificados: rWithAviso.parecer,
+        fontes_consultadas: rWithAviso.fontes_consultadas ?? null,
+        buscas_realizadas: rWithAviso.buscas_realizadas ?? null,
+        prompt_versao: rWithAviso.prompt_versao,
       });
-      setIaResults((s) => ({ ...s, [g.key]: r }));
+      setIaResults((s) => ({ ...s, [g.key]: rWithAviso }));
       toast.success(modo === "online" ? "Análise online concluída" : "Análise local gerada");
     } catch (e) {
       toast.error((e as Error).message);
@@ -781,7 +845,17 @@ function Validacao() {
                           Stake sugerida: <strong>{ia.stake_sugerida}u</strong>
                         </span>
                       )}
+                      {ia.pick_escolhida && (
+                        <span className="rounded border border-border bg-background px-2 py-0.5">
+                          Opção IA: <strong>{ia.pick_escolhida}</strong>
+                        </span>
+                      )}
                     </div>
+                    {ia.aviso_opcao && (
+                      <div className="rounded border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+                        {ia.aviso_opcao}
+                      </div>
+                    )}
                     {ia.modo === "online" && getOnlineAlertas(ia.parecer).length > 0 && (
                       <div className="rounded border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
                         <div className="mb-1 flex items-center gap-1 font-semibold">
