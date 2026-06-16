@@ -256,36 +256,11 @@ function Validacao() {
 
   const grupos = useMemo(() => groupPendentes(pendentes), [pendentes]);
 
-  const getContextoAnalise = (p: Prognostico): string =>
-    contextos[p.id] ?? "";
-
   const getContextoGrupo = (g: ValidationGroup): string =>
     contextos[g.key] ?? "";
 
   const setContextoGrupo = (g: ValidationGroup, value: string) => {
     setContextos((prev) => ({ ...prev, [g.key]: value }));
-  };
-
-  const isMesmoJogo = (a: Prognostico, b: Prognostico): boolean =>
-    a.data === b.data &&
-    (a.hora ?? "") === (b.hora ?? "") &&
-    a.esporte === b.esporte &&
-    a.liga === b.liga &&
-    a.jogo === b.jogo;
-
-  const setContextoAnalise = (p: Prognostico, value: string) => {
-    setContextos((prev) => {
-      const previous = prev[p.id] ?? "";
-      const next = { ...prev, [p.id]: value };
-
-      for (const other of pendentes) {
-        if (other.id === p.id || !isMesmoJogo(p, other)) continue;
-        const current = prev[other.id] ?? "";
-        if (!current || current === previous) next[other.id] = value;
-      }
-
-      return next;
-    });
   };
 
   const getOddAjustadaNum = (p: Prognostico): number | null => {
@@ -432,6 +407,10 @@ function Validacao() {
   };
 
   const decidir = async (p: Prognostico, decisao: Status) => {
+    if (p.id || decisao) {
+      toast.error("Use a validacao agrupada para confirmar ou pular este mercado.");
+      return;
+    }
     const parecer = (pareceres[p.id] ?? "").trim();
     if (!parecer) {
       toast.error("Parecer da Validação é obrigatório.");
@@ -441,8 +420,8 @@ function Validacao() {
       const oddAj = getOddAjustadaNum(p);
       const edgeAj = getEdgeAjustado(p);
       const stakeNum = stakes[p.id] ? Number(stakes[p.id]) : p.stake;
-      const contextoAnalise = getContextoAnalise(p).trim();
-      const contextoFoiEditado = Object.prototype.hasOwnProperty.call(contextos, p.id);
+      const contextoAnalise = "";
+      const contextoFoiEditado = false;
 
       // atualiza odd/edge ajustados e contexto no prognostico
       const patch: Partial<Prognostico> & { id: string } = { id: p.id };
@@ -512,7 +491,7 @@ function Validacao() {
   const decidirGrupo = async (g: ValidationGroup, decisao: Status) => {
     const selected = getSelectedOption(g);
     const parecer = (pareceres[g.key] ?? "").trim();
-    if (!parecer) {
+    if (decisao === "CONFIRMA" && !parecer) {
       toast.error("Parecer da Validacao e obrigatorio.");
       return;
     }
@@ -524,13 +503,15 @@ function Validacao() {
     try {
       const contextoAnalise = getContextoGrupo(g).trim();
       const ia = iaResults[g.key];
+      const selectedLabel = selected ? `${selected.pick}${selected.linha ? ` ${selected.linha}` : ""}` : "";
+      const parecerBase = parecer || "Grupo recusado na validacao critica agrupada.";
       for (const option of g.opcoes) {
         const isConfirmada = decisao === "CONFIRMA" && selected?.id === option.id;
         const stakeNum = isConfirmada ? Number(stakes[option.id] ?? option.stake ?? 0) : 0;
         const parecerOption =
           isConfirmada || decisao === "PULAR"
-            ? parecer
-            : `${parecer}\n\nOpcao pulada automaticamente porque outra linha/opcao do mesmo jogo e mercado foi confirmada.`;
+            ? parecerBase
+            : `Linha nao escolhida na validacao agrupada. Opcao confirmada no grupo: ${selectedLabel}.`;
         await registrarValidacaoGrupo(
           option,
           isConfirmada ? "CONFIRMA" : "PULAR",
