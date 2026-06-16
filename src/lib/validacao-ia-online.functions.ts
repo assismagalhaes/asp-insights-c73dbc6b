@@ -141,7 +141,7 @@ Gates obrigatórios:
 - Gate 3 — Informação crítica ausente: se informação crítica necessária não estiver disponível = PULAR; no máximo CONFIRMA 0.5u apenas se a informação ausente não for determinante.
 - Gate 4 — Fonte online fraca: se fontes forem antigas, genéricas ou não confirmarem o ponto crítico, sinalize e tenda para PULAR.
 - Gate 5 — Risco > benefício: se houver 2 ou mais riscos relevantes, PULAR.
-- Gate 6 — Duplicidade/correlação: se houver outras picks do mesmo jogo e mesmo grupo de mercado, não confirme todas automaticamente. Compare e escolha a melhor ou recomende PULAR nas redundantes.
+- Gate 6 — Duplicidade/correlação: se houver outras picks do mesmo jogo e mesmo grupo de mercado, trate como opções concorrentes. Você deve escolher no máximo uma opção para CONFIRMAR ou recomendar PULAR o grupo inteiro. Nunca sugira confirmar mais de uma opção do grupo.
 
 Regras por informação crítica:
 - MLB: starter não confirmado → se muito crítico, PULAR; se não, destacar AGUARDAR CONFIRMAÇÃO. Bullpen muito usado e pick depende de under → risco alto.
@@ -269,7 +269,7 @@ ${data.contexto_adicional?.trim() || data.dados_tecnicos?.trim() || "(nenhum)"}
 CALIBRAÇÃO INTERNA ASP INSIGHTS:
 ${data.calibracao_interna?.trim() || "(histórico interno insuficiente ou indisponível)"}
 
-OUTRAS PICKS PENDENTES DO MESMO JOGO PARA GATE DE DUPLICIDADE/CORRELAÇÃO:
+OUTRAS OPÇÕES PENDENTES DO MESMO JOGO E MESMO MERCADO:
 ${correlacionadosTexto}
 
 CHECKLIST ESPECÍFICO DO ESPORTE:
@@ -279,6 +279,7 @@ Instrução reforçada:
 Você deve usar o checklist específico do esporte. Não faça apenas busca genérica por notícias. Busque os fatores que realmente podem confirmar ou invalidar a tese da aposta conforme esporte, liga, mercado, pick e linha. Quando não encontrar uma informação crítica, diga claramente que ela não foi encontrada. Não invente dados. Diferencie fatos confirmados, informações ausentes e inferências.
 Antes de sugerir CONFIRMA, procure motivos concretos para PULAR. Se a tese contra a entrada for relevante ou houver informação crítica ausente/incerta, sugira PULAR. Não confirme apenas porque a entrada veio como EV+.
 Não use 1.0u como stake padrão. Se houver qualquer dúvida entre 1.0u e 0.5u, use 0.5u. Se houver dúvida entre 0.5u e PULAR, use PULAR.
+Se houver outras opções listadas acima, compare linhas, odds, probabilidade e edge. A resposta deve indicar a melhor opção para CONFIRMAR ou recomendar PULAR o grupo inteiro. Nunca confirme mais de uma opção do mesmo jogo e mercado.
 
 Faça pesquisas online conforme a política descrita e produza o parecer no formato exigido.`;
 
