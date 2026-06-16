@@ -122,6 +122,38 @@ async function scraperRequest(path: string, init?: RequestInit) {
   }
 }
 
+async function scraperTextRequest(path: string) {
+  const { baseUrl, apiKey } = getScraperConfig();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 45000);
+  try {
+    const res = await fetch(`${baseUrl}${path}`, {
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "X-API-Key": apiKey,
+      },
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      console.error("[Scraper API] Erro ao baixar CSV", {
+        status: res.status,
+        path,
+        response: text,
+      });
+      throw new Error(`Erro HTTP ${res.status} ao baixar CSV da VM. Resposta: ${text}`);
+    }
+    return text;
+  } catch (e) {
+    if ((e as Error).name === "AbortError") {
+      throw new Error("Timeout ao baixar CSV da VM.");
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export const createScrapingJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => JobParamsSchema.parse(input))
@@ -168,5 +200,16 @@ export const getScrapingJobNormalized = createServerFn({ method: "POST" })
       job_id: data.job_id,
       normalized_json: pickPayload(payload) as JsonValue,
       payload: payload as JsonValue,
+    };
+  });
+
+export const getScrapingJobCsv = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => JobIdSchema.parse(input))
+  .handler(async ({ data }) => {
+    const csv = await scraperTextRequest(`/scraping/jobs/${encodeURIComponent(data.job_id)}/csv`);
+    return {
+      job_id: data.job_id,
+      csv,
     };
   });
