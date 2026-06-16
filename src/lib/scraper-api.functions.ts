@@ -4,20 +4,20 @@ import { requireSupabaseAuth } from "@/lib/auth-middleware-public";
 
 const JobParamsSchema = z
   .object({
-    sport: z.string().min(1).optional(),
     esporte: z.string().min(1).optional(),
+    sport: z.string().min(1).optional(),
     leagues: z.array(z.string().min(1)).optional().default([]),
     liga: z.string().optional(),
     data_inicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     data_fim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   })
   .transform((data) => ({
-    sport: data.sport ?? data.esporte,
+    esporte: data.esporte ?? data.sport,
     leagues: data.leagues ?? [],
     data_inicio: data.data_inicio,
     data_fim: data.data_fim,
   }))
-  .refine((data) => Boolean(data.sport), { message: "sport e obrigatorio" });
+  .refine((data) => Boolean(data.esporte), { message: "esporte e obrigatorio" });
 
 const JobIdSchema = z.object({
   job_id: z.string().min(1),
@@ -49,7 +49,7 @@ function stringifyDebug(value: unknown) {
 }
 
 const EXPECTED_JOB_PAYLOAD = {
-  sport: "football",
+  esporte: "Football",
   leagues: [
     "https://www.flashscore.com/football/brazil/serie-a-betano/fixtures/",
     "https://www.flashscore.com/football/england/premier-league/fixtures/",
