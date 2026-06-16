@@ -1,5 +1,12 @@
 import { supabase } from "@/lib/supabase-public";
-import { getEdgeEfetivo, getOddEfetiva, type FeedbackIaResultado, type Prognostico } from "@/lib/db";
+import {
+  getEdgeEfetivo,
+  getOddEfetiva,
+  normalizeAiDecision,
+  type FeedbackIaResultado,
+  type Prognostico,
+  type Validacao,
+} from "@/lib/db";
 
 const aiDb = supabase as unknown as {
   from: (table: string) => {
@@ -82,7 +89,7 @@ export async function getAiCalibrationSummary(prognostico?: Pick<Prognostico, "e
     return emptyCalibrationSummary();
   }
 
-  const rows = (data ?? []) as FeedbackIaResultado[];
+  const rows = mergeFeedbackRows((data ?? []) as FeedbackIaResultado[], await getHistoricalFeedbackRows(100));
   const resolved = rows.filter((row) => getOutcome(row) === "GREEN" || getOutcome(row) === "RED");
   const confirmed = resolved.filter((row) => normalizeDecision(row.decisao_ia_sugerida) === "CONFIRMAR");
   const skipped = resolved.filter((row) => normalizeDecision(row.decisao_ia_sugerida) === "PULAR");
@@ -143,7 +150,10 @@ export async function getSimilarAiHistory(prognostico: Prognostico): Promise<Sim
   }
 
   const targetLine = numberFromLine(prognostico.linha);
-  const rows = ((data ?? []) as FeedbackIaResultado[]).filter((row) => {
+  const sourceRows = mergeFeedbackRows((data ?? []) as FeedbackIaResultado[], await getHistoricalFeedbackRows(300));
+  const rows = sourceRows.filter((row) => {
+    if (row.esporte !== prognostico.esporte || row.mercado !== prognostico.mercado) return false;
+    if (prognostico.liga && row.liga && row.liga !== prognostico.liga) return false;
     if (!isSimilarPick(row.pick, prognostico.pick)) return false;
     const rowLine = numberFromLine(row.linha);
     if (targetLine == null || rowLine == null) return true;
@@ -178,7 +188,113 @@ export async function getSimilarAiHistory(prognostico: Prognostico): Promise<Sim
 }
 
 function getOutcome(row: FeedbackIaResultado): string | null {
-  return row.resultado_teorico ?? row.resultado_real ?? null;
+  return normalizeOutcome(row.resultado_teorico ?? row.resultado_real);
+}
+
+function mergeFeedbackRows(primary: FeedbackIaResultado[], historical: FeedbackIaResultado[]): FeedbackIaResultado[] {
+  const ids = new Set(primary.map((row) => row.prognostico_id).filter(Boolean));
+  return [...primary, ...historical.filter((row) => !ids.has(row.prognostico_id))];
+}
+
+type HistoricalPrognostico = Prognostico & {
+  resultados?: Array<{ resultado: string; lucro_prejuizo: number | null; created_at: string; data_resultado: string | null }>;
+  validacoes?: Array<Partial<Validacao>>;
+};
+
+async function getHistoricalFeedbackRows(limit: number): Promise<FeedbackIaResultado[]> {
+  const { data, error } = await supabase
+    .from("prognosticos")
+    .select("*, resultados(resultado, lucro_prejuizo, data_resultado, created_at), validacoes(*)")
+    .in("resultado", ["GREEN", "RED", "WIN", "WINS", "LOSS", "LOSSES"])
+    .limit(limit);
+
+  if (error) {
+    console.warn("[Aprendizado IA] Histórico retroativo indisponível:", error.message);
+    return [];
+  }
+
+  return ((data ?? []) as HistoricalPrognostico[])
+    .map((p) => {
+      const resultado = normalizeOutcome(p.resultado);
+      if (!resultado) return null;
+      const validacao = latestByCreatedAt(p.validacoes ?? []);
+      const resultadoRow = latestByCreatedAt(p.resultados ?? []);
+      const decisaoHumana = normalizeAiDecision(validacao?.decisao ?? p.status_validacao);
+      const decisaoIa = normalizeAiDecision(validacao?.decisao_ia_sugerida);
+      const contaBankroll = decisaoHumana === "CONFIRMAR";
+      const lucro = Number(resultadoRow?.lucro_prejuizo ?? p.lucro_prejuizo ?? 0);
+      return {
+        id: `retro-${p.id}`,
+        prognostico_id: p.id,
+        analise_ia_id: null,
+        modo_ia: validacao?.modo_ia ?? null,
+        esporte: p.esporte,
+        liga: p.liga,
+        mercado: p.mercado,
+        pick: p.pick,
+        linha: p.linha,
+        jogo: p.jogo,
+        decisao_ia_sugerida: decisaoIa,
+        stake_ia_sugerida: validacao?.stake_ia_sugerida ?? null,
+        decisao_humana_final: decisaoHumana,
+        stake_humana_final: Number(validacao?.stake_confirmada ?? p.stake ?? 0),
+        resultado_real: resultado,
+        resultado_teorico: resultado,
+        resultado_financeiro: contaBankroll ? resultado : null,
+        conta_bankroll: contaBankroll,
+        lucro_prejuizo: contaBankroll ? lucro : 0,
+        lucro_unidades: lucro,
+        lucro_teorico_unidades: lucro,
+        lucro_financeiro_unidades: contaBankroll ? lucro : 0,
+        odd_usada: getOddEfetiva(p),
+        probabilidade_final: p.probabilidade_final,
+        edge_usado: getEdgeEfetivo(p),
+        tags_risco: extractTags(validacao?.parecer_ia ?? validacao?.parecer_validacao ?? p.observacoes),
+        fontes_consultadas: validacao?.fontes_consultadas ?? null,
+        buscas_realizadas: validacao?.buscas_realizadas ?? null,
+        acertou_ia: decisaoIa ? decisionHit(decisaoIa, resultado) : null,
+        acertou_humano: decisaoHumana ? decisionHit(decisaoHumana, resultado) : null,
+        divergencia_ia_humano: decisaoIa && decisaoHumana ? decisaoIa !== decisaoHumana : null,
+        created_at: resultadoRow?.created_at ?? p.updated_at ?? p.created_at,
+        updated_at: p.updated_at,
+      } satisfies FeedbackIaResultado;
+    })
+    .filter((row): row is FeedbackIaResultado => Boolean(row));
+}
+
+function normalizeOutcome(resultado: string | null | undefined): "GREEN" | "RED" | null {
+  const value = String(resultado ?? "").toUpperCase().trim();
+  if (["GREEN", "WIN", "WINS"].includes(value)) return "GREEN";
+  if (["RED", "LOSS", "LOSSES"].includes(value)) return "RED";
+  return null;
+}
+
+function latestByCreatedAt<T extends { created_at?: string | null }>(rows: T[]): T | null {
+  if (!rows.length) return null;
+  return [...rows].sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")))[0] ?? null;
+}
+
+function decisionHit(decision: "CONFIRMAR" | "PULAR" | null, resultado: "GREEN" | "RED"): boolean | null {
+  if (decision === "CONFIRMAR") return resultado === "GREEN";
+  if (decision === "PULAR") return resultado === "RED";
+  return null;
+}
+
+function extractTags(text: string | null | undefined): string[] {
+  const value = String(text ?? "").toLowerCase();
+  const tags: string[] = [];
+  const checks: Array<[string, RegExp]> = [
+    ["info_ausente", /não encontrado|nao encontrado|ausente|incert|não confirmad|nao confirmad/],
+    ["risco_estrutural", /risco estrutural|lineup|escalação|escalacao|rotação|rotacao|desfalque|lesão|lesao|questionável|questionavel/],
+    ["fonte_fraca", /fonte insuficiente|fonte fraca|sem fonte|desatualizad|notícia antiga|noticia antiga/],
+    ["duplicidade", /duplicidade|correlaç|correlac|redundan/],
+    ["volatilidade", /volátil|volatil|variância|variancia|mercado volátil|mercado volatil/],
+    ["clima", /clima|vento|chuva|temperatura|weather/],
+  ];
+  for (const [tag, pattern] of checks) {
+    if (pattern.test(value)) tags.push(tag);
+  }
+  return tags;
 }
 
 function normalizeDecision(decision: string | null | undefined): "CONFIRMAR" | "PULAR" | null {
