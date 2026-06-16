@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { fetchCollections, type ColetaOdds } from "@/lib/coleta-dados";
 import { executePredictiveModel } from "@/lib/scraper-api.functions";
 import { supabase } from "@/lib/supabase-public";
@@ -36,6 +37,9 @@ interface ModeloPrognostico {
   probabilidade_final: number;
   edge: number;
   observacoes?: string | null;
+  dados_tecnicos?: string | null;
+  contexto_modelo?: string | null;
+  arquivo_contexto?: string | null;
 }
 
 interface ModeloResultado {
@@ -44,6 +48,9 @@ interface ModeloResultado {
   modelo?: string;
   csv_coleta?: string;
   arquivo_saida?: string;
+  arquivo_contexto?: string;
+  contexto_modelo?: string;
+  dados_tecnicos?: string;
   total_prognosticos?: number;
   prognosticos?: ModeloPrognostico[];
 }
@@ -99,7 +106,7 @@ function ModelosPreditivosPage() {
 
     setSending(true);
     try {
-      const payload = prognosticos.map(toPrognosticoInsert);
+      const payload = prognosticos.map((p) => toPrognosticoInsert(p, resultado));
       const { error } = await supabase.from("prognosticos").insert(payload as never);
       if (error) throw error;
       await qc.invalidateQueries({ queryKey: ["prognosticos"] });
@@ -191,6 +198,21 @@ function ModelosPreditivosPage() {
             <Info label="Arquivo" value={resultado?.arquivo_saida ?? "-"} />
             <Info label="Prognósticos" value={resultado?.total_prognosticos ?? prognosticos.length} />
           </div>
+
+          {(resultado?.contexto_modelo || resultado?.dados_tecnicos) && (
+            <Accordion type="single" collapsible className="rounded-md border px-3">
+              <AccordionItem value="dados-tecnicos" className="border-0">
+                <AccordionTrigger className="text-sm font-semibold">
+                  Dados Técnicos do Modelo
+                </AccordionTrigger>
+                <AccordionContent>
+                  <pre className="max-h-[42vh] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 font-mono text-xs">
+                    {resultado.contexto_modelo?.trim() || resultado.dados_tecnicos?.trim()}
+                  </pre>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          )}
 
           <div className="overflow-auto rounded-md border">
             <Table>
@@ -289,6 +311,9 @@ function normalizeModelResponse(response: unknown): ModeloResultado {
     modelo: data.modelo ? String(data.modelo) : undefined,
     csv_coleta: data.csv_coleta ? String(data.csv_coleta) : undefined,
     arquivo_saida: data.arquivo_saida ? String(data.arquivo_saida) : undefined,
+    arquivo_contexto: data.arquivo_contexto ? String(data.arquivo_contexto) : undefined,
+    contexto_modelo: data.contexto_modelo ? String(data.contexto_modelo) : undefined,
+    dados_tecnicos: data.dados_tecnicos ? String(data.dados_tecnicos) : undefined,
     total_prognosticos: toNumber(data.total_prognosticos) ?? prognosticos.length,
     prognosticos,
   };
@@ -311,12 +336,18 @@ function mapModeloPrognostico(row: Record<string, unknown>): ModeloPrognostico {
     probabilidade_final: toNumber(row.probabilidade_final) ?? 0,
     edge: toNumber(row.edge) ?? 0,
     observacoes: row.observacoes ? String(row.observacoes) : null,
+    dados_tecnicos: row.dados_tecnicos ? String(row.dados_tecnicos) : null,
+    contexto_modelo: row.contexto_modelo ? String(row.contexto_modelo) : null,
+    arquivo_contexto: row.arquivo_contexto ? String(row.arquivo_contexto) : null,
   };
 }
 
-function toPrognosticoInsert(p: ModeloPrognostico) {
+function toPrognosticoInsert(p: ModeloPrognostico, resultado: ModeloResultado | null) {
   const norm = normalizeEsporteLiga({ esporte: p.esporte, liga: p.liga });
   const { mandante, visitante } = inferTeams(p);
+  const dadosTecnicos = p.dados_tecnicos?.trim() || resultado?.dados_tecnicos?.trim() || null;
+  const contextoModelo = p.contexto_modelo?.trim() || resultado?.contexto_modelo?.trim() || null;
+  const arquivoContexto = p.arquivo_contexto?.trim() || resultado?.arquivo_contexto?.trim() || null;
   return {
     data: parseModelDate(p.data) ?? p.data,
     hora: p.hora,
@@ -334,7 +365,11 @@ function toPrognosticoInsert(p: ModeloPrognostico) {
     edge: p.edge,
     stake: 0,
     observacoes: p.observacoes ?? null,
-    dados_tecnicos: null,
+    dados_tecnicos: dadosTecnicos,
+    contexto_modelo: contextoModelo,
+    arquivo_contexto: arquivoContexto,
+    origem_modelo: "Futebol",
+    job_id_coleta: resultado?.job_id ?? null,
     status_validacao: "PENDENTE",
     status_publicacao: "NAO_PUBLICADO",
     resultado: "PENDENTE",

@@ -17,6 +17,10 @@ interface Props {
     Prognostico,
     | "id"
     | "dados_tecnicos"
+    | "contexto_modelo"
+    | "arquivo_contexto"
+    | "origem_modelo"
+    | "job_id_coleta"
     | "observacoes"
     | "jogo"
     | "mercado"
@@ -77,6 +81,13 @@ export function DadosTecnicosViewer({ prognostico, variant = "icon", className }
                 <Info label="Odd valor" value={prognostico.odd_valor.toFixed(2)} />
                 <Info label="Edge usado" value={`${edgeEfetivo.toFixed(2)}%`} />
               </div>
+              {(prognostico.origem_modelo || prognostico.job_id_coleta || prognostico.arquivo_contexto) && (
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <Info label="Origem modelo" value={prognostico.origem_modelo || "—"} />
+                  <Info label="Job coleta" value={prognostico.job_id_coleta || "—"} />
+                  <Info label="Arquivo contexto" value={prognostico.arquivo_contexto || "—"} />
+                </div>
+              )}
               <pre className="max-h-[48vh] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 font-mono text-xs">
                 {dados || "Nenhum dado técnico ou observação antiga registrada."}
               </pre>
