@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PeriodFilter } from "@/components/period-filter";
 import { dateInRange, rangeFromPeriodo, type PeriodoFiltro } from "@/lib/metrics";
@@ -50,20 +51,15 @@ function ColetaDadosPage() {
   const [remoteStatus, setRemoteStatus] = useState<string | null>(null);
   const [remoteParams, setRemoteParams] = useState({
     esporte: "Baseball",
-    liga: "",
+    leagues: ["Todos"],
     data_inicio: "",
     data_fim: "",
-    mercados: "",
-    bookmaker: "",
-    fonte: "",
   });
   const [periodo, setPeriodo] = useState<PeriodoFiltro>("tudo");
   const [customIni, setCustomIni] = useState("");
   const [customFim, setCustomFim] = useState("");
   const [fEsporte, setFEsporte] = useState("all");
   const [fLiga, setFLiga] = useState("all");
-  const [fMercado, setFMercado] = useState("all");
-  const [fBookmaker, setFBookmaker] = useState("all");
   const [fStatus, setFStatus] = useState("all");
   const { ini, fim } = rangeFromPeriodo(periodo, customIni, customFim);
 
@@ -82,11 +78,9 @@ function ColetaDadosPage() {
         if (row.data && !dateInRange(row.data, ini, fim)) return false;
         if (fEsporte !== "all" && row.esporte !== fEsporte) return false;
         if (fLiga !== "all" && row.liga !== fLiga) return false;
-        if (fMercado !== "all" && row.mercado !== fMercado) return false;
-        if (fBookmaker !== "all" && row.bookmaker !== fBookmaker) return false;
         return true;
       }),
-    [oddsRows, ini, fim, fEsporte, fLiga, fMercado, fBookmaker],
+    [oddsRows, ini, fim, fEsporte, fLiga],
   );
 
   const filteredCollections = useMemo(
@@ -107,20 +101,9 @@ function ColetaDadosPage() {
     return {
       esportes: unique(rows.map((row) => row.esporte)),
       ligas: unique(rows.map((row) => row.liga)),
-      mercados: unique(rows.map((row) => row.mercado)),
-      bookmakers: unique(rows.map((row) => row.bookmaker)),
       status: unique(coletas.map((row) => row.status)),
     };
   }, [normalized, oddsRows, coletas]);
-
-  const remoteMercados = useMemo(
-    () =>
-      remoteParams.mercados
-        .split(",")
-        .map((m) => m.trim())
-        .filter(Boolean),
-    [remoteParams.mercados],
-  );
 
   const handleFile = async (file: File | null) => {
     if (!file) return;
@@ -188,23 +171,24 @@ function ColetaDadosPage() {
     let coletaCriada: ColetaOdds | null = null;
     try {
       const scraperPayload = {
-        esporte: remoteParams.esporte,
-        liga: remoteParams.liga.trim(),
+        sport: sportSlug(remoteParams.esporte),
+        leagues: selectedLeagueValues(remoteParams.esporte, remoteParams.leagues),
         data_inicio: remoteParams.data_inicio,
         data_fim: remoteParams.data_fim,
-        mercados: remoteMercados,
       };
-      if (!scraperPayload.liga || !scraperPayload.data_inicio || !scraperPayload.data_fim || !scraperPayload.mercados.length) {
-        toast.error("Informe liga, data início, data fim e ao menos um mercado.");
+      if (!scraperPayload.data_inicio || !scraperPayload.data_fim) {
+        toast.error("Informe data inicio e data fim.");
         return;
       }
       console.info("[Coleta VM] Payload POST /scraping/jobs", scraperPayload);
       const result = await createScrapingJob({ data: scraperPayload });
       const coleta = await createRemoteCollection({
-        ...scraperPayload,
+        esporte: remoteParams.esporte,
+        liga: selectedLeagueLabels(remoteParams.esporte, remoteParams.leagues).join(", ") || "Todos",
+        data_inicio: scraperPayload.data_inicio,
+        data_fim: scraperPayload.data_fim,
+        mercados: [],
         job_id: result.job_id,
-        bookmaker: remoteParams.bookmaker || null,
-        fonte: remoteParams.fonte || null,
       });
       coletaCriada = coleta;
       await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
@@ -334,7 +318,7 @@ function ColetaDadosPage() {
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <div>
               <Label>Esporte</Label>
-              <Select value={remoteParams.esporte} onValueChange={(v) => setRemoteParams((p) => ({ ...p, esporte: v }))}>
+              <Select value={remoteParams.esporte} onValueChange={(v) => setRemoteParams((p) => ({ ...p, esporte: v, leagues: ["Todos"] }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Futebol">Futebol</SelectItem>
@@ -345,12 +329,13 @@ function ColetaDadosPage() {
                 </SelectContent>
               </Select>
             </div>
-            <Field label="Liga" value={remoteParams.liga} onChange={(liga) => setRemoteParams((p) => ({ ...p, liga }))} placeholder="Ex.: MLB, NBA, Premier League" />
+            <LeagueSelector
+              esporte={remoteParams.esporte}
+              selected={remoteParams.leagues}
+              onChange={(leagues) => setRemoteParams((p) => ({ ...p, leagues }))}
+            />
             <Field label="Data início" type="date" value={remoteParams.data_inicio} onChange={(data_inicio) => setRemoteParams((p) => ({ ...p, data_inicio }))} />
             <Field label="Data fim" type="date" value={remoteParams.data_fim} onChange={(data_fim) => setRemoteParams((p) => ({ ...p, data_fim }))} />
-            <Field label="Mercados" value={remoteParams.mercados} onChange={(mercados) => setRemoteParams((p) => ({ ...p, mercados }))} placeholder="Moneyline, Over/Under, Handicap" />
-            <Field label="Bookmaker" value={remoteParams.bookmaker} onChange={(bookmaker) => setRemoteParams((p) => ({ ...p, bookmaker }))} placeholder="Ex.: betano.br" />
-            <Field label="Fonte" value={remoteParams.fonte} onChange={(fonte) => setRemoteParams((p) => ({ ...p, fonte }))} placeholder="Ex.: flashscore" />
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={executarColeta} disabled={remoteBusy === "pipeline" || !remoteParams.esporte}>
@@ -425,8 +410,6 @@ function ColetaDadosPage() {
             />
             <Filter label="Esporte" value={fEsporte} onChange={setFEsporte} options={filterOptions.esportes} />
             <Filter label="Liga" value={fLiga} onChange={setFLiga} options={filterOptions.ligas} />
-            <Filter label="Mercado" value={fMercado} onChange={setFMercado} options={filterOptions.mercados} />
-            <Filter label="Bookmaker" value={fBookmaker} onChange={setFBookmaker} options={filterOptions.bookmakers} />
             <Filter label="Status" value={fStatus} onChange={setFStatus} options={filterOptions.status} />
           </div>
         </CardContent>
@@ -529,6 +512,54 @@ function Info({ label, value }: { label: string; value: string | number }) {
     <div className="rounded-md border p-3">
       <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className="mt-1 truncate font-mono font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function LeagueSelector({
+  esporte,
+  selected,
+  onChange,
+}: {
+  esporte: string;
+  selected: string[];
+  onChange: (value: string[]) => void;
+}) {
+  const options = leagueOptionsForSport(esporte);
+  const selectedSet = new Set(selected.length ? selected : ["Todos"]);
+
+  if (esporte === "Futebol") {
+    return (
+      <div className="md:col-span-2">
+        <Label>Liga</Label>
+        <div className="mt-2 max-h-48 overflow-auto rounded-md border p-3">
+          <div className="grid gap-2 sm:grid-cols-2">
+            {options.map((option) => (
+              <label key={option.value} className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={selectedSet.has(option.value)}
+                  onCheckedChange={(checked) => onChange(toggleLeague(selected, option.value, Boolean(checked)))}
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <Label>Liga</Label>
+      <Select value={selected[0] ?? "Todos"} onValueChange={(value) => onChange([value])}>
+        <SelectTrigger><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }
@@ -678,6 +709,99 @@ function EmptyRow({ cols }: { cols: number }) {
 
 function unique(values: Array<string | null | undefined>) {
   return [...new Set(values.filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+
+type LeagueOption = { label: string; value: string };
+
+const ALL_LEAGUES_VALUE = "Todos";
+
+const LEAGUES_BY_SPORT: Record<string, LeagueOption[]> = {
+  Basketball: [
+    { label: "Todos", value: ALL_LEAGUES_VALUE },
+    { label: "NBA", value: "https://www.flashscore.com/basketball/usa/nba/fixtures/" },
+    { label: "WNBA", value: "https://www.flashscore.com/basketball/usa/wnba/fixtures/" },
+  ],
+  Baseball: [
+    { label: "Todos", value: ALL_LEAGUES_VALUE },
+    { label: "MLB", value: "https://www.flashscore.com/baseball/usa/mlb/fixtures/" },
+  ],
+  Hockey: [
+    { label: "Todos", value: ALL_LEAGUES_VALUE },
+    { label: "NHL", value: "https://www.flashscore.com/hockey/usa/nhl/fixtures/" },
+  ],
+  "American Football": [
+    { label: "Todos", value: ALL_LEAGUES_VALUE },
+    { label: "NFL", value: "https://www.flashscore.com/american-football/usa/nfl/fixtures/" },
+  ],
+  Futebol: [
+    { label: "Todos", value: ALL_LEAGUES_VALUE },
+    { label: "Austria Bundesliga", value: "https://www.flashscore.com/football/austria/bundesliga/fixtures/" },
+    { label: "Belgium Jupiler Pro League", value: "https://www.flashscore.com/football/belgium/jupiler-pro-league/fixtures/" },
+    { label: "Brazil Série A", value: "https://www.flashscore.com/football/brazil/serie-a-betano/fixtures/" },
+    { label: "China Super League", value: "https://www.flashscore.com/football/china/super-league/fixtures/" },
+    { label: "Denmark Superliga", value: "https://www.flashscore.com/football/denmark/superliga/fixtures/" },
+    { label: "England Championship", value: "https://www.flashscore.com/football/england/championship/fixtures/" },
+    { label: "England Premier League", value: "https://www.flashscore.com/football/england/premier-league/fixtures/" },
+    { label: "Finland Veikkausliiga", value: "https://www.flashscore.com/football/finland/veikkausliiga/fixtures/" },
+    { label: "France Ligue 1", value: "https://www.flashscore.com/football/france/ligue-1/fixtures/" },
+    { label: "France Ligue 2", value: "https://www.flashscore.com/football/france/ligue-2/fixtures/" },
+    { label: "Germany 2. Bundesliga", value: "https://www.flashscore.com/football/germany/2-bundesliga/fixtures/" },
+    { label: "Germany Bundesliga", value: "https://www.flashscore.com/football/germany/bundesliga/fixtures/" },
+    { label: "Greece Super League", value: "https://www.flashscore.com/football/greece/super-league/fixtures/" },
+    { label: "Ireland Premier Division", value: "https://www.flashscore.com/football/ireland/premier-division/fixtures/" },
+    { label: "Italy Serie A", value: "https://www.flashscore.com/football/italy/serie-a/fixtures/" },
+    { label: "Italy Serie B", value: "https://www.flashscore.com/football/italy/serie-b/fixtures/" },
+    { label: "Japan J1 League", value: "https://www.flashscore.com/football/japan/j1-league/fixtures/" },
+    { label: "Mexico Liga MX", value: "https://www.flashscore.com/football/mexico/liga-mx/fixtures/" },
+    { label: "Netherlands Eredivisie", value: "https://www.flashscore.com/football/netherlands/eredivisie/fixtures/" },
+    { label: "Norway Eliteserien", value: "https://www.flashscore.com/football/norway/eliteserien/fixtures/" },
+    { label: "Poland Ekstraklasa", value: "https://www.flashscore.com/football/poland/ekstraklasa/fixtures/" },
+    { label: "Portugal Liga Portugal", value: "https://www.flashscore.com/football/portugal/liga-portugal/fixtures/" },
+    { label: "Romania Superliga", value: "https://www.flashscore.com/football/romania/superliga/fixtures/" },
+    { label: "Scotland Championship", value: "https://www.flashscore.com/football/scotland/championship/fixtures/" },
+    { label: "Scotland Premiership", value: "https://www.flashscore.com/football/scotland/premiership/fixtures/" },
+    { label: "Spain LaLiga", value: "https://www.flashscore.com/football/spain/laliga/fixtures/" },
+    { label: "Spain LaLiga2", value: "https://www.flashscore.com/football/spain/laliga2/fixtures/" },
+    { label: "Sweden Allsvenskan", value: "https://www.flashscore.com/football/sweden/allsvenskan/fixtures/" },
+    { label: "Switzerland Super League", value: "https://www.flashscore.com/football/switzerland/super-league/fixtures/" },
+    { label: "Turkey Super Lig", value: "https://www.flashscore.com/football/turkey/super-lig/fixtures/" },
+    { label: "USA MLS", value: "https://www.flashscore.com/football/usa/mls/fixtures/" },
+  ],
+};
+
+function leagueOptionsForSport(esporte: string) {
+  return LEAGUES_BY_SPORT[esporte] ?? LEAGUES_BY_SPORT.Baseball;
+}
+
+function selectedLeagueValues(esporte: string, selected: string[]) {
+  const values = selected.length ? selected : [ALL_LEAGUES_VALUE];
+  if (values.includes(ALL_LEAGUES_VALUE)) return [];
+  const validValues = new Set(leagueOptionsForSport(esporte).map((option) => option.value));
+  return values.filter((value) => validValues.has(value));
+}
+
+function selectedLeagueLabels(esporte: string, selected: string[]) {
+  const values = selected.length ? selected : [ALL_LEAGUES_VALUE];
+  if (values.includes(ALL_LEAGUES_VALUE)) return ["Todos"];
+  const labels = new Map(leagueOptionsForSport(esporte).map((option) => [option.value, option.label]));
+  return values.map((value) => labels.get(value)).filter(Boolean) as string[];
+}
+
+function toggleLeague(current: string[], value: string, checked: boolean) {
+  if (value === ALL_LEAGUES_VALUE) return checked ? [ALL_LEAGUES_VALUE] : [];
+  const base = current.filter((item) => item !== ALL_LEAGUES_VALUE);
+  if (checked) return [...new Set([...base, value])];
+  const next = base.filter((item) => item !== value);
+  return next.length ? next : [ALL_LEAGUES_VALUE];
+}
+
+function sportSlug(esporte: string) {
+  if (esporte === "Futebol") return "football";
+  if (esporte === "Basketball") return "basketball";
+  if (esporte === "Baseball") return "baseball";
+  if (esporte === "American Football") return "american-football";
+  if (esporte === "Hockey") return "hockey";
+  return esporte.toLowerCase();
 }
 
 function inferSportFromFilename(name: string) {
