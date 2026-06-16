@@ -23,6 +23,11 @@ const JobIdSchema = z.object({
   job_id: z.string().min(1),
 });
 
+const PredictiveModelSchema = z.object({
+  job_id: z.string().min(1),
+  modelo: z.enum(["Futebol"]),
+});
+
 type ScraperPayload = Record<string, unknown>;
 type JsonValue = string | number | boolean | null | { [k: string]: JsonValue } | JsonValue[];
 
@@ -212,4 +217,27 @@ export const getScrapingJobCsv = createServerFn({ method: "POST" })
       job_id: data.job_id,
       csv,
     };
+  });
+
+export const executePredictiveModel = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => PredictiveModelSchema.parse(input))
+  .handler(async ({ data }) => {
+    const endpointByModel: Record<string, string> = {
+      Futebol: "/modelos/futebol/executar",
+    };
+    const path = endpointByModel[data.modelo];
+    try {
+      const payload = await scraperRequest(path, {
+        method: "POST",
+        body: JSON.stringify({ job_id: data.job_id }),
+      });
+      return payload as JsonValue;
+    } catch (e) {
+      const message = (e as Error).message;
+      if (/404|failed to fetch|network|conex/i.test(message)) {
+        throw new Error("O endpoint de execução do modelo ainda não está disponível na VM.");
+      }
+      throw e;
+    }
   });
