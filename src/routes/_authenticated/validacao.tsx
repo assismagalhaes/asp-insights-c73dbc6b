@@ -61,15 +61,7 @@ const decisoes: { label: Status; texto: string; color: string }[] = [
 
 const STAKES = ["0.5", "1.0", "1.5"];
 
-const PARECER_TEMPLATE = `Tese:
-
-Riscos:
-
-Condição de invalidação:
-
-Decisão:
-
-Stake:`;
+const PARECER_TEMPLATE = "PULAR - risco/contexto insuficiente";
 
 interface IAResult {
   parecer: string;
@@ -86,6 +78,8 @@ interface IAResult {
 
 type ValidationGroup = {
   key: string;
+  eventKey: string;
+  familyKey: string;
   esporte: string;
   liga: string;
   data: string;
@@ -104,21 +98,43 @@ function normalizeGroupValue(value: unknown): string {
     .replace(/\s+/g, " ");
 }
 
-function getValidationGroupKey(prognostico: Prognostico): string {
+function getEventKey(prognostico: Prognostico): string {
   const jogoBase =
     prognostico.jogo ||
     `${prognostico.mandante ?? ""} vs ${prognostico.visitante ?? ""}`;
+  const mandante = prognostico.mandante || jogoBase.split(/\s+vs\s+/i)[0] || jogoBase;
+  const visitante = prognostico.visitante || jogoBase.split(/\s+vs\s+/i)[1] || "";
 
   return [
     prognostico.esporte,
     prognostico.liga,
     prognostico.data,
     prognostico.hora,
-    jogoBase,
-    prognostico.mercado,
+    mandante,
+    visitante,
   ]
     .map(normalizeGroupValue)
     .join("|");
+}
+
+function getMarketFamilyKey(prognostico: Prognostico): string {
+  const mercado = normalizeGroupValue(prognostico.mercado);
+  if (
+    /moneyline|1x2|resultado final|vencedor|handicap|h[áa]ndicap|dupla chance|double chance/.test(mercado)
+  ) {
+    return "resultado-protecao";
+  }
+  return `mercado:${mercado}`;
+}
+
+function getMarketFamilyLabel(prognostico: Prognostico): string {
+  return getMarketFamilyKey(prognostico) === "resultado-protecao"
+    ? "Resultado / Proteção de Resultado"
+    : prognostico.mercado;
+}
+
+function getValidationGroupKey(prognostico: Prognostico): string {
+  return `${getEventKey(prognostico)}|${getMarketFamilyKey(prognostico)}`;
 }
 
 function groupPendentes(prognosticos: Prognostico[]): ValidationGroup[] {
@@ -133,12 +149,14 @@ function groupPendentes(prognosticos: Prognostico[]): ValidationGroup[] {
     }
     map.set(key, {
       key,
+      eventKey: getEventKey(p),
+      familyKey: getMarketFamilyKey(p),
       esporte: p.esporte,
       liga: p.liga,
       data: p.data,
       hora: p.hora,
       jogo: p.jogo || `${p.mandante} vs ${p.visitante}`,
-      mercado: p.mercado,
+      mercado: getMarketFamilyLabel(p),
       opcoes: [p],
     });
   }
@@ -148,9 +166,13 @@ function groupPendentes(prognosticos: Prognostico[]): ValidationGroup[] {
     opcoes: group.opcoes.slice().sort((a, b) => {
       const pa = `${a.pick} ${a.linha ?? ""}`;
       const pb = `${b.pick} ${b.linha ?? ""}`;
-      return pa.localeCompare(pb);
+      return `${a.mercado} ${pa}`.localeCompare(`${b.mercado} ${pb}`);
     }),
   }));
+}
+
+function formatOptionCount(count: number): string {
+  return count === 1 ? "1 opção pendente" : `${count} opções pendentes`;
 }
 
 function normalizeAiChoice(value: unknown): string {
@@ -184,6 +206,36 @@ function getContextoInicialGrupo(g: ValidationGroup): string {
     if (dados?.trim()) return dados.trim();
   }
   return "";
+}
+
+function formatIaParecerForDisplay(parecer: string): string {
+  return parecer
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*"?decis[aã]o_grupo"?\s*:/i.test(line))
+    .filter((line) => !/^\s*"?prognostico_id_escolhido"?\s*:/i.test(line))
+    .filter((line) => !/^\s*"?stake_confirmada"?\s*:/i.test(line))
+    .map((line) =>
+      line
+        .replace(/^\s*"?pick_escolhida"?\s*:/i, "Pick escolhida:")
+        .replace(/^\s*"?justificativa_linha"?\s*:/i, "Justificativa da linha escolhida:")
+        .replace(/^\s*"?riscos"?\s*:/i, "Principais riscos:")
+        .replace(/^\s*"?condicao_invalidacao"?\s*:/i, "Condição de invalidação:")
+        .replace(/\bCONFIRMA\b/g, "CONFIRMAR")
+        .replace(/\bPASS\b/g, "PULAR"),
+    )
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function getIaResumo(ia: IAResult): string {
+  const decisao = ia.decisao_sugerida === "CONFIRMA" ? "CONFIRMAR" : "PULAR";
+  const pick = ia.decisao_sugerida === "CONFIRMA" && ia.pick_escolhida ? ` - ${ia.pick_escolhida}` : "";
+  const stake =
+    ia.decisao_sugerida === "CONFIRMA" && ia.stake_sugerida != null
+      ? ` - ${ia.stake_sugerida.toFixed(1)}u`
+      : "";
+  return `${decisao}${pick}${stake}`;
 }
 
 function getOnlineAlertas(parecer: string): string[] {
@@ -266,10 +318,16 @@ function Validacao() {
   const grupos = useMemo(() => groupPendentes(pendentes), [pendentes]);
 
   const getContextoGrupo = (g: ValidationGroup): string =>
-    contextos[g.key] ?? getContextoInicialGrupo(g);
+    contextos[g.key] ?? contextos[g.eventKey] ?? getContextoInicialGrupo(g);
 
   const setContextoGrupo = (g: ValidationGroup, value: string) => {
-    setContextos((prev) => ({ ...prev, [g.key]: value }));
+    setContextos((prev) => {
+      const next = { ...prev, [g.eventKey]: value };
+      for (const group of grupos) {
+        if (group.eventKey === g.eventKey) next[group.key] = value;
+      }
+      return next;
+    });
   };
 
   const getOddAjustadaNum = (p: Prognostico): number | null => {
@@ -290,7 +348,7 @@ function Validacao() {
   };
 
   const rodarIA = async (g: ValidationGroup, modo: "local" | "online") => {
-    const p = getSelectedOption(g) ?? g.opcoes[0];
+    const p = g.opcoes[0];
     setIaLoading((s) => ({ ...s, [g.key]: modo }));
     try {
       const contextoAnalise = getContextoGrupo(g);
@@ -299,6 +357,7 @@ function Validacao() {
       const calibracao = await getAiCalibrationSummary(p);
       const opcoesMesmoMercado = g.opcoes.map((option) => ({
         prognostico_id: option.id,
+        mercado: option.mercado,
         pick: option.pick,
         linha: option.linha,
         odd_original: option.odd_ofertada,
@@ -353,7 +412,7 @@ function Validacao() {
         ...r,
         aviso_opcao:
           r.decisao_sugerida === "CONFIRMA" && !chosenByIa
-            ? "A IA sugeriu confirmar, mas nao foi possivel identificar uma opcao valida do grupo. Selecione manualmente antes de confirmar."
+            ? "A IA sugeriu confirmar, mas não foi possível identificar uma opção válida do grupo. Selecione manualmente antes de confirmar."
             : null,
       };
       if (chosenByIa) {
@@ -365,7 +424,7 @@ function Validacao() {
           return next;
         });
       }
-      setPareceres((s) => ({ ...s, [g.key]: r.parecer }));
+      setPareceres((s) => ({ ...s, [g.key]: getIaResumo(rWithAviso) }));
       if (chosenByIa && r.stake_sugerida && STAKES.includes(r.stake_sugerida.toFixed(1))) {
         setStakes((s) => ({ ...s, [chosenByIa.id]: r.stake_sugerida!.toFixed(1) }));
       }
@@ -405,10 +464,14 @@ function Validacao() {
   };
 
   const aplicarIA = (g: ValidationGroup) => {
-    const selected = getSelectedOption(g);
     const r = iaResults[g.key];
     if (!r) return;
-    setPareceres((s) => ({ ...s, [g.key]: r.parecer }));
+    const chosenByIa = r.decisao_sugerida === "CONFIRMA" ? findAiChosenOption(g, r) : null;
+    const selected = chosenByIa ?? getSelectedOption(g);
+    if (chosenByIa) {
+      setSelectedByGroup((prev) => ({ ...prev, [g.key]: chosenByIa.id }));
+    }
+    setPareceres((s) => ({ ...s, [g.key]: getIaResumo(r) }));
     if (selected && r.stake_sugerida && STAKES.includes(r.stake_sugerida.toFixed(1))) {
       setStakes((s) => ({ ...s, [selected.id]: r.stake_sugerida!.toFixed(1) }));
     }
@@ -417,7 +480,7 @@ function Validacao() {
 
   const decidir = async (p: Prognostico, decisao: Status) => {
     if (p.id || decisao) {
-      toast.error("Use a validacao agrupada para confirmar ou pular este mercado.");
+      toast.error("Use a validação agrupada para confirmar ou pular este mercado.");
       return;
     }
     const parecer = (pareceres[p.id] ?? "").trim();
@@ -501,11 +564,11 @@ function Validacao() {
     const selected = getSelectedOption(g);
     const parecer = (pareceres[g.key] ?? "").trim();
     if (decisao === "CONFIRMA" && !parecer) {
-      toast.error("Parecer da Validacao e obrigatorio.");
+      toast.error("Resumo da decisão é obrigatório.");
       return;
     }
     if (decisao === "CONFIRMA" && !selected) {
-      toast.error("Selecione uma opcao para confirmar este grupo.");
+      toast.error("Selecione uma opção para confirmar este grupo.");
       return;
     }
 
@@ -513,14 +576,23 @@ function Validacao() {
       const contextoAnalise = getContextoGrupo(g).trim();
       const ia = iaResults[g.key];
       const selectedLabel = selected ? `${selected.pick}${selected.linha ? ` ${selected.linha}` : ""}` : "";
-      const parecerBase = parecer || "Grupo recusado na validacao critica agrupada.";
+      const parecerBase = parecer || "Grupo recusado na validação crítica agrupada.";
+      if (contextoAnalise) {
+        const groupIds = new Set(g.opcoes.map((option) => option.id));
+        const relatedEventOptions = pendentes.filter(
+          (option) => !groupIds.has(option.id) && getEventKey(option) === g.eventKey,
+        );
+        for (const option of relatedEventOptions) {
+          await updateProg.mutateAsync({ id: option.id, dados_tecnicos: contextoAnalise });
+        }
+      }
       for (const option of g.opcoes) {
         const isConfirmada = decisao === "CONFIRMA" && selected?.id === option.id;
         const stakeNum = isConfirmada ? Number(stakes[option.id] ?? option.stake ?? 0) : 0;
         const parecerOption =
           isConfirmada || decisao === "PULAR"
             ? parecerBase
-            : `Linha nao escolhida na validacao agrupada. Opcao confirmada no grupo: ${selectedLabel}.`;
+            : `Linha não escolhida na validação agrupada. Opção confirmada no grupo: ${selectedLabel}.`;
         await registrarValidacaoGrupo(
           option,
           isConfirmada ? "CONFIRMA" : "PULAR",
@@ -530,7 +602,7 @@ function Validacao() {
           stakeNum,
         );
       }
-      toast.success(decisao === "CONFIRMA" ? "Grupo validado: 1 opcao confirmada e demais puladas" : "Grupo inteiro marcado como PULAR");
+      toast.success(decisao === "CONFIRMA" ? "Grupo validado: 1 opção confirmada e demais puladas" : "Grupo inteiro marcado como PULAR");
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -600,6 +672,7 @@ function Validacao() {
           const contextoAnalise = getContextoGrupo(g);
           const parecerCurrent = pareceres[g.key] ?? "";
           const ia = iaResults[g.key];
+          const iaParecerDisplay = ia ? formatIaParecerForDisplay(ia.parecer) : "";
 
           return (
             <div
@@ -624,7 +697,7 @@ function Validacao() {
                   </div>
                   <h3 className="mt-1 text-lg font-semibold">{p.jogo}</h3>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    Mercado: <span className="font-semibold text-foreground">{g.mercado}</span> · {g.opcoes.length} opcao(oes) pendente(s)
+                    Grupo: <span className="font-semibold text-foreground">{g.mercado}</span> · {formatOptionCount(g.opcoes.length)}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -642,7 +715,7 @@ function Validacao() {
 
               <div className="rounded-md border border-border bg-background/50 p-4 space-y-3">
                 <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Opcoes disponiveis neste mercado
+                  Opções disponíveis neste grupo
                 </div>
                 <RadioGroup
                   value={selectedOptionId}
@@ -664,6 +737,9 @@ function Validacao() {
                         <RadioGroupItem value={opcao.id} className="mt-1" />
                         <div className="min-w-0 flex-1 space-y-2">
                           <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded border border-border bg-muted/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                              {opcao.mercado}
+                            </span>
                             <span className="font-semibold">{opcao.pick}</span>
                             {shouldShowLinha(opcao.pick, opcao.linha) && (
                               <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{opcao.linha}</span>
@@ -807,7 +883,7 @@ function Validacao() {
                         <Button size="sm" variant="outline" onClick={() => aplicarIA(g)}>
                           Aplicar
                         </Button>
-                        <Button size="sm" variant="outline" onClick={async () => { await navigator.clipboard.writeText(ia.parecer); toast.success("Copiado"); }}>
+                        <Button size="sm" variant="outline" onClick={async () => { await navigator.clipboard.writeText(iaParecerDisplay); toast.success("Copiado"); }}>
                           <Copy className="h-3 w-3" />
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => setIaResults((s) => { const n = { ...s }; delete n[g.key]; return n; })}>
@@ -827,7 +903,7 @@ function Validacao() {
                     <div className="flex flex-wrap gap-2 text-xs">
                       {ia.decisao_sugerida && (
                         <span className="rounded border border-border bg-background px-2 py-0.5">
-                          Sugerido: <strong>{ia.decisao_sugerida.replace("_", " ")}</strong>
+                          Decisão: <strong>{ia.decisao_sugerida === "CONFIRMA" ? "CONFIRMAR" : "PULAR"}</strong>
                         </span>
                       )}
                       {ia.stake_sugerida != null && (
@@ -837,7 +913,7 @@ function Validacao() {
                       )}
                       {ia.pick_escolhida && (
                         <span className="rounded border border-border bg-background px-2 py-0.5">
-                          Opção IA: <strong>{ia.pick_escolhida}</strong>
+                          Pick escolhida: <strong>{ia.pick_escolhida}</strong>
                         </span>
                       )}
                     </div>
@@ -862,7 +938,7 @@ function Validacao() {
                       </div>
                     )}
                     <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded border border-border bg-background/60 p-2 font-mono text-xs">
-                      {ia.parecer}
+                      {iaParecerDisplay}
                     </pre>
                     {ia.modo === "online" && (ia.fontes_consultadas?.length || ia.buscas_realizadas?.length) ? (
                       <div className="rounded border border-border bg-background/60 p-2 space-y-1.5">
@@ -907,24 +983,24 @@ function Validacao() {
               </div>
 
 
-              {/* Parecer + decisão */}
+              {/* Resumo + decisão */}
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="md:col-span-2">
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">Parecer da Validação *</Label>
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">Resumo da decisão *</Label>
                     {!parecerCurrent && (
                       <Button
                         size="sm"
                         variant="ghost"
                         onClick={() => setPareceres((s) => ({ ...s, [g.key]: PARECER_TEMPLATE }))}
                       >
-                        <RefreshCw className="h-3 w-3 mr-1" /> usar template
+                        <RefreshCw className="h-3 w-3 mr-1" /> usar resumo
                       </Button>
                     )}
                   </div>
                   <Textarea
-                    rows={8}
-                    placeholder={PARECER_TEMPLATE}
+                    rows={3}
+                    placeholder="Ex.: CONFIRMAR - Over 7.5 - 0.5u"
                     value={parecerCurrent}
                     onChange={(e) => setPareceres({ ...pareceres, [g.key]: e.target.value })}
                   />
