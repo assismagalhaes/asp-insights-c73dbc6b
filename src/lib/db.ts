@@ -37,6 +37,10 @@ export interface Prognostico {
   lucro_prejuizo: number | null;
   observacoes: string | null;
   dados_tecnicos: string | null;
+  contexto_modelo: string | null;
+  arquivo_contexto: string | null;
+  origem_modelo: string | null;
+  job_id_coleta: string | null;
   data_publicacao: string | null;
   tip_texto: string | null;
   publicado_em: string | null;
@@ -149,9 +153,16 @@ export function calcEdge(probabilidadePct: number, odd: number): number {
   return Number((((probabilidadePct / 100) * odd - 1) * 100).toFixed(2));
 }
 
-/** Dados técnicos efetivos: dados_tecnicos se houver, senão observacoes (legado). */
-export function getDadosTecnicos(p: Pick<Prognostico, "dados_tecnicos" | "observacoes">): string | null {
-  return (p.dados_tecnicos && p.dados_tecnicos.trim()) || (p.observacoes && p.observacoes.trim()) || null;
+/** Dados técnicos efetivos: contexto_modelo, dados_tecnicos ou observacoes legadas. */
+export function getDadosTecnicos(
+  p: Pick<Prognostico, "dados_tecnicos" | "observacoes"> & Partial<Pick<Prognostico, "contexto_modelo">>,
+): string | null {
+  return (
+    (p.contexto_modelo && p.contexto_modelo.trim()) ||
+    (p.dados_tecnicos && p.dados_tecnicos.trim()) ||
+    (p.observacoes && p.observacoes.trim()) ||
+    null
+  );
 }
 
 const aiDb = supabase as unknown as {
@@ -397,12 +408,20 @@ export type PrognosticoInput = Omit<
   | "odd_ajustada"
   | "edge_ajustado"
   | "dados_tecnicos"
+  | "contexto_modelo"
+  | "arquivo_contexto"
+  | "origem_modelo"
+  | "job_id_coleta"
 > & {
   status_publicacao?: StatusPublicacao;
   resultado?: Resultado;
   odd_ajustada?: number | null;
   edge_ajustado?: number | null;
   dados_tecnicos?: string | null;
+  contexto_modelo?: string | null;
+  arquivo_contexto?: string | null;
+  origem_modelo?: string | null;
+  job_id_coleta?: string | null;
 };
 
 export function useCreatePrognostico() {
