@@ -19,6 +19,7 @@ import { Route as AuthenticatedImportarRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedHistoricoRouteImport } from './routes/_authenticated/historico'
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
 import { Route as AuthenticatedColetaDadosRouteImport } from './routes/_authenticated/coleta-dados'
+import { Route as AuthenticatedModelosPreditivosRouteImport } from './routes/_authenticated/modelos-preditivos'
 import { Route as AuthenticatedBankrollRouteImport } from './routes/_authenticated/bankroll'
 import { Route as AuthenticatedAprendizadoIaRouteImport } from './routes/_authenticated/aprendizado-ia'
 
@@ -74,6 +75,12 @@ const AuthenticatedColetaDadosRoute =
     path: '/coleta-dados',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedModelosPreditivosRoute =
+  AuthenticatedModelosPreditivosRouteImport.update({
+    id: '/modelos-preditivos',
+    path: '/modelos-preditivos',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedBankrollRoute = AuthenticatedBankrollRouteImport.update({
   id: '/bankroll',
   path: '/bankroll',
@@ -92,6 +99,7 @@ export interface FileRoutesByFullPath {
   '/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
   '/bankroll': typeof AuthenticatedBankrollRoute
   '/coleta-dados': typeof AuthenticatedColetaDadosRoute
+  '/modelos-preditivos': typeof AuthenticatedModelosPreditivosRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/historico': typeof AuthenticatedHistoricoRoute
   '/importar': typeof AuthenticatedImportarRoute
@@ -104,6 +112,7 @@ export interface FileRoutesByTo {
   '/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
   '/bankroll': typeof AuthenticatedBankrollRoute
   '/coleta-dados': typeof AuthenticatedColetaDadosRoute
+  '/modelos-preditivos': typeof AuthenticatedModelosPreditivosRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/historico': typeof AuthenticatedHistoricoRoute
   '/importar': typeof AuthenticatedImportarRoute
@@ -119,6 +128,7 @@ export interface FileRoutesById {
   '/_authenticated/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
   '/_authenticated/bankroll': typeof AuthenticatedBankrollRoute
   '/_authenticated/coleta-dados': typeof AuthenticatedColetaDadosRoute
+  '/_authenticated/modelos-preditivos': typeof AuthenticatedModelosPreditivosRoute
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/_authenticated/historico': typeof AuthenticatedHistoricoRoute
   '/_authenticated/importar': typeof AuthenticatedImportarRoute
@@ -135,6 +145,7 @@ export interface FileRouteTypes {
     | '/aprendizado-ia'
     | '/bankroll'
     | '/coleta-dados'
+    | '/modelos-preditivos'
     | '/configuracoes'
     | '/historico'
     | '/importar'
@@ -147,6 +158,7 @@ export interface FileRouteTypes {
     | '/aprendizado-ia'
     | '/bankroll'
     | '/coleta-dados'
+    | '/modelos-preditivos'
     | '/configuracoes'
     | '/historico'
     | '/importar'
@@ -161,6 +173,7 @@ export interface FileRouteTypes {
     | '/_authenticated/aprendizado-ia'
     | '/_authenticated/bankroll'
     | '/_authenticated/coleta-dados'
+    | '/_authenticated/modelos-preditivos'
     | '/_authenticated/configuracoes'
     | '/_authenticated/historico'
     | '/_authenticated/importar'
@@ -247,6 +260,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedColetaDadosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/modelos-preditivos': {
+      id: '/_authenticated/modelos-preditivos'
+      path: '/modelos-preditivos'
+      fullPath: '/modelos-preditivos'
+      preLoaderRoute: typeof AuthenticatedModelosPreditivosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/bankroll': {
       id: '/_authenticated/bankroll'
       path: '/bankroll'
@@ -268,6 +288,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAprendizadoIaRoute: typeof AuthenticatedAprendizadoIaRoute
   AuthenticatedBankrollRoute: typeof AuthenticatedBankrollRoute
   AuthenticatedColetaDadosRoute: typeof AuthenticatedColetaDadosRoute
+  AuthenticatedModelosPreditivosRoute: typeof AuthenticatedModelosPreditivosRoute
   AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRoute
   AuthenticatedHistoricoRoute: typeof AuthenticatedHistoricoRoute
   AuthenticatedImportarRoute: typeof AuthenticatedImportarRoute
@@ -281,6 +302,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAprendizadoIaRoute: AuthenticatedAprendizadoIaRoute,
   AuthenticatedBankrollRoute: AuthenticatedBankrollRoute,
   AuthenticatedColetaDadosRoute: AuthenticatedColetaDadosRoute,
+  AuthenticatedModelosPreditivosRoute: AuthenticatedModelosPreditivosRoute,
   AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRoute,
   AuthenticatedHistoricoRoute: AuthenticatedHistoricoRoute,
   AuthenticatedImportarRoute: AuthenticatedImportarRoute,

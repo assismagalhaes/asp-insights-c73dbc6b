@@ -6,6 +6,7 @@ import {
   History,
   Wallet,
   BrainCircuit,
+  Cpu,
   
   Settings,
   Upload,
@@ -33,6 +34,7 @@ const items = [
   { title: "Prognósticos", url: "/prognosticos", icon: ListChecks },
   { title: "Importar", url: "/importar", icon: Upload },
   { title: "Coleta de Odds", url: "/coleta-dados", icon: Database },
+  { title: "Modelos Preditivos", url: "/modelos-preditivos", icon: Cpu },
   { title: "Validação Crítica", url: "/validacao", icon: ShieldCheck },
   { title: "Publicação", url: "/publicacao", icon: Megaphone },
   { title: "Histórico", url: "/historico", icon: History },
