@@ -42,6 +42,7 @@ interface ModeloResultado {
   ok?: boolean;
   job_id?: string;
   modelo?: string;
+  csv_coleta?: string;
   arquivo_saida?: string;
   total_prognosticos?: number;
   prognosticos?: ModeloPrognostico[];
@@ -166,6 +167,12 @@ function ModelosPreditivosPage() {
             </Button>
           </div>
 
+          {running && (
+            <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">
+              Executando modelo preditivo na VM...
+            </div>
+          )}
+
           {coletaSelecionada && <ColetaResumo coleta={coletaSelecionada} />}
         </CardContent>
       </Card>
@@ -177,9 +184,10 @@ function ModelosPreditivosPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-5">
             <Info label="Job" value={resultado?.job_id ?? coletaSelecionada?.job_id ?? "-"} />
             <Info label="Modelo" value={resultado?.modelo ?? modelo} />
+            <Info label="CSV coleta" value={resultado?.csv_coleta ?? "-"} />
             <Info label="Arquivo" value={resultado?.arquivo_saida ?? "-"} />
             <Info label="Prognósticos" value={resultado?.total_prognosticos ?? prognosticos.length} />
           </div>
@@ -189,13 +197,18 @@ function ModelosPreditivosPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Data</TableHead>
+                  <TableHead>Hora</TableHead>
+                  <TableHead>Esporte</TableHead>
+                  <TableHead>Liga</TableHead>
                   <TableHead>Jogo</TableHead>
+                  <TableHead>Mandante</TableHead>
+                  <TableHead>Visitante</TableHead>
                   <TableHead>Mercado</TableHead>
                   <TableHead>Pick</TableHead>
                   <TableHead>Linha</TableHead>
-                  <TableHead className="text-right">Odd</TableHead>
-                  <TableHead className="text-right">Odd Valor</TableHead>
-                  <TableHead className="text-right">Prob.</TableHead>
+                  <TableHead className="text-right">Odd ofertada</TableHead>
+                  <TableHead className="text-right">Odd valor</TableHead>
+                  <TableHead className="text-right">Probabilidade</TableHead>
                   <TableHead className="text-right">Edge</TableHead>
                   <TableHead>Observações</TableHead>
                 </TableRow>
@@ -203,8 +216,13 @@ function ModelosPreditivosPage() {
               <TableBody>
                 {prognosticos.slice(0, 100).map((p, index) => (
                   <TableRow key={`${p.jogo}-${p.mercado}-${p.pick}-${index}`}>
-                    <TableCell className="whitespace-nowrap font-mono text-xs">{p.data} {p.hora ?? ""}</TableCell>
+                    <TableCell className="whitespace-nowrap font-mono text-xs">{p.data}</TableCell>
+                    <TableCell className="whitespace-nowrap font-mono text-xs">{p.hora ?? "-"}</TableCell>
+                    <TableCell>{p.esporte}</TableCell>
+                    <TableCell>{p.liga}</TableCell>
                     <TableCell className="min-w-56">{p.jogo}</TableCell>
+                    <TableCell>{p.mandante ?? "-"}</TableCell>
+                    <TableCell>{p.visitante ?? "-"}</TableCell>
                     <TableCell>{p.mercado}</TableCell>
                     <TableCell>{p.pick}</TableCell>
                     <TableCell className="font-mono text-xs">{p.linha ?? "-"}</TableCell>
@@ -217,7 +235,7 @@ function ModelosPreditivosPage() {
                 ))}
                 {!prognosticos.length && (
                   <TableRow>
-                    <TableCell colSpan={10} className="py-12 text-center text-muted-foreground">
+                    <TableCell colSpan={15} className="py-12 text-center text-muted-foreground">
                       Nenhum modelo executado ainda.
                     </TableCell>
                   </TableRow>
@@ -269,6 +287,7 @@ function normalizeModelResponse(response: unknown): ModeloResultado {
     ok: Boolean(data.ok ?? true),
     job_id: data.job_id ? String(data.job_id) : undefined,
     modelo: data.modelo ? String(data.modelo) : undefined,
+    csv_coleta: data.csv_coleta ? String(data.csv_coleta) : undefined,
     arquivo_saida: data.arquivo_saida ? String(data.arquivo_saida) : undefined,
     total_prognosticos: toNumber(data.total_prognosticos) ?? prognosticos.length,
     prognosticos,
@@ -299,7 +318,7 @@ function toPrognosticoInsert(p: ModeloPrognostico) {
   const norm = normalizeEsporteLiga({ esporte: p.esporte, liga: p.liga });
   const { mandante, visitante } = inferTeams(p);
   return {
-    data: parseBrazilianDate(p.data) ?? p.data,
+    data: parseModelDate(p.data) ?? p.data,
     hora: p.hora,
     esporte: norm.esporte || p.esporte,
     liga: norm.liga || p.liga,
@@ -345,6 +364,13 @@ function toNumber(value: unknown) {
 
 function formatNum(value: number) {
   return Number(value || 0).toFixed(2);
+}
+
+function parseModelDate(value: unknown) {
+  if (typeof value === "string") {
+    return parseBrazilianDate(value.replace(/\./g, "/"));
+  }
+  return parseBrazilianDate(value);
 }
 
 function formatColetaLigas(coleta: ColetaOdds) {
