@@ -146,6 +146,7 @@ function BaseDadosPage() {
         setYears(parsed);
         const latest = parsed.length ? Math.max(...parsed.map((item) => item.ano)) : null;
         setYear(latest ? String(latest) : "");
+        if (!parsed.length) toast.warning("A VM respondeu, mas nao retornou anos de base MLB.");
       })
       .catch((e) => toast.error(formatError(e)))
       .finally(() => {
@@ -164,7 +165,10 @@ function BaseDadosPage() {
     setBusy("teams");
     getTeams({ data: { ano: selectedYear } })
       .then((payload) => {
-        if (!cancelled) setTeams(parseTeams(payload));
+        if (cancelled) return;
+        const parsed = parseTeams(payload);
+        setTeams(parsed);
+        if (!parsed.length) toast.warning(`A VM respondeu, mas nao retornou times MLB para ${selectedYear}.`);
       })
       .catch((e) => toast.error(formatError(e)))
       .finally(() => {
@@ -316,7 +320,7 @@ function BaseDadosPage() {
                       }}
                       disabled={busy === "years" || !years.length}
                     >
-                      <SelectTrigger><SelectValue placeholder={busy === "years" ? "Carregando..." : "Ano"} /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder={busy === "years" ? "Carregando..." : years.length ? "Ano" : "Nenhum ano encontrado"} /></SelectTrigger>
                       <SelectContent>
                         {years.map((item) => (
                           <SelectItem key={item.ano} value={String(item.ano)}>
@@ -329,7 +333,7 @@ function BaseDadosPage() {
 
                   <Field label="Time MLB">
                     <Select value={team} onValueChange={setTeam} disabled={busy === "teams" || !teams.length}>
-                      <SelectTrigger><SelectValue placeholder={busy === "teams" ? "Carregando..." : "Selecione o time"} /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder={busy === "teams" ? "Carregando..." : teams.length ? "Selecione o time" : "Nenhum time encontrado"} /></SelectTrigger>
                       <SelectContent>
                         {teams.map((item) => (
                           <SelectItem key={item.sigla} value={item.sigla}>
@@ -525,23 +529,46 @@ function InfoBlock({ title, value }: { title: string; value: string }) {
 }
 
 function parseYears(payload: unknown): BaseballYear[] {
-  const obj = payload as { anos?: BaseballYear[] };
-  return (obj.anos ?? [])
-    .map((item) => ({ ...item, ano: Number(item.ano), total_csvs: Number(item.total_csvs ?? 0) }))
+  const value = unwrapPayload(payload);
+  const obj = value as { anos?: unknown[] };
+  const rows = Array.isArray(value) ? value : obj.anos;
+  return (rows ?? [])
+    .map((item) => {
+      if (typeof item === "number" || typeof item === "string") {
+        return { ano: Number(item), total_csvs: 0 };
+      }
+      const row = item as BaseballYear;
+      return { ...row, ano: Number(row.ano), total_csvs: Number(row.total_csvs ?? 0) };
+    })
     .filter((item) => Number.isFinite(item.ano))
     .sort((a, b) => b.ano - a.ano);
 }
 
 function parseTeams(payload: unknown): BaseballTeam[] {
-  const obj = payload as { times?: BaseballTeam[] };
-  return (obj.times ?? [])
-    .filter((item) => item.sigla && item.nome)
+  const value = unwrapPayload(payload);
+  const obj = value as { times?: unknown[] };
+  const rows = Array.isArray(value) ? value : obj.times;
+  return (rows ?? [])
+    .map((item) => {
+      if (typeof item === "string") return { sigla: item, nome: item };
+      return item as BaseballTeam;
+    })
+    .filter((item) => item.sigla)
+    .map((item) => ({ ...item, nome: item.nome || item.sigla }))
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }
 
 function parseLastLines(payload: unknown): string[] {
-  const obj = payload as { ultimas_linhas?: unknown[] };
-  return (obj.ultimas_linhas ?? []).map((item) => String(item));
+  const value = unwrapPayload(payload);
+  const obj = value as { ultimas_linhas?: unknown[]; linhas?: unknown[] };
+  const rows = Array.isArray(value) ? value : (obj.ultimas_linhas ?? obj.linhas);
+  return (rows ?? []).map((item) => String(item));
+}
+
+function unwrapPayload(payload: unknown): unknown {
+  if (!payload || typeof payload !== "object") return payload;
+  const obj = payload as { data?: unknown; result?: unknown; payload?: unknown };
+  return obj.data ?? obj.result ?? obj.payload ?? payload;
 }
 
 function formatError(error: unknown) {
