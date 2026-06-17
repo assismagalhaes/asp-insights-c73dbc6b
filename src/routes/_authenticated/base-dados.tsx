@@ -342,7 +342,7 @@ function BaseDadosPage() {
                       <SelectContent>
                         {teams.map((item) => (
                           <SelectItem key={item.sigla} value={item.sigla}>
-                            {item.sigla} · {item.nome}
+                            {item.nome || item.sigla}
                           </SelectItem>
                         ))}
                       </SelectContent>
