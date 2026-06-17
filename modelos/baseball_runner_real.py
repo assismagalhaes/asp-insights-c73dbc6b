@@ -53,6 +53,17 @@ MLB_TEAMS = {
     "Washington Nationals": "WSN",
 }
 
+MLB_DIVISIONS = {
+    "AL East": ["NYY", "BOS", "TOR", "TBR", "BAL"],
+    "AL Central": ["CLE", "DET", "KCR", "MIN", "CHW"],
+    "AL West": ["HOU", "SEA", "TEX", "LAA", "ATH"],
+    "NL East": ["ATL", "PHI", "NYM", "MIA", "WSN"],
+    "NL Central": ["CHC", "MIL", "STL", "CIN", "PIT"],
+    "NL West": ["LAD", "SDP", "SFG", "ARI", "COL"],
+}
+
+MLB_TEAM_DIVISION = {sigla: division for division, teams in MLB_DIVISIONS.items() for sigla in teams}
+
 
 @dataclass
 class TeamStats:
@@ -64,6 +75,9 @@ class TeamStats:
     last5_for: float
     last5_against: float
     streak: int
+    current_rows: list[dict[str, str]]
+    previous_rows: list[dict[str, str]]
+    all_rows: list[dict[str, str]]
 
 
 def main() -> None:
@@ -298,6 +312,7 @@ def localizar_arquivo_historico(ano: int, sigla: str) -> Path:
 
 def load_team_stats(sigla: str, season: int) -> TeamStats:
     rows: list[dict[str, str]] = []
+    rows_by_year: dict[int, list[dict[str, str]]] = {}
     missing: list[str] = []
     found_files: list[str] = []
 
@@ -311,7 +326,9 @@ def load_team_stats(sigla: str, season: int) -> TeamStats:
         found_files.append(str(path))
 
         with path.open("r", encoding="utf-8-sig", newline="") as fh:
-            rows.extend(list(csv.DictReader(fh)))
+            year_rows = list(csv.DictReader(fh))
+            rows_by_year[year] = year_rows
+            rows.extend(year_rows)
 
     if not rows:
         raise RuntimeError(
@@ -354,6 +371,9 @@ def load_team_stats(sigla: str, season: int) -> TeamStats:
         last5_for=mean(last5_for),
         last5_against=mean(last5_against),
         streak=streak,
+        current_rows=rows_by_year.get(season, []),
+        previous_rows=rows_by_year.get(season - 1, []),
+        all_rows=rows,
     )
 
 
@@ -519,18 +539,199 @@ def append_if_ev(
 def build_game_context(game: dict[str, Any], home: TeamStats, away: TeamStats, season: int) -> str:
     expected_home = (home.avg_for * 0.55) + (away.avg_against * 0.45)
     expected_away = (away.avg_for * 0.55) + (home.avg_against * 0.45)
+    total_expected = expected_home + expected_away
     delta_rpi = home.win_rate - away.win_rate
-    return (
-        f"Confronto: {game['home']} vs {game['away']} ({game['data']} {game['hora']}).\n"
-        f"Temporadas usadas: {season - 1}/{season}. Pesos ML={PROB_ML_WEIGHTS}; "
-        f"OU={PROB_OU_WEIGHTS}; Handicap={HANDICAP_WEIGHTS}.\n"
-        f"{home.sigla}: jogos={home.games}, RPI proxy={home.win_rate:.3f}, "
-        f"corridas marcadas={home.avg_for:.2f}, sofridas={home.avg_against:.2f}, streak={home.streak}.\n"
-        f"{away.sigla}: jogos={away.games}, RPI proxy={away.win_rate:.3f}, "
-        f"corridas marcadas={away.avg_for:.2f}, sofridas={away.avg_against:.2f}, streak={away.streak}.\n"
-        f"Delta RPI proxy: {delta_rpi:.3f}. Expectativa de corridas: {game['home']} {expected_home:.2f} x "
-        f"{expected_away:.2f} {game['away']}; total esperado {expected_home + expected_away:.2f}."
+    home_record = season_record(home.current_rows)
+    away_record = season_record(away.current_rows)
+    home_rank = latest_value(home.current_rows, "Rank") or "-"
+    away_rank = latest_value(away.current_rows, "Rank") or "-"
+    home_division = MLB_TEAM_DIVISION.get(home.sigla, "MLB")
+    away_division = MLB_TEAM_DIVISION.get(away.sigla, "MLB")
+    home_win_prob = win_probability_poisson(expected_home, expected_away) * 100
+    away_win_prob = 100 - home_win_prob
+    home_diff = home.avg_for - home.avg_against
+    away_diff = away.avg_for - away.avg_against
+    insight = "Confronto equilibrado"
+    if abs(delta_rpi) >= 0.080:
+        insight = f"Vantagem relevante para {game['home'] if delta_rpi > 0 else game['away']}"
+    elif abs(delta_rpi) >= 0.035:
+        insight = f"Leve vantagem para {game['home'] if delta_rpi > 0 else game['away']}"
+
+    return "\n".join(
+        [
+            "--- CONFRONTO ---",
+            f"{game['home']} (W-{home_record['wins']}/L-{home_record['losses']}/WL-{home_record['win_rate']:.3f}) - {home_rank} {home_division} Division",
+            "vs",
+            f"{game['away']} (W-{away_record['wins']}/L-{away_record['losses']}/WL-{away_record['win_rate']:.3f}) - {away_rank} {away_division} Division",
+            f"Data/Horário: {game['data']} / {game['hora']}",
+            "",
+            f"Jogo {max(home_record['games'], away_record['games']) + 1} da temporada regular",
+            "",
+            "--- Probabilidade de Vitória ---",
+            f"{game['home']}: {home_win_prob:.1f}%",
+            f"{game['away']}: {away_win_prob:.1f}%",
+            f"--- H2H ({season} + {season - 1}) ---",
+            build_h2h_section(game, home, away, season),
+            "",
+            "--- ÚLTIMOS 5 JOGOS NO LOCAL ---",
+            build_last5_section(game, home, away, season),
+            "",
+            "--- DADOS TÉCNICOS ---",
+            "Streak:",
+            f"   {game['home']} {format_streak(home)} | {game['away']} {format_streak(away)}",
+            "",
+            "RPI:",
+            f"   {game['home']} {home.win_rate:.3f} | {game['away']} {away.win_rate:.3f}",
+            f"   Delta RPI: {delta_rpi:.3f}",
+            "",
+            "Insights do Delta RPI:",
+            f"   {insight}",
+            "Médias e Expectativas de Corridas",
+            f"   {game['home']}: Marcadas = {home.avg_for:.2f} | Sofridas = {home.avg_against:.2f}",
+            f"   {game['away']}: Marcadas = {away.avg_for:.2f} | Sofridas = {away.avg_against:.2f}",
+            f"   Expectativa de Total de Corridas = {total_expected:.2f} | Min = {max(0.0, total_expected - 6.5):.1f} | Max = {total_expected + 6.5:.1f}",
+            "",
+            "Diferencial de Corridas:",
+            f"   {game['home']}: {home_diff:+.2f}",
+            f"   {game['away']}: {away_diff:+.2f}",
+            f"   Delta de Corridas: {home_diff - away_diff:+.2f}",
+        ]
     )
+
+
+def season_record(rows: list[dict[str, str]]) -> dict[str, float]:
+    wins = 0
+    losses = 0
+    for row in rows:
+        result = get_row_value(row, "W/L").upper()
+        if result.startswith("W"):
+            wins += 1
+        elif result.startswith("L"):
+            losses += 1
+        else:
+            rf = extract_runs(row, True)
+            ra = extract_runs(row, False)
+            if rf is None or ra is None:
+                continue
+            wins += 1 if rf > ra else 0
+            losses += 1 if rf <= ra else 0
+    games = wins + losses
+    return {"wins": wins, "losses": losses, "games": games, "win_rate": wins / games if games else 0.0}
+
+
+def build_h2h_section(game: dict[str, Any], home: TeamStats, away: TeamStats, season: int) -> str:
+    sections: list[str] = []
+    for year, rows in ((season, home.current_rows), (season - 1, home.previous_rows)):
+        matches = [row for row in rows if normalize_key(get_row_value(row, "Opp")) == normalize_key(away.sigla)]
+        sections.append(f"{year}:")
+        if not matches:
+            sections.append("Nenhum confronto encontrado.")
+            sections.append("")
+            continue
+
+        home_wins = 0
+        away_wins = 0
+        home_runs: list[float] = []
+        away_runs: list[float] = []
+        totals: list[float] = []
+
+        for idx, row in enumerate(matches, start=1):
+            rf = extract_runs(row, True) or 0.0
+            ra = extract_runs(row, False) or 0.0
+            total = rf + ra
+            totals.append(total)
+            if rf > ra:
+                home_wins += 1
+            else:
+                away_wins += 1
+            if is_away_game(row):
+                home_runs.append(rf)
+                away_runs.append(ra)
+                matchup = f"{game['away']} (Casa) vs {game['home']} (Fora) - ({int(ra)}-{int(rf)})"
+            else:
+                home_runs.append(rf)
+                away_runs.append(ra)
+                matchup = f"{game['home']} (Casa) vs {game['away']} (Fora) - ({int(rf)}-{int(ra)})"
+            sections.append(f"jogo {idx}: {get_row_value(row, 'Date') or '-'}")
+            sections.append(f"  {matchup} | Total de Corridas = {int(total)}")
+
+        sections.append("")
+        sections.append(f"Total de jogos {year}: {len(matches)}")
+        sections.append(f"Vitórias {game['home']}: {home_wins} | Vitórias {game['away']}: {away_wins}")
+        sections.append(
+            f"Médias de Corridas (H2H): {game['home']}= {mean(home_runs):.2f} | "
+            f"{game['away']}= {mean(away_runs):.2f} | Média Total: {mean(totals):.2f}"
+        )
+        sections.append("")
+    return "\n".join(sections).rstrip()
+
+
+def build_last5_section(game: dict[str, Any], home: TeamStats, away: TeamStats, season: int) -> str:
+    home_games = [row for row in home.current_rows if not is_away_game(row)][-5:]
+    away_games = [row for row in away.current_rows if is_away_game(row)][-5:]
+    lines = [f"{game['home']}:"]
+    lines.extend(format_recent_game(row, season) for row in home_games)
+    if not home_games:
+        lines.append("  Nenhum jogo recente em casa encontrado.")
+    lines.append("")
+    lines.append(f"{game['away']}:")
+    lines.extend(format_recent_game(row, season) for row in away_games)
+    if not away_games:
+        lines.append("  Nenhum jogo recente fora encontrado.")
+    return "\n".join(lines)
+
+
+def format_recent_game(row: dict[str, str], year: int) -> str:
+    rf = extract_runs(row, True) or 0.0
+    ra = extract_runs(row, False) or 0.0
+    result = get_row_value(row, "W/L") or ("W" if rf > ra else "L")
+    opp = get_row_value(row, "Opp") or "OPP"
+    date_text = format_baseball_date(get_row_value(row, "Date"), year)
+    return f"  {date_text} vs {opp} - {result[:1]} ({int(rf)}-{int(ra)}) | Total Corridas = {int(rf + ra)}"
+
+
+def format_baseball_date(value: str, year: int) -> str:
+    text = clean(value)
+    for fmt in ("%A %b %d", "%b %d", "%Y-%m-%d", "%d/%m/%Y"):
+        try:
+            parsed = datetime.strptime(text, fmt)
+            if "%Y" not in fmt:
+                parsed = parsed.replace(year=year)
+            return parsed.strftime("%d/%m/%Y")
+        except ValueError:
+            pass
+    return text
+
+
+def format_streak(stats: TeamStats) -> str:
+    latest = latest_value(stats.current_rows, "Streak")
+    if latest:
+        return latest
+    if stats.streak > 0:
+        return f"W{stats.streak}"
+    if stats.streak < 0:
+        return f"L{abs(stats.streak)}"
+    return "-"
+
+
+def latest_value(rows: list[dict[str, str]], column: str) -> str:
+    for row in reversed(rows):
+        value = get_row_value(row, column)
+        if value:
+            return value
+    return ""
+
+
+def get_row_value(row: dict[str, str], column: str) -> str:
+    target = normalize_key(column)
+    for key, value in row.items():
+        if normalize_key(key) == target:
+            return clean(value)
+    return ""
+
+
+def is_away_game(row: dict[str, str]) -> bool:
+    return any(clean(value) == "@" for value in row.values())
 
 
 def write_output_csv(path: Path, rows: list[dict[str, Any]]) -> None:
