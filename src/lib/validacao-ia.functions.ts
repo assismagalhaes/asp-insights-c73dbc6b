@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/lib/auth-middleware-public";
 import { generateText } from "ai";
 import { z } from "zod";
 
-export const PROMPT_VERSAO = "validacao-critica-v7-grupo-correlato";
+export const PROMPT_VERSAO = "validacao-critica-v8-asp-matrix-cv";
 
 const CorrelatedPickSchema = z.object({
   mercado: z.string(),
@@ -54,6 +54,24 @@ const InputSchema = z.object({
   calibracao_interna: z.string().nullable().optional(),
 });
 
+function normalizeMarketName(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toLowerCase();
+}
+
+function isAspMatrixMarket(value: unknown): boolean {
+  const normalized = normalizeMarketName(value);
+  return (
+    normalized.includes("cornermatrix") ||
+    normalized.includes("cornersmatrix") ||
+    normalized.includes("goalmatrix") ||
+    normalized.includes("goalsmatrix")
+  );
+}
+
 const SYSTEM_PROMPT = `Papel:
 Você é um auditor sênior de risco em apostas esportivas. Sua função não é confirmar picks EV+, mas tentar identificar se existe algum fator técnico, contextual, estrutural ou informacional que invalide a entrada. A decisão padrão em caso de incerteza relevante é PULAR.
 
@@ -95,11 +113,27 @@ Regras para grupo de opções concorrentes:
 - Se nenhuma opção tiver sustentação técnica suficiente, retorne PULAR.
 - Se houver risco estrutural relevante, prefira PULAR.
 
+Regra específica para IA Local em ASP CornerMatrix e ASP GoalMatrix/ASP GoalsMatrix:
+- Aplique esta regra apenas quando o mercado/modelo contiver ASP CornerMatrix, CornerMatrix, ASP CornersMatrix, ASP GoalMatrix, ASP GoalsMatrix, GoalMatrix ou GoalsMatrix.
+- Nesses modelos, o campo CV/Coeficiente de Variação é uma métrica própria de consistência do modelo, não o CV estatístico tradicional.
+- Não interprete CV alto como dispersão, oscilação, variabilidade alta ou baixa confiabilidade.
+- Interpretação correta do CV nesses modelos: quanto mais próximo de 100, maior a consistência; quanto mais baixo, menor a consistência.
+- CV de 60% indica consistência moderada/boa dentro da métrica do modelo. Não classifique como alta inconsistência.
+- CV acima de 70% indica boa consistência.
+- CV acima de 80% indica consistência forte.
+- CV abaixo de 50% pede atenção/cautela.
+- CV abaixo de 40% indica baixa consistência.
+- Frases proibidas para esses modelos: "CV de 60% indica alta inconsistência", "CV elevado indica oscilação", "CV próximo de 100 indica maior variabilidade", "CV alto reduz confiabilidade".
+- A ausência de notícias online, contexto externo, escalações prováveis, desfalques, informações recentes de imprensa, movimentação de mercado ou confirmação de titulares NÃO deve ser usada como motivo principal para PULAR ou reduzir confiança nesses modelos.
+- Para esses modelos, priorize dados técnicos do próprio modelo, médias, linhas analisadas, probabilidade, odd de valor, edge, consistência da amostra, CV como consistência, coerência entre tendência histórica/simulação/linha ofertada e qualidade da oportunidade.
+- Só sugira PULAR nesses modelos quando houver fragilidade nos dados internos do modelo: edge fraco, odd sem valor, linha incompatível com projeção, baixa consistência, conflito forte entre indicadores internos ou dados técnicos insuficientes.
+- Essa exceção não vale para Moneyline, Over/Under comum, Handicap comum, Dupla Chance, Basketball, Baseball, Hockey, American Football ou demais mercados.
+
 Gates obrigatórios:
 - Gate 1 — Coerência técnica: tese precisa estar coerente com mercado, pick, linha, probabilidade, edge ajustado/original, contexto informado, esporte e liga. Conflito técnico relevante = PULAR.
 - Gate 2 — Risco estrutural: risco estrutural alto = PULAR. Exemplos: MLB starter incerto/bullpen desgastado/lineup alternativo; NBA/WNBA estrela questionável/rotação incerta/back-to-back forte; NHL goalie não confirmado em pick sensível; NFL QB questionável/clima forte/desfalques OL/defesa; Futebol escalação rodada/mata-mata incerto/desfalques-chave.
 - Gate 3 — Informação crítica ausente: se informação crítica necessária não estiver disponível = PULAR; no máximo CONFIRMA 0.5u apenas se a informação ausente não for determinante.
-- Gate 4 — Fontes: para IA local, aprove se não depende de fonte online; reprove se a tese exige confirmação externa que não foi fornecida no contexto.
+- Gate 4 — Fontes: para IA local, aprove se não depende de fonte online; reprove se a tese exige confirmação externa que não foi fornecida no contexto. Para ASP CornerMatrix/GoalMatrix, não reprove apenas por falta de fonte online, escalação ou notícias externas.
 - Gate 5 — Risco > benefício: se houver 2 ou mais riscos relevantes, PULAR.
 - Gate 6 — Duplicidade/correlação: se houver outras picks do mesmo jogo e mesmo grupo de mercado, trate como opções concorrentes. Você deve escolher no máximo uma opção para CONFIRMAR ou recomendar PULAR o grupo inteiro. Nunca sugira confirmar mais de uma opção do grupo.
 
@@ -188,6 +222,17 @@ export const analisarValidacao = createServerFn({ method: "POST" })
     const oddFinal = p.odd_ajustada ?? p.odd_original;
     const edgeFinal = p.edge_ajustado ?? p.edge_original;
     const opcoesMesmoMercado = data.opcoes_mesmo_mercado ?? [];
+    const isAspMatrix =
+      isAspMatrixMarket(p.mercado) ||
+      isAspMatrixMarket(p.pick) ||
+      isAspMatrixMarket(data.dados_tecnicos) ||
+      opcoesMesmoMercado.some((opcao) => isAspMatrixMarket(opcao.mercado) || isAspMatrixMarket(opcao.pick)) ||
+      (data.prognosticos_correlacionados ?? []).some(
+        (opcao) => isAspMatrixMarket(opcao.mercado) || isAspMatrixMarket(opcao.pick),
+      );
+    const aspMatrixInstrucao = isAspMatrix
+      ? `\nREGRA ESPECIFICA ATIVA - ASP GOAL/CORNER MATRIX:\nEste grupo foi identificado como ASP CornerMatrix, CornerMatrix, ASP CornersMatrix, ASP GoalMatrix, ASP GoalsMatrix, GoalMatrix ou GoalsMatrix.\nInterprete CV/Coeficiente de Variacao como metrica propria de consistencia do modelo: mais perto de 100 = maior consistencia; 60% = consistencia moderada/boa; acima de 70% = boa; acima de 80% = forte; abaixo de 50% = cautela; abaixo de 40% = baixa consistencia.\nNao use a ausencia de noticias online, escalacoes, desfalques, fontes externas ou confirmacao de titulares como motivo principal para PULAR ou reduzir confianca. Julgue principalmente os dados internos do modelo, probabilidade, odd de valor, edge, linha, medias, tendencia historica, simulacao e consistencia da amostra.\nSe mencionar CV, use linguagem de consistencia do modelo e nunca linguagem de dispersao estatistica tradicional.\n`
+      : "";
     const opcoesMesmoMercadoTexto = opcoesMesmoMercado.length
       ? opcoesMesmoMercado
           .map((c, index) => {
@@ -245,6 +290,7 @@ Não use 1.0u como stake padrão. Se houver qualquer dúvida entre 1.0u e 0.5u, 
 Se houver opcoes concorrentes listadas acima, compare mercado, linhas, odds, probabilidade, edge, protecao da linha e risco/retorno. A resposta deve indicar a melhor opcao para CONFIRMAR ou recomendar PULAR o grupo inteiro. Nunca confirme mais de uma opcao do mesmo jogo e mesma familia de mercado.
 Nao use a opcao selecionada na interface como preferencia. Ela serve apenas para ajuste de odd; sua decisao deve comparar todas as opcoes concorrentes.
 Se sugerir CONFIRMA, devolva obrigatoriamente o campo prognostico_id_escolhido com um ID exato da lista OPÇÕES CONCORRENTES. Se sugerir PULAR, use prognostico_id_escolhido: null.
+${aspMatrixInstrucao}
 `;
 
     try {
