@@ -214,7 +214,7 @@ async function getHistoricalFeedbackRows(limit: number): Promise<FeedbackIaResul
   }
 
   return ((data ?? []) as HistoricalPrognostico[])
-    .map((p) => {
+    .map((p): FeedbackIaResultado | null => {
       const resultado = normalizeOutcome(p.resultado);
       if (!resultado) return null;
       const validacao = latestByCreatedAt(p.validacoes ?? []);
