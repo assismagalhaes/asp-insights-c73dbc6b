@@ -288,21 +288,21 @@ export const getBaseballYears = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => EmptySchema.parse(input))
   .handler(async () => {
-    return (await scraperRequest("/modelos/baseball/anos")) as JsonValue;
+    return pickPayload(await scraperRequest("/modelos/baseball/anos")) as JsonValue;
   });
 
 export const getBaseballTeams = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => BaseballYearSchema.parse(input))
   .handler(async ({ data }) => {
-    return (await scraperRequest(`/modelos/baseball/times?ano=${encodeURIComponent(String(data.ano))}`)) as JsonValue;
+    return pickPayload(await scraperRequest(`/modelos/baseball/times?ano=${encodeURIComponent(String(data.ano))}`)) as JsonValue;
   });
 
 export const getBaseballTeamLastLines = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => BaseballTeamLinesSchema.parse(input))
   .handler(async ({ data }) => {
-    return (await scraperRequest(
+    return pickPayload(await scraperRequest(
       `/modelos/baseball/time/${encodeURIComponent(data.sigla_time)}/ultimas-linhas?ano=${encodeURIComponent(String(data.ano))}&limite=${encodeURIComponent(String(data.limite))}`,
     )) as JsonValue;
   });
