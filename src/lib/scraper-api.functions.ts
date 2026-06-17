@@ -28,6 +28,22 @@ const PredictiveModelSchema = z.object({
   modelo: z.enum(["Futebol"]),
 });
 
+const EmptySchema = z.object({}).optional().default({});
+
+const BaseballYearSchema = z.object({
+  ano: z.number().int().min(2000).max(2100),
+});
+
+const BaseballTeamLinesSchema = BaseballYearSchema.extend({
+  sigla_time: z.string().min(1),
+  limite: z.number().int().min(1).max(100).optional().default(10),
+});
+
+const BaseballLineSchema = BaseballYearSchema.extend({
+  sigla_time: z.string().min(1),
+  linha: z.string().min(1, "linha e obrigatoria"),
+});
+
 type ScraperPayload = Record<string, unknown>;
 type JsonValue = string | number | boolean | null | { [k: string]: JsonValue } | JsonValue[];
 
@@ -240,4 +256,57 @@ export const executePredictiveModel = createServerFn({ method: "POST" })
       }
       throw e;
     }
+  });
+
+export const getBaseballYears = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => EmptySchema.parse(input))
+  .handler(async () => {
+    return (await scraperRequest("/modelos/baseball/anos")) as JsonValue;
+  });
+
+export const getBaseballTeams = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => BaseballYearSchema.parse(input))
+  .handler(async ({ data }) => {
+    return (await scraperRequest(`/modelos/baseball/times?ano=${encodeURIComponent(String(data.ano))}`)) as JsonValue;
+  });
+
+export const getBaseballTeamLastLines = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => BaseballTeamLinesSchema.parse(input))
+  .handler(async ({ data }) => {
+    return (await scraperRequest(
+      `/modelos/baseball/time/${encodeURIComponent(data.sigla_time)}/ultimas-linhas?ano=${encodeURIComponent(String(data.ano))}&limite=${encodeURIComponent(String(data.limite))}`,
+    )) as JsonValue;
+  });
+
+export const validateBaseballLine = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => BaseballLineSchema.parse(input))
+  .handler(async ({ data }) => {
+    return (await scraperRequest("/modelos/baseball/base/validar-linha", {
+      method: "POST",
+      body: JSON.stringify(data),
+    })) as JsonValue;
+  });
+
+export const addBaseballLine = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => BaseballLineSchema.parse(input))
+  .handler(async ({ data }) => {
+    return (await scraperRequest("/modelos/baseball/base/adicionar", {
+      method: "POST",
+      body: JSON.stringify(data),
+    })) as JsonValue;
+  });
+
+export const removeBaseballLastLine = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => BaseballYearSchema.extend({ sigla_time: z.string().min(1) }).parse(input))
+  .handler(async ({ data }) => {
+    return (await scraperRequest("/modelos/baseball/base/remover-ultima", {
+      method: "POST",
+      body: JSON.stringify(data),
+    })) as JsonValue;
   });
