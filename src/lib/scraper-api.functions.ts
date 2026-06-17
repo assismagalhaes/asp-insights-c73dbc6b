@@ -47,6 +47,11 @@ const BaseballLineSchema = BaseballYearSchema.extend({
 type ScraperPayload = Record<string, unknown>;
 type JsonValue = string | number | boolean | null | { [k: string]: JsonValue } | JsonValue[];
 
+function normalizeMlbSigla(sigla: string) {
+  const value = sigla.toUpperCase().trim();
+  return value === "OAK" ? "ATH" : value;
+}
+
 function getScraperConfig() {
   const baseUrl = process.env.SCRAPER_API_URL?.replace(/\/+$/, "");
   const apiKey = process.env.SCRAPER_API_KEY;
@@ -302,8 +307,9 @@ export const getBaseballTeamLastLines = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => BaseballTeamLinesSchema.parse(input))
   .handler(async ({ data }) => {
+    const sigla = normalizeMlbSigla(data.sigla);
     return pickPayload(await scraperRequest(
-      `/modelos/baseball/time/${encodeURIComponent(data.sigla)}/ultimas-linhas?ano=${encodeURIComponent(String(data.ano))}&limite=${encodeURIComponent(String(data.limite))}`,
+      `/modelos/baseball/time/${encodeURIComponent(sigla)}/ultimas-linhas?ano=${encodeURIComponent(String(data.ano))}&limite=${encodeURIComponent(String(data.limite))}`,
     )) as JsonValue;
   });
 
@@ -313,7 +319,7 @@ export const validateBaseballLine = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     return (await scraperRequest("/modelos/baseball/base/validar-linha", {
       method: "POST",
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...data, sigla: normalizeMlbSigla(data.sigla) }),
     })) as JsonValue;
   });
 
@@ -323,7 +329,7 @@ export const addBaseballLine = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     return (await scraperRequest("/modelos/baseball/base/adicionar", {
       method: "POST",
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...data, sigla: normalizeMlbSigla(data.sigla) }),
     })) as JsonValue;
   });
 
@@ -333,6 +339,6 @@ export const removeBaseballLastLine = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     return (await scraperRequest("/modelos/baseball/base/remover-ultima", {
       method: "POST",
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...data, sigla: normalizeMlbSigla(data.sigla) }),
     })) as JsonValue;
   });

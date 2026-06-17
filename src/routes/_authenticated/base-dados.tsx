@@ -588,7 +588,10 @@ function parseTeams(payload: unknown): BaseballTeam[] {
       return item as BaseballTeam;
     })
     .filter((item) => item.sigla)
-    .map((item) => ({ ...item, nome: item.nome || item.sigla }))
+    .map((item) => {
+      const sigla = normalizeMlbSigla(item.sigla);
+      return { ...item, sigla, nome: item.nome || sigla };
+    })
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }
 
@@ -626,6 +629,11 @@ function parseCsvLine(input: string): string[] {
 
 function formatLineValue(value: string | string[]): string {
   return Array.isArray(value) ? value.join(",") : value;
+}
+
+function normalizeMlbSigla(sigla: string) {
+  const value = sigla.toUpperCase().trim();
+  return value === "OAK" ? "ATH" : value;
 }
 
 function isValidationSuccess(validation: ValidationResult) {
