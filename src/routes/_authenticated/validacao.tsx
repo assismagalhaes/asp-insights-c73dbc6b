@@ -379,30 +379,34 @@ function Validacao() {
           edge_original: other.edge,
           edge_ajustado: getEdgeAjustado(other),
         }));
+      const payloadData = {
+        prognostico: {
+          data: p.data,
+          hora: p.hora,
+          esporte: p.esporte,
+          liga: p.liga,
+          jogo: p.jogo,
+          mercado: p.mercado,
+          pick: p.pick,
+          linha: p.linha,
+          odd_original: p.odd_ofertada,
+          odd_ajustada: oddAj,
+          odd_valor: p.odd_valor,
+          probabilidade_final: p.probabilidade_final,
+          edge_original: p.edge,
+          edge_ajustado: edgeAj,
+          stake_sugerida: p.stake,
+        },
+        opcoes_mesmo_mercado: opcoesMesmoMercado,
+        prognosticos_correlacionados: prognosticosCorrelacionados,
+        dados_tecnicos: contextoAnalise,
+        contexto_local: contextoAnalise,
+        calibracao_interna: calibracao.texto,
+      };
       const payload = {
         data: {
-          prognostico: {
-            data: p.data,
-            hora: p.hora,
-            esporte: p.esporte,
-            liga: p.liga,
-            jogo: p.jogo,
-            mercado: p.mercado,
-            pick: p.pick,
-            linha: p.linha,
-            odd_original: p.odd_ofertada,
-            odd_ajustada: oddAj,
-            odd_valor: p.odd_valor,
-            probabilidade_final: p.probabilidade_final,
-            edge_original: p.edge,
-            edge_ajustado: edgeAj,
-            stake_sugerida: p.stake,
-          },
-          opcoes_mesmo_mercado: opcoesMesmoMercado,
-          prognosticos_correlacionados: prognosticosCorrelacionados,
-          dados_tecnicos: contextoAnalise,
-          contexto_adicional: contextoAnalise,
-          calibracao_interna: calibracao.texto,
+          ...payloadData,
+          ...(modo === "online" ? { contexto_online: null } : {}),
         },
       };
       const raw = modo === "online" ? await callIAOnline(payload) : await callIA(payload);
@@ -824,11 +828,11 @@ function Validacao() {
               {/* Contexto da analise */}
               <div>
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Dados Técnicos / Contexto da Análise
+                  Dados Técnicos / Contexto Local
                 </Label>
                 <Textarea
                   rows={6}
-                  placeholder="Cole H2H, últimos jogos, projeções, odds, linhas, splits, lesões, escalações, clima, notícias ou observações usadas na análise. O conteúdo será reaproveitado nos outros mercados da mesma partida."
+                  placeholder="Cole dados internos do prognóstico: H2H, últimos jogos, projeções, odds, linhas, splits, dados técnicos do modelo ou observações manuais. IA Local usará somente este contexto e os dados internos."
                   value={contextoAnalise}
                   onChange={(e) => setContextoGrupo(g, e.target.value)}
                 />
@@ -863,7 +867,7 @@ function Validacao() {
                       ) : (
                         <Brain className="h-3 w-3 mr-1" />
                       )}
-                      IA local
+                      IA Local
                     </Button>
                     <Button
                       size="sm"
@@ -876,7 +880,7 @@ function Validacao() {
                       ) : (
                         <Globe className="h-3 w-3 mr-1" />
                       )}
-                      IA + Pesquisa
+                      IA Local + Pesquisa
                     </Button>
                     {ia && (
                       <>
@@ -977,7 +981,7 @@ function Validacao() {
                   </>
                 ) : (
                   <p className="text-xs text-muted-foreground">
-                    <strong>IA local</strong>: analisa apenas os dados acima e o contexto colado. <strong>IA + Pesquisa</strong>: o modelo busca notícias, lineups, lesões e contexto na web automaticamente.
+                    <strong>IA Local</strong>: analisa apenas dados internos e contexto local/manual. <strong>IA Local + Pesquisa</strong>: usa os dados internos e adiciona notícias, lineups, lesões e contexto online pesquisado.
                   </p>
                 )}
               </div>
