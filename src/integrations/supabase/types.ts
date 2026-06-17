@@ -277,8 +277,6 @@ export type Database = {
       prognosticos: {
         Row: {
           canal_publicacao: string | null
-          arquivo_contexto: string | null
-          contexto_modelo: string | null
           created_at: string
           dados_tecnicos: string | null
           data: string
@@ -295,8 +293,6 @@ export type Database = {
           mandante: string
           mercado: string
           observacoes: string | null
-          origem_modelo: string | null
-          job_id_coleta: string | null
           odd_ajustada: number | null
           odd_ofertada: number
           odd_valor: number
@@ -314,8 +310,6 @@ export type Database = {
         }
         Insert: {
           canal_publicacao?: string | null
-          arquivo_contexto?: string | null
-          contexto_modelo?: string | null
           created_at?: string
           dados_tecnicos?: string | null
           data?: string
@@ -332,8 +326,6 @@ export type Database = {
           mandante: string
           mercado: string
           observacoes?: string | null
-          origem_modelo?: string | null
-          job_id_coleta?: string | null
           odd_ajustada?: number | null
           odd_ofertada: number
           odd_valor: number
@@ -351,8 +343,6 @@ export type Database = {
         }
         Update: {
           canal_publicacao?: string | null
-          arquivo_contexto?: string | null
-          contexto_modelo?: string | null
           created_at?: string
           dados_tecnicos?: string | null
           data?: string
@@ -369,8 +359,6 @@ export type Database = {
           mandante?: string
           mercado?: string
           observacoes?: string | null
-          origem_modelo?: string | null
-          job_id_coleta?: string | null
           odd_ajustada?: number | null
           odd_ofertada?: number
           odd_valor?: number
