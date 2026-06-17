@@ -394,8 +394,11 @@ function mapModeloPrognostico(row: Record<string, unknown>): ModeloPrognostico {
 function toPrognosticoInsert(p: ModeloPrognostico, resultado: ModeloResultado | null) {
   const norm = normalizeEsporteLiga({ esporte: p.esporte, liga: p.liga });
   const { mandante, visitante } = inferTeams(p);
-  const dadosTecnicos = p.dados_tecnicos?.trim() || resultado?.dados_tecnicos?.trim() || null;
+  const dadosTecnicosBase = p.dados_tecnicos?.trim() || resultado?.dados_tecnicos?.trim() || "";
   const contextoModelo = p.contexto_modelo?.trim() || resultado?.contexto_modelo?.trim() || null;
+  const dadosTecnicos = [dadosTecnicosBase, contextoModelo ? `Contexto do modelo:\n${contextoModelo}` : ""]
+    .filter(Boolean)
+    .join("\n\n") || null;
   return {
     data: parseModelDate(p.data) ?? p.data,
     hora: p.hora,
@@ -414,7 +417,6 @@ function toPrognosticoInsert(p: ModeloPrognostico, resultado: ModeloResultado | 
     stake: 0,
     observacoes: p.observacoes ?? null,
     dados_tecnicos: dadosTecnicos,
-    contexto_modelo: contextoModelo,
     status_validacao: "PENDENTE",
     status_publicacao: "NAO_PUBLICADO",
     resultado: "PENDENTE",
