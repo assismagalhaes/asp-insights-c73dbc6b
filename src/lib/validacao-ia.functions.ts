@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/lib/auth-middleware-public";
 import { generateText } from "ai";
 import { z } from "zod";
 
-export const PROMPT_VERSAO = "validacao-critica-v8-asp-matrix-cv";
+export const PROMPT_VERSAO = "validacao-critica-v9-local-interno";
 
 const CorrelatedPickSchema = z.object({
   mercado: z.string(),
@@ -50,7 +50,7 @@ const InputSchema = z.object({
   opcoes_mesmo_mercado: z.array(GroupOptionSchema).optional(),
   prognosticos_correlacionados: z.array(CorrelatedPickSchema).optional(),
   dados_tecnicos: z.string().nullable().optional(),
-  contexto_adicional: z.string().nullable().optional(),
+  contexto_local: z.string().nullable().optional(),
   calibracao_interna: z.string().nullable().optional(),
 });
 
@@ -89,6 +89,9 @@ Regras:
 - Não buscar dados online.
 - Não inventar informações externas.
 - Analisar apenas os dados fornecidos.
+- MODO IA LOCAL: use exclusivamente dados internos/localmente disponíveis no payload: prognóstico, dados técnicos manuais/importados, odds, linha, probabilidade, edge, mercado, esporte, liga, opções concorrentes e calibração/histórico interno.
+- MODO IA LOCAL: é proibido usar, inferir, exigir ou penalizar por notícias online, pesquisa web, odds externas em tempo real, lesões buscadas online, escalações online, lineups online, clima online ou qualquer contexto externo que não esteja explicitamente colado nos dados técnicos manuais.
+- MODO IA LOCAL: não mencione ausência de notícias, lesões, escalações, lineups, fontes externas ou contexto online como motivo de PULAR/reduzir stake, salvo quando o próprio contexto manual afirmar que essa informação interna é desconhecida e determinante.
 - Avaliar coerência técnica, matchup, forma, projeções, linha, odd, risco e contexto colado pelo usuário.
 - Se houver bom argumento, mas risco estrutural relevante, a decisão padrão deve ser PULAR.
 - Regra de stake: 1.0u NÃO é padrão automático.
@@ -133,7 +136,7 @@ Gates obrigatórios:
 - Gate 1 — Coerência técnica: tese precisa estar coerente com mercado, pick, linha, probabilidade, edge ajustado/original, contexto informado, esporte e liga. Conflito técnico relevante = PULAR.
 - Gate 2 — Risco estrutural: risco estrutural alto = PULAR. Exemplos: MLB starter incerto/bullpen desgastado/lineup alternativo; NBA/WNBA estrela questionável/rotação incerta/back-to-back forte; NHL goalie não confirmado em pick sensível; NFL QB questionável/clima forte/desfalques OL/defesa; Futebol escalação rodada/mata-mata incerto/desfalques-chave.
 - Gate 3 — Informação crítica ausente: se informação crítica necessária não estiver disponível = PULAR; no máximo CONFIRMA 0.5u apenas se a informação ausente não for determinante.
-- Gate 4 — Fontes: para IA local, aprove se não depende de fonte online; reprove se a tese exige confirmação externa que não foi fornecida no contexto. Para ASP CornerMatrix/GoalMatrix, não reprove apenas por falta de fonte online, escalação ou notícias externas.
+- Gate 4 — Contexto interno/manual: aprove quando a tese for sustentada pelos dados internos e pelo contexto manual disponível. Não reprove por ausência de fonte online, notícia, escalação, lesão ou confirmação externa; esses fatores pertencem apenas ao modo IA Local + Pesquisa, salvo se estiverem explicitamente colados no contexto manual.
 - Gate 5 — Risco > benefício: se houver 2 ou mais riscos relevantes, PULAR.
 - Gate 6 — Duplicidade/correlação: se houver outras picks do mesmo jogo e mesmo grupo de mercado, trate como opções concorrentes. Você deve escolher no máximo uma opção para CONFIRMAR ou recomendar PULAR o grupo inteiro. Nunca sugira confirmar mais de uma opção do grupo.
 
@@ -159,7 +162,7 @@ D) Gates de validação
 Coerência técnica: aprovado/reprovado - motivo:
 Informação crítica: aprovado/reprovado - motivo:
 Risco estrutural: aprovado/reprovado - motivo:
-Contexto online/manual: aprovado/reprovado - motivo:
+Contexto interno/manual: aprovado/reprovado - motivo:
 Duplicidade/correlação: aprovado/reprovado - motivo:
 
 E) Riscos principais
@@ -272,8 +275,8 @@ Edge ajustado: ${p.edge_ajustado != null ? p.edge_ajustado.toFixed(2) + "%" : "�
 Edge em uso para análise: ${edgeFinal.toFixed(2)}%
 Stake sugerida pelo sistema: ${p.stake_sugerida}u
 
-CONTEXTO DA ANÁLISE:
-${data.contexto_adicional?.trim() || data.dados_tecnicos?.trim() || "(nenhum contexto informado — trate como informação ausente)"}
+CONTEXTO LOCAL / DADOS TÉCNICOS MANUAIS:
+${data.contexto_local?.trim() || data.dados_tecnicos?.trim() || "(nenhum contexto interno/manual informado — avalie somente os demais dados do prognóstico)"}
 
 CALIBRAÇÃO INTERNA ASP INSIGHTS:
 ${data.calibracao_interna?.trim() || "(histórico interno insuficiente ou indisponível)"}

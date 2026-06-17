@@ -50,6 +50,8 @@ const InputSchema = z.object({
   opcoes_mesmo_mercado: z.array(GroupOptionSchema).optional(),
   prognosticos_correlacionados: z.array(CorrelatedPickSchema).optional(),
   dados_tecnicos: z.string().nullable().optional(),
+  contexto_local: z.string().nullable().optional(),
+  contexto_online: z.string().nullable().optional(),
   contexto_adicional: z.string().nullable().optional(),
   calibracao_interna: z.string().nullable().optional(),
 });
@@ -315,8 +317,11 @@ Probabilidade final: ${p.probabilidade_final.toFixed(2)}%
 Edge: ${edgeFinal.toFixed(2)}%
 Stake sugerida: ${p.stake_sugerida}u
 
-CONTEXTO DA ANÁLISE:
-${data.contexto_adicional?.trim() || data.dados_tecnicos?.trim() || "(nenhum)"}
+CONTEXTO LOCAL / DADOS TÉCNICOS MANUAIS:
+${data.contexto_local?.trim() || data.dados_tecnicos?.trim() || "(nenhum)"}
+
+CONTEXTO ONLINE PRÉ-CARREGADO, SE HOUVER:
+${data.contexto_online?.trim() || data.contexto_adicional?.trim() || "(nenhum contexto online pré-carregado; use as ferramentas de pesquisa quando necessário)"}
 
 CALIBRAÇÃO INTERNA ASP INSIGHTS:
 ${data.calibracao_interna?.trim() || "(histórico interno insuficiente ou indisponível)"}
