@@ -124,7 +124,7 @@ function ModelosPreditivosPage() {
 
     setSending(true);
     try {
-      const payload = prognosticos.map((p) => toPrognosticoInsert(p, resultado));
+      const payload = prognosticos.map((p) => stripUnsupportedPrognosticoColumns(toPrognosticoInsert(p, resultado)));
       const { error } = await supabase.from("prognosticos").insert(payload as never);
       if (error) throw error;
       await qc.invalidateQueries({ queryKey: ["prognosticos"] });
@@ -421,6 +421,18 @@ function toPrognosticoInsert(p: ModeloPrognostico, resultado: ModeloResultado | 
     status_publicacao: "NAO_PUBLICADO",
     resultado: "PENDENTE",
   };
+}
+
+function stripUnsupportedPrognosticoColumns(row: Record<string, unknown>) {
+  const {
+    contexto_modelo: _contextoModelo,
+    arquivo_contexto: _arquivoContexto,
+    origem_modelo: _origemModelo,
+    job_id_coleta: _jobIdColeta,
+    contexto_adicional: _contextoAdicional,
+    ...safeRow
+  } = row;
+  return safeRow;
 }
 
 function inferTeams(p: ModeloPrognostico) {
