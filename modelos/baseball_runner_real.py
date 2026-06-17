@@ -30,7 +30,7 @@ MLB_TEAMS = {
     "Colorado Rockies": "COL",
     "Detroit Tigers": "DET",
     "Houston Astros": "HOU",
-    "Kansas City Royals": "KC",
+    "Kansas City Royals": "KCR",
     "Los Angeles Angels": "LAA",
     "Los Angeles Dodgers": "LAD",
     "Miami Marlins": "MIA",
@@ -38,19 +38,19 @@ MLB_TEAMS = {
     "Minnesota Twins": "MIN",
     "New York Mets": "NYM",
     "New York Yankees": "NYY",
-    "Oakland Athletics": "OAK",
-    "Athletics": "OAK",
+    "Athletics": "ATH",
     "Philadelphia Phillies": "PHI",
     "Pittsburgh Pirates": "PIT",
-    "San Diego Padres": "SD",
-    "San Francisco Giants": "SF",
+    "San Diego Padres": "SDP",
+    "San Francisco Giants": "SFG",
     "Seattle Mariners": "SEA",
     "St. Louis Cardinals": "STL",
     "St Louis Cardinals": "STL",
-    "Tampa Bay Rays": "TB",
+    "St.Louis Cardinals": "STL",
+    "Tampa Bay Rays": "TBR",
     "Texas Rangers": "TEX",
     "Toronto Blue Jays": "TOR",
-    "Washington Nationals": "WSH",
+    "Washington Nationals": "WSN",
 }
 
 
@@ -221,24 +221,114 @@ def set_best(target: dict[str, Any], key: str, odd: float) -> None:
         target[key] = odd
 
 
+def extrair_sigla_arquivo_baseball(arquivo: Path) -> str:
+    nome = arquivo.stem.upper()
+
+    prefixos_para_remover = [
+        "DADOS_BASE_",
+        "DADOS_BASEBALL_",
+        "BASEBALL_",
+        "BASE_",
+        "DADOS_",
+        "DADOS_BASE",
+        "DADOS_BASEBALL",
+        "BASEBALL",
+        "BASE",
+        "DADOS",
+    ]
+
+    for prefixo in prefixos_para_remover:
+        if nome.startswith(prefixo):
+            nome = nome.replace(prefixo, "", 1)
+
+    nome = nome.replace(" ", "_").replace("-", "_")
+    partes = [p for p in nome.split("_") if p]
+
+    if partes:
+        return partes[-1].upper()
+
+    return nome.upper()
+
+
+def localizar_arquivo_historico(ano: int, sigla: str) -> Path:
+    sigla = str(sigla).upper().strip()
+    year_dir = HIST_DIR / str(ano)
+
+    if not year_dir.exists():
+        raise FileNotFoundError(f"Pasta histórica não encontrada: {year_dir}")
+
+    candidatos = [
+        year_dir / f"dados_base_{sigla}.csv",
+        year_dir / f"dados_base_{sigla.lower()}.csv",
+        year_dir / f"DADOS_BASE_{sigla}.csv",
+        year_dir / f"DADOS_BASE_{sigla.lower()}.csv",
+        year_dir / f"dados_baseball_{sigla}.csv",
+        year_dir / f"dados_baseball_{sigla.lower()}.csv",
+        year_dir / f"DADOS_BASEBALL_{sigla}.csv",
+        year_dir / f"DADOS_BASEBALL_{sigla.lower()}.csv",
+        year_dir / f"baseball_{sigla}.csv",
+        year_dir / f"baseball_{sigla.lower()}.csv",
+        year_dir / f"BASEBALL_{sigla}.csv",
+        year_dir / f"base_{sigla}.csv",
+        year_dir / f"base_{sigla.lower()}.csv",
+        year_dir / f"BASE_{sigla}.csv",
+        year_dir / f"dados_{sigla}.csv",
+        year_dir / f"dados_{sigla.lower()}.csv",
+        year_dir / f"DADOS_{sigla}.csv",
+        year_dir / f"{sigla}.csv",
+        year_dir / f"{sigla.lower()}.csv",
+    ]
+
+    for candidato in candidatos:
+        if candidato.exists() and candidato.is_file():
+            return candidato
+
+    for arquivo in sorted(year_dir.glob("*.csv")):
+        if extrair_sigla_arquivo_baseball(arquivo) == sigla:
+            return arquivo
+
+    arquivos_disponiveis = ", ".join([p.name for p in sorted(year_dir.glob("*.csv"))[:20]])
+
+    raise FileNotFoundError(
+        f"Base histórica ausente para {sigla} em {ano}. "
+        f"Nenhum CSV compatível encontrado em {year_dir}. "
+        f"Primeiros arquivos disponíveis: {arquivos_disponiveis}"
+    )
+
+
 def load_team_stats(sigla: str, season: int) -> TeamStats:
     rows: list[dict[str, str]] = []
     missing: list[str] = []
+    found_files: list[str] = []
+
     for year in (season - 1, season):
-        path = HIST_DIR / str(year) / f"dados_base_{sigla}.csv"
-        if not path.exists():
-            missing.append(str(path))
+        try:
+            path = localizar_arquivo_historico(year, sigla)
+        except Exception as exc:
+            missing.append(f"{year}: {exc}")
             continue
+
+        found_files.append(str(path))
+
         with path.open("r", encoding="utf-8-sig", newline="") as fh:
             rows.extend(list(csv.DictReader(fh)))
 
     if not rows:
-        raise RuntimeError(f"Base histórica ausente para {sigla}. Arquivos buscados: {', '.join(missing)}")
+        raise RuntimeError(
+            f"Base histórica ausente para {sigla}. "
+            f"Arquivos/pastas buscados: {', '.join(missing)}"
+        )
 
     scored = [value for value in (extract_runs(row, True) for row in rows) if value is not None]
     allowed = [value for value in (extract_runs(row, False) for row in rows) if value is not None]
+
     if not scored or not allowed:
-        raise RuntimeError(f"Base histórica de {sigla} não possui colunas de corridas reconhecíveis.")
+        sample_cols = list(rows[0].keys()) if rows else []
+        raise RuntimeError(
+            f"Base histórica de {sigla} não possui colunas de corridas reconhecíveis. "
+            f"Arquivos lidos: {', '.join(found_files)}. "
+            f"Colunas encontradas: {sample_cols}"
+        )
 
     wins = 0
     valid_results = 0
