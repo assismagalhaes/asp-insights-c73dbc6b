@@ -69,6 +69,33 @@ function stringifyDebug(value: unknown) {
   }
 }
 
+function pickErrorMessage(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const obj = payload as ScraperPayload;
+  const value = obj.message ?? obj.error ?? obj.detail;
+
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (!item || typeof item !== "object") return String(item);
+        const issue = item as ScraperPayload;
+        const loc = Array.isArray(issue.loc) ? issue.loc.join(".") : null;
+        const msg = typeof issue.msg === "string" ? issue.msg : stringifyDebug(issue);
+        return loc ? `${loc}: ${msg}` : msg;
+      })
+      .join("; ");
+  }
+  if (value && typeof value === "object") {
+    const nested = value as ScraperPayload;
+    if (typeof nested.mensagem === "string") return nested.mensagem;
+    if (typeof nested.erro === "string") return nested.erro;
+    return stringifyDebug(value);
+  }
+
+  return null;
+}
+
 const EXPECTED_JOB_PAYLOAD = {
   esporte: "Football",
   leagues: [
@@ -125,11 +152,9 @@ async function scraperRequest(path: string, init?: RequestInit) {
         expectedPayload: EXPECTED_JOB_PAYLOAD,
       });
       const message =
-        res.status === 422
+        res.status === 422 && path === "/scraping/jobs"
           ? `HTTP 422 ao chamar API da VM (${path}). Payload enviado: ${requestBody}. JSON esperado: ${stringifyDebug(EXPECTED_JOB_PAYLOAD)}. Resposta da VM: ${stringifyDebug(payload)}`
-          : payload && typeof payload === "object" && "message" in payload
-            ? String((payload as ScraperPayload).message)
-            : `Erro HTTP ${res.status} ao chamar API da VM. Resposta: ${stringifyDebug(payload)}`;
+          : pickErrorMessage(payload) ?? `Erro HTTP ${res.status} ao chamar API da VM. Resposta: ${stringifyDebug(payload)}`;
       throw new Error(message);
     }
     return payload;
