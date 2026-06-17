@@ -52,25 +52,34 @@ type BaseballTeam = {
 };
 
 type ValidationResult = {
+  ok?: boolean;
   valida?: boolean;
   erros?: string[];
   avisos?: string[];
-  linha?: string;
+  linha?: string | string[];
   arquivo?: string;
   ano?: number;
+  sigla?: string;
   sigla_time?: string;
 };
 
 type OperationResult = {
+  ok?: boolean;
   status?: string;
   mensagem?: string;
   ano?: number;
+  sigla?: string;
   sigla_time?: string;
   nome_time?: string;
   arquivo?: string;
   backup?: string;
-  linha_adicionada?: string;
-  linha_removida?: string;
+  linha_adicionada?: string | string[];
+  linha_removida?: string | string[];
+};
+
+type LastLinesResult = {
+  cabecalho: string | null;
+  linhas: string[];
 };
 
 const SPORTS: Array<{ value: SportKey; label: string }> = [
@@ -112,6 +121,7 @@ function BaseDadosPage() {
   const [team, setTeam] = useState("");
   const [line, setLine] = useState("");
   const [lastLines, setLastLines] = useState<string[]>([]);
+  const [lastLinesHeader, setLastLinesHeader] = useState<string | null>(null);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [operation, setOperation] = useState<OperationResult | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -124,7 +134,7 @@ function BaseDadosPage() {
   const selectedTeam = teams.find((item) => item.sigla === team) ?? null;
   const isHistoricalYear = Boolean(selectedYear && maxYear && selectedYear < maxYear);
   const canValidate = Boolean(isBaseballMlb && selectedYear && team && line.trim() && !busy);
-  const canAdd = Boolean(canValidate && validation?.valida === true && !validation?.erros?.length);
+  const canAdd = Boolean(canValidate && validation && isValidationSuccess(validation));
   const canRemove = Boolean(isBaseballMlb && selectedYear && team && !busy);
 
   useEffect(() => {
@@ -186,6 +196,7 @@ function BaseDadosPage() {
 
   useEffect(() => {
     setLastLines([]);
+    setLastLinesHeader(null);
     setValidation(null);
     setOperation(null);
     if (!isBaseballMlb || !selectedYear || !team) return;
@@ -203,6 +214,7 @@ function BaseDadosPage() {
     setTeam("");
     setLine("");
     setLastLines([]);
+    setLastLinesHeader(null);
     setValidation(null);
     setOperation(null);
   }
@@ -210,8 +222,10 @@ function BaseDadosPage() {
   async function loadLastLines(ano: number, sigla: string) {
     setBusy("last-lines");
     try {
-      const payload = await getLastLines({ data: { ano, sigla_time: sigla, limite: 10 } });
-      setLastLines(parseLastLines(payload));
+      const payload = await getLastLines({ data: { ano, sigla, limite: 10 } });
+      const parsed = parseLastLines(payload);
+      setLastLinesHeader(parsed.cabecalho);
+      setLastLines(parsed.linhas);
     } catch (e) {
       toast.error(formatError(e));
     } finally {
@@ -227,10 +241,11 @@ function BaseDadosPage() {
     setBusy("validate");
     setOperation(null);
     try {
-      const payload = await validateLine({ data: { ano: selectedYear, sigla_time: team, linha: line.trim() } });
+      const payload = await validateLine({ data: { ano: selectedYear, sigla: team, linha: parseCsvLine(line) } });
       const result = payload as ValidationResult;
+      result.valida = isValidationSuccess(result);
       setValidation(result);
-      if (result.valida) toast.success("Linha validada com sucesso.");
+      if (isValidationSuccess(result)) toast.success("Linha validada com sucesso.");
       else toast.error("A linha possui erros de validação.");
     } catch (e) {
       toast.error(formatError(e));
@@ -243,7 +258,7 @@ function BaseDadosPage() {
     if (!canAdd || !selectedYear || !team) return;
     setBusy("add");
     try {
-      const payload = await addLine({ data: { ano: selectedYear, sigla_time: team, linha: line.trim() } });
+      const payload = await addLine({ data: { ano: selectedYear, sigla: team, linha: parseCsvLine(line) } });
       setOperation(payload as OperationResult);
       toast.success("Linha adicionada à base MLB.");
       await loadLastLines(selectedYear, team);
@@ -259,7 +274,7 @@ function BaseDadosPage() {
     setConfirmRemove(false);
     setBusy("remove");
     try {
-      const payload = await removeLastLine({ data: { ano: selectedYear, sigla_time: team } });
+      const payload = await removeLastLine({ data: { ano: selectedYear, sigla: team } });
       setOperation(payload as OperationResult);
       setValidation(null);
       toast.success("Última linha removida da base MLB.");
@@ -412,6 +427,11 @@ function BaseDadosPage() {
               )}
               {lastLines.length ? (
                 <div className="max-h-[420px] space-y-2 overflow-auto rounded-md border border-border bg-background/50 p-3">
+                  {lastLinesHeader && (
+                    <pre className="whitespace-pre-wrap rounded border border-border/70 bg-muted/60 p-2 font-mono text-xs text-muted-foreground">
+                      {lastLinesHeader}
+                    </pre>
+                  )}
                   {lastLines.map((item, index) => (
                     <pre key={`${index}-${item}`} className="whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-xs">
                       {item}
@@ -493,7 +513,7 @@ function OperationPanel({ operation }: { operation: OperationResult }) {
       </div>
       <div className="grid gap-2 md:grid-cols-2">
         <Info label="Ano" value={operation.ano ?? "-"} />
-        <Info label="Time" value={operation.nome_time ?? operation.sigla_time ?? "-"} />
+        <Info label="Time" value={operation.nome_time ?? operation.sigla ?? operation.sigla_time ?? "-"} />
         <Info label="Arquivo" value={operation.arquivo ?? "-"} />
         <Info label="Backup" value={operation.backup ?? "-"} />
       </div>
@@ -524,11 +544,12 @@ function Info({ label, value }: { label: string; value: unknown }) {
   );
 }
 
-function InfoBlock({ title, value }: { title: string; value: string }) {
+function InfoBlock({ title, value }: { title: string; value: string | string[] }) {
+  const displayValue = formatLineValue(value);
   return (
     <div>
       <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">{title}</div>
-      <pre className="whitespace-pre-wrap rounded-md border border-border bg-background/60 p-3 font-mono text-xs">{value}</pre>
+      <pre className="whitespace-pre-wrap rounded-md border border-border bg-background/60 p-3 font-mono text-xs">{displayValue}</pre>
     </div>
   );
 }
@@ -571,17 +592,44 @@ function parseTeams(payload: unknown): BaseballTeam[] {
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }
 
-function parseLastLines(payload: unknown): string[] {
+function parseLastLines(payload: unknown): LastLinesResult {
   const value = unwrapPayload(payload);
-  const obj = value as { ultimas_linhas?: unknown[]; linhas?: unknown[] };
+  const obj = value as { cabecalho?: unknown[]; ultimas_linhas?: unknown[]; linhas?: unknown[] };
   const rows = Array.isArray(value) ? value : (obj.ultimas_linhas ?? obj.linhas);
-  return (rows ?? []).map((item) => String(item));
+  return {
+    cabecalho: Array.isArray(obj.cabecalho) ? obj.cabecalho.map((item) => String(item)).join(",") : null,
+    linhas: (rows ?? []).map(formatLastLine).filter((item) => item.length > 0),
+  };
 }
 
 function unwrapPayload(payload: unknown): unknown {
   if (!payload || typeof payload !== "object") return payload;
   const obj = payload as { data?: unknown; result?: unknown; payload?: unknown };
   return obj.data ?? obj.result ?? obj.payload ?? payload;
+}
+
+function formatLastLine(item: unknown): string {
+  if (typeof item === "string") return item;
+  if (!item || typeof item !== "object") return "";
+  const row = item as { valores?: unknown[]; linha?: unknown[]; registro?: Record<string, unknown> };
+  if (Array.isArray(row.valores)) return row.valores.map((value) => String(value)).join(",");
+  if (Array.isArray(row.linha)) return row.linha.map((value) => String(value)).join(",");
+  return "";
+}
+
+function parseCsvLine(input: string): string[] {
+  return input
+    .trimEnd()
+    .split(",")
+    .map((value) => value.trim());
+}
+
+function formatLineValue(value: string | string[]): string {
+  return Array.isArray(value) ? value.join(",") : value;
+}
+
+function isValidationSuccess(validation: ValidationResult) {
+  return (validation.ok === true || validation.valida === true) && !validation.erros?.length;
 }
 
 function formatError(error: unknown) {

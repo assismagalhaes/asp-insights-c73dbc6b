@@ -35,13 +35,13 @@ const BaseballYearSchema = z.object({
 });
 
 const BaseballTeamLinesSchema = BaseballYearSchema.extend({
-  sigla_time: z.string().min(1),
+  sigla: z.string().min(1),
   limite: z.number().int().min(1).max(100).optional().default(10),
 });
 
 const BaseballLineSchema = BaseballYearSchema.extend({
-  sigla_time: z.string().min(1),
-  linha: z.string().min(1, "linha e obrigatoria"),
+  sigla: z.string().min(1),
+  linha: z.array(z.string()).min(1, "linha e obrigatoria"),
 });
 
 type ScraperPayload = Record<string, unknown>;
@@ -303,7 +303,7 @@ export const getBaseballTeamLastLines = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => BaseballTeamLinesSchema.parse(input))
   .handler(async ({ data }) => {
     return pickPayload(await scraperRequest(
-      `/modelos/baseball/time/${encodeURIComponent(data.sigla_time)}/ultimas-linhas?ano=${encodeURIComponent(String(data.ano))}&limite=${encodeURIComponent(String(data.limite))}`,
+      `/modelos/baseball/time/${encodeURIComponent(data.sigla)}/ultimas-linhas?ano=${encodeURIComponent(String(data.ano))}&limite=${encodeURIComponent(String(data.limite))}`,
     )) as JsonValue;
   });
 
@@ -329,7 +329,7 @@ export const addBaseballLine = createServerFn({ method: "POST" })
 
 export const removeBaseballLastLine = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => BaseballYearSchema.extend({ sigla_time: z.string().min(1) }).parse(input))
+  .inputValidator((input: unknown) => BaseballYearSchema.extend({ sigla: z.string().min(1) }).parse(input))
   .handler(async ({ data }) => {
     return (await scraperRequest("/modelos/baseball/base/remover-ultima", {
       method: "POST",
