@@ -24,9 +24,13 @@ dist-ssr
 outputs/jobs/*
 outputs/raw/*
 outputs/normalized/*
+outputs/exports/*
+model_outputs/*
 !outputs/jobs/.gitkeep
 !outputs/raw/.gitkeep
 !outputs/normalized/.gitkeep
+!outputs/exports/.gitkeep
+!model_outputs/.gitkeep
 
 # Wrangler / Cloudflare
 .wrangler/
