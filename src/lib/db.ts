@@ -428,7 +428,7 @@ export function useCreatePrognostico() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: PrognosticoInput) => {
-      const { data, error } = await supabase.from("prognosticos").insert(input).select().single();
+      const { data, error } = await supabase.from("prognosticos").insert(input as never).select().single();
       if (error) throw error;
       return data;
     },
@@ -441,7 +441,7 @@ export function useUpdatePrognostico() {
   return useMutation({
     mutationFn: async ({ id, ...patch }: Partial<Prognostico> & { id: string }) => {
       const { placar_final: _pf, ...rest } = patch;
-      const { data, error } = await supabase.from("prognosticos").update(rest).eq("id", id).select().single();
+      const { data, error } = await supabase.from("prognosticos").update(rest as never).eq("id", id).select().single();
       if (error) throw error;
       return data;
     },
