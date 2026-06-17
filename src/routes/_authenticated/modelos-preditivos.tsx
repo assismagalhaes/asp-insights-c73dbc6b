@@ -396,7 +396,6 @@ function toPrognosticoInsert(p: ModeloPrognostico, resultado: ModeloResultado | 
   const { mandante, visitante } = inferTeams(p);
   const dadosTecnicos = p.dados_tecnicos?.trim() || resultado?.dados_tecnicos?.trim() || null;
   const contextoModelo = p.contexto_modelo?.trim() || resultado?.contexto_modelo?.trim() || null;
-  const arquivoContexto = p.arquivo_contexto?.trim() || resultado?.arquivo_contexto?.trim() || null;
   return {
     data: parseModelDate(p.data) ?? p.data,
     hora: p.hora,
@@ -416,9 +415,6 @@ function toPrognosticoInsert(p: ModeloPrognostico, resultado: ModeloResultado | 
     observacoes: p.observacoes ?? null,
     dados_tecnicos: dadosTecnicos,
     contexto_modelo: contextoModelo,
-    arquivo_contexto: arquivoContexto,
-    origem_modelo: resultado?.modelo ?? "Futebol",
-    job_id_coleta: resultado?.job_id ?? null,
     status_validacao: "PENDENTE",
     status_publicacao: "NAO_PUBLICADO",
     resultado: "PENDENTE",
