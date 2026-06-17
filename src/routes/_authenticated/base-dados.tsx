@@ -39,6 +39,11 @@ type BaseballYear = {
   total_csvs?: number;
 };
 
+type BaseballYearDetail = {
+  ano: number;
+  total_csvs?: number;
+};
+
 type BaseballTeam = {
   sigla: string;
   nome: string;
@@ -530,15 +535,23 @@ function InfoBlock({ title, value }: { title: string; value: string }) {
 
 function parseYears(payload: unknown): BaseballYear[] {
   const value = unwrapPayload(payload);
-  const obj = value as { anos?: unknown[] };
+  const obj = value as { anos?: unknown[]; detalhes?: BaseballYearDetail[] };
   const rows = Array.isArray(value) ? value : obj.anos;
+  const detailsByYear = new Map(
+    (obj.detalhes ?? [])
+      .map((item) => [Number(item.ano), Number(item.total_csvs ?? 0)] as const)
+      .filter(([ano]) => Number.isFinite(ano)),
+  );
+
   return (rows ?? [])
     .map((item) => {
       if (typeof item === "number" || typeof item === "string") {
-        return { ano: Number(item), total_csvs: 0 };
+        const ano = Number(item);
+        return { ano, total_csvs: detailsByYear.get(ano) ?? 0 };
       }
       const row = item as BaseballYear;
-      return { ...row, ano: Number(row.ano), total_csvs: Number(row.total_csvs ?? 0) };
+      const ano = Number(row.ano);
+      return { ...row, ano, total_csvs: detailsByYear.get(ano) ?? Number(row.total_csvs ?? 0) };
     })
     .filter((item) => Number.isFinite(item.ano))
     .sort((a, b) => b.ano - a.ano);
