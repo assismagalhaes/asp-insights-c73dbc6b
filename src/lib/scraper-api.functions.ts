@@ -25,7 +25,7 @@ const JobIdSchema = z.object({
 
 const PredictiveModelSchema = z.object({
   job_id: z.string().min(1),
-  modelo: z.enum(["Futebol"]),
+  modelo: z.enum(["Futebol", "Baseball"]),
 });
 
 const EmptySchema = z.object({}).optional().default({});
@@ -241,6 +241,7 @@ export const executePredictiveModel = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const endpointByModel: Record<string, string> = {
       Futebol: "/modelos/futebol/executar",
+      Baseball: "/modelos/baseball/executar",
     };
     const path = endpointByModel[data.modelo];
     try {
