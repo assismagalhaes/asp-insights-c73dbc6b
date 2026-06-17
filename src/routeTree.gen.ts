@@ -15,12 +15,12 @@ import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedValidacaoRouteImport } from './routes/_authenticated/validacao'
 import { Route as AuthenticatedPublicacaoRouteImport } from './routes/_authenticated/publicacao'
 import { Route as AuthenticatedPrognosticosRouteImport } from './routes/_authenticated/prognosticos'
+import { Route as AuthenticatedModelosPreditivosRouteImport } from './routes/_authenticated/modelos-preditivos'
 import { Route as AuthenticatedImportarRouteImport } from './routes/_authenticated/importar'
 import { Route as AuthenticatedHistoricoRouteImport } from './routes/_authenticated/historico'
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
 import { Route as AuthenticatedColetaDadosRouteImport } from './routes/_authenticated/coleta-dados'
 import { Route as AuthenticatedBaseDadosRouteImport } from './routes/_authenticated/base-dados'
-import { Route as AuthenticatedModelosPreditivosRouteImport } from './routes/_authenticated/modelos-preditivos'
 import { Route as AuthenticatedBankrollRouteImport } from './routes/_authenticated/bankroll'
 import { Route as AuthenticatedAprendizadoIaRouteImport } from './routes/_authenticated/aprendizado-ia'
 
@@ -54,6 +54,12 @@ const AuthenticatedPrognosticosRoute =
     path: '/prognosticos',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedModelosPreditivosRoute =
+  AuthenticatedModelosPreditivosRouteImport.update({
+    id: '/modelos-preditivos',
+    path: '/modelos-preditivos',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedImportarRoute = AuthenticatedImportarRouteImport.update({
   id: '/importar',
   path: '/importar',
@@ -81,12 +87,6 @@ const AuthenticatedBaseDadosRoute = AuthenticatedBaseDadosRouteImport.update({
   path: '/base-dados',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedModelosPreditivosRoute =
-  AuthenticatedModelosPreditivosRouteImport.update({
-    id: '/modelos-preditivos',
-    path: '/modelos-preditivos',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 const AuthenticatedBankrollRoute = AuthenticatedBankrollRouteImport.update({
   id: '/bankroll',
   path: '/bankroll',
@@ -106,10 +106,10 @@ export interface FileRoutesByFullPath {
   '/bankroll': typeof AuthenticatedBankrollRoute
   '/base-dados': typeof AuthenticatedBaseDadosRoute
   '/coleta-dados': typeof AuthenticatedColetaDadosRoute
-  '/modelos-preditivos': typeof AuthenticatedModelosPreditivosRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/historico': typeof AuthenticatedHistoricoRoute
   '/importar': typeof AuthenticatedImportarRoute
+  '/modelos-preditivos': typeof AuthenticatedModelosPreditivosRoute
   '/prognosticos': typeof AuthenticatedPrognosticosRoute
   '/publicacao': typeof AuthenticatedPublicacaoRoute
   '/validacao': typeof AuthenticatedValidacaoRoute
@@ -120,10 +120,10 @@ export interface FileRoutesByTo {
   '/bankroll': typeof AuthenticatedBankrollRoute
   '/base-dados': typeof AuthenticatedBaseDadosRoute
   '/coleta-dados': typeof AuthenticatedColetaDadosRoute
-  '/modelos-preditivos': typeof AuthenticatedModelosPreditivosRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/historico': typeof AuthenticatedHistoricoRoute
   '/importar': typeof AuthenticatedImportarRoute
+  '/modelos-preditivos': typeof AuthenticatedModelosPreditivosRoute
   '/prognosticos': typeof AuthenticatedPrognosticosRoute
   '/publicacao': typeof AuthenticatedPublicacaoRoute
   '/validacao': typeof AuthenticatedValidacaoRoute
@@ -137,10 +137,10 @@ export interface FileRoutesById {
   '/_authenticated/bankroll': typeof AuthenticatedBankrollRoute
   '/_authenticated/base-dados': typeof AuthenticatedBaseDadosRoute
   '/_authenticated/coleta-dados': typeof AuthenticatedColetaDadosRoute
-  '/_authenticated/modelos-preditivos': typeof AuthenticatedModelosPreditivosRoute
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/_authenticated/historico': typeof AuthenticatedHistoricoRoute
   '/_authenticated/importar': typeof AuthenticatedImportarRoute
+  '/_authenticated/modelos-preditivos': typeof AuthenticatedModelosPreditivosRoute
   '/_authenticated/prognosticos': typeof AuthenticatedPrognosticosRoute
   '/_authenticated/publicacao': typeof AuthenticatedPublicacaoRoute
   '/_authenticated/validacao': typeof AuthenticatedValidacaoRoute
@@ -155,10 +155,10 @@ export interface FileRouteTypes {
     | '/bankroll'
     | '/base-dados'
     | '/coleta-dados'
-    | '/modelos-preditivos'
     | '/configuracoes'
     | '/historico'
     | '/importar'
+    | '/modelos-preditivos'
     | '/prognosticos'
     | '/publicacao'
     | '/validacao'
@@ -169,10 +169,10 @@ export interface FileRouteTypes {
     | '/bankroll'
     | '/base-dados'
     | '/coleta-dados'
-    | '/modelos-preditivos'
     | '/configuracoes'
     | '/historico'
     | '/importar'
+    | '/modelos-preditivos'
     | '/prognosticos'
     | '/publicacao'
     | '/validacao'
@@ -185,10 +185,10 @@ export interface FileRouteTypes {
     | '/_authenticated/bankroll'
     | '/_authenticated/base-dados'
     | '/_authenticated/coleta-dados'
-    | '/_authenticated/modelos-preditivos'
     | '/_authenticated/configuracoes'
     | '/_authenticated/historico'
     | '/_authenticated/importar'
+    | '/_authenticated/modelos-preditivos'
     | '/_authenticated/prognosticos'
     | '/_authenticated/publicacao'
     | '/_authenticated/validacao'
@@ -244,6 +244,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPrognosticosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/modelos-preditivos': {
+      id: '/_authenticated/modelos-preditivos'
+      path: '/modelos-preditivos'
+      fullPath: '/modelos-preditivos'
+      preLoaderRoute: typeof AuthenticatedModelosPreditivosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/importar': {
       id: '/_authenticated/importar'
       path: '/importar'
@@ -279,13 +286,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBaseDadosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/modelos-preditivos': {
-      id: '/_authenticated/modelos-preditivos'
-      path: '/modelos-preditivos'
-      fullPath: '/modelos-preditivos'
-      preLoaderRoute: typeof AuthenticatedModelosPreditivosRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/bankroll': {
       id: '/_authenticated/bankroll'
       path: '/bankroll'
@@ -308,10 +308,10 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedBankrollRoute: typeof AuthenticatedBankrollRoute
   AuthenticatedBaseDadosRoute: typeof AuthenticatedBaseDadosRoute
   AuthenticatedColetaDadosRoute: typeof AuthenticatedColetaDadosRoute
-  AuthenticatedModelosPreditivosRoute: typeof AuthenticatedModelosPreditivosRoute
   AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRoute
   AuthenticatedHistoricoRoute: typeof AuthenticatedHistoricoRoute
   AuthenticatedImportarRoute: typeof AuthenticatedImportarRoute
+  AuthenticatedModelosPreditivosRoute: typeof AuthenticatedModelosPreditivosRoute
   AuthenticatedPrognosticosRoute: typeof AuthenticatedPrognosticosRoute
   AuthenticatedPublicacaoRoute: typeof AuthenticatedPublicacaoRoute
   AuthenticatedValidacaoRoute: typeof AuthenticatedValidacaoRoute
@@ -323,10 +323,10 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBankrollRoute: AuthenticatedBankrollRoute,
   AuthenticatedBaseDadosRoute: AuthenticatedBaseDadosRoute,
   AuthenticatedColetaDadosRoute: AuthenticatedColetaDadosRoute,
-  AuthenticatedModelosPreditivosRoute: AuthenticatedModelosPreditivosRoute,
   AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRoute,
   AuthenticatedHistoricoRoute: AuthenticatedHistoricoRoute,
   AuthenticatedImportarRoute: AuthenticatedImportarRoute,
+  AuthenticatedModelosPreditivosRoute: AuthenticatedModelosPreditivosRoute,
   AuthenticatedPrognosticosRoute: AuthenticatedPrognosticosRoute,
   AuthenticatedPublicacaoRoute: AuthenticatedPublicacaoRoute,
   AuthenticatedValidacaoRoute: AuthenticatedValidacaoRoute,
