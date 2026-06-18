@@ -25,7 +25,7 @@ const JobIdSchema = z.object({
 
 const PredictiveModelSchema = z.object({
   job_id: z.string().min(1),
-  modelo: z.enum(["Futebol", "Baseball"]),
+  modelo: z.enum(["Futebol", "Baseball", "Basketball NBA", "Basketball WNBA"]),
 });
 
 const EmptySchema = z.object({}).optional().default({});
@@ -308,6 +308,8 @@ export const executePredictiveModel = createServerFn({ method: "POST" })
     const endpointByModel: Record<string, string> = {
       Futebol: "/modelos/futebol/executar",
       Baseball: "/modelos/baseball/executar",
+      "Basketball NBA": "/modelos/basketball/nba/executar",
+      "Basketball WNBA": "/modelos/basketball/wnba/executar",
     };
     const path = endpointByModel[data.modelo];
     try {
