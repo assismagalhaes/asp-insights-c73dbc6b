@@ -865,10 +865,12 @@ function formatBasketballSeasonStatus(year: number) {
 
 function formatYearOption(item: BaseballYear, isBasketball: boolean) {
   const count = Number(item.total_csvs ?? 0);
-  const label = item.label && (!/0\s*CSVs?/i.test(item.label) || count <= 0)
-    ? item.label
-    : `${item.ano} · ${count} CSVs`;
-  return isBasketball ? `${label} · ${formatBasketballSeasonStatus(item.ano)}` : label;
+  const rawLabel = typeof item.label === "string" ? item.label : "";
+  const labelHasCsvCount = /\d+\s*CSVs?/i.test(rawLabel);
+  const label = labelHasCsvCount && (!/0\s*CSVs?/i.test(rawLabel) || count <= 0)
+    ? rawLabel
+    : `${item.ano} - ${count} CSVs`;
+  return isBasketball ? `${label} - ${formatBasketballSeasonStatus(item.ano)}` : label;
 }
 
 function parseYears(payload: unknown): BaseballYear[] {
