@@ -324,10 +324,25 @@ function BaseDadosPage() {
       const parsed = parseLastLines(payload);
       setLastLinesHeader(parsed.cabecalho);
       setLastLines(parsed.linhas);
+      return parsed;
     } catch (e) {
       toast.error(formatError(e));
+      return null;
     } finally {
       setBusy(null);
+    }
+  }
+
+  async function refreshLastLinesAfterMutation(ano: number, sigla: string, optimisticLine?: string) {
+    let latest: LastLinesResult | null = null;
+    for (const waitMs of [250, 750, 1500]) {
+      await delay(waitMs);
+      latest = await loadLastLines(ano, sigla);
+    }
+    if (optimisticLine && latest && !hasEquivalentLine(latest.linhas, optimisticLine)) {
+      setLastLines([...latest.linhas, optimisticLine].slice(-10));
+    } else if (optimisticLine && !latest) {
+      setLastLines((current) => [...current, optimisticLine].slice(-10));
     }
   }
 
@@ -371,10 +386,11 @@ function BaseDadosPage() {
     if (!canAdd || !selectedYear || !team) return;
     setBusy("add");
     try {
-      const payload = await addLine({ data: { esporte: apiSport, liga: apiLeague, ano: selectedYear, sigla: team, linha: parseLineForBase(line, isBasketball) } });
+      const parsedLine = parseLineForBase(line, isBasketball);
+      const payload = await addLine({ data: { esporte: apiSport, liga: apiLeague, ano: selectedYear, sigla: team, linha: parsedLine } });
       setOperation(payload as OperationResult);
       toast.success(`Linha adicionada à base ${league}.`);
-      await loadLastLines(selectedYear, team);
+      await refreshLastLinesAfterMutation(selectedYear, team, formatLineValue(parsedLine));
     } catch (e) {
       toast.error(formatError(e));
     } finally {
@@ -962,7 +978,19 @@ function formatLastLine(item: unknown): string {
 }
 
 function parseLineForBase(input: string, isBasketball: boolean): string | string[] {
-  return isBasketball ? input.trim() : parseCsvLine(input);
+  return isBasketball ? normalizeBasketballLineInput(input) : parseCsvLine(input);
+}
+
+function normalizeBasketballLineInput(input: string): string {
+  return input
+    .trimEnd()
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/[ \t]+(?=\d+,20\d{2}-\d{2}-\d{2},)/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
 }
 
 function parseCsvLine(input: string): string[] {
@@ -974,14 +1002,27 @@ function parseCsvLine(input: string): string[] {
 
 function getLinePlaceholder(isBasketball: boolean, league: string) {
   if (!isBasketball) return "Cole aqui a linha no formato esperado pelo CSV historico da MLB.";
-  if (league === "WNBA") return "Cole aqui as linhas no formato esperado da WNBA: estatisticas basicas e avancadas, preferencialmente separadas por TAB.";
-  return "Cole aqui as linhas no formato esperado da NBA: estatisticas basicas e avancadas, preferencialmente separadas por TAB.";
+  if (league === "WNBA") return "Cole aqui a linha basic da WNBA e, em seguida, a linha advanced. Pode separar por espaco ou quebra de linha.";
+  return "Cole aqui a linha basic da NBA e, em seguida, a linha advanced. Pode separar por espaco ou quebra de linha.";
 }
 
 function formatLineValue(value: unknown): string {
   if (Array.isArray(value)) return value.map((item) => String(item)).join(",");
   if (value && typeof value === "object") return JSON.stringify(value, null, 2);
   return String(value ?? "");
+}
+
+function normalizeLineForCompare(value: string): string {
+  return value.replace(/\s+/g, "").toLowerCase();
+}
+
+function hasEquivalentLine(lines: string[], target: string) {
+  const normalizedTarget = normalizeLineForCompare(target);
+  return lines.some((line) => normalizeLineForCompare(line).includes(normalizedTarget));
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => globalThis.setTimeout(resolve, ms));
 }
 
 function normalizeMlbSigla(sigla: string) {
