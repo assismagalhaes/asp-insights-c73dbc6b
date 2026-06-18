@@ -19,7 +19,7 @@ export const Route = createFileRoute("/_authenticated/modelos-preditivos")({
   component: ModelosPreditivosPage,
 });
 
-type ModeloDisponivel = "Futebol" | "Baseball";
+type ModeloDisponivel = "Futebol" | "Baseball" | "Basketball NBA" | "Basketball WNBA";
 
 interface ModeloPrognostico {
   data: string;
@@ -77,6 +77,8 @@ function ModelosPreditivosPage() {
   const concluidas = useMemo(() => {
     const coletasConcluidas = coletas.filter((coleta) => coleta.status === "CONCLUIDA" && coleta.job_id);
     if (modelo === "Baseball") return coletasConcluidas.filter(isBaseballColeta);
+    if (modelo === "Basketball NBA") return coletasConcluidas.filter((coleta) => isBasketballColeta(coleta, "NBA"));
+    if (modelo === "Basketball WNBA") return coletasConcluidas.filter((coleta) => isBasketballColeta(coleta, "WNBA"));
     if (modelo === "Futebol") return coletasConcluidas.filter((coleta) => !coleta.esporte || isFootballColeta(coleta));
     return coletasConcluidas;
   }, [coletas, modelo]);
@@ -92,6 +94,14 @@ function ModelosPreditivosPage() {
 
     if (modelo === "Baseball" && !isBaseballColeta(coletaSelecionada)) {
       toast.error("Selecione uma coleta Baseball/MLB para executar o modelo Baseball.");
+      return;
+    }
+    if (modelo === "Basketball NBA" && !isBasketballColeta(coletaSelecionada, "NBA")) {
+      toast.error("Selecione uma coleta Basketball/NBA para executar o modelo NBA.");
+      return;
+    }
+    if (modelo === "Basketball WNBA" && !isBasketballColeta(coletaSelecionada, "WNBA")) {
+      toast.error("Selecione uma coleta Basketball/WNBA para executar o modelo WNBA.");
       return;
     }
 
@@ -184,7 +194,8 @@ function ModelosPreditivosPage() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Futebol">Futebol</SelectItem>
-                  <SelectItem value="Basketball" disabled>Basketball</SelectItem>
+                  <SelectItem value="Basketball NBA">Basketball NBA</SelectItem>
+                  <SelectItem value="Basketball WNBA">Basketball WNBA</SelectItem>
                   <SelectItem value="Baseball">Baseball</SelectItem>
                   <SelectItem value="Hockey" disabled>Hockey</SelectItem>
                   <SelectItem value="American Football" disabled>American Football</SelectItem>
@@ -482,6 +493,13 @@ function coletaSearchText(coleta: ColetaOdds) {
 function isBaseballColeta(coleta: ColetaOdds) {
   const text = coletaSearchText(coleta);
   return text.includes("baseball") || text.includes("mlb");
+}
+
+function isBasketballColeta(coleta: ColetaOdds, liga?: "NBA" | "WNBA") {
+  const text = coletaSearchText(coleta);
+  if (!text.includes("basketball")) return false;
+  if (!liga) return true;
+  return text.includes(liga.toLowerCase());
 }
 
 function isFootballColeta(coleta: ColetaOdds) {
