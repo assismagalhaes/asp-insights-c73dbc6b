@@ -40,6 +40,7 @@ type BaseballYear = {
   ano: number;
   pasta?: string;
   total_csvs?: number;
+  label?: string;
 };
 
 type BaseballYearDetail = {
@@ -50,6 +51,7 @@ type BaseballYearDetail = {
 type BaseballTeam = {
   sigla: string;
   nome: string;
+  label?: string;
   arquivo?: string;
   caminho?: string;
 };
@@ -57,6 +59,8 @@ type BaseballTeam = {
 type ValidationResult = {
   ok?: boolean;
   valida?: boolean;
+  valido?: boolean;
+  valid?: boolean;
   erros?: string[];
   avisos?: string[];
   linha?: string | string[];
@@ -87,9 +91,14 @@ type OperationResult = {
   stdout?: string;
   stderr?: string;
   arquivos_criados?: number;
+  registros_lidos?: number;
   registros_identificados?: number;
   registros_basicos_importados?: number;
   registros_avancados_importados?: number;
+  erros_ignorados?: number | string[] | string;
+  arquivo_merged?: string;
+  raw_salvo?: string;
+  log_salvo?: string;
   linha_adicionada?: string | string[];
   linha_removida?: string | string[];
 };
@@ -120,6 +129,60 @@ const LEAGUES_BY_SPORT: Record<SportKey, Array<{ value: string; label: string }>
   football: [{ value: "Futebol", label: "Futebol" }],
   "football-goals": [{ value: "Futebol - Gols", label: "Futebol - Gols" }],
   "football-corners": [{ value: "Futebol - Escanteios", label: "Futebol - Escanteios" }],
+};
+
+const CURRENT_BASKETBALL_SEASON_YEAR = 2026;
+
+const BASKETBALL_TEAM_NAMES: Record<"nba" | "wnba", Record<string, string>> = {
+  nba: {
+    ATL: "Atlanta Hawks",
+    BOS: "Boston Celtics",
+    BRK: "Brooklyn Nets",
+    CHO: "Charlotte Hornets",
+    CHI: "Chicago Bulls",
+    CLE: "Cleveland Cavaliers",
+    DAL: "Dallas Mavericks",
+    DEN: "Denver Nuggets",
+    DET: "Detroit Pistons",
+    GSW: "Golden State Warriors",
+    HOU: "Houston Rockets",
+    IND: "Indiana Pacers",
+    LAC: "Los Angeles Clippers",
+    LAL: "Los Angeles Lakers",
+    MEM: "Memphis Grizzlies",
+    MIA: "Miami Heat",
+    MIL: "Milwaukee Bucks",
+    MIN: "Minnesota Timberwolves",
+    NOP: "New Orleans Pelicans",
+    NYK: "New York Knicks",
+    OKC: "Oklahoma City Thunder",
+    ORL: "Orlando Magic",
+    PHI: "Philadelphia 76ers",
+    PHO: "Phoenix Suns",
+    POR: "Portland Trail Blazers",
+    SAC: "Sacramento Kings",
+    SAS: "San Antonio Spurs",
+    TOR: "Toronto Raptors",
+    UTA: "Utah Jazz",
+    WAS: "Washington Wizards",
+  },
+  wnba: {
+    ATL: "Atlanta Dream W",
+    CHI: "Chicago Sky W",
+    CON: "Connecticut Sun W",
+    DAL: "Dallas Wings W",
+    GSV: "Golden State Valkyries W",
+    IND: "Indiana Fever W",
+    LVA: "Las Vegas Aces W",
+    LAS: "Los Angeles Sparks W",
+    MIN: "Minnesota Lynx W",
+    NYL: "New York Liberty W",
+    PHO: "Phoenix Mercury W",
+    SEA: "Seattle Storm W",
+    WAS: "Washington Mystics W",
+    TOR: "Toronto Tempo W",
+    POR: "Portland Fire W",
+  },
 };
 
 function BaseDadosPage() {
@@ -159,7 +222,11 @@ function BaseDadosPage() {
   const maxYear = years.length ? Math.max(...years.map((item) => item.ano)) : null;
   const selectedYear = year ? Number(year) : null;
   const selectedTeam = teams.find((item) => item.sigla === team) ?? null;
-  const isHistoricalYear = Boolean(selectedYear && maxYear && selectedYear < maxYear);
+  const selectedBasketballSeasonStatus = isBasketball && selectedYear ? getBasketballSeasonStatus(selectedYear) : null;
+  const isHistoricalYear = Boolean(
+    selectedYear &&
+    (isBasketball ? selectedBasketballSeasonStatus === "closed" : maxYear && selectedYear < maxYear),
+  );
   const canValidate = Boolean(isIntegratedBase && selectedYear && team && line.trim() && !busy);
   const canAdd = Boolean(canValidate && validation && isValidationSuccess(validation));
   const canRemove = Boolean(isBaseballMlb && selectedYear && team && !busy);
@@ -182,12 +249,16 @@ function BaseDadosPage() {
     let cancelled = false;
     setBusy("years");
     getYears({ data: { esporte: apiSport, liga: apiLeague } })
-      .then((payload) => {
+      .then(async (payload) => {
         if (cancelled) return;
         const parsed = parseYears(payload);
-        setYears(parsed);
-        const latest = parsed.length ? Math.max(...parsed.map((item) => item.ano)) : null;
-        setYear(latest ? String(latest) : "");
+        const resolved = isBasketball ? await hydrateYearCounts(parsed, apiSport, apiLeague) : parsed;
+        if (cancelled) return;
+        setYears(resolved);
+        const defaultYear = isBasketball && resolved.some((item) => item.ano === CURRENT_BASKETBALL_SEASON_YEAR)
+          ? CURRENT_BASKETBALL_SEASON_YEAR
+          : resolved.length ? Math.max(...resolved.map((item) => item.ano)) : null;
+        setYear(defaultYear ? String(defaultYear) : "");
         if (!parsed.length) toast.warning(`A VM respondeu, mas nao retornou anos de base ${league}.`);
       })
       .catch((e) => toast.error(formatError(e)))
@@ -208,7 +279,7 @@ function BaseDadosPage() {
     getTeams({ data: { esporte: apiSport, liga: apiLeague, ano: selectedYear } })
       .then((payload) => {
         if (cancelled) return;
-        const parsed = parseTeams(payload);
+        const parsed = parseTeams(payload, apiLeague);
         setTeams(parsed);
         if (!parsed.length) toast.warning(`A VM respondeu, mas nao retornou times ${league} para ${selectedYear}.`);
       })
@@ -258,6 +329,21 @@ function BaseDadosPage() {
     } finally {
       setBusy(null);
     }
+  }
+
+  async function hydrateYearCounts(items: BaseballYear[], esporte: "baseball" | "basketball", liga: "mlb" | "nba" | "wnba") {
+    return Promise.all(
+      items.map(async (item) => {
+        if (Number(item.total_csvs ?? 0) > 0) return item;
+        try {
+          const payload = await getTeams({ data: { esporte, liga, ano: item.ano } });
+          const total = parseTeams(payload, liga).length;
+          return total > 0 ? { ...item, total_csvs: total, label: undefined } : item;
+        } catch {
+          return item;
+        }
+      }),
+    );
   }
 
   async function handleValidate() {
@@ -341,7 +427,10 @@ function BaseDadosPage() {
       setYear(String(targetYear));
       toast.success("Temporada criada/atualizada com sucesso.");
       const refreshed = await getYears({ data: { esporte: seasonSport, liga: seasonLeague.toLowerCase() as "mlb" | "nba" | "wnba" } });
-      setYears(parseYears(refreshed));
+      const parsedYears = parseYears(refreshed);
+      setYears(seasonSport === "basketball"
+        ? await hydrateYearCounts(parsedYears, seasonSport, seasonLeague.toLowerCase() as "mlb" | "nba" | "wnba")
+        : parsedYears);
     } catch (e) {
       toast.error(formatError(e));
     } finally {
@@ -417,7 +506,7 @@ function BaseDadosPage() {
                       <SelectContent>
                         {years.map((item) => (
                           <SelectItem key={item.ano} value={String(item.ano)}>
-                            {item.ano} · {item.total_csvs ?? 0} CSVs
+                            {formatYearOption(item, isBasketball)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -445,7 +534,7 @@ function BaseDadosPage() {
                       <SelectContent>
                         {teams.map((item) => (
                           <SelectItem key={item.sigla} value={item.sigla}>
-                            {item.nome || item.sigla}
+                            {item.label || item.nome || item.sigla}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -705,11 +794,15 @@ function OperationPanel({ operation }: { operation: OperationResult }) {
         <Info label="Ano origem" value={operation.ano_origem ?? "-"} />
         <Info label="Time" value={operation.nome_time ?? operation.sigla ?? operation.sigla_time ?? "-"} />
         <Info label="Arquivos criados" value={operation.arquivos_criados ?? "-"} />
+        <Info label="Registros lidos" value={operation.registros_lidos ?? operation.registros_identificados ?? "-"} />
         <Info label="Basic importados" value={operation.registros_basicos_importados ?? "-"} />
         <Info label="Advanced importados" value={operation.registros_avancados_importados ?? "-"} />
-        <Info label="Arquivo" value={operation.arquivo ?? "-"} />
+        <Info label="Arquivo" value={operation.arquivo_merged ?? operation.arquivo ?? "-"} />
         <Info label="Backup" value={operation.backup ?? "-"} />
+        <Info label="Raw salvo" value={operation.raw_salvo ?? "-"} />
+        <Info label="Log salvo" value={operation.log_salvo ?? "-"} />
       </div>
+      {operation.erros_ignorados && <InfoBlock title="Erros/ignorados" value={formatLineValue(operation.erros_ignorados)} />}
       {operation.linha_adicionada && <InfoBlock title="Linha adicionada" value={operation.linha_adicionada} />}
       {operation.linha_removida && <InfoBlock title="Linha removida" value={operation.linha_removida} />}
       {operation.stdout && <InfoBlock title="Retorno da VM" value={operation.stdout} />}
@@ -739,7 +832,7 @@ function Info({ label, value }: { label: string; value: unknown }) {
   );
 }
 
-function InfoBlock({ title, value }: { title: string; value: string | string[] }) {
+function InfoBlock({ title, value }: { title: string; value: unknown }) {
   const displayValue = formatLineValue(value);
   return (
     <div>
@@ -749,10 +842,39 @@ function InfoBlock({ title, value }: { title: string; value: string | string[] }
   );
 }
 
+function firstNumber(...values: unknown[]) {
+  for (const value of values) {
+    const numberValue = Number(value);
+    if (Number.isFinite(numberValue)) return numberValue;
+  }
+  return 0;
+}
+
+function getBasketballSeasonStatus(year: number) {
+  if (year === CURRENT_BASKETBALL_SEASON_YEAR) return "current";
+  if (year > CURRENT_BASKETBALL_SEASON_YEAR) return "future";
+  return "closed";
+}
+
+function formatBasketballSeasonStatus(year: number) {
+  const status = getBasketballSeasonStatus(year);
+  if (status === "current") return "Atual";
+  if (status === "future") return "Futura";
+  return "Encerrada";
+}
+
+function formatYearOption(item: BaseballYear, isBasketball: boolean) {
+  const count = Number(item.total_csvs ?? 0);
+  const label = item.label && (!/0\s*CSVs?/i.test(item.label) || count <= 0)
+    ? item.label
+    : `${item.ano} · ${count} CSVs`;
+  return isBasketball ? `${label} · ${formatBasketballSeasonStatus(item.ano)}` : label;
+}
+
 function parseYears(payload: unknown): BaseballYear[] {
   const value = unwrapPayload(payload);
-  const obj = value as { anos?: unknown[]; detalhes?: BaseballYearDetail[] };
-  const rows = Array.isArray(value) ? value : obj.anos;
+  const obj = value as { anos?: unknown[]; years?: unknown[]; items?: unknown[]; options?: unknown[]; detalhes?: BaseballYearDetail[] };
+  const rows = Array.isArray(value) ? value : (obj.anos ?? obj.years ?? obj.items ?? obj.options);
   const detailsByYear = new Map(
     (obj.detalhes ?? [])
       .map((item) => [Number(item.ano), Number(item.total_csvs ?? 0)] as const)
@@ -765,38 +887,56 @@ function parseYears(payload: unknown): BaseballYear[] {
         const ano = Number(item);
         return { ano, total_csvs: detailsByYear.get(ano) ?? 0 };
       }
-      const row = item as BaseballYear;
-      const ano = Number(row.ano);
-      return { ...row, ano, total_csvs: detailsByYear.get(ano) ?? Number(row.total_csvs ?? 0) };
+      const row = item as Record<string, unknown>;
+      const ano = Number(row.ano ?? row.year ?? row.value);
+      const csvCount = firstNumber(row.csv_count, row.total_csvs, row.arquivos_csv, row.count, detailsByYear.get(ano), 0);
+      return { ...row, ano, label: typeof row.label === "string" ? row.label : undefined, total_csvs: csvCount };
     })
     .filter((item) => Number.isFinite(item.ano))
     .sort((a, b) => b.ano - a.ano);
 }
 
-function parseTeams(payload: unknown): BaseballTeam[] {
+function parseTeams(payload: unknown, league?: string): BaseballTeam[] {
   const value = unwrapPayload(payload);
-  const obj = value as { times?: unknown[] };
-  const rows = Array.isArray(value) ? value : obj.times;
+  const obj = value as {
+    times?: unknown[];
+    teams?: unknown[];
+    items?: unknown[];
+    options?: unknown[];
+    times_detalhados?: unknown[];
+    teams_detalhados?: unknown[];
+  };
+  const rows = Array.isArray(value)
+    ? value
+    : (obj.options ?? obj.items ?? obj.times_detalhados ?? obj.teams_detalhados ?? obj.times ?? obj.teams);
   return (rows ?? [])
     .map((item) => {
       if (typeof item === "string") return { sigla: item, nome: item };
-      return item as BaseballTeam;
+      const row = item as Record<string, unknown>;
+      const sigla = String(row.value ?? row.sigla ?? row.codigo ?? row.time ?? row.team ?? "").trim();
+      const nome = String(row.nome ?? row.name ?? row.display ?? row.label ?? sigla).trim();
+      const label = String(row.label ?? row.display ?? (nome && nome !== sigla ? `${sigla} - ${nome}` : sigla)).trim();
+      return { ...(item as BaseballTeam), sigla, nome, label };
     })
     .filter((item) => item.sigla)
     .map((item) => {
       const sigla = normalizeMlbSigla(item.sigla);
-      return { ...item, sigla, nome: item.nome || sigla };
+      const basketballName = league === "nba" || league === "wnba" ? BASKETBALL_TEAM_NAMES[league][sigla] : undefined;
+      const nome = basketballName ?? item.nome ?? sigla;
+      return { ...item, sigla, nome, label: item.label || (basketballName ? `${sigla} - ${basketballName}` : nome) };
     })
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }
 
 function parseLastLines(payload: unknown): LastLinesResult {
   const value = unwrapPayload(payload);
-  const obj = value as { cabecalho?: unknown[]; ultimas_linhas?: unknown[]; linhas?: unknown[] };
-  const rows = Array.isArray(value) ? value : (obj.ultimas_linhas ?? obj.linhas);
+  const obj = value as { cabecalho?: unknown[]; ultimas_linhas?: unknown[]; linhas?: unknown[]; rows?: unknown[]; data?: unknown[]; mensagem?: string; message?: string };
+  const rows = Array.isArray(value) ? value : (obj.ultimas_linhas ?? obj.linhas ?? obj.rows ?? obj.data);
+  const parsed = (rows ?? []).map(formatLastLine).filter((item) => item.length > 0);
+  const message = obj.mensagem ?? obj.message;
   return {
     cabecalho: Array.isArray(obj.cabecalho) ? obj.cabecalho.map((item) => String(item)).join(",") : null,
-    linhas: (rows ?? []).map(formatLastLine).filter((item) => item.length > 0),
+    linhas: parsed.length ? parsed : message ? [message] : [],
   };
 }
 
@@ -836,8 +976,10 @@ function getLinePlaceholder(isBasketball: boolean, league: string) {
   return "Cole aqui as linhas no formato esperado da NBA: estatisticas basicas e avancadas, preferencialmente separadas por TAB.";
 }
 
-function formatLineValue(value: string | string[]): string {
-  return Array.isArray(value) ? value.join(",") : value;
+function formatLineValue(value: unknown): string {
+  if (Array.isArray(value)) return value.map((item) => String(item)).join(",");
+  if (value && typeof value === "object") return JSON.stringify(value, null, 2);
+  return String(value ?? "");
 }
 
 function normalizeMlbSigla(sigla: string) {
@@ -846,7 +988,7 @@ function normalizeMlbSigla(sigla: string) {
 }
 
 function isValidationSuccess(validation: ValidationResult) {
-  return (validation.ok === true || validation.valida === true) && !validation.erros?.length;
+  return (validation.ok === true || validation.valida === true || validation.valido === true || validation.valid === true) && !validation.erros?.length;
 }
 
 function formatError(error: unknown) {
