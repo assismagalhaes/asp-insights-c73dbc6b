@@ -229,7 +229,7 @@ function BaseDadosPage() {
   );
   const canValidate = Boolean(isIntegratedBase && selectedYear && team && line.trim() && !busy);
   const canAdd = Boolean(canValidate && validation && isValidationSuccess(validation));
-  const canRemove = Boolean(isBaseballMlb && selectedYear && team && !busy);
+  const canRemove = Boolean(isIntegratedBase && selectedYear && team && !busy);
 
   useEffect(() => {
     if (!sport) {
@@ -596,11 +596,6 @@ function BaseDadosPage() {
                     {busy === "remove" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
                     Remover Última Linha
                   </Button>
-                  {isBasketball && (
-                    <span className="self-center text-xs text-muted-foreground">
-                      Remocao manual para Basketball sera habilitada apos rotina segura de backup.
-                    </span>
-                  )}
                 </div>
               </>
             )}
