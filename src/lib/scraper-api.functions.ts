@@ -76,6 +76,18 @@ function normalizeMlbSigla(sigla: string) {
   return value === "OAK" ? "ATH" : value;
 }
 
+function isBaseballBase(data: { esporte: string; liga: string }) {
+  return data.esporte === "baseball" && data.liga === "mlb";
+}
+
+function basketballBaseUnavailable(error: unknown): never {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/not found|404|erro http 404/i.test(message)) {
+    throw new Error("A base Basketball ainda nao esta integrada na API da VM. Atualize a VM com os endpoints /modelos/base/basketball/{nba|wnba}/... antes de usar NBA/WNBA.");
+  }
+  throw error;
+}
+
 function getScraperConfig() {
   const baseUrl = process.env.SCRAPER_API_URL?.replace(/\/+$/, "");
   const apiKey = process.env.SCRAPER_API_KEY;
@@ -371,63 +383,122 @@ export const getBaseYears = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => BaseDataSchema.parse(input))
   .handler(async ({ data }) => {
-    return pickPayload(await scraperRequest(`/modelos/base/${encodeURIComponent(data.esporte)}/${encodeURIComponent(data.liga)}/anos`)) as JsonValue;
+    if (isBaseballBase(data)) {
+      return pickPayload(await scraperRequest("/modelos/baseball/anos")) as JsonValue;
+    }
+    try {
+      return pickPayload(await scraperRequest(`/modelos/base/${encodeURIComponent(data.esporte)}/${encodeURIComponent(data.liga)}/anos`)) as JsonValue;
+    } catch (error) {
+      basketballBaseUnavailable(error);
+    }
   });
 
 export const getBaseTeams = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => BaseDataYearSchema.parse(input))
   .handler(async ({ data }) => {
-    return pickPayload(await scraperRequest(
-      `/modelos/base/${encodeURIComponent(data.esporte)}/${encodeURIComponent(data.liga)}/times?ano=${encodeURIComponent(String(data.ano))}`,
-    )) as JsonValue;
+    if (isBaseballBase(data)) {
+      return pickPayload(await scraperRequest(`/modelos/baseball/times?ano=${encodeURIComponent(String(data.ano))}`)) as JsonValue;
+    }
+    try {
+      return pickPayload(await scraperRequest(
+        `/modelos/base/${encodeURIComponent(data.esporte)}/${encodeURIComponent(data.liga)}/times?ano=${encodeURIComponent(String(data.ano))}`,
+      )) as JsonValue;
+    } catch (error) {
+      basketballBaseUnavailable(error);
+    }
   });
 
 export const getBaseTeamLastLines = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => BaseDataTeamLinesSchema.parse(input))
   .handler(async ({ data }) => {
-    return pickPayload(await scraperRequest(
-      `/modelos/base/${encodeURIComponent(data.esporte)}/${encodeURIComponent(data.liga)}/time/${encodeURIComponent(data.sigla)}/ultimas-linhas?ano=${encodeURIComponent(String(data.ano))}&limite=${encodeURIComponent(String(data.limite))}`,
-    )) as JsonValue;
+    if (isBaseballBase(data)) {
+      const sigla = normalizeMlbSigla(data.sigla);
+      return pickPayload(await scraperRequest(
+        `/modelos/baseball/time/${encodeURIComponent(sigla)}/ultimas-linhas?ano=${encodeURIComponent(String(data.ano))}&limite=${encodeURIComponent(String(data.limite))}`,
+      )) as JsonValue;
+    }
+    try {
+      return pickPayload(await scraperRequest(
+        `/modelos/base/${encodeURIComponent(data.esporte)}/${encodeURIComponent(data.liga)}/time/${encodeURIComponent(data.sigla)}/ultimas-linhas?ano=${encodeURIComponent(String(data.ano))}&limite=${encodeURIComponent(String(data.limite))}`,
+      )) as JsonValue;
+    } catch (error) {
+      basketballBaseUnavailable(error);
+    }
   });
 
 export const validateBaseLine = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => BaseDataLineSchema.parse(input))
   .handler(async ({ data }) => {
-    return (await scraperRequest("/modelos/base/validar-linha", {
-      method: "POST",
-      body: JSON.stringify(data),
-    })) as JsonValue;
+    if (isBaseballBase(data)) {
+      return (await scraperRequest("/modelos/baseball/base/validar-linha", {
+        method: "POST",
+        body: JSON.stringify({ ano: data.ano, sigla: normalizeMlbSigla(data.sigla), linha: data.linha }),
+      })) as JsonValue;
+    }
+    try {
+      return (await scraperRequest("/modelos/base/validar-linha", {
+        method: "POST",
+        body: JSON.stringify(data),
+      })) as JsonValue;
+    } catch (error) {
+      basketballBaseUnavailable(error);
+    }
   });
 
 export const addBaseLine = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => BaseDataLineSchema.parse(input))
   .handler(async ({ data }) => {
-    return (await scraperRequest("/modelos/base/adicionar", {
-      method: "POST",
-      body: JSON.stringify(data),
-    })) as JsonValue;
+    if (isBaseballBase(data)) {
+      return (await scraperRequest("/modelos/baseball/base/adicionar", {
+        method: "POST",
+        body: JSON.stringify({ ano: data.ano, sigla: normalizeMlbSigla(data.sigla), linha: data.linha }),
+      })) as JsonValue;
+    }
+    try {
+      return (await scraperRequest("/modelos/base/adicionar", {
+        method: "POST",
+        body: JSON.stringify(data),
+      })) as JsonValue;
+    } catch (error) {
+      basketballBaseUnavailable(error);
+    }
   });
 
 export const removeBaseLastLine = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => BaseDataYearSchema.extend({ sigla: z.string().min(1) }).parse(input))
   .handler(async ({ data }) => {
-    return (await scraperRequest("/modelos/base/remover-ultima", {
-      method: "POST",
-      body: JSON.stringify(data),
-    })) as JsonValue;
+    if (isBaseballBase(data)) {
+      return (await scraperRequest("/modelos/baseball/base/remover-ultima", {
+        method: "POST",
+        body: JSON.stringify({ ano: data.ano, sigla: normalizeMlbSigla(data.sigla) }),
+      })) as JsonValue;
+    }
+    try {
+      return (await scraperRequest("/modelos/base/remover-ultima", {
+        method: "POST",
+        body: JSON.stringify(data),
+      })) as JsonValue;
+    } catch (error) {
+      basketballBaseUnavailable(error);
+    }
   });
 
 export const createBaseSeason = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => CreateBaseSeasonSchema.parse(input))
   .handler(async ({ data }) => {
-    return (await scraperRequest("/modelos/base/criar-temporada", {
-      method: "POST",
-      body: JSON.stringify(data),
-    })) as JsonValue;
+    try {
+      return (await scraperRequest("/modelos/base/criar-temporada", {
+        method: "POST",
+        body: JSON.stringify(data),
+      })) as JsonValue;
+    } catch (error) {
+      if (data.esporte === "basketball") basketballBaseUnavailable(error);
+      throw error;
+    }
   });
