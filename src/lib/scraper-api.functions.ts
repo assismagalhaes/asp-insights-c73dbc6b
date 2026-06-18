@@ -44,6 +44,30 @@ const BaseballLineSchema = BaseballYearSchema.extend({
   linha: z.array(z.string()).min(1, "linha e obrigatoria"),
 });
 
+const BaseDataSchema = z.object({
+  esporte: z.enum(["baseball", "basketball"]),
+  liga: z.enum(["mlb", "nba", "wnba"]),
+});
+
+const BaseDataYearSchema = BaseDataSchema.extend({
+  ano: z.number().int().min(2000).max(2100),
+});
+
+const BaseDataTeamLinesSchema = BaseDataYearSchema.extend({
+  sigla: z.string().min(1),
+  limite: z.number().int().min(1).max(100).optional().default(10),
+});
+
+const BaseDataLineSchema = BaseDataYearSchema.extend({
+  sigla: z.string().min(1),
+  linha: z.union([z.string().min(1), z.array(z.string()).min(1)]),
+});
+
+const CreateBaseSeasonSchema = BaseDataSchema.extend({
+  ano_destino: z.number().int().min(2000).max(2100),
+  ano_origem: z.number().int().min(2000).max(2100).optional(),
+});
+
 type ScraperPayload = Record<string, unknown>;
 type JsonValue = string | number | boolean | null | { [k: string]: JsonValue } | JsonValue[];
 
@@ -340,5 +364,70 @@ export const removeBaseballLastLine = createServerFn({ method: "POST" })
     return (await scraperRequest("/modelos/baseball/base/remover-ultima", {
       method: "POST",
       body: JSON.stringify({ ...data, sigla: normalizeMlbSigla(data.sigla) }),
+    })) as JsonValue;
+  });
+
+export const getBaseYears = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => BaseDataSchema.parse(input))
+  .handler(async ({ data }) => {
+    return pickPayload(await scraperRequest(`/modelos/base/${encodeURIComponent(data.esporte)}/${encodeURIComponent(data.liga)}/anos`)) as JsonValue;
+  });
+
+export const getBaseTeams = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => BaseDataYearSchema.parse(input))
+  .handler(async ({ data }) => {
+    return pickPayload(await scraperRequest(
+      `/modelos/base/${encodeURIComponent(data.esporte)}/${encodeURIComponent(data.liga)}/times?ano=${encodeURIComponent(String(data.ano))}`,
+    )) as JsonValue;
+  });
+
+export const getBaseTeamLastLines = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => BaseDataTeamLinesSchema.parse(input))
+  .handler(async ({ data }) => {
+    return pickPayload(await scraperRequest(
+      `/modelos/base/${encodeURIComponent(data.esporte)}/${encodeURIComponent(data.liga)}/time/${encodeURIComponent(data.sigla)}/ultimas-linhas?ano=${encodeURIComponent(String(data.ano))}&limite=${encodeURIComponent(String(data.limite))}`,
+    )) as JsonValue;
+  });
+
+export const validateBaseLine = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => BaseDataLineSchema.parse(input))
+  .handler(async ({ data }) => {
+    return (await scraperRequest("/modelos/base/validar-linha", {
+      method: "POST",
+      body: JSON.stringify(data),
+    })) as JsonValue;
+  });
+
+export const addBaseLine = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => BaseDataLineSchema.parse(input))
+  .handler(async ({ data }) => {
+    return (await scraperRequest("/modelos/base/adicionar", {
+      method: "POST",
+      body: JSON.stringify(data),
+    })) as JsonValue;
+  });
+
+export const removeBaseLastLine = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => BaseDataYearSchema.extend({ sigla: z.string().min(1) }).parse(input))
+  .handler(async ({ data }) => {
+    return (await scraperRequest("/modelos/base/remover-ultima", {
+      method: "POST",
+      body: JSON.stringify(data),
+    })) as JsonValue;
+  });
+
+export const createBaseSeason = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => CreateBaseSeasonSchema.parse(input))
+  .handler(async ({ data }) => {
+    return (await scraperRequest("/modelos/base/criar-temporada", {
+      method: "POST",
+      body: JSON.stringify(data),
     })) as JsonValue;
   });

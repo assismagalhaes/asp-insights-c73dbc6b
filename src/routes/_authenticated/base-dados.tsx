@@ -8,16 +8,19 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  addBaseballLine,
-  getBaseballTeamLastLines,
-  getBaseballTeams,
-  getBaseballYears,
-  removeBaseballLastLine,
-  validateBaseballLine,
+  addBaseLine,
+  createBaseSeason,
+  getBaseTeamLastLines,
+  getBaseTeams,
+  getBaseYears,
+  removeBaseLastLine,
+  validateBaseLine,
 } from "@/lib/scraper-api.functions";
 
 export const Route = createFileRoute("/_authenticated/base-dados")({
@@ -58,21 +61,35 @@ type ValidationResult = {
   avisos?: string[];
   linha?: string | string[];
   arquivo?: string;
+  liga?: string;
   ano?: number;
   sigla?: string;
   sigla_time?: string;
+  basic_identificado?: boolean;
+  advanced_identificado?: boolean;
+  registros_identificados?: number;
 };
 
 type OperationResult = {
   ok?: boolean;
   status?: string;
   mensagem?: string;
+  esporte?: string;
+  liga?: string;
   ano?: number;
+  ano_destino?: number;
+  ano_origem?: number;
   sigla?: string;
   sigla_time?: string;
   nome_time?: string;
   arquivo?: string;
   backup?: string;
+  stdout?: string;
+  stderr?: string;
+  arquivos_criados?: number;
+  registros_identificados?: number;
+  registros_basicos_importados?: number;
+  registros_avancados_importados?: number;
   linha_adicionada?: string | string[];
   linha_removida?: string | string[];
 };
@@ -106,12 +123,13 @@ const LEAGUES_BY_SPORT: Record<SportKey, Array<{ value: string; label: string }>
 };
 
 function BaseDadosPage() {
-  const getYears = useServerFn(getBaseballYears);
-  const getTeams = useServerFn(getBaseballTeams);
-  const getLastLines = useServerFn(getBaseballTeamLastLines);
-  const validateLine = useServerFn(validateBaseballLine);
-  const addLine = useServerFn(addBaseballLine);
-  const removeLastLine = useServerFn(removeBaseballLastLine);
+  const getYears = useServerFn(getBaseYears);
+  const getTeams = useServerFn(getBaseTeams);
+  const getLastLines = useServerFn(getBaseTeamLastLines);
+  const validateLine = useServerFn(validateBaseLine);
+  const addLine = useServerFn(addBaseLine);
+  const removeLastLine = useServerFn(removeBaseLastLine);
+  const createSeason = useServerFn(createBaseSeason);
 
   const [sport, setSport] = useState<SportKey | "">("");
   const [league, setLeague] = useState("");
@@ -126,14 +144,23 @@ function BaseDadosPage() {
   const [operation, setOperation] = useState<OperationResult | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [seasonDialog, setSeasonDialog] = useState(false);
+  const [seasonSport, setSeasonSport] = useState<"baseball" | "basketball">("baseball");
+  const [seasonLeague, setSeasonLeague] = useState("MLB");
+  const [seasonOriginYear, setSeasonOriginYear] = useState("");
+  const [seasonTargetYear, setSeasonTargetYear] = useState("");
 
   const leagues = sport ? LEAGUES_BY_SPORT[sport] : [];
   const isBaseballMlb = sport === "baseball" && league === "MLB";
+  const isBasketball = sport === "basketball" && ["NBA", "WNBA"].includes(league);
+  const isIntegratedBase = isBaseballMlb || isBasketball;
+  const apiSport: "baseball" | "basketball" = sport === "basketball" ? "basketball" : "baseball";
+  const apiLeague = league.toLowerCase() as "mlb" | "nba" | "wnba";
   const maxYear = years.length ? Math.max(...years.map((item) => item.ano)) : null;
   const selectedYear = year ? Number(year) : null;
   const selectedTeam = teams.find((item) => item.sigla === team) ?? null;
   const isHistoricalYear = Boolean(selectedYear && maxYear && selectedYear < maxYear);
-  const canValidate = Boolean(isBaseballMlb && selectedYear && team && line.trim() && !busy);
+  const canValidate = Boolean(isIntegratedBase && selectedYear && team && line.trim() && !busy);
   const canAdd = Boolean(canValidate && validation && isValidationSuccess(validation));
   const canRemove = Boolean(isBaseballMlb && selectedYear && team && !busy);
 
@@ -150,18 +177,18 @@ function BaseDadosPage() {
     setYears([]);
     setYear("");
     resetTeamState();
-    if (!isBaseballMlb) return;
+    if (!isIntegratedBase) return;
 
     let cancelled = false;
     setBusy("years");
-    getYears({ data: {} })
+    getYears({ data: { esporte: apiSport, liga: apiLeague } })
       .then((payload) => {
         if (cancelled) return;
         const parsed = parseYears(payload);
         setYears(parsed);
         const latest = parsed.length ? Math.max(...parsed.map((item) => item.ano)) : null;
         setYear(latest ? String(latest) : "");
-        if (!parsed.length) toast.warning("A VM respondeu, mas nao retornou anos de base MLB.");
+        if (!parsed.length) toast.warning(`A VM respondeu, mas nao retornou anos de base ${league}.`);
       })
       .catch((e) => toast.error(formatError(e)))
       .finally(() => {
@@ -170,20 +197,20 @@ function BaseDadosPage() {
     return () => {
       cancelled = true;
     };
-  }, [isBaseballMlb]);
+  }, [isIntegratedBase, apiSport, apiLeague, league]);
 
   useEffect(() => {
     resetTeamState();
-    if (!isBaseballMlb || !selectedYear) return;
+    if (!isIntegratedBase || !selectedYear) return;
 
     let cancelled = false;
     setBusy("teams");
-    getTeams({ data: { ano: selectedYear } })
+    getTeams({ data: { esporte: apiSport, liga: apiLeague, ano: selectedYear } })
       .then((payload) => {
         if (cancelled) return;
         const parsed = parseTeams(payload);
         setTeams(parsed);
-        if (!parsed.length) toast.warning(`A VM respondeu, mas nao retornou times MLB para ${selectedYear}.`);
+        if (!parsed.length) toast.warning(`A VM respondeu, mas nao retornou times ${league} para ${selectedYear}.`);
       })
       .catch((e) => toast.error(formatError(e)))
       .finally(() => {
@@ -192,22 +219,22 @@ function BaseDadosPage() {
     return () => {
       cancelled = true;
     };
-  }, [isBaseballMlb, selectedYear]);
+  }, [isIntegratedBase, selectedYear, apiSport, apiLeague, league]);
 
   useEffect(() => {
     setLastLines([]);
     setLastLinesHeader(null);
     setValidation(null);
     setOperation(null);
-    if (!isBaseballMlb || !selectedYear || !team) return;
+    if (!isIntegratedBase || !selectedYear || !team) return;
     void loadLastLines(selectedYear, team);
-  }, [isBaseballMlb, selectedYear, team]);
+  }, [isIntegratedBase, selectedYear, team]);
 
   const placeholderMessage = useMemo(() => {
     if (!sport) return "Selecione um esporte/modelo para carregar a base de dados.";
-    if (!isBaseballMlb) return "Base ainda não integrada à API. Integração prevista para etapa futura.";
+    if (!isIntegratedBase) return "Base ainda não integrada à API. Integração prevista para etapa futura.";
     return null;
-  }, [sport, isBaseballMlb]);
+  }, [sport, isIntegratedBase]);
 
   function resetTeamState() {
     setTeams([]);
@@ -222,7 +249,7 @@ function BaseDadosPage() {
   async function loadLastLines(ano: number, sigla: string) {
     setBusy("last-lines");
     try {
-      const payload = await getLastLines({ data: { ano, sigla, limite: 10 } });
+      const payload = await getLastLines({ data: { esporte: apiSport, liga: apiLeague, ano, sigla, limite: 10 } });
       const parsed = parseLastLines(payload);
       setLastLinesHeader(parsed.cabecalho);
       setLastLines(parsed.linhas);
@@ -241,7 +268,7 @@ function BaseDadosPage() {
     setBusy("validate");
     setOperation(null);
     try {
-      const payload = await validateLine({ data: { ano: selectedYear, sigla: team, linha: parseCsvLine(line) } });
+      const payload = await validateLine({ data: { esporte: apiSport, liga: apiLeague, ano: selectedYear, sigla: team, linha: parseLineForBase(line, isBasketball) } });
       const result = payload as ValidationResult;
       result.valida = isValidationSuccess(result);
       setValidation(result);
@@ -258,9 +285,9 @@ function BaseDadosPage() {
     if (!canAdd || !selectedYear || !team) return;
     setBusy("add");
     try {
-      const payload = await addLine({ data: { ano: selectedYear, sigla: team, linha: parseCsvLine(line) } });
+      const payload = await addLine({ data: { esporte: apiSport, liga: apiLeague, ano: selectedYear, sigla: team, linha: parseLineForBase(line, isBasketball) } });
       setOperation(payload as OperationResult);
-      toast.success("Linha adicionada à base MLB.");
+      toast.success(`Linha adicionada à base ${league}.`);
       await loadLastLines(selectedYear, team);
     } catch (e) {
       toast.error(formatError(e));
@@ -274,11 +301,47 @@ function BaseDadosPage() {
     setConfirmRemove(false);
     setBusy("remove");
     try {
-      const payload = await removeLastLine({ data: { ano: selectedYear, sigla: team } });
+      const payload = await removeLastLine({ data: { esporte: apiSport, liga: apiLeague, ano: selectedYear, sigla: team } });
       setOperation(payload as OperationResult);
       setValidation(null);
-      toast.success("Última linha removida da base MLB.");
+      toast.success(`Última linha removida da base ${league}.`);
       await loadLastLines(selectedYear, team);
+    } catch (e) {
+      toast.error(formatError(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleCreateSeason() {
+    const targetYear = Number(seasonTargetYear);
+    const originYear = Number(seasonOriginYear);
+    if (!Number.isFinite(targetYear) || targetYear < 2000 || targetYear > 2100) {
+      toast.error("Informe um ano destino válido.");
+      return;
+    }
+    if (seasonSport === "basketball" && (!Number.isFinite(originYear) || originYear < 2000 || originYear > 2100)) {
+      toast.error("Informe o ano origem/schema para Basketball.");
+      return;
+    }
+    setBusy("create-season");
+    try {
+      const payload = await createSeason({
+        data: {
+          esporte: seasonSport,
+          liga: seasonLeague.toLowerCase() as "mlb" | "nba" | "wnba",
+          ano_destino: targetYear,
+          ...(seasonSport === "basketball" ? { ano_origem: originYear } : {}),
+        },
+      });
+      setOperation(payload as OperationResult);
+      setSeasonDialog(false);
+      setSport(seasonSport);
+      setLeague(seasonLeague);
+      setYear(String(targetYear));
+      toast.success("Temporada criada/atualizada com sucesso.");
+      const refreshed = await getYears({ data: { esporte: seasonSport, liga: seasonLeague.toLowerCase() as "mlb" | "nba" | "wnba" } });
+      setYears(parseYears(refreshed));
     } catch (e) {
       toast.error(formatError(e));
     } finally {
@@ -306,7 +369,16 @@ function BaseDadosPage() {
           <CardContent className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
               <Field label="Esporte/modelo">
-                <Select value={sport} onValueChange={(value) => setSport(value as SportKey)}>
+                <Select
+                  value={sport}
+                  onValueChange={(value) => {
+                    setSport(value as SportKey);
+                    setLeague("");
+                    setYear("");
+                    setLine("");
+                    resetTeamState();
+                  }}
+                >
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
                     {SPORTS.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}
@@ -332,6 +404,7 @@ function BaseDadosPage() {
               <>
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
                   <Field label="Ano da base">
+                    <div className="flex gap-2">
                     <Select
                       value={year}
                       onValueChange={(value) => {
@@ -349,9 +422,24 @@ function BaseDadosPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="shrink-0"
+                      onClick={() => {
+                        setSeasonSport(apiSport as "baseball" | "basketball");
+                        setSeasonLeague(league || (apiSport === "basketball" ? "NBA" : "MLB"));
+                        setSeasonOriginYear(String(selectedYear ?? maxYear ?? ""));
+                        setSeasonTargetYear("");
+                        setSeasonDialog(true);
+                      }}
+                    >
+                      + Nova Temporada
+                    </Button>
+                    </div>
                   </Field>
 
-                  <Field label="Time MLB">
+                  <Field label={isBasketball ? `Time ${league}` : "Time MLB"}>
                     <Select value={team} onValueChange={setTeam} disabled={busy === "teams" || !teams.length}>
                       <SelectTrigger><SelectValue placeholder={busy === "teams" ? "Carregando..." : teams.length ? "Selecione o time" : "Nenhum time encontrado"} /></SelectTrigger>
                       <SelectContent>
@@ -381,7 +469,7 @@ function BaseDadosPage() {
                       setValidation(null);
                       setOperation(null);
                     }}
-                    placeholder="Cole aqui a linha no formato esperado pelo CSV histórico da MLB."
+                    placeholder={getLinePlaceholder(isBasketball, league)}
                   />
                 </Field>
 
@@ -398,6 +486,11 @@ function BaseDadosPage() {
                     {busy === "remove" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
                     Remover Última Linha
                   </Button>
+                  {isBasketball && (
+                    <span className="self-center text-xs text-muted-foreground">
+                      Remocao manual para Basketball sera habilitada apos rotina segura de backup.
+                    </span>
+                  )}
                 </div>
               </>
             )}
@@ -477,6 +570,92 @@ function BaseDadosPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={seasonDialog} onOpenChange={setSeasonDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adicionar Nova Temporada</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Esporte/modelo">
+                <Select
+                  value={seasonSport}
+                  onValueChange={(value) => {
+                    const nextSport = value as "baseball" | "basketball";
+                    setSeasonSport(nextSport);
+                    setSeasonLeague(nextSport === "basketball" ? "NBA" : "MLB");
+                    setSeasonOriginYear("");
+                    setSeasonTargetYear("");
+                  }}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="baseball">Baseball</SelectItem>
+                    <SelectItem value="basketball">Basketball</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              <Field label="Liga/modelo especifico">
+                <Select value={seasonLeague} onValueChange={setSeasonLeague}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {seasonSport === "basketball" ? (
+                      <>
+                        <SelectItem value="NBA">NBA</SelectItem>
+                        <SelectItem value="WNBA">WNBA</SelectItem>
+                      </>
+                    ) : (
+                      <SelectItem value="MLB">MLB</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+
+            {seasonSport === "basketball" && (
+              <Field label="Ano origem/schema">
+                <Select value={seasonOriginYear} onValueChange={setSeasonOriginYear}>
+                  <SelectTrigger><SelectValue placeholder={years.length ? "Selecione o ano origem" : "Informe manualmente abaixo"} /></SelectTrigger>
+                  <SelectContent>
+                    {years.map((item) => (
+                      <SelectItem key={`origin-${item.ano}`} value={String(item.ano)}>
+                        {item.ano}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {!years.length && (
+                  <Input
+                    className="mt-2"
+                    inputMode="numeric"
+                    value={seasonOriginYear}
+                    onChange={(event) => setSeasonOriginYear(event.target.value)}
+                    placeholder="Ex.: 2025"
+                  />
+                )}
+              </Field>
+            )}
+
+            <Field label="Ano da nova temporada">
+              <Input
+                inputMode="numeric"
+                value={seasonTargetYear}
+                onChange={(event) => setSeasonTargetYear(event.target.value)}
+                placeholder="Ex.: 2027"
+              />
+            </Field>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSeasonDialog(false)}>Cancelar</Button>
+            <Button onClick={handleCreateSeason} disabled={busy === "create-season"}>
+              {busy === "create-season" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Criar temporada
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -497,6 +676,13 @@ function ValidationPanel({ validation }: { validation: ValidationResult }) {
         <Badge variant={validation.valida ? "outline" : "destructive"}>{validation.valida ? "Válida" : "Inválida"}</Badge>
         {validation.arquivo && <span className="text-xs text-muted-foreground">{validation.arquivo}</span>}
       </div>
+      <div className="grid gap-2 md:grid-cols-3">
+        {validation.liga && <Info label="Liga" value={validation.liga} />}
+        {validation.ano && <Info label="Ano" value={validation.ano} />}
+        {validation.registros_identificados != null && <Info label="Registros identificados" value={validation.registros_identificados} />}
+        {validation.basic_identificado != null && <Info label="Basic identificado" value={validation.basic_identificado ? "Sim" : "Nao"} />}
+        {validation.advanced_identificado != null && <Info label="Advanced identificado" value={validation.advanced_identificado ? "Sim" : "Nao"} />}
+      </div>
       <MessageList title="Erros" items={validation.erros ?? []} tone="bad" />
       <MessageList title="Avisos" items={validation.avisos ?? []} tone="warn" />
       {validation.linha && <InfoBlock title="Linha validada" value={validation.linha} />}
@@ -512,13 +698,22 @@ function OperationPanel({ operation }: { operation: OperationResult }) {
         {operation.mensagem && <span className="text-sm">{operation.mensagem}</span>}
       </div>
       <div className="grid gap-2 md:grid-cols-2">
+        <Info label="Esporte" value={operation.esporte ?? "-"} />
+        <Info label="Liga" value={operation.liga ?? "-"} />
         <Info label="Ano" value={operation.ano ?? "-"} />
+        <Info label="Ano destino" value={operation.ano_destino ?? "-"} />
+        <Info label="Ano origem" value={operation.ano_origem ?? "-"} />
         <Info label="Time" value={operation.nome_time ?? operation.sigla ?? operation.sigla_time ?? "-"} />
+        <Info label="Arquivos criados" value={operation.arquivos_criados ?? "-"} />
+        <Info label="Basic importados" value={operation.registros_basicos_importados ?? "-"} />
+        <Info label="Advanced importados" value={operation.registros_avancados_importados ?? "-"} />
         <Info label="Arquivo" value={operation.arquivo ?? "-"} />
         <Info label="Backup" value={operation.backup ?? "-"} />
       </div>
       {operation.linha_adicionada && <InfoBlock title="Linha adicionada" value={operation.linha_adicionada} />}
       {operation.linha_removida && <InfoBlock title="Linha removida" value={operation.linha_removida} />}
+      {operation.stdout && <InfoBlock title="Retorno da VM" value={operation.stdout} />}
+      {operation.stderr && <InfoBlock title="Detalhes/erros da VM" value={operation.stderr} />}
     </div>
   );
 }
@@ -617,7 +812,15 @@ function formatLastLine(item: unknown): string {
   const row = item as { valores?: unknown[]; linha?: unknown[]; registro?: Record<string, unknown> };
   if (Array.isArray(row.valores)) return row.valores.map((value) => String(value)).join(",");
   if (Array.isArray(row.linha)) return row.linha.map((value) => String(value)).join(",");
-  return "";
+  const record = row.registro ?? (item as Record<string, unknown>);
+  const preferred = ["data", "local", "adversario", "resultado", "pontos_time", "pontos_adversario", "off_rtg", "def_rtg", "pace", "ts_pct"];
+  const keys = preferred.filter((key) => key in record);
+  const visibleKeys = keys.length ? keys : Object.keys(record).slice(0, 12);
+  return visibleKeys.map((key) => `${key}: ${String(record[key] ?? "")}`).join(" | ");
+}
+
+function parseLineForBase(input: string, isBasketball: boolean): string | string[] {
+  return isBasketball ? input.trim() : parseCsvLine(input);
 }
 
 function parseCsvLine(input: string): string[] {
@@ -625,6 +828,12 @@ function parseCsvLine(input: string): string[] {
     .trimEnd()
     .split(",")
     .map((value) => value.trim());
+}
+
+function getLinePlaceholder(isBasketball: boolean, league: string) {
+  if (!isBasketball) return "Cole aqui a linha no formato esperado pelo CSV historico da MLB.";
+  if (league === "WNBA") return "Cole aqui as linhas no formato esperado da WNBA: estatisticas basicas e avancadas, preferencialmente separadas por TAB.";
+  return "Cole aqui as linhas no formato esperado da NBA: estatisticas basicas e avancadas, preferencialmente separadas por TAB.";
 }
 
 function formatLineValue(value: string | string[]): string {
