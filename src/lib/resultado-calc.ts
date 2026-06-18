@@ -85,8 +85,12 @@ export function calcularResultadoAuto(
   if (ehTotal && (has(pick, "over") || has(pick, "under") || has(mercado, "over", "under"))) {
     const linha = linhaDoProg(prog);
     if (linha == null) return null;
-    if (has(pick, "over") || has(mercado, "over")) return total > linha ? "GREEN" : "RED";
-    if (has(pick, "under") || has(mercado, "under")) return total < linha ? "GREEN" : "RED";
+    const pickOver = has(pick, "over");
+    const pickUnder = has(pick, "under");
+    if (pickOver) return total > linha ? "GREEN" : "RED";
+    if (pickUnder) return total < linha ? "GREEN" : "RED";
+    if (has(mercado, "over")) return total > linha ? "GREEN" : "RED";
+    if (has(mercado, "under")) return total < linha ? "GREEN" : "RED";
   }
 
   if (has(mercado, "ambas marcam", "btts") || has(pick, "ambas marcam", "btts")) {
