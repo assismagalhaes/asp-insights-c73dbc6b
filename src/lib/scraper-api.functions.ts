@@ -479,9 +479,9 @@ export const removeBaseLastLine = createServerFn({ method: "POST" })
       })) as JsonValue;
     }
     try {
-      return (await scraperRequest("/modelos/base/remover-ultima", {
+      return (await scraperRequest(`/modelos/base/basketball/${encodeURIComponent(data.liga)}/${encodeURIComponent(String(data.ano))}/${encodeURIComponent(data.sigla.toLowerCase())}/remover-ultima`, {
         method: "POST",
-        body: JSON.stringify(data),
+        body: JSON.stringify({}),
       })) as JsonValue;
     } catch (error) {
       basketballBaseUnavailable(error);
