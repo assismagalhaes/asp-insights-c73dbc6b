@@ -407,9 +407,15 @@ function toPrognosticoInsert(p: ModeloPrognostico, resultado: ModeloResultado | 
   const { mandante, visitante } = inferTeams(p);
   const dadosTecnicosBase = p.dados_tecnicos?.trim() || resultado?.dados_tecnicos?.trim() || "";
   const contextoModelo = p.contexto_modelo?.trim() || resultado?.contexto_modelo?.trim() || null;
-  const dadosTecnicos = [dadosTecnicosBase, contextoModelo ? `Contexto do modelo:\n${contextoModelo}` : ""]
-    .filter(Boolean)
-    .join("\n\n") || null;
+  const contextoDuplicado = Boolean(
+    dadosTecnicosBase &&
+      contextoModelo &&
+      normalizeComparableText(dadosTecnicosBase) === normalizeComparableText(contextoModelo),
+  );
+  const dadosTecnicos = [
+    dadosTecnicosBase,
+    contextoModelo && !contextoDuplicado ? `Contexto do modelo:\n${contextoModelo}` : "",
+  ].filter(Boolean).join("\n\n") || null;
   return {
     data: parseModelDate(p.data) ?? p.data,
     hora: p.hora,
@@ -484,6 +490,10 @@ function normalizeText(value: unknown) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
+}
+
+function normalizeComparableText(value: string) {
+  return normalizeText(value).replace(/\s+/g, " ").trim();
 }
 
 function coletaSearchText(coleta: ColetaOdds) {
