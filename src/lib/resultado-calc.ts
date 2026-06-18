@@ -55,12 +55,26 @@ function mentionsTeam(pickNorm: string, team: string | null | undefined): boolea
   return parts.length > 0 && parts.some((part) => pickNorm.includes(part));
 }
 
+function splitJogoTeams(jogo: string | null | undefined): { mandante?: string; visitante?: string } {
+  const parts = String(jogo ?? "")
+    .split(/\s+(?:vs|x|v)\s+/i)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return { mandante: parts[0], visitante: parts[1] };
+}
+
 function pickSide(
-  prog: Pick<Prognostico, "pick" | "mandante" | "visitante">,
+  prog: Pick<Prognostico, "pick" | "mandante" | "visitante"> & Partial<Pick<Prognostico, "jogo">>,
 ): "casa" | "fora" | null {
   const pick = norm(prog.pick);
   if (has(pick, "casa", "mandante", "home")) return "casa";
   if (has(pick, "fora", "visitante", "away")) return "fora";
+
+  const jogoTeams = splitJogoTeams(prog.jogo);
+  const jogoHome = mentionsTeam(pick, jogoTeams.mandante);
+  const jogoAway = mentionsTeam(pick, jogoTeams.visitante);
+  if (jogoHome && !jogoAway) return "casa";
+  if (jogoAway && !jogoHome) return "fora";
 
   const home = mentionsTeam(pick, prog.mandante);
   const away = mentionsTeam(pick, prog.visitante);
@@ -70,7 +84,7 @@ function pickSide(
 }
 
 export function calcularResultadoAuto(
-  prog: Pick<Prognostico, "mercado" | "pick" | "linha" | "mandante" | "visitante">,
+  prog: Pick<Prognostico, "mercado" | "pick" | "linha" | "mandante" | "visitante"> & Partial<Pick<Prognostico, "jogo">>,
   placar: PlacarParsed,
 ): ResultadoCalc | null {
   const mercado = norm(prog.mercado);
