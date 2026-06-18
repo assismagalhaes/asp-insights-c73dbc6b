@@ -83,7 +83,7 @@ function isBaseballBase(data: { esporte: string; liga: string }) {
 function basketballBaseUnavailable(error: unknown): never {
   const message = error instanceof Error ? error.message : String(error);
   if (/not found|404|erro http 404/i.test(message)) {
-    throw new Error("A base Basketball ainda nao esta integrada na API da VM. Atualize a VM com os endpoints /modelos/base/basketball/{nba|wnba}/... antes de usar NBA/WNBA.");
+    throw new Error("A API da VM nao encontrou a rota de Basketball solicitada. Verifique se os endpoints /modelos/base/basketball/{liga}/... estao publicados.");
   }
   throw error;
 }
@@ -387,7 +387,7 @@ export const getBaseYears = createServerFn({ method: "POST" })
       return pickPayload(await scraperRequest("/modelos/baseball/anos")) as JsonValue;
     }
     try {
-      return pickPayload(await scraperRequest(`/modelos/base/${encodeURIComponent(data.esporte)}/${encodeURIComponent(data.liga)}/anos`)) as JsonValue;
+      return pickPayload(await scraperRequest(`/modelos/base/basketball/${encodeURIComponent(data.liga)}/anos`)) as JsonValue;
     } catch (error) {
       basketballBaseUnavailable(error);
     }
@@ -402,7 +402,7 @@ export const getBaseTeams = createServerFn({ method: "POST" })
     }
     try {
       return pickPayload(await scraperRequest(
-        `/modelos/base/${encodeURIComponent(data.esporte)}/${encodeURIComponent(data.liga)}/times?ano=${encodeURIComponent(String(data.ano))}`,
+        `/modelos/base/basketball/${encodeURIComponent(data.liga)}/${encodeURIComponent(String(data.ano))}/times`,
       )) as JsonValue;
     } catch (error) {
       basketballBaseUnavailable(error);
@@ -421,7 +421,7 @@ export const getBaseTeamLastLines = createServerFn({ method: "POST" })
     }
     try {
       return pickPayload(await scraperRequest(
-        `/modelos/base/${encodeURIComponent(data.esporte)}/${encodeURIComponent(data.liga)}/time/${encodeURIComponent(data.sigla)}/ultimas-linhas?ano=${encodeURIComponent(String(data.ano))}&limite=${encodeURIComponent(String(data.limite))}`,
+        `/modelos/base/basketball/${encodeURIComponent(data.liga)}/${encodeURIComponent(String(data.ano))}/${encodeURIComponent(data.sigla.toLowerCase())}/ultimas`,
       )) as JsonValue;
     } catch (error) {
       basketballBaseUnavailable(error);
@@ -439,9 +439,9 @@ export const validateBaseLine = createServerFn({ method: "POST" })
       })) as JsonValue;
     }
     try {
-      return (await scraperRequest("/modelos/base/validar-linha", {
+      return (await scraperRequest(`/modelos/base/basketball/${encodeURIComponent(data.liga)}/${encodeURIComponent(String(data.ano))}/${encodeURIComponent(data.sigla.toLowerCase())}/validar`, {
         method: "POST",
-        body: JSON.stringify(data),
+        body: JSON.stringify({ linha: data.linha }),
       })) as JsonValue;
     } catch (error) {
       basketballBaseUnavailable(error);
@@ -459,9 +459,9 @@ export const addBaseLine = createServerFn({ method: "POST" })
       })) as JsonValue;
     }
     try {
-      return (await scraperRequest("/modelos/base/adicionar", {
+      return (await scraperRequest(`/modelos/base/basketball/${encodeURIComponent(data.liga)}/${encodeURIComponent(String(data.ano))}/${encodeURIComponent(data.sigla.toLowerCase())}/adicionar`, {
         method: "POST",
-        body: JSON.stringify(data),
+        body: JSON.stringify({ linha: data.linha }),
       })) as JsonValue;
     } catch (error) {
       basketballBaseUnavailable(error);
@@ -493,9 +493,15 @@ export const createBaseSeason = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => CreateBaseSeasonSchema.parse(input))
   .handler(async ({ data }) => {
     try {
-      return (await scraperRequest("/modelos/base/criar-temporada", {
+      const path = data.esporte === "basketball"
+        ? `/modelos/base/basketball/${encodeURIComponent(data.liga)}/${encodeURIComponent(String(data.ano_destino))}/temporada`
+        : "/modelos/base/criar-temporada";
+      const body = data.esporte === "basketball"
+        ? { ano_origem: data.ano_origem, ano_destino: data.ano_destino }
+        : data;
+      return (await scraperRequest(path, {
         method: "POST",
-        body: JSON.stringify(data),
+        body: JSON.stringify(body),
       })) as JsonValue;
     } catch (error) {
       if (data.esporte === "basketball") basketballBaseUnavailable(error);
