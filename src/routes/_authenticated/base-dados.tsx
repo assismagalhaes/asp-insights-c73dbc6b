@@ -388,7 +388,12 @@ function BaseDadosPage() {
     try {
       const parsedLine = parseLineForBase(line, isBasketball);
       const payload = await addLine({ data: { esporte: apiSport, liga: apiLeague, ano: selectedYear, sigla: team, linha: parsedLine } });
-      setOperation(payload as OperationResult);
+      const result = payload as OperationResult;
+      setOperation(result);
+      if (!isAddOperationSuccess(result, isBasketball)) {
+        toast.error(getOperationErrorMessage(result));
+        return;
+      }
       toast.success(`Linha adicionada à base ${league}.`);
       await refreshLastLinesAfterMutation(selectedYear, team, formatLineValue(parsedLine));
     } catch (e) {
@@ -796,10 +801,13 @@ function ValidationPanel({ validation }: { validation: ValidationResult }) {
 }
 
 function OperationPanel({ operation }: { operation: OperationResult }) {
+  const hasRuntimeError = textIncludesRuntimeError(operation.stderr) || textIncludesRuntimeError(operation.stdout);
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <Badge variant={operation.status === "ok" ? "outline" : "destructive"}>{operation.status ?? "retorno"}</Badge>
+        <Badge variant={operation.status === "ok" && !hasRuntimeError ? "outline" : "destructive"}>
+          {hasRuntimeError ? "erro" : operation.status ?? "retorno"}
+        </Badge>
         {operation.mensagem && <span className="text-sm">{operation.mensagem}</span>}
       </div>
       <div className="grid gap-2 md:grid-cols-2">
@@ -1010,6 +1018,36 @@ function formatLineValue(value: unknown): string {
   if (Array.isArray(value)) return value.map((item) => String(item)).join(",");
   if (value && typeof value === "object") return JSON.stringify(value, null, 2);
   return String(value ?? "");
+}
+
+function textIncludesRuntimeError(value: unknown) {
+  const text = formatLineValue(value).toLowerCase();
+  return /traceback|modulenotfounderror|exception|error:|erro:|no module named/.test(text);
+}
+
+function isAddOperationSuccess(operation: OperationResult, isBasketball: boolean) {
+  if (operation.ok === false) return false;
+  if (operation.status && !/^ok|success|sucesso$/i.test(operation.status)) return false;
+  if (textIncludesRuntimeError(operation.stderr) || textIncludesRuntimeError(operation.stdout)) return false;
+
+  if (isBasketball) {
+    const basic = Number(operation.registros_basicos_importados ?? 0);
+    const advanced = Number(operation.registros_avancados_importados ?? 0);
+    const identified = Number(operation.registros_identificados ?? operation.registros_lidos ?? 0);
+    if (basic <= 0 && advanced <= 0 && identified <= 0) return false;
+  }
+
+  return true;
+}
+
+function getOperationErrorMessage(operation: OperationResult) {
+  const details = [operation.stderr, operation.stdout, operation.mensagem, operation.erros_ignorados]
+    .map((value) => formatLineValue(value).trim())
+    .find(Boolean);
+  if (/no module named ['"]?pandas/i.test(details ?? "")) {
+    return "A VM nao conseguiu adicionar: falta instalar o pacote pandas no Python usado pela API.";
+  }
+  return details || "A VM retornou erro ao adicionar a linha.";
 }
 
 function normalizeLineForCompare(value: string): string {
