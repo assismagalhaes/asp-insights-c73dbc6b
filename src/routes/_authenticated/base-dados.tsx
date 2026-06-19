@@ -389,6 +389,7 @@ function BaseDadosPage() {
       const parsedLine = parseLineForBase(line, isBasketball);
       const payload = await addLine({ data: { esporte: apiSport, liga: apiLeague, ano: selectedYear, sigla: team, linha: parsedLine } });
       const result = payload as OperationResult;
+      setValidation(null);
       setOperation(result);
       if (!isAddOperationSuccess(result, isBasketball)) {
         toast.error(getOperationErrorMessage(result));
@@ -974,10 +975,48 @@ function formatLastLine(item: unknown): string {
   if (Array.isArray(row.valores)) return row.valores.map((value) => String(value)).join(",");
   if (Array.isArray(row.linha)) return row.linha.map((value) => String(value)).join(",");
   const record = row.registro ?? (item as Record<string, unknown>);
+  const basketballLine = formatBasketballLastLine(record);
+  if (basketballLine) return basketballLine;
+
   const preferred = ["data", "local", "adversario", "resultado", "pontos_time", "pontos_adversario", "off_rtg", "def_rtg", "pace", "ts_pct"];
   const keys = preferred.filter((key) => key in record);
   const visibleKeys = keys.length ? keys : Object.keys(record).slice(0, 12);
   return visibleKeys.map((key) => `${key}: ${String(record[key] ?? "")}`).join(" | ");
+}
+
+function formatBasketballLastLine(record: Record<string, unknown>): string | null {
+  const fields: Array<[string, string[]]> = [
+    ["data", ["data", "Date", "date"]],
+    ["local", ["local", "Unnamed: 3", "Unnamed: 44"]],
+    ["adversario", ["adversario", "Opp", "Opp.2"]],
+    ["resultado", ["resultado", "W/L", "W/L.1"]],
+    ["pontos_time", ["pontos_time", "Tm", "Tm.1"]],
+    ["pontos_adversario", ["pontos_adversario", "Opp.1", "Opp.3"]],
+    ["off_rtg", ["off_rtg", "ORtg"]],
+    ["def_rtg", ["def_rtg", "DRtg"]],
+    ["pace", ["pace", "Pace"]],
+    ["ts_pct", ["ts_pct", "TS%"]],
+  ];
+
+  const parts = fields
+    .map(([label, keys]) => {
+      const value = firstRecordValue(record, keys);
+      return value === null ? null : `${label}: ${value}`;
+    })
+    .filter(Boolean);
+
+  return parts.length >= 3 ? parts.join(" | ") : null;
+}
+
+function firstRecordValue(record: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    if (!(key in record)) continue;
+    const value = record[key];
+    if (value === null || value === undefined) continue;
+    const text = String(value).trim();
+    if (text) return text;
+  }
+  return null;
 }
 
 function parseLineForBase(input: string, isBasketball: boolean): string | string[] {
