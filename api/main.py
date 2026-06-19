@@ -78,6 +78,28 @@ def load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def load_raw_json(path: Path, job_id: str = "") -> dict:
+    content = path.read_text(encoding="utf-8")
+    if not content.strip():
+        return {
+            "job_id": job_id,
+            "jogos": [],
+            "_default": {},
+            "mensagem": "Arquivo bruto da coleta está vazio.",
+        }
+
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError as exc:
+        return {
+            "job_id": job_id,
+            "jogos": [],
+            "_default": {},
+            "mensagem": "Arquivo bruto da coleta não contém JSON válido.",
+            "erro_json": str(exc),
+        }
+
+
 def save_job(job: dict):
     save_json(job_file(job["job_id"]), job)
 
@@ -599,7 +621,7 @@ def consultar_raw(
     if not path.exists():
         raise HTTPException(status_code=404, detail="Arquivo bruto não encontrado")
 
-    return load_json(path)
+    return load_raw_json(path, job_id)
 
 @app.get("/scraping/jobs/{job_id}/normalized")
 def consultar_normalized(
@@ -619,7 +641,7 @@ def consultar_normalized(
     if not path.exists():
         raise HTTPException(status_code=404, detail="Arquivo bruto não encontrado")
 
-    raw_data = load_json(path)
+    raw_data = load_raw_json(path, job_id)
     normalized_data = normalizar_raw_data(job_id, raw_data)
 
     return {
@@ -645,7 +667,7 @@ def baixar_csv_coleta(
     if not path.exists():
         raise HTTPException(status_code=404, detail="Arquivo bruto não encontrado")
 
-    raw_data = load_json(path)
+    raw_data = load_raw_json(path, job_id)
     csv_path = gerar_csv_coleta(job_id, raw_data, job)
 
     return FileResponse(
@@ -706,7 +728,7 @@ def executar_modelo_futebol(
             detail="Arquivo bruto da coleta não encontrado"
         )
 
-    raw_data = load_json(path)
+    raw_data = load_raw_json(path, job_id)
 
     # Reaproveita a função já existente que gera o CSV da coleta
     csv_coleta_path = gerar_csv_coleta(job_id, raw_data, job)
@@ -804,7 +826,7 @@ def executar_modelo_baseball(
             detail="Arquivo bruto da coleta não encontrado"
         )
 
-    raw_data = load_json(path)
+    raw_data = load_raw_json(path, job_id)
 
     csv_coleta_path = gerar_csv_coleta(job_id, raw_data, job)
 
@@ -894,7 +916,7 @@ def _executar_modelo_basketball(job_id: str, liga: str):
             detail="Arquivo bruto da coleta não encontrado"
         )
 
-    raw_data = load_json(path)
+    raw_data = load_raw_json(path, job_id)
     csv_coleta_path = gerar_csv_coleta(job_id, raw_data, job)
 
     liga = liga.upper().strip()
