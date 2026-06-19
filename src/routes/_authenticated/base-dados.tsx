@@ -988,6 +988,7 @@ function formatLastLine(item: unknown): string {
 
 function formatBasketballLastLine(record: Record<string, unknown>): string | null {
   const fields: Array<[string, string[]]> = [
+    ["rk", ["rk", "Rk", "Rk.1", "G#", "G#_basic"]],
     ["data", ["data", "Date", "date"]],
     ["local", ["local", "Unnamed: 3", "Unnamed: 44"]],
     ["adversario", ["adversario", "Opp", "Opp.2"]],
@@ -1014,7 +1015,7 @@ function getSyntheticLastLinesHeader(rows: unknown[]): string | null {
     })
     .find((record) => record && formatBasketballLastLine(record));
 
-  return firstRecord ? "data,local,adversario,resultado,pontos_time,pontos_adversario,off_rtg,def_rtg,pace,ts_pct" : null;
+  return firstRecord ? "rk,data,local,adversario,resultado,pontos_time,pontos_adversario,off_rtg,def_rtg,pace,ts_pct" : null;
 }
 
 function firstRecordValue(record: Record<string, unknown>, keys: string[]): string | null {
