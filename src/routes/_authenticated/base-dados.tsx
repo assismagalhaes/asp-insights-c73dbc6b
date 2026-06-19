@@ -954,10 +954,12 @@ function parseLastLines(payload: unknown): LastLinesResult {
   const value = unwrapPayload(payload);
   const obj = value as { cabecalho?: unknown[]; ultimas_linhas?: unknown[]; linhas?: unknown[]; rows?: unknown[]; data?: unknown[]; mensagem?: string; message?: string };
   const rows = Array.isArray(value) ? value : (obj.ultimas_linhas ?? obj.linhas ?? obj.rows ?? obj.data);
-  const parsed = (rows ?? []).map(formatLastLine).filter((item) => item.length > 0);
+  const rowItems = rows ?? [];
+  const parsed = rowItems.map(formatLastLine).filter((item) => item.length > 0);
   const message = obj.mensagem ?? obj.message;
+  const syntheticHeader = getSyntheticLastLinesHeader(rowItems);
   return {
-    cabecalho: Array.isArray(obj.cabecalho) ? obj.cabecalho.map((item) => String(item)).join(",") : null,
+    cabecalho: Array.isArray(obj.cabecalho) ? obj.cabecalho.map((item) => String(item)).join(",") : syntheticHeader,
     linhas: parsed.length ? parsed : message ? [message] : [],
   };
 }
@@ -998,14 +1000,21 @@ function formatBasketballLastLine(record: Record<string, unknown>): string | nul
     ["ts_pct", ["ts_pct", "TS%"]],
   ];
 
-  const parts = fields
-    .map(([label, keys]) => {
-      const value = firstRecordValue(record, keys);
-      return value === null ? null : `${label}: ${value}`;
-    })
-    .filter(Boolean);
+  const values = fields.map(([, keys]) => firstRecordValue(record, keys) ?? "");
 
-  return parts.length >= 3 ? parts.join(" | ") : null;
+  return values.filter(Boolean).length >= 3 ? values.join(",") : null;
+}
+
+function getSyntheticLastLinesHeader(rows: unknown[]): string | null {
+  const firstRecord = rows
+    .map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+      const row = item as { registro?: Record<string, unknown> };
+      return row.registro ?? (item as Record<string, unknown>);
+    })
+    .find((record) => record && formatBasketballLastLine(record));
+
+  return firstRecord ? "data,local,adversario,resultado,pontos_time,pontos_adversario,off_rtg,def_rtg,pace,ts_pct" : null;
 }
 
 function firstRecordValue(record: Record<string, unknown>, keys: string[]): string | null {
