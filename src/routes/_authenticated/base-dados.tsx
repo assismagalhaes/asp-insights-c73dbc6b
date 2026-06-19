@@ -229,7 +229,7 @@ function BaseDadosPage() {
   );
   const canValidate = Boolean(isIntegratedBase && selectedYear && team && line.trim() && !busy);
   const canAdd = Boolean(canValidate && validation && isValidationSuccess(validation));
-  const canRemove = Boolean(isBaseballMlb && selectedYear && team && !busy);
+  const canRemove = Boolean(isIntegratedBase && selectedYear && team && !busy);
 
   useEffect(() => {
     if (!sport) {
@@ -324,10 +324,25 @@ function BaseDadosPage() {
       const parsed = parseLastLines(payload);
       setLastLinesHeader(parsed.cabecalho);
       setLastLines(parsed.linhas);
+      return parsed;
     } catch (e) {
       toast.error(formatError(e));
+      return null;
     } finally {
       setBusy(null);
+    }
+  }
+
+  async function refreshLastLinesAfterMutation(ano: number, sigla: string, optimisticLine?: string) {
+    let latest: LastLinesResult | null = null;
+    for (const waitMs of [250, 750, 1500]) {
+      await delay(waitMs);
+      latest = await loadLastLines(ano, sigla);
+    }
+    if (optimisticLine && latest && !hasEquivalentLine(latest.linhas, optimisticLine)) {
+      setLastLines([...latest.linhas, optimisticLine].slice(-10));
+    } else if (optimisticLine && !latest) {
+      setLastLines((current) => [...current, optimisticLine].slice(-10));
     }
   }
 
@@ -371,10 +386,16 @@ function BaseDadosPage() {
     if (!canAdd || !selectedYear || !team) return;
     setBusy("add");
     try {
-      const payload = await addLine({ data: { esporte: apiSport, liga: apiLeague, ano: selectedYear, sigla: team, linha: parseLineForBase(line, isBasketball) } });
-      setOperation(payload as OperationResult);
+      const parsedLine = parseLineForBase(line, isBasketball);
+      const payload = await addLine({ data: { esporte: apiSport, liga: apiLeague, ano: selectedYear, sigla: team, linha: parsedLine } });
+      const result = payload as OperationResult;
+      setOperation(result);
+      if (!isAddOperationSuccess(result, isBasketball)) {
+        toast.error(getOperationErrorMessage(result));
+        return;
+      }
       toast.success(`Linha adicionada à base ${league}.`);
-      await loadLastLines(selectedYear, team);
+      await refreshLastLinesAfterMutation(selectedYear, team, formatLineValue(parsedLine));
     } catch (e) {
       toast.error(formatError(e));
     } finally {
@@ -575,11 +596,6 @@ function BaseDadosPage() {
                     {busy === "remove" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
                     Remover Última Linha
                   </Button>
-                  {isBasketball && (
-                    <span className="self-center text-xs text-muted-foreground">
-                      Remocao manual para Basketball sera habilitada apos rotina segura de backup.
-                    </span>
-                  )}
                 </div>
               </>
             )}
@@ -780,10 +796,13 @@ function ValidationPanel({ validation }: { validation: ValidationResult }) {
 }
 
 function OperationPanel({ operation }: { operation: OperationResult }) {
+  const hasRuntimeError = textIncludesRuntimeError(operation.stderr) || textIncludesRuntimeError(operation.stdout);
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <Badge variant={operation.status === "ok" ? "outline" : "destructive"}>{operation.status ?? "retorno"}</Badge>
+        <Badge variant={operation.status === "ok" && !hasRuntimeError ? "outline" : "destructive"}>
+          {hasRuntimeError ? "erro" : operation.status ?? "retorno"}
+        </Badge>
         {operation.mensagem && <span className="text-sm">{operation.mensagem}</span>}
       </div>
       <div className="grid gap-2 md:grid-cols-2">
@@ -962,7 +981,19 @@ function formatLastLine(item: unknown): string {
 }
 
 function parseLineForBase(input: string, isBasketball: boolean): string | string[] {
-  return isBasketball ? input.trim() : parseCsvLine(input);
+  return isBasketball ? normalizeBasketballLineInput(input) : parseCsvLine(input);
+}
+
+function normalizeBasketballLineInput(input: string): string {
+  return input
+    .trimEnd()
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/[ \t]+(?=\d+,20\d{2}-\d{2}-\d{2},)/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
 }
 
 function parseCsvLine(input: string): string[] {
@@ -974,14 +1005,57 @@ function parseCsvLine(input: string): string[] {
 
 function getLinePlaceholder(isBasketball: boolean, league: string) {
   if (!isBasketball) return "Cole aqui a linha no formato esperado pelo CSV historico da MLB.";
-  if (league === "WNBA") return "Cole aqui as linhas no formato esperado da WNBA: estatisticas basicas e avancadas, preferencialmente separadas por TAB.";
-  return "Cole aqui as linhas no formato esperado da NBA: estatisticas basicas e avancadas, preferencialmente separadas por TAB.";
+  if (league === "WNBA") return "Cole aqui a linha basic da WNBA e, em seguida, a linha advanced. Pode separar por espaco ou quebra de linha.";
+  return "Cole aqui a linha basic da NBA e, em seguida, a linha advanced. Pode separar por espaco ou quebra de linha.";
 }
 
 function formatLineValue(value: unknown): string {
   if (Array.isArray(value)) return value.map((item) => String(item)).join(",");
   if (value && typeof value === "object") return JSON.stringify(value, null, 2);
   return String(value ?? "");
+}
+
+function textIncludesRuntimeError(value: unknown) {
+  const text = formatLineValue(value).toLowerCase();
+  return /traceback|modulenotfounderror|exception|error:|erro:|no module named/.test(text);
+}
+
+function isAddOperationSuccess(operation: OperationResult, isBasketball: boolean) {
+  if (operation.ok === false) return false;
+  if (operation.status && !/^ok|success|sucesso$/i.test(operation.status)) return false;
+  if (textIncludesRuntimeError(operation.stderr) || textIncludesRuntimeError(operation.stdout)) return false;
+
+  if (isBasketball) {
+    const basic = Number(operation.registros_basicos_importados ?? 0);
+    const advanced = Number(operation.registros_avancados_importados ?? 0);
+    const identified = Number(operation.registros_identificados ?? operation.registros_lidos ?? 0);
+    if (basic <= 0 && advanced <= 0 && identified <= 0) return false;
+  }
+
+  return true;
+}
+
+function getOperationErrorMessage(operation: OperationResult) {
+  const details = [operation.stderr, operation.stdout, operation.mensagem, operation.erros_ignorados]
+    .map((value) => formatLineValue(value).trim())
+    .find(Boolean);
+  if (/no module named ['"]?pandas/i.test(details ?? "")) {
+    return "A VM nao conseguiu adicionar: falta instalar o pacote pandas no Python usado pela API.";
+  }
+  return details || "A VM retornou erro ao adicionar a linha.";
+}
+
+function normalizeLineForCompare(value: string): string {
+  return value.replace(/\s+/g, "").toLowerCase();
+}
+
+function hasEquivalentLine(lines: string[], target: string) {
+  const normalizedTarget = normalizeLineForCompare(target);
+  return lines.some((line) => normalizeLineForCompare(line).includes(normalizedTarget));
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => globalThis.setTimeout(resolve, ms));
 }
 
 function normalizeMlbSigla(sigla: string) {

@@ -25,7 +25,7 @@ const JobIdSchema = z.object({
 
 const PredictiveModelSchema = z.object({
   job_id: z.string().min(1),
-  modelo: z.enum(["Futebol", "Baseball"]),
+  modelo: z.enum(["Futebol", "Baseball", "Basketball NBA", "Basketball WNBA"]),
 });
 
 const PackballModelSchema = z.enum(["ASP GoalMatrix", "ASP CornerMatrix"]);
@@ -370,6 +370,8 @@ export const executePredictiveModel = createServerFn({ method: "POST" })
     const endpointByModel: Record<string, string> = {
       Futebol: "/modelos/futebol/executar",
       Baseball: "/modelos/baseball/executar",
+      "Basketball NBA": "/modelos/basketball/nba/executar",
+      "Basketball WNBA": "/modelos/basketball/wnba/executar",
     };
     const path = endpointByModel[data.modelo];
     try {
@@ -567,9 +569,9 @@ export const removeBaseLastLine = createServerFn({ method: "POST" })
       })) as JsonValue;
     }
     try {
-      return (await scraperRequest("/modelos/base/remover-ultima", {
+      return (await scraperRequest(`/modelos/base/basketball/${encodeURIComponent(data.liga)}/${encodeURIComponent(String(data.ano))}/${encodeURIComponent(data.sigla.toLowerCase())}/remover-ultima`, {
         method: "POST",
-        body: JSON.stringify(data),
+        body: JSON.stringify({}),
       })) as JsonValue;
     } catch (error) {
       basketballBaseUnavailable(error);

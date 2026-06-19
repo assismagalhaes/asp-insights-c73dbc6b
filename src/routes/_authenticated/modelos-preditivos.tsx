@@ -23,7 +23,13 @@ export const Route = createFileRoute("/_authenticated/modelos-preditivos")({
   component: ModelosPreditivosPage,
 });
 
-type ModeloDisponivel = "Futebol" | "Baseball" | "ASP GoalMatrix" | "ASP CornerMatrix";
+type ModeloDisponivel =
+  | "Futebol"
+  | "Baseball"
+  | "Basketball NBA"
+  | "Basketball WNBA"
+  | "ASP GoalMatrix"
+  | "ASP CornerMatrix";
 
 interface ModeloPrognostico {
   data: string;
@@ -85,6 +91,8 @@ function ModelosPreditivosPage() {
     if (isPackballModel(modelo)) return [];
     const coletasConcluidas = coletas.filter((coleta) => coleta.status === "CONCLUIDA" && coleta.job_id);
     if (modelo === "Baseball") return coletasConcluidas.filter(isBaseballColeta);
+    if (modelo === "Basketball NBA") return coletasConcluidas.filter((coleta) => isBasketballColeta(coleta, "NBA"));
+    if (modelo === "Basketball WNBA") return coletasConcluidas.filter((coleta) => isBasketballColeta(coleta, "WNBA"));
     if (modelo === "Futebol") return coletasConcluidas.filter((coleta) => !coleta.esporte || isFootballColeta(coleta));
     return coletasConcluidas;
   }, [coletas, modelo]);
@@ -141,6 +149,14 @@ function ModelosPreditivosPage() {
 
     if (modelo === "Baseball" && !isBaseballColeta(coletaSelecionada)) {
       toast.error("Selecione uma coleta Baseball/MLB para executar o modelo Baseball.");
+      return;
+    }
+    if (modelo === "Basketball NBA" && !isBasketballColeta(coletaSelecionada, "NBA")) {
+      toast.error("Selecione uma coleta Basketball/NBA para executar o modelo NBA.");
+      return;
+    }
+    if (modelo === "Basketball WNBA" && !isBasketballColeta(coletaSelecionada, "WNBA")) {
+      toast.error("Selecione uma coleta Basketball/WNBA para executar o modelo WNBA.");
       return;
     }
 
@@ -242,7 +258,8 @@ function ModelosPreditivosPage() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Futebol">Futebol</SelectItem>
-                  <SelectItem value="Basketball" disabled>Basketball</SelectItem>
+                  <SelectItem value="Basketball NBA">Basketball NBA</SelectItem>
+                  <SelectItem value="Basketball WNBA">Basketball WNBA</SelectItem>
                   <SelectItem value="Baseball">Baseball</SelectItem>
                   <SelectItem value="Hockey" disabled>Hockey</SelectItem>
                   <SelectItem value="American Football" disabled>American Football</SelectItem>
@@ -505,9 +522,15 @@ function toPrognosticoInsert(p: ModeloPrognostico, resultado: ModeloResultado | 
   const { mandante, visitante } = inferTeams(p);
   const dadosTecnicosBase = p.dados_tecnicos?.trim() || resultado?.dados_tecnicos?.trim() || "";
   const contextoModelo = p.contexto_modelo?.trim() || resultado?.contexto_modelo?.trim() || null;
-  const dadosTecnicos = [dadosTecnicosBase, contextoModelo ? `Contexto do modelo:\n${contextoModelo}` : ""]
-    .filter(Boolean)
-    .join("\n\n") || null;
+  const contextoDuplicado = Boolean(
+    dadosTecnicosBase &&
+      contextoModelo &&
+      normalizeComparableText(dadosTecnicosBase) === normalizeComparableText(contextoModelo),
+  );
+  const dadosTecnicos = [
+    dadosTecnicosBase,
+    contextoModelo && !contextoDuplicado ? `Contexto do modelo:\n${contextoModelo}` : "",
+  ].filter(Boolean).join("\n\n") || null;
   return {
     data: parseModelDate(p.data) ?? p.data,
     hora: p.hora,
@@ -584,6 +607,10 @@ function normalizeText(value: unknown) {
     .toLowerCase();
 }
 
+function normalizeComparableText(value: string) {
+  return normalizeText(value).replace(/\s+/g, " ").trim();
+}
+
 function coletaSearchText(coleta: ColetaOdds) {
   return normalizeText(`${coleta.esporte ?? ""} ${coleta.liga ?? ""} ${JSON.stringify(coleta.parametros ?? {})}`);
 }
@@ -591,6 +618,13 @@ function coletaSearchText(coleta: ColetaOdds) {
 function isBaseballColeta(coleta: ColetaOdds) {
   const text = coletaSearchText(coleta);
   return text.includes("baseball") || text.includes("mlb");
+}
+
+function isBasketballColeta(coleta: ColetaOdds, liga?: "NBA" | "WNBA") {
+  const text = coletaSearchText(coleta);
+  if (!text.includes("basketball")) return false;
+  if (!liga) return true;
+  return text.includes(liga.toLowerCase());
 }
 
 function isFootballColeta(coleta: ColetaOdds) {
