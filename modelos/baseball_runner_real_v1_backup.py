@@ -14,12 +14,6 @@ from typing import Any
 
 HIST_DIR = Path(os.getenv("BASEBALL_HIST_DIR", "/home/ubuntu/jupyter/dados_baseball"))
 
-MODEL_VERSION = "MLB_V1_1"
-HANDICAP_ENABLED_MLB_V1_1 = False
-HISTORICAL_PRIOR = 0.50
-HISTORICAL_PRIOR_STRENGTH = 10.0
-OVERCONFIDENCE_PROB_CUTOFF = 0.70
-
 PROB_ML_WEIGHTS = {"vit": 0.30, "sim": 0.40, "vig": 0.30}
 PROB_OU_WEIGHTS = {"hist": 0.30, "sim": 0.40, "vig": 0.30}
 HANDICAP_WEIGHTS = {"hist": 0.25, "sim": 0.45, "vig": 0.30}
@@ -401,37 +395,11 @@ def generate_game_picks(game: dict[str, Any], home: TeamStats, away: TeamStats, 
             continue
         over_sim = 1 - poisson_cdf(math.floor(line), total_expected)
         under_sim = poisson_cdf(math.floor(line), total_expected)
-        hist_over, over_sample, over_warnings = historical_total_probability(home, away, line, "over")
-        hist_under, under_sample, under_warnings = historical_total_probability(home, away, line, "under")
-        add_total_pick(
-            picks,
-            game,
-            "Over",
-            line,
-            odds.get("over"),
-            over_sim,
-            hist_over,
-            odds.get("under"),
-            game_context,
-            over_sample,
-            over_warnings,
-        )
-        add_total_pick(
-            picks,
-            game,
-            "Under",
-            line,
-            odds.get("under"),
-            under_sim,
-            hist_under,
-            odds.get("over"),
-            game_context,
-            under_sample,
-            under_warnings,
-        )
+        hist_over = 1.0 if (home.avg_for + away.avg_for) > line else 0.0
+        hist_under = 1.0 - hist_over
+        add_total_pick(picks, game, "Over", line, odds.get("over"), over_sim, hist_over, odds.get("under"), game_context)
+        add_total_pick(picks, game, "Under", line, odds.get("under"), under_sim, hist_under, odds.get("over"), game_context)
 
-    if not HANDICAP_ENABLED_MLB_V1_1:
-        return picks
     for _line_key, odds in game["handicaps"].items():
         if "home" in odds and "home_line" in odds:
             prob = handicap_probability(expected_home, expected_away, odds["home_line"])
@@ -456,30 +424,11 @@ def add_moneyline_pick(
     if not odd:
         return
     other_odd = game["moneyline"].get("away" if side == "home" else "home")
-    if not other_odd:
-        return
     vig_prob = no_vig_probability(odd, other_odd)
     hist_prob = home.win_rate if side == "home" else away.win_rate
     prob = weighted({"vit": hist_prob, "sim": sim_prob, "vig": vig_prob}, PROB_ML_WEIGHTS)
     team = game["home"] if side == "home" else game["away"]
-    append_if_ev(
-        picks,
-        game,
-        "Moneyline",
-        team,
-        "",
-        odd,
-        prob,
-        game_context,
-        f"Sim Win%: {sim_prob:.2%}",
-        {
-            "prob_hist": hist_prob,
-            "prob_sim": sim_prob,
-            "prob_no_vig": vig_prob,
-            "sample_size_hist": (home.games if side == "home" else away.games),
-            "warnings": [],
-        },
-    )
+    append_if_ev(picks, game, "Moneyline", team, "", odd, prob, game_context, f"Sim Win%: {sim_prob:.2%}")
 
 
 def add_total_pick(
@@ -492,12 +441,8 @@ def add_total_pick(
     hist_prob: float,
     other_odd: float | None,
     game_context: str,
-    sample_size_hist: int,
-    warnings: list[str],
 ) -> None:
     if not odd:
-        return
-    if not other_odd:
         return
     vig_prob = no_vig_probability(odd, other_odd)
     prob = weighted({"hist": hist_prob, "sim": sim_prob, "vig": vig_prob}, PROB_OU_WEIGHTS)
@@ -511,13 +456,6 @@ def add_total_pick(
         prob,
         game_context,
         f"Probabilidade simulada {side}: {sim_prob:.2%}",
-        {
-            "prob_hist": hist_prob,
-            "prob_sim": sim_prob,
-            "prob_no_vig": vig_prob,
-            "sample_size_hist": sample_size_hist,
-            "warnings": warnings,
-        },
     )
 
 
@@ -533,8 +471,6 @@ def add_handicap_pick(
 ) -> None:
     if not odd:
         return
-    if not HANDICAP_ENABLED_MLB_V1_1:
-        return
     hist_prob = 1.0 if diff + line > 0 else 0.0
     vig_prob = implied_probability(odd)
     prob = weighted({"hist": hist_prob, "sim": sim_prob, "vig": vig_prob}, HANDICAP_WEIGHTS)
@@ -549,13 +485,6 @@ def add_handicap_pick(
         prob,
         game_context,
         f"Probabilidade simulada de cobertura: {sim_prob:.2%}",
-        {
-            "prob_hist": hist_prob,
-            "prob_sim": sim_prob,
-            "prob_no_vig": vig_prob,
-            "sample_size_hist": 0,
-            "warnings": ["handicap_bloqueado_v1_1_overconfidence_backtest"],
-        },
     )
 
 
@@ -569,28 +498,16 @@ def append_if_ev(
     prob: float,
     game_context: str,
     extra: str,
-    diagnostics: dict[str, Any] | None = None,
 ) -> None:
     if prob <= 0:
-        return
-    if prob >= OVERCONFIDENCE_PROB_CUTOFF:
         return
     odd_valor = 1 / prob
     edge = (odd * prob - 1) * 100
     if not (odd > odd_valor and odd > 1.25 and odd <= 2.00):
         return
-    diagnostics = diagnostics or {}
-    warnings = diagnostics.get("warnings") or []
-    debug_text = (
-        f" modelo_versao={MODEL_VERSION}; prob_hist={float(diagnostics.get('prob_hist', 0.0)):.4f};"
-        f" prob_sim={float(diagnostics.get('prob_sim', 0.0)):.4f};"
-        f" prob_no_vig={float(diagnostics.get('prob_no_vig', 0.0)):.4f};"
-        f" prob_final={prob:.4f}; sample_size_hist={int(diagnostics.get('sample_size_hist') or 0)};"
-        f" warnings={','.join(str(item) for item in warnings) if warnings else 'nenhum'}."
-    )
     observacoes = (
         f"Modelo Baseball MLB. {extra}. Odd ofertada {odd:.3f}; odd valor {odd_valor:.3f}; "
-        f"probabilidade final {prob * 100:.2f}%; edge {edge:.2f}%.{debug_text}"
+        f"probabilidade final {prob * 100:.2f}%; edge {edge:.2f}%."
     )
     picks.append(
         {
@@ -604,7 +521,6 @@ def append_if_ev(
             "mercado": mercado,
             "pick": pick,
             "linha": linha,
-            "modelo_versao": MODEL_VERSION,
             "odd": round(odd, 3),
             "odd_ofertada": round(odd, 3),
             "odd_valor": round(odd_valor, 3),
@@ -681,44 +597,6 @@ def build_game_context(game: dict[str, Any], home: TeamStats, away: TeamStats, s
             f"   Delta de Corridas: {home_diff - away_diff:+.2f}",
         ]
     )
-
-
-def apply_shrinkage(prob_observed: float, n: int, prior: float = HISTORICAL_PRIOR, prior_strength: float = HISTORICAL_PRIOR_STRENGTH) -> float:
-    if n <= 0:
-        return prior
-    return ((n * prob_observed) + (prior_strength * prior)) / (n + prior_strength)
-
-
-def historical_total_probability(home: TeamStats, away: TeamStats, line: float, side: str) -> tuple[float, int, list[str]]:
-    totals: list[float] = []
-    for row in [*home.all_rows, *away.all_rows]:
-        runs_for = extract_runs(row, True)
-        runs_against = extract_runs(row, False)
-        if runs_for is None or runs_against is None:
-            continue
-        totals.append(runs_for + runs_against)
-
-    sample_size = len(totals)
-    warnings: list[str] = []
-    if sample_size == 0:
-        warnings.append("hist_total_fallback_prior_050")
-        return HISTORICAL_PRIOR, 0, warnings
-
-    normalized_side = normalize_key(side)
-    if normalized_side == "over":
-        hits = sum(1 for total in totals if total > line)
-    elif normalized_side == "under":
-        hits = sum(1 for total in totals if total < line)
-    else:
-        warnings.append("hist_total_side_invalido_prior_050")
-        return HISTORICAL_PRIOR, sample_size, warnings
-
-    prob_raw = hits / sample_size
-    if sample_size < 10:
-        warnings.append("hist_total_amostra_baixa_shrinkage")
-    elif sample_size >= 20:
-        warnings.append("hist_total_amostra_confiavel")
-    return apply_shrinkage(prob_raw, sample_size), sample_size, warnings
 
 
 def season_record(rows: list[dict[str, str]]) -> dict[str, float]:
@@ -869,7 +747,6 @@ def write_output_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "mercado",
         "pick",
         "linha",
-        "modelo_versao",
         "odd_ofertada",
         "odd_valor",
         "probabilidade_final",
