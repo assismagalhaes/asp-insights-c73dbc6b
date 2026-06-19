@@ -28,6 +28,26 @@ const PredictiveModelSchema = z.object({
   modelo: z.enum(["Futebol", "Baseball", "Basketball NBA", "Basketball WNBA"]),
 });
 
+const PackballModelSchema = z.enum(["ASP GoalMatrix", "ASP CornerMatrix"]);
+
+const PackballUploadSchema = z.object({
+  modelo: PackballModelSchema,
+  date_str: z.string().regex(/^\d{2}-\d{2}-\d{4}$/).optional(),
+  arquivo_5: z.object({
+    name: z.string().min(1),
+    content: z.string().min(1),
+  }),
+  arquivo_20: z.object({
+    name: z.string().min(1),
+    content: z.string().min(1),
+  }),
+});
+
+const PackballExecuteSchema = z.object({
+  modelo: PackballModelSchema,
+  input_id: z.string().min(1),
+});
+
 const EmptySchema = z.object({}).optional().default({});
 
 const BaseballYearSchema = z.object({
@@ -209,6 +229,48 @@ async function scraperRequest(path: string, init?: RequestInit) {
   }
 }
 
+async function scraperFormRequest(path: string, formData: FormData) {
+  const { baseUrl, apiKey } = getScraperConfig();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 45000);
+  try {
+    const res = await fetch(`${baseUrl}${path}`, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "X-API-Key": apiKey,
+      },
+      body: formData,
+    });
+    const text = await res.text();
+    let payload: unknown = null;
+    if (text) {
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        payload = { message: text };
+      }
+    }
+    if (!res.ok) {
+      console.error("[Scraper API] Erro no upload multipart", {
+        status: res.status,
+        path,
+        response: payload,
+      });
+      throw new Error(pickErrorMessage(payload) ?? `Erro HTTP ${res.status} ao enviar arquivos para a VM.`);
+    }
+    return payload;
+  } catch (e) {
+    if ((e as Error).name === "AbortError") {
+      throw new Error("Timeout ao enviar arquivos para a VM.");
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function scraperTextRequest(path: string) {
   const { baseUrl, apiKey } = getScraperConfig();
   const controller = new AbortController();
@@ -325,6 +387,32 @@ export const executePredictiveModel = createServerFn({ method: "POST" })
       }
       throw e;
     }
+  });
+
+export const uploadPackballModelFiles = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => PackballUploadSchema.parse(input))
+  .handler(async ({ data }) => {
+    const formData = new FormData();
+    formData.append("modelo", data.modelo);
+    if (data.date_str) formData.append("date_str", data.date_str);
+    formData.append("arquivo_5", new Blob([data.arquivo_5.content], { type: "text/csv" }), data.arquivo_5.name);
+    formData.append("arquivo_20", new Blob([data.arquivo_20.content], { type: "text/csv" }), data.arquivo_20.name);
+    return (await scraperFormRequest("/modelos/packball/upload", formData)) as JsonValue;
+  });
+
+export const executePackballPredictiveModel = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => PackballExecuteSchema.parse(input))
+  .handler(async ({ data }) => {
+    const endpointByModel: Record<string, string> = {
+      "ASP GoalMatrix": "/modelos/goalmatrix/executar",
+      "ASP CornerMatrix": "/modelos/cornermatrix/executar",
+    };
+    return (await scraperRequest(endpointByModel[data.modelo], {
+      method: "POST",
+      body: JSON.stringify({ input_id: data.input_id }),
+    })) as JsonValue;
   });
 
 export const getBaseballYears = createServerFn({ method: "POST" })

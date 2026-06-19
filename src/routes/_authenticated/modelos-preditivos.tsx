@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BrainCircuit, Play, Send, Sparkles } from "lucide-react";
+import { BrainCircuit, Play, Send, Sparkles, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { fetchCollections, type ColetaOdds } from "@/lib/coleta-dados";
-import { executePredictiveModel } from "@/lib/scraper-api.functions";
+import {
+  executePackballPredictiveModel,
+  executePredictiveModel,
+  uploadPackballModelFiles,
+} from "@/lib/scraper-api.functions";
 import { supabase } from "@/lib/supabase-public";
 import { normalizeEsporteLiga } from "@/lib/db";
 import { parseBrazilianDate } from "@/lib/date-br";
@@ -19,7 +23,13 @@ export const Route = createFileRoute("/_authenticated/modelos-preditivos")({
   component: ModelosPreditivosPage,
 });
 
-type ModeloDisponivel = "Futebol" | "Baseball" | "Basketball NBA" | "Basketball WNBA";
+type ModeloDisponivel =
+  | "Futebol"
+  | "Baseball"
+  | "Basketball NBA"
+  | "Basketball WNBA"
+  | "ASP GoalMatrix"
+  | "ASP CornerMatrix";
 
 interface ModeloPrognostico {
   data: string;
@@ -50,6 +60,7 @@ interface ModeloPrognostico {
 interface ModeloResultado {
   ok?: boolean;
   job_id?: string;
+  input_id?: string;
   modelo?: string;
   csv_coleta?: string;
   arquivo_saida?: string;
@@ -68,6 +79,8 @@ function ModelosPreditivosPage() {
   const [running, setRunning] = useState(false);
   const [sending, setSending] = useState(false);
   const [resultado, setResultado] = useState<ModeloResultado | null>(null);
+  const [packballFile5, setPackballFile5] = useState<File | null>(null);
+  const [packballFile20, setPackballFile20] = useState<File | null>(null);
 
   const { data: coletas = [] } = useQuery({
     queryKey: ["coletas-odds"],
@@ -75,6 +88,7 @@ function ModelosPreditivosPage() {
   });
 
   const concluidas = useMemo(() => {
+    if (isPackballModel(modelo)) return [];
     const coletasConcluidas = coletas.filter((coleta) => coleta.status === "CONCLUIDA" && coleta.job_id);
     if (modelo === "Baseball") return coletasConcluidas.filter(isBaseballColeta);
     if (modelo === "Basketball NBA") return coletasConcluidas.filter((coleta) => isBasketballColeta(coleta, "NBA"));
@@ -83,10 +97,51 @@ function ModelosPreditivosPage() {
     return coletasConcluidas;
   }, [coletas, modelo]);
 
+  const packballMode = isPackballModel(modelo);
   const coletaSelecionada = concluidas.find((coleta) => coleta.id === selectedColetaId) ?? null;
   const prognosticos = resultado?.prognosticos ?? [];
+  const canExecute = packballMode
+    ? Boolean(packballFile5 && packballFile20) && !running
+    : Boolean(coletaSelecionada) && !running;
 
   const executarModelo = async () => {
+    if (packballMode) {
+      if (!packballFile5 || !packballFile20) {
+        toast.error("Selecione as planilhas PackBall de 5j e 20j.");
+        return;
+      }
+
+      setRunning(true);
+      setResultado(null);
+      try {
+        const uploadResponse = await uploadPackballModelFiles({
+          data: {
+            modelo,
+            date_str: inferPackballDate(packballFile5.name, packballFile20.name),
+            arquivo_5: { name: packballFile5.name, content: await packballFile5.text() },
+            arquivo_20: { name: packballFile20.name, content: await packballFile20.text() },
+          },
+        });
+        const inputId = extractInputId(uploadResponse);
+        const response = await executePackballPredictiveModel({
+          data: { modelo, input_id: inputId },
+        });
+        const parsed = normalizeModelResponse(response);
+        setResultado(parsed);
+        const total = parsed.total_prognosticos ?? parsed.prognosticos?.length ?? 0;
+        if (total === 0) {
+          toast.info("Nenhuma oportunidade EV+ encontrada para estas planilhas.");
+        } else {
+          toast.success(`${total} prognóstico(s) gerado(s)`);
+        }
+      } catch (e) {
+        toast.error((e as Error).message || "Erro ao executar modelo PackBall.");
+      } finally {
+        setRunning(false);
+      }
+      return;
+    }
+
     if (!coletaSelecionada?.job_id) {
       toast.error("Selecione uma coleta concluída.");
       return;
@@ -165,22 +220,29 @@ function ModelosPreditivosPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-[1.5fr_240px_auto] md:items-end">
-            <div>
-              <label className="text-sm font-medium">Coleta concluída</label>
-              <Select value={selectedColetaId} onValueChange={setSelectedColetaId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione uma coleta" />
-                </SelectTrigger>
-                <SelectContent>
-                  {concluidas.map((coleta) => (
-                    <SelectItem key={coleta.id} value={coleta.id}>
-                      {coleta.created_at.slice(0, 16).replace("T", " ")} · {coleta.esporte ?? "-"} · {coleta.job_id}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className={packballMode ? "grid gap-3 md:grid-cols-[1fr_1fr_240px_auto] md:items-end" : "grid gap-3 md:grid-cols-[1.5fr_240px_auto] md:items-end"}>
+            {packballMode ? (
+              <>
+                <PackballFileInput label="Planilha PackBall 5j" file={packballFile5} onFile={setPackballFile5} />
+                <PackballFileInput label="Planilha PackBall 20j" file={packballFile20} onFile={setPackballFile20} />
+              </>
+            ) : (
+              <div>
+                <label className="text-sm font-medium">Coleta concluida</label>
+                <Select value={selectedColetaId} onValueChange={setSelectedColetaId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione uma coleta" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {concluidas.map((coleta) => (
+                      <SelectItem key={coleta.id} value={coleta.id}>
+                        {coleta.created_at.slice(0, 16).replace("T", " ")} - {coleta.esporte ?? "-"} - {coleta.job_id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <label className="text-sm font-medium">Modelo</label>
               <Select
@@ -189,6 +251,8 @@ function ModelosPreditivosPage() {
                   setModelo(value as ModeloDisponivel);
                   setSelectedColetaId("");
                   setResultado(null);
+                  setPackballFile5(null);
+                  setPackballFile20(null);
                 }}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -199,12 +263,12 @@ function ModelosPreditivosPage() {
                   <SelectItem value="Baseball">Baseball</SelectItem>
                   <SelectItem value="Hockey" disabled>Hockey</SelectItem>
                   <SelectItem value="American Football" disabled>American Football</SelectItem>
-                  <SelectItem value="ASP GoalMatrix" disabled>ASP GoalMatrix</SelectItem>
-                  <SelectItem value="ASP CornerMatrix" disabled>ASP CornerMatrix</SelectItem>
+                  <SelectItem value="ASP GoalMatrix">ASP GoalMatrix</SelectItem>
+                  <SelectItem value="ASP CornerMatrix">ASP CornerMatrix</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={executarModelo} disabled={!coletaSelecionada || running}>
+            <Button onClick={executarModelo} disabled={!canExecute}>
               <Play className="mr-2 h-4 w-4" />
               {running ? "Executando..." : "Executar Modelo"}
             </Button>
@@ -213,6 +277,13 @@ function ModelosPreditivosPage() {
           {running && (
             <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">
               Executando modelo preditivo na VM...
+            </div>
+          )}
+
+          {packballMode && (
+            <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+              <Upload className="mr-2 inline h-4 w-4" />
+              Importe as duas planilhas cruas do PackBall. O modelo organiza os dados e gera prognosticos no mesmo fluxo dos demais modelos.
             </div>
           )}
 
@@ -228,7 +299,7 @@ function ModelosPreditivosPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-5">
-            <Info label="Job" value={resultado?.job_id ?? coletaSelecionada?.job_id ?? "-"} />
+            <Info label="Job" value={resultado?.job_id ?? resultado?.input_id ?? coletaSelecionada?.job_id ?? "-"} />
             <Info label="Modelo" value={resultado?.modelo ?? modelo} />
             <Info label="CSV coleta" value={resultado?.csv_coleta ?? "-"} />
             <Info label="Arquivo" value={resultado?.arquivo_saida ?? "-"} />
@@ -346,6 +417,29 @@ function ColetaResumo({ coleta }: { coleta: ColetaOdds }) {
   );
 }
 
+function PackballFileInput({
+  label,
+  file,
+  onFile,
+}: {
+  label: string;
+  file: File | null;
+  onFile: (file: File | null) => void;
+}) {
+  return (
+    <div>
+      <label className="text-sm font-medium">{label}</label>
+      <input
+        type="file"
+        accept=".csv,text/csv"
+        className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1 file:text-primary-foreground"
+        onChange={(event) => onFile(event.currentTarget.files?.[0] ?? null)}
+      />
+      <div className="mt-1 truncate text-xs text-muted-foreground">{file?.name ?? "Nenhum arquivo selecionado"}</div>
+    </div>
+  );
+}
+
 function Info({ label, value }: { label: string; value: string | number }) {
   return (
     <div>
@@ -355,6 +449,26 @@ function Info({ label, value }: { label: string; value: string | number }) {
   );
 }
 
+function isPackballModel(modelo: ModeloDisponivel): modelo is "ASP GoalMatrix" | "ASP CornerMatrix" {
+  return modelo === "ASP GoalMatrix" || modelo === "ASP CornerMatrix";
+}
+
+function inferPackballDate(...names: string[]) {
+  for (const name of names) {
+    const match = name.match(/(\d{2}-\d{2}-\d{4})/);
+    if (match) return match[1];
+  }
+  return undefined;
+}
+
+function extractInputId(response: unknown) {
+  const root = isRecord(response) ? response : {};
+  const data = isRecord(root.data) ? root.data : isRecord(root.result) ? root.result : root;
+  const value = data.input_id ?? data.job_id ?? data.id;
+  if (!value) throw new Error("A VM nao retornou input_id para executar o modelo.");
+  return String(value);
+}
+
 function normalizeModelResponse(response: unknown): ModeloResultado {
   const root = isRecord(response) ? response : {};
   const data = isRecord(root.data) ? root.data : isRecord(root.result) ? root.result : root;
@@ -362,6 +476,7 @@ function normalizeModelResponse(response: unknown): ModeloResultado {
   return {
     ok: Boolean(data.ok ?? true),
     job_id: data.job_id ? String(data.job_id) : undefined,
+    input_id: data.input_id ? String(data.input_id) : undefined,
     modelo: data.modelo ? String(data.modelo) : undefined,
     csv_coleta: data.csv_coleta ? String(data.csv_coleta) : undefined,
     arquivo_saida: data.arquivo_saida ? String(data.arquivo_saida) : undefined,
