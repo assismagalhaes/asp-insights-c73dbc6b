@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { Download } from "lucide-react";
 import { StatusBadge, ResultBadge, PublicacaoBadge } from "@/components/status-badge";
-import { usePrognosticos, useConfiguracao, ESPORTES_DEFAULT, MERCADOS_DEFAULT } from "@/lib/db";
+import { usePrognosticos, useConfiguracao, ESPORTES_DEFAULT, MERCADOS_DEFAULT, type Prognostico } from "@/lib/db";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -58,14 +60,26 @@ function Historico() {
   const losses = rows.filter((r) => r.resultado === "RED").length;
   const pushes = 0;
   const lucro = rows.reduce((s, p) => s + (p.lucro_prejuizo ?? 0), 0);
+  const exportFilename = `asp_insights_resultados_${new Date().toISOString().slice(0, 10)}.csv`;
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Histórico</h1>
-        <p className="text-sm text-muted-foreground">
-          Todos os prognósticos com filtros e resultados consolidados.
-        </p>
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Histórico</h1>
+          <p className="text-sm text-muted-foreground">
+            Todos os prognósticos com filtros e resultados consolidados.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          disabled={!rows.length}
+          onClick={() => downloadCsv(exportFilename, toHistoricoCsv(rows))}
+          title="Baixa os resultados conforme os filtros atuais da tela."
+        >
+          <Download className="h-4 w-4" />
+          Baixar CSV
+        </Button>
       </div>
 
       <div className="rounded-lg border border-border bg-card p-3">
@@ -181,7 +195,7 @@ function Historico() {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={15} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={16} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     Nenhum prognóstico encontrado com os filtros aplicados.
                   </td>
                 </tr>
@@ -192,6 +206,59 @@ function Historico() {
       </div>
     </div>
   );
+}
+
+function toHistoricoCsv(rows: Prognostico[]): string {
+  const headers: Array<{ label: string; value: (row: Prognostico) => unknown }> = [
+    { label: "prognostico_id", value: (p) => p.id },
+    { label: "data", value: (p) => p.data },
+    { label: "hora", value: (p) => p.hora },
+    { label: "esporte", value: (p) => p.esporte },
+    { label: "liga", value: (p) => p.liga },
+    { label: "jogo", value: (p) => p.jogo },
+    { label: "mandante", value: (p) => p.mandante },
+    { label: "visitante", value: (p) => p.visitante },
+    { label: "placar_final", value: (p) => p.placar_final },
+    { label: "mercado", value: (p) => p.mercado },
+    { label: "pick", value: (p) => p.pick },
+    { label: "linha", value: (p) => p.linha },
+    { label: "odd_ofertada", value: (p) => p.odd_ofertada },
+    { label: "odd_ajustada", value: (p) => p.odd_ajustada },
+    { label: "odd_valor", value: (p) => p.odd_valor },
+    { label: "probabilidade_final", value: (p) => p.probabilidade_final },
+    { label: "edge", value: (p) => p.edge },
+    { label: "edge_ajustado", value: (p) => p.edge_ajustado },
+    { label: "stake", value: (p) => p.stake },
+    { label: "status_validacao", value: (p) => p.status_validacao },
+    { label: "status_publicacao", value: (p) => p.status_publicacao },
+    { label: "resultado", value: (p) => p.resultado },
+    { label: "lucro_prejuizo", value: (p) => p.lucro_prejuizo },
+    { label: "origem_modelo", value: (p) => p.origem_modelo },
+    { label: "job_id_coleta", value: (p) => p.job_id_coleta },
+    { label: "created_at", value: (p) => p.created_at },
+    { label: "updated_at", value: (p) => p.updated_at },
+    { label: "dados_tecnicos", value: (p) => p.contexto_modelo || p.dados_tecnicos || p.observacoes },
+  ];
+
+  return [
+    headers.map((header) => header.label).join(","),
+    ...rows.map((row) => headers.map((header) => escapeCsvValue(header.value(row))).join(",")),
+  ].join("\n");
+}
+
+function escapeCsvValue(value: unknown): string {
+  if (value == null) return "";
+  return `"${String(value).replace(/"/g, '""').replace(/\r?\n/g, "\n")}"`;
+}
+
+function downloadCsv(filename: string, content: string) {
+  const blob = new Blob([`\uFEFF${content}`], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: "good" | "bad" }) {
