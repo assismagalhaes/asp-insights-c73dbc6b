@@ -520,8 +520,12 @@ function mapModeloPrognostico(row: Record<string, unknown>): ModeloPrognostico {
 function toPrognosticoInsert(p: ModeloPrognostico, resultado: ModeloResultado | null) {
   const norm = normalizeEsporteLiga({ esporte: p.esporte, liga: p.liga });
   const { mandante, visitante } = inferTeams(p);
-  const dadosTecnicosBase = p.dados_tecnicos?.trim() || resultado?.dados_tecnicos?.trim() || "";
-  const contextoModelo = p.contexto_modelo?.trim() || resultado?.contexto_modelo?.trim() || null;
+  const dadosTecnicosBase =
+    p.dados_tecnicos?.trim() ||
+    p.contexto_adicional?.trim() ||
+    p.observacoes?.trim() ||
+    "";
+  const contextoModelo = p.contexto_modelo?.trim() || null;
   const contextoDuplicado = Boolean(
     dadosTecnicosBase &&
       contextoModelo &&

@@ -854,6 +854,107 @@ def _fmt_obs_num(value, nd: int = 2, signed: bool = False) -> str:
         return "-"
 
 
+def _format_match_datetime(row: pd.Series) -> str:
+    dth = row.get("Data/Hora")
+    if pd.notna(dth):
+        return dth.strftime("%d-%m-%Y / %H:%M")
+    return "Data/Hora inválida"
+
+
+def _pick_technical_line(row: pd.Series, mercado: str = "", pick: str = "", linha=None) -> str:
+    if mercado == "Over/Under Gols" and linha not in (None, ""):
+        line_key = f"{float(linha)}"
+        prob = row.get(f"{pick} {line_key} Gols prob")
+        margem = row.get(f"{pick} {line_key} Margem Gol")
+        custo = row.get(f"{pick} {line_key} Custo Gol")
+        return (
+            f"  • Linha {line_key}: {pick} {_fmt_obs_num(prob, 2)}% | "
+            f"Margem: {_fmt_obs_num(margem, 2, signed=True)} | Custo Gol: {_fmt_obs_num(custo, 2)}"
+        )
+    if mercado == "BTTS" and pick == "BTTS Sim":
+        return (
+            f"  • BTTS Sim {_fmt_obs_num(row.get('BTTS Sim prob'), 2)}% | "
+            f"Força BTTS: {_fmt_obs_num(row.get('BTTS Sim Força Gols'), 3)} | "
+            f"Custo BTTS: {_fmt_obs_num(row.get('BTTS Sim Custo'), 2)}"
+        )
+    if mercado == "Primeiro a Marcar":
+        if pick == "Casa":
+            label = "Casa 1º Gol"
+            prefix = "Casa 1º a Marcar"
+        elif pick == "Visitante":
+            label = "Visitante 1º Gol"
+            prefix = "Visitante 1º a Marcar"
+        elif pick == "Sem Gol":
+            label = "Sem Gol"
+            prefix = "Sem Gol"
+        else:
+            label = pick
+            prefix = pick
+        return (
+            f"  • {label}: {_fmt_obs_num(row.get(f'{prefix} prob'), 2)}% | "
+            f"Força: {_fmt_obs_num(row.get(f'{prefix} Força %'), 2)} | "
+            f"Custo: {_fmt_obs_num(row.get(f'{prefix} Custo'), 2)}"
+        )
+    return ""
+
+
+def _technical_context(row: pd.Series, mercado: str = "", pick: str = "", linha=None) -> str:
+    home = str(row.get("Time Casa", "") or "").strip()
+    away = str(row.get("Time Visitante", "") or "").strip()
+    home_rank = _fmt_obs_num(row.get("Colocação Time Casa"), 0)
+    away_rank = _fmt_obs_num(row.get("Colocação Time Visitante"), 0)
+    lines = [
+        f"Confronto: {home} ({home_rank}°) vs {away} ({away_rank}°)",
+        _country_league(row),
+        f"Data/Hora: {_format_match_datetime(row)}",
+        "--- DADOS TÉCNICOS ---",
+        f"Média Marcados Casa:           {_fmt_obs_num(row.get('Média Marcados Casa'), 2)}",
+        f"Média Sofridos Casa:           {_fmt_obs_num(row.get('Média Sofridos Casa'), 2)}",
+        f"Média Marcados Visitante:      {_fmt_obs_num(row.get('Média Marcados Visitante'), 2)}",
+        f"Média Sofridos Visitante:      {_fmt_obs_num(row.get('Média Sofridos Visitante'), 2)}",
+        (
+            "Força esperada gols C/V/T:     "
+            f"{_fmt_obs_num(row.get('Lambda Casa'), 3)} / "
+            f"{_fmt_obs_num(row.get('Lambda Visitante'), 3)} / "
+            f"{_fmt_obs_num(row.get('Lambda Total'), 3)}"
+        ),
+        f"Exp. de Gols (modelo):         {_fmt_obs_num(row.get('Lambda Total'), 2)}",
+        f"Exp. de Gols (Packball):       {_fmt_obs_num(row.get('Expectativa de Gols'), 2)}",
+        f"Média Gols Liga:               {_fmt_obs_num(row.get('Média Gols Liga'), 2)}",
+        f"Odd Casa MO:                   {_fmt_obs_num(row.get('Odd Casa MO'), 2)}",
+        f"Odd Visitante MO:              {_fmt_obs_num(row.get('Odd Visitante MO'), 2)}",
+        f"CV Gols Marcados Casa:         {_fmt_obs_num(row.get('CV Gols Marcados Casa'), 2)}%",
+        f"CV Gols Marcados Visitante:    {_fmt_obs_num(row.get('CV Gols Marcados Visitante'), 2)}%",
+        "--- OCORRÊNCIAS (HIST - MÉDIAS) ---",
+        (
+            "BTTS Sim/Não (avg):            "
+            f"{_fmt_obs_num(row.get('Occ BTTS Sim Avg'), 2)}% / "
+            f"{_fmt_obs_num(row.get('Occ BTTS Não Avg'), 2)}%"
+        ),
+        (
+            "1º Gol Casa/Vis/Sem Gol:       "
+            f"{_fmt_obs_num(row.get('Occ Casa 1º Gol'), 2)}% / "
+            f"{_fmt_obs_num(row.get('Occ Visit 1º Gol'), 2)}% / "
+            f"{_fmt_obs_num(row.get('Occ Sem Gol'), 2)}%"
+        ),
+        "--- H2H (INSIGHTS) ---",
+        (
+            f"Over 1.5: {_fmt_obs_num(row.get('H2H Over 1.5'), 2)}% | "
+            f"Over 2.5: {_fmt_obs_num(row.get('H2H Over 2.5'), 2)}% | "
+            f"Over 3.5: {_fmt_obs_num(row.get('H2H Over 3.5'), 2)}%"
+        ),
+        (
+            f"BTTS Sim: {_fmt_obs_num(row.get('H2H BTTS Sim'), 2)}% | "
+            f"Casa 1º Gol: {_fmt_obs_num(row.get('H2H Casa 1º Gol'), 2)}% | "
+            f"Visit 1º Gol: {_fmt_obs_num(row.get('H2H Visit 1º Gol'), 2)}%"
+        ),
+    ]
+    detail = _pick_technical_line(row, mercado=mercado, pick=pick, linha=linha)
+    if detail:
+        lines.append(detail)
+    return "\n".join(line for line in lines if line and str(line).strip())
+
+
 def _fmt_obs(row: pd.Series, mercado: str = "", pick: str = "", linha=None) -> str:
     base_obs = (
         f"Média de Gols Marcados/Sofridos: Casa {_fmt_obs_num(row.get('Média Marcados Casa'), 2)}/"
@@ -963,6 +1064,9 @@ def _add_lovable_row(rows: list[dict], row: pd.Series, mercado: str, pick: str, 
         "probabilidade_final": round(prob, 2),
         "edge": round(edge, 2),
         "observacoes": _fmt_obs(row, mercado=mercado, pick=pick, linha=linha),
+        "dados_tecnicos": _technical_context(row, mercado=mercado, pick=pick, linha=linha),
+        "contexto_adicional": _technical_context(row, mercado=mercado, pick=pick, linha=linha),
+        "contexto_modelo": _technical_context(row, mercado=mercado, pick=pick, linha=linha),
     })
 
 
@@ -997,7 +1101,7 @@ def build_lovable_export(base: pd.DataFrame) -> pd.DataFrame:
     cols = [
         "data", "hora", "esporte", "liga", "jogo", "mandante", "visitante",
         "mercado", "pick", "linha", "odd_ofertada", "odd_valor",
-        "probabilidade_final", "edge", "observacoes",
+        "probabilidade_final", "edge", "observacoes", "dados_tecnicos", "contexto_adicional", "contexto_modelo",
     ]
     out = pd.DataFrame(rows, columns=cols)
     if not out.empty:
@@ -1587,8 +1691,9 @@ def _to_records(lovable: pd.DataFrame) -> list[dict]:
         row["odd"] = row.get("odd_ofertada")
         row["probabilidade"] = row.get("probabilidade_final")
         row["stake"] = row.get("stake") or 0.5
-        row["dados_tecnicos"] = obs or None
-        row["contexto_adicional"] = obs or None
+        row["dados_tecnicos"] = row.get("dados_tecnicos") or obs or None
+        row["contexto_adicional"] = row.get("contexto_adicional") or row.get("dados_tecnicos") or obs or None
+        row["contexto_modelo"] = row.get("contexto_modelo") or row.get("dados_tecnicos") or obs or None
         row["parecer_validacao"] = row.get("parecer_validacao") or "AGUARDAR_VALIDACAO"
         records.append(_clean_json(row))
     return records
