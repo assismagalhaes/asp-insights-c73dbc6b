@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/lib/auth-middleware-public";
 import { generateText } from "ai";
 import { z } from "zod";
 
-export const PROMPT_VERSAO = "validacao-critica-v9-local-interno";
+export const PROMPT_VERSAO = "validacao-critica-v10-local-sem-gate-online";
 
 const CorrelatedPickSchema = z.object({
   mercado: z.string(),
@@ -91,11 +91,13 @@ Regras:
 - Analisar apenas os dados fornecidos.
 - MODO IA LOCAL: use exclusivamente dados internos/localmente disponíveis no payload: prognóstico, dados técnicos manuais/importados, odds, linha, probabilidade, edge, mercado, esporte, liga, opções concorrentes e calibração/histórico interno.
 - MODO IA LOCAL: é proibido usar, inferir, exigir ou penalizar por notícias online, pesquisa web, odds externas em tempo real, lesões buscadas online, escalações online, lineups online, clima online ou qualquer contexto externo que não esteja explicitamente colado nos dados técnicos manuais.
-- MODO IA LOCAL: não mencione ausência de notícias, lesões, escalações, lineups, fontes externas ou contexto online como motivo de PULAR/reduzir stake, salvo quando o próprio contexto manual afirmar que essa informação interna é desconhecida e determinante.
+- MODO IA LOCAL: não mencione ausência de notícias, lesões, escalações, lineups, pitchers/starters, bullpens pesquisados, goalies, QB status, clima, odds movement, fontes externas ou contexto online como motivo de PULAR/reduzir stake, salvo quando o próprio contexto manual afirmar explicitamente que essa informação foi analisada e invalida a tese.
+- MODO IA LOCAL: dados externos ausentes devem ser classificados apenas como "limitação da análise local", "dado não informado" ou "não aplicável ao modo local". Nunca marque o gate de informação crítica como reprovado apenas porque pitchers, lineups, escalações, lesões, clima, notícias, goalies, QB status ou odds movement não foram fornecidos.
+- MODO IA LOCAL: a decisão final deve ser baseada na coerência dos dados fornecidos: expectativa projetada, linha, odd, probabilidade, edge, H2H, forma recente, médias, consistência, divergência entre indicadores, histórico interno e risco estatístico.
 - Avaliar coerência técnica, matchup, forma, projeções, linha, odd, risco e contexto colado pelo usuário.
 - Se houver bom argumento, mas risco estrutural relevante, a decisão padrão deve ser PULAR.
 - Regra de stake: 1.0u NÃO é padrão automático.
-  - PULAR: use quando houver risco relevante, informação crítica ausente, tese fraca, fonte/contexto insuficiente, pick redundante, contexto contraditório ou risco estrutural alto.
+  - PULAR: use quando houver risco relevante nos dados fornecidos, tese fraca, contexto interno insuficiente para sustentar a entrada, pick redundante, contexto contraditório ou risco estatístico/técnico alto. Não use PULAR apenas por ausência de dados externos pesquisáveis.
   - CONFIRMA 0.5u: use quando a tese é boa, mas há incerteza moderada, contexto não perfeito, risco normal do esporte, amostra pequena ou mercado volátil.
   - CONFIRMA 1.0u: use apenas quando a tese técnica é consistente, não há risco estrutural relevante, o contexto manual não contradiz a entrada, a informação crítica está confirmada no contexto e não há pick melhor concorrente no mesmo mercado.
   - CONFIRMA 1.5u: use raramente, somente quando a tese técnica é forte, múltiplos sinais confirmam, risco estrutural é baixo, contexto é favorável ou neutro, não há informação crítica ausente e histórico interno semelhante é positivo com amostra suficiente quando esse histórico estiver disponível.
@@ -134,8 +136,8 @@ Regra específica para IA Local em ASP CornerMatrix e ASP GoalMatrix/ASP GoalsMa
 
 Gates obrigatórios:
 - Gate 1 — Coerência técnica: tese precisa estar coerente com mercado, pick, linha, probabilidade, edge ajustado/original, contexto informado, esporte e liga. Conflito técnico relevante = PULAR.
-- Gate 2 — Risco estrutural: risco estrutural alto = PULAR. Exemplos: MLB starter incerto/bullpen desgastado/lineup alternativo; NBA/WNBA estrela questionável/rotação incerta/back-to-back forte; NHL goalie não confirmado em pick sensível; NFL QB questionável/clima forte/desfalques OL/defesa; Futebol escalação rodada/mata-mata incerto/desfalques-chave.
-- Gate 3 — Informação crítica ausente: se informação crítica necessária não estiver disponível = PULAR; no máximo CONFIRMA 0.5u apenas se a informação ausente não for determinante.
+- Gate 2 — Risco estrutural interno: risco estrutural alto identificado nos dados fornecidos = PULAR. Exemplos válidos no modo local: conflito forte entre projeção e H2H/forma recente, edge fraco ou negativo, odd sem valor, linha incompatível com a projeção, amostra inconsistente, baixa consistência do modelo, indicadores internos contraditórios, exposição duplicada/correlata.
+- Gate 3 — Informação crítica no modo local: não reprove por ausência de informação externa pesquisável. Se faltar pitcher, lineup, escalação, lesão, clima, goalie, QB status, bullpen pesquisado, notícias ou odds movement, escreva "não aplicável ao modo local / dado externo não informado" e avalie apenas como limitação. Reprove este gate somente quando faltar dado interno essencial para interpretar o próprio prognóstico, como mercado, pick, linha, odd, probabilidade, edge ou contexto técnico mínimo.
 - Gate 4 — Contexto interno/manual: aprove quando a tese for sustentada pelos dados internos e pelo contexto manual disponível. Não reprove por ausência de fonte online, notícia, escalação, lesão ou confirmação externa; esses fatores pertencem apenas ao modo IA Local + Pesquisa, salvo se estiverem explicitamente colados no contexto manual.
 - Gate 5 — Risco > benefício: se houver 2 ou mais riscos relevantes, PULAR.
 - Gate 6 — Duplicidade/correlação: se houver outras picks do mesmo jogo e mesmo grupo de mercado, trate como opções concorrentes. Você deve escolher no máximo uma opção para CONFIRMAR ou recomendar PULAR o grupo inteiro. Nunca sugira confirmar mais de uma opção do grupo.
@@ -288,7 +290,7 @@ OUTRAS OPÇÕES PENDENTES DO MESMO JOGO E MESMA FAMÍLIA DE MERCADO:
 ${correlacionadosTexto}
 
 INSTRUÇÃO DE AUDITORIA:
-Antes de sugerir CONFIRMA, procure motivos concretos para PULAR. Se a tese contra a entrada for relevante ou houver informação importante ausente, sugira PULAR. Não confirme apenas porque a entrada veio como EV+.
+Antes de sugerir CONFIRMA, procure motivos concretos nos dados fornecidos para PULAR. Se a tese contra a entrada for relevante com base nos dados internos, sugira PULAR. Não confirme apenas porque a entrada veio como EV+. Não trate ausência de informação externa pesquisável como motivo principal para PULAR no modo IA Local.
 Não use 1.0u como stake padrão. Se houver qualquer dúvida entre 1.0u e 0.5u, use 0.5u. Se houver dúvida entre 0.5u e PULAR, use PULAR.
 Se houver opcoes concorrentes listadas acima, compare mercado, linhas, odds, probabilidade, edge, protecao da linha e risco/retorno. A resposta deve indicar a melhor opcao para CONFIRMAR ou recomendar PULAR o grupo inteiro. Nunca confirme mais de uma opcao do mesmo jogo e mesma familia de mercado.
 Nao use a opcao selecionada na interface como preferencia. Ela serve apenas para ajuste de odd; sua decisao deve comparar todas as opcoes concorrentes.
