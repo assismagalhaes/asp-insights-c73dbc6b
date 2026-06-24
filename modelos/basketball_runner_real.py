@@ -15,6 +15,10 @@ from typing import Any
 
 import pandas as pd
 
+PROJECT_DIR = Path(__file__).resolve().parents[1]
+if str(PROJECT_DIR) not in sys.path:
+    sys.path.insert(0, str(PROJECT_DIR))
+
 BASE_DIR = Path('/home/ubuntu/asp-scraper-api')
 JUPYTER_DIR = Path('/home/ubuntu/jupyter')
 NOTEBOOKS = {
