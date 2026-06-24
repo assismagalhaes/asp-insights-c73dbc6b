@@ -89,6 +89,9 @@ def main() -> None:
                 errors.append(f"{row.get('home')} vs {row.get('away')}: {exc}")
 
         rows = normalize_rows(rows, league)
+        handicap_shadow_diagnostics = None
+        if league == 'WNBA':
+            handicap_shadow_diagnostics = build_wnba_handicap_shadow_from_csv(csv_coleta_path)
         write_output_csv(output_path, rows)
         contexto_modelo = '\n\n'.join(contexts[:20])
         msg = None
@@ -97,7 +100,7 @@ def main() -> None:
         if errors:
             msg = (msg + ' ' if msg else '') + f"Jogos ignorados/erros: {'; '.join(errors[:5])}"
 
-        emit({
+        result_payload = {
             'ok': True,
             'modelo': f'Basketball {league}',
             'arquivo_saida': str(output_path),
@@ -107,7 +110,10 @@ def main() -> None:
             'dados_tecnicos': contexto_modelo,
             'mensagem': msg,
             'prognosticos': rows,
-        })
+        }
+        if handicap_shadow_diagnostics is not None:
+            result_payload['handicap_shadow_diagnostics'] = handicap_shadow_diagnostics
+        emit(result_payload)
     except Exception as exc:
         emit({'ok': False, 'erro': str(exc), 'detalhe': f'csv={csv_coleta_path} output={output_path} league={league}'})
 
@@ -117,6 +123,27 @@ def normalize_league(value: str) -> str:
     if league in {'NBA', 'WNBA'}:
         return league
     raise RuntimeError('Liga Basketball inválida. Use NBA ou WNBA.')
+
+
+def build_wnba_handicap_shadow_from_csv(csv_coleta_path: Path) -> dict[str, Any]:
+    from modelos.wnba_handicap_shadow_runner_integration_v1_6 import build_wnba_handicap_shadow_diagnostics
+
+    try:
+        df = pd.read_csv(csv_coleta_path)
+        normalized_rows = df.to_dict(orient='records')
+    except Exception as exc:
+        return {
+            'enabled': True,
+            'mode': 'shadow_only',
+            'model_version': 'WNBA_HANDICAP_SHADOW_V1_6',
+            'published': False,
+            'pairs_analyzed': 0,
+            'valid_pairs': 0,
+            'diagnostics': [],
+            'summary': {'erro': str(exc)},
+            'warnings': ['SHADOW_READ_ERROR'],
+        }
+    return build_wnba_handicap_shadow_diagnostics(normalized_rows, {'source': str(csv_coleta_path)})
 
 
 def load_notebook_module(league: str) -> types.SimpleNamespace:
