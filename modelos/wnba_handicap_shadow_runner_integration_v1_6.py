@@ -58,6 +58,12 @@ def build_wnba_handicap_shadow_diagnostics(
                 sigma_margin=margin_context.get(side, {}).get("sigma_margin"),
             )
             item = diagnostic.to_dict()
+            item["data"] = pair.data
+            item["hora"] = pair.hora
+            item["liga"] = pair.liga
+            item["mercado"] = pair.mercado
+            item["bookmaker"] = pair.bookmaker
+            item["pick"] = _format_pick(pair, side, diagnostic.linha)
             item["published"] = False
             item["stake"] = None
             item["model_version"] = MODEL_VERSION
@@ -108,6 +114,15 @@ def ensure_main_output_has_no_handicap(prognosticos: Iterable[dict[str, Any]]) -
 def _is_real_odd_two(value: Any, metadata: dict[str, Any]) -> bool:
     odd = classify_odd(value, metadata)
     return odd.status == VALID_ODD and odd.odd == 2.0
+
+
+def _format_pick(pair: Any, side: str, line: Any) -> str:
+    team = pair.mandante if side == "home" else pair.visitante
+    try:
+        line_text = f"{float(line):+.1f}"
+    except Exception:
+        line_text = str(line or "")
+    return f"{team} {line_text}".strip()
 
 
 def _side_row(pair: Any, side: str) -> dict[str, Any]:

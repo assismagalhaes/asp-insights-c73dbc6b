@@ -25,6 +25,7 @@ NOTEBOOKS = {
 MIN_ODD_EXPORT = 1.25
 MAX_ODD_EXPORT = 2.00
 BASKETBALL_WNBA_MODEL_VERSION = "BASKETBALL_WNBA_V1_1"
+BASKETBALL_WNBA_HANDICAP_MODEL_VERSION = "BASKETBALL_WNBA_V1_7_HANDICAP_CONTROLLED"
 WNBA_CURRENT_SEASON_YEAR = 2026
 WNBA_PREVIOUS_SEASON_YEAR = 2025
 WNBA_TOTAL_PRIOR = 0.50
@@ -32,6 +33,7 @@ WNBA_TOTAL_PRIOR_STRENGTH = 10.0
 WNBA_TOTAL_LOW_SAMPLE = 10
 WNBA_OVERCONFIDENCE_CUTOFF = 70.0
 WNBA_HANDICAP_ENABLED_V1_1 = False
+WNBA_HANDICAP_ENABLED_V1_7 = True
 
 
 def main() -> None:
@@ -91,7 +93,10 @@ def main() -> None:
         rows = normalize_rows(rows, league)
         handicap_shadow_diagnostics = None
         if league == 'WNBA':
-            handicap_shadow_diagnostics = build_wnba_handicap_shadow_from_csv(csv_coleta_path)
+            activation = build_wnba_handicap_controlled_activation_from_csv(csv_coleta_path)
+            rows.extend(activation.get('prognosticos') or [])
+            rows.sort(key=lambda r: (r.get('data') or '', r.get('hora') or '', r.get('jogo') or '', r.get('mercado') or '', -float(r.get('edge') or 0)))
+            handicap_shadow_diagnostics = activation.get('handicap_shadow_diagnostics')
         write_output_csv(output_path, rows)
         contexto_modelo = '\n\n'.join(contexts[:20])
         msg = None
@@ -144,6 +149,38 @@ def build_wnba_handicap_shadow_from_csv(csv_coleta_path: Path) -> dict[str, Any]
             'warnings': ['SHADOW_READ_ERROR'],
         }
     return build_wnba_handicap_shadow_diagnostics(normalized_rows, {'source': str(csv_coleta_path)})
+
+
+def build_wnba_handicap_controlled_activation_from_csv(csv_coleta_path: Path) -> dict[str, Any]:
+    from modelos.wnba_handicap_controlled_activation_v1_7 import build_wnba_handicap_controlled_activation
+
+    try:
+        df = pd.read_csv(csv_coleta_path)
+        normalized_rows = df.to_dict(orient='records')
+    except Exception as exc:
+        return {
+            'handicap_shadow_diagnostics': {
+                'enabled': WNBA_HANDICAP_ENABLED_V1_7,
+                'mode': 'controlled_activation',
+                'model_version': BASKETBALL_WNBA_HANDICAP_MODEL_VERSION,
+                'published': False,
+                'published_count': 0,
+                'pairs_analyzed': 0,
+                'valid_pairs': 0,
+                'diagnostics': [],
+                'summary': {'erro': str(exc)},
+                'warnings': ['CONTROLLED_ACTIVATION_READ_ERROR'],
+            },
+            'prognosticos': [],
+            'discarded': [],
+        }
+    if not WNBA_HANDICAP_ENABLED_V1_7:
+        shadow = build_wnba_handicap_shadow_from_csv(csv_coleta_path)
+        shadow['mode'] = 'shadow_only'
+        shadow['published'] = False
+        shadow['published_count'] = 0
+        return {'handicap_shadow_diagnostics': shadow, 'prognosticos': [], 'discarded': shadow.get('diagnostics', [])}
+    return build_wnba_handicap_controlled_activation(normalized_rows, {'source': str(csv_coleta_path)})
 
 
 def load_notebook_module(league: str) -> types.SimpleNamespace:
