@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { Upload, Download, FileSpreadsheet, AlertTriangle, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -250,12 +250,30 @@ function ImportarPage() {
       json = parseCsvAsText(text);
     } else {
       const buf = await file.arrayBuffer();
-      // cellDates:false + raw:false → todas as células chegam como strings, sem conversão para Date.
-      const wb = XLSX.read(buf, { type: "array", cellDates: false, raw: false });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
-        defval: "",
-        raw: false,
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buf);
+      const ws = wb.worksheets[0];
+      const headerVals = (ws.getRow(1).values as unknown[]).slice(1).map((h) => String(h ?? "").trim());
+      json = [];
+      ws.eachRow({ includeEmpty: false }, (row, idx) => {
+        if (idx === 1) return;
+        const vals = row.values as unknown[];
+        const obj: Record<string, unknown> = {};
+        headerVals.forEach((h, i) => {
+          if (!h) return;
+          const v = vals[i + 1];
+          // Normaliza valores não-primitivos vindos do ExcelJS (formula/hyperlink/richText/Date)
+          if (v == null) obj[h] = "";
+          else if (v instanceof Date) obj[h] = v;
+          else if (typeof v === "object") {
+            const o = v as { text?: unknown; result?: unknown; richText?: { text: string }[]; hyperlink?: unknown };
+            if (Array.isArray(o.richText)) obj[h] = o.richText.map((r) => r.text).join("");
+            else if (o.text != null) obj[h] = String(o.text);
+            else if (o.result != null) obj[h] = o.result;
+            else obj[h] = String(v);
+          } else obj[h] = v;
+        });
+        json.push(obj);
       });
     }
 
