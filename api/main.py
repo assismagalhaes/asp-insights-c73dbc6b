@@ -892,7 +892,8 @@ def executar_modelo_baseball(
         "total_prognosticos": resposta_script.get("total_prognosticos", 0),
         "contexto_modelo": resposta_script.get("contexto_modelo", ""),
         "dados_tecnicos": resposta_script.get("dados_tecnicos", ""),
-        "prognosticos": resposta_script.get("prognosticos", [])
+        "prognosticos": resposta_script.get("prognosticos", []),
+        "handicap_shadow_diagnostics": resposta_script.get("handicap_shadow_diagnostics"),
     }
 
     return limpar_json_nan(resposta_final)
