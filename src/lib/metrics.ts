@@ -5,6 +5,22 @@ export const PICK_RESOLVIDA: Resultado[] = ["GREEN", "RED"];
 export const PICK_GREEN: Resultado[] = ["GREEN"];
 export const PICK_RED: Resultado[] = ["RED"];
 
+export type ValidationMetricsFilter = "confirmadas" | "puladas" | "todas";
+
+export function matchesValidationFilter(
+  p: Pick<Prognostico, "status_validacao">,
+  filter: ValidationMetricsFilter,
+): boolean {
+  if (filter === "confirmadas") return p.status_validacao === "CONFIRMA";
+  if (filter === "puladas") return p.status_validacao === "PULAR";
+  return p.status_validacao === "CONFIRMA" || p.status_validacao === "PULAR";
+}
+
+export function stakeAnalitica(p: Pick<Prognostico, "status_validacao" | "stake">): number {
+  if (p.status_validacao === "PULAR") return p.stake > 0 ? p.stake : 1;
+  return p.stake;
+}
+
 /** Lucro/prejuízo em unidades (independe do valor da unidade) */
 export function lucroUnidades(p: Pick<Prognostico, "resultado" | "stake" | "odd_ofertada">): number {
   const { resultado, stake, odd_ofertada: odd } = p;
@@ -23,6 +39,12 @@ export function lucroUnidades(p: Pick<Prognostico, "resultado" | "stake" | "odd_
     default:
       return 0;
   }
+}
+
+export function lucroUnidadesAnalitico(
+  p: Pick<Prognostico, "resultado" | "stake" | "odd_ofertada" | "status_validacao">,
+): number {
+  return lucroUnidades({ ...p, stake: stakeAnalitica(p) });
 }
 
 export function lucroReais(
@@ -69,9 +91,9 @@ export function computeMetrics(
   const lucroR = lucroU * valorUnidade;
 
   const bancaAtual = bancaInicial + lucroR;
-  const roi = totalApostadoR$ > 0 ? (lucroR / totalApostadoR$) * 100 : 0;
+  const roi = totalApostadoR$ > 0 ?(lucroR / totalApostadoR$) * 100 : 0;
   const yld = roi; // mesma fórmula (lucro / stake)
-  const winRate = resolvidas.length ? (greens / resolvidas.length) * 100 : 0;
+  const winRate = resolvidas.length ?(greens / resolvidas.length) * 100 : 0;
 
   // Drawdown a partir do timeline ordenado por data
   const timeline = bankrollTimeline(confirma, bancaInicial, valorUnidade);
@@ -99,6 +121,46 @@ export function computeMetrics(
   };
 }
 
+/** Metricas por decisao de validacao. O bankroll oficial permanece em computeMetrics/bankrollTimeline. */
+export function computeValidationMetrics(
+  prognosticos: Prognostico[],
+  cfg: { banca_inicial: number; valor_unidade_padrao: number } | null | undefined,
+  filter: ValidationMetricsFilter,
+): Metrics & { oddMediaGreens: number; puladas: number; confirmadas: number } {
+  const bancaInicial = cfg?.banca_inicial ?? 0;
+  const valorUnidade = cfg?.valor_unidade_padrao ?? 0;
+  const rows = prognosticos.filter((p) => matchesValidationFilter(p, filter));
+  const resolvidas = rows.filter((p) => PICK_RESOLVIDA.includes(p.resultado));
+  const greensRows = rows.filter((p) => PICK_GREEN.includes(p.resultado));
+  const redsRows = rows.filter((p) => PICK_RED.includes(p.resultado));
+  const totalApostadoU = resolvidas.reduce((s, p) => s + stakeAnalitica(p), 0);
+  const totalApostadoR$ = totalApostadoU * valorUnidade;
+  const lucroU = rows.reduce((s, p) => s + lucroUnidadesAnalitico(p), 0);
+  const lucroR = lucroU * valorUnidade;
+  const oddMediaGreens = greensRows.length
+    ?greensRows.reduce((sum, p) => sum + p.odd_ofertada, 0) / greensRows.length
+    : 0;
+
+  return {
+    greens: greensRows.length,
+    reds: redsRows.length,
+    resolvidas: resolvidas.length,
+    totalApostadoU,
+    totalApostadoR$,
+    lucroU,
+    lucroReais: lucroR,
+    roi: totalApostadoR$ > 0 ?(lucroR / totalApostadoR$) * 100 : 0,
+    yield: totalApostadoR$ > 0 ?(lucroR / totalApostadoR$) * 100 : 0,
+    winRate: resolvidas.length ?(greensRows.length / resolvidas.length) * 100 : 0,
+    bancaInicial,
+    bancaAtual: bancaInicial + lucroR,
+    drawdown: 0,
+    oddMediaGreens,
+    puladas: rows.filter((p) => p.status_validacao === "PULAR").length,
+    confirmadas: rows.filter((p) => p.status_validacao === "CONFIRMA").length,
+  };
+}
+
 /** Evolução da banca dia a dia (somente CONFIRMA). */
 export function bankrollTimeline(
   prognosticos: Prognostico[],
@@ -118,7 +180,7 @@ export function bankrollTimeline(
     const delta = byDate.get(d) ?? 0;
     banca += delta;
     lucroAcum += delta;
-    const roi = bancaInicial ? (lucroAcum / bancaInicial) * 100 : 0;
+    const roi = bancaInicial ?(lucroAcum / bancaInicial) * 100 : 0;
     return { data: d, banca: Number(banca.toFixed(2)), lucroAcum: Number(lucroAcum.toFixed(2)), roi: Number(roi.toFixed(2)) };
   });
 }

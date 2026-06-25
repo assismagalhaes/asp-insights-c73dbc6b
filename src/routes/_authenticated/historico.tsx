@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Download } from "lucide-react";
-import { StatusBadge, ResultBadge, PublicacaoBadge } from "@/components/status-badge";
+import { StatusBadge, ResultBadge } from "@/components/status-badge";
 import { usePrognosticos, useConfiguracao, ESPORTES_DEFAULT, MERCADOS_DEFAULT, type Prognostico } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,15 +11,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { LeagueFilter } from "@/components/league-filter";
 import { PeriodFilter } from "@/components/period-filter";
-import { rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
+import { rangeFromPeriodo, dateInRange, lucroUnidadesAnalitico, stakeAnalitica, type PeriodoFiltro } from "@/lib/metrics";
 import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
 import { DadosTecnicosViewer } from "@/components/dados-tecnicos-viewer";
 
 export const Route = createFileRoute("/_authenticated/historico")({
-  head: () => ({ meta: [{ title: "Histórico — ASP Insights" }] }),
+  head: () => ({ meta: [{ title: "Histórico - ASP Insights" }] }),
   component: Historico,
 });
 
@@ -34,8 +33,6 @@ function Historico() {
   const [mercado, setMercado] = useState("all");
   const [status, setStatus] = useState("all");
   const [resultado, setResultado] = useState("all");
-  const [publicacao, setPublicacao] = useState("all");
-  const [data, setData] = useState("");
   const [periodo, setPeriodo] = useState<PeriodoFiltro>("tudo");
   const [customIni, setCustomIni] = useState("");
   const [customFim, setCustomFim] = useState("");
@@ -50,16 +47,13 @@ function Historico() {
       if (mercado !== "all" && p.mercado !== mercado) return false;
       if (status !== "all" && p.status_validacao !== status) return false;
       if (resultado !== "all" && p.resultado !== resultado) return false;
-      if (publicacao !== "all" && p.status_publicacao !== publicacao) return false;
-      if (data && p.data !== data) return false;
       return true;
     });
-  }, [prognosticos, ini, fim, esporte, liga, mercado, status, resultado, publicacao, data]);
+  }, [prognosticos, ini, fim, esporte, liga, mercado, status, resultado]);
 
   const wins = rows.filter((r) => r.resultado === "GREEN").length;
   const losses = rows.filter((r) => r.resultado === "RED").length;
-  const pushes = 0;
-  const lucro = rows.reduce((s, p) => s + (p.lucro_prejuizo ?? 0), 0);
+  const lucro = rows.reduce((s, p) => s + lucroUnidadesAnalitico(p), 0);
   const exportFilename = `asp_insights_resultados_${new Date().toISOString().slice(0, 10)}.csv`;
 
   return (
@@ -93,8 +87,7 @@ function Historico() {
         />
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-7">
-        <Input type="date" value={data} onChange={(e) => setData(e.target.value)} placeholder="Data exata" />
+      <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
         <Select value={esporte} onValueChange={(v) => { setEsporte(v); setLiga("all"); }}>
           <SelectTrigger><SelectValue placeholder="Esporte" /></SelectTrigger>
           <SelectContent>
@@ -119,16 +112,6 @@ function Historico() {
             <SelectItem value="PENDENTE">PENDENTE</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={publicacao} onValueChange={setPublicacao}>
-          <SelectTrigger><SelectValue placeholder="Publicação" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas as publicações</SelectItem>
-            <SelectItem value="NAO_PUBLICADO">Não publicado</SelectItem>
-            <SelectItem value="PUBLICADO">Publicado</SelectItem>
-            <SelectItem value="FINALIZADO">Finalizado</SelectItem>
-            <SelectItem value="CANCELADO">Cancelado</SelectItem>
-          </SelectContent>
-        </Select>
         <Select value={resultado} onValueChange={setResultado}>
           <SelectTrigger><SelectValue placeholder="Resultado" /></SelectTrigger>
           <SelectContent>
@@ -140,11 +123,10 @@ function Historico() {
         </Select>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
         <Stat label="Wins" value={String(wins)} tone="good" />
         <Stat label="Losses" value={String(losses)} tone="bad" />
-        <Stat label="Push" value={String(pushes)} />
-        <Stat label="Lucro" value={`${lucro >= 0 ? "+" : ""}${lucro.toFixed(2)}u`} tone={lucro >= 0 ? "good" : "bad"} />
+        <Stat label="Lucro" value={`${lucro >= 0 ?"+" : ""}${lucro.toFixed(2)}u`} tone={lucro >= 0 ?"good" : "bad"} />
       </div>
 
       <div className="rounded-lg border border-border bg-card overflow-hidden">
@@ -164,7 +146,6 @@ function Historico() {
                 <th className="px-3 py-2 text-right font-mono">Odd</th>
                 <th className="px-3 py-2 text-right font-mono">Stake</th>
                 <th className="px-3 py-2 text-left">Validação</th>
-                <th className="px-3 py-2 text-left">Publicação</th>
                 <th className="px-3 py-2 text-left">Resultado</th>
                 <th className="px-3 py-2 text-right font-mono">Lucro</th>
                 <th className="px-3 py-2 text-center">Dados</th>
@@ -174,28 +155,27 @@ function Historico() {
               {rows.map((p) => (
                 <tr key={p.id} className="border-t border-border hover:bg-muted/30">
                   <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatBR(p.data)}</td>
-                  <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{p.hora ? formatHora(p.hora) : "—"}</td>
+                  <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{p.hora ? formatHora(p.hora) : "-"}</td>
                   <td className="px-3 py-2">{p.esporte}</td>
                   <td className="px-3 py-2 text-muted-foreground">{p.liga}</td>
                   <td className="px-3 py-2">{p.jogo}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{p.placar_final ?? "—"}</td>
+                  <td className="px-3 py-2 font-mono text-xs">{p.placar_final ?? "-"}</td>
                   <td className="px-3 py-2 text-muted-foreground">{p.mercado}</td>
                   <td className="px-3 py-2">{p.pick}</td>
-                  <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{shouldShowLinha(p.pick, p.linha) ? p.linha : "—"}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{shouldShowLinha(p.pick, p.linha) ? p.linha : "-"}</td>
                   <td className="px-3 py-2 text-right font-mono">{p.odd_ofertada.toFixed(2)}</td>
-                  <td className="px-3 py-2 text-right font-mono">{p.stake.toFixed(1)}u</td>
+                  <td className="px-3 py-2 text-right font-mono">{stakeAnalitica(p).toFixed(1)}u</td>
                   <td className="px-3 py-2"><StatusBadge status={p.status_validacao} /></td>
-                  <td className="px-3 py-2"><PublicacaoBadge status={p.status_publicacao} /></td>
                   <td className="px-3 py-2"><ResultBadge result={p.resultado} /></td>
-                  <td className={`px-3 py-2 text-right font-mono ${(p.lucro_prejuizo ?? 0) >= 0 ? "text-success" : "text-destructive"}`}>
-                    {p.lucro_prejuizo != null ? `${p.lucro_prejuizo >= 0 ? "+" : ""}${p.lucro_prejuizo.toFixed(2)}u` : "-"}
+                  <td className={`px-3 py-2 text-right font-mono ${lucroUnidadesAnalitico(p) >= 0 ?"text-success" : "text-destructive"}`}>
+                    {`${lucroUnidadesAnalitico(p) >= 0 ?"+" : ""}${lucroUnidadesAnalitico(p).toFixed(2)}u`}
                   </td>
                   <td className="px-3 py-2 text-center"><DadosTecnicosViewer prognostico={p} /></td>
                 </tr>
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={16} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={15} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     Nenhum prognóstico encontrado com os filtros aplicados.
                   </td>
                 </tr>
@@ -228,11 +208,10 @@ function toHistoricoCsv(rows: Prognostico[]): string {
     { label: "probabilidade_final", value: (p) => p.probabilidade_final },
     { label: "edge", value: (p) => p.edge },
     { label: "edge_ajustado", value: (p) => p.edge_ajustado },
-    { label: "stake", value: (p) => p.stake },
+    { label: "stake", value: (p) => stakeAnalitica(p) },
     { label: "status_validacao", value: (p) => p.status_validacao },
-    { label: "status_publicacao", value: (p) => p.status_publicacao },
     { label: "resultado", value: (p) => p.resultado },
-    { label: "lucro_prejuizo", value: (p) => p.lucro_prejuizo },
+    { label: "lucro_prejuizo", value: (p) => lucroUnidadesAnalitico(p) },
     { label: "origem_modelo", value: (p) => p.origem_modelo },
     { label: "job_id_coleta", value: (p) => p.job_id_coleta },
     { label: "created_at", value: (p) => p.created_at },
@@ -267,7 +246,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "go
       <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
       <div
         className={`mt-1 font-mono text-xl font-bold ${
-          tone === "good" ? "text-success" : tone === "bad" ? "text-destructive" : ""
+          tone === "good" ?"text-success" : tone === "bad" ?"text-destructive" : ""
         }`}
       >
         {value}
