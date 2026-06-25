@@ -15,14 +15,22 @@ from typing import Any
 HIST_DIR = Path(os.getenv("BASEBALL_HIST_DIR", "/home/ubuntu/jupyter/dados_baseball"))
 
 MODEL_VERSION = "MLB_V1_1"
-HANDICAP_ENABLED_MLB_V1_1 = False
+HANDICAP_ENABLED_MLB_V1_1 = True
+HANDICAP_SHADOW_MODE_MLB_V1_1 = True
+HANDICAP_MARKET_STATUS_MLB_V1_1 = "HANDICAP_FUNCTIONAL_NOT_VALIDATED"
 HISTORICAL_PRIOR = 0.50
 HISTORICAL_PRIOR_STRENGTH = 10.0
 OVERCONFIDENCE_PROB_CUTOFF = 0.70
 
 PROB_ML_WEIGHTS = {"vit": 0.30, "sim": 0.40, "vig": 0.30}
 PROB_OU_WEIGHTS = {"hist": 0.30, "sim": 0.40, "vig": 0.30}
-HANDICAP_WEIGHTS = {"hist": 0.25, "sim": 0.45, "vig": 0.30}
+PROB_HC_WEIGHTS = {"hist": 0.25, "sim": 0.45, "vig": 0.30}
+HANDICAP_WEIGHTS = PROB_HC_WEIGHTS
+HANDICAP_ALLOWED_LINES = {-2.5, -1.5, 1.5, 2.5}
+HANDICAP_MIN_PROB = 0.525
+HANDICAP_MAX_PROB = 0.685
+HANDICAP_MIN_EDGE = 3.0
+HANDICAP_AUDIT_PATH = Path(".codex_tmp/mlb_handicap_v1_1_shadow_audit.csv")
 
 MLB_TEAMS = {
     "Arizona Diamondbacks": "ARI",
@@ -116,6 +124,7 @@ def main() -> None:
         stats_cache: dict[str, TeamStats] = {}
         prognosticos: list[dict[str, Any]] = []
         context_parts: list[str] = []
+        handicap_audit_rows: list[dict[str, Any]] = []
 
         for game in games:
             home = game["home"]
@@ -129,9 +138,10 @@ def main() -> None:
             away_stats = stats_cache.setdefault(away_sigla, load_team_stats(away_sigla, season))
             game_context = build_game_context(game, home_stats, away_stats, season)
             context_parts.append(game_context)
-            prognosticos.extend(generate_game_picks(game, home_stats, away_stats, game_context))
+            prognosticos.extend(generate_game_picks(game, home_stats, away_stats, game_context, handicap_audit_rows))
 
         write_output_csv(output_path, prognosticos)
+        write_handicap_audit_csv(HANDICAP_AUDIT_PATH, handicap_audit_rows)
         contexto_modelo = "\n\n".join(context_parts[:20])
         emit(
             {
@@ -383,7 +393,13 @@ def load_team_stats(sigla: str, season: int) -> TeamStats:
     )
 
 
-def generate_game_picks(game: dict[str, Any], home: TeamStats, away: TeamStats, game_context: str) -> list[dict[str, Any]]:
+def generate_game_picks(
+    game: dict[str, Any],
+    home: TeamStats,
+    away: TeamStats,
+    game_context: str,
+    handicap_audit_rows: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     expected_home = max(0.2, (home.avg_for * 0.55) + (away.avg_against * 0.45))
     expected_away = max(0.2, (away.avg_for * 0.55) + (home.avg_against * 0.45))
     total_expected = expected_home + expected_away
@@ -432,13 +448,21 @@ def generate_game_picks(game: dict[str, Any], home: TeamStats, away: TeamStats, 
 
     if not HANDICAP_ENABLED_MLB_V1_1:
         return picks
-    for _line_key, odds in game["handicaps"].items():
-        if "home" in odds and "home_line" in odds:
-            prob = handicap_probability(expected_home, expected_away, odds["home_line"])
-            add_handicap_pick(picks, game, game["home"], odds["home_line"], odds.get("home"), prob, diff, game_context)
-        if "away" in odds and "away_line" in odds:
-            prob = handicap_probability(expected_away, expected_home, odds["away_line"])
-            add_handicap_pick(picks, game, game["away"], odds["away_line"], odds.get("away"), prob, -diff, game_context)
+    for candidate in iter_handicap_candidates(game):
+        add_handicap_pick(
+            picks,
+            game,
+            home,
+            away,
+            candidate["side"],
+            candidate["line"],
+            candidate["odd"],
+            candidate.get("other_odd"),
+            expected_home,
+            expected_away,
+            game_context,
+            handicap_audit_rows,
+        )
 
     return picks
 
@@ -521,7 +545,7 @@ def add_total_pick(
     )
 
 
-def add_handicap_pick(
+def add_handicap_pick_legacy_disabled(
     picks: list[dict[str, Any]],
     game: dict[str, Any],
     team: str,
@@ -558,6 +582,186 @@ def add_handicap_pick(
         },
     )
 
+def iter_handicap_candidates(game: dict[str, Any]) -> list[dict[str, Any]]:
+    by_side_line: dict[tuple[str, float], dict[str, Any]] = {}
+    for odds in game.get("handicaps", {}).values():
+        for side in ("home", "away"):
+            odd = odds.get(side)
+            line = odds.get(f"{side}_line")
+            if odd is None or line is None:
+                continue
+            by_side_line[(side, float(line))] = {"side": side, "line": float(line), "odd": float(odd)}
+
+    candidates: list[dict[str, Any]] = []
+    for (side, line), item in sorted(by_side_line.items(), key=lambda pair: (pair[0][0], pair[0][1])):
+        other_side = "away" if side == "home" else "home"
+        other = by_side_line.get((other_side, -line))
+        candidates.append({**item, "other_odd": other.get("odd") if other else None})
+    return candidates
+
+
+def add_handicap_pick(
+    picks: list[dict[str, Any]],
+    game: dict[str, Any],
+    home: TeamStats,
+    away: TeamStats,
+    side: str,
+    line: float,
+    odd: float | None,
+    other_odd: float | None,
+    expected_home: float,
+    expected_away: float,
+    game_context: str,
+    handicap_audit_rows: list[dict[str, Any]] | None = None,
+) -> None:
+    if not HANDICAP_ENABLED_MLB_V1_1:
+        return
+
+    warnings = ["handicap_mlb_v1_1_shadow_funcional_nao_validado"]
+    team_name = game["home"] if side == "home" else game["away"]
+    team_stats = home if side == "home" else away
+    expected_margin = expected_home - expected_away if side == "home" else expected_away - expected_home
+    expected_margin_home = expected_home - expected_away
+    expected_margin_away = expected_away - expected_home
+    run_diff_edge = team_stats.avg_for - team_stats.avg_against
+    line_text = format_signed_line(line)
+    base_audit = {
+        "data": game["data"],
+        "jogo": game["jogo"],
+        "mandante": game["home"],
+        "visitante": game["away"],
+        "pick": f"{team_name} {line_text}",
+        "linha": line,
+        "odd": odd,
+        "expected_home": expected_home,
+        "expected_away": expected_away,
+        "expected_margin_home": expected_margin_home,
+        "expected_margin_away": expected_margin_away,
+        "warnings": ";".join(warnings),
+    }
+
+    def audit(reason: str, passed: bool = False, extra: dict[str, Any] | None = None) -> None:
+        if handicap_audit_rows is None:
+            return
+        handicap_audit_rows.append(
+            {
+                **base_audit,
+                "prob_hist": "",
+                "prob_sim": "",
+                "prob_no_vig": "",
+                "prob_final": "",
+                "odd_justa": "",
+                "edge": "",
+                "sample_size_hist": "",
+                "passou_filtros": passed,
+                "motivo_descarte": "" if passed else reason,
+                **(extra or {}),
+            }
+        )
+
+    if odd is None or odd <= 1:
+        audit("INVALID_ODD")
+        return
+    if not is_allowed_handicap_line(line):
+        audit("HANDICAP_LINE_NOT_SUPPORTED")
+        return
+    if other_odd is None or other_odd <= 1:
+        audit("HANDICAP_NO_PAIRED_ODDS")
+        return
+    if line < 0 and expected_margin < abs(line) * 0.65:
+        audit("NEGATIVE_LINE_MARGIN_TOO_LOW")
+        return
+    if line < 0 and run_diff_edge < 0:
+        audit("NEGATIVE_LINE_TEAM_RUN_DIFF_NEGATIVE")
+        return
+    if line > 0 and -expected_margin > 2.25:
+        audit("POSITIVE_LINE_TOO_WEAK")
+        return
+
+    hist = historical_handicap_cover_rate(team_stats, line)
+    hist_prob = float(hist["cover_rate_shrunk"])
+    sim_prob = handicap_cover_probability_poisson(expected_home, expected_away, side, line)
+    vig_prob = no_vig_probability(odd, other_odd)
+    prob = weighted({"hist": hist_prob, "sim": sim_prob, "vig": vig_prob}, PROB_HC_WEIGHTS)
+    odd_valor = 1 / prob if prob > 0 else 0.0
+    edge = (odd * prob - 1) * 100
+    common_audit = {
+        "prob_hist": hist_prob,
+        "prob_sim": sim_prob,
+        "prob_no_vig": vig_prob,
+        "prob_final": prob,
+        "odd_justa": odd_valor,
+        "edge": edge,
+        "sample_size_hist": hist["sample_size_hist"],
+        "covers_historicos": hist["covers"],
+        "losses_historicos": hist["losses"],
+        "cover_rate_raw": hist["cover_rate_raw"],
+        "cover_rate_shrunk": hist["cover_rate_shrunk"],
+    }
+
+    if prob < HANDICAP_MIN_PROB:
+        audit("HANDICAP_PROB_BELOW_MIN", extra=common_audit)
+        return
+    if prob >= HANDICAP_MAX_PROB:
+        audit("HANDICAP_PROB_ABOVE_MAX", extra=common_audit)
+        return
+    if not (odd > odd_valor and odd > 1.25 and odd <= 2.00):
+        audit("HANDICAP_NOT_EV_PLUS_OR_ODD_OUT_OF_RANGE", extra=common_audit)
+        return
+    if edge < HANDICAP_MIN_EDGE:
+        audit("HANDICAP_EDGE_BELOW_MIN", extra=common_audit)
+        return
+
+    technical = build_handicap_technical_context(
+        game=game,
+        pick=f"{team_name} {line_text}",
+        line=line,
+        odd=odd,
+        odd_valor=odd_valor,
+        edge=edge,
+        prob=prob,
+        hist=hist,
+        sim_prob=sim_prob,
+        vig_prob=vig_prob,
+        expected_home=expected_home,
+        expected_away=expected_away,
+        home=home,
+        away=away,
+        other_odd=other_odd,
+        warnings=warnings,
+    )
+    audit("", passed=True, extra=common_audit)
+    append_if_ev(
+        picks,
+        game,
+        "Handicap Asiatico",
+        f"{team_name} {line_text}",
+        line_text,
+        odd,
+        prob,
+        game_context,
+        f"Handicap MLB shadow: probabilidade simulada de cobertura {sim_prob:.2%}",
+        {
+            "prob_hist": hist_prob,
+            "prob_sim": sim_prob,
+            "prob_no_vig": vig_prob,
+            "sample_size_hist": hist["sample_size_hist"],
+            "warnings": warnings,
+        },
+        min_prob=HANDICAP_MIN_PROB,
+        max_prob=HANDICAP_MAX_PROB,
+        min_edge=HANDICAP_MIN_EDGE,
+        extra_fields={
+            "shadow_mode": HANDICAP_SHADOW_MODE_MLB_V1_1,
+            "market_status": HANDICAP_MARKET_STATUS_MLB_V1_1,
+            "model_version": MODEL_VERSION,
+            "odd_justa": round(odd_valor, 3),
+            "dados_tecnicos": f"{game_context}\n{technical}",
+            "contexto_adicional": game_context,
+            "observacoes": technical,
+        },
+    )
+
 
 def append_if_ev(
     picks: list[dict[str, Any]],
@@ -570,15 +774,23 @@ def append_if_ev(
     game_context: str,
     extra: str,
     diagnostics: dict[str, Any] | None = None,
-) -> None:
+    min_prob: float = 0.0,
+    max_prob: float = OVERCONFIDENCE_PROB_CUTOFF,
+    min_edge: float = 0.0,
+    extra_fields: dict[str, Any] | None = None,
+) -> bool:
     if prob <= 0:
-        return
-    if prob >= OVERCONFIDENCE_PROB_CUTOFF:
-        return
+        return False
+    if prob < min_prob:
+        return False
+    if prob >= max_prob:
+        return False
     odd_valor = 1 / prob
     edge = (odd * prob - 1) * 100
     if not (odd > odd_valor and odd > 1.25 and odd <= 2.00):
-        return
+        return False
+    if edge < min_edge:
+        return False
     diagnostics = diagnostics or {}
     warnings = diagnostics.get("warnings") or []
     debug_text = (
@@ -618,6 +830,9 @@ def append_if_ev(
             "observacoes": observacoes,
         }
     )
+    if extra_fields:
+        picks[-1].update(extra_fields)
+    return True
 
 
 def build_game_context(game: dict[str, Any], home: TeamStats, away: TeamStats, season: int) -> str:
@@ -719,6 +934,96 @@ def historical_total_probability(home: TeamStats, away: TeamStats, line: float, 
     elif sample_size >= 20:
         warnings.append("hist_total_amostra_confiavel")
     return apply_shrinkage(prob_raw, sample_size), sample_size, warnings
+
+
+def is_allowed_handicap_line(line: float) -> bool:
+    return any(math.isclose(float(line), allowed, abs_tol=1e-9) for allowed in HANDICAP_ALLOWED_LINES)
+
+
+def historical_handicap_cover_rate(
+    team: TeamStats,
+    line: float,
+    prior: float = HISTORICAL_PRIOR,
+    prior_strength: float = HISTORICAL_PRIOR_STRENGTH,
+) -> dict[str, Any]:
+    covers = 0
+    losses = 0
+    for row in team.all_rows:
+        runs_for = extract_runs(row, True)
+        runs_against = extract_runs(row, False)
+        if runs_for is None or runs_against is None:
+            continue
+        if runs_for - runs_against + line > 0:
+            covers += 1
+        else:
+            losses += 1
+
+    sample_size = covers + losses
+    cover_rate_raw = covers / sample_size if sample_size else prior
+    cover_rate_shrunk = apply_shrinkage(cover_rate_raw, sample_size, prior=prior, prior_strength=prior_strength)
+    return {
+        "sample_size_hist": sample_size,
+        "covers": covers,
+        "losses": losses,
+        "cover_rate_raw": cover_rate_raw,
+        "cover_rate_shrunk": cover_rate_shrunk,
+        "prior": prior,
+        "prior_strength": prior_strength,
+    }
+
+
+def build_handicap_technical_context(
+    game: dict[str, Any],
+    pick: str,
+    line: float,
+    odd: float,
+    odd_valor: float,
+    edge: float,
+    prob: float,
+    hist: dict[str, Any],
+    sim_prob: float,
+    vig_prob: float,
+    expected_home: float,
+    expected_away: float,
+    home: TeamStats,
+    away: TeamStats,
+    other_odd: float,
+    warnings: list[str],
+) -> str:
+    expected_margin_home = expected_home - expected_away
+    expected_margin_away = expected_away - expected_home
+    return "\n".join(
+        [
+            "--- HANDICAP / RUN LINE MLB V1.1 SHADOW ---",
+            f"Mercado: Handicap / Run Line",
+            f"Pick: {pick}",
+            f"Linha: {format_signed_line(line)}",
+            f"Odd ofertada: {odd:.3f}",
+            f"Odd justa: {odd_valor:.3f}",
+            f"Edge: {edge:.2f}%",
+            f"Probabilidade final: {prob * 100:.2f}%",
+            f"Prob hist: {float(hist['cover_rate_shrunk']):.4f}",
+            f"Prob sim: {sim_prob:.4f}",
+            f"Prob no-vig: {vig_prob:.4f}",
+            f"Pesos: hist={PROB_HC_WEIGHTS['hist']:.2f}; sim={PROB_HC_WEIGHTS['sim']:.2f}; vig={PROB_HC_WEIGHTS['vig']:.2f}",
+            f"Sample hist: {int(hist['sample_size_hist'])}",
+            f"Covers historicos: {int(hist['covers'])}",
+            f"Losses historicos: {int(hist['losses'])}",
+            f"Cover rate raw: {float(hist['cover_rate_raw']):.4f}",
+            f"Cover rate shrinkage: {float(hist['cover_rate_shrunk']):.4f}",
+            f"Expected home: {expected_home:.3f}",
+            f"Expected away: {expected_away:.3f}",
+            f"Expected margin home: {expected_margin_home:+.3f}",
+            f"Expected margin away: {expected_margin_away:+.3f}",
+            f"Total expected: {expected_home + expected_away:.3f}",
+            f"{game['home']} medias: marcadas={home.avg_for:.2f}; sofridas={home.avg_against:.2f}; diff={home.avg_for - home.avg_against:+.2f}",
+            f"{game['away']} medias: marcadas={away.avg_for:.2f}; sofridas={away.avg_against:.2f}; diff={away.avg_for - away.avg_against:+.2f}",
+            f"No-vig pair: odd_pick={odd:.3f}; odd_oposta={other_odd:.3f}",
+            f"Warnings: {', '.join(warnings) if warnings else 'nenhum'}",
+            f"shadow_mode: {HANDICAP_SHADOW_MODE_MLB_V1_1}",
+            f"market_status: {HANDICAP_MARKET_STATUS_MLB_V1_1}",
+        ]
+    )
 
 
 def season_record(rows: list[dict[str, str]]) -> dict[str, float]:
@@ -883,6 +1188,43 @@ def write_output_csv(path: Path, rows: list[dict[str, Any]]) -> None:
             writer.writerow({column: row.get(column) for column in columns})
 
 
+def write_handicap_audit_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+    if not rows:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    columns = [
+        "data",
+        "jogo",
+        "mandante",
+        "visitante",
+        "pick",
+        "linha",
+        "odd",
+        "prob_hist",
+        "prob_sim",
+        "prob_no_vig",
+        "prob_final",
+        "odd_justa",
+        "edge",
+        "sample_size_hist",
+        "covers_historicos",
+        "losses_historicos",
+        "cover_rate_raw",
+        "cover_rate_shrunk",
+        "expected_home",
+        "expected_away",
+        "expected_margin_home",
+        "expected_margin_away",
+        "passou_filtros",
+        "motivo_descarte",
+        "warnings",
+    ]
+    with path.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=columns, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def extract_runs(row: dict[str, str], scored: bool) -> float | None:
     candidates = (
         ["runs_for", "corridas_marcadas", "pontos_marcados", "team_score", "score_for", "rf", "R"]
@@ -1006,6 +1348,22 @@ def win_probability_poisson(home_lam: float, away_lam: float, max_runs: int = 20
         for away_runs in range(max_runs + 1):
             if home_runs > away_runs:
                 prob += p_home * poisson_pmf(away_runs, away_lam)
+    return max(0.01, min(0.99, prob))
+
+
+def handicap_cover_probability_poisson(expected_home: float, expected_away: float, side: str, line: float, max_runs: int = 20) -> float:
+    normalized_side = str(side).strip().lower()
+    if normalized_side not in {"home", "away"}:
+        raise ValueError("side deve ser 'home' ou 'away'")
+
+    prob = 0.0
+    for home_runs in range(max_runs + 1):
+        p_home = poisson_pmf(home_runs, expected_home)
+        for away_runs in range(max_runs + 1):
+            score_prob = p_home * poisson_pmf(away_runs, expected_away)
+            margin = home_runs - away_runs if normalized_side == "home" else away_runs - home_runs
+            if margin + line > 0:
+                prob += score_prob
     return max(0.01, min(0.99, prob))
 
 
