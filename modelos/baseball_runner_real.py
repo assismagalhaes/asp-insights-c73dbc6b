@@ -15,9 +15,10 @@ from typing import Any
 HIST_DIR = Path(os.getenv("BASEBALL_HIST_DIR", "/home/ubuntu/jupyter/dados_baseball"))
 
 MODEL_VERSION = "MLB_V1_1"
+BASEBALL_MLB_HANDICAP_MODEL_VERSION = "MLB_V1_1_HANDICAP_CONTROLLED"
 HANDICAP_ENABLED_MLB_V1_1 = True
-HANDICAP_SHADOW_MODE_MLB_V1_1 = True
-HANDICAP_MARKET_STATUS_MLB_V1_1 = "HANDICAP_FUNCTIONAL_NOT_VALIDATED"
+HANDICAP_CONTROLLED_ACTIVATION_MLB_V1_1 = True
+HANDICAP_SELECTED_CONTROLLED = "HANDICAP_SELECTED_CONTROLLED"
 HISTORICAL_PRIOR = 0.50
 HISTORICAL_PRIOR_STRENGTH = 10.0
 OVERCONFIDENCE_PROB_CUTOFF = 0.70
@@ -142,6 +143,7 @@ def main() -> None:
 
         write_output_csv(output_path, prognosticos)
         write_handicap_audit_csv(HANDICAP_AUDIT_PATH, handicap_audit_rows)
+        handicap_shadow_diagnostics = build_handicap_shadow_diagnostics(handicap_audit_rows)
         contexto_modelo = "\n\n".join(context_parts[:20])
         emit(
             {
@@ -154,6 +156,7 @@ def main() -> None:
                 "dados_tecnicos": contexto_modelo,
                 "mensagem": None if prognosticos else "Nenhuma oportunidade EV+ encontrada para os filtros atuais.",
                 "prognosticos": prognosticos,
+                "handicap_shadow_diagnostics": handicap_shadow_diagnostics,
             }
         )
     except Exception as exc:  # noqa: BLE001 - runner must serialize failures to API.
@@ -617,7 +620,7 @@ def add_handicap_pick(
     if not HANDICAP_ENABLED_MLB_V1_1:
         return
 
-    warnings = ["handicap_mlb_v1_1_shadow_funcional_nao_validado"]
+    warnings = ["handicap_mlb_v1_1_controlled_activation"]
     team_name = game["home"] if side == "home" else game["away"]
     team_stats = home if side == "home" else away
     expected_margin = expected_home - expected_away if side == "home" else expected_away - expected_home
@@ -643,9 +646,14 @@ def add_handicap_pick(
     def audit(reason: str, passed: bool = False, extra: dict[str, Any] | None = None) -> None:
         if handicap_audit_rows is None:
             return
+        activation_status = HANDICAP_SELECTED_CONTROLLED if passed else reason
         handicap_audit_rows.append(
             {
                 **base_audit,
+                "model_version": BASEBALL_MLB_HANDICAP_MODEL_VERSION,
+                "mode": "controlled_activation",
+                "published": passed,
+                "activation_status": activation_status,
                 "prob_hist": "",
                 "prob_sim": "",
                 "prob_no_vig": "",
@@ -740,7 +748,7 @@ def add_handicap_pick(
         odd,
         prob,
         game_context,
-        f"Handicap MLB shadow: probabilidade simulada de cobertura {sim_prob:.2%}",
+        f"Handicap MLB controlled activation: probabilidade simulada de cobertura {sim_prob:.2%}",
         {
             "prob_hist": hist_prob,
             "prob_sim": sim_prob,
@@ -752,9 +760,9 @@ def add_handicap_pick(
         max_prob=HANDICAP_MAX_PROB,
         min_edge=HANDICAP_MIN_EDGE,
         extra_fields={
-            "shadow_mode": HANDICAP_SHADOW_MODE_MLB_V1_1,
-            "market_status": HANDICAP_MARKET_STATUS_MLB_V1_1,
-            "model_version": MODEL_VERSION,
+            "modelo_versao": BASEBALL_MLB_HANDICAP_MODEL_VERSION,
+            "model_version": BASEBALL_MLB_HANDICAP_MODEL_VERSION,
+            "activation_status": HANDICAP_SELECTED_CONTROLLED,
             "odd_justa": round(odd_valor, 3),
             "dados_tecnicos": f"{game_context}\n{technical}",
             "contexto_adicional": game_context,
@@ -994,7 +1002,7 @@ def build_handicap_technical_context(
     expected_margin_away = expected_away - expected_home
     return "\n".join(
         [
-            "--- HANDICAP / RUN LINE MLB V1.1 SHADOW ---",
+            "--- HANDICAP / RUN LINE MLB V1.1 CONTROLLED ACTIVATION ---",
             f"Mercado: Handicap / Run Line",
             f"Pick: {pick}",
             f"Linha: {format_signed_line(line)}",
@@ -1020,8 +1028,8 @@ def build_handicap_technical_context(
             f"{game['away']} medias: marcadas={away.avg_for:.2f}; sofridas={away.avg_against:.2f}; diff={away.avg_for - away.avg_against:+.2f}",
             f"No-vig pair: odd_pick={odd:.3f}; odd_oposta={other_odd:.3f}",
             f"Warnings: {', '.join(warnings) if warnings else 'nenhum'}",
-            f"shadow_mode: {HANDICAP_SHADOW_MODE_MLB_V1_1}",
-            f"market_status: {HANDICAP_MARKET_STATUS_MLB_V1_1}",
+            "mode: controlled_activation",
+            f"model_version: {BASEBALL_MLB_HANDICAP_MODEL_VERSION}",
         ]
     )
 
@@ -1223,6 +1231,32 @@ def write_handicap_audit_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer = csv.DictWriter(fh, fieldnames=columns, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
+
+
+def build_handicap_shadow_diagnostics(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    published = [row for row in rows if bool(row.get("passou_filtros"))]
+    discarded = [row for row in rows if not bool(row.get("passou_filtros"))]
+    discard_reasons: dict[str, int] = defaultdict(int)
+    for row in discarded:
+        reason = str(row.get("motivo_descarte") or "UNKNOWN")
+        discard_reasons[reason] += 1
+
+    return {
+        "enabled": HANDICAP_ENABLED_MLB_V1_1,
+        "mode": "controlled_activation",
+        "model_version": BASEBALL_MLB_HANDICAP_MODEL_VERSION,
+        "published": bool(published),
+        "published_count": len(published),
+        "discarded_count": len(discarded),
+        "diagnostics": rows,
+        "summary": {
+            "published_count": len(published),
+            "discarded_count": len(discarded),
+            "discard_reasons": dict(discard_reasons),
+            "controlled_activation": HANDICAP_CONTROLLED_ACTIVATION_MLB_V1_1,
+            "selected_reason": HANDICAP_SELECTED_CONTROLLED,
+        },
+    }
 
 
 def extract_runs(row: dict[str, str], scored: bool) -> float | None:
