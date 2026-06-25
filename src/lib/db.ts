@@ -489,7 +489,9 @@ export function useCreateValidacao() {
         input.decisao === "PULAR"
           ? Number(input.stake_confirmada ?? 1) || 1
           : input.stake_confirmada ?? undefined;
-      const prognosticoPatch: Partial<Prognostico> = { status_validacao: input.decisao as Status };
+      const prognosticoPatch: { status_validacao: Status; stake?: number } = {
+        status_validacao: input.decisao as Status,
+      };
       if (stakeEspelhada !== undefined) prognosticoPatch.stake = stakeEspelhada;
       // espelha decisão no prognóstico
       await supabase
