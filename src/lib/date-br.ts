@@ -1,8 +1,6 @@
 // Parser e formatador de datas brasileiras (DD/MM/YYYY)
 // Nunca usa Date.parse para evitar interpretação americana.
 
-import * as XLSX from "xlsx";
-
 function valid(y: number, m: number, d: number): boolean {
   if (m < 1 || m > 12 || d < 1 || d > 31) return false;
   const probe = new Date(Date.UTC(y, m - 1, d));
@@ -11,6 +9,15 @@ function valid(y: number, m: number, d: number): boolean {
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const iso = (y: number, m: number, d: number) => `${y}-${pad(m)}-${pad(d)}`;
+
+// Converte serial Excel → {y,m,d} respeitando o bug de 1900 leap year.
+function excelSerialToYMD(serial: number): { y: number; m: number; d: number } | null {
+  if (!Number.isFinite(serial)) return null;
+  // Excel epoch é 1899-12-30 em JS (compensa o bug do 29/02/1900 inexistente).
+  const ms = Math.round(serial * 86400 * 1000) + Date.UTC(1899, 11, 30);
+  const dt = new Date(ms);
+  return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
+}
 
 /**
  * Parse data em formatos:
@@ -26,10 +33,11 @@ export function parseBrazilianDate(input: unknown): string | null {
   // Serial Excel
   if (typeof input === "number") {
     if (input < 60) return null; // antes de 1900-03-01 não confiável
-    const d = XLSX.SSF.parse_date_code(input);
+    const d = excelSerialToYMD(input);
     if (!d || !valid(d.y, d.m, d.d)) return null;
     return iso(d.y, d.m, d.d);
   }
+
 
   if (input instanceof Date) {
     const y = input.getUTCFullYear();

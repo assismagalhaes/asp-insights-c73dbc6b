@@ -842,9 +842,25 @@ function csvName(name: string) {
 }
 
 async function exportXlsx(rows: NormalizedOdd[], fileName: string) {
-  const XLSX = await import("xlsx");
-  const ws = XLSX.utils.json_to_sheet(rows.map(({ raw_ref: _raw, ...row }) => row));
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "odds");
-  XLSX.writeFile(wb, `${fileName.replace(/\.json$/i, "") || "coleta_odds"}_normalizado.xlsx`);
+  const ExcelJS = (await import("exceljs")).default;
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("odds");
+  const cleaned = rows.map(({ raw_ref: _raw, ...row }) => row);
+  if (cleaned.length) {
+    const keys = Object.keys(cleaned[0]);
+    ws.columns = keys.map((k) => ({ header: k, key: k }));
+    ws.addRows(cleaned as Record<string, unknown>[]);
+  }
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${fileName.replace(/\.json$/i, "") || "coleta_odds"}_normalizado.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }

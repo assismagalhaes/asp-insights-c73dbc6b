@@ -945,7 +945,8 @@ function parseTeams(payload: unknown, league?: string): BaseballTeam[] {
       const sigla = normalizeMlbSigla(item.sigla);
       const basketballName = league === "nba" || league === "wnba" ? BASKETBALL_TEAM_NAMES[league][sigla] : undefined;
       const nome = basketballName ?? item.nome ?? sigla;
-      return { ...item, sigla, nome, label: item.label || (basketballName ? `${sigla} - ${basketballName}` : nome) };
+      const existingLabel = "label" in item ? item.label : undefined;
+      return { ...item, sigla, nome, label: existingLabel || (basketballName ? `${sigla} - ${basketballName}` : nome) };
     })
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }
