@@ -270,8 +270,8 @@ async function createAiFeedbackForResultado(input: Omit<ResultadoRow, "id" | "cr
   const oddUsada = getOddEfetiva(p);
   const edgeUsado = getEdgeEfetivo(p);
   const lucroTeorico = input.lucro_prejuizo;
-  const lucroFinanceiro = contaBankroll ? input.lucro_prejuizo : 0;
-  const resultadoFinanceiro = contaBankroll ? input.resultado : null;
+  const lucroFinanceiro = contaBankroll ?input.lucro_prejuizo : 0;
+  const resultadoFinanceiro = contaBankroll ?input.resultado : null;
   const feedbackRows = rows.map((a) => {
     const decisaoIa = normalizeAiDecision(a.decisao_sugerida);
     const acertouIa = decisionHit(decisaoIa, input.resultado);
@@ -306,7 +306,7 @@ async function createAiFeedbackForResultado(input: Omit<ResultadoRow, "id" | "cr
       buscas_realizadas: a.buscas_realizadas,
       acertou_ia: acertouIa,
       acertou_humano: acertouHumano,
-      divergencia_ia_humano: decisaoIa != null && decisaoHumana != null ? decisaoIa !== decisaoHumana : null,
+      divergencia_ia_humano: decisaoIa != null && decisaoHumana != null ?decisaoIa !== decisaoHumana : null,
       updated_at: new Date().toISOString(),
     };
   });
@@ -355,8 +355,8 @@ export interface Configuracao {
   updated_at: string;
 }
 
-const num = (v: unknown) => (v == null ? 0 : Number(v));
-const numOrNull = (v: unknown) => (v == null ? null : Number(v));
+const num = (v: unknown) => (v == null ?0 : Number(v));
+const numOrNull = (v: unknown) => (v == null ?null : Number(v));
 const mapPrognostico = (r: Record<string, unknown>): Prognostico => ({
   ...(r as unknown as Prognostico),
   odd_ofertada: num(r.odd_ofertada),
@@ -366,7 +366,7 @@ const mapPrognostico = (r: Record<string, unknown>): Prognostico => ({
   edge: num(r.edge),
   edge_ajustado: numOrNull(r.edge_ajustado),
   stake: num(r.stake),
-  lucro_prejuizo: r.lucro_prejuizo == null ? null : Number(r.lucro_prejuizo),
+  lucro_prejuizo: r.lucro_prejuizo == null ?null : Number(r.lucro_prejuizo),
 });
 
 // ===== Prognósticos =====
@@ -383,7 +383,7 @@ export function usePrognosticos() {
       return (data ?? []).map((r: Record<string, unknown>) => {
         const rs = (r.resultados as Array<{ placar_final: string | null; created_at: string }> | null) ?? [];
         const last = rs.length
-          ? [...rs].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0]
+          ?[...rs].sort((a, b) => (a.created_at < b.created_at ?1 : -1))[0]
           : null;
         return { ...mapPrognostico(r), placar_final: last?.placar_final ?? null };
       });
@@ -484,10 +484,16 @@ export function useCreateValidacao() {
     mutationFn: async (input: ValidacaoInput) => {
       const { data, error } = await supabase.from("validacoes").insert(input).select().single();
       if (error) throw error;
+      const stakeEspelhada =
+        input.decisao === "PULAR"
+          ? Number(input.stake_confirmada ?? 1) || 1
+          : input.stake_confirmada ?? undefined;
+      const prognosticoPatch: Partial<Prognostico> = { status_validacao: input.decisao as Status };
+      if (stakeEspelhada !== undefined) prognosticoPatch.stake = stakeEspelhada;
       // espelha decisão no prognóstico
       await supabase
         .from("prognosticos")
-        .update({ status_validacao: input.decisao, stake: input.stake_confirmada ?? undefined })
+        .update(prognosticoPatch)
         .eq("id", input.prognostico_id);
       return data;
     },
@@ -583,23 +589,47 @@ export function useUpdateConfiguracao() {
 export const ESPORTES_DEFAULT = ["Futebol", "Basketball", "Baseball", "American Football", "Hockey"];
 
 export const MERCADOS_DEFAULT = [
-  "Resultado Final",
   "Moneyline",
-  "Handicap Asiático",
-  "Handicap Europeu",
-  "Over/Under",
-  "Over/Under Pontos",
-  "Ambas Marcam",
-  "Dupla Chance",
-  "Parlay",
-  "Spread",
+  "Resultado da Partida",
+  "Total de Gols",
   "Total de Pontos",
   "Total de Corridas",
+  "Handicap Asiático",
+  "Ambas Marcam",
+  "Dupla Chance",
   "Total de Escanteios",
-  "Player Props",
   "ASP GoalMatrix",
   "ASP CornerMatrix",
 ];
+
+export function normalizeMercadoPadrao(mercado: string, esporte?: string | null): string {
+  const raw = String(mercado ?? "").trim();
+  const normalized = raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const sport = String(esporte ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  if (/asp\s*goals?matrix|goals?matrix/.test(normalized)) return "ASP GoalMatrix";
+  if (/asp\s*corners?matrix|corners?matrix/.test(normalized)) return "ASP CornerMatrix";
+  if (/resultado final|1x2|resultado da partida/.test(normalized)) return "Resultado da Partida";
+  if (/ambas marcam|btts/.test(normalized)) return "Ambas Marcam";
+  if (/dupla chance|double chance/.test(normalized)) return "Dupla Chance";
+  if (/handicap|spread|run line/.test(normalized)) return "Handicap Asiático";
+  if (/moneyline|home\/away|home away/.test(normalized)) return "Moneyline";
+  if (/over\/under pontos|total de pontos|pontos/.test(normalized)) return "Total de Pontos";
+  if (/over\/under corridas|total de corridas|corridas|runs/.test(normalized)) return "Total de Corridas";
+  if (/over\/under gols|total de gols|gols|goals/.test(normalized)) return "Total de Gols";
+  if (/over\/under|total/.test(normalized)) {
+    if (sport.includes("baseball")) return "Total de Corridas";
+    if (sport.includes("basketball")) return "Total de Pontos";
+    return "Total de Gols";
+  }
+  return raw;
+}
 
 // Mapeia esporte "errado" (que é na verdade uma liga) para esporte real + liga
 const LIGA_TO_ESPORTE: Record<string, { esporte: string; liga: string }> = {
@@ -711,9 +741,10 @@ export function calcLucro(resultado: Resultado, stake: number, odd: number): num
 export function gerarTipTexto(
   p: Prognostico,
   extras?: {
+    modo?: "completo" | "resumo";
     parecer?: string | null;
     dados_tecnicos?: string | null;
-    /** legados — usados apenas como fallback se parecer não vier */
+    /** legados - usados apenas como fallback se parecer nao vier */
     justificativa?: string | null;
     riscos?: string | null;
     comentarios?: string | null;
@@ -724,7 +755,6 @@ export function gerarTipTexto(
   const linhaForaDoPick = linha && linha !== "-" && !pickLower.includes(linha.toLowerCase());
   const oddFinal = getOddEfetiva(p);
   const edgeFinal = getEdgeEfetivo(p);
-  const dados = (extras?.dados_tecnicos?.trim()) || getDadosTecnicos(p) || "—";
   const parecerLegado = [
     extras?.justificativa?.trim(),
     extras?.riscos?.trim() ? `Riscos: ${extras.riscos.trim()}` : "",
@@ -732,34 +762,31 @@ export function gerarTipTexto(
   ]
     .filter(Boolean)
     .join("\n");
-  const parecer = extras?.parecer?.trim() || parecerLegado || "—";
+  const parecer = extras?.parecer?.trim() || parecerLegado || "Sem justificativa final registrada.";
   const formatDateBR = (iso: string) => {
     const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
     return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
   };
-  const hora = p.hora ? p.hora.slice(0, 5) : "—";
+  const hora = p.hora ? p.hora.slice(0, 5) : "-";
+  const pickComLinha = `${p.pick}${linhaForaDoPick ? `\nLinha: ${linha}` : ""}`;
+  if (extras?.modo === "resumo") return parecer;
 
-  return `🔥 ASP INSIGHTS - PICK CONFIRMADA
+  return `ASP INSIGHTS - PICK CONFIRMADA
 
-🏆 Jogo: ${p.jogo}
-📅 Data/Hora: ${formatDateBR(p.data)} às ${hora}
-📊 Esporte/Liga: ${p.esporte} - ${p.liga || "—"}
+Jogo: ${p.jogo}
+Data/Hora: ${formatDateBR(p.data)} as ${hora}
+Esporte/Liga: ${p.esporte} - ${p.liga || "-"}
 
-🎯 Mercado: ${p.mercado}
-✅ Pick: ${p.pick}${linhaForaDoPick ? `\n📌 Linha: ${linha}` : ""}
-📈 Odd: ${oddFinal.toFixed(2)}${p.odd_ajustada != null ? ` (original: ${p.odd_ofertada.toFixed(2)})` : ""}
-📉 Odd de Valor: ${p.odd_valor.toFixed(2)}
-📊 Probabilidade: ${p.probabilidade_final.toFixed(1)}%
-⚖️ Edge: ${edgeFinal.toFixed(2)}%
-💰 Stake: ${p.stake}u
+Mercado: ${p.mercado}
+Pick: ${pickComLinha}
+Odd: ${oddFinal.toFixed(2)}${p.odd_ajustada != null ? ` (original: ${p.odd_ofertada.toFixed(2)})` : ""}
+Odd de Valor: ${p.odd_valor.toFixed(2)}
+Probabilidade: ${p.probabilidade_final.toFixed(1)}%
+Edge: ${edgeFinal.toFixed(2)}%
+Stake: ${p.stake}u
 
-🧠 Contexto da análise:
-${dados}
-
-📋 Parecer:
-${parecer}
-
-📌 Status: ${p.status_validacao}`;
+Justificativa final:
+${parecer}`;
 }
 
 export function useValidacaoByPrognostico(prognosticoId: string | null | undefined) {

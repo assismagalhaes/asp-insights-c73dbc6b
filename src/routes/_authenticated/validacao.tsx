@@ -50,7 +50,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/validacao")({
-  head: () => ({ meta: [{ title: "Validação Crítica — ASP Insights" }] }),
+  head: () => ({ meta: [{ title: "Validação Crítica - ASP Insights" }] }),
   component: Validacao,
 });
 
@@ -172,7 +172,7 @@ function groupPendentes(prognosticos: Prognostico[]): ValidationGroup[] {
 }
 
 function formatOptionCount(count: number): string {
-  return count === 1 ? "1 opção pendente" : `${count} opções pendentes`;
+  return count === 1 ?"1 opção pendente" : `${count} opções pendentes`;
 }
 
 function normalizeAiChoice(value: unknown): string {
@@ -229,7 +229,7 @@ function formatIaParecerForDisplay(parecer: string): string {
 }
 
 function getIaResumo(ia: IAResult): string {
-  const decisao = ia.decisao_sugerida === "CONFIRMA" ? "CONFIRMAR" : "PULAR";
+  const decisao = ia.decisao_sugerida === "CONFIRMA" ?"CONFIRMAR" : "PULAR";
   const pick = ia.decisao_sugerida === "CONFIRMA" && ia.pick_escolhida ? ` - ${ia.pick_escolhida}` : "";
   const stake =
     ia.decisao_sugerida === "CONFIRMA" && ia.stake_sugerida != null
@@ -307,10 +307,10 @@ function Validacao() {
         })
         .slice()
         .sort((a, b) => {
-          if (a.data !== b.data) return a.data < b.data ? -1 : 1;
+          if (a.data !== b.data) return a.data < b.data ?-1 : 1;
           const ha = a.hora ?? "99:99";
           const hb = b.hora ?? "99:99";
-          return ha < hb ? -1 : ha > hb ? 1 : 0;
+          return ha < hb ?-1 : ha > hb ?1 : 0;
         }),
     [prognosticos, ini, fim, fEsporte, fLiga, fMercado],
   );
@@ -345,6 +345,16 @@ function Validacao() {
   const getSelectedOption = (g: ValidationGroup): Prognostico | null => {
     const selectedId = selectedByGroup[g.key] ?? (g.opcoes.length === 1 ? g.opcoes[0].id : "");
     return g.opcoes.find((p) => p.id === selectedId) ?? null;
+  };
+
+  const getBestPularOption = (g: ValidationGroup): Prognostico => {
+    return g.opcoes
+      .slice()
+      .sort((a, b) => {
+        const scoreA = (getEdgeAjustado(a) ?? a.edge ?? 0) * 2 + (a.probabilidade_final ?? 0) + (a.odd_ofertada ?? 0);
+        const scoreB = (getEdgeAjustado(b) ?? b.edge ?? 0) * 2 + (b.probabilidade_final ?? 0) + (b.odd_ofertada ?? 0);
+        return scoreB - scoreA;
+      })[0];
   };
 
   const rodarIA = async (g: ValidationGroup, modo: "local" | "online") => {
@@ -482,52 +492,6 @@ function Validacao() {
     toast.success("Parecer da IA aplicado");
   };
 
-  const decidir = async (p: Prognostico, decisao: Status) => {
-    if (p.id || decisao) {
-      toast.error("Use a validação agrupada para confirmar ou pular este mercado.");
-      return;
-    }
-    const parecer = (pareceres[p.id] ?? "").trim();
-    if (!parecer) {
-      toast.error("Parecer da Validação é obrigatório.");
-      return;
-    }
-    try {
-      const oddAj = getOddAjustadaNum(p);
-      const edgeAj = getEdgeAjustado(p);
-      const stakeNum = stakes[p.id] ? Number(stakes[p.id]) : p.stake;
-      const contextoAnalise = "";
-      const contextoFoiEditado = false;
-
-      // atualiza odd/edge ajustados e contexto no prognostico
-      const patch: Partial<Prognostico> & { id: string } = { id: p.id };
-      if (oddAj != null && oddAj !== p.odd_ajustada) patch.odd_ajustada = oddAj;
-      if (edgeAj != null && edgeAj !== p.edge_ajustado) patch.edge_ajustado = edgeAj;
-      if (contextoFoiEditado) patch.dados_tecnicos = contextoAnalise || null;
-      if (Object.keys(patch).length > 1) await updateProg.mutateAsync(patch);
-
-      const ia = iaResults[p.id];
-      await createVal.mutateAsync({
-        prognostico_id: p.id,
-        decisao,
-        stake_confirmada: decisao === "CONFIRMA" ? stakeNum : 0,
-        parecer_validacao: parecer,
-        contexto_adicional: contextoAnalise || null,
-        parecer_ia: ia?.parecer ?? null,
-        decisao_ia_sugerida: ia?.decisao_sugerida ?? null,
-        stake_ia_sugerida: ia?.stake_sugerida ?? null,
-        data_analise_ia: ia ? new Date().toISOString() : null,
-        prompt_versao: ia?.prompt_versao ?? null,
-        modo_ia: ia?.modo ?? null,
-        fontes_consultadas: ia?.fontes_consultadas ?? null,
-        buscas_realizadas: ia?.buscas_realizadas ?? null,
-      });
-      toast.success(`Decisão registrada: ${decisao}`);
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  };
-
   const registrarValidacaoGrupo = async (
     p: Prognostico,
     decisao: Status,
@@ -550,13 +514,13 @@ function Validacao() {
     await createVal.mutateAsync({
       prognostico_id: p.id,
       decisao,
-      stake_confirmada: decisao === "CONFIRMA" ? stakeNum : 0,
+      stake_confirmada: decisao === "CONFIRMA" ?stakeNum : 1,
       parecer_validacao: parecer,
       contexto_adicional: contextoAnalise || null,
       parecer_ia: ia?.parecer ?? null,
       decisao_ia_sugerida: ia?.decisao_sugerida ?? null,
       stake_ia_sugerida: ia?.stake_sugerida ?? null,
-      data_analise_ia: ia ? new Date().toISOString() : null,
+      data_analise_ia: ia ?new Date().toISOString() : null,
       prompt_versao: ia?.prompt_versao ?? null,
       modo_ia: ia?.modo ?? null,
       fontes_consultadas: ia?.fontes_consultadas ?? null,
@@ -579,7 +543,8 @@ function Validacao() {
     try {
       const contextoAnalise = getContextoGrupo(g).trim();
       const ia = iaResults[g.key];
-      const selectedLabel = selected ? `${selected.pick}${selected.linha ? ` ${selected.linha}` : ""}` : "";
+      const retained = decisao === "CONFIRMA" ?selected! : getBestPularOption(g);
+      const retainedStake = decisao === "CONFIRMA" ? Number(stakes[retained.id] ?? retained.stake ?? 0) : 1;
       const parecerBase = parecer || "Grupo recusado na validação crítica agrupada.";
       if (contextoAnalise) {
         const groupIds = new Set(g.opcoes.map((option) => option.id));
@@ -590,23 +555,22 @@ function Validacao() {
           await updateProg.mutateAsync({ id: option.id, dados_tecnicos: contextoAnalise });
         }
       }
-      for (const option of g.opcoes) {
-        const isConfirmada = decisao === "CONFIRMA" && selected?.id === option.id;
-        const stakeNum = isConfirmada ? Number(stakes[option.id] ?? option.stake ?? 0) : 0;
-        const parecerOption =
-          isConfirmada || decisao === "PULAR"
-            ? parecerBase
-            : `Linha não escolhida na validação agrupada. Opção confirmada no grupo: ${selectedLabel}.`;
-        await registrarValidacaoGrupo(
-          option,
-          isConfirmada ? "CONFIRMA" : "PULAR",
-          parecerOption,
-          contextoAnalise,
-          isConfirmada ? ia : undefined,
-          stakeNum,
-        );
+      await registrarValidacaoGrupo(
+        retained,
+        decisao === "CONFIRMA" ?"CONFIRMA" : "PULAR",
+        parecerBase,
+        contextoAnalise,
+        decisao === "CONFIRMA" ?ia : undefined,
+        retainedStake,
+      );
+      for (const option of g.opcoes.filter((option) => option.id !== retained.id)) {
+        await deleteProg.mutateAsync(option.id);
       }
-      toast.success(decisao === "CONFIRMA" ? "Grupo validado: 1 opção confirmada e demais puladas" : "Grupo inteiro marcado como PULAR");
+      toast.success(
+        decisao === "CONFIRMA"
+          ?"Grupo validado: opção confirmada e linhas concorrentes removidas"
+          : "Grupo pulado: melhor registro mantido e linhas concorrentes removidas",
+      );
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -695,13 +659,13 @@ function Validacao() {
                   <div className="flex items-center gap-2 text-xs">
                     <span className="font-mono text-muted-foreground">{formatBR(p.data)}</span>
                     {p.hora && <span className="font-mono text-muted-foreground">às {formatHora(p.hora)}</span>}
-                    <span className="text-muted-foreground">•</span>
+                    <span className="text-muted-foreground">-</span>
                     <span className="font-semibold uppercase tracking-wider text-primary">{p.esporte}</span>
-                    <span className="text-muted-foreground">• {p.liga}</span>
+                    <span className="text-muted-foreground">- {p.liga}</span>
                   </div>
                   <h3 className="mt-1 text-lg font-semibold">{p.jogo}</h3>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    Grupo: <span className="font-semibold text-foreground">{g.mercado}</span> · {formatOptionCount(g.opcoes.length)}
+                    Grupo: <span className="font-semibold text-foreground">{g.mercado}</span> - {formatOptionCount(g.opcoes.length)}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -735,7 +699,7 @@ function Validacao() {
                         key={opcao.id}
                         className={cn(
                           "flex cursor-pointer gap-3 rounded-md border p-3 transition-colors hover:bg-muted/40",
-                          selectedOptionId === opcao.id ? "border-primary bg-primary/5" : "border-border bg-background/40",
+                          selectedOptionId === opcao.id ?"border-primary bg-primary/5" : "border-border bg-background/40",
                         )}
                       >
                         <RadioGroupItem value={opcao.id} className="mt-1" />
@@ -764,7 +728,7 @@ function Validacao() {
                             <span>Odd aj.: <strong className="font-mono">{(opcaoOdd ?? opcao.odd_ofertada).toFixed(2)}</strong></span>
                             <span>Odd valor: <strong className="font-mono">{opcao.odd_valor.toFixed(2)}</strong></span>
                             <span>Prob.: <strong className="font-mono">{opcao.probabilidade_final.toFixed(2)}%</strong></span>
-                            <span>Edge aj.: <strong className="font-mono">{opcaoEdge != null ? `${opcaoEdge.toFixed(2)}%` : "-"}</strong></span>
+                            <span>Edge aj.: <strong className="font-mono">{opcaoEdge != null ?`${opcaoEdge.toFixed(2)}%` : "-"}</strong></span>
                           </div>
                         </div>
                       </label>
@@ -784,7 +748,7 @@ function Validacao() {
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                   <KV label="Mercado" value={p.mercado} />
                   <KV label="Pick" value={p.pick} />
-                  {mostrarLinha && <KV label="Linha" value={p.linha ?? "—"} />}
+                  {mostrarLinha && <KV label="Linha" value={p.linha ?? "-"} />}
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
                   <Metric label="Odd original" value={p.odd_ofertada.toFixed(2)} />
@@ -800,12 +764,12 @@ function Validacao() {
                     />
                   </div>
                   <Metric label="Odd valor" value={p.odd_valor.toFixed(2)} />
-                  <Metric label="Probabilidade" value={`${p.probabilidade_final.toFixed(2)}%`} tone={p.probabilidade_final > 60 ? "good" : p.probabilidade_final < 55 ? "warn" : undefined} />
-                  <Metric label="Edge original" value={`${p.edge.toFixed(2)}%`} tone={p.edge < 0 ? "bad" : "good"} />
+                  <Metric label="Probabilidade" value={`${p.probabilidade_final.toFixed(2)}%`} tone={p.probabilidade_final > 60 ?"good" : p.probabilidade_final < 55 ?"warn" : undefined} />
+                  <Metric label="Edge original" value={`${p.edge.toFixed(2)}%`} tone={p.edge < 0 ?"bad" : "good"} />
                   <Metric
                     label="Edge ajustado"
-                    value={edgeAj != null ? `${edgeAj.toFixed(2)}%` : "—"}
-                    tone={edgeAj == null ? undefined : edgeAj < 0 ? "bad" : "good"}
+                    value={edgeAj != null ? `${edgeAj.toFixed(2)}%` : "-"}
+                    tone={edgeAj == null ?undefined : edgeAj < 0 ?"bad" : "good"}
                   />
                 </div>
 
@@ -818,9 +782,9 @@ function Validacao() {
                       check.auto === "DESTAQUE" && "border-success/40 bg-success/10 text-success",
                     )}
                   >
-                    {check.auto === "DESTAQUE" ? <Sparkles className="h-3.5 w-3.5" /> : check.auto === "ALERTA" ? <ShieldAlert className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
+                    {check.auto === "DESTAQUE" ?<Sparkles className="h-3.5 w-3.5" /> : check.auto === "ALERTA" ?<ShieldAlert className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
                     <span className="uppercase tracking-wider">{check.auto}</span>
-                    <span className="text-foreground/80 normal-case tracking-normal">— {check.reason}</span>
+                    <span className="text-foreground/80 normal-case tracking-normal">- {check.reason}</span>
                   </div>
                 )}
               </div>
@@ -862,7 +826,7 @@ function Validacao() {
                       onClick={() => rodarIA(g, "local")}
                       disabled={!!iaLoading[g.key]}
                     >
-                      {iaLoading[g.key] === "local" ? (
+                      {iaLoading[g.key] === "local" ?(
                         <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                       ) : (
                         <Brain className="h-3 w-3 mr-1" />
@@ -873,9 +837,9 @@ function Validacao() {
                       size="sm"
                       onClick={() => rodarIA(g, "online")}
                       disabled={!!iaLoading[g.key]}
-                      title="Usa Gemini com pesquisa online (Firecrawl) — consome créditos extras"
+                      title="Usa Gemini com pesquisa online (Firecrawl) - consome créditos extras"
                     >
-                      {iaLoading[g.key] === "online" ? (
+                      {iaLoading[g.key] === "online" ?(
                         <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                       ) : (
                         <Globe className="h-3 w-3 mr-1" />
@@ -899,15 +863,15 @@ function Validacao() {
                 </div>
                 {iaLoading[g.key] === "online" && (
                   <p className="text-xs text-primary/80">
-                    Pesquisando notícias, lineups e contexto na web… pode levar 15-40s.
+                    Pesquisando notícias, lineups e contexto na web; pode levar 15-40s.
                   </p>
                 )}
-                {ia ? (
+                {ia ?(
                   <>
                     <div className="flex flex-wrap gap-2 text-xs">
                       {ia.decisao_sugerida && (
                         <span className="rounded border border-border bg-background px-2 py-0.5">
-                          Decisão: <strong>{ia.decisao_sugerida === "CONFIRMA" ? "CONFIRMAR" : "PULAR"}</strong>
+                          Decisão: <strong>{ia.decisao_sugerida === "CONFIRMA" ?"CONFIRMAR" : "PULAR"}</strong>
                         </span>
                       )}
                       {ia.stake_sugerida != null && (
@@ -944,14 +908,14 @@ function Validacao() {
                     <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded border border-border bg-background/60 p-2 font-mono text-xs">
                       {iaParecerDisplay}
                     </pre>
-                    {ia.modo === "online" && (ia.fontes_consultadas?.length || ia.buscas_realizadas?.length) ? (
+                    {ia.modo === "online" && (ia.fontes_consultadas?.length || ia.buscas_realizadas?.length) ?(
                       <div className="rounded border border-border bg-background/60 p-2 space-y-1.5">
                         {ia.buscas_realizadas && ia.buscas_realizadas.length > 0 && (
                           <div>
                             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Buscas realizadas</div>
                             <ul className="mt-0.5 space-y-0.5 text-xs">
                               {ia.buscas_realizadas.map((q, i) => (
-                                <li key={i} className="text-muted-foreground">• {q}</li>
+                                <li key={i} className="text-muted-foreground">- {q}</li>
                               ))}
                             </ul>
                           </div>
@@ -1047,7 +1011,7 @@ function Validacao() {
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir prognóstico?</AlertDialogTitle>
             <AlertDialogDescription>
-              {confirmDelete?.jogo} — {confirmDelete?.pick}. Esta ação não pode ser desfeita e removerá o prognóstico também da aba de Prognósticos.
+              {confirmDelete?.jogo} - {confirmDelete?.pick}. Esta ação não pode ser desfeita e removerá o prognóstico também da aba de Prognósticos.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

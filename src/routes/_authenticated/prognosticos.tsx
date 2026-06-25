@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Upload, Plus, Pencil, Trash2, Trophy, Megaphone, Copy, Ban, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+import { Plus, Pencil, Trash2, Trophy, Megaphone, Copy, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +23,6 @@ import {
   useBulkDeletePrognosticos,
   useConfiguracao,
   usePublicarPrognostico,
-  useCancelarPrognostico,
   gerarTipTexto,
   getOddEfetiva,
   getEdgeEfetivo,
@@ -34,6 +33,7 @@ import {
 import { PrognosticoDialog } from "@/components/prognostico-dialog";
 import { ResultadoDialog } from "@/components/resultado-dialog";
 import { DadosTecnicosViewer } from "@/components/dados-tecnicos-viewer";
+import { supabase } from "@/lib/supabase-public";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -47,7 +47,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/_authenticated/prognosticos")({
-  head: () => ({ meta: [{ title: "Prognósticos — ASP Insights" }] }),
+  head: () => ({ meta: [{ title: "Prognósticos - ASP Insights" }] }),
   component: Prognosticos,
 });
 
@@ -81,7 +81,6 @@ function Prognosticos() {
   const del = useDeletePrognostico();
   const bulkDel = useBulkDeletePrognosticos();
   const publicar = usePublicarPrognostico();
-  const cancelar = useCancelarPrognostico();
 
   const [editing, setEditing] = useState<Prognostico | null>(null);
   const [template, setTemplate] = useState<Prognostico | null>(null);
@@ -100,7 +99,6 @@ function Prognosticos() {
   const [fLiga, setFLiga] = useState("all");
   const [fMercado, setFMercado] = useState("all");
   const [fValidacao, setFValidacao] = useState("all");
-  const [fPublicacao, setFPublicacao] = useState("all");
   const [fResultado, setFResultado] = useState("all");
   const [fLinha, setFLinha] = useState("");
   const [periodo, setPeriodo] = useState<PeriodoFiltro>("tudo");
@@ -110,7 +108,7 @@ function Prognosticos() {
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(10);
 
   const toggleSort = (k: SortKey) => {
-    if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    if (sortKey === k) setSortDir((d) => (d === "asc" ?"desc" : "asc"));
     else {
       setSortKey(k);
       setSortDir("asc");
@@ -126,7 +124,6 @@ function Prognosticos() {
       if (fLiga !== "all" && p.liga !== fLiga) return false;
       if (fMercado !== "all" && p.mercado !== fMercado) return false;
       if (fValidacao !== "all" && p.status_validacao !== fValidacao) return false;
-      if (fPublicacao !== "all" && p.status_publicacao !== fPublicacao) return false;
       if (fResultado !== "all" && p.resultado !== fResultado) return false;
       if (fLinha.trim()) {
         const q = fLinha.trim().toLowerCase();
@@ -139,11 +136,11 @@ function Prognosticos() {
     arr.sort((a, b) => {
       if (sortKey === "odd_ofertada") {
         const cmp = getOddEfetiva(a) - getOddEfetiva(b);
-        return sortDir === "asc" ? cmp : -cmp;
+        return sortDir === "asc" ?cmp : -cmp;
       }
       if (sortKey === "edge") {
         const cmp = getEdgeEfetivo(a) - getEdgeEfetivo(b);
-        return sortDir === "asc" ? cmp : -cmp;
+        return sortDir === "asc" ?cmp : -cmp;
       }
       const av = a[sortKey] as unknown;
       const bv = b[sortKey] as unknown;
@@ -153,10 +150,10 @@ function Prognosticos() {
       let cmp = 0;
       if (typeof av === "number" && typeof bv === "number") cmp = av - bv;
       else cmp = String(av).localeCompare(String(bv), "pt-BR", { numeric: true });
-      return sortDir === "asc" ? cmp : -cmp;
+      return sortDir === "asc" ?cmp : -cmp;
     });
     return arr;
-  }, [prognosticos, sortKey, sortDir, ini, fim, fEsporte, fLiga, fMercado, fValidacao, fPublicacao, fResultado, fLinha]);
+  }, [prognosticos, sortKey, sortDir, ini, fim, fEsporte, fLiga, fMercado, fValidacao, fResultado, fLinha]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -167,7 +164,7 @@ function Prognosticos() {
 
   useEffect(() => {
     setPage(1);
-  }, [ini, fim, fEsporte, fLiga, fMercado, fValidacao, fPublicacao, fResultado, fLinha, pageSize]);
+  }, [ini, fim, fEsporte, fLiga, fMercado, fValidacao, fResultado, fLinha, pageSize]);
 
   const allSelected = paginated.length > 0 && paginated.every((p) => selected.has(p.id));
   const someSelected = selected.size > 0 && !allSelected;
@@ -201,7 +198,27 @@ function Prognosticos() {
     p.status_validacao === "CONFIRMA";
 
   const copyTip = async (p: Prognostico) => {
-    await navigator.clipboard.writeText(p.tip_texto || gerarTipTexto(p));
+    if (p.status_validacao === "PULAR") {
+      toast.info("Prognósticos pulados não geram TIP para publicação.");
+      return;
+    }
+    const { data, error } = await supabase
+      .from("validacoes")
+      .select("parecer_validacao")
+      .eq("prognostico_id", p.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    const justificativaFinal = String(data?.parecer_validacao ?? "").trim();
+    if (!justificativaFinal) {
+      toast.info("Nenhuma justificativa final objetiva registrada para copiar.");
+      return;
+    }
+    await navigator.clipboard.writeText(justificativaFinal);
     toast.success("TIP copiada");
   };
 
@@ -255,11 +272,6 @@ function Prognosticos() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" asChild>
-            <Link to="/importar">
-              <Upload className="h-4 w-4" /> Importar
-            </Link>
-          </Button>
           <Button
             onClick={() => {
               setEditing(null);
@@ -316,16 +328,6 @@ function Prognosticos() {
               <SelectItem value="PENDENTE">PENDENTE</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={fPublicacao} onValueChange={setFPublicacao}>
-            <SelectTrigger><SelectValue placeholder="Publicação" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas as publicações</SelectItem>
-              <SelectItem value="NAO_PUBLICADO">Não publicado</SelectItem>
-              <SelectItem value="PUBLICADO">Publicado</SelectItem>
-              <SelectItem value="FINALIZADO">Finalizado</SelectItem>
-              <SelectItem value="CANCELADO">Cancelado</SelectItem>
-            </SelectContent>
-          </Select>
           <Select value={fResultado} onValueChange={setFResultado}>
             <SelectTrigger className="h-10 w-full"><SelectValue placeholder="Resultado" /></SelectTrigger>
             <SelectContent>
@@ -377,7 +379,7 @@ function Prognosticos() {
                 <tr>
                   <th className="px-3 py-2 w-10">
                     <Checkbox
-                      checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                      checked={allSelected ?true : someSelected ?"indeterminate" : false}
                       onCheckedChange={toggleAll}
                       aria-label="Selecionar todos"
                     />
@@ -429,15 +431,15 @@ function Prognosticos() {
                       />
                     </td>
                     <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatDateBR(p.data)}</td>
-                    <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{p.hora ? p.hora.slice(0, 5) : "—"}</td>
+                    <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{p.hora ? p.hora.slice(0, 5) : "-"}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{p.esporte}</td>
                     <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{p.liga}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{p.jogo}</td>
-                    <td className="px-3 py-2 whitespace-nowrap font-mono text-xs">{p.placar_final ?? "—"}</td>
+                    <td className="px-3 py-2 whitespace-nowrap font-mono text-xs">{p.placar_final ?? "-"}</td>
                     <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{p.mercado}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{p.pick}</td>
                     <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-muted-foreground">
-                      {shouldShowLinha(p.pick, p.linha) ? p.linha : "—"}
+                      {shouldShowLinha(p.pick, p.linha) ? p.linha : "-"}
                     </td>
                     <td className="px-3 py-2 text-right font-mono">
                       {oddEfetiva.toFixed(2)}
@@ -445,7 +447,7 @@ function Prognosticos() {
                     </td>
                     <td className="px-3 py-2 text-right font-mono">{p.odd_valor.toFixed(2)}</td>
                     <td className="px-3 py-2 text-right font-mono">{p.probabilidade_final.toFixed(1)}%</td>
-                    <td className={`px-3 py-2 text-right font-mono ${edgeEfetivo >= 0 ? "text-success" : "text-destructive"}`}>
+                    <td className={`px-3 py-2 text-right font-mono ${edgeEfetivo >= 0 ?"text-success" : "text-destructive"}`}>
                       {edgeEfetivo.toFixed(1)}%
                       {p.edge_ajustado != null && <span className="ml-1 text-[10px] text-muted-foreground">aj.</span>}
                     </td>
@@ -464,16 +466,6 @@ function Prognosticos() {
                         <Button size="icon" variant="ghost" title="Copiar TIP" onClick={() => copyTip(p)}>
                           <Copy className="h-4 w-4" />
                         </Button>
-                        {p.status_publicacao !== "CANCELADO" && p.status_publicacao !== "FINALIZADO" && (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            title="Cancelar pick"
-                            onClick={() => cancelar.mutate(p.id)}
-                          >
-                            <Ban className="h-4 w-4 text-destructive" />
-                          </Button>
-                        )}
                         {p.resultado === "PENDENTE" && (
                           <Button
                             size="icon"
@@ -515,7 +507,7 @@ function Prognosticos() {
 
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
         <div>
-          Mostrando {sorted.length ? (currentPage - 1) * pageSize + 1 : 0}
+          Mostrando {sorted.length ?(currentPage - 1) * pageSize + 1 : 0}
           {"-"}
           {Math.min(currentPage * pageSize, sorted.length)} de {sorted.length} prognóstico(s)
         </div>
@@ -544,7 +536,7 @@ function Prognosticos() {
           if (!o) setTemplate(null);
         }}
         prognostico={editing}
-        template={editing ? null : template}
+        template={editing ?null : template}
         esportes={cfg?.esportes_ativos}
         mercados={cfg?.mercados_ativos}
       />
@@ -561,7 +553,7 @@ function Prognosticos() {
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir prognóstico?</AlertDialogTitle>
             <AlertDialogDescription>
-              {confirmDelete?.jogo} — {confirmDelete?.pick}. Esta ação não pode ser desfeita.
+              {confirmDelete?.jogo} - {confirmDelete?.pick}. Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -618,7 +610,7 @@ function Prognosticos() {
             <AlertDialogTitle>Repetir dados do último prognóstico?</AlertDialogTitle>
             <AlertDialogDescription>
               {prognosticos[0] && (
-                <>Último: <span className="font-medium text-foreground">{prognosticos[0].jogo}</span> — {prognosticos[0].mercado} / {prognosticos[0].pick}.</>
+                <>Último: <span className="font-medium text-foreground">{prognosticos[0].jogo}</span> - {prognosticos[0].mercado} / {prognosticos[0].pick}.</>
               )}
               <br />
               Você pode reaproveitar os dados (times, liga, mercado, etc.) e ajustar o que mudou, ou começar um prognóstico totalmente novo.
@@ -666,18 +658,18 @@ function SortableTh({
   onClick: (k: SortKey) => void;
 }) {
   const active = sortKey === k;
-  const Icon = !active ? ArrowUpDown : sortDir === "asc" ? ArrowUp : ArrowDown;
+  const Icon = !active ?ArrowUpDown : sortDir === "asc" ?ArrowUp : ArrowDown;
   return (
-    <th className={`px-3 py-2 ${align === "right" ? "text-right" : "text-left"}`}>
+    <th className={`px-3 py-2 ${align === "right" ?"text-right" : "text-left"}`}>
       <button
         type="button"
         onClick={() => onClick(k)}
         className={`inline-flex items-center gap-1 hover:text-foreground transition-colors ${
-          align === "right" ? "flex-row-reverse" : ""
-        } ${active ? "text-foreground" : ""}`}
+          align === "right" ?"flex-row-reverse" : ""
+        } ${active ?"text-foreground" : ""}`}
       >
         <span>{label}</span>
-        <Icon className={`h-3 w-3 ${active ? "opacity-100" : "opacity-40"}`} />
+        <Icon className={`h-3 w-3 ${active ?"opacity-100" : "opacity-40"}`} />
       </button>
     </th>
   );

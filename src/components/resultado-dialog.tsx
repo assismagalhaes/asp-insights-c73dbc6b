@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useCreateResultado, calcLucro, todayBR, getOddEfetiva, type Prognostico, type Resultado } from "@/lib/db";
-import { lucroUnidades } from "@/lib/metrics";
+import { lucroUnidades, stakeAnalitica } from "@/lib/metrics";
 import { parsePlacar, calcularResultadoAuto, extrairLinha } from "@/lib/resultado-calc";
 import { supabase } from "@/lib/supabase-public";
 import { toast } from "sonner";
@@ -49,7 +49,7 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
       for (const s of list) {
         const rs = s.resultados ?? [];
         if (rs.length) {
-          const last = [...rs].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0];
+          const last = [...rs].sort((a, b) => (a.created_at < b.created_at ?1 : -1))[0];
           if (last.placar_final) {
             setPlacar(last.placar_final);
             break;
@@ -71,13 +71,14 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
     if (!prognostico) return null;
     if (prognostico.linha) return String(prognostico.linha);
     const e = extrairLinha(prognostico.pick ?? "");
-    return e != null ? String(e) : null;
+    return e != null ?String(e) : null;
   }, [prognostico]);
 
   if (!prognostico) return null;
 
   const oddEfetiva = getOddEfetiva(prognostico);
-  const lucroU = resultadoFinal ? lucroUnidades({ resultado: resultadoFinal, stake: prognostico.stake, odd_ofertada: oddEfetiva }) : 0;
+  const stakeResultado = stakeAnalitica(prognostico);
+  const lucroU = resultadoFinal ?lucroUnidades({ resultado: resultadoFinal, stake: stakeResultado, odd_ofertada: oddEfetiva }) : 0;
   const lucroR = lucroU * valorUnidade;
 
   const submit = async () => {
@@ -91,7 +92,7 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
         resultado: resultadoFinal,
         placar_final: placar || null,
         odd_fechamento: null,
-        lucro_prejuizo: calcLucro(resultadoFinal, prognostico.stake, oddEfetiva),
+        lucro_prejuizo: calcLucro(resultadoFinal, stakeResultado, oddEfetiva),
         data_resultado: todayBR(),
       });
 
@@ -100,7 +101,7 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
       }
       toast.success(
         prognostico.status_validacao === "CONFIRMA"
-          ? "Resultado financeiro registrado, bankroll atualizada."
+          ?"Resultado financeiro registrado, bankroll atualizada."
           : "Resultado teórico registrado para aprendizado da IA.",
       );
       onOpenChange(false);
@@ -116,10 +117,10 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
           <DialogTitle>Registrar resultado — {prognostico.jogo}</DialogTitle>
         </DialogHeader>
         <div className="text-xs text-muted-foreground">
-          {linhaInfo ? `Linha ${linhaInfo} · ` : ""}Odd usada {oddEfetiva.toFixed(2)}
+          {linhaInfo ?`Linha ${linhaInfo} · ` : ""}Odd usada {oddEfetiva.toFixed(2)}
         </div>
         <div className="text-xs text-muted-foreground">
-          {prognostico.mercado} · {prognostico.pick} · Stake {prognostico.stake.toFixed(1)}u · Unidade R$ {valorUnidade.toFixed(2)}
+          {prognostico.mercado} · {prognostico.pick} · Stake {stakeResultado.toFixed(1)}u · Unidade R$ {valorUnidade.toFixed(2)}
         </div>
 
         <div>
@@ -146,9 +147,9 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
             {linhaInfo && <div className="text-xs"><span className="text-muted-foreground">Linha:</span> {linhaInfo}</div>}
             <div className="pt-1">
               <span className="text-muted-foreground text-xs">Resultado calculado: </span>
-              {resultadoFinal ? (
-                <span className={`text-sm font-bold ${resultadoFinal === "GREEN" ? "text-success" : "text-destructive"}`}>
-                  {resultadoFinal}{manual ? " (manual)" : ""}
+              {resultadoFinal ?(
+                <span className={`text-sm font-bold ${resultadoFinal === "GREEN" ?"text-success" : "text-destructive"}`}>
+                  {resultadoFinal}{manual ?" (manual)" : ""}
                 </span>
               ) : (
                 <span className="text-sm font-bold text-muted-foreground">— não calculável, marque manualmente</span>
@@ -157,7 +158,7 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
             {resultadoFinal && (
               <div className="text-xs grid grid-cols-2 gap-2 pt-1">
                 <div><span className="text-muted-foreground">Lucro real:</span> <b>R$ {lucroR.toFixed(2)}</b></div>
-                <div><span className="text-muted-foreground">Lucro (u):</span> <b>{lucroU > 0 ? "+" : ""}{lucroU.toFixed(2)}u</b></div>
+                <div><span className="text-muted-foreground">Lucro (u):</span> <b>{lucroU > 0 ?"+" : ""}{lucroU.toFixed(2)}u</b></div>
               </div>
             )}
           </div>
@@ -166,7 +167,7 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
         <div className="flex gap-2">
           <Button
             type="button"
-            variant={manual === "GREEN" ? "default" : "outline"}
+            variant={manual === "GREEN" ?"default" : "outline"}
             size="sm"
             onClick={() => setManual("GREEN")}
           >
@@ -174,7 +175,7 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
           </Button>
           <Button
             type="button"
-            variant={manual === "RED" ? "destructive" : "outline"}
+            variant={manual === "RED" ?"destructive" : "outline"}
             size="sm"
             onClick={() => setManual("RED")}
           >

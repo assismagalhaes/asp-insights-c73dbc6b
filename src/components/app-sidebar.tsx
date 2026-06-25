@@ -9,7 +9,6 @@ import {
   Cpu,
   
   Settings,
-  Upload,
   Megaphone,
   Database,
 } from "lucide-react";
@@ -32,7 +31,6 @@ import {
 const items = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Prognósticos", url: "/prognosticos", icon: ListChecks },
-  { title: "Importar", url: "/importar", icon: Upload },
   { title: "Coleta de Odds", url: "/coleta-dados", icon: Database },
   { title: "Base de Dados", url: "/base-dados", icon: Database },
   { title: "Modelos Preditivos", url: "/modelos-preditivos", icon: Cpu },

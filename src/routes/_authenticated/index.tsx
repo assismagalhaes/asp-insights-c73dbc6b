@@ -52,10 +52,14 @@ import { PeriodFilter } from "@/components/period-filter";
 import { formatBR } from "@/lib/date-br";
 import {
   computeMetrics,
+  computeValidationMetrics,
   bankrollTimeline,
   lucroUnidades,
+  lucroUnidadesAnalitico,
+  matchesValidationFilter,
   rangeFromPeriodo,
   dateInRange,
+  type ValidationMetricsFilter,
   type PeriodoFiltro,
 } from "@/lib/metrics";
 
@@ -85,6 +89,7 @@ function Dashboard() {
   const [esporte, setEsporte] = useState("Todos");
   const [liga, setLiga] = useState("all");
   const [mercado, setMercado] = useState("Todos");
+  const [validacao, setValidacao] = useState<ValidationMetricsFilter>("confirmadas");
 
   const { ini, fim } = rangeFromPeriodo(periodo, customIni, customFim);
 
@@ -100,7 +105,8 @@ function Dashboard() {
     [prognosticos, ini, fim, esporte, liga, mercado],
   );
 
-  const metrics = useMemo(() => computeMetrics(filtrados, cfg), [filtrados, cfg]);
+  const officialMetrics = useMemo(() => computeMetrics(filtrados, cfg), [filtrados, cfg]);
+  const metrics = useMemo(() => computeValidationMetrics(filtrados, cfg, validacao), [filtrados, cfg, validacao]);
   const timeline = useMemo(
     () => bankrollTimeline(filtrados, cfg?.banca_inicial ?? 0, cfg?.valor_unidade_padrao ?? 0),
     [filtrados, cfg],
@@ -109,58 +115,58 @@ function Dashboard() {
   const sportPerf = useMemo(() => {
     const map = new Map<string, { lucro: number; stake: number }>();
     filtrados
-      .filter((p) => p.status_validacao === "CONFIRMA")
+      .filter((p) => matchesValidationFilter(p, validacao))
       .forEach((p) => {
         const cur = map.get(p.esporte) ?? { lucro: 0, stake: 0 };
-        cur.lucro += lucroUnidades(p);
-        cur.stake += p.stake;
+        cur.lucro += validacao === "confirmadas" ?lucroUnidades(p) : lucroUnidadesAnalitico(p);
+        cur.stake += validacao === "confirmadas" ? p.stake : p.status_validacao === "PULAR" && p.stake <= 0 ? 1 : p.stake;
         map.set(p.esporte, cur);
       });
     return Array.from(map.entries()).map(([esporte, v]) => ({
       esporte,
       lucro: Number(v.lucro.toFixed(2)),
     }));
-  }, [filtrados]);
+  }, [filtrados, validacao]);
 
   const sportPerfRoi = useMemo(() => {
     const map = new Map<string, { lucro: number; stake: number }>();
     filtrados
-      .filter((p) => p.status_validacao === "CONFIRMA")
+      .filter((p) => matchesValidationFilter(p, validacao))
       .forEach((p) => {
         const cur = map.get(p.esporte) ?? { lucro: 0, stake: 0 };
-        cur.lucro += lucroUnidades(p);
-        cur.stake += p.stake;
+        cur.lucro += validacao === "confirmadas" ?lucroUnidades(p) : lucroUnidadesAnalitico(p);
+        cur.stake += validacao === "confirmadas" ? p.stake : p.status_validacao === "PULAR" && p.stake <= 0 ? 1 : p.stake;
         map.set(p.esporte, cur);
       });
     return Array.from(map.entries()).map(([esporte, v]) => ({
       esporte,
-      roi: v.stake ? Number(((v.lucro / v.stake) * 100).toFixed(1)) : 0,
+      roi: v.stake ?Number(((v.lucro / v.stake) * 100).toFixed(1)) : 0,
     }));
-  }, [filtrados]);
+  }, [filtrados, validacao]);
 
   const monthlyResults = useMemo(() => {
     const map = new Map<string, number>();
     filtrados
-      .filter((p) => p.status_validacao === "CONFIRMA")
+      .filter((p) => matchesValidationFilter(p, validacao))
       .forEach((p) => {
         const mes = p.data.slice(0, 7);
-        map.set(mes, (map.get(mes) ?? 0) + lucroUnidades(p));
+        map.set(mes, (map.get(mes) ?? 0) + (validacao === "confirmadas" ?lucroUnidades(p) : lucroUnidadesAnalitico(p)));
       });
     return Array.from(map.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([mes, lucro]) => ({ mes, lucro: Number(lucro.toFixed(2)) }));
-  }, [filtrados]);
+  }, [filtrados, validacao]);
 
   const marketPerf = useMemo(() => {
     const map = new Map<string, number>();
     filtrados
-      .filter((p) => p.status_validacao === "CONFIRMA")
-      .forEach((p) => map.set(p.mercado, (map.get(p.mercado) ?? 0) + lucroUnidades(p)));
+      .filter((p) => matchesValidationFilter(p, validacao))
+      .forEach((p) => map.set(p.mercado, (map.get(p.mercado) ?? 0) + (validacao === "confirmadas" ?lucroUnidades(p) : lucroUnidadesAnalitico(p))));
     return Array.from(map.entries()).map(([mercado, lucro]) => ({
       mercado,
       lucro: Number(lucro.toFixed(2)),
     }));
-  }, [filtrados]);
+  }, [filtrados, validacao]);
 
   return (
     <div className="space-y-6">
@@ -204,35 +210,52 @@ function Dashboard() {
               </SelectContent>
             </Select>
           </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Validação</label>
+            <Select value={validacao} onValueChange={(v) => setValidacao(v as ValidationMetricsFilter)}>
+              <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="confirmadas">Confirmadas</SelectItem>
+                <SelectItem value="puladas">Puladas</SelectItem>
+                <SelectItem value="todas">Todas</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-7">
         <StatCard label="Greens" value={String(metrics.greens)} icon={CheckCircle2} tone="up" />
         <StatCard label="Reds" value={String(metrics.reds)} icon={XCircle} tone="down" />
+        <StatCard
+          label="Odd Média dos Greens"
+          value={metrics.oddMediaGreens ?metrics.oddMediaGreens.toFixed(2) : "-"}
+          icon={Target}
+          tone="neutral"
+        />
         <StatCard
           label="Lucro (u)"
           value={`${withSign(metrics.lucroU)}u`}
           icon={Activity}
-          tone={metrics.lucroU > 0 ? "up" : metrics.lucroU < 0 ? "down" : "neutral"}
+          tone={metrics.lucroU > 0 ?"up" : metrics.lucroU < 0 ?"down" : "neutral"}
         />
         <StatCard
           label="Lucro Real"
-          value={`${metrics.lucroReais >= 0 ? "+" : "-"}R$ ${Math.abs(metrics.lucroReais).toFixed(2)}`}
+          value={`${metrics.lucroReais >= 0 ?"+" : "-"}R$ ${Math.abs(metrics.lucroReais).toFixed(2)}`}
           icon={DollarSign}
-          tone={metrics.lucroReais > 0 ? "up" : metrics.lucroReais < 0 ? "down" : "neutral"}
+          tone={metrics.lucroReais > 0 ?"up" : metrics.lucroReais < 0 ?"down" : "neutral"}
         />
         <StatCard
           label="ROI"
           value={`${withSign(metrics.roi)}%`}
           icon={TrendingUp}
-          tone={metrics.roi > 0 ? "up" : metrics.roi < 0 ? "down" : "neutral"}
+          tone={metrics.roi > 0 ?"up" : metrics.roi < 0 ?"down" : "neutral"}
         />
         <StatCard
           label="Win Rate"
           value={`${metrics.winRate.toFixed(1)}%`}
           icon={Target}
-          tone={metrics.winRate >= 50 ? "up" : metrics.winRate > 0 ? "down" : "neutral"}
+          tone={metrics.winRate >= 50 ?"up" : metrics.winRate > 0 ?"down" : "neutral"}
         />
       </div>
 
@@ -244,9 +267,9 @@ function Dashboard() {
             </h3>
             <span
               className="font-mono text-xs"
-              style={{ color: signColor(metrics.bancaAtual - metrics.bancaInicial) }}
+              style={{ color: signColor(officialMetrics.bancaAtual - officialMetrics.bancaInicial) }}
             >
-              R$ {metrics.bancaAtual.toFixed(2)}
+              R$ {officialMetrics.bancaAtual.toFixed(2)}
             </span>
           </div>
           <ResponsiveContainer width="100%" height={340}>
@@ -265,7 +288,7 @@ function Dashboard() {
               <XAxis dataKey="data" stroke={axisColor} fontSize={10} tickFormatter={(d) => String(d).slice(5)} />
               <YAxis stroke={axisColor} fontSize={10} domain={["auto", "auto"]} />
               <ReferenceLine
-                y={metrics.bancaInicial}
+                y={officialMetrics.bancaInicial}
                 stroke={COLOR_REFERENCE}
                 strokeDasharray="4 4"
                 label={{ value: "Banca inicial", position: "insideTopRight", fill: COLOR_NEUTRAL, fontSize: 10 }}
@@ -276,10 +299,10 @@ function Dashboard() {
                     headerFormatter={(d) => formatBR(d)}
                     formatter={(v, _n, dk) => {
                       if (dk === "banca") {
-                        return { label: "Banca", display: `R$ ${v.toFixed(2)}`, color: signColor(v - metrics.bancaInicial) };
+                        return { label: "Banca", display: `R$ ${v.toFixed(2)}`, color: signColor(v - officialMetrics.bancaInicial) };
                       }
                       if (dk === "lucroAcum") {
-                        return { label: "Lucro acum.", display: `${v >= 0 ? "+" : "-"}R$ ${Math.abs(v).toFixed(2)}` };
+                        return { label: "Lucro acum.", display: `${v >= 0 ?"+" : "-"}R$ ${Math.abs(v).toFixed(2)}` };
                       }
                       return { label: dk, display: String(v) };
                     }}
@@ -289,7 +312,7 @@ function Dashboard() {
               <Line
                 type="monotone"
                 dataKey="banca"
-                stroke={signColor(metrics.bancaAtual - metrics.bancaInicial)}
+                stroke={signColor(officialMetrics.bancaAtual - officialMetrics.bancaInicial)}
                 strokeWidth={2.5}
                 dot={false}
                 isAnimationActive={false}

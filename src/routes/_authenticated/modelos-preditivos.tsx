@@ -16,7 +16,7 @@ import {
   uploadPackballModelFiles,
 } from "@/lib/scraper-api.functions";
 import { supabase } from "@/lib/supabase-public";
-import { normalizeEsporteLiga } from "@/lib/db";
+import { normalizeEsporteLiga, normalizeMercadoPadrao } from "@/lib/db";
 import { parseBrazilianDate } from "@/lib/date-br";
 
 export const Route = createFileRoute("/_authenticated/modelos-preditivos")({
@@ -101,7 +101,7 @@ function ModelosPreditivosPage() {
   const coletaSelecionada = concluidas.find((coleta) => coleta.id === selectedColetaId) ?? null;
   const prognosticos = resultado?.prognosticos ?? [];
   const canExecute = packballMode
-    ? Boolean(packballFile5 && packballFile20) && !running
+    ?Boolean(packballFile5 && packballFile20) && !running
     : Boolean(coletaSelecionada) && !running;
 
   const executarModelo = async () => {
@@ -220,29 +220,7 @@ function ModelosPreditivosPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className={packballMode ? "grid gap-3 md:grid-cols-[1fr_1fr_240px_auto] md:items-end" : "grid gap-3 md:grid-cols-[1.5fr_240px_auto] md:items-end"}>
-            {packballMode ? (
-              <>
-                <PackballFileInput label="Planilha PackBall 5j" file={packballFile5} onFile={setPackballFile5} />
-                <PackballFileInput label="Planilha PackBall 20j" file={packballFile20} onFile={setPackballFile20} />
-              </>
-            ) : (
-              <div>
-                <label className="text-sm font-medium">Coleta concluida</label>
-                <Select value={selectedColetaId} onValueChange={setSelectedColetaId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione uma coleta" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {concluidas.map((coleta) => (
-                      <SelectItem key={coleta.id} value={coleta.id}>
-                        {coleta.created_at.slice(0, 16).replace("T", " ")} - {coleta.esporte ?? "-"} - {coleta.job_id}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+          <div className={packballMode ?"grid gap-3 md:grid-cols-[240px_1fr_1fr_auto] md:items-end" : "grid gap-3 md:grid-cols-[240px_1.5fr_auto] md:items-end"}>
             <div>
               <label className="text-sm font-medium">Modelo</label>
               <Select
@@ -268,9 +246,31 @@ function ModelosPreditivosPage() {
                 </SelectContent>
               </Select>
             </div>
+            {packballMode ?(
+              <>
+                <PackballFileInput label="Planilha PackBall 5j" file={packballFile5} onFile={setPackballFile5} />
+                <PackballFileInput label="Planilha PackBall 20j" file={packballFile20} onFile={setPackballFile20} />
+              </>
+            ) : (
+              <div>
+                <label className="text-sm font-medium">Coleta concluida</label>
+                <Select value={selectedColetaId} onValueChange={setSelectedColetaId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione uma coleta" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {concluidas.map((coleta) => (
+                      <SelectItem key={coleta.id} value={coleta.id}>
+                        {coleta.created_at.slice(0, 16).replace("T", " ")} - {coleta.esporte ?? "-"} - {coleta.job_id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <Button onClick={executarModelo} disabled={!canExecute}>
               <Play className="mr-2 h-4 w-4" />
-              {running ? "Executando..." : "Executar Modelo"}
+              {running ?"Executando..." : "Executar Modelo"}
             </Button>
           </div>
 
@@ -348,10 +348,6 @@ function ModelosPreditivosPage() {
                   <TableHead className="text-right">Probabilidade</TableHead>
                   <TableHead className="text-right">Edge</TableHead>
                   <TableHead className="text-right">Stake</TableHead>
-                  <TableHead>Parecer</TableHead>
-                  <TableHead>Contexto</TableHead>
-                  <TableHead>Dados técnicos</TableHead>
-                  <TableHead>Observações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -374,16 +370,12 @@ function ModelosPreditivosPage() {
                     <TableCell className="text-right font-mono">{formatNum(p.probabilidade_final)}%</TableCell>
                     <TableCell className="text-right font-mono">{formatNum(p.edge)}%</TableCell>
                     <TableCell className="text-right font-mono">{formatOptionalNum(p.stake)}</TableCell>
-                    <TableCell className="max-w-64 truncate text-muted-foreground">{p.parecer_validacao ?? "-"}</TableCell>
-                    <TableCell className="max-w-64 truncate text-muted-foreground">{p.contexto_adicional ?? "-"}</TableCell>
-                    <TableCell className="max-w-64 truncate text-muted-foreground">{p.dados_tecnicos ?? "-"}</TableCell>
-                    <TableCell className="max-w-80 truncate text-muted-foreground">{p.observacoes ?? "-"}</TableCell>
                   </TableRow>
                 ))}
                 {!prognosticos.length && (
                   <TableRow>
-                    <TableCell colSpan={21} className="py-12 text-center text-muted-foreground">
-                      {resultado ? "Nenhuma oportunidade EV+ encontrada para esta coleta." : "Nenhum modelo executado ainda."}
+                    <TableCell colSpan={17} className="py-12 text-center text-muted-foreground">
+                      {resultado ?"Nenhuma oportunidade EV+ encontrada para esta coleta." : "Nenhum modelo executado ainda."}
                     </TableCell>
                   </TableRow>
                 )}
@@ -395,7 +387,7 @@ function ModelosPreditivosPage() {
             <div className="flex justify-end">
               <Button onClick={enviarParaPrognosticos} disabled={sending}>
                 <Send className="mr-2 h-4 w-4" />
-                {sending ? "Enviando..." : "Enviar para Prognósticos"}
+                {sending ?"Enviando..." : "Enviar para Prognósticos"}
               </Button>
             </div>
           )}
@@ -462,28 +454,28 @@ function inferPackballDate(...names: string[]) {
 }
 
 function extractInputId(response: unknown) {
-  const root = isRecord(response) ? response : {};
-  const data = isRecord(root.data) ? root.data : isRecord(root.result) ? root.result : root;
+  const root = isRecord(response) ?response : {};
+  const data = isRecord(root.data) ?root.data : isRecord(root.result) ?root.result : root;
   const value = data.input_id ?? data.job_id ?? data.id;
   if (!value) throw new Error("A VM nao retornou input_id para executar o modelo.");
   return String(value);
 }
 
 function normalizeModelResponse(response: unknown): ModeloResultado {
-  const root = isRecord(response) ? response : {};
-  const data = isRecord(root.data) ? root.data : isRecord(root.result) ? root.result : root;
-  const prognosticos = Array.isArray(data.prognosticos) ? data.prognosticos.filter(isRecord).map(mapModeloPrognostico) : [];
+  const root = isRecord(response) ?response : {};
+  const data = isRecord(root.data) ?root.data : isRecord(root.result) ?root.result : root;
+  const prognosticos = Array.isArray(data.prognosticos) ?data.prognosticos.filter(isRecord).map(mapModeloPrognostico) : [];
   return {
     ok: Boolean(data.ok ?? true),
-    job_id: data.job_id ? String(data.job_id) : undefined,
-    input_id: data.input_id ? String(data.input_id) : undefined,
-    modelo: data.modelo ? String(data.modelo) : undefined,
-    csv_coleta: data.csv_coleta ? String(data.csv_coleta) : undefined,
-    arquivo_saida: data.arquivo_saida ? String(data.arquivo_saida) : undefined,
-    arquivo_contexto: data.arquivo_contexto ? String(data.arquivo_contexto) : undefined,
-    contexto_modelo: data.contexto_modelo ? String(data.contexto_modelo) : undefined,
-    dados_tecnicos: data.dados_tecnicos ? String(data.dados_tecnicos) : undefined,
-    mensagem: data.mensagem ? String(data.mensagem) : undefined,
+    job_id: data.job_id ?String(data.job_id) : undefined,
+    input_id: data.input_id ?String(data.input_id) : undefined,
+    modelo: data.modelo ?String(data.modelo) : undefined,
+    csv_coleta: data.csv_coleta ?String(data.csv_coleta) : undefined,
+    arquivo_saida: data.arquivo_saida ?String(data.arquivo_saida) : undefined,
+    arquivo_contexto: data.arquivo_contexto ?String(data.arquivo_contexto) : undefined,
+    contexto_modelo: data.contexto_modelo ?String(data.contexto_modelo) : undefined,
+    dados_tecnicos: data.dados_tecnicos ?String(data.dados_tecnicos) : undefined,
+    mensagem: data.mensagem ?String(data.mensagem) : undefined,
     total_prognosticos: toNumber(data.total_prognosticos) ?? prognosticos.length,
     prognosticos,
   };
@@ -492,15 +484,15 @@ function normalizeModelResponse(response: unknown): ModeloResultado {
 function mapModeloPrognostico(row: Record<string, unknown>): ModeloPrognostico {
   return {
     data: String(row.data ?? ""),
-    hora: row.hora ? String(row.hora) : null,
+    hora: row.hora ?String(row.hora) : null,
     esporte: String(row.esporte ?? ""),
     liga: String(row.liga ?? ""),
     jogo: String(row.jogo ?? ""),
-    mandante: row.mandante ? String(row.mandante) : null,
-    visitante: row.visitante ? String(row.visitante) : null,
+    mandante: row.mandante ?String(row.mandante) : null,
+    visitante: row.visitante ?String(row.visitante) : null,
     mercado: String(row.mercado ?? ""),
     pick: String(row.pick ?? ""),
-    linha: row.linha == null || row.linha === "" ? null : String(row.linha),
+    linha: row.linha == null || row.linha === "" ?null : String(row.linha),
     odd: toNumber(row.odd),
     odd_ofertada: toNumber(row.odd_ofertada) ?? toNumber(row.odd) ?? 0,
     odd_valor: toNumber(row.odd_valor) ?? 0,
@@ -508,12 +500,12 @@ function mapModeloPrognostico(row: Record<string, unknown>): ModeloPrognostico {
     probabilidade_final: toNumber(row.probabilidade_final) ?? toNumber(row.probabilidade) ?? 0,
     edge: toNumber(row.edge) ?? 0,
     stake: toNumber(row.stake),
-    observacoes: row.observacoes ? String(row.observacoes) : null,
-    dados_tecnicos: row.dados_tecnicos ? String(row.dados_tecnicos) : null,
-    contexto_adicional: row.contexto_adicional ? String(row.contexto_adicional) : null,
-    parecer_validacao: row.parecer_validacao ? String(row.parecer_validacao) : null,
-    contexto_modelo: row.contexto_modelo ? String(row.contexto_modelo) : null,
-    arquivo_contexto: row.arquivo_contexto ? String(row.arquivo_contexto) : null,
+    observacoes: row.observacoes ?String(row.observacoes) : null,
+    dados_tecnicos: row.dados_tecnicos ?String(row.dados_tecnicos) : null,
+    contexto_adicional: row.contexto_adicional ?String(row.contexto_adicional) : null,
+    parecer_validacao: row.parecer_validacao ?String(row.parecer_validacao) : null,
+    contexto_modelo: row.contexto_modelo ?String(row.contexto_modelo) : null,
+    arquivo_contexto: row.arquivo_contexto ?String(row.arquivo_contexto) : null,
   };
 }
 
@@ -543,7 +535,7 @@ function toPrognosticoInsert(p: ModeloPrognostico, resultado: ModeloResultado | 
     jogo: p.jogo,
     mandante,
     visitante,
-    mercado: p.mercado,
+    mercado: normalizeMercadoPadrao(p.mercado, norm.esporte || p.esporte),
     pick: p.pick,
     linha: p.linha,
     odd_ofertada: p.odd_ofertada,
@@ -589,7 +581,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function toNumber(value: unknown) {
   if (value == null || value === "") return null;
   const n = Number(String(value).replace(",", "."));
-  return Number.isFinite(n) ? n : null;
+  return Number.isFinite(n) ?n : null;
 }
 
 function formatNum(value: number) {
@@ -597,11 +589,11 @@ function formatNum(value: number) {
 }
 
 function formatOptionalNum(value: number | null | undefined) {
-  return value == null ? "-" : Number(value || 0).toFixed(2);
+  return value == null ?"-" : Number(value || 0).toFixed(2);
 }
 
 function formatOptionalPercent(value: number | null | undefined) {
-  return value == null ? "-" : `${Number(value || 0).toFixed(2)}%`;
+  return value == null ?"-" : `${Number(value || 0).toFixed(2)}%`;
 }
 
 function normalizeText(value: unknown) {
