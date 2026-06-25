@@ -160,19 +160,19 @@ function AprendizadoIaPage() {
         stake_humana_final: stakeHumana,
         resultado_real: resultado,
         resultado_teorico: resultado,
-        resultado_financeiro: contaBankroll ? resultado : null,
+        resultado_financeiro: contaBankroll ?resultado : null,
         conta_bankroll: contaBankroll,
-        lucro_prejuizo: contaBankroll ? lucro : 0,
+        lucro_prejuizo: contaBankroll ?lucro : 0,
         lucro_unidades: lucro,
         lucro_teorico_unidades: lucro,
-        lucro_financeiro_unidades: contaBankroll ? lucro : 0,
+        lucro_financeiro_unidades: contaBankroll ?lucro : 0,
         odd_usada: getOddEfetiva(p),
         probabilidade_final: p.probabilidade_final,
         edge_usado: getEdgeEfetivo(p),
         tags_risco: extractTagsFromLegacyText(validacao?.parecer_ia ?? validacao?.parecer_validacao ?? p.observacoes),
-        acertou_ia: decisaoIa ? decisionHit(decisaoIa, resultado) : null,
-        acertou_humano: decisaoHumana ? decisionHit(decisaoHumana, resultado) : null,
-        divergencia_ia_humano: decisaoIa && decisaoHumana ? decisaoIa !== decisaoHumana : null,
+        acertou_ia: decisaoIa ?decisionHit(decisaoIa, resultado) : null,
+        acertou_humano: decisaoHumana ?decisionHit(decisaoHumana, resultado) : null,
+        divergencia_ia_humano: decisaoIa && decisaoHumana ?decisaoIa !== decisaoHumana : null,
         created_at: resultadoRow?.created_at ?? p.updated_at ?? p.created_at,
       });
     }
@@ -247,11 +247,11 @@ function AprendizadoIaPage() {
     local: filteredFeedback.filter((row) => row.modo_ia === "local").length || filteredAnalises.filter((a) => a.modo_ia === "local").length,
     online: filteredFeedback.filter((row) => row.modo_ia === "online").length || filteredAnalises.filter((a) => a.modo_ia === "online").length,
     taxaConfirmacao: rowsComDecisaoIa.length
-      ? (rowsConfirmadasIa.length / rowsComDecisaoIa.length) * 100
+      ?(rowsConfirmadasIa.length / rowsComDecisaoIa.length) * 100
       : filteredAnalises.length
-        ? (iaConfirmadas.length / filteredAnalises.length) * 100
+        ?(iaConfirmadas.length / filteredAnalises.length) * 100
         : 0,
-    taxaAcerto: feedbackComAcertoIa.length ? (acertosIa / feedbackComAcertoIa.length) * 100 : 0,
+    taxaAcerto: feedbackComAcertoIa.length ?(acertosIa / feedbackComAcertoIa.length) * 100 : 0,
     confirmadasGreen,
     confirmadasRed,
     puladasGreen,
@@ -260,7 +260,7 @@ function AprendizadoIaPage() {
     confirmarIncorreto: confirmadasRed,
     pularCorreto: puladasRed,
     pularIncorreto: puladasGreen,
-    roiConfirmadasIa: stakeConfirmadaIa > 0 ? (lucroUnidadesIa / stakeConfirmadaIa) * 100 : 0,
+    roiConfirmadasIa: stakeConfirmadaIa > 0 ?(lucroUnidadesIa / stakeConfirmadaIa) * 100 : 0,
     lucroUnidades: lucroUnidadesIa,
     lucroReal: lucroUnidadesIa * valorUnidade,
     divergencias,
@@ -279,7 +279,7 @@ function AprendizadoIaPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Aprendizado da IA</h1>
         <p className="text-sm text-muted-foreground">
-          Memória operacional entre análise da IA, decisão humana e resultados GREEN/RED.
+          Memória operacional entre análise da IA, decisão humana e resultados GREEN/RED. Confirmadas medem banca; puladas medem qualidade da decisão de recusa.
         </p>
       </div>
 
@@ -308,19 +308,19 @@ function AprendizadoIaPage() {
         </CardContent>
       </Card>
 
-      {loadingHistorico ? (
+      {loadingHistorico ?(
         <Card>
           <CardContent className="py-6 text-sm text-muted-foreground">
             Carregando histórico de aprendizado...
           </CardContent>
         </Card>
-      ) : !hasData ? (
+      ) : !hasData ?(
         <Card>
           <CardContent className="py-6 text-sm text-muted-foreground">
             Nenhum dado encontrado para os filtros selecionados.
           </CardContent>
         </Card>
-      ) : feedback.length === 0 && historico.length > 0 ? (
+      ) : feedback.length === 0 && historico.length > 0 ?(
         <Card>
           <CardContent className="py-4 text-sm text-muted-foreground">
             Histórico atualizado com dados retroativos a partir de prognósticos, validações e resultados existentes.
@@ -335,22 +335,22 @@ function AprendizadoIaPage() {
         <StatCard label="Taxa de confirmação IA" value={`${stats.taxaConfirmacao.toFixed(1)}%`} icon={Target} />
         <StatCard label="Acerto geral IA" value={`${stats.taxaAcerto.toFixed(1)}%`} icon={TrendingUp} />
         <StatCard label="Confirmadas IA GREEN/RED" value={`${stats.confirmadasGreen}/${stats.confirmadasRed}`} icon={Target} />
-        <StatCard label="ROI confirmadas IA" value={`${stats.roiConfirmadasIa.toFixed(1)}%`} icon={TrendingUp} trend={stats.roiConfirmadasIa >= 0 ? "up" : "down"} />
+        <StatCard label="ROI confirmadas IA" value={`${stats.roiConfirmadasIa.toFixed(1)}%`} icon={TrendingUp} trend={stats.roiConfirmadasIa >= 0 ?"up" : "down"} />
         <StatCard label="Puladas IA GREEN/RED" value={`${stats.puladasGreen}/${stats.puladasRed}`} icon={Split} />
         <StatCard label="Pular correto" value={String(stats.pularCorreto)} icon={Split} trend="up" />
-        <StatCard label="Pular incorreto" value={String(stats.pularIncorreto)} icon={Split} trend={stats.pularIncorreto > 0 ? "down" : "neutral"} />
+        <StatCard label="Pular incorreto" value={String(stats.pularIncorreto)} icon={Split} trend={stats.pularIncorreto > 0 ?"down" : "neutral"} />
         <StatCard label="Confirmar correto" value={String(stats.confirmarCorreto)} icon={Target} trend="up" />
-        <StatCard label="Confirmar incorreto" value={String(stats.confirmarIncorreto)} icon={Target} trend={stats.confirmarIncorreto > 0 ? "down" : "neutral"} />
-        <StatCard label="Lucro real IA" value={`R$ ${stats.lucroReal.toFixed(2)}`} icon={Scale} trend={stats.lucroReal >= 0 ? "up" : "down"} />
-        <StatCard label="Lucro (u) IA" value={`${stats.lucroUnidades.toFixed(2)}u`} icon={Scale} trend={stats.lucroUnidades >= 0 ? "up" : "down"} />
+        <StatCard label="Confirmar incorreto" value={String(stats.confirmarIncorreto)} icon={Target} trend={stats.confirmarIncorreto > 0 ?"down" : "neutral"} />
+        <StatCard label="Lucro real IA" value={`R$ ${stats.lucroReal.toFixed(2)}`} icon={Scale} trend={stats.lucroReal >= 0 ?"up" : "down"} />
+        <StatCard label="Lucro (u) IA" value={`${stats.lucroUnidades.toFixed(2)}u`} icon={Scale} trend={stats.lucroUnidades >= 0 ?"up" : "down"} />
         <StatCard label="Divergências IA x humano" value={String(stats.divergencias)} icon={Split} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <ChartCard title="Acerto da IA por esporte (%)" rows={acertoPorEsporte} suffix="%" />
         <ChartCard title="Acerto da IA por mercado (%)" rows={acertoPorMercado} suffix="%" />
-        <ChartCard title="Lucro por esporte das confirmadas IA (u)" rows={lucroPorEsporte} suffix="u" diverging />
-        <ChartCard title="Lucro por mercado das confirmadas IA (u)" rows={lucroPorMercado} suffix="u" diverging />
+        <ChartCard title="Resultado oficial por esporte das confirmadas IA (u)" rows={lucroPorEsporte} suffix="u" diverging />
+        <ChartCard title="Resultado oficial por mercado das confirmadas IA (u)" rows={lucroPorMercado} suffix="u" diverging />
         <ChartCard title="IA local vs IA online (%)" rows={modoComparativo} suffix="%" />
         <ChartCard title="Tags de risco mais associadas a RED" rows={tagsRed} suffix="" />
       </div>
@@ -379,7 +379,7 @@ function Filter({
         <SelectContent>
           {options.map((option) => (
             <SelectItem key={option} value={option}>
-              {option === "all" ? allLabel : option}
+              {option === "all" ?allLabel : option}
             </SelectItem>
           ))}
         </SelectContent>
@@ -395,19 +395,19 @@ function ChartCard({ title, rows, suffix, diverging = false }: { title: string; 
         <CardTitle className="text-sm uppercase tracking-wider text-muted-foreground">{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        {rows.length ? (
+        {rows.length ?(
           <div className="space-y-2">
             {rows.slice(0, 10).map((row) => (
               <div key={row.label} className="space-y-1">
                 <div className="flex items-center justify-between gap-3 text-xs">
                   <span className="truncate text-muted-foreground">{row.label}</span>
-                  <span className={row.value > 0 ? "text-success" : row.value < 0 ? "text-destructive" : "text-muted-foreground"}>
+                  <span className={row.value > 0 ?"text-success" : row.value < 0 ?"text-destructive" : "text-muted-foreground"}>
                     {row.value.toFixed(1)}{suffix}
                   </span>
                 </div>
                 <div className="h-2 rounded bg-muted">
                   <div
-                    className={diverging ? (row.value >= 0 ? "h-2 rounded bg-success" : "h-2 rounded bg-destructive") : "h-2 rounded bg-primary"}
+                    className={diverging ?(row.value >= 0 ?"h-2 rounded bg-success" : "h-2 rounded bg-destructive") : "h-2 rounded bg-primary"}
                     style={{ width: `${Math.max(4, Math.min(100, row.percent))}%` }}
                   />
                 </div>
@@ -441,7 +441,7 @@ function rateBy(rows: LearningRow[], field: keyof LearningRow): BarRow[] {
   }
   return [...map.entries()]
     .filter(([, value]) => value.total > 0)
-    .map(([label, value]) => ({ label, value: value.total ? (value.ok / value.total) * 100 : 0, percent: value.total ? (value.ok / value.total) * 100 : 0 }))
+    .map(([label, value]) => ({ label, value: value.total ?(value.ok / value.total) * 100 : 0, percent: value.total ?(value.ok / value.total) * 100 : 0 }))
     .sort((a, b) => b.value - a.value);
 }
 

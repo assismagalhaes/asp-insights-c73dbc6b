@@ -25,6 +25,7 @@ import {
   useUpdatePrognostico,
   useLigas,
   useUpsertLiga,
+  normalizeMercadoPadrao,
   type Prognostico,
   type PrognosticoInput,
   type Liga,
@@ -48,7 +49,7 @@ const empty: PrognosticoInput = {
   jogo: "",
   mandante: "",
   visitante: "",
-  mercado: "Resultado Final",
+  mercado: "Resultado da Partida",
   pick: "",
   linha: "-",
   odd_ofertada: 0,
@@ -65,7 +66,7 @@ const empty: PrognosticoInput = {
 
 function normalizeStatusValidacao(status: PrognosticoInput["status_validacao"]): PrognosticoInput["status_validacao"] {
   return status === "CONFIRMA_CAUTELA" || status === "PASS" || status === "AGUARDAR_NOTICIA"
-    ? "PULAR"
+    ?"PULAR"
     : status;
 }
 
@@ -100,7 +101,7 @@ export function PrognosticoDialog({
         jogo: prognostico.jogo,
         mandante: prognostico.mandante,
         visitante: prognostico.visitante,
-        mercado: prognostico.mercado,
+        mercado: normalizeMercadoPadrao(prognostico.mercado, prognostico.esporte),
         pick: prognostico.pick,
         linha: prognostico.linha,
         odd_ofertada: prognostico.odd_ofertada,
@@ -123,7 +124,7 @@ export function PrognosticoDialog({
         jogo: template.jogo,
         mandante: template.mandante,
         visitante: template.visitante,
-        mercado: template.mercado,
+        mercado: normalizeMercadoPadrao(template.mercado, template.esporte),
         pick: template.pick,
         linha: template.linha,
         odd_ofertada: template.odd_ofertada,
@@ -178,7 +179,7 @@ export function PrognosticoDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{prognostico ? "Editar Prognóstico" : "Novo Prognóstico"}</DialogTitle>
+          <DialogTitle>{prognostico ?"Editar Prognóstico" : "Novo Prognóstico"}</DialogTitle>
         </DialogHeader>
 
         <div className="grid gap-3 md:grid-cols-3">
@@ -203,7 +204,7 @@ export function PrognosticoDialog({
           <Field label="Liga">
             <Select value={form.liga || ""} onValueChange={(v) => set("liga", v)}>
               <SelectTrigger>
-                <SelectValue placeholder={ligasDoEsporte.length ? "Selecione a liga" : "Nenhuma liga cadastrada"} />
+                <SelectValue placeholder={ligasDoEsporte.length ?"Selecione a liga" : "Nenhuma liga cadastrada"} />
               </SelectTrigger>
               <SelectContent>
                 {ligasDoEsporte.map((l) => (
@@ -309,7 +310,7 @@ export function PrognosticoDialog({
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button onClick={submit} disabled={create.isPending || update.isPending}>
-            {prognostico ? "Salvar" : "Criar"}
+            {prognostico ?"Salvar" : "Criar"}
           </Button>
         </DialogFooter>
       </DialogContent>

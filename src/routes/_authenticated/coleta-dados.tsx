@@ -311,7 +311,7 @@ function ColetaDadosPage() {
     }
   };
 
-  const exportRows: NormalizedOdd[] = normalized?.rows.length ? normalized.rows : filteredOdds;
+  const exportRows: NormalizedOdd[] = normalized?.rows.length ?normalized.rows : filteredOdds;
 
   return (
     <div className="space-y-6">
@@ -358,7 +358,7 @@ function ColetaDadosPage() {
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={executarColeta} disabled={remoteBusy === "pipeline" || !remoteParams.esporte}>
               <CloudDownload className="mr-2 h-4 w-4" />
-              {remoteBusy === "pipeline" ? "Coletando..." : "Executar Coleta"}
+              {remoteBusy === "pipeline" ?"Coletando..." : "Executar Coleta"}
             </Button>
             <p className="text-xs text-muted-foreground">
               A chave da VM fica protegida no servidor via SCRAPER_API_URL e SCRAPER_API_KEY.
@@ -407,7 +407,7 @@ function ColetaDadosPage() {
           </div>
           <div className="grid gap-4 xl:grid-cols-2">
             <Preview title="Conteúdo bruto" icon={FileJson} value={rawText || "Nenhum arquivo carregado."} />
-            <Preview title="Dados normalizados" icon={Database} value={normalized ? JSON.stringify(normalized.rows.slice(0, 80), null, 2) : "Nenhuma normalização gerada."} />
+            <Preview title="Dados normalizados" icon={Database} value={normalized ?JSON.stringify(normalized.rows.slice(0, 80), null, 2) : "Nenhuma normalização gerada."} />
           </div>
         </CardContent>
       </Card>
@@ -456,7 +456,7 @@ function ColetaDadosPage() {
                   {filteredCollections.map((coleta) => (
                     <tr key={coleta.id} className="border-t">
                       <td className="px-3 py-2 font-mono text-xs">{coleta.created_at.slice(0, 10)}</td>
-                      <td className="px-3 py-2"><Badge variant={coleta.erro ? "destructive" : "outline"}>{coleta.status}</Badge></td>
+                      <td className="px-3 py-2"><Badge variant={coleta.erro ?"destructive" : "outline"}>{coleta.status}</Badge></td>
                       <td className="px-3 py-2">{coleta.esporte ?? "-"} / <span className="text-muted-foreground">{coleta.liga ?? "múltiplas"}</span></td>
                       <td className="px-3 py-2 font-mono text-xs">{coleta.job_id ?? "-"}</td>
                       <td className="px-3 py-2 text-right font-mono">{coleta.total_jogos}</td>
@@ -547,7 +547,7 @@ function LeagueSelector({
   onChange: (value: string[]) => void;
 }) {
   const options = leagueOptionsForSport(esporte);
-  const selectedSet = new Set(selected.length ? selected : ["Todos"]);
+  const selectedSet = new Set(selected.length ?selected : ["Todos"]);
 
   if (esporte === "Futebol") {
     return (
@@ -601,7 +601,13 @@ function Field({
   return (
     <div>
       <Label>{label}</Label>
-      <Input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+      <Input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={type === "date" ?"[color-scheme:dark] text-foreground" : undefined}
+      />
     </div>
   );
 }
@@ -616,21 +622,21 @@ function Preview({ title, icon: Icon, value }: { title: string; icon: LucideIcon
 }
 
 function extractVmStatus(payload: unknown) {
-  const root = isObj(payload) ? payload : {};
-  const data = isObj(root.data) ? root.data : isObj(root.result) ? root.result : root;
+  const root = isObj(payload) ?payload : {};
+  const data = isObj(root.data) ?root.data : isObj(root.result) ?root.result : root;
   const raw = String(data.status ?? data.state ?? data.situacao ?? "").toUpperCase();
   const erro = data.erro ?? data.error ?? data.message;
   const status =
     raw.includes("RUN") || raw.includes("ROD") || raw.includes("PROCESS")
-      ? "RODANDO"
+      ?"RODANDO"
       : raw.includes("DONE") || raw.includes("CONCL") || raw.includes("SUCCESS") || raw.includes("FINISH")
-        ? "CONCLUIDA"
+        ?"CONCLUIDA"
         : raw.includes("ERR") || raw.includes("FAIL")
-          ? "ERRO"
+          ?"ERRO"
           : raw.includes("PEND") || raw.includes("QUEUE")
-            ? "PENDENTE"
+            ?"PENDENTE"
             : raw || "PENDENTE";
-  return { status, erro: erro ? String(erro) : null };
+  return { status, erro: erro ?String(erro) : null };
 }
 
 async function pollVmJob(
@@ -689,7 +695,7 @@ function extractErrorMessage(e: unknown): string {
       return e.detail
         .map((item) => {
           if (!isObj(item)) return String(item);
-          const loc = Array.isArray(item.loc) ? item.loc.join(".") : "";
+          const loc = Array.isArray(item.loc) ?item.loc.join(".") : "";
           return `${loc ? `${loc}: ` : ""}${String(item.msg ?? item.message ?? item.type ?? "erro")}`;
         })
         .join("; ");
@@ -795,25 +801,25 @@ function leagueOptionsForSport(esporte: string) {
 }
 
 function selectedLeagueValues(esporte: string, selected: string[]) {
-  const values = selected.length ? selected : [ALL_LEAGUES_VALUE];
+  const values = selected.length ?selected : [ALL_LEAGUES_VALUE];
   if (values.includes(ALL_LEAGUES_VALUE)) return [];
   const validValues = new Set(leagueOptionsForSport(esporte).map((option) => option.value));
   return values.filter((value) => validValues.has(value));
 }
 
 function selectedLeagueLabels(esporte: string, selected: string[]) {
-  const values = selected.length ? selected : [ALL_LEAGUES_VALUE];
+  const values = selected.length ?selected : [ALL_LEAGUES_VALUE];
   if (values.includes(ALL_LEAGUES_VALUE)) return ["Todos"];
   const labels = new Map(leagueOptionsForSport(esporte).map((option) => [option.value, option.label]));
   return values.map((value) => labels.get(value)).filter(Boolean) as string[];
 }
 
 function toggleLeague(current: string[], value: string, checked: boolean) {
-  if (value === ALL_LEAGUES_VALUE) return checked ? [ALL_LEAGUES_VALUE] : [];
+  if (value === ALL_LEAGUES_VALUE) return checked ?[ALL_LEAGUES_VALUE] : [];
   const base = current.filter((item) => item !== ALL_LEAGUES_VALUE);
   if (checked) return [...new Set([...base, value])];
   const next = base.filter((item) => item !== value);
-  return next.length ? next : [ALL_LEAGUES_VALUE];
+  return next.length ?next : [ALL_LEAGUES_VALUE];
 }
 
 function scraperSportName(esporte: string) {
