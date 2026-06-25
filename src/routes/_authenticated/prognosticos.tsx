@@ -218,7 +218,7 @@ function Prognosticos() {
       toast.info("Nenhuma justificativa final objetiva registrada para copiar.");
       return;
     }
-    await navigator.clipboard.writeText(justificativaFinal);
+    await navigator.clipboard.writeText(gerarTipTexto(p, { parecer: justificativaFinal }));
     toast.success("TIP copiada");
   };
 

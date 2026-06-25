@@ -47,6 +47,11 @@ export function DadosTecnicosViewer({ prognostico, variant = "icon", className }
   const dados = getDadosTecnicos(prognostico);
   const oddEfetiva = getOddEfetiva(prognostico);
   const edgeEfetivo = getEdgeEfetivo(prognostico);
+  const textoIa =
+    validacao?.parecer_ia?.trim() ||
+    validacao?.parecer_validacao?.trim() ||
+    validacao?.contexto_adicional?.trim() ||
+    "";
 
   return (
     <>
@@ -98,7 +103,7 @@ export function DadosTecnicosViewer({ prognostico, variant = "icon", className }
                 <Info label="Stake IA" value={validacao?.stake_ia_sugerida != null ? `${validacao.stake_ia_sugerida}u` : "-"} />
               </div>
               <pre className="max-h-[34vh] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 font-mono text-xs">
-                {validacao?.parecer_ia?.trim() || "Nenhuma análise de IA registrada."}
+                {textoIa || "Nenhuma análise de IA registrada."}
               </pre>
               <div className="grid gap-2 md:grid-cols-2">
                 <ListBlock title="Buscas realizadas" items={validacao?.buscas_realizadas ?? []} />

@@ -359,6 +359,7 @@ const num = (v: unknown) => (v == null ?0 : Number(v));
 const numOrNull = (v: unknown) => (v == null ?null : Number(v));
 const mapPrognostico = (r: Record<string, unknown>): Prognostico => ({
   ...(r as unknown as Prognostico),
+  mercado: normalizeMercadoPadrao(String(r.mercado ?? ""), String(r.esporte ?? "")),
   odd_ofertada: num(r.odd_ofertada),
   odd_ajustada: numOrNull(r.odd_ajustada),
   odd_valor: num(r.odd_valor),
@@ -768,24 +769,25 @@ export function gerarTipTexto(
     return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
   };
   const hora = p.hora ? p.hora.slice(0, 5) : "-";
-  const pickComLinha = `${p.pick}${linhaForaDoPick ? `\nLinha: ${linha}` : ""}`;
+  const pickComLinha = `${p.pick}${linhaForaDoPick ? ` ${linha}` : ""}`;
   if (extras?.modo === "resumo") return parecer;
 
-  return `ASP INSIGHTS - PICK CONFIRMADA
+  return `🔥 ASP INSIGHTS - PICK CONFIRMADA
 
-Jogo: ${p.jogo}
-Data/Hora: ${formatDateBR(p.data)} as ${hora}
-Esporte/Liga: ${p.esporte} - ${p.liga || "-"}
+🏆 Jogo: ${p.jogo}
+📅 Data/Hora: ${formatDateBR(p.data)} às ${hora}
+🏟️ Liga: ${p.liga || "-"}
+📊 Esporte: ${p.esporte}
 
-Mercado: ${p.mercado}
-Pick: ${pickComLinha}
-Odd: ${oddFinal.toFixed(2)}${p.odd_ajustada != null ? ` (original: ${p.odd_ofertada.toFixed(2)})` : ""}
-Odd de Valor: ${p.odd_valor.toFixed(2)}
-Probabilidade: ${p.probabilidade_final.toFixed(1)}%
-Edge: ${edgeFinal.toFixed(2)}%
-Stake: ${p.stake}u
+🎯 Mercado: ${p.mercado}
+✅ Pick: ${pickComLinha}
+📈 Odd: ${oddFinal.toFixed(2)}${p.odd_ajustada != null ? ` (original: ${p.odd_ofertada.toFixed(2)})` : ""}
+📉 Odd de Valor: ${p.odd_valor.toFixed(2)}
+📊 Probabilidade: ${p.probabilidade_final.toFixed(1)}%
+⚖️ Edge: ${edgeFinal.toFixed(2)}%
+💰 Stake: ${p.stake}u
 
-Justificativa final:
+🧠 Justificativa:
 ${parecer}`;
 }
 
