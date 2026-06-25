@@ -57,7 +57,8 @@ class BaseballRunnerV11Tests(unittest.TestCase):
     def test_model_version_and_handicap_flag_are_set(self) -> None:
         self.assertEqual(runner.MODEL_VERSION, "MLB_V1_1")
         self.assertTrue(runner.HANDICAP_ENABLED_MLB_V1_1)
-        self.assertTrue(runner.HANDICAP_SHADOW_MODE_MLB_V1_1)
+        self.assertTrue(runner.HANDICAP_CONTROLLED_ACTIVATION_MLB_V1_1)
+        self.assertEqual(runner.BASEBALL_MLB_HANDICAP_MODEL_VERSION, "MLB_V1_1_HANDICAP_CONTROLLED")
 
     def test_totals_historical_probability_is_smoothed_not_binary(self) -> None:
         home = stats("NYY", [6, 8, 10, 12, 4])
@@ -82,7 +83,7 @@ class BaseballRunnerV11Tests(unittest.TestCase):
         self.assertEqual(sample_size, 0)
         self.assertIn("hist_total_fallback_prior_050", warnings)
 
-    def test_handicap_generation_is_shadow_when_filters_pass(self) -> None:
+    def test_handicap_generation_uses_controlled_activation_when_filters_pass(self) -> None:
         game = {
             "data": "2026-06-19",
             "hora": "20:00",
@@ -104,8 +105,10 @@ class BaseballRunnerV11Tests(unittest.TestCase):
         handicaps = [pick for pick in picks if "Handicap" in pick["mercado"]]
 
         self.assertTrue(handicaps)
-        self.assertTrue(all(pick["shadow_mode"] is True for pick in handicaps))
-        self.assertTrue(all(pick["market_status"] == "HANDICAP_FUNCTIONAL_NOT_VALIDATED" for pick in handicaps))
+        self.assertTrue(all("shadow_mode" not in pick for pick in handicaps))
+        self.assertTrue(all("market_status" not in pick for pick in handicaps))
+        self.assertTrue(all(pick["modelo_versao"] == "MLB_V1_1_HANDICAP_CONTROLLED" for pick in handicaps))
+        self.assertTrue(all(pick["activation_status"] == "HANDICAP_SELECTED_CONTROLLED" for pick in handicaps))
 
     def test_handicap_minus_one_and_half_cover_probability(self) -> None:
         self.assertAlmostEqual(runner.handicap_cover_probability_poisson(10.0, 0.2, "home", -1.5), 0.99, delta=0.02)
@@ -200,6 +203,31 @@ class BaseballRunnerV11Tests(unittest.TestCase):
         )
 
         self.assertEqual(audit_rows[0]["motivo_descarte"], "HANDICAP_LINE_NOT_SUPPORTED")
+        self.assertFalse(audit_rows[0]["published"])
+        self.assertEqual(audit_rows[0]["mode"], "controlled_activation")
+
+    def test_handicap_diagnostics_are_top_level_controlled_activation(self) -> None:
+        rows = [
+            {
+                "passou_filtros": True,
+                "motivo_descarte": "",
+                "pick": "NYY -1.5",
+            },
+            {
+                "passou_filtros": False,
+                "motivo_descarte": "INVALID_ODD",
+                "pick": "BOS +1.5",
+            },
+        ]
+
+        diagnostics = runner.build_handicap_shadow_diagnostics(rows)
+
+        self.assertEqual(diagnostics["mode"], "controlled_activation")
+        self.assertEqual(diagnostics["model_version"], "MLB_V1_1_HANDICAP_CONTROLLED")
+        self.assertTrue(diagnostics["published"])
+        self.assertEqual(diagnostics["published_count"], 1)
+        self.assertEqual(diagnostics["discarded_count"], 1)
+        self.assertEqual(diagnostics["summary"]["discard_reasons"], {"INVALID_ODD": 1})
 
     def test_handicap_high_probability_is_blocked(self) -> None:
         picks: list[dict[str, object]] = []
