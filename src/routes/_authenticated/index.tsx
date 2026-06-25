@@ -228,7 +228,7 @@ function Dashboard() {
         <StatCard label="Greens" value={String(metrics.greens)} icon={CheckCircle2} tone="up" />
         <StatCard label="Reds" value={String(metrics.reds)} icon={XCircle} tone="down" />
         <StatCard
-          label="Odd Média dos Greens"
+          label="ODD MÉDIA"
           value={metrics.oddMediaGreens ?metrics.oddMediaGreens.toFixed(2) : "-"}
           icon={Target}
           tone="neutral"
