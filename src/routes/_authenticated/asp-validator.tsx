@@ -99,6 +99,10 @@ type ValidatorRecord = {
   structured_json: Record<string, unknown> | null;
   structured_status: "pending" | "processing" | "completed" | "failed" | string;
   structured_error: string | null;
+  ocr_structured_data: Record<string, unknown> | null;
+  ocr_data_quality_score: number | null;
+  ocr_structured_fields_count: number | null;
+  simulation_type: string | null;
   result_status: string | null;
   result_settled_at: string | null;
   final_score: string | null;
