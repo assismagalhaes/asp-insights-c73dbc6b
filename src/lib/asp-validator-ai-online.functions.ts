@@ -39,6 +39,10 @@ Regras obrigatorias:
 - Ausencia de informacao online relevante deve gerar: "Verificacao online sem achados relevantes. Nao ha noticia ou contexto externo suficiente para alterar a analise."
 - Falta de dados online so pesa contra quando o mercado depende fortemente de escalacoes, desfalques, motivacao, rotacao, jogo sem interesse, treinador novo, calendario apertado ou noticia relevante nao confirmada.
 - Priorize campos manuais em caso de conflito com OCR/JSON.
+- Nao diga "ausencia de dados estruturados" quando structured_json/ocr_structured_data tiver odds, probabilidade, EV, medias, percentuais, linhas, totais ou estatisticas de corners/gols.
+- Se has_structured_ocr_data=true ou structured_fields_count > 0, trate esses dados como evidencias quantitativas validas, ainda que incompletas.
+- Para ASP Corner Validator, cite obrigatoriamente os dados de escanteios extraidos: medias, race to corners, primeiro escanteio, over/under corners, odds/probabilidade/EV quando existirem.
+- A probabilidade ajustada deve combinar previsao original, odd implicita, simulacao, qualidade dos dados e contexto online; evite cortes agressivos sem justificativa quantitativa.
 - Diferencie fatos encontrados, informacoes nao encontradas e inferencias.
 
 Busque quando possivel:

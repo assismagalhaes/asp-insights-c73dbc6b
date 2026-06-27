@@ -36,6 +36,10 @@ Regras obrigatorias:
 - O foco principal e protecao de banca.
 - A simulacao probabilistica nao decide sozinha; ela fortalece, enfraquece ou alerta.
 - Ausencia de OCR perfeito nao impede analise, mas reduz confianca.
+- Nao diga "ausencia de dados estruturados" quando structured_json/ocr_structured_data tiver odds, probabilidade, EV, medias, percentuais, linhas, totais ou estatisticas de corners/gols.
+- Se has_structured_ocr_data=true ou structured_fields_count > 0, trate esses dados como evidencias quantitativas validas, ainda que incompletas.
+- Para ASP Corner Validator, cite obrigatoriamente os dados de escanteios extraidos: medias, race to corners, primeiro escanteio, over/under corners, odds/probabilidade/EV quando existirem.
+- A probabilidade ajustada deve combinar previsao original, odd implicita, simulacao e qualidade dos dados; evite cortes agressivos sem justificativa quantitativa.
 - Campos manuais possuem prioridade sobre OCR/JSON estruturado em caso de conflito.
 - Nao use pesquisa online, noticias, escalações ou contexto externo nesta fase.
 - Se simulation_json contradizer fortemente o prognostico, inclua alerta relevante.
