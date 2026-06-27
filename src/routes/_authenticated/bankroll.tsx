@@ -26,6 +26,7 @@ import {
   useConfiguracao,
   useUpdateConfiguracao,
   usePrognosticos,
+  useAspValidatorBankrollPrognosticos,
   type TipoStake,
 } from "@/lib/db";
 import { computeMetrics, bankrollTimeline } from "@/lib/metrics";
@@ -52,6 +53,7 @@ const axisColor = COLOR_AXIS;
 function Bankroll() {
   const { data: cfg } = useConfiguracao();
   const { data: prognosticos = [] } = usePrognosticos();
+  const { data: aspValidatorBankroll = [] } = useAspValidatorBankrollPrognosticos();
   const updateCfg = useUpdateConfiguracao();
 
   const [unidade, setUnidade] = useState(10);
@@ -68,8 +70,9 @@ function Bankroll() {
     }
   }, [cfg]);
 
-  const metrics = computeMetrics(prognosticos, cfg);
-  const timeline = bankrollTimeline(prognosticos, metrics.bancaInicial, cfg?.valor_unidade_padrao ?? 0);
+  const officialRows = [...prognosticos, ...aspValidatorBankroll];
+  const metrics = computeMetrics(officialRows, cfg);
+  const timeline = bankrollTimeline(officialRows, metrics.bancaInicial, cfg?.valor_unidade_padrao ?? 0);
 
   // valor real de 1u, conforme tipo de stake
   const valorUnidadeEfetiva =

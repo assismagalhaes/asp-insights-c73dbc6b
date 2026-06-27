@@ -2389,3 +2389,119 @@ def criar_temporada_basketball(liga: str, ano: int, payload: BasketballTemporada
         "stderr": result.stderr,
         "message": "Temporada Basketball criada/validada com sucesso."
     }
+
+
+def _extract_text_from_pdf(path: Path) -> str:
+    try:
+        from pypdf import PdfReader
+    except Exception as exc:
+        raise RuntimeError("Biblioteca pypdf nao instalada para OCR/leitura de PDF.") from exc
+
+    reader = PdfReader(str(path))
+    parts = []
+
+    for page in reader.pages:
+        try:
+            text = page.extract_text() or ""
+        except Exception:
+            text = ""
+        if text.strip():
+            parts.append(text.strip())
+
+    return "\n\n".join(parts).strip()
+
+
+def _extract_text_from_image(path: Path) -> str:
+    try:
+        from PIL import Image
+        import pytesseract
+    except Exception as exc:
+        raise RuntimeError("Bibliotecas pillow/pytesseract nao instaladas para OCR de imagem.") from exc
+
+    try:
+        image = Image.open(path)
+        try:
+            return (pytesseract.image_to_string(image, lang="por+eng") or "").strip()
+        except Exception:
+            return (pytesseract.image_to_string(image, lang="eng") or "").strip()
+    except Exception as exc:
+        raise RuntimeError(f"Erro ao processar imagem no OCR: {exc}") from exc
+
+
+def _extract_ocr_text(path: Path, mime_type: str | None, file_name: str) -> str:
+    mime = (mime_type or "").lower()
+    suffix = Path(file_name).suffix.lower()
+
+    if mime == "application/pdf" or suffix == ".pdf":
+        return _extract_text_from_pdf(path)
+
+    if mime.startswith("image/") or suffix in [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"]:
+        return _extract_text_from_image(path)
+
+    raise RuntimeError("Tipo de arquivo ainda nao suportado para OCR. Use imagem ou PDF.")
+
+
+@app.post("/asp-validator/ocr")
+async def processar_ocr_asp_validator(
+    validator_id: str = Form(...),
+    upload_id: str = Form(...),
+    upload_category: str = Form(""),
+    user_comment: str = Form(""),
+    arquivo: UploadFile | None = File(default=None),
+    file: UploadFile | None = File(default=None),
+    authorization: str | None = Header(default=None),
+):
+    verificar_token(authorization)
+
+    upload = arquivo or file
+    if upload is None:
+        raise HTTPException(status_code=400, detail="Arquivo não enviado para OCR.")
+
+    suffix = Path(upload.filename or "upload").suffix
+    tmp_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix or ".upload") as tmp:
+            tmp_path = Path(tmp.name)
+            while True:
+                chunk = await upload.read(1024 * 1024)
+                if not chunk:
+                    break
+                tmp.write(chunk)
+
+        text = _extract_ocr_text(tmp_path, upload.content_type, upload.filename or "")
+        status = "completed" if text else "failed"
+        error = None if text else "OCR nao retornou texto."
+
+        return {
+            "ok": status == "completed",
+            "validator_id": validator_id,
+            "upload_id": upload_id,
+            "upload_category": upload_category,
+            "user_comment": user_comment,
+            "file_name": upload.filename,
+            "mime_type": upload.content_type,
+            "ocr_status": status,
+            "ocr_text": text,
+            "ocr_error": error,
+        }
+
+    except Exception as exc:
+        return {
+            "ok": False,
+            "validator_id": validator_id,
+            "upload_id": upload_id,
+            "upload_category": upload_category,
+            "user_comment": user_comment,
+            "file_name": upload.filename if upload else None,
+            "mime_type": upload.content_type if upload else None,
+            "ocr_status": "failed",
+            "ocr_text": "",
+            "ocr_error": str(exc),
+        }
+    finally:
+        try:
+            if tmp_path and tmp_path.exists():
+                tmp_path.unlink()
+        except Exception:
+            pass

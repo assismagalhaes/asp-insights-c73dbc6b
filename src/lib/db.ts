@@ -51,6 +51,34 @@ export interface Prognostico {
   updated_at: string;
 }
 
+export interface AspValidatorBankrollRecord {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  sport: string;
+  league: string | null;
+  match_date: string | null;
+  home_team: string;
+  away_team: string;
+  market: string;
+  pick: string;
+  line: string | null;
+  offered_odd: number | null;
+  adjusted_fair_odd: number | null;
+  adjusted_probability: number | null;
+  adjusted_ev: number | null;
+  decision: "CONFIRMAR" | "PULAR";
+  validator_model: string;
+  result_status: Resultado | string | null;
+  stake_units: number | null;
+  profit_units: number | null;
+  profit_brl: number | null;
+  final_score: string | null;
+  result_settled_at: string | null;
+  is_simulated_result: boolean | null;
+  bankroll_applied: boolean | null;
+}
+
 export interface Validacao {
   id: string;
   prognostico_id: string;
@@ -390,6 +418,71 @@ export function usePrognosticos() {
       });
     },
   });
+}
+
+export function useAspValidatorBankrollPrognosticos() {
+  return useQuery({
+    queryKey: ["asp-validator-bankroll"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as unknown as { from: (table: string) => any })
+        .from("asp_validator_registros")
+        .select("*")
+        .eq("decision", "CONFIRMAR")
+        .eq("bankroll_applied", true)
+        .eq("is_simulated_result", false)
+        .not("result_status", "is", null)
+        .order("match_date", { ascending: false })
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map(mapAspValidatorToPrognostico);
+    },
+  });
+}
+
+function mapAspValidatorToPrognostico(row: Record<string, unknown>): Prognostico {
+  const result = String(row.result_status ?? "PENDENTE").toUpperCase() as Resultado;
+  const stake = num(row.stake_units);
+  const odd = num(row.offered_odd) || 1;
+  const probability = num(row.adjusted_probability);
+  const fairOdd = num(row.adjusted_fair_odd) || (probability > 0 ? 100 / probability : 1);
+  return {
+    id: `asp-validator-${String(row.id)}`,
+    data: String(row.result_settled_at ?? row.match_date ?? String(row.created_at ?? "").slice(0, 10)),
+    hora: null,
+    esporte: String(row.sport ?? ""),
+    liga: String(row.league ?? ""),
+    jogo: `${String(row.home_team ?? "")} vs ${String(row.away_team ?? "")}`,
+    mandante: String(row.home_team ?? ""),
+    visitante: String(row.away_team ?? ""),
+    mercado: normalizeMercadoPadrao(String(row.market ?? ""), String(row.sport ?? "")),
+    pick: String(row.pick ?? ""),
+    linha: row.line == null ? null : String(row.line),
+    odd_ofertada: odd,
+    odd_ajustada: null,
+    odd_valor: fairOdd,
+    probabilidade_final: probability,
+    edge: num(row.adjusted_ev),
+    edge_ajustado: null,
+    stake,
+    status_validacao: "CONFIRMA",
+    status_publicacao: "NAO_PUBLICADO",
+    resultado: result,
+    lucro_prejuizo: row.profit_units == null ? null : Number(row.profit_units),
+    observacoes: "ASP Validator",
+    dados_tecnicos: null,
+    contexto_modelo: String(row.validator_model ?? "ASP Validator"),
+    arquivo_contexto: null,
+    origem_modelo: String(row.validator_model ?? "ASP Validator"),
+    job_id_coleta: null,
+    data_publicacao: null,
+    tip_texto: null,
+    publicado_em: null,
+    publicado_por: null,
+    canal_publicacao: null,
+    placar_final: row.final_score == null ? null : String(row.final_score),
+    created_at: String(row.created_at ?? ""),
+    updated_at: String(row.updated_at ?? ""),
+  };
 }
 
 export type PrognosticoInput = Omit<

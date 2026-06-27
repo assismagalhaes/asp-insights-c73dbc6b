@@ -6,6 +6,7 @@ import {
   History,
   Wallet,
   BrainCircuit,
+  ClipboardCheck,
   Cpu,
   
   Settings,
@@ -35,6 +36,7 @@ const items = [
   { title: "Base de Dados", url: "/base-dados", icon: Database },
   { title: "Modelos Preditivos", url: "/modelos-preditivos", icon: Cpu },
   { title: "Validação Crítica", url: "/validacao", icon: ShieldCheck },
+  { title: "ASP Validator", url: "/asp-validator", icon: ClipboardCheck },
   { title: "Publicação", url: "/publicacao", icon: Megaphone },
   { title: "Histórico", url: "/historico", icon: History },
   { title: "Bankroll", url: "/bankroll", icon: Wallet },
