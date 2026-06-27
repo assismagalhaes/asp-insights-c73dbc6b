@@ -23,14 +23,17 @@ export type Database = {
           alerts: string[]
           analysis_context: string | null
           away_team: string
+          bankroll_applied: boolean
           clv: number | null
           confidence: string
           created_at: string
           decision: string
           favorable_blocks: string[]
           final_analysis: string
+          final_score: string | null
           home_team: string
           id: string
+          is_simulated_result: boolean
           league: string | null
           line: string | null
           market: string
@@ -41,6 +44,8 @@ export type Database = {
           pick: string
           profit_brl: number | null
           profit_units: number | null
+          result_notes: string | null
+          result_settled_at: string | null
           result_status: string | null
           simulation_json: Json
           source_ev: number | null
@@ -52,6 +57,7 @@ export type Database = {
           structured_error: string | null
           structured_json: Json
           structured_status: string
+          unit_value_brl: number | null
           updated_at: string
           user_context: string | null
           user_id: string
@@ -65,14 +71,17 @@ export type Database = {
           alerts?: string[]
           analysis_context?: string | null
           away_team: string
+          bankroll_applied?: boolean
           clv?: number | null
           confidence: string
           created_at?: string
           decision: string
           favorable_blocks?: string[]
           final_analysis: string
+          final_score?: string | null
           home_team: string
           id?: string
+          is_simulated_result?: boolean
           league?: string | null
           line?: string | null
           market: string
@@ -83,6 +92,8 @@ export type Database = {
           pick: string
           profit_brl?: number | null
           profit_units?: number | null
+          result_notes?: string | null
+          result_settled_at?: string | null
           result_status?: string | null
           simulation_json?: Json
           source_ev?: number | null
@@ -94,6 +105,7 @@ export type Database = {
           structured_error?: string | null
           structured_json?: Json
           structured_status?: string
+          unit_value_brl?: number | null
           updated_at?: string
           user_context?: string | null
           user_id?: string
@@ -107,14 +119,17 @@ export type Database = {
           alerts?: string[]
           analysis_context?: string | null
           away_team?: string
+          bankroll_applied?: boolean
           clv?: number | null
           confidence?: string
           created_at?: string
           decision?: string
           favorable_blocks?: string[]
           final_analysis?: string
+          final_score?: string | null
           home_team?: string
           id?: string
+          is_simulated_result?: boolean
           league?: string | null
           line?: string | null
           market?: string
@@ -125,6 +140,8 @@ export type Database = {
           pick?: string
           profit_brl?: number | null
           profit_units?: number | null
+          result_notes?: string | null
+          result_settled_at?: string | null
           result_status?: string | null
           simulation_json?: Json
           source_ev?: number | null
@@ -136,6 +153,7 @@ export type Database = {
           structured_error?: string | null
           structured_json?: Json
           structured_status?: string
+          unit_value_brl?: number | null
           updated_at?: string
           user_context?: string | null
           user_id?: string
