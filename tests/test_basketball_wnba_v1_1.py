@@ -171,6 +171,81 @@ class BasketballWnbaV11Tests(unittest.TestCase):
         rows = runner.build_wnba_total_candidate_rows(FakeWnbaModule(), row, res)
         self.assertEqual([item["pick"] for item in rows], ["Over 176.5", "Under 176.5"])
 
+    def test_wnba_moneyline_candidates_include_both_sides_before_filter(self) -> None:
+        row = pd.Series({"home_sigla": "TOR", "away_sigla": "PHO", "date": "2026-06-27", "time": "20:00"})
+        res = {"odd_ml_c": 1.80, "odd_ml_f": 2.05}
+        rows = runner.build_wnba_moneyline_candidate_rows(FakeWnbaModule(), row, res)
+        self.assertEqual([item["mercado"] for item in rows], ["Moneyline", "Moneyline"])
+        self.assertEqual([item["pick"] for item in rows], ["Toronto Tempo W", "Phoenix Mercury W"])
+
+    def test_wnba_handicap_candidates_include_paired_lines_before_filter(self) -> None:
+        row = pd.Series({"home_sigla": "TOR", "away_sigla": "PHO", "date": "2026-06-27", "time": "20:00"})
+        res = {
+            "hc": {
+                ("home", -4.5): {"odd_off": 1.91},
+                ("away", +4.5): {"odd_off": 1.91},
+            }
+        }
+        rows = runner.build_wnba_handicap_candidate_rows(FakeWnbaModule(), row, res)
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(all("handicap" in runner.normalize_text(item["mercado"]) for item in rows))
+        self.assertEqual([item["linha"] for item in rows], [-4.5, 4.5])
+
+    def test_moneyline_uses_real_wins_simulation_and_no_vig(self) -> None:
+        rows = [
+            {"pontos_time": 90, "pontos_adversario": 80, "resultado": "W"},
+            {"pontos_time": 88, "pontos_adversario": 82, "resultado": "W"},
+            {"pontos_time": 76, "pontos_adversario": 84, "resultado": "L"},
+            {"pontos_time": 92, "pontos_adversario": 89, "resultado": "W"},
+        ]
+        module = FakeWnbaModule(rows)
+        row = pd.Series({"date": "2026-06-27", "time": "20:00"})
+        res = {"odd_ml_c": 1.80, "odd_ml_f": 2.05, "ou": {170.5: {"odd_off_over": 1.91, "odd_off_under": 1.91}}}
+        item = {
+            "mercado": "Moneyline",
+            "pick": "Toronto Tempo W",
+            "mandante": "Toronto Tempo W",
+            "visitante": "Phoenix Mercury W",
+            "odd_ofertada": 1.80,
+        }
+        adjusted, debug = runner.recalculate_wnba_moneyline_pick(module, row, res, item, "TOR", "PHO", lines=[170.5])
+        self.assertEqual(debug["pesos_probabilidade"], runner.WNBA_MONEYLINE_V1_4_WEIGHTS)
+        self.assertIn("vitorias_reais", debug)
+        self.assertIn("vitorias_sim_home", debug)
+        self.assertIn("prob_no_vig", debug)
+        self.assertIsInstance(adjusted["probabilidade_final"], float)
+
+    def test_handicap_uses_real_cover_simulated_cover_and_no_vig(self) -> None:
+        rows = [
+            {"pontos_time": 90, "pontos_adversario": 80, "resultado": "W"},
+            {"pontos_time": 88, "pontos_adversario": 82, "resultado": "W"},
+            {"pontos_time": 76, "pontos_adversario": 84, "resultado": "L"},
+            {"pontos_time": 92, "pontos_adversario": 89, "resultado": "W"},
+        ]
+        module = FakeWnbaModule(rows)
+        row = pd.Series({"date": "2026-06-27", "time": "20:00"})
+        res = {
+            "ou": {170.5: {"odd_off_over": 1.91, "odd_off_under": 1.91}},
+            "hc": {
+                ("home", -4.5): {"odd_off": 1.91},
+                ("away", +4.5): {"odd_off": 1.91},
+            },
+        }
+        item = {
+            "mercado": "Handicap Asiático",
+            "pick": "Toronto Tempo W -4.5",
+            "mandante": "Toronto Tempo W",
+            "visitante": "Phoenix Mercury W",
+            "linha": -4.5,
+            "odd_ofertada": 1.91,
+        }
+        adjusted, debug = runner.recalculate_wnba_handicap_pick(module, row, res, item, "TOR", "PHO", lines=[170.5])
+        self.assertEqual(debug["pesos_probabilidade"], runner.WNBA_HANDICAP_V1_8_WEIGHTS)
+        self.assertIn("coberturas_reais", debug)
+        self.assertIn("coberturas_simuladas", debug)
+        self.assertIn("prob_no_vig", debug)
+        self.assertIsInstance(adjusted["probabilidade_final"], float)
+
     def test_moneyline_without_real_odds_does_not_generate_artificial_edge(self) -> None:
         item = {
             "mercado": "Moneyline",
