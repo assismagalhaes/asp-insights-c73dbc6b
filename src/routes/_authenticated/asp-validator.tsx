@@ -1478,10 +1478,12 @@ function SimulationPanel({ record }: { record: ValidatorRecord }) {
             Sinal tecnico por matriz de placares Poisson. A simulacao nao confirma nem pula prognostico sozinha.
           </p>
         </div>
-        <Badge variant={simulation?.status === "completed" ? "default" : simulation?.status === "failed" ? "destructive" : "outline"}>
-          {simulation?.status ?? "pending"}
-        </Badge>
-      </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {record.simulation_type ? <Badge variant="secondary">Tipo: {record.simulation_type}</Badge> : null}
+          <Badge variant={simulation?.status === "completed" ? "default" : simulation?.status === "failed" ? "destructive" : "outline"}>
+            {simulation?.status ?? "pending"}
+          </Badge>
+        </div>
 
       {simulation ? (
         <>
