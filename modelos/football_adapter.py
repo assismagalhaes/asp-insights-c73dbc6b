@@ -5,6 +5,59 @@ import re
 
 ADAPTER_WARNINGS = []
 
+COUNTRY_CODE_TO_NAME = {
+    "ARG": "Argentina",
+    "AUT": "Austria",
+    "BEL": "Belgium",
+    "BRA": "Brazil",
+    "CHN": "China",
+    "DNK": "Denmark",
+    "ENG": "England",
+    "FIN": "Finland",
+    "FRA": "France",
+    "GER": "Germany",
+    "GRE": "Greece",
+    "IRL": "Ireland",
+    "ITA": "Italy",
+    "JPN": "Japan",
+    "MEX": "Mexico",
+    "NED": "Netherlands",
+    "NOR": "Norway",
+    "POL": "Poland",
+    "POR": "Portugal",
+    "ROU": "Romania",
+    "SCO": "Scotland",
+    "SPA": "Spain",
+    "SWE": "Sweden",
+    "SWZ": "Switzerland",
+    "TUR": "Turkey",
+    "USA": "USA",
+}
+
+COUNTRY_NAMES = {value.casefold(): value for value in COUNTRY_CODE_TO_NAME.values()}
+
+
+def normalizar_country_league(country, liga):
+    country_text = limpar_texto(country)
+    liga_text = limpar_texto(liga)
+
+    if " - " in liga_text:
+        prefix, league_name = [part.strip() for part in liga_text.split(" - ", 1)]
+        prefix_upper = prefix.upper()
+        if prefix_upper in COUNTRY_CODE_TO_NAME:
+            return COUNTRY_CODE_TO_NAME[prefix_upper], league_name
+        country_from_prefix = COUNTRY_NAMES.get(prefix.casefold())
+        if country_from_prefix:
+            return country_from_prefix, league_name
+
+    country_upper = country_text.upper()
+    if country_upper in COUNTRY_CODE_TO_NAME:
+        country_text = COUNTRY_CODE_TO_NAME[country_upper]
+    elif country_text:
+        country_text = country_text.replace("_", " ").title()
+
+    return country_text, liga_text
+
 
 def normalizar_float(valor):
     if pd.isna(valor):
@@ -174,11 +227,13 @@ def converter_csv_longo_para_wide(caminho_entrada, caminho_saida):
     )
 
     for (data, hora, liga, jogo, mandante, visitante), grupo in grupos:
+        country_raw = grupo["country"].iloc[0] if "country" in grupo.columns and not grupo.empty else ""
+        country_modelo, liga_modelo = normalizar_country_league(country_raw, liga)
         row = {
             "date": formatar_data_para_modelo(data),
             "time": limpar_texto(hora),
-            "country": "",
-            "league": limpar_texto(liga),
+            "country": country_modelo,
+            "league": liga_modelo,
             "home": limpar_texto(mandante),
             "away": limpar_texto(visitante),
         }

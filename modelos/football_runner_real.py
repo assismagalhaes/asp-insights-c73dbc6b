@@ -6,6 +6,7 @@ import re
 import importlib.util
 import contextlib
 import io
+import unicodedata
 from pathlib import Path
 
 import pandas as pd
@@ -61,6 +62,16 @@ def _norm_text(value) -> str:
     if pd.isna(value):
         return ""
     return str(value).strip().lower()
+
+
+def _comparable_context_text(value) -> str:
+    if value is None:
+        return ""
+    text = unicodedata.normalize("NFKD", str(value))
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    text = text.lower()
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def _valid_odd(value) -> bool:
@@ -843,6 +854,62 @@ def limpar_contexto_modelo(texto: str) -> str:
     return contexto
 
 
+def dividir_contexto_por_confronto(contexto_modelo: str) -> list[str]:
+    if not contexto_modelo:
+        return []
+
+    linhas = contexto_modelo.splitlines()
+    blocos: list[list[str]] = []
+    atual: list[str] = []
+
+    for linha in linhas:
+        if linha.strip().lower() == "confronto:":
+            if atual:
+                blocos.append(atual)
+            atual = [linha]
+            continue
+
+        if atual:
+            atual.append(linha)
+
+    if atual:
+        blocos.append(atual)
+
+    return ["\n".join(bloco).strip() for bloco in blocos if "\n".join(bloco).strip()]
+
+
+def _inferir_times_linha(row: pd.Series) -> tuple[str, str]:
+    mandante = str(row.get("mandante") or "").strip()
+    visitante = str(row.get("visitante") or "").strip()
+    if mandante and visitante:
+        return mandante, visitante
+
+    jogo = str(row.get("jogo") or "")
+    partes = re.split(r"\s+(?:vs|x|v)\s+", jogo, maxsplit=1, flags=re.IGNORECASE)
+    if len(partes) == 2:
+        return partes[0].strip(), partes[1].strip()
+
+    return mandante, visitante
+
+
+def selecionar_contexto_do_prognostico(row: pd.Series, contexto_modelo: str) -> str:
+    blocos = dividir_contexto_por_confronto(contexto_modelo)
+    if not blocos:
+        return contexto_modelo or ""
+
+    mandante, visitante = _inferir_times_linha(row)
+    mandante_norm = _comparable_context_text(mandante)
+    visitante_norm = _comparable_context_text(visitante)
+
+    if mandante_norm and visitante_norm:
+        for bloco in blocos:
+            bloco_norm = _comparable_context_text(bloco)
+            if mandante_norm in bloco_norm and visitante_norm in bloco_norm:
+                return bloco
+
+    return blocos[0] if len(blocos) == 1 else ""
+
+
 def carregar_modulo_modelo_real():
     if not REAL_MODEL_PATH.exists():
         raise FileNotFoundError(f"Modelo real não encontrado em {REAL_MODEL_PATH}")
@@ -968,8 +1035,9 @@ def executar_modelo_real(caminho_csv_longo, caminho_saida):
     df_saida = df_saida[colunas_saida]
 
     # 8. Adiciona o contexto técnico filtrado em cada prognóstico
-    df_saida["dados_tecnicos"] = contexto_modelo
-    df_saida["contexto_modelo"] = contexto_modelo
+    contextos_linha = df_saida.apply(lambda row: selecionar_contexto_do_prognostico(row, contexto_modelo), axis=1)
+    df_saida["dados_tecnicos"] = contextos_linha
+    df_saida["contexto_modelo"] = contextos_linha
     df_saida["arquivo_contexto"] = str(caminho_contexto)
 
     # 8.1. Aplica a camada conservadora Football V1.1 sem alterar o notebook real.
