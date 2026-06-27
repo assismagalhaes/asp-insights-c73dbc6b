@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import math
+import tempfile
 import unittest
 from datetime import datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 import pandas as pd
@@ -190,6 +192,76 @@ class BasketballWnbaV11Tests(unittest.TestCase):
         self.assertEqual(len(rows), 2)
         self.assertTrue(all("handicap" in runner.normalize_text(item["mercado"]) for item in rows))
         self.assertEqual([item["linha"] for item in rows], [-4.5, 4.5])
+
+    def test_long_csv_to_wide_preserves_handicap_sign_per_team(self) -> None:
+        rows = [
+            {
+                "data": "27.06.2026",
+                "hora": "21:00",
+                "esporte": "Basketball",
+                "liga": "WNBA",
+                "jogo": "Toronto Tempo W vs Phoenix Mercury W",
+                "mandante": "Toronto Tempo W",
+                "visitante": "Phoenix Mercury W",
+                "mercado": "Asian handicap",
+                "pick": "Toronto Tempo W",
+                "linha": -7.5,
+                "odd": 1.98,
+            },
+            {
+                "data": "27.06.2026",
+                "hora": "21:00",
+                "esporte": "Basketball",
+                "liga": "WNBA",
+                "jogo": "Toronto Tempo W vs Phoenix Mercury W",
+                "mandante": "Toronto Tempo W",
+                "visitante": "Phoenix Mercury W",
+                "mercado": "Asian handicap",
+                "pick": "Phoenix Mercury W",
+                "linha": 7.5,
+                "odd": 1.80,
+            },
+            {
+                "data": "27.06.2026",
+                "hora": "21:00",
+                "esporte": "Basketball",
+                "liga": "WNBA",
+                "jogo": "Toronto Tempo W vs Phoenix Mercury W",
+                "mandante": "Toronto Tempo W",
+                "visitante": "Phoenix Mercury W",
+                "mercado": "Asian handicap",
+                "pick": "Toronto Tempo W",
+                "linha": 7.5,
+                "odd": 1.29,
+            },
+            {
+                "data": "27.06.2026",
+                "hora": "21:00",
+                "esporte": "Basketball",
+                "liga": "WNBA",
+                "jogo": "Toronto Tempo W vs Phoenix Mercury W",
+                "mandante": "Toronto Tempo W",
+                "visitante": "Phoenix Mercury W",
+                "mercado": "Asian handicap",
+                "pick": "Phoenix Mercury W",
+                "linha": -7.5,
+                "odd": 3.25,
+            },
+        ]
+        with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False, newline="", encoding="utf-8") as fh:
+            pd.DataFrame(rows).to_csv(fh.name, index=False)
+            wide = runner.long_csv_to_wide(Path(fh.name), "WNBA", FakeWnbaModule())
+        pairs = {
+            float(wide.iloc[0][col]): (
+                float(wide.iloc[0][col.replace("_HANDICAP", "_1")]),
+                float(wide.iloc[0][col.replace("_HANDICAP", "_Opp_HANDICAP")]),
+                float(wide.iloc[0][col.replace("_HANDICAP", "_Opp_Odd")]),
+            )
+            for col in wide.columns
+            if col.endswith("_HANDICAP") and "_Opp_" not in col and not pd.isna(wide.iloc[0][col])
+        }
+        self.assertEqual(pairs[-7.5], (1.98, 7.5, 1.80))
+        self.assertEqual(pairs[7.5], (1.29, -7.5, 3.25))
 
     def test_moneyline_uses_real_wins_simulation_and_no_vig(self) -> None:
         rows = [

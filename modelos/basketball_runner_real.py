@@ -287,23 +287,34 @@ def long_csv_to_wide(csv_path: Path, league: str, module: Any) -> pd.DataFrame:
             continue
 
         if 'handicap' in mercado and linha is not None:
-            pair_key = (key, abs(float(linha)))
-            pair = handicap_pairs.setdefault(pair_key, {'game': game, 'line': float(linha), 'home_odd': None, 'away_odd': None})
             if home_norm and (home_norm in pick_norm or pick_norm in home_norm):
+                pair_key = (key, float(linha))
+                pair = handicap_pairs.setdefault(
+                    pair_key,
+                    {'game': game, 'home_line': None, 'away_line': None, 'home_odd': None, 'away_odd': None},
+                )
                 pair['home_odd'] = max_odd(pair.get('home_odd'), odd)
-                pair['line'] = float(linha)
+                pair['home_line'] = float(linha)
             elif away_norm and (away_norm in pick_norm or pick_norm in away_norm):
+                pair_key = (key, -float(linha))
+                pair = handicap_pairs.setdefault(
+                    pair_key,
+                    {'game': game, 'home_line': None, 'away_line': None, 'home_odd': None, 'away_odd': None},
+                )
                 pair['away_odd'] = max_odd(pair.get('away_odd'), odd)
-                pair['line'] = float(linha)
+                pair['away_line'] = float(linha)
 
     for idx, pair in enumerate(handicap_pairs.values(), start=1):
         if pair.get('home_odd') is None or pair.get('away_odd') is None:
             continue
+        if pair.get('home_line') is None or pair.get('away_line') is None:
+            continue
         game = pair['game']
-        line = float(pair['line'])
-        game[f'odds_Asian_handicap_FT_including_OT_Linha{idx}_HANDICAP'] = line
+        home_line = float(pair['home_line'])
+        away_line = float(pair['away_line'])
+        game[f'odds_Asian_handicap_FT_including_OT_Linha{idx}_HANDICAP'] = home_line
         game[f'odds_Asian_handicap_FT_including_OT_Linha{idx}_1'] = pair['home_odd']
-        game[f'odds_Asian_handicap_FT_including_OT_Linha{idx}_Opp_HANDICAP'] = -line
+        game[f'odds_Asian_handicap_FT_including_OT_Linha{idx}_Opp_HANDICAP'] = away_line
         game[f'odds_Asian_handicap_FT_including_OT_Linha{idx}_Opp_Odd'] = pair['away_odd']
 
     rows = list(grouped.values())
