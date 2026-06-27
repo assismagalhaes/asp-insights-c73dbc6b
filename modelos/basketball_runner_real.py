@@ -847,7 +847,8 @@ def wnba_simulated_total_probability(
     away_expected = max(0.0, expectation['away_expected'] + calibration_delta / 2.0)
     seed = (
         f"{row.get('date')}|{row.get('time')}|{home}|{away}|"
-        f"{line}|{side}|{round(home_expected, 3)}|{round(away_expected, 3)}"
+        f"{round(home_expected, 3)}|{round(away_expected, 3)}|"
+        f"{round(expectation['home_sd'], 3)}|{round(expectation['away_sd'], 3)}"
     )
     simulation = run_wnba_total_monte_carlo(
         home_expected,
@@ -858,6 +859,7 @@ def wnba_simulated_total_probability(
         side,
         simulations=WNBA_TOTAL_SIMULATIONS,
         seed=seed,
+        cache=res.setdefault('_wnba_total_sim_cache', {}),
     )
     simulation.update(
         {
@@ -875,6 +877,17 @@ def wnba_simulated_total_probability(
 
 def wnba_calculate_expected_points(module: Any, home: str, away: str, lines: list[float] | None = None) -> dict[str, float]:
     metric_lines = lines or []
+    cache = getattr(module, '_wnba_expected_points_cache', None)
+    if cache is None:
+        cache = {}
+        setattr(module, '_wnba_expected_points_cache', cache)
+    cache_key = (
+        home,
+        away,
+        tuple(round(float(line), 3) for line in metric_lines if to_float(line) is not None),
+    )
+    if cache_key in cache:
+        return dict(cache[cache_key])
     home_metrics = module.calcular_metricas_time(home, 'casa', metric_lines)
     away_metrics = module.calcular_metricas_time(away, 'fora', metric_lines)
     home_scored = require_float_metric(home_metrics, 'media_tm', f'{home} media_tm')
@@ -896,12 +909,14 @@ def wnba_calculate_expected_points(module: Any, home: str, away: str, lines: lis
         WNBA_TOTAL_MIN_TEAM_SD,
         math.sqrt((away_scored_sd * 0.55) ** 2 + (home_allowed_sd * 0.45) ** 2),
     )
-    return {
+    result = {
         'home_expected': home_expected,
         'away_expected': away_expected,
         'home_sd': home_sd,
         'away_sd': away_sd,
     }
+    cache[cache_key] = dict(result)
+    return result
 
 
 def require_float_metric(metrics: dict[str, Any], key: str, label: str) -> float:
@@ -943,19 +958,28 @@ def run_wnba_total_monte_carlo(
     side: str,
     simulations: int,
     seed: str,
+    cache: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if simulations <= 0:
         raise ValueError('simulations must be positive')
-    rng = random.Random(seed)
+    cache_key = f"{seed}|{simulations}"
+    cache = cache if cache is not None else {}
+    if cache_key not in cache:
+        rng = random.Random(seed)
+        totals: list[float] = []
+        total_sum = 0.0
+        for _ in range(simulations):
+            home_points = max(0.0, rng.normalvariate(home_mean, home_sd))
+            away_points = max(0.0, rng.normalvariate(away_mean, away_sd))
+            total_points = home_points + away_points
+            totals.append(total_points)
+            total_sum += total_points
+        cache[cache_key] = {'totals': totals, 'total_sum': total_sum}
+    cached = cache[cache_key]
     wins = 0
     pushes = 0
-    total_sum = 0.0
     normalized_side = normalize_text(side)
-    for _ in range(simulations):
-        home_points = max(0.0, rng.normalvariate(home_mean, home_sd))
-        away_points = max(0.0, rng.normalvariate(away_mean, away_sd))
-        total_points = home_points + away_points
-        total_sum += total_points
+    for total_points in cached['totals']:
         if math.isclose(total_points, line, abs_tol=1e-9):
             pushes += 1
             continue
@@ -971,7 +995,7 @@ def run_wnba_total_monte_carlo(
         'wins': wins,
         'pushes': pushes,
         'decisions': decisions,
-        'average_total': total_sum / simulations,
+        'average_total': cached['total_sum'] / simulations,
     }
 
 
@@ -995,31 +1019,48 @@ def wnba_simulate_matchup(
     calibration_delta = calibrated_total - model_total
     home_expected = max(0.0, expectation['home_expected'] + calibration_delta / 2.0)
     away_expected = max(0.0, expectation['away_expected'] + calibration_delta / 2.0)
-    seed = (
+    cache_key = (
         f"{row.get('date')}|{row.get('time')}|{home}|{away}|"
-        f"{handicap_line}|{handicap_side}|{round(home_expected, 3)}|{round(away_expected, 3)}"
+        f"{round(home_expected, 3)}|{round(away_expected, 3)}|"
+        f"{round(expectation['home_sd'], 3)}|{round(expectation['away_sd'], 3)}"
     )
-    rng = random.Random(seed)
-    home_wins = 0
-    away_wins = 0
+    cache = res.setdefault('_wnba_matchup_sim_cache', {})
+    if cache_key not in cache:
+        rng = random.Random(cache_key)
+        margins: list[float] = []
+        home_wins = 0
+        away_wins = 0
+        margin_sum = 0.0
+        total_sum = 0.0
+        for _ in range(WNBA_TOTAL_SIMULATIONS):
+            home_points = max(0.0, rng.normalvariate(home_expected, expectation['home_sd']))
+            away_points = max(0.0, rng.normalvariate(away_expected, expectation['away_sd']))
+            margin = home_points - away_points
+            margins.append(margin)
+            margin_sum += margin
+            total_sum += home_points + away_points
+            if margin > 0:
+                home_wins += 1
+            elif margin < 0:
+                away_wins += 1
+            else:
+                home_wins += 0.5
+                away_wins += 0.5
+        cache[cache_key] = {
+            'margins': margins,
+            'home_wins': home_wins,
+            'away_wins': away_wins,
+            'margin_sum': margin_sum,
+            'total_sum': total_sum,
+        }
+    cached = cache[cache_key]
+    margins = cached['margins']
+    home_wins = cached['home_wins']
+    away_wins = cached['away_wins']
     handicap_wins = 0
     handicap_pushes = 0
-    margin_sum = 0.0
-    total_sum = 0.0
-    for _ in range(WNBA_TOTAL_SIMULATIONS):
-        home_points = max(0.0, rng.normalvariate(home_expected, expectation['home_sd']))
-        away_points = max(0.0, rng.normalvariate(away_expected, expectation['away_sd']))
-        margin = home_points - away_points
-        margin_sum += margin
-        total_sum += home_points + away_points
-        if margin > 0:
-            home_wins += 1
-        elif margin < 0:
-            away_wins += 1
-        else:
-            home_wins += 0.5
-            away_wins += 0.5
-        if handicap_line is not None and handicap_side in {'home', 'away'}:
+    if handicap_line is not None and handicap_side in {'home', 'away'}:
+        for margin in margins:
             selected_margin = margin if handicap_side == 'home' else -margin
             adjusted = selected_margin + handicap_line
             if math.isclose(adjusted, 0.0, abs_tol=1e-9):
@@ -1036,8 +1077,8 @@ def wnba_simulate_matchup(
         'away_wins': away_wins,
         'handicap_wins': handicap_wins,
         'handicap_pushes': handicap_pushes,
-        'average_margin': margin_sum / WNBA_TOTAL_SIMULATIONS,
-        'average_total': total_sum / WNBA_TOTAL_SIMULATIONS,
+        'average_margin': cached['margin_sum'] / WNBA_TOTAL_SIMULATIONS,
+        'average_total': cached['total_sum'] / WNBA_TOTAL_SIMULATIONS,
         'home_expected': home_expected,
         'away_expected': away_expected,
         'home_sd': expectation['home_sd'],
@@ -1419,15 +1460,25 @@ def apply_probability_shrinkage(prob_observed: float, n: int, prior: float = WNB
 
 
 def wnba_load_team_dataframe(module: Any, team: str, season: str, local: str | None) -> pd.DataFrame:
+    cache = getattr(module, '_wnba_dataframe_cache', None)
+    if cache is None:
+        cache = {}
+        setattr(module, '_wnba_dataframe_cache', cache)
+    cache_key = (str(team), str(season), str(local))
+    if cache_key in cache:
+        return cache[cache_key]
     try:
         df = module.carregar_dados_time(team, season, local=local, filtrar_ot=False)
     except TypeError:
         df = module.carregar_dados_time(team, season, local=local)
     except Exception:
-        return pd.DataFrame()
+        cache[cache_key] = pd.DataFrame()
+        return cache[cache_key]
     if df is None or getattr(df, 'empty', True):
-        return pd.DataFrame()
-    return df
+        cache[cache_key] = pd.DataFrame()
+        return cache[cache_key]
+    cache[cache_key] = df
+    return cache[cache_key]
 
 
 def wnba_get_season_weights(module: Any, current_games: int) -> dict[str, float]:
