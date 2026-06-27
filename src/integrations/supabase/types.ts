@@ -49,7 +49,9 @@ export type Database = {
           source_probability: number | null
           sport: string
           stake_units: number | null
+          structured_error: string | null
           structured_json: Json
+          structured_status: string
           updated_at: string
           user_context: string | null
           user_id: string
@@ -89,7 +91,9 @@ export type Database = {
           source_probability?: number | null
           sport: string
           stake_units?: number | null
+          structured_error?: string | null
           structured_json?: Json
+          structured_status?: string
           updated_at?: string
           user_context?: string | null
           user_id?: string
@@ -129,7 +133,9 @@ export type Database = {
           source_probability?: number | null
           sport?: string
           stake_units?: number | null
+          structured_error?: string | null
           structured_json?: Json
+          structured_status?: string
           updated_at?: string
           user_context?: string | null
           user_id?: string
@@ -148,7 +154,9 @@ export type Database = {
           ocr_error: string | null
           ocr_status: string
           ocr_text: string | null
+          structured_error: string | null
           structured_json: Json | null
+          structured_status: string
           updated_at: string
           upload_category: string
           upload_order: number
@@ -166,7 +174,9 @@ export type Database = {
           ocr_error?: string | null
           ocr_status?: string
           ocr_text?: string | null
+          structured_error?: string | null
           structured_json?: Json | null
+          structured_status?: string
           updated_at?: string
           upload_category: string
           upload_order?: number
@@ -184,7 +194,9 @@ export type Database = {
           ocr_error?: string | null
           ocr_status?: string
           ocr_text?: string | null
+          structured_error?: string | null
           structured_json?: Json | null
+          structured_status?: string
           updated_at?: string
           upload_category?: string
           upload_order?: number
