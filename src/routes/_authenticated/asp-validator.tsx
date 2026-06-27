@@ -1484,6 +1484,9 @@ function SimulationPanel({ record }: { record: ValidatorRecord }) {
             {simulation?.status ?? "pending"}
           </Badge>
         </div>
+      </div>
+
+
 
       {simulation ? (
         <>
