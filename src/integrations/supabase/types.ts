@@ -14,6 +14,194 @@ export type Database = {
   }
   public: {
     Tables: {
+      asp_validator_registros: {
+        Row: {
+          adjusted_ev: number | null
+          adjusted_fair_odd: number | null
+          adjusted_probability: number | null
+          against_blocks: string[]
+          alerts: string[]
+          analysis_context: string | null
+          away_team: string
+          clv: number | null
+          confidence: string
+          created_at: string
+          decision: string
+          favorable_blocks: string[]
+          final_analysis: string
+          home_team: string
+          id: string
+          league: string | null
+          line: string | null
+          market: string
+          match_date: string | null
+          ocr_raw_text: string | null
+          offered_odd: number | null
+          online_context_json: Json
+          pick: string
+          profit_brl: number | null
+          profit_units: number | null
+          result_status: string | null
+          simulation_json: Json
+          source_ev: number | null
+          source_fair_odd: number | null
+          source_platform: string
+          source_probability: number | null
+          sport: string
+          stake_units: number | null
+          structured_json: Json
+          updated_at: string
+          user_context: string | null
+          user_id: string
+          validator_model: string
+        }
+        Insert: {
+          adjusted_ev?: number | null
+          adjusted_fair_odd?: number | null
+          adjusted_probability?: number | null
+          against_blocks?: string[]
+          alerts?: string[]
+          analysis_context?: string | null
+          away_team: string
+          clv?: number | null
+          confidence: string
+          created_at?: string
+          decision: string
+          favorable_blocks?: string[]
+          final_analysis: string
+          home_team: string
+          id?: string
+          league?: string | null
+          line?: string | null
+          market: string
+          match_date?: string | null
+          ocr_raw_text?: string | null
+          offered_odd?: number | null
+          online_context_json?: Json
+          pick: string
+          profit_brl?: number | null
+          profit_units?: number | null
+          result_status?: string | null
+          simulation_json?: Json
+          source_ev?: number | null
+          source_fair_odd?: number | null
+          source_platform: string
+          source_probability?: number | null
+          sport: string
+          stake_units?: number | null
+          structured_json?: Json
+          updated_at?: string
+          user_context?: string | null
+          user_id?: string
+          validator_model: string
+        }
+        Update: {
+          adjusted_ev?: number | null
+          adjusted_fair_odd?: number | null
+          adjusted_probability?: number | null
+          against_blocks?: string[]
+          alerts?: string[]
+          analysis_context?: string | null
+          away_team?: string
+          clv?: number | null
+          confidence?: string
+          created_at?: string
+          decision?: string
+          favorable_blocks?: string[]
+          final_analysis?: string
+          home_team?: string
+          id?: string
+          league?: string | null
+          line?: string | null
+          market?: string
+          match_date?: string | null
+          ocr_raw_text?: string | null
+          offered_odd?: number | null
+          online_context_json?: Json
+          pick?: string
+          profit_brl?: number | null
+          profit_units?: number | null
+          result_status?: string | null
+          simulation_json?: Json
+          source_ev?: number | null
+          source_fair_odd?: number | null
+          source_platform?: string
+          source_probability?: number | null
+          sport?: string
+          stake_units?: number | null
+          structured_json?: Json
+          updated_at?: string
+          user_context?: string | null
+          user_id?: string
+          validator_model?: string
+        }
+        Relationships: []
+      }
+      asp_validator_uploads: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_size: number | null
+          file_type: string | null
+          id: string
+          mime_type: string | null
+          ocr_error: string | null
+          ocr_status: string
+          ocr_text: string | null
+          structured_json: Json | null
+          updated_at: string
+          upload_category: string
+          upload_order: number
+          user_comment: string | null
+          user_id: string
+          validator_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          mime_type?: string | null
+          ocr_error?: string | null
+          ocr_status?: string
+          ocr_text?: string | null
+          structured_json?: Json | null
+          updated_at?: string
+          upload_category: string
+          upload_order?: number
+          user_comment?: string | null
+          user_id?: string
+          validator_id: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          mime_type?: string | null
+          ocr_error?: string | null
+          ocr_status?: string
+          ocr_text?: string | null
+          structured_json?: Json | null
+          updated_at?: string
+          upload_category?: string
+          upload_order?: number
+          user_comment?: string | null
+          user_id?: string
+          validator_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asp_validator_uploads_validator_id_fkey"
+            columns: ["validator_id"]
+            isOneToOne: false
+            referencedRelation: "asp_validator_registros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bankroll_historico: {
         Row: {
           banca_atual: number
