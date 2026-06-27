@@ -38,7 +38,10 @@ export type Database = {
           line: string | null
           market: string
           match_date: string | null
+          ocr_data_quality_score: number | null
           ocr_raw_text: string | null
+          ocr_structured_data: Json | null
+          ocr_structured_fields_count: number | null
           offered_odd: number | null
           online_context_json: Json
           pick: string
@@ -48,6 +51,7 @@ export type Database = {
           result_settled_at: string | null
           result_status: string | null
           simulation_json: Json
+          simulation_type: string | null
           source_ev: number | null
           source_fair_odd: number | null
           source_platform: string
@@ -86,7 +90,10 @@ export type Database = {
           line?: string | null
           market: string
           match_date?: string | null
+          ocr_data_quality_score?: number | null
           ocr_raw_text?: string | null
+          ocr_structured_data?: Json | null
+          ocr_structured_fields_count?: number | null
           offered_odd?: number | null
           online_context_json?: Json
           pick: string
@@ -96,6 +103,7 @@ export type Database = {
           result_settled_at?: string | null
           result_status?: string | null
           simulation_json?: Json
+          simulation_type?: string | null
           source_ev?: number | null
           source_fair_odd?: number | null
           source_platform: string
@@ -134,7 +142,10 @@ export type Database = {
           line?: string | null
           market?: string
           match_date?: string | null
+          ocr_data_quality_score?: number | null
           ocr_raw_text?: string | null
+          ocr_structured_data?: Json | null
+          ocr_structured_fields_count?: number | null
           offered_odd?: number | null
           online_context_json?: Json
           pick?: string
@@ -144,6 +155,7 @@ export type Database = {
           result_settled_at?: string | null
           result_status?: string | null
           simulation_json?: Json
+          simulation_type?: string | null
           source_ev?: number | null
           source_fair_odd?: number | null
           source_platform?: string
