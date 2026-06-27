@@ -99,6 +99,10 @@ type ValidatorRecord = {
   structured_json: Record<string, unknown> | null;
   structured_status: "pending" | "processing" | "completed" | "failed" | string;
   structured_error: string | null;
+  ocr_structured_data: Record<string, unknown> | null;
+  ocr_data_quality_score: number | null;
+  ocr_structured_fields_count: number | null;
+  simulation_type: string | null;
   result_status: string | null;
   result_settled_at: string | null;
   final_score: string | null;
@@ -1378,6 +1382,17 @@ function StructuredOcrPanel({ record, uploads }: { record: ValidatorRecord; uplo
   const structured = record.structured_json;
   const quality = extractDataQuality(structured);
   const uploadStructuredCount = uploads.filter((upload) => hasJsonContent(upload.structured_json)).length;
+  const dbQualityScore = typeof record.ocr_data_quality_score === "number" ? record.ocr_data_quality_score : null;
+  const dbFieldsCount = typeof record.ocr_structured_fields_count === "number" ? record.ocr_structured_fields_count : null;
+  const dbStructuredData = record.ocr_structured_data;
+  const hasDbStructured = hasJsonContent(dbStructuredData);
+  const qualityTone = dbQualityScore === null
+    ? "text-muted-foreground"
+    : dbQualityScore >= 0.75
+      ? "text-emerald-400"
+      : dbQualityScore >= 0.5
+        ? "text-amber-400"
+        : "text-red-400";
 
   return (
     <div className="space-y-3 rounded-md border border-border bg-muted/10 p-3">
@@ -1393,6 +1408,14 @@ function StructuredOcrPanel({ record, uploads }: { record: ValidatorRecord; uplo
             Estrutura: {record.structured_status || "pending"}
           </Badge>
           <Badge variant="outline">Uploads estruturados: {uploadStructuredCount}/{uploads.length}</Badge>
+          {dbQualityScore !== null ? (
+            <Badge variant="outline" className={qualityTone}>
+              Qualidade OCR: {(dbQualityScore * 100).toFixed(0)}%
+            </Badge>
+          ) : null}
+          {dbFieldsCount !== null ? (
+            <Badge variant="outline">Campos estruturados: {dbFieldsCount}</Badge>
+          ) : null}
         </div>
       </div>
 
@@ -1400,19 +1423,33 @@ function StructuredOcrPanel({ record, uploads }: { record: ValidatorRecord; uplo
         <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">{record.structured_error}</div>
       ) : null}
 
-      {quality ? (
-        <div className="grid gap-3 md:grid-cols-3">
-          <Info label="Qualidade OCR" value={String(quality.ocr_quality ?? "-")} />
-          <Info label="Campos faltantes" value={Array.isArray(quality.missing_fields) ? String(quality.missing_fields.length) : "0"} />
-          <Info label="Revisao manual" value={quality.needs_manual_review ? "Sim" : "Nao"} />
-        </div>
-      ) : null}
+      <div className="grid gap-3 md:grid-cols-3">
+        <Info
+          label="Qualidade OCR (score)"
+          value={dbQualityScore === null ? (quality ? String(quality.ocr_quality ?? "-") : "-") : `${(dbQualityScore * 100).toFixed(0)}%`}
+        />
+        <Info
+          label="Campos faltantes"
+          value={Array.isArray(quality?.missing_fields) ? String(quality?.missing_fields.length) : "0"}
+        />
+        <Info
+          label="Revisao manual"
+          value={quality?.needs_manual_review ? "Sim" : "Nao"}
+        />
+      </div>
 
       {quality?.missing_fields && Array.isArray(quality.missing_fields) && quality.missing_fields.length ? (
         <SignalBlock title="Campos faltantes" items={quality.missing_fields.map(String)} tone="warn" />
       ) : null}
       {quality?.conflicts && Array.isArray(quality.conflicts) && quality.conflicts.length ? (
         <SignalBlock title="Conflitos detectados" items={quality.conflicts.map(String)} tone="bad" />
+      ) : null}
+
+      {hasDbStructured ? (
+        <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3">
+          <p className="mb-2 text-xs uppercase tracking-wide text-emerald-300">Dados estruturados (OCR inteligente)</p>
+          <pre className="max-h-96 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">{JSON.stringify(dbStructuredData, null, 2)}</pre>
+        </div>
       ) : null}
 
       {hasJsonContent(structured) ? (
@@ -1441,10 +1478,15 @@ function SimulationPanel({ record }: { record: ValidatorRecord }) {
             Sinal tecnico por matriz de placares Poisson. A simulacao nao confirma nem pula prognostico sozinha.
           </p>
         </div>
-        <Badge variant={simulation?.status === "completed" ? "default" : simulation?.status === "failed" ? "destructive" : "outline"}>
-          {simulation?.status ?? "pending"}
-        </Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          {record.simulation_type ? <Badge variant="secondary">Tipo: {record.simulation_type}</Badge> : null}
+          <Badge variant={simulation?.status === "completed" ? "default" : simulation?.status === "failed" ? "destructive" : "outline"}>
+            {simulation?.status ?? "pending"}
+          </Badge>
+        </div>
       </div>
+
+
 
       {simulation ? (
         <>
