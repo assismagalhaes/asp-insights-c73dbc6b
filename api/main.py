@@ -290,6 +290,29 @@ def normalizar_raw_data(job_id: str, raw_data: dict) -> dict:
                                 )
 
                     # ------------------------------
+                    # Home/Away (Baseball/Hockey/etc.)
+                    # Header: BOOKMAKER, 1, 2
+                    # ------------------------------
+                    elif mercado_nome == "Home/Away":
+                        for idx, pick_label in [(1, mandante), (2, visitante)]:
+                            if idx < len(row) and is_number(row[idx]):
+                                adicionar_linha(
+                                    data=data,
+                                    hora=hora,
+                                    esporte=esporte,
+                                    liga=liga,
+                                    jogo_nome=jogo_nome,
+                                    mandante=mandante,
+                                    visitante=visitante,
+                                    mercado="Moneyline",
+                                    pick=pick_label,
+                                    linha="",
+                                    odd=to_float(row[idx]),
+                                    bookmaker=bookmaker,
+                                    fonte="FlashScore"
+                                )
+
+                    # ------------------------------
                     # Over/Under
                     # Header: BOOKMAKER, TOTAL, OVER, UNDER
                     # Row: betano.br, 2.5, 1.70, 2.07
