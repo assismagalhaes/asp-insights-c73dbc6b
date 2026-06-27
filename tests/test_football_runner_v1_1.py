@@ -115,6 +115,41 @@ class FootballRunnerV11Test(unittest.TestCase):
         self.assertIn("lambda_home_final=unavailable_not_calculated_by_core", selected["observacoes"])
         self.assertNotIn("not_exposed_by_v1_runner", selected["observacoes"])
 
+    def test_selects_only_matching_match_context(self):
+        contexto = """Confronto:
+Home FC (2º) vs Away FC (5º) | (Brazil - Serie A)
+--- DADOS TÉCNICOS ---
+RPI Home FC
+
+Confronto:
+Other FC (1º) vs Rival FC (4º) | (Brazil - Serie A)
+--- DADOS TÉCNICOS ---
+RPI Other FC
+"""
+
+        selected = runner.selecionar_contexto_do_prognostico(output_row(), contexto)
+
+        self.assertIn("Home FC", selected)
+        self.assertIn("Away FC", selected)
+        self.assertNotIn("Other FC", selected)
+        self.assertNotIn("Rival FC", selected)
+
+    def test_does_not_fallback_to_all_context_when_multiple_blocks_do_not_match(self):
+        contexto = """Confronto:
+Other FC vs Rival FC | (Brazil - Serie A)
+--- DADOS TÉCNICOS ---
+RPI Other FC
+
+Confronto:
+Third FC vs Fourth FC | (Brazil - Serie A)
+--- DADOS TÉCNICOS ---
+RPI Third FC
+"""
+
+        selected = runner.selecionar_contexto_do_prognostico(output_row(), contexto)
+
+        self.assertEqual(selected, "")
+
     def test_total_uses_exact_line_pair_and_shrinkage_note(self):
         row = output_row(
             mercado="Total de Gols",
@@ -295,6 +330,34 @@ class FootballRunnerV11Test(unittest.TestCase):
             float(first["odds_Asian_handicap_Full_Time_Linha1_HANDICAP"]),
             -float(first["odds_Asian_handicap_Full_Time_Linha1_Opp_HANDICAP"]),
         )
+
+    def test_adapter_preserves_country_for_ambiguous_super_league(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_path = Path(tmp) / "coleta.csv"
+            wide_path = Path(tmp) / "wide.csv"
+            pd.DataFrame([
+                {
+                    "data": "27.06.2026",
+                    "hora": "08:00",
+                    "esporte": "Football",
+                    "liga": "China - Super League",
+                    "country": "China",
+                    "jogo": "Liaoning Tieren vs Shandong Taishan",
+                    "mandante": "Liaoning Tieren",
+                    "visitante": "Shandong Taishan",
+                    "mercado": "1X2",
+                    "pick": "Liaoning Tieren",
+                    "linha": "",
+                    "odd": 2.80,
+                    "bookmaker": "betano.br",
+                    "fonte": "FlashScore",
+                },
+            ]).to_csv(csv_path, index=False)
+
+            wide = football_adapter.converter_csv_longo_para_wide(csv_path, wide_path)
+
+        self.assertEqual(wide.iloc[0]["country"], "China")
+        self.assertEqual(wide.iloc[0]["league"], "Super League")
 
     def test_output_keeps_app_columns_and_no_stake_is_added(self):
         selected_df, discarded_df = runner.aplicar_controles_football_v1_1(

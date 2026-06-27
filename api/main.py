@@ -116,11 +116,33 @@ def load_job(job_id: str) -> dict:
 def normalizar_raw_data(job_id: str, raw_data: dict) -> dict:
     normalized_rows = []
 
+    def format_country_league(country: str | None, league: str | None) -> str:
+        country_text = str(country or "").strip()
+        league_text = str(league or "").strip()
+        if not country_text:
+            return league_text
+        country_text = country_text.replace("_", " ").title()
+        if not league_text:
+            return country_text
+        if league_text.casefold().startswith(f"{country_text} - ".casefold()):
+            return league_text
+        return f"{country_text} - {league_text}"
+
+    def country_from_league(country: str | None, league: str | None) -> str:
+        country_text = str(country or "").strip()
+        if country_text:
+            return country_text.replace("_", " ").title()
+        league_text = str(league or "").strip()
+        if " - " in league_text:
+            return league_text.split(" - ", 1)[0].strip()
+        return ""
+
     def adicionar_linha(
         data="",
         hora="",
         esporte="",
         liga="",
+        country="",
         jogo_nome="",
         mandante="",
         visitante="",
@@ -136,6 +158,7 @@ def normalizar_raw_data(job_id: str, raw_data: dict) -> dict:
             "hora": hora,
             "esporte": esporte,
             "liga": liga,
+            "country": country_from_league(country, liga),
             "jogo": jogo_nome,
             "mandante": mandante,
             "visitante": visitante,
@@ -200,7 +223,8 @@ def normalizar_raw_data(job_id: str, raw_data: dict) -> dict:
     for _, jogo in jogos_tinydb.items():
         data = jogo.get("date", "")
         hora = jogo.get("hour", "")
-        liga = jogo.get("league", "")
+        country = jogo.get("country", "")
+        liga = format_country_league(country, jogo.get("league", ""))
         mandante = jogo.get("home", "")
         visitante = jogo.get("away", "")
         jogo_nome = f"{mandante} vs {visitante}".strip()
@@ -519,6 +543,7 @@ def gerar_csv_coleta(job_id: str, raw_data: dict, job: dict) -> Path:
         "hora",
         "esporte",
         "liga",
+        "country",
         "jogo",
         "mandante",
         "visitante",
