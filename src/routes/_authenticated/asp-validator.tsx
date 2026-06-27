@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import type { ClipboardEvent, DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, BrainCircuit, CheckCircle2, ClipboardCheck, Cloud, Eye, FileJson, ImageUp, Loader2, Microscope, Plus, RefreshCw, Search, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -96,13 +97,13 @@ type ValidatorRecord = {
   simulation_json: Record<string, unknown> | null;
   online_context_json: Record<string, unknown> | null;
   ocr_raw_text: string | null;
-  structured_json: Record<string, unknown> | null;
-  structured_status: "pending" | "processing" | "completed" | "failed" | string;
-  structured_error: string | null;
   ocr_structured_data: Record<string, unknown> | null;
   ocr_data_quality_score: number | null;
   ocr_structured_fields_count: number | null;
   simulation_type: string | null;
+  structured_json: Record<string, unknown> | null;
+  structured_status: "pending" | "processing" | "completed" | "failed" | string;
+  structured_error: string | null;
   result_status: string | null;
   result_settled_at: string | null;
   final_score: string | null;
@@ -184,6 +185,9 @@ type ValidatorInsert = Omit<ValidatorForm, "offered_odd" | "source_probability" 
   simulation_json: Record<string, unknown>;
   online_context_json: Record<string, unknown>;
   ocr_raw_text: string | null;
+  ocr_structured_data: Record<string, unknown>;
+  ocr_data_quality_score: number | null;
+  ocr_structured_fields_count: number | null;
   structured_json: Record<string, unknown>;
   structured_status: "pending" | "processing" | "completed" | "failed";
   structured_error: string | null;
@@ -196,6 +200,7 @@ type ValidatorInsert = Omit<ValidatorForm, "offered_odd" | "source_probability" 
   result_settled_at: string | null;
   final_score: string | null;
   result_notes: string | null;
+  simulation_type: string | null;
   is_simulated_result: boolean;
   bankroll_applied: boolean;
 };
@@ -570,6 +575,9 @@ function AspValidatorPage() {
         .from("asp_validator_registros")
         .update({
           structured_json: structured,
+          ocr_structured_data: structured,
+          ocr_data_quality_score: structured.data_quality_score,
+          ocr_structured_fields_count: structured.structured_fields_count,
           structured_status: "completed",
           structured_error: null,
           updated_at: new Date().toISOString(),
@@ -578,7 +586,19 @@ function AspValidatorPage() {
       if (error) throw error;
 
       toast.success("OCR estruturado em JSON.");
-      setSelectedRecord((prev) => (prev ? { ...prev, structured_json: structured, structured_status: "completed", structured_error: null } : prev));
+      setSelectedRecord((prev) =>
+        prev
+          ? {
+              ...prev,
+              structured_json: structured,
+              ocr_structured_data: structured,
+              ocr_data_quality_score: structured.data_quality_score,
+              ocr_structured_fields_count: structured.structured_fields_count,
+              structured_status: "completed",
+              structured_error: null,
+            }
+          : prev,
+      );
       setUploadsByRecord((prev) => ({
         ...prev,
         [selectedRecord.id]: (prev[selectedRecord.id] ?? currentUploads).map((upload) => {
@@ -624,6 +644,7 @@ function AspValidatorPage() {
         .from("asp_validator_registros")
         .update({
           simulation_json: simulation,
+          simulation_type: simulation.status === "completed" && simulation.notes.some((note) => normalize(note).includes("simplificada")) ? "simplified_ocr" : simulation.status,
           adjusted_probability: adjustedProbability,
           adjusted_fair_odd: adjustedFairOdd,
           adjusted_ev: adjustedEv,
@@ -637,6 +658,7 @@ function AspValidatorPage() {
           ? {
               ...prev,
               simulation_json: simulation,
+              simulation_type: simulation.status === "completed" && simulation.notes.some((note) => normalize(note).includes("simplificada")) ? "simplified_ocr" : simulation.status,
               adjusted_probability: adjustedProbability,
               adjusted_fair_odd: adjustedFairOdd,
               adjusted_ev: adjustedEv,
@@ -1452,6 +1474,8 @@ function StructuredOcrPanel({ record, uploads }: { record: ValidatorRecord; uplo
         </div>
       ) : null}
 
+      {hasJsonContent(structured) ? <ExtractedImageDataPanel structured={structured as StructuredValidatorJson} /> : null}
+
       {hasJsonContent(structured) ? (
         <div className="rounded-md border border-border bg-background/50 p-3">
           <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">JSON estruturado</p>
@@ -1463,6 +1487,47 @@ function StructuredOcrPanel({ record, uploads }: { record: ValidatorRecord; uplo
         </div>
       )}
     </div>
+  );
+}
+
+function ExtractedImageDataPanel({ structured }: { structured: StructuredValidatorJson }) {
+  const market = structured.market ?? structured.prediction;
+  const corners = structured.corners;
+  return (
+    <details className="rounded-md border border-border bg-background/50 p-3" open>
+      <summary className="cursor-pointer text-sm font-semibold">Dados extraidos das imagens</summary>
+      <div className="mt-3 grid gap-3 md:grid-cols-4">
+        <Info label="Mercado identificado" value={market?.name || structured.prediction?.market || "-"} />
+        <Info label="Pick" value={market?.pick || structured.prediction?.pick || "-"} />
+        <Info label="Odd" value={formatOdd(Number(market?.offered_odd ?? structured.prediction?.offered_odd ?? 0) || null)} />
+        <Info label="Probabilidade" value={formatPercent(Number(market?.probability_original ?? structured.prediction?.source_probability ?? 0) || null)} />
+        <Info label="Odd justa" value={formatOdd(Number(market?.fair_odd_original ?? structured.prediction?.source_fair_odd ?? 0) || null)} />
+        <Info label="EV" value={formatPercent(Number(market?.ev_original ?? structured.prediction?.source_ev ?? 0) || null)} />
+        <Info label="Qualidade" value={`${Math.round((structured.data_quality_score ?? 0) * 100)}%`} />
+        <Info label="Campos extraidos" value={String(structured.structured_fields_count ?? 0)} />
+      </div>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <div className="rounded-md border border-border p-3">
+          <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">{structured.match?.home_team || "Mandante"}</div>
+          <div className="grid gap-2 md:grid-cols-2">
+            <Info label="Corners marcados" value={formatNumber(corners?.home?.avg_for)} />
+            <Info label="Corners sofridos" value={formatNumber(corners?.home?.avg_against)} />
+            <Info label="Total medio" value={formatNumber(corners?.home?.avg_total)} />
+            <Info label="Race 5" value={formatPercent(corners?.home?.race_to_5_pct ?? null)} />
+          </div>
+        </div>
+        <div className="rounded-md border border-border p-3">
+          <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">{structured.match?.away_team || "Visitante"}</div>
+          <div className="grid gap-2 md:grid-cols-2">
+            <Info label="Corners marcados" value={formatNumber(corners?.away?.avg_for)} />
+            <Info label="Corners sofridos" value={formatNumber(corners?.away?.avg_against)} />
+            <Info label="Total medio" value={formatNumber(corners?.away?.avg_total)} />
+            <Info label="Race 5" value={formatPercent(corners?.away?.race_to_5_pct ?? null)} />
+          </div>
+        </div>
+      </div>
+      {structured.missing_critical_fields?.length ? <SignalBlock title="Campos criticos ausentes" items={structured.missing_critical_fields} tone="warn" /> : null}
+    </details>
   );
 }
 
@@ -1497,6 +1562,7 @@ function SimulationPanel({ record }: { record: ValidatorRecord }) {
             <Info label="Odd justa simulada" value={formatOdd(simulation.fair_odd)} />
             <Info label="EV simulado" value={formatDecimalEv(simulation.ev)} />
             <Info label="Modelo" value={simulation.model} />
+            <Info label="Tipo" value={record.simulation_type || (simulation.notes.some((note) => normalize(note).includes("simplificada")) ? "simplificada OCR" : "padrao")} />
           </div>
 
           {simulation.most_likely_scores.length ? (
@@ -1887,12 +1953,57 @@ function UploadsWithComments({
   onUpdate: (localId: string, patch: Partial<Pick<ValidatorUploadDraft, "upload_category" | "user_comment">>) => void;
   onRemove: (localId: string) => void;
 }) {
+  const [isDragging, setIsDragging] = useState(false);
+  const [pasteFeedback, setPasteFeedback] = useState("");
+  const pasteTimerRef = useRef<number | null>(null);
+
+  const addFileArray = (files: File[]) => {
+    if (!files.length) return;
+    const dataTransfer = new DataTransfer();
+    files.forEach((file) => dataTransfer.items.add(file));
+    onAddFiles(dataTransfer.files);
+  };
+
+  const handlePaste = (event: ClipboardEvent<HTMLDivElement>) => {
+    const files = Array.from(event.clipboardData.files ?? []);
+    const imageFiles = files.filter((file) => file.type.startsWith("image/"));
+    if (!imageFiles.length) return;
+    event.preventDefault();
+    addFileArray(
+      imageFiles.map((file, index) => {
+        const extension = file.type.includes("png") ? "png" : file.type.includes("jpeg") || file.type.includes("jpg") ? "jpg" : "png";
+        return new File([file], file.name || `screenshot-colado-${Date.now()}-${index + 1}.${extension}`, { type: file.type || "image/png" });
+      }),
+    );
+    setPasteFeedback(`${imageFiles.length} imagem(ns) colada(s) e adicionada(s) aos uploads.`);
+    if (pasteTimerRef.current) window.clearTimeout(pasteTimerRef.current);
+    pasteTimerRef.current = window.setTimeout(() => setPasteFeedback(""), 3500);
+  };
+
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+    onAddFiles(event.dataTransfer.files);
+  };
+
   return (
-    <div className="space-y-3 rounded-md border border-border bg-muted/10 p-3">
+    <div
+      className={`space-y-3 rounded-md border bg-muted/10 p-3 transition ${isDragging ? "border-primary bg-primary/10" : "border-border"}`}
+      tabIndex={0}
+      onPaste={handlePaste}
+      onDragOver={(event) => {
+        event.preventDefault();
+        setIsDragging(true);
+      }}
+      onDragLeave={() => setIsDragging(false)}
+      onDrop={handleDrop}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <Label>Uploads com comentario</Label>
-          <p className="mt-1 text-xs text-muted-foreground">Anexe prints ou arquivos de apoio. OCR sera aplicado em fase posterior.</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Clique, arraste arquivos ou cole prints com CTRL+V. Imagens coladas entram no mesmo fluxo de OCR.
+          </p>
         </div>
         <Button variant="outline" size="sm" asChild className="gap-2">
           <label>
@@ -1901,6 +2012,10 @@ function UploadsWithComments({
             <input type="file" multiple className="hidden" onChange={(event) => onAddFiles(event.target.files)} />
           </label>
         </Button>
+      </div>
+      {pasteFeedback ? <div className="rounded-md border border-green-500/30 bg-green-500/10 p-2 text-xs text-green-200">{pasteFeedback}</div> : null}
+      <div className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
+        Area ativa para drag and drop e CTRL+V. Use screenshots do Windows Snipping Tool ou imagens copiadas da area de transferencia.
       </div>
 
       {uploads.length ? (
@@ -2136,6 +2251,10 @@ function buildRecordValidationContext(record: ValidatorRecord, uploads: Validato
       structured_status: upload.structured_status,
     })),
     ocr_raw_text: record.ocr_raw_text,
+    ocr_structured_data: record.ocr_structured_data,
+    ocr_data_quality_score: record.ocr_data_quality_score,
+    ocr_structured_fields_count: record.ocr_structured_fields_count,
+    simulation_type: record.simulation_type,
     structured_json: record.structured_json,
     simulation_json: record.simulation_json,
     data_usage: {
@@ -2143,6 +2262,7 @@ function buildRecordValidationContext(record: ValidatorRecord, uploads: Validato
       used_structured_json: hasJsonContent(record.structured_json),
       used_simulation: hasJsonContent(record.simulation_json),
       used_upload_comments: uploads.some((upload) => upload.user_comment?.trim()),
+      has_structured_ocr_data: Boolean((record.structured_json as { has_structured_ocr_data?: unknown } | null)?.has_structured_ocr_data),
     },
   };
 }
@@ -2321,6 +2441,9 @@ async function saveValidation(form: ValidatorForm, result: ValidationResult, upl
       simulation_json: {},
       online_context_json: {},
       ocr_raw_text: null,
+      ocr_structured_data: {},
+      ocr_data_quality_score: null,
+      ocr_structured_fields_count: 0,
       structured_json: {
         form,
         result,
@@ -2337,6 +2460,7 @@ async function saveValidation(form: ValidatorForm, result: ValidationResult, upl
       result_settled_at: null,
       final_score: null,
       result_notes: null,
+      simulation_type: null,
       is_simulated_result: false,
       bankroll_applied: false,
     };
@@ -2401,8 +2525,37 @@ type StructuredUpload = {
 };
 
 type StructuredValidatorJson = {
+  extracted_from_ocr: boolean;
+  data_quality_score: number;
+  has_structured_ocr_data: boolean;
+  structured_fields_count: number;
+  missing_critical_fields: string[];
   source_platform: string;
   sport: string;
+  match: {
+    sport: string;
+    competition: string;
+    round: string;
+    date: string;
+    home_team: string;
+    away_team: string;
+  };
+  market: {
+    name: string;
+    line: string | number | null;
+    pick: string;
+    selection_team: string;
+    offered_odd: number | null;
+    fair_odd_original: number | null;
+    probability_original: number | null;
+    ev_original: number | null;
+  };
+  corners: {
+    home: CornerSideStats;
+    away: CornerSideStats;
+  };
+  goals: Record<string, unknown>;
+  raw_ocr_text: string;
   fixture: {
     league: string;
     date: string;
@@ -2439,10 +2592,60 @@ type StructuredValidatorJson = {
   notes: string[];
   data_quality: {
     ocr_quality: "low" | "medium" | "high";
+    score: number;
+    structured_fields_count: number;
+    has_structured_ocr_data: boolean;
     missing_fields: string[];
+    missing_critical_fields: string[];
     conflicts: string[];
     needs_manual_review: boolean;
   };
+};
+
+type CornerSideStats = {
+  avg_for: number | null;
+  avg_against: number | null;
+  avg_total: number | null;
+  first_corner_pct: number | null;
+  race_to_3_pct: number | null;
+  race_to_5_pct: number | null;
+  race_to_7_pct: number | null;
+  race_to_9_pct: number | null;
+  most_corners_1x2_pct: number | null;
+  over_lines: Record<string, number>;
+};
+
+type OcrIntelligenceData = {
+  extracted_from_ocr: boolean;
+  data_quality_score: number;
+  has_structured_ocr_data: boolean;
+  structured_fields_count: number;
+  missing_critical_fields: string[];
+  match: {
+    sport: string;
+    competition: string;
+    round: string;
+    date: string;
+    home_team: string;
+    away_team: string;
+  };
+  market: {
+    name: string;
+    line: string | number | null;
+    pick: string;
+    selection_team: string;
+    offered_odd: number | null;
+    fair_odd_original: number | null;
+    probability_original: number | null;
+    ev_original: number | null;
+  };
+  corners: {
+    home: CornerSideStats;
+    away: CornerSideStats;
+  };
+  goals: Record<string, unknown>;
+  raw_ocr_text: string;
+  notes: string[];
 };
 
 function buildStructuredOcrJson(record: ValidatorRecord, uploads: ValidatorUploadRecord[]): StructuredValidatorJson {
@@ -2454,6 +2657,7 @@ function buildStructuredOcrJson(record: ValidatorRecord, uploads: ValidatorUploa
     .filter(Boolean)
     .join("\n\n");
   const inferred = extractPredictionSignals(combinedText);
+  const intelligence = buildOcrIntelligence(record, uploads, combinedText, inferred);
 
   const structuredUploads = uploads.map((upload): StructuredUpload => {
     const text = upload.ocr_text || "";
@@ -2466,13 +2670,14 @@ function buildStructuredOcrJson(record: ValidatorRecord, uploads: ValidatorUploa
       detected_content_type: detectContentType(upload.upload_category, `${comment}\n${text}`),
       extracted_data: {
         ...extractPredictionSignals(`${comment}\n${text}`),
+        ocr_intelligence: buildOcrIntelligence(record, [upload], `${comment}\n${text}`, extractPredictionSignals(`${comment}\n${text}`)),
         games: extractGameLikeLines(text),
       },
     };
   });
 
   const marketData = buildMarketSpecificData(record, structuredUploads, combinedText);
-  const missingFields = buildMissingFields(record, structuredUploads);
+  const missingFields = buildMissingFields(record, structuredUploads, intelligence);
   const conflicts = buildStructuredConflicts(record, inferred);
   const totalOcrChars = structuredUploads.reduce((sum, upload) => sum + upload.ocr_text.length, 0);
   const completedUploads = uploads.filter((upload) => upload.ocr_status === "completed" && upload.ocr_text?.trim()).length;
@@ -2480,22 +2685,32 @@ function buildStructuredOcrJson(record: ValidatorRecord, uploads: ValidatorUploa
     totalOcrChars > 1200 && completedUploads >= 2 ? "high" : totalOcrChars > 250 || completedUploads >= 1 ? "medium" : "low";
 
   return {
+    extracted_from_ocr: intelligence.extracted_from_ocr,
+    data_quality_score: intelligence.data_quality_score,
+    has_structured_ocr_data: intelligence.has_structured_ocr_data,
+    structured_fields_count: intelligence.structured_fields_count,
+    missing_critical_fields: intelligence.missing_critical_fields,
     source_platform: record.source_platform || "",
     sport: record.sport || "",
+    match: intelligence.match,
+    market: intelligence.market,
+    corners: intelligence.corners,
+    goals: intelligence.goals,
+    raw_ocr_text: combinedText,
     fixture: {
-      league: record.league || "",
+      league: record.league || intelligence.match.competition || "",
       date: record.match_date || "",
-      home_team: record.home_team || "",
-      away_team: record.away_team || "",
+      home_team: record.home_team || intelligence.match.home_team || "",
+      away_team: record.away_team || intelligence.match.away_team || "",
     },
     prediction: {
-      market: record.market || "",
-      pick: record.pick || "",
-      line: manualLine ?? inferred.line ?? null,
-      offered_odd: manualOdd ?? inferred.offered_odd ?? null,
-      source_probability: manualProbability ?? inferred.source_probability ?? null,
-      source_ev: manualEv ?? inferred.source_ev ?? null,
-      source_fair_odd: record.source_fair_odd ?? inferred.source_fair_odd ?? null,
+      market: record.market || intelligence.market.name || "",
+      pick: record.pick || intelligence.market.pick || "",
+      line: manualLine ?? inferred.line ?? intelligence.market.line ?? null,
+      offered_odd: manualOdd ?? inferred.offered_odd ?? intelligence.market.offered_odd ?? null,
+      source_probability: manualProbability ?? inferred.source_probability ?? intelligence.market.probability_original ?? null,
+      source_ev: manualEv ?? inferred.source_ev ?? intelligence.market.ev_original ?? null,
+      source_fair_odd: record.source_fair_odd ?? inferred.source_fair_odd ?? intelligence.market.fair_odd_original ?? null,
     },
     uploads: structuredUploads,
     recent_form: {
@@ -2507,12 +2722,16 @@ function buildStructuredOcrJson(record: ValidatorRecord, uploads: ValidatorUploa
       away_team_away_games: extractCategoryGames(structuredUploads, "Casa/Fora", record.away_team),
     },
     market_specific_data: marketData,
-    notes: buildStructuredNotes(record, structuredUploads, inferred),
+    notes: [...buildStructuredNotes(record, structuredUploads, inferred), ...intelligence.notes],
     data_quality: {
       ocr_quality: ocrQuality,
+      score: intelligence.data_quality_score,
+      structured_fields_count: intelligence.structured_fields_count,
+      has_structured_ocr_data: intelligence.has_structured_ocr_data,
       missing_fields: missingFields,
+      missing_critical_fields: intelligence.missing_critical_fields,
       conflicts,
-      needs_manual_review: missingFields.length > 0 || conflicts.length > 0 || ocrQuality === "low",
+      needs_manual_review: intelligence.data_quality_score < 0.55 || conflicts.length > 0 || ocrQuality === "low",
     },
   };
 }
@@ -2537,6 +2756,279 @@ function extractPredictionSignals(text: string): {
     source_fair_odd: fairOdd,
     line: lineMatch?.[1] ?? null,
   };
+}
+
+function buildOcrIntelligence(
+  record: ValidatorRecord,
+  uploads: ValidatorUploadRecord[],
+  combinedText: string,
+  inferred: ReturnType<typeof extractPredictionSignals>,
+): OcrIntelligenceData {
+  const normalizedText = combinedText.replace(/,/g, ".");
+  const match = extractMatchFromOcr(record, normalizedText);
+  const robustSignals = extractRobustPredictionSignals(normalizedText);
+  const mergedSignals = {
+    offered_odd: inferred.offered_odd ?? robustSignals.offered_odd,
+    source_probability: inferred.source_probability ?? robustSignals.source_probability,
+    source_ev: inferred.source_ev ?? robustSignals.source_ev,
+    source_fair_odd: inferred.source_fair_odd ?? robustSignals.source_fair_odd,
+    line: inferred.line ?? robustSignals.line,
+  };
+  const market = extractMarketFromOcr(record, normalizedText, mergedSignals, match);
+  const corners = extractCornerStats(normalizedText, match.home_team || record.home_team, match.away_team || record.away_team);
+  const goals = extractGoalStats(normalizedText);
+  const structuredFieldsCount = countStructuredFields({
+    match,
+    market,
+    corners,
+    goals,
+    extracted_numbers: extractPercentagesAndNumbers(combinedText),
+  });
+  const missingCriticalFields = buildOcrCriticalMissingFields(match, market, structuredFieldsCount);
+  const textVolume = uploads.reduce((sum, upload) => sum + (upload.ocr_text?.trim().length ?? 0), 0);
+  const hasStructuredOcrData =
+    structuredFieldsCount >= 4 ||
+    Boolean(market.offered_odd || market.probability_original || market.ev_original || market.fair_odd_original) ||
+    Boolean(corners.home.avg_for || corners.away.avg_for || corners.home.race_to_5_pct || corners.away.race_to_5_pct);
+  const dataQualityScore = calculateOcrDataQualityScore(structuredFieldsCount, missingCriticalFields.length, textVolume, hasStructuredOcrData);
+
+  return {
+    extracted_from_ocr: uploads.some((upload) => Boolean(upload.ocr_text?.trim())),
+    data_quality_score: dataQualityScore,
+    has_structured_ocr_data: hasStructuredOcrData,
+    structured_fields_count: structuredFieldsCount,
+    missing_critical_fields: missingCriticalFields,
+    match,
+    market,
+    corners,
+    goals,
+    raw_ocr_text: combinedText,
+    notes: [
+      hasStructuredOcrData
+        ? `OCR Intelligence identificou ${structuredFieldsCount} campo(s) estruturado(s).`
+        : "OCR Intelligence nao encontrou campos quantitativos suficientes.",
+      dataQualityScore >= 0.75 ? "Qualidade dos dados OCR considerada alta para uso auxiliar." : "Dados OCR devem ser usados como apoio, com revisao manual.",
+    ],
+  };
+}
+
+function extractRobustPredictionSignals(text: string): ReturnType<typeof extractPredictionSignals> {
+  const odd =
+    matchNumber(text, /\b(?:odd|odds|cotacao|cotacao)\s*(?:ofertada|oferecida|oferecidas)?\s*[:=]?\s*(\d+(?:\.\d+)?)/i) ??
+    matchNumber(text, /\(odds?\s*oferecid[ao]s?\)\s*=?\s*(\d+(?:\.\d+)?)/i) ??
+    matchNumber(text, /\bavg\s*[:=]?\s*(\d+(?:\.\d+)?)/i);
+  const probability =
+    matchNumber(text, /\b(?:probabilidade|prob\.?|probability|chance)\s*(?:\(\s*%\s*\))?\s*[:=]?\s*(\d+(?:\.\d+)?)\s*%?/i) ??
+    matchNumber(text, /\b(\d+(?:\.\d+)?)\s*%\b[^\n]{0,70}(?:chance|previs|recomend|best)/i);
+  const ev = matchNumber(text, /\b(?:ev|edge|valor esperado)\s*[:=]?\s*(-?\d+(?:\.\d+)?)\s*%?/i);
+  const fairOdd =
+    matchNumber(text, /\b(?:odd justa|odd valor|fair odd|odds esperadas|odd esperada)\s*[:=]?\s*(\d+(?:\.\d+)?)/i) ??
+    matchNumber(text, /\bVE\s*(?:\([^)]*\))?\s*=?\s*(\d+(?:\.\d+)?)/i);
+  const lineMatch = text.match(/\b(?:linha|line|over|under|handicap|race to|corrida de escanteios)\s*[:=]?\s*([+-]?\d+(?:\.\d+)?)/i);
+  return {
+    offered_odd: odd,
+    source_probability: probability !== null ? normalizeProbability(probability) : null,
+    source_ev: ev,
+    source_fair_odd: fairOdd,
+    line: lineMatch?.[1] ?? null,
+  };
+}
+
+function extractMatchFromOcr(record: ValidatorRecord, text: string): OcrIntelligenceData["match"] {
+  const competitionMatch =
+    text.match(/(?:World|Mundo|Competicao|Competição|Liga)\s*[:\-]\s*([^\n\r]+?)(?:\s*-\s*Rodada\s*[:\-]?\s*([^\n\r]+))?(?:\n|$)/i) ??
+    text.match(/\b([A-Z][A-Za-z\s]+(?:Cup|League|Liga|Division|Championship))[^\n\r]*/);
+  const fixtureMatch = text.match(/([A-Za-zÀ-ÿ .'-]{2,40})\s+(?:vs|x)\s+([A-Za-zÀ-ÿ .'-]{2,40})/i);
+  const dateMatch = text.match(/(\d{2}\/\d{2}\/\d{4})(?:\s+(\d{1,2}:\d{2}))?/);
+  return {
+    sport: record.sport || inferSportFromText(text),
+    competition: record.league || cleanOcrValue(competitionMatch?.[1] ?? ""),
+    round: cleanOcrValue(competitionMatch?.[2] ?? ""),
+    date: record.match_date || cleanOcrValue(dateMatch ? `${dateMatch[1]}${dateMatch[2] ? ` ${dateMatch[2]}` : ""}` : ""),
+    home_team: record.home_team || cleanOcrValue(fixtureMatch?.[1] ?? ""),
+    away_team: record.away_team || cleanOcrValue(fixtureMatch?.[2] ?? ""),
+  };
+}
+
+function extractMarketFromOcr(
+  record: ValidatorRecord,
+  text: string,
+  inferred: ReturnType<typeof extractPredictionSignals>,
+  match: OcrIntelligenceData["match"],
+): OcrIntelligenceData["market"] {
+  const normalized = normalize(text);
+  const raceMatch = text.match(/(?:fora|visitante|away|casa|mandante|home)?\s*(?:cobrar|chegar|marcar)?\s*(\d+)\s*(?:escanteios|cantos|corners?)\s*(?:primeiro|first)/i);
+  const raceLine = raceMatch?.[1] ?? text.match(/(\d+)\s*primeiro/i)?.[1] ?? null;
+  const isCornerRace = Boolean(raceLine) || normalized.includes("corrida de escanteios") || normalized.includes("race to");
+  const selectionTeam =
+    inferSelectionTeam(record.pick, match, text) ||
+    (/\bfora\b|\bvisitante\b|\baway\b/i.test(text) ? match.away_team : "") ||
+    (/\bcasa\b|\bmandante\b|\bhome\b/i.test(text) ? match.home_team : "");
+  const marketName = record.market || (isCornerRace ? `Race to ${raceLine ?? ""} Corners`.trim() : inferMarketNameFromText(text));
+  const pick = record.pick || (isCornerRace ? `${selectionTeam || "Visitante"} cobrar ${raceLine ?? ""} escanteios primeiro`.trim() : "");
+
+  return {
+    name: marketName,
+    line: record.line || inferred.line || raceLine || null,
+    pick,
+    selection_team: selectionTeam,
+    offered_odd: record.offered_odd ?? inferred.offered_odd ?? null,
+    fair_odd_original: record.source_fair_odd ?? inferred.source_fair_odd ?? null,
+    probability_original: record.source_probability ?? inferred.source_probability ?? null,
+    ev_original: record.source_ev ?? inferred.source_ev ?? null,
+  };
+}
+
+function extractCornerStats(text: string, homeTeam: string, awayTeam: string): OcrIntelligenceData["corners"] {
+  const avgFor = labelNumbers(text, /marcados/gi);
+  const avgAgainst = labelNumbers(text, /sofridos/gi);
+  const avgTotal = labelNumbers(text, /marcados\s*\+\s*sofridos|total\s+escanteios|m[eé]dia\s+escanteios/gi);
+  const first = twoSidedPercent(text, /primeiro\s+do\s+jogo/i);
+  const race3 = twoSidedPercent(text, /3\s*primeiro/i);
+  const race5 = twoSidedPercent(text, /5\s*primeiro/i);
+  const race7 = twoSidedPercent(text, /7\s*primeiro/i);
+  const race9 = twoSidedPercent(text, /9\s*primeiro/i);
+  const mostCorners = twoSidedPercent(text, /mais\s+escanteios|1x2/i);
+  const overLines = extractCornerOverLines(text);
+
+  return {
+    home: {
+      avg_for: numberAt(avgFor, 0) ?? numberNearTeam(text, homeTeam, /marcados/i),
+      avg_against: numberAt(avgAgainst, 0) ?? numberNearTeam(text, homeTeam, /sofridos/i),
+      avg_total: numberAt(avgTotal, 0),
+      first_corner_pct: first.home,
+      race_to_3_pct: race3.home,
+      race_to_5_pct: race5.home,
+      race_to_7_pct: race7.home,
+      race_to_9_pct: race9.home,
+      most_corners_1x2_pct: mostCorners.home,
+      over_lines: overLines.home,
+    },
+    away: {
+      avg_for: numberAt(avgFor, 1) ?? numberNearTeam(text, awayTeam, /marcados/i),
+      avg_against: numberAt(avgAgainst, 1) ?? numberNearTeam(text, awayTeam, /sofridos/i),
+      avg_total: numberAt(avgTotal, 1),
+      first_corner_pct: first.away,
+      race_to_3_pct: race3.away,
+      race_to_5_pct: race5.away,
+      race_to_7_pct: race7.away,
+      race_to_9_pct: race9.away,
+      most_corners_1x2_pct: mostCorners.away,
+      over_lines: overLines.away,
+    },
+  };
+}
+
+function extractGoalStats(text: string): Record<string, unknown> {
+  const normalized = normalize(text);
+  if (!normalized.includes("gol") && !normalized.includes("goal") && !normalized.includes("btts")) return {};
+  return {
+    extracted_numbers: extractPercentagesAndNumbers(text),
+    over_1_5_pct: matchNumber(text, /over\s*1\.5[^\d]*(\d+(?:\.\d+)?)\s*%/i),
+    over_2_5_pct: matchNumber(text, /over\s*2\.5[^\d]*(\d+(?:\.\d+)?)\s*%/i),
+    btts_yes_pct: matchNumber(text, /btts[^\d]*(?:sim|yes)?[^\d]*(\d+(?:\.\d+)?)\s*%/i),
+  };
+}
+
+function twoSidedPercent(text: string, label: RegExp): { home: number | null; away: number | null } {
+  const line = text.split(/\r?\n/).find((item) => label.test(item));
+  if (line) {
+    const values = [...line.matchAll(/(\d+(?:\.\d+)?)\s*%/g)].map((match) => Number(match[1])).filter(Number.isFinite);
+    if (values.length >= 2) return { home: values[0], away: values[1] };
+  }
+  const compact = text.replace(/\s+/g, " ");
+  const match = compact.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*%[^%]{0,80}${label.source}[^%]{0,80}(\\d+(?:\\.\\d+)?)\\s*%`, "i"));
+  return { home: match ? Number(match[1]) : null, away: match ? Number(match[2]) : null };
+}
+
+function labelNumbers(text: string, label: RegExp): number[] {
+  return text
+    .split(/\r?\n/)
+    .filter((line) => label.test(line))
+    .flatMap((line) => [...line.replace(/,/g, ".").matchAll(/(\d+(?:\.\d+)?)/g)].map((match) => Number(match[1])))
+    .filter((value) => Number.isFinite(value) && value <= 100)
+    .slice(0, 8);
+}
+
+function extractCornerOverLines(text: string): { home: Record<string, number>; away: Record<string, number> } {
+  const home: Record<string, number> = {};
+  const away: Record<string, number> = {};
+  for (const line of text.replace(/,/g, ".").split(/\r?\n/)) {
+    const lineMatch = line.match(/([+-]?\d+(?:\.\d+)?)/);
+    const pctMatches = [...line.matchAll(/(\d+(?:\.\d+)?)\s*%/g)].map((match) => Number(match[1]));
+    if (!lineMatch || pctMatches.length < 1 || !/(over|under|mais\/menos|\+\d|-?\d)/i.test(line)) continue;
+    const key = lineMatch[1];
+    if (pctMatches[0] !== undefined) home[key] = pctMatches[0];
+    if (pctMatches[1] !== undefined) away[key] = pctMatches[1];
+  }
+  return { home, away };
+}
+
+function numberAt(values: number[], index: number): number | null {
+  const value = values[index];
+  return Number.isFinite(value) ? value : null;
+}
+
+function numberNearTeam(text: string, team: string, label: RegExp): number | null {
+  if (!team) return null;
+  const teamKey = normalize(team);
+  const line = text.split(/\r?\n/).find((item) => normalize(item).includes(teamKey) && label.test(item));
+  if (!line) return null;
+  return matchNumber(line.replace(/,/g, "."), /(\d+(?:\.\d+)?)/);
+}
+
+function countStructuredFields(value: unknown): number {
+  if (value === null || value === undefined || value === "") return 0;
+  if (typeof value === "number") return Number.isFinite(value) ? 1 : 0;
+  if (typeof value === "string") return value.trim() ? 1 : 0;
+  if (Array.isArray(value)) return value.reduce<number>((sum, item) => sum + countStructuredFields(item), 0);
+  if (typeof value === "object") return Object.values(value as Record<string, unknown>).reduce<number>((sum, item) => sum + countStructuredFields(item), 0);
+  return 0;
+}
+
+function buildOcrCriticalMissingFields(match: OcrIntelligenceData["match"], market: OcrIntelligenceData["market"], structuredFieldsCount: number): string[] {
+  const missing: string[] = [];
+  if (!match.home_team) missing.push("mandante");
+  if (!match.away_team) missing.push("visitante");
+  if (!market.name) missing.push("mercado");
+  if (!market.pick) missing.push("pick");
+  if (!market.offered_odd) missing.push("odd ofertada");
+  if (!market.probability_original) missing.push("probabilidade original");
+  if (structuredFieldsCount < 4) missing.push("dados quantitativos OCR");
+  return missing;
+}
+
+function calculateOcrDataQualityScore(fieldCount: number, missingCount: number, textVolume: number, hasStructuredData: boolean): number {
+  const fieldScore = Math.min(0.55, fieldCount * 0.025);
+  const textScore = Math.min(0.2, textVolume / 5000);
+  const structuredBonus = hasStructuredData ? 0.2 : 0;
+  const penalty = Math.min(0.35, missingCount * 0.05);
+  return round(Math.max(0, Math.min(1, 0.1 + fieldScore + textScore + structuredBonus - penalty)), 2);
+}
+
+function inferSportFromText(text: string): string {
+  const value = normalize(text);
+  if (value.includes("escanteio") || value.includes("corner") || value.includes("gol") || value.includes("world cup")) return "Futebol";
+  return "";
+}
+
+function inferMarketNameFromText(text: string): string {
+  const value = normalize(text);
+  if (value.includes("escanteio") || value.includes("corner")) return "Escanteios";
+  if (value.includes("btts")) return "BTTS";
+  if (value.includes("over") || value.includes("under")) return "Over/Under";
+  return "";
+}
+
+function inferSelectionTeam(pick: string, match: OcrIntelligenceData["match"], text: string): string {
+  const pickKey = normalize(pick || text);
+  if (match.home_team && pickKey.includes(normalize(match.home_team))) return match.home_team;
+  if (match.away_team && pickKey.includes(normalize(match.away_team))) return match.away_team;
+  return "";
+}
+
+function cleanOcrValue(value: string): string {
+  return value.replace(/\s+/g, " ").replace(/[|•]+/g, "").trim();
 }
 
 function matchNumber(text: string, pattern: RegExp): number | null {
@@ -2604,13 +3096,13 @@ function extractCategoryGames(uploads: StructuredUpload[], category: string, tea
     .slice(0, 10);
 }
 
-function buildMissingFields(record: ValidatorRecord, uploads: StructuredUpload[]): string[] {
+function buildMissingFields(record: ValidatorRecord, uploads: StructuredUpload[], intelligence: OcrIntelligenceData): string[] {
   const missing: string[] = [];
-  if (!record.league) missing.push("fixture.league");
-  if (!record.match_date) missing.push("fixture.date");
-  if (record.offered_odd === null) missing.push("prediction.offered_odd");
-  if (record.source_probability === null) missing.push("prediction.source_probability");
-  if (record.source_ev === null) missing.push("prediction.source_ev");
+  if (!record.league && !intelligence.match.competition) missing.push("fixture.league");
+  if (!record.match_date && !intelligence.match.date) missing.push("fixture.date");
+  if (record.offered_odd === null && !intelligence.market.offered_odd) missing.push("prediction.offered_odd");
+  if (record.source_probability === null && !intelligence.market.probability_original) missing.push("prediction.source_probability");
+  if (record.source_ev === null && intelligence.market.ev_original === null) missing.push("prediction.source_ev");
   if (!uploads.some((upload) => upload.ocr_text.trim())) missing.push("uploads.ocr_text");
   return missing;
 }
@@ -2999,6 +3491,10 @@ function formatDecimalEv(value: number | null): string {
 
 function formatOdd(value: number | null): string {
   return value === null ? "-" : value.toFixed(2);
+}
+
+function formatNumber(value: number | null | undefined): string {
+  return value === null || value === undefined || !Number.isFinite(value) ? "-" : round(value, 2).toFixed(2);
 }
 
 function numberToInput(value: number | null): string {

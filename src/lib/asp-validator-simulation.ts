@@ -59,6 +59,10 @@ export function runAspValidatorSimulation(input: AspValidatorSimulationInput): A
       };
     }
 
+    if (isCornerMarket(marketText)) {
+      return runCornerSimulation(input, marketText);
+    }
+
     const line = parseLine(input.line);
     const lambda = estimateLambdas(input);
     if (lambda.lambdaHome === null || lambda.lambdaAway === null) {
@@ -151,8 +155,88 @@ function isSupportedMarket(text: string): boolean {
     text.includes("moneyline") ||
     text.includes("dupla chance") ||
     text.includes("double chance") ||
-    text.includes("handicap")
+    text.includes("handicap") ||
+    text.includes("corner") ||
+    text.includes("escanteio") ||
+    text.includes("canto")
   );
+}
+
+function isCornerMarket(text: string): boolean {
+  return text.includes("corner") || text.includes("escanteio") || text.includes("canto");
+}
+
+function runCornerSimulation(input: AspValidatorSimulationInput, marketText: string): AspValidatorSimulationResult {
+  const structured = (input.structured_json ?? {}) as Record<string, any>;
+  const market = (structured.market ?? structured.prediction ?? {}) as Record<string, any>;
+  const corners = (structured.corners ?? {}) as Record<string, any>;
+  const pickText = normalize(input.pick ?? market.pick ?? "");
+  const wantsAway = pickText.includes(normalize(input.away_team ?? "")) || pickText.includes("fora") || pickText.includes("visitante") || pickText.includes("away");
+  const side = wantsAway ? "away" : "home";
+  const sideStats = (corners[side] ?? {}) as Record<string, number | null>;
+  const opponentStats = (corners[side === "home" ? "away" : "home"] ?? {}) as Record<string, number | null>;
+  const line = parseLine(input.line ?? market.line ?? null);
+  const sourceProb = percentToDecimal(readNumber(market.probability_original ?? structured.prediction?.source_probability));
+  const offeredOdd = input.offered_odd ?? readNumber(market.offered_odd ?? structured.prediction?.offered_odd);
+  const marketProb = offeredOdd && offeredOdd > 1 ? 1 / offeredOdd : null;
+  const raceProb = line ? percentToDecimal(readNumber(sideStats[`race_to_${Math.trunc(line)}_pct`])) : null;
+  const avgFor = readNumber(sideStats.avg_for);
+  const avgAgainstOpp = readNumber(opponentStats.avg_against);
+  const avgTotal = readNumber(sideStats.avg_total ?? opponentStats.avg_total);
+  const avgSupport =
+    avgFor !== null && avgAgainstOpp !== null && line
+      ? clampDecimal((avgFor * 0.6 + avgAgainstOpp * 0.4) / Math.max(line, 1), 0.35, 0.72)
+      : avgTotal !== null && line
+        ? clampDecimal(avgTotal / Math.max(line * 1.8, 1), 0.35, 0.68)
+        : null;
+  const components = [
+    sourceProb !== null ? { value: sourceProb, weight: 0.35 } : null,
+    raceProb !== null ? { value: raceProb, weight: 0.3 } : null,
+    avgSupport !== null ? { value: avgSupport, weight: 0.2 } : null,
+    marketProb !== null ? { value: marketProb, weight: 0.15 } : null,
+  ].filter((item): item is { value: number; weight: number } => Boolean(item));
+
+  if (!components.length) {
+    return {
+      model: "poisson_score_matrix",
+      status: "low_confidence",
+      lambda_home: null,
+      lambda_away: null,
+      market_probability: null,
+      fair_odd: null,
+      ev: null,
+      most_likely_scores: [],
+      goal_distribution: {},
+      notes: ["Simulacao simplificada de corners nao realizada por falta de dados quantitativos OCR."],
+      warnings: ["Dados OCR de corners insuficientes para estimar probabilidade."],
+    };
+  }
+
+  const totalWeight = components.reduce((sum, item) => sum + item.weight, 0);
+  const rawProbability = components.reduce((sum, item) => sum + item.value * item.weight, 0) / totalWeight;
+  const quality = readNumber(structured.data_quality_score) ?? readNumber(structured.data_quality?.score) ?? 0.5;
+  const penalty = quality < 0.7 ? (0.7 - quality) * 0.12 : 0;
+  const probability = clampDecimal(rawProbability - penalty, 0.05, 0.85);
+  const fairOdd = probability > 0 ? round(1 / probability) : null;
+  const ev = offeredOdd && offeredOdd > 1 ? round(offeredOdd * probability - 1, 4) : null;
+
+  return {
+    model: "poisson_score_matrix",
+    status: components.length >= 2 ? "completed" : "low_confidence",
+    lambda_home: null,
+    lambda_away: null,
+    market_probability: round(probability, 4),
+    fair_odd: fairOdd,
+    ev,
+    most_likely_scores: [],
+    goal_distribution: {},
+    notes: [
+      "Simulacao simplificada baseada em dados extraidos das imagens.",
+      `Composicao: probabilidade original ${formatProb(sourceProb)}, race ${formatProb(raceProb)}, medias ${formatProb(avgSupport)}, mercado ${formatProb(marketProb)}.`,
+      "Penalidade por qualidade OCR limitada para evitar cortes agressivos sem base quantitativa.",
+    ],
+    warnings: components.length < 2 ? ["Simulacao de baixa confiabilidade por pouca evidencia estruturada."] : [],
+  };
 }
 
 function estimateLambdas(input: AspValidatorSimulationInput): LambdaEstimate {
@@ -351,6 +435,29 @@ function parseLine(value: string | number | null): number | null {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   const parsed = Number(String(value ?? "").replace(",", ".").match(/[+-]?\d+(?:\.\d+)?/)?.[0]);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function readNumber(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string") {
+    const parsed = Number(value.replace("%", "").replace(",", ".").match(/[+-]?\d+(?:\.\d+)?/)?.[0]);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function percentToDecimal(value: number | null): number | null {
+  if (value === null) return null;
+  if (value > 0 && value <= 1) return clampDecimal(value, 0, 1);
+  return clampDecimal(value / 100, 0, 1);
+}
+
+function clampDecimal(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function formatProb(value: number | null): string {
+  return value === null ? "indisponivel" : `${round(value * 100, 2)}%`;
 }
 
 function firstNumber(text: string, patterns: RegExp[]): number | null {
