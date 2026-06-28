@@ -184,6 +184,8 @@ function normalizePick(
   type: FootballMarketType | null,
   period: FootballPeriod,
   line: number | null,
+  homeTeam?: string | null,
+  awayTeam?: string | null,
 ): string {
   const raw = `${pick || market}`.trim();
   if (!raw) return "";
@@ -215,6 +217,14 @@ function normalizePick(
   }
   if (type === "x1x2") {
     if (/empate|draw|\bx\b/.test(lower)) return `Empate${periodSuffix}`.trim();
+    const aw = norm(awayTeam ?? "");
+    const hm = norm(homeTeam ?? "");
+    if (/visitante|away|\bfora\b/.test(lower) || (aw && lower.includes(aw))) {
+      return `Visitante vence${awayTeam ? ` (${awayTeam})` : ""}${periodSuffix}`.trim();
+    }
+    if (/mandante|home|\bcasa\b/.test(lower) || (hm && lower.includes(hm))) {
+      return `Mandante vence${homeTeam ? ` (${homeTeam})` : ""}${periodSuffix}`.trim();
+    }
   }
   return raw;
 }
