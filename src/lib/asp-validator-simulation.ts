@@ -349,10 +349,11 @@ function runCornerTotalOverSimulation(
     notes: [
       `Modelo corner_total_over_simplified para ${wantsUnder ? "Under" : "Over"} ${line} escanteios.`,
       `Composicao tecnica do total esperado (NAO somar diretamente medias totais):`,
-      `  - expectativa mandante = media(${formatNumber(homeFor)} marcados casa, ${formatNumber(awayAgainst)} sofridos visitante fora)`,
-      `  - expectativa visitante = media(${formatNumber(awayFor)} marcados fora, ${formatNumber(homeAgainst)} sofridos mandante casa)`,
-      `  - media geral por time: mandante total ${formatNumber(homeTotal)}, visitante total ${formatNumber(awayTotal)}`,
-      `  - total esperado consolidado ≈ ${formatNumber(expectedTotal)} cantos`,
+      `  - expectativa mandante = media(${formatNumber(homeForHome)} marcados em casa, ${formatNumber(awayAgainstAway)} sofridos como visitante) = ${formatNumber(expHome)}`,
+      `  - expectativa visitante = media(${formatNumber(awayForAway)} marcados como visitante, ${formatNumber(homeAgainstHome)} sofridos em casa) = ${formatNumber(expAway)}`,
+      `  - media geral por time (somente referencia): mandante total ${formatNumber(homeTotal)}, visitante total ${formatNumber(awayTotal)}`,
+      `  - total esperado consolidado ≈ ${formatNumber(expectedTotal)} cantos (NUNCA somar ${formatNumber(homeTotal)} + ${formatNumber(awayTotal)} diretamente)`,
+
       `Frequencia ${wantsUnder ? "Under" : "Over"} ${line}.5 observada: ${formatProb(frequencyProb)} (lembrando: "+${thresholdKey}" = Over ${thresholdKey}.5, ou seja ${Math.trunc(line) + 1}+ cantos).`,
       `Pesos finais: prob. original ${formatProb(sourceProb)}, odd implicita ${formatProb(marketProb)}, suporte medias ${formatProb(avgSupport)}, frequencia ${formatProb(frequencyProb)}, qualidade dados ${formatProb(quality)}.`,
     ],
