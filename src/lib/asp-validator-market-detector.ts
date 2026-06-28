@@ -19,7 +19,9 @@ export type FootballMarketType =
   | "x1x2"
   | "double_chance"
   | "corners"
-  | "cards";
+  | "cards"
+  | "first_goal";
+
 
 export type FootballPeriod = "FT" | "HT" | "ST";
 
