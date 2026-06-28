@@ -391,8 +391,8 @@ function extractPerformanceScopeTexts(text: string): { generalText: string; home
   const starts = [...text.matchAll(/^\s*---\s*DESEMPENHO\s+GERAL[^(\n]*(?:\([^\n]*\))?\s*---\s*$/gim)];
   if (starts.length === 0) return { generalText: "", homeAwayText: "" };
 
-  let generalText = "";
-  let homeAwayText = "";
+  const generalChunks: string[] = [];
+  const homeAwayChunks: string[] = [];
 
   for (let i = 0; i < starts.length; i += 1) {
     const start = starts[i].index ?? 0;
@@ -403,11 +403,16 @@ function extractPerformanceScopeTexts(text: string): { generalText: string; home
     const chunk = text.slice(contextStart, nextStart);
     const firstHeader = chunk.match(/Filtro\s*:\s*([^\n\r]+)/i)?.[1] ?? chunk.slice(0, 260);
     const isHomeAway = /casa\s*\/\s*fora/i.test(firstHeader);
-    if (isHomeAway) homeAwayText += chunk + "\n";
-    else generalText += chunk + "\n";
+    if (isHomeAway) homeAwayChunks.push(chunk);
+    else generalChunks.push(chunk);
   }
 
-  return { generalText, homeAwayText };
+  const chooseChunk = (chunks: string[]) => {
+    const withFt = chunks.filter((chunk) => /\bft\b|jogo\s+completo|full\s*time/i.test(chunk.match(/Filtro\s*:\s*([^\n\r]+)/i)?.[1] ?? chunk));
+    return (withFt.at(-1) ?? chunks.at(-1) ?? "") + "\n";
+  };
+
+  return { generalText: chooseChunk(generalChunks), homeAwayText: chooseChunk(homeAwayChunks) };
 }
 
 function inferSport(market: string): string {
