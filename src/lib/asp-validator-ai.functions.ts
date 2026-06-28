@@ -54,16 +54,13 @@ export const validateAspValidatorWithAi = createServerFn({ method: "POST" })
 
     try {
       const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
+      const { slimAspValidatorContext } = await import("@/lib/asp-validator-ai-slim");
       const gateway = createLovableAiGatewayProvider(key);
+      const slim = slimAspValidatorContext(data.context);
       const { text } = await generateText({
-        model: gateway("google/gemini-3-flash-preview"),
+        model: gateway("google/gemini-3.1-flash-lite"),
         system: SYSTEM_PROMPT,
-        prompt: [
-          "Analise o contexto consolidado abaixo.",
-          "Use campos manuais como prioridade. Use OCR, JSON estruturado e simulacao apenas como apoio tecnico.",
-          "Retorne apenas JSON valido.",
-          JSON.stringify(data.context, null, 2),
-        ].join("\n\n"),
+        prompt: `Contexto consolidado (priorize manual > structured_json > simulation_json). Retorne JSON valido.\n\n${JSON.stringify(slim)}`,
       });
       const parsed = parseJsonObject(text);
       if (!parsed) return fallback;
