@@ -17,6 +17,12 @@ import { runAspValidatorSimulation, type AspValidatorSimulationResult } from "@/
 import { routeSimulation } from "@/lib/asp-validator-football-simulation";
 
 import { parsePastedPrognostico, type PastedParsedData } from "@/lib/asp-validator-paste-parser";
+import {
+  ASP_VALIDATOR_ACCEPT_ATTR,
+  ASP_VALIDATOR_UPLOAD_HINT,
+  filterValidUploads,
+  validateAspValidatorUpload,
+} from "@/lib/asp-validator-upload-guard";
 import { useConfiguracao } from "@/lib/db";
 import { processAspValidatorOcr } from "@/lib/scraper-api.functions";
 import { supabase } from "@/lib/supabase-public";
@@ -441,8 +447,10 @@ function AspValidatorPage() {
 
   const addUploads = (files: FileList | null, uploadSource: ValidatorUploadDraft["upload_source"] = "manual") => {
     if (!files?.length) return;
+    const validFiles = filterValidUploads(Array.from(files), (reason) => toast.error(reason));
+    if (!validFiles.length) return;
     setUploads((prev) => {
-      const nextFiles = Array.from(files).map((file, index) => ({
+      const nextFiles = validFiles.map((file, index) => ({
         local_id: `${file.name}-${file.size}-${file.lastModified}-${Date.now()}-${index}`,
         file,
         upload_category: UPLOAD_CATEGORIES[0],
@@ -1670,7 +1678,25 @@ function UploadsDetail({
             <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
               <div className="space-y-2">
                 <Label>Arquivo alternativo para reprocessar OCR</Label>
-                <Input type="file" onChange={(event) => onAttachOcrFile(upload.id, event.target.files?.[0] ?? null)} />
+                <Input
+                  type="file"
+                  accept={ASP_VALIDATOR_ACCEPT_ATTR}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] ?? null;
+                    if (!file) {
+                      onAttachOcrFile(upload.id, null);
+                      return;
+                    }
+                    const result = validateAspValidatorUpload(file);
+                    if (!result.ok) {
+                      toast.error(result.reason);
+                      event.target.value = "";
+                      return;
+                    }
+                    onAttachOcrFile(upload.id, file);
+                  }}
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">{ASP_VALIDATOR_UPLOAD_HINT}</p>
                 <p className="text-xs text-muted-foreground">
                   {ocrFilesByUpload[upload.id]
                     ? `Arquivo pronto para OCR: ${ocrFilesByUpload[upload.id].name}`
@@ -2724,12 +2750,19 @@ function UploadsWithComments({
           <p className="mt-1 text-xs text-muted-foreground">
             Clique, arraste arquivos ou cole prints com CTRL+V. Imagens coladas entram no mesmo fluxo de OCR.
           </p>
+          <p className="mt-1 text-[11px] text-muted-foreground/80">{ASP_VALIDATOR_UPLOAD_HINT}</p>
         </div>
         <Button variant="outline" size="sm" asChild className="gap-2">
           <label>
             <Plus className="h-4 w-4" />
             Adicionar arquivo
-            <input type="file" multiple className="hidden" onChange={(event) => onAddFiles(event.target.files, "manual")} />
+            <input
+              type="file"
+              multiple
+              accept={ASP_VALIDATOR_ACCEPT_ATTR}
+              className="hidden"
+              onChange={(event) => onAddFiles(event.target.files, "manual")}
+            />
           </label>
         </Button>
       </div>
