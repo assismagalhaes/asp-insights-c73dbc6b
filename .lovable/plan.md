@@ -1,77 +1,110 @@
-## Objetivo
+# Arquitetura modular de parsers e validadores — ASP Validator (texto colado)
 
-Adicionar busca online opcional à Validação Crítica, com dois botões claros:
-- **Analisar com IA (local)** — já existe; usa apenas dados colados, sem internet.
-- **Analisar com IA + Pesquisa online** — novo; Gemini pesquisa na web automaticamente conforme o pick.
+Objetivo: expandir o fluxo de texto colado (hoje só escanteios) para 1X2, Over/Under FT/HT/ST, BTTS, Dupla Chance, Escanteios e Cartões — sem Handicap. Detecção de mercado, parsers, simuladores, UI e prompt da IA passam a ser roteados por `market_type` + `period`.
 
-## Limitação técnica (importante)
+## 1. Novos arquivos
 
-O Lovable AI Gateway é OpenAI-compatível e **não expõe** o `google_search` nativo do Gemini. A pesquisa online será implementada via **tool calling**: o próprio Gemini decide quando precisa buscar e chama uma ferramenta `web_search` que roda no servidor usando **Firecrawl**. O resultado é equivalente — Gemini lê páginas reais e cita fontes — sem exigir chave paga adicional.
+- `src/lib/asp-validator-market-detector.ts`
+  - `detectFootballMarketType(text, formMarket?, formPick?) -> { market_type, period, selection, line }`
+  - Regras conforme briefing (corners > cards > btts > double_chance > x1x2 > goals_total; period FT/HT/ST).
 
-## O que será implementado
+- `src/lib/asp-validator-football-parsers.ts`
+  - `parsePastedBaseMatchData(text)` (compartilhado: times, liga, data, mercado, odd, prob, EV).
+  - `parseFootballGeneralPerformance(text, home, away)` → wins/draws/losses/efic/possession/frequent_scores.
+  - `parseFootballGoalsData(text, home, away, period)` → totais/médias/over_lines/under_lines/btts/first_goal, por geral e casa/fora.
+  - `parseFootballCardsData(...)` → médias amarelos/vermelhos/total + over/under.
+  - `parseFootballBttsData(...)` (deriva de goals + bloco "Ambas marcam").
+  - `parseFootball1x2Data(...)` (deriva de general performance + gols).
+  - `parseFootballDoubleChanceData(...)` (deriva de 1x2).
+  - `normalizeFootballMarket(rawMarket, rawPick) -> { market_type, period, line, pick_normalized, validator_model }`.
+  - `buildStructuredPastedDataByMarket(text) -> StructuredPastedData` (orquestrador — chama detector + parsers do mercado correto + base + general performance quando útil).
 
-### 1. Conector Firecrawl
-- Linkar Firecrawl ao projeto via `standard_connectors--connect` (injeta `FIRECRAWL_API_KEY` no servidor).
-- Se o usuário não quiser linkar, o botão "IA + Pesquisa" fica desabilitado com tooltip explicativo.
+- `src/lib/asp-validator-football-simulation.ts`
+  - `simulateGoalsTotal(structured)` — `football_goals_total_simplified` com composição técnica (média(home_for, away_against) + média(away_for, home_against)); HT usa dados HT, fallback FT marcado como proxy de baixa confiança.
+  - `simulateBtts(structured)` — BTTS Sim/Não, inverte para Não.
+  - `simulate1x2(structured)` — eficiência + gols + mando.
+  - `simulateDoubleChance(structured)` — composição a partir de 1X2.
+  - `simulateCards(structured)` — médias + over/under.
+  - Reutiliza `runAspValidatorSimulation` (escanteios) já existente.
+  - `routeSimulation(structured) -> SimulationResult` decide pelo market_type.
 
-### 2. Nova server function `analisarValidacaoOnline`
-Arquivo: `src/lib/validacao-ia-online.functions.ts`
+- Manter `src/lib/asp-validator-paste-parser.ts` como wrapper: continua exportando `parsePastedPrognostico`, mas internamente delega para `buildStructuredPastedDataByMarket`. Parser de escanteios atual é movido para `parseFootballCornersData` em `asp-validator-football-parsers.ts`, preservando regra PackBall (+9 → Over 9.5) e estruturas existentes (over_lines, race_to_N_pct, etc.).
 
-- Usa `streamText`/`generateText` da AI SDK + provider Lovable Gateway.
-- Modelo: `google/gemini-3-flash-preview` (mais barato) com fallback para `google/gemini-2.5-pro` quando o usuário pedir análise profunda (futuro).
-- Registra duas tools:
-  - `web_search({ query, recency })` → chama Firecrawl `/search` (com `tbs: 'qdr:w'` por padrão) e retorna top 5 resultados (título, url, snippet).
-  - `web_scrape({ url })` → chama Firecrawl `/scrape` em formato markdown para aprofundar em uma fonte específica.
-- `stopWhen: stepCountIs(50)` (loop de agente).
-- System prompt orienta Gemini a buscar **automaticamente conforme o pick**:
-  - **Notícias recentes** do jogo/times (últimas 72h).
-  - **Status do elenco / lineups / lesões** quando o mercado for sensível a isso (player props, handicap, ML).
-  - **Contexto de mercado e jogo** (clima para esportes outdoor, forma recente, polêmicas).
-- Retorna estrutura: `{ parecer, decisao_sugerida, stake_sugerida, fontes: [{titulo, url}], buscas_realizadas: [query] }`.
+## 2. Schema
 
-### 3. Tela `validacao.tsx`
+`StructuredPastedData` ganha campos:
 
-Substituir o atual botão único "Analisar com IA" por **dois botões lado a lado**:
-
+```ts
+{
+  input_source: "pasted_text",
+  sport: "Futebol",
+  market_type: "goals_total"|"btts"|"x1x2"|"double_chance"|"corners"|"cards",
+  period: "FT"|"HT"|"ST",
+  match: { ...existente, location_scope, period_scope },
+  market: { ...existente, selection },
+  general_performance?: { home, away },
+  goals?: { period, general:{home,away}, home_away:{home,away} },
+  corners?: { ...estrutura atual },
+  cards?: { period, general, home_away },
+  btts?: { home:{yes_pct,no_pct,first_goal_pct}, away:{...} },
+  raw_pasted_text, data_quality_score, structured_fields_count, missing_critical_fields,
+  form_patch: { ...existente, validator_model }
+}
 ```
-[ 🧠 IA local ]   [ 🌐 IA + Pesquisa online ]
-```
 
-- Cada um aciona sua server function.
-- Painel de resultado da IA ganha aba/seção extra **"Fontes consultadas"** com lista clicável de URLs e a lista de buscas feitas pelo modelo.
-- Indicador visual `🌐` no parecer da IA quando vier da versão online (para diferenciar no histórico).
-- Toast informando "Pesquisando notícias e contexto…" enquanto roda (pode levar 10-30s).
-- Tratamento de erros 402/429 do gateway e erros do Firecrawl com mensagens claras.
+Backwards-compat: para escanteios, `corners.home/away` permanecem populados como hoje (consumido por `runAspValidatorSimulation`).
 
-### 4. Persistência
+## 3. Rota `src/routes/_authenticated/asp-validator.tsx`
 
-Estender tabela `validacoes` com:
-- `fontes_consultadas` (jsonb nullable) — array `[{titulo, url}]`.
-- `buscas_realizadas` (jsonb nullable) — array de queries.
-- `modo_ia` (text nullable) — `'local'` ou `'online'`.
+- `PastedDataPreview` passa a renderizar painéis condicionais por `market_type`:
+  - `corners` → painel atual (Escanteios + race).
+  - `goals_total` → novo `GoalsPanel` (totais, médias, over/under, btts opcional).
+  - `cards` → `CardsPanel`.
+  - `btts` → `GoalsPanel` + `BttsPanel`.
+  - `x1x2` / `double_chance` → `GeneralPerformancePanel` + `GoalsPanel` (suporte).
+- Esconder seções de Race/Corners quando market_type ≠ corners.
+- `applyPastedToForm`: usa `form_patch.validator_model` (`ASP Goal Validator` / `ASP Corner Validator` / `ASP Cards Validator`).
+- `runAspValidatorSimulation` substituído por `routeSimulation` para mercados não-corner. Corners continua chamando o atual.
+- `simulation_json` enviado à IA inclui `market_type`, `period`, `proxy_used` (FT como proxy para HT), `model_name` (ex. `football_goals_total_simplified`).
+- `saveValidation`: persistir `market_type` e `period` em `structured_json`; mapear validador correto.
 
-Mostrar essas infos no `DadosTecnicosViewer` quando existirem.
+## 4. Prompts (`asp-validator-ai.functions.ts` e `asp-validator-ai-online.functions.ts`)
 
-### 5. Fluxo de configuração para o usuário
+- System prompt recebe `market_type` e `period`. Regras:
+  - "Não use análise de escanteios para mercado de gols/BTTS/1X2/cartões."
+  - "Cite apenas dados do mercado correto presente em `structured_json`."
+  - "Se `simulation_json.proxy_used = FT_as_HT`, alerte sobre baixa confiança."
+  - Manter proibição de soma bruta de médias.
+- Guardrail mantido: CONFIRMAR só se EV ajustado ≥ 3% e fair_odd < offered_odd; senão PULAR.
 
-Na primeira vez que clicar em "IA + Pesquisa", se Firecrawl não estiver linkado:
-- Modal explicativo: "Para pesquisa online preciso conectar o Firecrawl (grátis para uso moderado)."
-- Botão "Conectar Firecrawl" abre o fluxo de conexão.
+## 5. Tolerância do parser
 
-## O que NÃO muda
+Helper `normalize()` já remove acentos. Adicionar:
+- Sinônimos de período: `1 tempo|1º tempo|1° tempo|primeiro tempo|HT|1T` → HT; análogo ST; `jogo completo|FT|todos|tempo regulamentar` → FT.
+- Sinônimos de mercado conforme regras do briefing.
+- Ordem livre de blocos: parsers escaneiam o texto inteiro buscando marcadores `--- TITULO ---` ou cabeçalhos `TIME:`.
 
-- Botão **IA local** continua funcionando exatamente como hoje (sem internet, sem custo de Firecrawl).
-- Decisão final continua humana — IA online só sugere.
-- Importação, parser de datas, GREEN/RED, dashboard, bankroll, publicação: intactos.
-- Estrutura visual e nomenclatura (Dados Técnicos, Parecer da Validação): mantida.
+## 6. Critérios de aceite
 
-## Custo / observações
+- Náutico x Goiás "Menos de 1.5 gols 1º tempo" → `market_type=goals_total`, `period=HT`, painel de Gols (sem escanteios), simulador `football_goals_total_simplified`, proxy FT→HT se faltar HT.
+- Escanteios continua igual.
+- Cartões: detecta, painel cartões, simulador `football_cards_total_simplified`.
+- BTTS, 1X2, Dupla Chance: detectam e usam painéis/simuladores corretos.
+- `tsc --noEmit` e `vite build` OK.
 
-- Cada análise online gasta: ~1-3 buscas Firecrawl + ~1-2 scrapes + tokens Gemini Flash (modelo barato).
-- Botão separado garante que você só gasta quando realmente quer pesquisa.
+## 7. Fora de escopo
 
-## Arquivos afetados
+- Handicap (asiático/europeu) não implementado.
+- Migração de banco não necessária — `structured_json` já é JSONB livre em `asp_validator_registros`.
+- Sem mudanças em uploads/OCR (fluxo secundário inalterado).
 
-- **Criados**: `src/lib/validacao-ia-online.functions.ts`, `src/lib/firecrawl.server.ts`.
-- **Editados**: `src/routes/_authenticated/validacao.tsx`, `src/components/dados-tecnicos-viewer.tsx`, `src/lib/db.ts` (tipos da `Validacao`).
-- **Migração**: novos campos em `public.validacoes`.
+## 8. Execução
+
+1. Criar `asp-validator-market-detector.ts` + `asp-validator-football-parsers.ts` (move parser de escanteios para lá, sem mudar comportamento).
+2. Criar `asp-validator-football-simulation.ts` com `routeSimulation`.
+3. Refatorar `asp-validator-paste-parser.ts` para delegar (mantendo exports usados pela rota).
+4. Atualizar UI da rota com painéis condicionais + roteamento de simulação.
+5. Atualizar prompts da IA com `market_type`/`period` e proibições.
+6. `bunx tsgo --noEmit` + `bunx vite build` para validar.
+
+Estimativa: alteração grande, mas confinada a `src/lib/asp-validator-*` e `src/routes/_authenticated/asp-validator.tsx`.
