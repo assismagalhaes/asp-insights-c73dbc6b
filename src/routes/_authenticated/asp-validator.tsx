@@ -2041,22 +2041,46 @@ function SimulationPanel({ record }: { record: ValidatorRecord }) {
 }
 
 function AiAnalysisContextPanel({ record }: { record: ValidatorRecord }) {
-  const usedOcr = Boolean(record.ocr_raw_text?.trim());
+  const rawOcr = record.ocr_raw_text?.trim() ?? "";
+  const isPastedSummary = rawOcr.startsWith("[TEXTO COLADO INTERPRETADO]");
+  const structured = (record.structured_json ?? {}) as { input_source?: unknown; raw_pasted_text?: unknown };
+  const ocrStructured = (record.ocr_structured_data ?? {}) as { input_source?: unknown; raw_pasted_text?: unknown };
+  const usedPasted =
+    isPastedSummary ||
+    structured.input_source === "pasted_text" ||
+    ocrStructured.input_source === "pasted_text" ||
+    Boolean(structured.raw_pasted_text) ||
+    Boolean(ocrStructured.raw_pasted_text);
+  const usedRealOcr = Boolean(rawOcr) && !isPastedSummary && !usedPasted;
   const usedStructured = hasJsonContent(record.structured_json);
   const usedSimulation = hasJsonContent(record.simulation_json);
+  const pastedText = String(
+    (structured.raw_pasted_text as string | undefined) ??
+      (ocrStructured.raw_pasted_text as string | undefined) ??
+      (isPastedSummary ? rawOcr.replace(/^\[TEXTO COLADO INTERPRETADO\][\s\S]*?\n\n/, "") : ""),
+  );
   return (
     <div className="space-y-3 rounded-md border border-border bg-muted/10 p-3">
       <div>
         <div className="text-sm font-semibold">Dados usados na analise IA</div>
         <p className="mt-1 text-xs text-muted-foreground">
-          A validacao IA consolidada usa campos manuais como prioridade e OCR/JSON/simulacao como apoio tecnico.
+          A validacao IA consolidada usa campos manuais como prioridade e OCR/texto colado/JSON/simulacao como apoio tecnico.
         </p>
       </div>
-      <div className="grid gap-3 md:grid-cols-3">
-        <Info label="Usou OCR" value={usedOcr ? "Sim" : "Nao"} />
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+        <Info label="Usou OCR real" value={usedRealOcr ? "Sim" : "Nao"} />
+        <Info label="Usou texto colado" value={usedPasted ? "Sim" : "Nao"} />
         <Info label="Usou JSON estruturado" value={usedStructured ? "Sim" : "Nao"} />
         <Info label="Usou simulacao" value={usedSimulation ? "Sim" : "Nao"} />
       </div>
+      {pastedText ? (
+        <details className="rounded-md border border-border/60 bg-background/40 p-3">
+          <summary className="cursor-pointer select-none text-xs uppercase tracking-wide text-muted-foreground">
+            Texto colado original
+          </summary>
+          <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">{pastedText}</pre>
+        </details>
+      ) : null}
       {record.analysis_context ? (
         <div className="rounded-md border border-border bg-background/50 p-3">
           <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Contexto da IA</p>
