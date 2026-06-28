@@ -1001,7 +1001,17 @@ function AspValidatorPage() {
               />
             </div>
 
+            <PastedTextSection
+              value={pastedText}
+              parsed={pastedParsed}
+              onChange={setPastedText}
+              onInterpret={interpretPastedText}
+              onApply={applyPastedToForm}
+              onClear={clearPastedText}
+            />
+
             <UploadsWithComments uploads={uploads} onAddFiles={addUploads} onUpdate={updateUpload} onRemove={removeUpload} />
+
 
             <Button onClick={validate} disabled={!canValidate || saving} className="gap-2">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <BrainCircuit className="h-4 w-4" />}
