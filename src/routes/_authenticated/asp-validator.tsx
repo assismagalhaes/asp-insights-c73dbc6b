@@ -797,9 +797,9 @@ function AspValidatorPage() {
 
   const validateSelectedRecordWithOnlineAi = async () => {
     if (!selectedRecord) return;
-    const currentUploads = uploadsByRecord[selectedRecord.id] ?? [];
     setValidatingOnlineRecord(true);
     try {
+      const currentUploads = await ensureOcrForStoredUploads();
       const context = {
         ...buildRecordValidationContext(selectedRecord, currentUploads),
         previous_ai_analysis: {
