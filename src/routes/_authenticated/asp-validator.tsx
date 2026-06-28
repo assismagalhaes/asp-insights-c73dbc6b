@@ -991,16 +991,6 @@ function AspValidatorPage() {
               <div className="mt-1 font-semibold">{validatorModel}</div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Contexto geral do usuario</Label>
-              <Textarea
-                value={form.user_context}
-                onChange={(event) => update("user_context", event.target.value)}
-                placeholder="Cole observacoes, leitura do jogo, dados tecnicos, resumo de print ou contexto da fonte externa."
-                className="min-h-32"
-              />
-            </div>
-
             <PastedTextSection
               value={pastedText}
               parsed={pastedParsed}
@@ -1010,7 +1000,16 @@ function AspValidatorPage() {
               onClear={clearPastedText}
             />
 
-            <UploadsWithComments uploads={uploads} onAddFiles={addUploads} onUpdate={updateUpload} onRemove={removeUpload} />
+            <details className="rounded-md border border-border/60 bg-muted/10 p-3 text-sm">
+              <summary className="cursor-pointer select-none text-xs uppercase tracking-wide text-muted-foreground">
+                Recurso secundario: uploads com OCR (opcional)
+              </summary>
+              <div className="mt-3">
+                <UploadsWithComments uploads={uploads} onAddFiles={addUploads} onUpdate={updateUpload} onRemove={removeUpload} />
+              </div>
+            </details>
+
+
 
 
             <Button onClick={validate} disabled={!canValidate || saving} className="gap-2">
