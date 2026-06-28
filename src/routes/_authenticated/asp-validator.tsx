@@ -3440,6 +3440,12 @@ function extractCornerStats(text: string, homeTeam: string, awayTeam: string): O
       under_lines: { ...overLines.home_under, ...homeBlockStats.under_lines },
       home_away_over_lines: homeAwaySplit.home.over_lines,
       home_away_under_lines: homeAwaySplit.home.under_lines,
+      normalized_market_lines: buildNormalizedCornerLines(
+        { ...overLines.home, ...homeBlockStats.over_lines },
+        { ...overLines.home_under, ...homeBlockStats.under_lines },
+        homeAwaySplit.home.over_lines,
+        homeAwaySplit.home.under_lines,
+      ),
     },
     away: {
       avg_for: awayBlockStats.avg_for ?? numberAt(avgFor, 1) ?? numberNearTeam(text, awayTeam, /marcados/i),
@@ -3461,8 +3467,41 @@ function extractCornerStats(text: string, homeTeam: string, awayTeam: string): O
       under_lines: { ...overLines.away_under, ...awayBlockStats.under_lines },
       home_away_over_lines: homeAwaySplit.away.over_lines,
       home_away_under_lines: homeAwaySplit.away.under_lines,
+      normalized_market_lines: buildNormalizedCornerLines(
+        { ...overLines.away, ...awayBlockStats.over_lines },
+        { ...overLines.away_under, ...awayBlockStats.under_lines },
+        homeAwaySplit.away.over_lines,
+        homeAwaySplit.away.under_lines,
+      ),
     },
   };
+}
+
+function buildNormalizedCornerLines(
+  over: Record<string, number>,
+  under: Record<string, number>,
+  homeAwayOver: Record<string, number>,
+  homeAwayUnder: Record<string, number>,
+): NormalizedCornerLine[] {
+  const out: NormalizedCornerLine[] = [];
+  const push = (token: string, value_pct: number, side: "over" | "under", scope: "general" | "home_away") => {
+    const signedToken = token.startsWith("+") || token.startsWith("-") ? token : `${side === "under" ? "-" : "+"}${token}`;
+    const parsed = normalizeCornerLineToken(signedToken);
+    if (!parsed) return;
+    out.push({
+      label: signedToken,
+      side: parsed.side,
+      line_value: parsed.line_value,
+      market_normalized: parsed.market_normalized,
+      value_pct,
+      scope,
+    });
+  };
+  for (const [key, value] of Object.entries(over)) push(key, value, "over", "general");
+  for (const [key, value] of Object.entries(under)) push(key, value, "under", "general");
+  for (const [key, value] of Object.entries(homeAwayOver)) push(key, value, "over", "home_away");
+  for (const [key, value] of Object.entries(homeAwayUnder)) push(key, value, "under", "home_away");
+  return out;
 }
 
 function metricPairNumbers(text: string, label: RegExp, options: { requireDecimal?: boolean } = {}): number[] | null {
