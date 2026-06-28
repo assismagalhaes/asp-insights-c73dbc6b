@@ -17,6 +17,12 @@ import { runAspValidatorSimulation, type AspValidatorSimulationResult } from "@/
 import { routeSimulation } from "@/lib/asp-validator-football-simulation";
 
 import { parsePastedPrognostico, type PastedParsedData } from "@/lib/asp-validator-paste-parser";
+import {
+  ASP_VALIDATOR_ACCEPT_ATTR,
+  ASP_VALIDATOR_UPLOAD_HINT,
+  filterValidUploads,
+  validateAspValidatorUpload,
+} from "@/lib/asp-validator-upload-guard";
 import { useConfiguracao } from "@/lib/db";
 import { processAspValidatorOcr } from "@/lib/scraper-api.functions";
 import { supabase } from "@/lib/supabase-public";
