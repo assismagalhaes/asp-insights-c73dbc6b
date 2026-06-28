@@ -390,10 +390,30 @@ function isCornerTotalOverUnderMarket(marketText: string, pick: string, line: nu
   return hasCorner && hasTotalSide && !hasRace;
 }
 
-function readLinePercent(lines: unknown, key: string): number | null {
+function readLinePercent(lines: unknown, key: string | number): number | null {
   if (!lines || typeof lines !== "object") return null;
   const map = lines as Record<string, unknown>;
-  return readNumber(map[key] ?? map[`+${key}`] ?? map[`-${key}`] ?? map[`${key}.0`]);
+  const num = typeof key === "number" ? key : Number(String(key).replace(",", "."));
+  const candidates: string[] = [];
+  if (typeof key === "string") candidates.push(key);
+  if (Number.isFinite(num)) {
+    const exact = String(num);
+    const intPart = String(Math.trunc(num));
+    const dec = `${intPart}.5`;
+    candidates.push(exact, `+${exact}`, `-${exact}`, intPart, `+${intPart}`, `-${intPart}`, dec, `+${dec}`, `${exact}.0`);
+  }
+  for (const c of candidates) {
+    if (c in map) {
+      const value = readNumber(map[c]);
+      if (value !== null) return value;
+    }
+  }
+  return null;
+}
+
+function formatLineLabel(line: number): string {
+  if (!Number.isFinite(line)) return String(line);
+  return Number.isInteger(line) ? `${line}.5` : String(line);
 }
 
 function averagePercentValues(values: Array<number | null>): number | null {
