@@ -369,48 +369,35 @@ function averagePercentValues(values: Array<number | null>): number | null {
 }
 
 function estimateLambdas(input: AspValidatorSimulationInput): LambdaEstimate {
-  const text = [
-    input.user_context ?? "",
-    JSON.stringify(input.structured_json ?? {}),
-  ].join("\n");
-  const normalized = text.replace(/,/g, ".");
-
-  const homeScored = firstNumber(normalized, [
-    /m[eé]dia\s+marcados\s+casa[^0-9]*(\d+(?:\.\d+)?)/i,
-    /home[^0-9]{0,30}(?:scored|for|marcados)[^0-9]*(\d+(?:\.\d+)?)/i,
-  ]);
-  const homeAllowed = firstNumber(normalized, [
-    /m[eé]dia\s+sofridos\s+casa[^0-9]*(\d+(?:\.\d+)?)/i,
-    /home[^0-9]{0,30}(?:allowed|against|sofridos)[^0-9]*(\d+(?:\.\d+)?)/i,
-  ]);
-  const awayScored = firstNumber(normalized, [
-    /m[eé]dia\s+marcados\s+visitante[^0-9]*(\d+(?:\.\d+)?)/i,
-    /away[^0-9]{0,30}(?:scored|for|marcados)[^0-9]*(\d+(?:\.\d+)?)/i,
-  ]);
-  const awayAllowed = firstNumber(normalized, [
-    /m[eé]dia\s+sofridos\s+visitante[^0-9]*(\d+(?:\.\d+)?)/i,
-    /away[^0-9]{0,30}(?:allowed|against|sofridos)[^0-9]*(\d+(?:\.\d+)?)/i,
-  ]);
-  const expectedHomeAwayTotal = normalized.match(/for[cç]a\s+esperada\s+gols[^0-9]*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/i);
-  const expectedTotal = firstNumber(normalized, [
-    /exp\.\s*de\s*gols\s*\(modelo\)[^0-9]*(\d+(?:\.\d+)?)/i,
-    /expectativa\s+de\s+gols[^0-9]*(\d+(?:\.\d+)?)/i,
-  ]);
-
   const notes: string[] = [];
   const warnings: string[] = [];
   let lambdaHome: number | null = null;
   let lambdaAway: number | null = null;
   let evidence = 0;
 
-  if (expectedHomeAwayTotal?.[1] && expectedHomeAwayTotal?.[2]) {
-    lambdaHome = Number(expectedHomeAwayTotal[1]);
-    lambdaAway = Number(expectedHomeAwayTotal[2]);
+  // 1) Primary source: structured_json.goals extracted by OCR
+  const structured = (input.structured_json ?? {}) as Record<string, any>;
+  const goalsBlock = (structured.goals ?? {}) as Record<string, any>;
+  const home = (goalsBlock.home ?? {}) as Record<string, any>;
+  const away = (goalsBlock.away ?? {}) as Record<string, any>;
+
+  const expHome = readNumber(home.expected_goals);
+  const expAway = readNumber(away.expected_goals);
+  if (expHome !== null && expAway !== null) {
+    lambdaHome = expHome;
+    lambdaAway = expAway;
     evidence += 3;
-    notes.push("Lambdas estimados por forca esperada de gols extraida do OCR/JSON.");
-  } else {
-    const homeParts = [homeScored, awayAllowed].filter((value): value is number => value !== null);
-    const awayParts = [awayScored, homeAllowed].filter((value): value is number => value !== null);
+    notes.push(`Lambdas extraidos da forca esperada de gols: mandante ${formatNumber(expHome)}, visitante ${formatNumber(expAway)}.`);
+  }
+
+  if (lambdaHome === null || lambdaAway === null) {
+    const homeFor = readNumber(home.home_avg_for) ?? readNumber(home.avg_for);
+    const homeAgainst = readNumber(home.home_avg_against) ?? readNumber(home.avg_against);
+    const awayFor = readNumber(away.away_avg_for) ?? readNumber(away.avg_for);
+    const awayAgainst = readNumber(away.away_avg_against) ?? readNumber(away.avg_against);
+
+    const homeParts = [homeFor, awayAgainst].filter((value): value is number => value !== null && Number.isFinite(value));
+    const awayParts = [awayFor, homeAgainst].filter((value): value is number => value !== null && Number.isFinite(value));
     if (homeParts.length) {
       lambdaHome = average(homeParts);
       evidence += homeParts.length;
@@ -419,17 +406,58 @@ function estimateLambdas(input: AspValidatorSimulationInput): LambdaEstimate {
       lambdaAway = average(awayParts);
       evidence += awayParts.length;
     }
-    if (homeParts.length || awayParts.length) notes.push("Lambdas estimados por medias de marcados/sofridos disponiveis.");
+    if (homeParts.length || awayParts.length) {
+      notes.push(
+        `Lambdas estimados por medias OCR: mandante marcados ${formatNumber(homeFor)} / visitante sofridos ${formatNumber(awayAgainst)}; visitante marcados ${formatNumber(awayFor)} / mandante sofridos ${formatNumber(homeAgainst)}.`,
+      );
+    }
   }
 
-  if ((lambdaHome === null || lambdaAway === null) && expectedTotal !== null) {
-    lambdaHome = expectedTotal * 0.52;
-    lambdaAway = expectedTotal * 0.48;
+  const expectedTotalStruct = readNumber(goalsBlock.expected_total_goals);
+
+  // 2) Fallback: regex over text blob (user_context + JSON)
+  if (lambdaHome === null || lambdaAway === null) {
+    const text = [input.user_context ?? "", JSON.stringify(input.structured_json ?? {})].join("\n");
+    const normalized = text.replace(/,/g, ".");
+    const homeScored = firstNumber(normalized, [
+      /m[eé]dia\s+marcados\s+casa[^0-9]*(\d+(?:\.\d+)?)/i,
+      /home[^0-9]{0,30}(?:scored|for|marcados)[^0-9]*(\d+(?:\.\d+)?)/i,
+    ]);
+    const homeAllowed = firstNumber(normalized, [
+      /m[eé]dia\s+sofridos\s+casa[^0-9]*(\d+(?:\.\d+)?)/i,
+      /home[^0-9]{0,30}(?:allowed|against|sofridos)[^0-9]*(\d+(?:\.\d+)?)/i,
+    ]);
+    const awayScored = firstNumber(normalized, [
+      /m[eé]dia\s+marcados\s+visitante[^0-9]*(\d+(?:\.\d+)?)/i,
+      /away[^0-9]{0,30}(?:scored|for|marcados)[^0-9]*(\d+(?:\.\d+)?)/i,
+    ]);
+    const awayAllowed = firstNumber(normalized, [
+      /m[eé]dia\s+sofridos\s+visitante[^0-9]*(\d+(?:\.\d+)?)/i,
+      /away[^0-9]{0,30}(?:allowed|against|sofridos)[^0-9]*(\d+(?:\.\d+)?)/i,
+    ]);
+    const homeParts = [homeScored, awayAllowed].filter((value): value is number => value !== null);
+    const awayParts = [awayScored, homeAllowed].filter((value): value is number => value !== null);
+    if (lambdaHome === null && homeParts.length) {
+      lambdaHome = average(homeParts);
+      evidence += homeParts.length;
+      notes.push("Lambda mandante derivado por fallback de regex no texto OCR.");
+    }
+    if (lambdaAway === null && awayParts.length) {
+      lambdaAway = average(awayParts);
+      evidence += awayParts.length;
+      notes.push("Lambda visitante derivado por fallback de regex no texto OCR.");
+    }
+  }
+
+  if ((lambdaHome === null || lambdaAway === null) && expectedTotalStruct !== null) {
+    lambdaHome = expectedTotalStruct * 0.52;
+    lambdaAway = expectedTotalStruct * 0.48;
     evidence += 1;
-    warnings.push("Total esperado foi dividido de forma aproximada por ausencia de lambdas por equipe.");
+    warnings.push("Total esperado dividido 52/48 por ausencia de lambdas por equipe.");
   }
 
   if (lambdaHome === null || lambdaAway === null) {
+    warnings.push("Nenhuma media de gols por equipe encontrada nos dados estruturados.");
     return { lambdaHome: null, lambdaAway: null, confidence: "low", notes, warnings };
   }
 
