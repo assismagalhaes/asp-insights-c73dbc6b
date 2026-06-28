@@ -240,3 +240,11 @@ function round(value: number, digits = 2): number {
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
 }
+
+// Normaliza EV para percentual. Se a IA enviar fracao decimal (|x| < 1 e != 0),
+// converte para percentual multiplicando por 100. Caso ja venha em percentual, mantem.
+function normalizeEvPercent(value: number | null): number | null {
+  if (value === null || value === undefined || !Number.isFinite(value)) return null;
+  if (value !== 0 && Math.abs(value) < 1) return round(value * 100);
+  return round(value);
+}
