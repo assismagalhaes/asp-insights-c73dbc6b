@@ -493,6 +493,27 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
     away: general.away,
   };
 
+  const goalsBlock: GoalsBlock | null =
+    detection.market_type === "goals_total" ||
+    detection.market_type === "btts" ||
+    detection.market_type === "x1x2" ||
+    detection.market_type === "double_chance"
+      ? parseFootballGoalsData(text, home_team, away_team, detection.period)
+      : null;
+  const cardsBlock: CardsBlock | null =
+    detection.market_type === "cards"
+      ? parseFootballCardsData(text, home_team, away_team, detection.period)
+      : null;
+  const generalPerf: GeneralPerformanceBlock | null =
+    detection.market_type === "x1x2" ||
+    detection.market_type === "double_chance" ||
+    detection.market_type === "goals_total" ||
+    detection.market_type === "btts"
+      ? parseFootballGeneralPerformance(text, home_team, away_team)
+      : null;
+  const bttsBlock: BttsBlock | null = goalsBlock ? parseFootballBttsData(goalsBlock) : null;
+
+
   const missing_critical_fields: string[] = [];
   if (!home_team) missing_critical_fields.push("mandante");
   if (!away_team) missing_critical_fields.push("visitante");
