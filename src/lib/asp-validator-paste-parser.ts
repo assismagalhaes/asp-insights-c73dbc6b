@@ -598,7 +598,7 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
   );
 
   notes.push("Dados interpretados a partir de texto colado (input_source: pasted_text).");
-  if (splitIdx >= 0) notes.push("Identificadas duas secoes: medias gerais e medias casa/fora.");
+  if (hasHomeAwaySection) notes.push("Identificadas duas secoes: medias gerais e medias casa/fora.");
   if (ev_original !== null) {
     if (source_ev_type === "percent") {
       notes.push(`EV bruto da fonte (${ev_display}) compativel com EV percentual recalculado (${calculated_ev_pct}%).`);
