@@ -2040,6 +2040,122 @@ function SimulationPanel({ record }: { record: ValidatorRecord }) {
   );
 }
 
+function detectPastedRecord(record: ValidatorRecord, uploads: ValidatorUploadRecord[] = []): {
+  isPasted: boolean;
+  hasRealOcr: boolean;
+  pastedText: string;
+} {
+  const rawOcr = record.ocr_raw_text?.trim() ?? "";
+  const isPastedSummary = rawOcr.startsWith("[TEXTO COLADO INTERPRETADO]");
+  const structured = (record.structured_json ?? {}) as { input_source?: unknown; raw_pasted_text?: unknown };
+  const ocrStructured = (record.ocr_structured_data ?? {}) as { input_source?: unknown; raw_pasted_text?: unknown };
+  const isPasted =
+    isPastedSummary ||
+    structured.input_source === "pasted_text" ||
+    ocrStructured.input_source === "pasted_text" ||
+    Boolean(structured.raw_pasted_text) ||
+    Boolean(ocrStructured.raw_pasted_text);
+  const hasRealOcr =
+    uploads.some((upload) => Boolean(upload.file_path) || Boolean(upload.ocr_text?.trim())) ||
+    (Boolean(rawOcr) && !isPastedSummary && !isPasted);
+  const pastedText = String(
+    (structured.raw_pasted_text as string | undefined) ??
+      (ocrStructured.raw_pasted_text as string | undefined) ??
+      (isPastedSummary ? rawOcr.replace(/^\[TEXTO COLADO INTERPRETADO\][\s\S]*?\n\n/, "") : ""),
+  );
+  return { isPasted, hasRealOcr, pastedText };
+}
+
+function PastedDataPanel({ record }: { record: ValidatorRecord }) {
+  const structured = (record.structured_json ?? {}) as Record<string, unknown>;
+  const quality =
+    typeof record.ocr_data_quality_score === "number"
+      ? record.ocr_data_quality_score
+      : typeof (structured as { data_quality_score?: unknown }).data_quality_score === "number"
+        ? ((structured as { data_quality_score?: number }).data_quality_score ?? 0)
+        : null;
+  const fieldsCount =
+    record.ocr_structured_fields_count ??
+    (typeof (structured as { structured_fields_count?: unknown }).structured_fields_count === "number"
+      ? ((structured as { structured_fields_count?: number }).structured_fields_count ?? 0)
+      : 0);
+  const qualityTone =
+    quality === null
+      ? "text-muted-foreground"
+      : quality >= 0.75
+        ? "text-emerald-400"
+        : quality >= 0.5
+          ? "text-amber-400"
+          : "text-red-400";
+  return (
+    <div className="space-y-3 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-sm font-semibold">Dados estruturados do texto colado</div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            JSON interpretado a partir do prognostico colado, usado como base para simulacao e IA.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {quality !== null ? (
+            <Badge variant="outline" className={qualityTone}>
+              Qualidade da extracao: {(quality * 100).toFixed(0)}%
+            </Badge>
+          ) : null}
+          <Badge variant="outline">Campos estruturados: {fieldsCount}</Badge>
+        </div>
+      </div>
+      {hasJsonContent(structured) ? (
+        <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded border border-border bg-background/50 p-3 text-xs text-muted-foreground">
+          {JSON.stringify(structured, null, 2)}
+        </pre>
+      ) : (
+        <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
+          Texto colado sem JSON estruturado salvo.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PastedDiagnosticsPanel({ record }: { record: ValidatorRecord }) {
+  const { pastedText } = detectPastedRecord(record);
+  const quality =
+    typeof record.ocr_data_quality_score === "number" ? record.ocr_data_quality_score : null;
+  const fields = record.ocr_structured_fields_count ?? 0;
+  return (
+    <div className="space-y-3 rounded-md border border-border bg-muted/10 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-sm font-semibold">Diagnostico do texto colado</div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Texto interpretado pelo parser ASP, sem dependencia de OCR de imagem.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="default">Texto colado interpretado</Badge>
+          <Badge variant="outline">Simulacao: {record.simulation_type || (hasJsonContent(record.simulation_json) ? "completed" : "pending")}</Badge>
+        </div>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        <Info label="Qualidade da extracao" value={quality === null ? "-" : `${(quality * 100).toFixed(0)}%`} />
+        <Info label="Campos extraidos" value={String(fields)} />
+        <Info label="Fonte" value="Texto colado" />
+      </div>
+      {pastedText ? (
+        <details className="rounded-md border border-border/60 bg-background/40 p-3">
+          <summary className="cursor-pointer select-none text-xs uppercase tracking-wide text-muted-foreground">
+            Texto colado original
+          </summary>
+          <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">{pastedText}</pre>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+
+
 function AiAnalysisContextPanel({ record }: { record: ValidatorRecord }) {
   const rawOcr = record.ocr_raw_text?.trim() ?? "";
   const isPastedSummary = rawOcr.startsWith("[TEXTO COLADO INTERPRETADO]");
