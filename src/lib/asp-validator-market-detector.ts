@@ -140,7 +140,9 @@ export function detectFootballMarketType(
 
   // 2. So depois caimos para deteccao por blocos estatisticos auxiliares.
   if (!market_type) {
-    if (/escanteio|corner|canto/.test(blob)) market_type = "corners";
+    if (/marcar\s+primeiro|marca\s+primeiro|primeiro\s+(a|para)\s+marcar|first\s+goal|first\s+to\s+score|team\s+to\s+score\s+first|abrir\s+o\s+placar/.test(blob))
+      market_type = "first_goal";
+    else if (/escanteio|corner|canto/.test(blob)) market_type = "corners";
     else if (/cartao|cartoes|cards?|amarel|vermelh/.test(blob)) market_type = "cards";
     else if (
       /\b1\s*x\s*2\b|match\s*odds|moneyline|resultado\s+final|vencedor|\b(home|away)\s*win\b|para\s+vencer/.test(
@@ -154,6 +156,7 @@ export function detectFootballMarketType(
     else if (/(mais\s+de|menos\s+de|over|under|gol|goal|total)/.test(blob))
       market_type = "goals_total";
   }
+
 
   const line = extractLine(`${formPick || ""} ${formMarket || ""}`);
   const pick_normalized = normalizePick(formMarket || "", formPick || "", market_type, period, line, homeTeam, awayTeam);
