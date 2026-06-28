@@ -240,8 +240,20 @@ function normalizePick(
       return `Mandante vence${homeTeam ? ` (${homeTeam})` : ""}${periodSuffix}`.trim();
     }
   }
+  if (type === "first_goal") {
+    const aw = norm(awayTeam ?? "");
+    const hm = norm(homeTeam ?? "");
+    if (/visitante|away|\bfora\b/.test(lower) || (aw && lower.includes(aw))) {
+      return `Visitante marca primeiro${awayTeam ? ` (${awayTeam})` : ""}${periodSuffix}`.trim();
+    }
+    if (/mandante|home|\bcasa\b/.test(lower) || (hm && lower.includes(hm))) {
+      return `Mandante marca primeiro${homeTeam ? ` (${homeTeam})` : ""}${periodSuffix}`.trim();
+    }
+    return `Marca primeiro${periodSuffix}`.trim();
+  }
   return raw;
 }
+
 
 /**
  * Sinonimos de "mando": retorna "all", "home" ou "away" se conseguir inferir
