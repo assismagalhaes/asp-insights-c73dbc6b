@@ -916,11 +916,21 @@ function AspValidatorPage() {
         },
         reason: guardrailReason
           ? guardrailReason
-          : before.decision === next.decision
-            ? "IA + Pesquisa manteve a decisao apos verificacao online."
-            : next.decision === "CONFIRMAR"
-              ? "Contexto online elevou probabilidade/EV ajustado acima do limite minimo de protecao de banca."
-              : "Contexto online reduziu probabilidade/EV ajustado abaixo do limite minimo de protecao de banca.",
+          : (() => {
+              const dp = Math.abs(((next.adjusted_probability ?? 0) - (before.adjusted_probability ?? 0)));
+              const de = Math.abs(((next.adjusted_ev ?? 0) - (before.adjusted_ev ?? 0)));
+              const sameDecision = before.decision === next.decision;
+              const noMaterialChange = dp < 1 && de < 1;
+              if (sameDecision && noMaterialChange) {
+                return "Pesquisa reforcou a decisao, sem alterar materialmente a probabilidade nem o EV ajustado.";
+              }
+              if (sameDecision) {
+                return "IA + Pesquisa manteve a decisao apos verificacao online (probabilidade/EV ajustados marginalmente).";
+              }
+              return next.decision === "CONFIRMAR"
+                ? "Contexto online elevou probabilidade/EV ajustado acima do limite minimo de protecao de banca."
+                : "Contexto online reduziu probabilidade/EV ajustado abaixo do limite minimo de protecao de banca.";
+            })(),
       };
       const onlineContextWithHistory = {
         ...next.online_context_json,
