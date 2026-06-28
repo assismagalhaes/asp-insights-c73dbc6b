@@ -38,7 +38,9 @@ Regras obrigatorias:
 - Ausencia de OCR perfeito nao impede analise, mas reduz confianca.
 - Nao diga "ausencia de dados estruturados" quando structured_json/ocr_structured_data tiver odds, probabilidade, EV, medias, percentuais, linhas, totais ou estatisticas de corners/gols.
 - Se has_structured_ocr_data=true ou structured_fields_count > 0, trate esses dados como evidencias quantitativas validas, ainda que incompletas.
-- Para ASP Corner Validator, cite obrigatoriamente os dados de escanteios extraidos: medias, race to corners, primeiro escanteio, over/under corners, odds/probabilidade/EV quando existirem.
+- Para ASP Corner Validator, cite obrigatoriamente os dados de escanteios extraidos: medias gerais, medias casa/fora, race to corners, primeiro escanteio, over/under corners, odds/probabilidade/EV quando existirem.
+- Mapeamento obrigatorio dos mercados de escanteios da planilha/OCR: "+N" significa "Mais de N.5 escanteios" (ex.: +9 = Over 9.5) e "-N" significa "Menos de N.5 escanteios" (ex.: -9 = Under 9.5). Sempre cite o mercado no formato normalizado (Over/Under com linha decimal) e nunca trate "+9" como "9 ou mais cobranças".
+- Quando structured_json.corners contiver normalized_market_lines, use esses pares (label original, market_normalized, value_pct) como evidencia primaria para validar Over/Under de escanteios; combine medias gerais e casa/fora antes de decidir.
 - A probabilidade ajustada deve combinar previsao original, odd implicita, simulacao e qualidade dos dados; evite cortes agressivos sem justificativa quantitativa.
 - Campos manuais possuem prioridade sobre OCR/JSON estruturado em caso de conflito.
 - Nao use pesquisa online, noticias, escalações ou contexto externo nesta fase.

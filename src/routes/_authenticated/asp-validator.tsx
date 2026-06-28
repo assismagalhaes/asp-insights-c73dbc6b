@@ -1655,6 +1655,7 @@ function ExtractedImageDataPanel({ structured }: { structured: StructuredValidat
       <div className="mt-3 grid gap-3 md:grid-cols-4">
         <Info label="Mercado identificado" value={market?.name || structured.prediction?.market || "-"} />
         <Info label="Pick" value={market?.pick || structured.prediction?.pick || "-"} />
+        <Info label="Mercado normalizado" value={(market as { market_normalized?: string | null } | undefined)?.market_normalized || "-"} />
         <Info label="Odd" value={formatOdd(Number(market?.offered_odd ?? structured.prediction?.offered_odd ?? 0) || null)} />
         <Info label="Probabilidade" value={formatPercent(Number(market?.probability_original ?? structured.prediction?.source_probability ?? 0) || null)} />
         <Info label="Odd justa" value={formatOdd(Number(market?.fair_odd_original ?? structured.prediction?.source_fair_odd ?? 0) || null)} />
@@ -1663,6 +1664,7 @@ function ExtractedImageDataPanel({ structured }: { structured: StructuredValidat
         <Info label="Qualidade" value={`${Math.round((structured.data_quality_score ?? 0) * 100)}%`} />
         <Info label="Campos extraidos" value={String(structured.structured_fields_count ?? 0)} />
       </div>
+      <NormalizedCornerLinesPanel home={corners?.home?.normalized_market_lines ?? []} away={corners?.away?.normalized_market_lines ?? []} />
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         <div className="rounded-md border border-border p-3">
           <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Geral - {structured.match?.home_team || "Mandante"}</div>
@@ -1776,6 +1778,37 @@ function LinePercentBadges({ title, values, prefix }: { title: string; values: R
             {prefix}{line}: {formatPercent(pct)}
           </Badge>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function NormalizedCornerLinesPanel({ home, away }: { home: NormalizedCornerLine[]; away: NormalizedCornerLine[] }) {
+  const all = [...home, ...away];
+  if (!all.length) return null;
+  const renderGroup = (label: string, items: NormalizedCornerLine[]) => {
+    if (!items.length) return null;
+    const sorted = [...items].sort((a, b) => a.line_value - b.line_value || a.side.localeCompare(b.side));
+    return (
+      <div className="rounded-md border border-border p-2">
+        <div className="mb-2 text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+        <div className="flex flex-wrap gap-2">
+          {sorted.map((item, idx) => (
+            <Badge key={`${label}-${idx}`} variant="outline" title={`${item.label} → ${item.market_normalized}`}>
+              {item.label} → {item.market_normalized}: {formatPercent(item.value_pct)}
+              {item.scope === "home_away" ? " (C/F)" : ""}
+            </Badge>
+          ))}
+        </div>
+      </div>
+    );
+  };
+  return (
+    <div className="mt-3 rounded-md border border-border bg-muted/10 p-3">
+      <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Mercados de cantos normalizados (+N → Over N.5)</div>
+      <div className="grid gap-2 md:grid-cols-2">
+        {renderGroup("Mandante", home)}
+        {renderGroup("Visitante", away)}
       </div>
     </div>
   );
@@ -2948,6 +2981,7 @@ type StructuredValidatorJson = {
     fair_odd_original: number | null;
     probability_original: number | null;
     ev_original: number | null;
+    market_normalized: string | null;
   };
   corners: {
     home: CornerSideStats;
@@ -3011,6 +3045,15 @@ type StructuredValidatorJson = {
   };
 };
 
+type NormalizedCornerLine = {
+  label: string;
+  side: "over" | "under";
+  line_value: number;
+  market_normalized: string;
+  value_pct: number;
+  scope: "general" | "home_away";
+};
+
 type CornerSideStats = {
   avg_for: number | null;
   avg_against: number | null;
@@ -3031,6 +3074,7 @@ type CornerSideStats = {
   under_lines: Record<string, number>;
   home_away_over_lines: Record<string, number>;
   home_away_under_lines: Record<string, number>;
+  normalized_market_lines: NormalizedCornerLine[];
 };
 
 type OcrIntelligenceData = {
@@ -3057,6 +3101,7 @@ type OcrIntelligenceData = {
     fair_odd_original: number | null;
     probability_original: number | null;
     ev_original: number | null;
+    market_normalized: string | null;
   };
   corners: {
     home: CornerSideStats;
@@ -3326,16 +3371,66 @@ function extractMarketFromOcr(
     : record.market;
   const pick = record.pick || (isCornerTotal ? `${normalized.includes("under") || normalized.includes("menos de") ? "Under" : "Over"} ${totalCornerLine} escanteios` : isCornerRace ? `${selectionTeam || "Visitante"} cobrar ${raceLine ?? ""} escanteios primeiro`.trim() : "");
 
+  const finalLine = record.line || inferred.line || totalCornerLine || raceLine || null;
+  const market_normalized = buildCornerMarketNormalized(marketName, pick, finalLine, isCornerTotal, normalized);
+
   return {
     name: marketName,
-    line: record.line || inferred.line || totalCornerLine || raceLine || null,
+    line: finalLine,
     pick,
     selection_team: selectionTeam,
     offered_odd: record.offered_odd ?? inferred.offered_odd ?? null,
     fair_odd_original: record.source_fair_odd ?? inferred.source_fair_odd ?? null,
     probability_original: record.source_probability ?? inferred.source_probability ?? null,
     ev_original: record.source_ev ?? inferred.source_ev ?? null,
+    market_normalized,
   };
+}
+
+/**
+ * Convencao da planilha/OCR para mercados de escanteios:
+ *   "+N" significa "Mais de N.5 escanteios" (ex.: +9 = Over 9.5)
+ *   "-N" significa "Menos de N.5 escanteios" (ex.: -9 = Under 9.5)
+ * Para linhas ja decimais (ex.: 9.5), preserva a linha original.
+ */
+function normalizeCornerLineToken(token: string): { line_value: number; market_normalized: string; side: "over" | "under" } | null {
+  if (!token) return null;
+  const trimmed = token.replace(/\s+/g, "").replace(",", ".");
+  const match = trimmed.match(/^([+-]?)(\d+(?:\.\d+)?)$/);
+  if (!match) return null;
+  const sign = match[1];
+  const raw = Number(match[2]);
+  if (!Number.isFinite(raw)) return null;
+  const isInteger = !match[2].includes(".");
+  const side: "over" | "under" = sign === "-" ? "under" : "over";
+  // +N -> Over (N).5 ; -N -> Under (N).5 ; decimal stays as-is
+  const line_value = isInteger ? raw + 0.5 : raw;
+  const prefix = side === "over" ? "Mais de" : "Menos de";
+  return { line_value, market_normalized: `${prefix} ${line_value} escanteios`, side };
+}
+
+function buildCornerMarketNormalized(
+  marketName: string,
+  pick: string,
+  line: string | number | null,
+  isCornerTotal: boolean,
+  normalizedText: string,
+): string | null {
+  const blob = `${marketName} ${pick}`.toLowerCase();
+  const isCornerContext = isCornerTotal || /escanteio|canto|corner/.test(blob) || /escanteio|canto|corner/.test(normalizedText);
+  if (!isCornerContext) return null;
+  const explicit = `${pick} ${marketName} ${line ?? ""}`.match(/([+-]?\d+(?:[.,]\d+)?)/);
+  const token = explicit?.[1] ?? (typeof line === "number" ? String(line) : line ?? "");
+  if (!token) return null;
+  // If pick already says under/menos, force that side regardless of sign
+  const forced: "over" | "under" | null = /\b(under|menos)\b/i.test(`${pick} ${marketName}`) ? "under" : /\b(over|mais)\b/i.test(`${pick} ${marketName}`) ? "over" : null;
+  const parsed = normalizeCornerLineToken(String(token));
+  if (!parsed) return null;
+  if (forced && forced !== parsed.side) {
+    const prefix = forced === "over" ? "Mais de" : "Menos de";
+    return `${prefix} ${parsed.line_value} escanteios`;
+  }
+  return parsed.market_normalized;
 }
 
 function extractCornerStats(text: string, homeTeam: string, awayTeam: string): OcrIntelligenceData["corners"] {
@@ -3378,6 +3473,12 @@ function extractCornerStats(text: string, homeTeam: string, awayTeam: string): O
       under_lines: { ...overLines.home_under, ...homeBlockStats.under_lines },
       home_away_over_lines: homeAwaySplit.home.over_lines,
       home_away_under_lines: homeAwaySplit.home.under_lines,
+      normalized_market_lines: buildNormalizedCornerLines(
+        { ...overLines.home, ...homeBlockStats.over_lines },
+        { ...overLines.home_under, ...homeBlockStats.under_lines },
+        homeAwaySplit.home.over_lines,
+        homeAwaySplit.home.under_lines,
+      ),
     },
     away: {
       avg_for: awayBlockStats.avg_for ?? numberAt(avgFor, 1) ?? numberNearTeam(text, awayTeam, /marcados/i),
@@ -3399,8 +3500,41 @@ function extractCornerStats(text: string, homeTeam: string, awayTeam: string): O
       under_lines: { ...overLines.away_under, ...awayBlockStats.under_lines },
       home_away_over_lines: homeAwaySplit.away.over_lines,
       home_away_under_lines: homeAwaySplit.away.under_lines,
+      normalized_market_lines: buildNormalizedCornerLines(
+        { ...overLines.away, ...awayBlockStats.over_lines },
+        { ...overLines.away_under, ...awayBlockStats.under_lines },
+        homeAwaySplit.away.over_lines,
+        homeAwaySplit.away.under_lines,
+      ),
     },
   };
+}
+
+function buildNormalizedCornerLines(
+  over: Record<string, number>,
+  under: Record<string, number>,
+  homeAwayOver: Record<string, number>,
+  homeAwayUnder: Record<string, number>,
+): NormalizedCornerLine[] {
+  const out: NormalizedCornerLine[] = [];
+  const push = (token: string, value_pct: number, side: "over" | "under", scope: "general" | "home_away") => {
+    const signedToken = token.startsWith("+") || token.startsWith("-") ? token : `${side === "under" ? "-" : "+"}${token}`;
+    const parsed = normalizeCornerLineToken(signedToken);
+    if (!parsed) return;
+    out.push({
+      label: signedToken,
+      side: parsed.side,
+      line_value: parsed.line_value,
+      market_normalized: parsed.market_normalized,
+      value_pct,
+      scope,
+    });
+  };
+  for (const [key, value] of Object.entries(over)) push(key, value, "over", "general");
+  for (const [key, value] of Object.entries(under)) push(key, value, "under", "general");
+  for (const [key, value] of Object.entries(homeAwayOver)) push(key, value, "over", "home_away");
+  for (const [key, value] of Object.entries(homeAwayUnder)) push(key, value, "under", "home_away");
+  return out;
 }
 
 function metricPairNumbers(text: string, label: RegExp, options: { requireDecimal?: boolean } = {}): number[] | null {
