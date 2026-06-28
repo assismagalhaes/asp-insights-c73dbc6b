@@ -177,6 +177,84 @@ function normalize(s: string): string {
   return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
+/**
+ * Normaliza texto colado em formato compacto (uma unica linha longa ou
+ * blocos sem quebras) para o formato que os extratores esperam. NAO altera
+ * conteudo, apenas reintroduz quebras logicas antes de cabecalhos, titulos
+ * de secao, bullets e linhas de mercado.
+ */
+export function normalizeCompactPastedText(raw: string): string {
+  if (!raw) return "";
+  let t = raw.replace(/\r\n?/g, "\n");
+
+  // Separadores principais
+  t = t
+    .replace(/\s+(Partida\s*:)/gi, "\n$1")
+    .replace(/\s+(Campeonato\s*:)/gi, "\n$1")
+    .replace(/\s+(Data\s*\/\s*Hora\s*:)/gi, "\n$1")
+    .replace(/\s+(Filtro\s*:)/gi, "\n$1")
+    .replace(/\s+(Mercado\s*:)/gi, "\n$1")
+    .replace(/\s+(Pick\s*:)/gi, "\n$1")
+    .replace(/\s+(Odd\s+(?:Oferecida|Ofertada|Esperada|Justa)\s*:)/gi, "\n$1")
+    .replace(/\s+(Chance\s*\(?%?\)?\s*:)/gi, "\n$1")
+    .replace(/\s+(Probabilidade\s*:)/gi, "\n$1")
+    .replace(/\s+(EV\s*:)/gi, "\n$1")
+    .replace(/\s+(VE\s*:)/gi, "\n$1");
+
+  // Titulos de secao "--- ... ---"
+  t = t.replace(/\s+(---\s*[^-\n]+?\s*---)/g, "\n\n$1\n");
+
+  // Cabecalhos de time antes de metricas inline
+  t = t
+    .replace(
+      /\s+([A-Za-zÀ-ÿ0-9 .'-]+?(?:\s*\((?:Casa|Fora|Casa\s*\/\s*Fora)\))?\s*:)\s+-\s+(Marcados\s*:)/g,
+      "\n$1\n  - $2",
+    )
+    .replace(
+      /\s+([A-Za-zÀ-ÿ0-9 .'-]+?(?:\s*\((?:Casa|Fora|Casa\s*\/\s*Fora)\))?\s*:)\s+-\s+(Vit[oó]rias\s*:)/g,
+      "\n$1\n  - $2",
+    )
+    .replace(
+      /\s+([A-Za-zÀ-ÿ0-9 .'-]+?(?:\s*\((?:Casa|Fora|Casa\s*\/\s*Fora)\))?\s*:)\s+-\s+(Amarelos?\s*:|Vermelhos?\s*:|Total\s+cart[oõ]es\s*:)/gi,
+      "\n$1\n  - $2",
+    );
+
+  // Bullets de metricas comuns
+  t = t
+    .replace(/\s+-\s+(Marcados\s*:)/gi, "\n  - $1")
+    .replace(/\s+-\s+(Sofridos\s*:)/gi, "\n  - $1")
+    .replace(/\s+-\s+(Total(?:\s*\([^)]*\))?\s*:)/gi, "\n  - $1")
+    .replace(/\s+-\s+(Vit[oó]rias\s*:)/gi, "\n  - $1")
+    .replace(/\s+-\s+(Empates\s*:)/gi, "\n  - $1")
+    .replace(/\s+-\s+(Derrotas\s*:)/gi, "\n  - $1")
+    .replace(/\s+-\s+(Efici[eê]ncia\s*:)/gi, "\n  - $1")
+    .replace(/\s+-\s+(Aproveitamento\s*:)/gi, "\n  - $1");
+
+  // Linhas de mercado
+  t = t
+    .replace(/\s+(Mais\s+de\s+\d+(?:[.,]\d+)?\s*(?:gols?|escanteios?|cart[oõ]es?)?\s*:)/gi, "\n$1")
+    .replace(/\s+(Menos\s+de\s+\d+(?:[.,]\d+)?\s*(?:gols?|escanteios?|cart[oõ]es?)?\s*:)/gi, "\n$1")
+    .replace(/\s+(Over\s+\d+(?:[.,]\d+)?\s*:)/gi, "\n$1")
+    .replace(/\s+(Under\s+\d+(?:[.,]\d+)?\s*:)/gi, "\n$1")
+    .replace(/\s+(Sim\s*:)/gi, "\n$1")
+    .replace(/\s+(N[aã]o\s*:)/gi, "\n$1");
+
+  // Posse e placares
+  t = t
+    .replace(/\s+(Porcentagem\s*:)/gi, "\n$1")
+    .replace(/\s+(M[ée]dia\s+posse\s+de\s+bola[^:]*:)/gi, "\n$1")
+    .replace(/\s+(Mais\s+posse\s+de\s+bola\s*\(?1X2\)?\s*:)/gi, "\n$1")
+    .replace(/\s+(Placares?\s*:)/gi, "\n$1")
+    .replace(/\s+-\s+(\d+\s*x\s*\d+\s*:)/g, "\n  - $1");
+
+  // Race / corrida ate N
+  t = t.replace(/\s+-?\s+(\d+\s+escanteios?\s*:)/gi, "\n  - $1");
+
+  // Reduz excesso de linhas em branco
+  t = t.replace(/\n{3,}/g, "\n\n").trim();
+  return t;
+}
+
 function teamKey(s: string): string {
   return normalize(s).replace(/[^a-z0-9]/g, "");
 }
