@@ -241,20 +241,47 @@ function parseTwoSidedPercent(line: string, team: string): number | null {
 
 function extractSection(text: string, titles: string[]): string {
   for (const t of titles) {
-    const re = new RegExp(`---\\s*${t}\\s*---([\\s\\S]*?)(?:---|$)`, "i");
+    const re = new RegExp(`---\\s*${t}[^\\n]*---([\\s\\S]*?)(?:---|$)`, "i");
     const m = text.match(re);
     if (m) return m[1];
   }
   return "";
 }
 
+function extractPreferredSection(text: string, titles: string[], period?: FootballPeriod): string {
+  const candidates: Array<{ body: string; context: string }> = [];
+  for (const title of titles) {
+    const re = new RegExp(`---\\s*${title}[^\\n]*---([\\s\\S]*?)(?=\\n\\s*---|$)`, "gi");
+    for (const match of text.matchAll(re)) {
+      const start = match.index ?? 0;
+      candidates.push({
+        body: match[1] ?? "",
+        context: text.slice(Math.max(0, start - 280), start),
+      });
+    }
+  }
+  if (candidates.length === 0) return "";
+
+  const explicitPeriod = (candidate: { body: string; context: string }) => {
+    const haystack = norm(`${candidate.context}\n${candidate.body}`);
+    if (period === "HT") return /\b(1t|ht|primeiro\s+tempo|1\s*[oº°]?\s*tempo)\b/.test(haystack);
+    if (period === "ST") return /\b(2t|st|segundo\s+tempo|2\s*[oº°]?\s*tempo)\b/.test(haystack);
+    return /\bft\b|jogo\s+completo|full\s*time/.test(haystack);
+  };
+
+  const periodMatches = period ? candidates.filter(explicitPeriod) : [];
+  return (periodMatches.at(-1) ?? candidates.at(-1))?.body ?? "";
+}
+
 function extractTeamPercent(block: string, team: string): number | null {
   const tKey = teamKey(team);
   if (!tKey) return null;
   for (const line of block.split(/\r?\n/)) {
-    if (!teamKey(line).includes(tKey)) continue;
-    const pct = line.match(/(-?\d+(?:[.,]\d+)?)\s*%/);
-    if (pct) return num(pct[1]);
+    for (const part of line.split(/\s*\|\s*/)) {
+      if (!teamKey(part).includes(tKey)) continue;
+      const pct = part.match(/(-?\d+(?:[.,]\d+)?)\s*%/);
+      if (pct) return num(pct[1]);
+    }
   }
   return null;
 }
@@ -267,18 +294,19 @@ export function parseFootballGeneralPerformance(
   text: string,
   homeTeam: string,
   awayTeam: string,
+  period: FootballPeriod = "FT",
 ): GeneralPerformanceBlock {
   const out: GeneralPerformanceBlock = { home: emptyGeneralSide(), away: emptyGeneralSide() };
   if (!homeTeam && !awayTeam) return out;
 
   const perfSection =
-    extractSection(text, ["DESEMPENHO\\s+GERAL", "DESEMPENHO"]) || text;
-  const possSection = extractSection(text, ["POSSE\\s+DE\\s+BOLA", "POSSE"]) || "";
-  const scoresSection = extractSection(text, [
+    extractPreferredSection(text, ["DESEMPENHO\\s+GERAL", "DESEMPENHO"], period) || text;
+  const possSection = extractPreferredSection(text, ["M[ÉE]DIA\\s+POSSE\\s+DE\\s+BOLA", "POSSE\\s+DE\\s+BOLA", "POSSE"], period) || "";
+  const scoresSection = extractPreferredSection(text, [
     "RESULTADOS\\s+MAIS\\s+FREQUENTES",
     "PLACARES?\\s+MAIS\\s+FREQUENTES",
     "PLACARES?",
-  ]) || "";
+  ], period) || "";
 
   for (const [team, side] of [
     [homeTeam, out.home] as const,
