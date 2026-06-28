@@ -3011,6 +3011,15 @@ type StructuredValidatorJson = {
   };
 };
 
+type NormalizedCornerLine = {
+  label: string;
+  side: "over" | "under";
+  line_value: number;
+  market_normalized: string;
+  value_pct: number;
+  scope: "general" | "home_away";
+};
+
 type CornerSideStats = {
   avg_for: number | null;
   avg_against: number | null;
@@ -3031,6 +3040,7 @@ type CornerSideStats = {
   under_lines: Record<string, number>;
   home_away_over_lines: Record<string, number>;
   home_away_under_lines: Record<string, number>;
+  normalized_market_lines: NormalizedCornerLine[];
 };
 
 type OcrIntelligenceData = {
