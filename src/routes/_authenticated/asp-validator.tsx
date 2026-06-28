@@ -3190,6 +3190,8 @@ function buildLocalAnalysisContext(context: Record<string, unknown>, aiParsed: b
     "ASP Validator - Validacao IA consolidada",
     `Resposta IA interpretada: ${aiParsed ? "sim" : "nao"}`,
     `Usou OCR real: ${usage.used_ocr ? "sim" : "nao"}`,
+    `Usou texto colado: ${usage.used_pasted_text ? "sim" : "nao"}`,
+
     `Usou comentarios dos uploads: ${usage.used_upload_comments ? "sim" : "nao"}`,
     `Usou dados manuais: ${context.prediction ? "sim" : "nao"}`,
     `Usou JSON estruturado: ${usage.used_structured_json ? "sim" : "nao"}`,
