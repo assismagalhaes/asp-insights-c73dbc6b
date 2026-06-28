@@ -238,14 +238,16 @@ function buildAnalysisContext(context: Record<string, unknown>, sources: Array<{
   const usage = context.data_usage && typeof context.data_usage === "object" ? (context.data_usage as Record<string, unknown>) : {};
   return [
     "ASP Validator - IA + Pesquisa",
-    `Usou OCR: ${usage.used_ocr ? "sim" : "nao"}`,
+    `Usou OCR real: ${usage.used_ocr ? "sim" : "nao"}`,
+    `Usou texto colado: ${usage.used_pasted_text ? "sim" : "nao"}`,
     `Usou JSON estruturado: ${usage.used_structured_json ? "sim" : "nao"}`,
     `Usou simulacao: ${usage.used_simulation ? "sim" : "nao"}`,
     `Buscas realizadas: ${searches.length}`,
     `Fontes consultadas: ${sources.length}`,
-    "Regras: pesquisa online e complementar; ausencia de achados nao reprova sozinha; em duvida relevante, PULAR.",
+    "Regras: pesquisa online e complementar; ausencia de achados nao reprova sozinha; em duvida relevante, PULAR; proibido somar medias brutas (ex.: 11.8 + 12.6).",
   ].join("\n");
 }
+
 
 function normalizeConfidence(value: unknown): "Baixo" | "Medio" | "Alto" {
   const text = String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
