@@ -248,3 +248,9 @@ function normalizeEvPercent(value: number | null): number | null {
   if (value !== 0 && Math.abs(value) < 1) return round(value * 100);
   return round(value);
 }
+
+function normalizeProbabilityPercent(value: number | null): number | null {
+  if (value === null || value === undefined || !Number.isFinite(value)) return null;
+  if (value > 0 && value <= 1) return round(value * 100);
+  return round(value);
+}
