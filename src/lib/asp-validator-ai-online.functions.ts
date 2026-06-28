@@ -142,7 +142,7 @@ function normalizeOnlineResult(
     source_probability: readNumber(value.source_probability) ?? manual.source_probability,
     source_fair_odd: readNumber(value.source_fair_odd) ?? manual.source_fair_odd,
     offered_odd: offeredOdd,
-    source_ev: readNumber(value.source_ev) ?? manual.source_ev,
+    source_ev: normalizeEvPercent(readNumber(value.source_ev)) ?? manual.source_ev,
     adjusted_probability: round(adjustedProbability),
     adjusted_fair_odd: round(adjustedFairOdd),
     adjusted_ev: adjustedEv,
