@@ -2499,6 +2499,154 @@ function UploadsWithComments({
   );
 }
 
+function PastedTextSection({
+  value,
+  parsed,
+  onChange,
+  onInterpret,
+  onApply,
+  onClear,
+}: {
+  value: string;
+  parsed: PastedParsedData | null;
+  onChange: (next: string) => void;
+  onInterpret: () => void;
+  onApply: () => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="space-y-3 rounded-md border border-primary/40 bg-primary/5 p-3">
+      <div>
+        <Label className="text-sm font-semibold">Colar dados do prognostico</Label>
+        <p className="text-xs text-muted-foreground">
+          Cole aqui dados extraidos do PackBall, Gemini, ChatGPT, OCR externo ou anotacoes manuais. Pode vir em texto desordenado.
+        </p>
+      </div>
+      <Textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Cole o bloco completo: confronto, mercado, odds, probabilidade, EV, medias gerais, medias casa/fora, over/under, race, primeiro escanteio etc."
+        className="min-h-48 font-mono text-xs"
+      />
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" size="sm" variant="default" onClick={onInterpret} className="gap-2">
+          <FileJson className="h-4 w-4" />
+          Interpretar dados colados
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={onApply} disabled={!parsed} className="gap-2">
+          <ClipboardCheck className="h-4 w-4" />
+          Aplicar ao formulario
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={onClear} disabled={!value && !parsed}>
+          Limpar dados colados
+        </Button>
+      </div>
+      {parsed ? <PastedDataPreview parsed={parsed} /> : null}
+    </div>
+  );
+}
+
+function PastedDataPreview({ parsed }: { parsed: PastedParsedData }) {
+  const home = parsed.match.home_team || "Mandante";
+  const away = parsed.match.away_team || "Visitante";
+  const fmtNum = (v: number | null | undefined) => (v === null || v === undefined ? "-" : String(v));
+  const fmtPct = (v: number | null | undefined) => (v === null || v === undefined ? "-" : `${v}%`);
+  const fmtOdd = (v: number | null | undefined) => (v === null || v === undefined ? "-" : v.toFixed(2));
+  return (
+    <div className="space-y-3 rounded-md border border-border bg-background/60 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div className="font-semibold uppercase tracking-wide text-primary">Dados interpretados do texto colado</div>
+        <div className="text-muted-foreground">
+          Qualidade {(parsed.data_quality_score * 100).toFixed(0)}% | {parsed.structured_fields_count} campos
+        </div>
+      </div>
+      <div className="grid gap-2 text-xs md:grid-cols-2">
+        <Info label="Confronto" value={`${home} x ${away}`} />
+        <Info label="Liga / Rodada" value={[parsed.match.competition, parsed.match.round ? `Rodada ${parsed.match.round}` : ""].filter(Boolean).join(" - ") || "-"} />
+        <Info label="Data / Hora" value={[parsed.match.date, parsed.match.time].filter(Boolean).join(" ") || "-"} />
+        <Info label="Mercado" value={parsed.market.normalized_market || parsed.market.name || "-"} />
+        <Info label="Pick / Linha" value={`${parsed.market.pick || "-"} / ${parsed.market.line ?? "-"}`} />
+        <Info label="Odd / Justa" value={`${fmtOdd(parsed.market.offered_odd)} / ${fmtOdd(parsed.market.fair_odd_original)}`} />
+        <Info label="Probabilidade" value={fmtPct(parsed.market.probability_original)} />
+        <Info label="EV original" value={fmtPct(parsed.market.ev_original)} />
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <PastedCornerCard title={`${home} — geral`} side={parsed.corners.general.home} fmtNum={fmtNum} fmtPct={fmtPct} />
+        <PastedCornerCard title={`${away} — geral`} side={parsed.corners.general.away} fmtNum={fmtNum} fmtPct={fmtPct} />
+        <PastedCornerCard title={`${home} — casa`} side={parsed.corners.home_away.home} fmtNum={fmtNum} fmtPct={fmtPct} homeAway />
+        <PastedCornerCard title={`${away} — fora`} side={parsed.corners.home_away.away} fmtNum={fmtNum} fmtPct={fmtPct} homeAway />
+      </div>
+      {parsed.missing_critical_fields.length ? (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2 text-xs text-amber-300">
+          Campos ausentes: {parsed.missing_critical_fields.join(", ")}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PastedCornerCard({
+  title,
+  side,
+  homeAway = false,
+  fmtNum,
+  fmtPct,
+}: {
+  title: string;
+  side: PastedParsedData["corners"]["general"]["home"];
+  homeAway?: boolean;
+  fmtNum: (v: number | null | undefined) => string;
+  fmtPct: (v: number | null | undefined) => string;
+}) {
+  const avgFor = homeAway ? side.home_away_avg_for ?? side.avg_for : side.avg_for;
+  const avgAgainst = homeAway ? side.home_away_avg_against ?? side.avg_against : side.avg_against;
+  const avgTotal = homeAway ? side.home_away_avg_total ?? side.avg_total : side.avg_total;
+  const over = homeAway ? side.home_away_over_lines : side.over_lines;
+  const under = homeAway ? side.home_away_under_lines : side.under_lines;
+  const overEntries = Object.entries(over).sort(([a], [b]) => Number(a) - Number(b));
+  const underEntries = Object.entries(under).sort(([a], [b]) => Number(a) - Number(b));
+  return (
+    <div className="rounded-md border border-border bg-background/40 p-2 text-xs">
+      <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{title}</div>
+      <div className="grid grid-cols-3 gap-1">
+        <span>Marcados {fmtNum(avgFor)}</span>
+        <span>Sofridos {fmtNum(avgAgainst)}</span>
+        <span>Total {fmtNum(avgTotal)}</span>
+      </div>
+      {!homeAway ? (
+        <div className="mt-1 grid grid-cols-2 gap-1 text-[11px] text-muted-foreground">
+          <span>Tot. marcados {fmtNum(side.total_for)}</span>
+          <span>Tot. sofridos {fmtNum(side.total_against)}</span>
+        </div>
+      ) : null}
+      {overEntries.length ? (
+        <div className="mt-1">
+          <span className="text-[10px] uppercase text-muted-foreground">Over: </span>
+          {overEntries.map(([k, v]) => `${k}=${fmtPct(v)}`).join(" | ")}
+        </div>
+      ) : null}
+      {underEntries.length ? (
+        <div className="mt-1">
+          <span className="text-[10px] uppercase text-muted-foreground">Under: </span>
+          {underEntries.map(([k, v]) => `${k}=${fmtPct(v)}`).join(" | ")}
+        </div>
+      ) : null}
+      {!homeAway ? (
+        <div className="mt-1 grid grid-cols-2 gap-1 text-[11px] text-muted-foreground">
+          <span>1o esc. {fmtPct(side.first_corner_pct)}</span>
+          <span>Mais corn. 1x2 {fmtPct(side.most_corners_1x2_pct)}</span>
+          <span>Race 3 {fmtPct(side.race_to_3_pct)}</span>
+          <span>Race 5 {fmtPct(side.race_to_5_pct)}</span>
+          <span>Race 7 {fmtPct(side.race_to_7_pct)}</span>
+          <span>Race 9 {fmtPct(side.race_to_9_pct)}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+
+
 function Placeholder({ icon: Icon, title, text }: { icon: typeof Search; title: string; text: string }) {
   return (
     <div className="rounded-md border border-dashed border-border bg-muted/10 p-3">
