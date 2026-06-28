@@ -14,6 +14,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { validateAspValidatorWithAi, type AspValidatorAiResult } from "@/lib/asp-validator-ai.functions";
 import { validateAspValidatorWithOnlineAi, type AspValidatorOnlineAiResult } from "@/lib/asp-validator-ai-online.functions";
 import { runAspValidatorSimulation, type AspValidatorSimulationResult } from "@/lib/asp-validator-simulation";
+import { routeSimulation } from "@/lib/asp-validator-football-simulation";
+
 import { parsePastedPrognostico, type PastedParsedData } from "@/lib/asp-validator-paste-parser";
 import { useConfiguracao } from "@/lib/db";
 import { processAspValidatorOcr } from "@/lib/scraper-api.functions";
