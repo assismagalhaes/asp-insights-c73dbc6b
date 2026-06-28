@@ -1352,15 +1352,20 @@ function RecordDetailDialog({
               <TextField label="EV original (%)" value={editingRecord.source_ev} onChange={(value) => onUpdateRecord("source_ev", value)} disabled={!canEdit} hint={ocrAppliedFields.source_ev ? "preenchido via OCR" : undefined} />
             </div>
 
-            <div className="space-y-2">
-              <Label>Contexto do usuario</Label>
-              <Textarea
-                value={editingRecord.user_context}
-                disabled={!canEdit}
-                onChange={(event) => onUpdateRecord("user_context", event.target.value)}
-                className="min-h-28"
-              />
-            </div>
+            {editingRecord.user_context?.trim() ? (
+              <details className="space-y-2 rounded-md border border-border/60 bg-muted/10 p-3">
+                <summary className="cursor-pointer select-none text-xs uppercase tracking-wide text-muted-foreground">
+                  Contexto antigo do usuario (legado)
+                </summary>
+                <Textarea
+                  value={editingRecord.user_context}
+                  disabled={!canEdit}
+                  onChange={(event) => onUpdateRecord("user_context", event.target.value)}
+                  className="mt-2 min-h-28"
+                />
+              </details>
+            ) : null}
+
 
             {!canEdit ? (
               <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
