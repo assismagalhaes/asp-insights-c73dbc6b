@@ -3338,16 +3338,66 @@ function extractMarketFromOcr(
     : record.market;
   const pick = record.pick || (isCornerTotal ? `${normalized.includes("under") || normalized.includes("menos de") ? "Under" : "Over"} ${totalCornerLine} escanteios` : isCornerRace ? `${selectionTeam || "Visitante"} cobrar ${raceLine ?? ""} escanteios primeiro`.trim() : "");
 
+  const finalLine = record.line || inferred.line || totalCornerLine || raceLine || null;
+  const market_normalized = buildCornerMarketNormalized(marketName, pick, finalLine, isCornerTotal, normalized);
+
   return {
     name: marketName,
-    line: record.line || inferred.line || totalCornerLine || raceLine || null,
+    line: finalLine,
     pick,
     selection_team: selectionTeam,
     offered_odd: record.offered_odd ?? inferred.offered_odd ?? null,
     fair_odd_original: record.source_fair_odd ?? inferred.source_fair_odd ?? null,
     probability_original: record.source_probability ?? inferred.source_probability ?? null,
     ev_original: record.source_ev ?? inferred.source_ev ?? null,
+    market_normalized,
   };
+}
+
+/**
+ * Convencao da planilha/OCR para mercados de escanteios:
+ *   "+N" significa "Mais de N.5 escanteios" (ex.: +9 = Over 9.5)
+ *   "-N" significa "Menos de N.5 escanteios" (ex.: -9 = Under 9.5)
+ * Para linhas ja decimais (ex.: 9.5), preserva a linha original.
+ */
+function normalizeCornerLineToken(token: string): { line_value: number; market_normalized: string; side: "over" | "under" } | null {
+  if (!token) return null;
+  const trimmed = token.replace(/\s+/g, "").replace(",", ".");
+  const match = trimmed.match(/^([+-]?)(\d+(?:\.\d+)?)$/);
+  if (!match) return null;
+  const sign = match[1];
+  const raw = Number(match[2]);
+  if (!Number.isFinite(raw)) return null;
+  const isInteger = !match[2].includes(".");
+  const side: "over" | "under" = sign === "-" ? "under" : "over";
+  // +N -> Over (N).5 ; -N -> Under (N).5 ; decimal stays as-is
+  const line_value = isInteger ? raw + 0.5 : raw;
+  const prefix = side === "over" ? "Mais de" : "Menos de";
+  return { line_value, market_normalized: `${prefix} ${line_value} escanteios`, side };
+}
+
+function buildCornerMarketNormalized(
+  marketName: string,
+  pick: string,
+  line: string | number | null,
+  isCornerTotal: boolean,
+  normalizedText: string,
+): string | null {
+  const blob = `${marketName} ${pick}`.toLowerCase();
+  const isCornerContext = isCornerTotal || /escanteio|canto|corner/.test(blob) || /escanteio|canto|corner/.test(normalizedText);
+  if (!isCornerContext) return null;
+  const explicit = `${pick} ${marketName} ${line ?? ""}`.match(/([+-]?\d+(?:[.,]\d+)?)/);
+  const token = explicit?.[1] ?? (typeof line === "number" ? String(line) : line ?? "");
+  if (!token) return null;
+  // If pick already says under/menos, force that side regardless of sign
+  const forced: "over" | "under" | null = /\b(under|menos)\b/i.test(`${pick} ${marketName}`) ? "under" : /\b(over|mais)\b/i.test(`${pick} ${marketName}`) ? "over" : null;
+  const parsed = normalizeCornerLineToken(String(token));
+  if (!parsed) return null;
+  if (forced && forced !== parsed.side) {
+    const prefix = forced === "over" ? "Mais de" : "Menos de";
+    return `${prefix} ${parsed.line_value} escanteios`;
+  }
+  return parsed.market_normalized;
 }
 
 function extractCornerStats(text: string, homeTeam: string, awayTeam: string): OcrIntelligenceData["corners"] {
