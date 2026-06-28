@@ -21,6 +21,7 @@ import {
   parseFootballCardsData,
   parseFootballGeneralPerformance,
   parseFootballBttsData,
+  partitionByLocationScope,
   type GoalsBlock,
   type CardsBlock,
   type GeneralPerformanceBlock,
