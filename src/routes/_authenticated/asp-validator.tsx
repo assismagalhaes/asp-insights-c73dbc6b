@@ -4523,6 +4523,12 @@ function parseSimulationResult(value: Record<string, unknown> | null): AspValida
   };
 }
 
+type DecisionHistoryEntry = {
+  before: { decision: string | null; adjusted_probability: number | null; adjusted_ev: number | null };
+  after: { decision: string | null; adjusted_probability: number | null; adjusted_ev: number | null };
+  reason: string;
+};
+
 type OnlineContextView = {
   status: "completed" | "failed";
   online_summary: string;
@@ -4532,12 +4538,31 @@ type OnlineContextView = {
   sources: Array<{ title: string; url: string }>;
   searches: string[];
   error?: string;
+  decision_history?: DecisionHistoryEntry | null;
 };
 
 function parseOnlineContext(value: Record<string, unknown> | null): OnlineContextView | null {
   if (!value || !Object.keys(value).length) return null;
   const status = value.status === "completed" ? "completed" : value.status === "failed" ? "failed" : null;
   if (!status) return null;
+  const dh = value.decision_history && typeof value.decision_history === "object"
+    ? (value.decision_history as Record<string, unknown>)
+    : null;
+  const decisionHistory: DecisionHistoryEntry | null = dh && dh.before && dh.after
+    ? {
+        before: {
+          decision: (dh.before as Record<string, unknown>).decision == null ? null : String((dh.before as Record<string, unknown>).decision),
+          adjusted_probability: typeof (dh.before as Record<string, unknown>).adjusted_probability === "number" ? ((dh.before as Record<string, unknown>).adjusted_probability as number) : null,
+          adjusted_ev: typeof (dh.before as Record<string, unknown>).adjusted_ev === "number" ? ((dh.before as Record<string, unknown>).adjusted_ev as number) : null,
+        },
+        after: {
+          decision: (dh.after as Record<string, unknown>).decision == null ? null : String((dh.after as Record<string, unknown>).decision),
+          adjusted_probability: typeof (dh.after as Record<string, unknown>).adjusted_probability === "number" ? ((dh.after as Record<string, unknown>).adjusted_probability as number) : null,
+          adjusted_ev: typeof (dh.after as Record<string, unknown>).adjusted_ev === "number" ? ((dh.after as Record<string, unknown>).adjusted_ev as number) : null,
+        },
+        reason: typeof dh.reason === "string" ? dh.reason : "",
+      }
+    : null;
   return {
     status,
     online_summary:
@@ -4555,8 +4580,10 @@ function parseOnlineContext(value: Record<string, unknown> | null): OnlineContex
       : [],
     searches: Array.isArray(value.searches) ? value.searches.map(String) : [],
     error: typeof value.error === "string" ? value.error : undefined,
+    decision_history: decisionHistory,
   };
 }
+
 
 type SimulationRecordUpdate = {
   simulation_json: AspValidatorSimulationResult;
