@@ -1783,6 +1783,37 @@ function LinePercentBadges({ title, values, prefix }: { title: string; values: R
   );
 }
 
+function NormalizedCornerLinesPanel({ home, away }: { home: NormalizedCornerLine[]; away: NormalizedCornerLine[] }) {
+  const all = [...home, ...away];
+  if (!all.length) return null;
+  const renderGroup = (label: string, items: NormalizedCornerLine[]) => {
+    if (!items.length) return null;
+    const sorted = [...items].sort((a, b) => a.line_value - b.line_value || a.side.localeCompare(b.side));
+    return (
+      <div className="rounded-md border border-border p-2">
+        <div className="mb-2 text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+        <div className="flex flex-wrap gap-2">
+          {sorted.map((item, idx) => (
+            <Badge key={`${label}-${idx}`} variant="outline" title={`${item.label} → ${item.market_normalized}`}>
+              {item.label} → {item.market_normalized}: {formatPercent(item.value_pct)}
+              {item.scope === "home_away" ? " (C/F)" : ""}
+            </Badge>
+          ))}
+        </div>
+      </div>
+    );
+  };
+  return (
+    <div className="mt-3 rounded-md border border-border bg-muted/10 p-3">
+      <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Mercados de cantos normalizados (+N → Over N.5)</div>
+      <div className="grid gap-2 md:grid-cols-2">
+        {renderGroup("Mandante", home)}
+        {renderGroup("Visitante", away)}
+      </div>
+    </div>
+  );
+}
+
 function OcrDiagnosticsPanel({ record, uploads }: { record: ValidatorRecord; uploads: ValidatorUploadRecord[] }) {
   const structured = record.ocr_structured_data ?? record.structured_json;
   const quality = extractDataQuality(structured);
