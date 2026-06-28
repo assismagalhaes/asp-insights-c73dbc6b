@@ -3068,6 +3068,7 @@ type OcrIntelligenceData = {
     fair_odd_original: number | null;
     probability_original: number | null;
     ev_original: number | null;
+    market_normalized: string | null;
   };
   corners: {
     home: CornerSideStats;
