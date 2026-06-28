@@ -127,7 +127,16 @@ export type PastedParsedData = {
   };
   form_patch: PasteFormPatch;
   notes: string[];
+  market_type: FootballMarketType | null;
+  period: FootballPeriod;
+  pick_normalized: string;
+  validator_model: ValidatorModel;
+  goals: GoalsBlock | null;
+  cards: CardsBlock | null;
+  general_performance: GeneralPerformanceBlock | null;
+  btts: BttsBlock | null;
 };
+
 
 function emptySide(): PasteCornerSide {
   return {
