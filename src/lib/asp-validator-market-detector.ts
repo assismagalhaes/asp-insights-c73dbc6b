@@ -81,6 +81,11 @@ export function detectFootballPeriod(text: string): FootballPeriod {
 function detectTypeFromMarketLine(line: string): FootballMarketType | null {
   if (!line.trim()) return null;
   const t = norm(line);
+  // Prioridade maxima: "Primeiro a marcar" deve vir ANTES de 1X2/escanteios,
+  // pois pode conter palavras como "Casa"/nome do time que confundem 1X2.
+  if (/marcar\s+primeiro|marca\s+primeiro|primeiro\s+(a|para)\s+marcar|first\s+goal|first\s+to\s+score|team\s+to\s+score\s+first|abrir\s+o\s+placar/.test(t)) {
+    return "first_goal";
+  }
   if (/escanteio|corner|canto/.test(t)) return "corners";
   if (/cartao|cartoes|cards?|amarel|vermelh/.test(t)) return "cards";
   if (
@@ -97,6 +102,7 @@ function detectTypeFromMarketLine(line: string): FootballMarketType | null {
     return "goals_total";
   return null;
 }
+
 
 function detectSelectionSide(
   type: FootballMarketType | null,
