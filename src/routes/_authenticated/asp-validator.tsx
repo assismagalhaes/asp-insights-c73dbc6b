@@ -2605,47 +2605,65 @@ function buildFailedOnlineContext(previous: Record<string, unknown> | null, erro
   };
 }
 
-function buildFormValidationContext(form: ValidatorForm, uploads: ValidatorUploadDraft[], validatorModel: string): Record<string, unknown> {
-  const sourceProbability = normalizeProbability(parseNumber(form.source_probability));
-  const offeredOdd = parseNumber(form.offered_odd);
-  const sourceEv = parseNumber(form.source_ev);
+function buildFormValidationContext(
+  form: ValidatorForm,
+  uploads: ValidatorUploadDraft[],
+  validatorModel: string,
+  pasted?: PastedParsedData | null,
+): Record<string, unknown> {
+  const sourceProbability = normalizeProbability(parseNumber(form.source_probability)) ?? pasted?.market.probability_original ?? null;
+  const offeredOdd = parseNumber(form.offered_odd) ?? pasted?.market.offered_odd ?? null;
+  const sourceEv = parseNumber(form.source_ev) ?? pasted?.market.ev_original ?? null;
+  const structuredJson = pasted
+    ? ({ ...pasted, input_source: "pasted_text" } as unknown as Record<string, unknown>)
+    : null;
+  const pastedSummary = pasted
+    ? `[TEXTO COLADO INTERPRETADO]\nQualidade: ${(pasted.data_quality_score * 100).toFixed(0)}% | Campos: ${pasted.structured_fields_count}\n\n${pasted.raw_pasted_text}`
+    : null;
   return {
     source_platform: form.source_platform,
-    sport: form.sport,
+    sport: form.sport || pasted?.match.sport || "Futebol",
     validator_model: validatorModel,
     fixture: {
-      league: form.league,
-      date: form.match_date,
-      home_team: form.home_team,
-      away_team: form.away_team,
+      league: form.league || pasted?.fixture.league || "",
+      date: form.match_date || pasted?.fixture.date || "",
+      home_team: form.home_team || pasted?.match.home_team || "",
+      away_team: form.away_team || pasted?.match.away_team || "",
     },
     prediction: {
-      market: form.market,
-      pick: form.pick,
-      line: form.line || null,
+      market: form.market || pasted?.market.name || "",
+      pick: form.pick || pasted?.market.pick || "",
+      line: form.line || pasted?.market.line || null,
       offered_odd: offeredOdd,
       source_probability: sourceProbability,
       source_ev: sourceEv,
-      source_fair_odd: sourceProbability ? round(100 / sourceProbability, 2) : null,
+      source_fair_odd: pasted?.market.fair_odd_original ?? (sourceProbability ? round(100 / sourceProbability, 2) : null),
     },
     user_context: form.user_context,
+    pasted_text: pasted?.raw_pasted_text ?? null,
+    pasted_structured_data: structuredJson,
     upload_comments: uploads.map((upload) => ({
       file_name: upload.file.name,
       category: upload.upload_category,
       comment: upload.user_comment,
       order: upload.upload_order,
     })),
-    ocr_raw_text: null,
-    structured_json: null,
+    ocr_raw_text: pastedSummary,
+    ocr_structured_data: structuredJson,
+    structured_json: structuredJson,
     simulation_json: null,
     data_usage: {
       used_ocr: false,
-      used_structured_json: false,
+      used_pasted_text: Boolean(structuredJson),
+      used_structured_json: Boolean(structuredJson),
       used_simulation: false,
       used_upload_comments: uploads.some((upload) => upload.user_comment.trim()),
+      has_structured_ocr_data: Boolean(pasted?.has_structured_ocr_data),
+      structured_fields_count: pasted?.structured_fields_count ?? 0,
     },
   };
 }
+
 
 function buildRecordValidationContext(record: ValidatorRecord, uploads: ValidatorUploadRecord[]): Record<string, unknown> {
   return {
