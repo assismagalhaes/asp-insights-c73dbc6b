@@ -125,7 +125,7 @@ function normalizeOnlineResult(
   searches: string[],
 ): AspValidatorOnlineAiResult {
   const manual = extractManualPrediction(context);
-  const adjustedProbability = clampNumber(readNumber(value.adjusted_probability), 0, 100) ?? manual.source_probability ?? 50;
+  const adjustedProbability = clampNumber(normalizeProbabilityPercent(readNumber(value.adjusted_probability)), 0, 100) ?? manual.source_probability ?? 50;
   const offeredOdd = readNumber(value.offered_odd) ?? manual.offered_odd;
   const adjustedFairOdd = readNumber(value.adjusted_fair_odd) ?? (adjustedProbability > 0 ? round(100 / adjustedProbability) : 2);
   const adjustedEv = normalizeEvPercent(readNumber(value.adjusted_ev)) ?? (offeredOdd ? round((offeredOdd * (adjustedProbability / 100) - 1) * 100) : null);
@@ -139,7 +139,7 @@ function normalizeOnlineResult(
   return {
     decision: value.decision === "CONFIRMAR" ? "CONFIRMAR" : "PULAR",
     confidence: normalizeConfidence(value.confidence),
-    source_probability: readNumber(value.source_probability) ?? manual.source_probability,
+    source_probability: normalizeProbabilityPercent(readNumber(value.source_probability)) ?? manual.source_probability,
     source_fair_odd: readNumber(value.source_fair_odd) ?? manual.source_fair_odd,
     offered_odd: offeredOdd,
     source_ev: normalizeEvPercent(readNumber(value.source_ev)) ?? manual.source_ev,
@@ -246,5 +246,11 @@ function round(value: number, digits = 2): number {
 function normalizeEvPercent(value: number | null): number | null {
   if (value === null || value === undefined || !Number.isFinite(value)) return null;
   if (value !== 0 && Math.abs(value) < 1) return round(value * 100);
+  return round(value);
+}
+
+function normalizeProbabilityPercent(value: number | null): number | null {
+  if (value === null || value === undefined || !Number.isFinite(value)) return null;
+  if (value > 0 && value <= 1) return round(value * 100);
   return round(value);
 }
