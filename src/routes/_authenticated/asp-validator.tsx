@@ -1636,9 +1636,16 @@ function UploadsDetail({
   );
 }
 
-function PendingTechFields({ record }: { record: ValidatorRecord }) {
+function PendingTechFields({ record, pasted = false }: { record: ValidatorRecord; pasted?: boolean }) {
   const items = [
-    { title: "OCR", value: record.ocr_raw_text ? "OCR processado e texto bruto salvo." : "Aguardando processamento OCR dos uploads." },
+    {
+      title: pasted ? "Texto colado" : "OCR",
+      value: pasted
+        ? "Texto colado interpretado e salvo."
+        : record.ocr_raw_text
+          ? "OCR processado e texto bruto salvo."
+          : "Aguardando processamento OCR dos uploads.",
+    },
     {
       title: "Simulacao probabilistica",
       value: hasJsonContent(record.simulation_json) ? "Dados de simulacao registrados." : "Disponivel apos OCR estruturado ou dados manuais suficientes.",
@@ -1648,6 +1655,7 @@ function PendingTechFields({ record }: { record: ValidatorRecord }) {
       value: hasJsonContent(record.online_context_json) ? "Contexto online registrado." : "Disponivel para validacao complementar quando necessario.",
     },
   ];
+
   return (
     <div className="grid gap-3 md:grid-cols-3">
       {items.map((item) => (
