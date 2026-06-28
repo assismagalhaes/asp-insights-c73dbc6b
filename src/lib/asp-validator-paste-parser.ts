@@ -670,7 +670,9 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
     goals: goalsBlock,
     cards: cardsBlock,
     general_performance: generalPerf,
+    general_performance_home_away: generalPerfHA,
     btts: bttsBlock,
+    btts_home_away: bttsBlockHA,
 
   };
 }
