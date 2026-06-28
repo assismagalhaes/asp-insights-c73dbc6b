@@ -90,7 +90,7 @@ function normalizeAiResult(value: Record<string, unknown>, context: Record<strin
   const adjustedProbability = clampNumber(readNumber(value.adjusted_probability), 0, 100) ?? manual.source_probability ?? 50;
   const adjustedFairOdd = readNumber(value.adjusted_fair_odd) ?? (adjustedProbability > 0 ? round(100 / adjustedProbability) : 2);
   const offeredOdd = readNumber(value.offered_odd) ?? manual.offered_odd;
-  const adjustedEv = readNumber(value.adjusted_ev) ?? (offeredOdd && adjustedProbability ? round((offeredOdd * (adjustedProbability / 100) - 1) * 100) : null);
+  const adjustedEv = normalizeEvPercent(readNumber(value.adjusted_ev)) ?? (offeredOdd && adjustedProbability ? round((offeredOdd * (adjustedProbability / 100) - 1) * 100) : null);
   return {
     decision: value.decision === "CONFIRMAR" ? "CONFIRMAR" : "PULAR",
     confidence: normalizeConfidence(value.confidence),
