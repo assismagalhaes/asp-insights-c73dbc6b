@@ -447,8 +447,10 @@ function AspValidatorPage() {
 
   const addUploads = (files: FileList | null, uploadSource: ValidatorUploadDraft["upload_source"] = "manual") => {
     if (!files?.length) return;
+    const validFiles = filterValidUploads(Array.from(files), (reason) => toast.error(reason));
+    if (!validFiles.length) return;
     setUploads((prev) => {
-      const nextFiles = Array.from(files).map((file, index) => ({
+      const nextFiles = validFiles.map((file, index) => ({
         local_id: `${file.name}-${file.size}-${file.lastModified}-${Date.now()}-${index}`,
         file,
         upload_category: UPLOAD_CATEGORIES[0],
