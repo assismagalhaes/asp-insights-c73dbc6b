@@ -3065,6 +3065,28 @@ async function saveValidation(
     const pastedRawText = pasted
       ? `[TEXTO COLADO INTERPRETADO]\nQualidade: ${(pasted.data_quality_score * 100).toFixed(0)}% | Campos: ${pasted.structured_fields_count}\n\n${pasted.raw_pasted_text}`
       : null;
+    let simulationPayload: Record<string, unknown> = {};
+    let simulationType: string | null = null;
+    if (pastedStructured) {
+      try {
+        const sim = runAspValidatorSimulation({
+          sport: form.sport || pasted?.match.sport || "Futebol",
+          market: form.market || pasted?.market.name || null,
+          pick: form.pick || pasted?.market.pick || null,
+          line: form.line || (pasted?.market.line ?? null),
+          offered_odd: result.offered_odd ?? pasted?.market.offered_odd ?? null,
+          home_team: form.home_team || pasted?.match.home_team || null,
+          away_team: form.away_team || pasted?.match.away_team || null,
+          user_context: form.user_context ?? null,
+          structured_json: pastedStructured,
+        });
+        simulationPayload = sim as unknown as Record<string, unknown>;
+        simulationType = sim.model;
+      } catch {
+        simulationPayload = {};
+        simulationType = null;
+      }
+    }
     const payload: ValidatorInsert = {
       ...form,
       match_date: form.match_date || "",
@@ -3083,7 +3105,7 @@ async function saveValidation(
       against_blocks: result.against_blocks,
       alerts: result.alerts,
       final_analysis: result.final_analysis,
-      simulation_json: {},
+      simulation_json: simulationPayload,
       online_context_json: {},
       ocr_raw_text: pastedRawText,
       ocr_structured_data: pastedStructured ?? {},
@@ -3105,10 +3127,11 @@ async function saveValidation(
       result_settled_at: null,
       final_score: null,
       result_notes: null,
-      simulation_type: null,
+      simulation_type: simulationType,
       is_simulated_result: false,
       bankroll_applied: false,
     };
+
 
     const insertPayload = {
       ...payload,
