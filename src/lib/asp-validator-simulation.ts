@@ -11,7 +11,7 @@ export type AspValidatorSimulationInput = {
 };
 
 export type AspValidatorSimulationResult = {
-  model: "poisson_score_matrix" | "corner_race_simplified" | "corner_volume_matrix" | "low_confidence_corner_race";
+  model: "poisson_score_matrix" | "corner_race_simplified" | "corner_volume_matrix" | "corner_total_over_simplified" | "low_confidence_corner_race";
   status: "completed" | "low_confidence" | "not_applicable" | "failed";
   lambda_home: number | null;
   lambda_away: number | null;
@@ -170,12 +170,17 @@ function runCornerSimulation(input: AspValidatorSimulationInput, marketText: str
   const structured = (input.structured_json ?? {}) as Record<string, any>;
   const market = (structured.market ?? structured.prediction ?? {}) as Record<string, any>;
   const corners = (structured.corners ?? {}) as Record<string, any>;
+  const line = parseLine(input.line ?? market.line ?? readCornerRaceLine(input.pick ?? market.pick ?? ""));
+  const isTotalOverUnder = isCornerTotalOverUnderMarket(marketText, input.pick ?? market.pick ?? "", line);
+  if (isTotalOverUnder && line !== null) {
+    return runCornerTotalOverSimulation(input, structured, market, corners, line);
+  }
+
   const pickText = normalize(input.pick ?? market.pick ?? "");
   const wantsAway = pickText.includes(normalize(input.away_team ?? "")) || pickText.includes("fora") || pickText.includes("visitante") || pickText.includes("away");
   const side = wantsAway ? "away" : "home";
   const sideStats = (corners[side] ?? {}) as Record<string, number | null>;
   const opponentStats = (corners[side === "home" ? "away" : "home"] ?? {}) as Record<string, number | null>;
-  const line = parseLine(input.line ?? market.line ?? readCornerRaceLine(input.pick ?? market.pick ?? ""));
   const prediction = (structured.prediction ?? {}) as Record<string, any>;
   const sourceProb = percentToDecimal(readNumber(market.probability_original ?? prediction.source_probability ?? prediction.probability_original));
   const offeredOdd = input.offered_odd ?? readNumber(market.offered_odd ?? structured.prediction?.offered_odd);
@@ -238,6 +243,129 @@ function runCornerSimulation(input: AspValidatorSimulationInput, marketText: str
     ],
     warnings: components.length < 2 ? ["Simulacao de baixa confiabilidade por pouca evidencia estruturada."] : [],
   };
+}
+
+function runCornerTotalOverSimulation(
+  input: AspValidatorSimulationInput,
+  structured: Record<string, any>,
+  market: Record<string, any>,
+  corners: Record<string, any>,
+  line: number,
+): AspValidatorSimulationResult {
+  const prediction = (structured.prediction ?? {}) as Record<string, any>;
+  const home = (corners.home ?? {}) as Record<string, any>;
+  const away = (corners.away ?? {}) as Record<string, any>;
+  const pickText = normalize(input.pick ?? market.pick ?? "");
+  const wantsUnder = pickText.includes("under") || pickText.includes("menos");
+  const sourceProb = percentToDecimal(readNumber(market.probability_original ?? prediction.source_probability ?? prediction.probability_original));
+  const offeredOdd = input.offered_odd ?? readNumber(market.offered_odd ?? prediction.offered_odd);
+  const marketProb = offeredOdd && offeredOdd > 1 ? 1 / offeredOdd : null;
+  const homeFor = readNumber(home.avg_for);
+  const homeAgainst = readNumber(home.avg_against);
+  const awayFor = readNumber(away.avg_for);
+  const awayAgainst = readNumber(away.avg_against);
+  const homeTotal = readNumber(home.avg_total);
+  const awayTotal = readNumber(away.avg_total);
+  const homeAwayTotal = readNumber(home.home_away_avg_total);
+  const awayHomeTotal = readNumber(away.home_away_avg_total);
+  const expectedPieces = [
+    homeTotal,
+    awayTotal,
+    homeFor !== null && awayAgainst !== null ? homeFor + awayAgainst : null,
+    awayFor !== null && homeAgainst !== null ? awayFor + homeAgainst : null,
+    homeAwayTotal,
+    awayHomeTotal,
+  ].filter((value): value is number => value !== null && Number.isFinite(value));
+  const expectedTotal = expectedPieces.length ? average(expectedPieces) : null;
+  const avgSupport = expectedTotal !== null
+    ? wantsUnder
+      ? clampDecimal((line + 1.5 - expectedTotal) / Math.max(line + 1.5, 1), 0.08, 0.78)
+      : clampDecimal((expectedTotal - Math.max(line - 2.5, 1)) / Math.max(5, line + 1), 0.25, 0.82)
+    : null;
+  const thresholdKey = String(Math.trunc(line));
+  const totalFreq = averagePercentValues([
+    readLinePercent(home.over_lines, thresholdKey),
+    readLinePercent(away.over_lines, thresholdKey),
+    readLinePercent(home.home_away_over_lines, thresholdKey),
+    readLinePercent(away.home_away_over_lines, thresholdKey),
+  ]);
+  const underFreq = averagePercentValues([
+    readLinePercent(home.under_lines, thresholdKey),
+    readLinePercent(away.under_lines, thresholdKey),
+    readLinePercent(home.home_away_under_lines, thresholdKey),
+    readLinePercent(away.home_away_under_lines, thresholdKey),
+  ]);
+  const frequencyProb = percentToDecimal(wantsUnder ? underFreq : totalFreq);
+  const quality = readNumber(structured.data_quality_score) ?? readNumber(structured.data_quality?.score) ?? 0.5;
+  const components = [
+    sourceProb !== null ? { value: sourceProb, weight: 0.3 } : null,
+    marketProb !== null ? { value: marketProb, weight: 0.15 } : null,
+    avgSupport !== null ? { value: avgSupport, weight: 0.25 } : null,
+    frequencyProb !== null ? { value: frequencyProb, weight: 0.25 } : null,
+    quality > 0 ? { value: clampDecimal(quality, 0.35, 0.9), weight: 0.05 } : null,
+  ].filter((item): item is { value: number; weight: number } => Boolean(item));
+
+  if (!components.length) {
+    return {
+      model: "corner_total_over_simplified",
+      status: "low_confidence",
+      lambda_home: null,
+      lambda_away: null,
+      market_probability: null,
+      fair_odd: null,
+      ev: null,
+      most_likely_scores: [],
+      goal_distribution: {},
+      notes: ["Simulacao de total de corners nao realizada por falta de dados quantitativos OCR."],
+      warnings: ["Dados OCR de corners insuficientes para estimar probabilidade de Over/Under."],
+    };
+  }
+
+  const totalWeight = components.reduce((sum, item) => sum + item.weight, 0);
+  const rawProbability = components.reduce((sum, item) => sum + item.value * item.weight, 0) / totalWeight;
+  const penalty = quality < 0.7 ? (0.7 - quality) * 0.08 : 0;
+  const probability = clampDecimal(rawProbability - penalty, 0.05, 0.88);
+  const fairOdd = probability > 0 ? round(1 / probability) : null;
+  const ev = offeredOdd && offeredOdd > 1 ? round(offeredOdd * probability - 1, 4) : null;
+
+  return {
+    model: "corner_total_over_simplified",
+    status: components.length >= 3 ? "completed" : "low_confidence",
+    lambda_home: null,
+    lambda_away: null,
+    market_probability: round(probability, 4),
+    fair_odd: fairOdd,
+    ev,
+    most_likely_scores: [],
+    goal_distribution: {},
+    notes: [
+      `Modelo corner_total_over_simplified para ${wantsUnder ? "Under" : "Over"} ${line} escanteios.`,
+      `Medias usadas: mandante marcados ${formatNumber(homeFor)}, mandante sofridos ${formatNumber(homeAgainst)}, visitante marcados ${formatNumber(awayFor)}, visitante sofridos ${formatNumber(awayAgainst)}, total esperado ${formatNumber(expectedTotal)}.`,
+      `Frequencia ${wantsUnder ? "-" : "+"}${thresholdKey}: ${formatProb(frequencyProb)}. Para Over 9.5, +9 representa 10 ou mais cantos.`,
+      `Composicao: probabilidade original ${formatProb(sourceProb)}, mercado ${formatProb(marketProb)}, medias ${formatProb(avgSupport)}, frequencia ${formatProb(frequencyProb)}, qualidade OCR ${formatProb(quality)}.`,
+    ],
+    warnings: components.length < 3 ? ["Simulacao de baixa confiabilidade por pouca evidencia estruturada."] : [],
+  };
+}
+
+function isCornerTotalOverUnderMarket(marketText: string, pick: string, line: number | null): boolean {
+  const text = normalize(`${marketText} ${pick}`);
+  if (line === null) return false;
+  const hasTotalSide = text.includes("over") || text.includes("under") || text.includes("mais de") || text.includes("menos de") || text.includes("total");
+  const hasCorner = text.includes("corner") || text.includes("escanteio") || text.includes("canto");
+  const hasRace = text.includes("race") || text.includes("corrida") || text.includes("primeiro");
+  return hasCorner && hasTotalSide && !hasRace;
+}
+
+function readLinePercent(lines: unknown, key: string): number | null {
+  if (!lines || typeof lines !== "object") return null;
+  const map = lines as Record<string, unknown>;
+  return readNumber(map[key] ?? map[`+${key}`] ?? map[`-${key}`] ?? map[`${key}.0`]);
+}
+
+function averagePercentValues(values: Array<number | null>): number | null {
+  const valid = values.filter((value): value is number => value !== null && Number.isFinite(value));
+  return valid.length ? average(valid) : null;
 }
 
 function estimateLambdas(input: AspValidatorSimulationInput): LambdaEstimate {
@@ -467,6 +595,10 @@ function clampDecimal(value: number, min: number, max: number): number {
 
 function formatProb(value: number | null): string {
   return value === null ? "indisponivel" : `${round(value * 100, 2)}%`;
+}
+
+function formatNumber(value: number | null): string {
+  return value === null ? "indisponivel" : String(round(value, 2));
 }
 
 function firstNumber(text: string, patterns: RegExp[]): number | null {
