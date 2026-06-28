@@ -589,10 +589,11 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
     period: detection.period,
     pick_normalized: detection.pick_normalized,
     validator_model: detection.validator_model,
-    goals,
-    cards,
-    general_performance,
-    btts,
+    goals: goalsBlock,
+    cards: cardsBlock,
+    general_performance: generalPerf,
+    btts: bttsBlock,
+
   };
 }
 
