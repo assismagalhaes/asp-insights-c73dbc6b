@@ -728,11 +728,25 @@ function AspValidatorPage() {
     }
   };
 
+  const ensureOcrForStoredUploads = async (): Promise<ValidatorUploadRecord[]> => {
+    if (!selectedRecord) return [];
+    const currentUploads = uploadsByRecord[selectedRecord.id] ?? [];
+    const pending = currentUploads.filter(
+      (upload) => Boolean(upload.file_path) && upload.ocr_status !== "completed",
+    );
+    if (!pending.length) return currentUploads;
+    toast.info(`Processando OCR de ${pending.length} arquivo(s) salvo(s) no Storage...`);
+    for (const upload of pending) {
+      await processUploadOcr(upload);
+    }
+    return uploadsByRecord[selectedRecord.id] ?? currentUploads;
+  };
+
   const validateSelectedRecordWithAi = async () => {
     if (!selectedRecord) return;
-    const currentUploads = uploadsByRecord[selectedRecord.id] ?? [];
     setValidatingAiRecord(true);
     try {
+      const currentUploads = await ensureOcrForStoredUploads();
       const next = await validateWithAiFallback(buildRecordValidationContext(selectedRecord, currentUploads));
       const { error } = await validatorDb
         .from("asp_validator_registros")
@@ -783,9 +797,9 @@ function AspValidatorPage() {
 
   const validateSelectedRecordWithOnlineAi = async () => {
     if (!selectedRecord) return;
-    const currentUploads = uploadsByRecord[selectedRecord.id] ?? [];
     setValidatingOnlineRecord(true);
     try {
+      const currentUploads = await ensureOcrForStoredUploads();
       const context = {
         ...buildRecordValidationContext(selectedRecord, currentUploads),
         previous_ai_analysis: {
