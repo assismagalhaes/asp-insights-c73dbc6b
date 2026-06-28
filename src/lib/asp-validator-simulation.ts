@@ -539,7 +539,12 @@ function estimateLambdas(input: AspValidatorSimulationInput): LambdaEstimate {
     Object.keys((goalsBlock.home_away ?? {}) as Record<string, any>).length > 0 ||
     Object.keys((goalsBlock.general ?? {}) as Record<string, any>).length > 0;
   const is1x2 = is1x2Market(marketText);
-  if ((lambdaHome === null || lambdaAway === null) && !(isBtts && hasStructuredGoalsBlocks) && !(is1x2 && !hasStructuredGoalsBlocks ? false : is1x2)) {
+  // Bloqueia fallback regex para BTTS e 1X2 quando ja existem blocos estruturados
+  // (mesmo parciais) — evita inflar lambdas com numeros soltos do blob.
+  // Para 1X2, bloqueia sempre que NAO houver blocos estruturados confiaveis,
+  // pois regex frequentemente captura medias do oponente ou cabecalhos errados.
+  const blockRegexFallback = (isBtts && hasStructuredGoalsBlocks) || is1x2;
+  if ((lambdaHome === null || lambdaAway === null) && !blockRegexFallback) {
     const text = [input.user_context ?? "", JSON.stringify(input.structured_json ?? {})].join("\n");
     const normalized = text.replace(/,/g, ".");
     const homeScored = firstNumber(normalized, [
