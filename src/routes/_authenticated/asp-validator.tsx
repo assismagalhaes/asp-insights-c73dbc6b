@@ -3566,11 +3566,43 @@ function metricPairNumbers(text: string, label: RegExp, options: { requireDecima
 function extractGoalStats(text: string): Record<string, unknown> {
   const normalized = normalize(text);
   if (!normalized.includes("gol") && !normalized.includes("goal") && !normalized.includes("btts")) return {};
+  const avgScoredPair = metricPairNumbers(text, /m[eé]dia\s+(?:de\s+)?gols?\s+marcados|marcados\s+(?:por\s+jogo)|scored/i);
+  const avgConcededPair = metricPairNumbers(text, /m[eé]dia\s+(?:de\s+)?gols?\s+sofridos|sofridos\s+(?:por\s+jogo)|conceded/i);
+  const avgTotalPair = metricPairNumbers(text, /m[eé]dia\s+total\s+gols|total\s+m[eé]dio\s+gols/i);
+  const homeAvgHomeMatches = matchNumber(text, /casa[^0-9]{0,40}(?:marcados|scored)[^0-9]*(\d+(?:\.\d+)?)/i);
+  const homeAvgHomeConceded = matchNumber(text, /casa[^0-9]{0,40}(?:sofridos|conceded)[^0-9]*(\d+(?:\.\d+)?)/i);
+  const awayAvgAwayMatches = matchNumber(text, /(?:visitante|fora)[^0-9]{0,40}(?:marcados|scored)[^0-9]*(\d+(?:\.\d+)?)/i);
+  const awayAvgAwayConceded = matchNumber(text, /(?:visitante|fora)[^0-9]{0,40}(?:sofridos|conceded)[^0-9]*(\d+(?:\.\d+)?)/i);
+  const expectedTotal =
+    matchNumber(text, /exp\.\s*de\s*gols\s*\(modelo\)[^0-9]*(\d+(?:\.\d+)?)/i) ??
+    matchNumber(text, /expectativa\s+de\s+gols[^0-9]*(\d+(?:\.\d+)?)/i);
+  const expectedSplit = text.replace(/,/g, ".").match(/for[cç]a\s+esperada\s+gols[^0-9]*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/i);
+  const home = {
+    avg_for: avgScoredPair?.[0] ?? null,
+    avg_against: avgConcededPair?.[0] ?? null,
+    avg_total: avgTotalPair?.[0] ?? null,
+    home_avg_for: homeAvgHomeMatches,
+    home_avg_against: homeAvgHomeConceded,
+    expected_goals: expectedSplit ? Number(expectedSplit[1]) : null,
+  };
+  const away = {
+    avg_for: avgScoredPair?.[1] ?? null,
+    avg_against: avgConcededPair?.[1] ?? null,
+    avg_total: avgTotalPair?.[1] ?? null,
+    away_avg_for: awayAvgAwayMatches,
+    away_avg_against: awayAvgAwayConceded,
+    expected_goals: expectedSplit ? Number(expectedSplit[2]) : null,
+  };
   return {
     extracted_numbers: extractPercentagesAndNumbers(text),
     over_1_5_pct: matchNumber(text, /over\s*1\.5[^\d]*(\d+(?:\.\d+)?)\s*%/i),
     over_2_5_pct: matchNumber(text, /over\s*2\.5[^\d]*(\d+(?:\.\d+)?)\s*%/i),
+    over_3_5_pct: matchNumber(text, /over\s*3\.5[^\d]*(\d+(?:\.\d+)?)\s*%/i),
     btts_yes_pct: matchNumber(text, /btts[^\d]*(?:sim|yes)?[^\d]*(\d+(?:\.\d+)?)\s*%/i),
+    btts_no_pct: matchNumber(text, /btts[^\d]*(?:nao|no)[^\d]*(\d+(?:\.\d+)?)\s*%/i),
+    expected_total_goals: expectedTotal,
+    home,
+    away,
   };
 }
 
