@@ -11,7 +11,7 @@ export type AspValidatorSimulationInput = {
 };
 
 export type AspValidatorSimulationResult = {
-  model: "poisson_score_matrix";
+  model: "poisson_score_matrix" | "corner_race_simplified" | "corner_volume_matrix" | "low_confidence_corner_race";
   status: "completed" | "low_confidence" | "not_applicable" | "failed";
   lambda_home: number | null;
   lambda_away: number | null;
@@ -175,8 +175,9 @@ function runCornerSimulation(input: AspValidatorSimulationInput, marketText: str
   const side = wantsAway ? "away" : "home";
   const sideStats = (corners[side] ?? {}) as Record<string, number | null>;
   const opponentStats = (corners[side === "home" ? "away" : "home"] ?? {}) as Record<string, number | null>;
-  const line = parseLine(input.line ?? market.line ?? null);
-  const sourceProb = percentToDecimal(readNumber(market.probability_original ?? structured.prediction?.source_probability));
+  const line = parseLine(input.line ?? market.line ?? readCornerRaceLine(input.pick ?? market.pick ?? ""));
+  const prediction = (structured.prediction ?? {}) as Record<string, any>;
+  const sourceProb = percentToDecimal(readNumber(market.probability_original ?? prediction.source_probability ?? prediction.probability_original));
   const offeredOdd = input.offered_odd ?? readNumber(market.offered_odd ?? structured.prediction?.offered_odd);
   const marketProb = offeredOdd && offeredOdd > 1 ? 1 / offeredOdd : null;
   const raceProb = line ? percentToDecimal(readNumber(sideStats[`race_to_${Math.trunc(line)}_pct`])) : null;
@@ -198,7 +199,7 @@ function runCornerSimulation(input: AspValidatorSimulationInput, marketText: str
 
   if (!components.length) {
     return {
-      model: "poisson_score_matrix",
+      model: "low_confidence_corner_race",
       status: "low_confidence",
       lambda_home: null,
       lambda_away: null,
@@ -221,7 +222,7 @@ function runCornerSimulation(input: AspValidatorSimulationInput, marketText: str
   const ev = offeredOdd && offeredOdd > 1 ? round(offeredOdd * probability - 1, 4) : null;
 
   return {
-    model: "poisson_score_matrix",
+    model: line ? "corner_race_simplified" : "corner_volume_matrix",
     status: components.length >= 2 ? "completed" : "low_confidence",
     lambda_home: null,
     lambda_away: null,
@@ -434,6 +435,14 @@ function buildGoalDistribution(matrix: ScoreCell[]): Record<string, number> {
 function parseLine(value: string | number | null): number | null {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   const parsed = Number(String(value ?? "").replace(",", ".").match(/[+-]?\d+(?:\.\d+)?/)?.[0]);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function readCornerRaceLine(value: string | number | null): number | null {
+  const text = String(value ?? "");
+  const match = text.match(/(\d+(?:[,.]\d+)?)\s*(?:escanteios|cantos|corners?)\s*(?:primeiro|first)/i) ?? text.match(/race\s*to\s*(\d+(?:[,.]\d+)?)/i);
+  if (!match?.[1]) return null;
+  const parsed = Number(match[1].replace(",", "."));
   return Number.isFinite(parsed) ? parsed : null;
 }
 
