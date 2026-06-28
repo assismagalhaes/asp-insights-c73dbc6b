@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { validateAspValidatorWithAi, type AspValidatorAiResult } from "@/lib/asp-validator-ai.functions";
 import { validateAspValidatorWithOnlineAi, type AspValidatorOnlineAiResult } from "@/lib/asp-validator-ai-online.functions";
 import { runAspValidatorSimulation, type AspValidatorSimulationResult } from "@/lib/asp-validator-simulation";
+import { parsePastedPrognostico, type PastedParsedData } from "@/lib/asp-validator-paste-parser";
 import { useConfiguracao } from "@/lib/db";
 import { processAspValidatorOcr } from "@/lib/scraper-api.functions";
 import { supabase } from "@/lib/supabase-public";
@@ -316,6 +317,8 @@ const INITIAL_DASHBOARD_FILTERS: ValidatorDashboardFilters = {
 function AspValidatorPage() {
   const { data: cfg } = useConfiguracao();
   const [form, setForm] = useState<ValidatorForm>(INITIAL_FORM);
+  const [pastedText, setPastedText] = useState("");
+  const [pastedParsed, setPastedParsed] = useState<PastedParsedData | null>(null);
   const [uploads, setUploads] = useState<ValidatorUploadDraft[]>([]);
   const [result, setResult] = useState<ValidationResult | null>(null);
   const [saving, setSaving] = useState(false);
@@ -342,11 +345,58 @@ function AspValidatorPage() {
     [form],
   );
   // Permite validar tambem quando ha uploads (OCR podera preencher campos automaticamente)
-  const canValidate = hasManualCore || uploads.length > 0;
+  // ou quando ha texto colado interpretado (fluxo principal a partir desta versao).
+  const canValidate = hasManualCore || uploads.length > 0 || Boolean(pastedParsed);
 
   const update = (field: keyof ValidatorForm, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
+
+  const interpretPastedText = () => {
+    const raw = pastedText.trim();
+    if (!raw) {
+      toast.error("Cole os dados do prognostico antes de interpretar.");
+      return;
+    }
+    try {
+      const parsed = parsePastedPrognostico(pastedText);
+      setPastedParsed(parsed);
+      toast.success(
+        `Texto interpretado: ${parsed.structured_fields_count} campos estruturados (qualidade ${(parsed.data_quality_score * 100).toFixed(0)}%).`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao interpretar o texto colado.");
+    }
+  };
+
+  const applyPastedToForm = () => {
+    if (!pastedParsed) {
+      toast.error("Interprete o texto colado antes de aplicar.");
+      return;
+    }
+    const p = pastedParsed.form_patch;
+    setForm((prev) => ({
+      ...prev,
+      sport: p.sport || prev.sport,
+      league: p.league || prev.league,
+      match_date: p.match_date || prev.match_date,
+      home_team: p.home_team || prev.home_team,
+      away_team: p.away_team || prev.away_team,
+      market: p.market || prev.market,
+      pick: p.pick || prev.pick,
+      line: p.line || prev.line,
+      offered_odd: p.offered_odd || prev.offered_odd,
+      source_probability: p.source_probability || prev.source_probability,
+      source_ev: p.source_ev || prev.source_ev,
+    }));
+    toast.success("Formulario preenchido com os dados colados. Revise antes de validar.");
+  };
+
+  const clearPastedText = () => {
+    setPastedText("");
+    setPastedParsed(null);
+  };
+
 
   const loadHistory = async () => {
     setLoadingHistory(true);
@@ -403,22 +453,27 @@ function AspValidatorPage() {
 
   const validate = async () => {
     if (!canValidate) {
-      toast.error("Preencha esporte, origem, confronto, mercado e pick, ou adicione uploads para OCR.");
+      toast.error("Preencha esporte, origem, confronto, mercado e pick, cole dados do prognostico ou adicione uploads.");
       return;
     }
-    if (!hasManualCore && uploads.length > 0) {
+    if (!hasManualCore && pastedParsed) {
+      toast.info("Validando com base no texto colado. Campos manuais ausentes serao inferidos a partir do JSON estruturado.");
+    } else if (!hasManualCore && uploads.length > 0) {
       toast.info("Validando com base nos uploads/OCR. Campos manuais ausentes serao inferidos quando possivel.");
     }
     setSaving(true);
-    const next = await validateWithAiFallback(buildFormValidationContext(form, uploads, validatorModel));
+    const next = await validateWithAiFallback(buildFormValidationContext(form, uploads, validatorModel, pastedParsed));
     setSaving(false);
     setResult(next);
-    const saved = await saveValidation(form, next, uploads, setSaving);
+    const saved = await saveValidation(form, next, uploads, setSaving, pastedParsed);
     if (saved) {
       setUploads([]);
+      setPastedText("");
+      setPastedParsed(null);
       await loadHistory();
     }
   };
+
 
   const openRecord = (record: ValidatorRecord) => {
     setSelectedRecord(record);
@@ -946,7 +1001,17 @@ function AspValidatorPage() {
               />
             </div>
 
+            <PastedTextSection
+              value={pastedText}
+              parsed={pastedParsed}
+              onChange={setPastedText}
+              onInterpret={interpretPastedText}
+              onApply={applyPastedToForm}
+              onClear={clearPastedText}
+            />
+
             <UploadsWithComments uploads={uploads} onAddFiles={addUploads} onUpdate={updateUpload} onRemove={removeUpload} />
+
 
             <Button onClick={validate} disabled={!canValidate || saving} className="gap-2">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <BrainCircuit className="h-4 w-4" />}
@@ -2434,6 +2499,154 @@ function UploadsWithComments({
   );
 }
 
+function PastedTextSection({
+  value,
+  parsed,
+  onChange,
+  onInterpret,
+  onApply,
+  onClear,
+}: {
+  value: string;
+  parsed: PastedParsedData | null;
+  onChange: (next: string) => void;
+  onInterpret: () => void;
+  onApply: () => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="space-y-3 rounded-md border border-primary/40 bg-primary/5 p-3">
+      <div>
+        <Label className="text-sm font-semibold">Colar dados do prognostico</Label>
+        <p className="text-xs text-muted-foreground">
+          Cole aqui dados extraidos do PackBall, Gemini, ChatGPT, OCR externo ou anotacoes manuais. Pode vir em texto desordenado.
+        </p>
+      </div>
+      <Textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Cole o bloco completo: confronto, mercado, odds, probabilidade, EV, medias gerais, medias casa/fora, over/under, race, primeiro escanteio etc."
+        className="min-h-48 font-mono text-xs"
+      />
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" size="sm" variant="default" onClick={onInterpret} className="gap-2">
+          <FileJson className="h-4 w-4" />
+          Interpretar dados colados
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={onApply} disabled={!parsed} className="gap-2">
+          <ClipboardCheck className="h-4 w-4" />
+          Aplicar ao formulario
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={onClear} disabled={!value && !parsed}>
+          Limpar dados colados
+        </Button>
+      </div>
+      {parsed ? <PastedDataPreview parsed={parsed} /> : null}
+    </div>
+  );
+}
+
+function PastedDataPreview({ parsed }: { parsed: PastedParsedData }) {
+  const home = parsed.match.home_team || "Mandante";
+  const away = parsed.match.away_team || "Visitante";
+  const fmtNum = (v: number | null | undefined) => (v === null || v === undefined ? "-" : String(v));
+  const fmtPct = (v: number | null | undefined) => (v === null || v === undefined ? "-" : `${v}%`);
+  const fmtOdd = (v: number | null | undefined) => (v === null || v === undefined ? "-" : v.toFixed(2));
+  return (
+    <div className="space-y-3 rounded-md border border-border bg-background/60 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div className="font-semibold uppercase tracking-wide text-primary">Dados interpretados do texto colado</div>
+        <div className="text-muted-foreground">
+          Qualidade {(parsed.data_quality_score * 100).toFixed(0)}% | {parsed.structured_fields_count} campos
+        </div>
+      </div>
+      <div className="grid gap-2 text-xs md:grid-cols-2">
+        <Info label="Confronto" value={`${home} x ${away}`} />
+        <Info label="Liga / Rodada" value={[parsed.match.competition, parsed.match.round ? `Rodada ${parsed.match.round}` : ""].filter(Boolean).join(" - ") || "-"} />
+        <Info label="Data / Hora" value={[parsed.match.date, parsed.match.time].filter(Boolean).join(" ") || "-"} />
+        <Info label="Mercado" value={parsed.market.normalized_market || parsed.market.name || "-"} />
+        <Info label="Pick / Linha" value={`${parsed.market.pick || "-"} / ${parsed.market.line ?? "-"}`} />
+        <Info label="Odd / Justa" value={`${fmtOdd(parsed.market.offered_odd)} / ${fmtOdd(parsed.market.fair_odd_original)}`} />
+        <Info label="Probabilidade" value={fmtPct(parsed.market.probability_original)} />
+        <Info label="EV original" value={fmtPct(parsed.market.ev_original)} />
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <PastedCornerCard title={`${home} — geral`} side={parsed.corners.general.home} fmtNum={fmtNum} fmtPct={fmtPct} />
+        <PastedCornerCard title={`${away} — geral`} side={parsed.corners.general.away} fmtNum={fmtNum} fmtPct={fmtPct} />
+        <PastedCornerCard title={`${home} — casa`} side={parsed.corners.home_away.home} fmtNum={fmtNum} fmtPct={fmtPct} homeAway />
+        <PastedCornerCard title={`${away} — fora`} side={parsed.corners.home_away.away} fmtNum={fmtNum} fmtPct={fmtPct} homeAway />
+      </div>
+      {parsed.missing_critical_fields.length ? (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2 text-xs text-amber-300">
+          Campos ausentes: {parsed.missing_critical_fields.join(", ")}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PastedCornerCard({
+  title,
+  side,
+  homeAway = false,
+  fmtNum,
+  fmtPct,
+}: {
+  title: string;
+  side: PastedParsedData["corners"]["general"]["home"];
+  homeAway?: boolean;
+  fmtNum: (v: number | null | undefined) => string;
+  fmtPct: (v: number | null | undefined) => string;
+}) {
+  const avgFor = homeAway ? side.home_away_avg_for ?? side.avg_for : side.avg_for;
+  const avgAgainst = homeAway ? side.home_away_avg_against ?? side.avg_against : side.avg_against;
+  const avgTotal = homeAway ? side.home_away_avg_total ?? side.avg_total : side.avg_total;
+  const over = homeAway ? side.home_away_over_lines : side.over_lines;
+  const under = homeAway ? side.home_away_under_lines : side.under_lines;
+  const overEntries = Object.entries(over).sort(([a], [b]) => Number(a) - Number(b));
+  const underEntries = Object.entries(under).sort(([a], [b]) => Number(a) - Number(b));
+  return (
+    <div className="rounded-md border border-border bg-background/40 p-2 text-xs">
+      <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{title}</div>
+      <div className="grid grid-cols-3 gap-1">
+        <span>Marcados {fmtNum(avgFor)}</span>
+        <span>Sofridos {fmtNum(avgAgainst)}</span>
+        <span>Total {fmtNum(avgTotal)}</span>
+      </div>
+      {!homeAway ? (
+        <div className="mt-1 grid grid-cols-2 gap-1 text-[11px] text-muted-foreground">
+          <span>Tot. marcados {fmtNum(side.total_for)}</span>
+          <span>Tot. sofridos {fmtNum(side.total_against)}</span>
+        </div>
+      ) : null}
+      {overEntries.length ? (
+        <div className="mt-1">
+          <span className="text-[10px] uppercase text-muted-foreground">Over: </span>
+          {overEntries.map(([k, v]) => `${k}=${fmtPct(v)}`).join(" | ")}
+        </div>
+      ) : null}
+      {underEntries.length ? (
+        <div className="mt-1">
+          <span className="text-[10px] uppercase text-muted-foreground">Under: </span>
+          {underEntries.map(([k, v]) => `${k}=${fmtPct(v)}`).join(" | ")}
+        </div>
+      ) : null}
+      {!homeAway ? (
+        <div className="mt-1 grid grid-cols-2 gap-1 text-[11px] text-muted-foreground">
+          <span>1o esc. {fmtPct(side.first_corner_pct)}</span>
+          <span>Mais corn. 1x2 {fmtPct(side.most_corners_1x2_pct)}</span>
+          <span>Race 3 {fmtPct(side.race_to_3_pct)}</span>
+          <span>Race 5 {fmtPct(side.race_to_5_pct)}</span>
+          <span>Race 7 {fmtPct(side.race_to_7_pct)}</span>
+          <span>Race 9 {fmtPct(side.race_to_9_pct)}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+
+
 function Placeholder({ icon: Icon, title, text }: { icon: typeof Search; title: string; text: string }) {
   return (
     <div className="rounded-md border border-dashed border-border bg-muted/10 p-3">
@@ -2550,47 +2763,65 @@ function buildFailedOnlineContext(previous: Record<string, unknown> | null, erro
   };
 }
 
-function buildFormValidationContext(form: ValidatorForm, uploads: ValidatorUploadDraft[], validatorModel: string): Record<string, unknown> {
-  const sourceProbability = normalizeProbability(parseNumber(form.source_probability));
-  const offeredOdd = parseNumber(form.offered_odd);
-  const sourceEv = parseNumber(form.source_ev);
+function buildFormValidationContext(
+  form: ValidatorForm,
+  uploads: ValidatorUploadDraft[],
+  validatorModel: string,
+  pasted?: PastedParsedData | null,
+): Record<string, unknown> {
+  const sourceProbability = normalizeProbability(parseNumber(form.source_probability)) ?? pasted?.market.probability_original ?? null;
+  const offeredOdd = parseNumber(form.offered_odd) ?? pasted?.market.offered_odd ?? null;
+  const sourceEv = parseNumber(form.source_ev) ?? pasted?.market.ev_original ?? null;
+  const structuredJson = pasted
+    ? ({ ...pasted, input_source: "pasted_text" } as unknown as Record<string, unknown>)
+    : null;
+  const pastedSummary = pasted
+    ? `[TEXTO COLADO INTERPRETADO]\nQualidade: ${(pasted.data_quality_score * 100).toFixed(0)}% | Campos: ${pasted.structured_fields_count}\n\n${pasted.raw_pasted_text}`
+    : null;
   return {
     source_platform: form.source_platform,
-    sport: form.sport,
+    sport: form.sport || pasted?.match.sport || "Futebol",
     validator_model: validatorModel,
     fixture: {
-      league: form.league,
-      date: form.match_date,
-      home_team: form.home_team,
-      away_team: form.away_team,
+      league: form.league || pasted?.fixture.league || "",
+      date: form.match_date || pasted?.fixture.date || "",
+      home_team: form.home_team || pasted?.match.home_team || "",
+      away_team: form.away_team || pasted?.match.away_team || "",
     },
     prediction: {
-      market: form.market,
-      pick: form.pick,
-      line: form.line || null,
+      market: form.market || pasted?.market.name || "",
+      pick: form.pick || pasted?.market.pick || "",
+      line: form.line || pasted?.market.line || null,
       offered_odd: offeredOdd,
       source_probability: sourceProbability,
       source_ev: sourceEv,
-      source_fair_odd: sourceProbability ? round(100 / sourceProbability, 2) : null,
+      source_fair_odd: pasted?.market.fair_odd_original ?? (sourceProbability ? round(100 / sourceProbability, 2) : null),
     },
     user_context: form.user_context,
+    pasted_text: pasted?.raw_pasted_text ?? null,
+    pasted_structured_data: structuredJson,
     upload_comments: uploads.map((upload) => ({
       file_name: upload.file.name,
       category: upload.upload_category,
       comment: upload.user_comment,
       order: upload.upload_order,
     })),
-    ocr_raw_text: null,
-    structured_json: null,
+    ocr_raw_text: pastedSummary,
+    ocr_structured_data: structuredJson,
+    structured_json: structuredJson,
     simulation_json: null,
     data_usage: {
       used_ocr: false,
-      used_structured_json: false,
+      used_pasted_text: Boolean(structuredJson),
+      used_structured_json: Boolean(structuredJson),
       used_simulation: false,
       used_upload_comments: uploads.some((upload) => upload.user_comment.trim()),
+      has_structured_ocr_data: Boolean(pasted?.has_structured_ocr_data),
+      structured_fields_count: pasted?.structured_fields_count ?? 0,
     },
   };
 }
+
 
 function buildRecordValidationContext(record: ValidatorRecord, uploads: ValidatorUploadRecord[]): Record<string, unknown> {
   return {
@@ -2793,16 +3024,28 @@ function inferValidatorModel(market: string, pick: string): string {
   return "ASP Market Validator";
 }
 
-async function saveValidation(form: ValidatorForm, result: ValidationResult, uploads: ValidatorUploadDraft[], setSaving: (saving: boolean) => void): Promise<boolean> {
+async function saveValidation(
+  form: ValidatorForm,
+  result: ValidationResult,
+  uploads: ValidatorUploadDraft[],
+  setSaving: (saving: boolean) => void,
+  pasted?: PastedParsedData | null,
+): Promise<boolean> {
   setSaving(true);
   try {
+    const pastedStructured = pasted
+      ? ({ ...pasted, input_source: "pasted_text" } as unknown as Record<string, unknown>)
+      : null;
+    const pastedRawText = pasted
+      ? `[TEXTO COLADO INTERPRETADO]\nQualidade: ${(pasted.data_quality_score * 100).toFixed(0)}% | Campos: ${pasted.structured_fields_count}\n\n${pasted.raw_pasted_text}`
+      : null;
     const payload: ValidatorInsert = {
       ...form,
       match_date: form.match_date || "",
-      offered_odd: result.offered_odd,
-      source_probability: result.source_probability,
-      source_ev: result.source_ev,
-      source_fair_odd: result.source_fair_odd,
+      offered_odd: result.offered_odd ?? pasted?.market.offered_odd ?? null,
+      source_probability: result.source_probability ?? pasted?.market.probability_original ?? null,
+      source_ev: result.source_ev ?? pasted?.market.ev_original ?? null,
+      source_fair_odd: result.source_fair_odd ?? pasted?.market.fair_odd_original ?? null,
       adjusted_probability: result.adjusted_probability,
       adjusted_fair_odd: result.adjusted_fair_odd,
       adjusted_ev: result.adjusted_ev,
@@ -2816,16 +3059,16 @@ async function saveValidation(form: ValidatorForm, result: ValidationResult, upl
       final_analysis: result.final_analysis,
       simulation_json: {},
       online_context_json: {},
-      ocr_raw_text: null,
-      ocr_structured_data: {},
-      ocr_data_quality_score: null,
-      ocr_structured_fields_count: 0,
-      structured_json: {
+      ocr_raw_text: pastedRawText,
+      ocr_structured_data: pastedStructured ?? {},
+      ocr_data_quality_score: pasted?.data_quality_score ?? null,
+      ocr_structured_fields_count: pasted?.structured_fields_count ?? 0,
+      structured_json: pastedStructured ?? {
         form,
         result,
         uploads: uploads.map((upload) => uploadMetadata(upload)),
       },
-      structured_status: "pending",
+      structured_status: pastedStructured ? "completed" : "pending",
       structured_error: null,
       result_status: null,
       stake_units: null,
@@ -2840,6 +3083,7 @@ async function saveValidation(form: ValidatorForm, result: ValidationResult, upl
       is_simulated_result: false,
       bankroll_applied: false,
     };
+
     const insertPayload = {
       ...payload,
       match_date: payload.match_date || null,
