@@ -177,19 +177,25 @@ export type Database = {
         Row: {
           created_at: string
           file_name: string
+          file_path: string | null
           file_size: number | null
           file_type: string | null
           id: string
           mime_type: string | null
+          ocr_data_quality_score: number | null
           ocr_error: string | null
           ocr_status: string
+          ocr_structured_data: Json | null
+          ocr_structured_fields_count: number | null
           ocr_text: string | null
+          storage_bucket: string | null
           structured_error: string | null
           structured_json: Json | null
           structured_status: string
           updated_at: string
           upload_category: string
           upload_order: number
+          upload_source: string | null
           user_comment: string | null
           user_id: string
           validator_id: string
@@ -197,19 +203,25 @@ export type Database = {
         Insert: {
           created_at?: string
           file_name: string
+          file_path?: string | null
           file_size?: number | null
           file_type?: string | null
           id?: string
           mime_type?: string | null
+          ocr_data_quality_score?: number | null
           ocr_error?: string | null
           ocr_status?: string
+          ocr_structured_data?: Json | null
+          ocr_structured_fields_count?: number | null
           ocr_text?: string | null
+          storage_bucket?: string | null
           structured_error?: string | null
           structured_json?: Json | null
           structured_status?: string
           updated_at?: string
           upload_category: string
           upload_order?: number
+          upload_source?: string | null
           user_comment?: string | null
           user_id?: string
           validator_id: string
@@ -217,19 +229,25 @@ export type Database = {
         Update: {
           created_at?: string
           file_name?: string
+          file_path?: string | null
           file_size?: number | null
           file_type?: string | null
           id?: string
           mime_type?: string | null
+          ocr_data_quality_score?: number | null
           ocr_error?: string | null
           ocr_status?: string
+          ocr_structured_data?: Json | null
+          ocr_structured_fields_count?: number | null
           ocr_text?: string | null
+          storage_bucket?: string | null
           structured_error?: string | null
           structured_json?: Json | null
           structured_status?: string
           updated_at?: string
           upload_category?: string
           upload_order?: number
+          upload_source?: string | null
           user_comment?: string | null
           user_id?: string
           validator_id?: string
