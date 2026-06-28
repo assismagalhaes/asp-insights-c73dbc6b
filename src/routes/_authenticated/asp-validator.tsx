@@ -2755,7 +2755,13 @@ function UploadsWithComments({
           <label>
             <Plus className="h-4 w-4" />
             Adicionar arquivo
-            <input type="file" multiple className="hidden" onChange={(event) => onAddFiles(event.target.files, "manual")} />
+            <input
+              type="file"
+              multiple
+              accept={ASP_VALIDATOR_ACCEPT_ATTR}
+              className="hidden"
+              onChange={(event) => onAddFiles(event.target.files, "manual")}
+            />
           </label>
         </Button>
       </div>
