@@ -2750,6 +2750,7 @@ function UploadsWithComments({
           <p className="mt-1 text-xs text-muted-foreground">
             Clique, arraste arquivos ou cole prints com CTRL+V. Imagens coladas entram no mesmo fluxo de OCR.
           </p>
+          <p className="mt-1 text-[11px] text-muted-foreground/80">{ASP_VALIDATOR_UPLOAD_HINT}</p>
         </div>
         <Button variant="outline" size="sm" asChild className="gap-2">
           <label>
