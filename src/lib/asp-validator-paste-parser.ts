@@ -118,6 +118,13 @@ export type PastedParsedData = {
     source_probability: number | null;
     source_ev: number | null;
     source_fair_odd: number | null;
+    source_ev_raw: number | null;
+    source_ev_display: string | null;
+    source_ev_type: "percent" | "odd_gap_or_unknown" | null;
+    calculated_ev_pct: number | null;
+    odd_gap: number | null;
+    home_moneyline_odd: number | null;
+    away_moneyline_odd: number | null;
   };
   fixture: {
     league: string;
@@ -403,10 +410,23 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
   const notes: string[] = [];
 
   // --- Cabecalho do prognostico ---
-  const fixtureM = text.match(/^\s*([A-Za-zÀ-ÿ0-9 .'\-]{2,60})\s+(?:x|vs)\s+([A-Za-zÀ-ÿ0-9 .'\-]{2,60})\s*$/im)
-    ?? text.match(/Partida\s*:\s*([A-Za-zÀ-ÿ0-9 .'\-]{2,60})\s+(?:x|vs)\s+([A-Za-zÀ-ÿ0-9 .'\-]{2,60})/i);
-  const home_team = (fixtureM?.[1] ?? "").trim();
-  const away_team = (fixtureM?.[2] ?? "").trim();
+  // Aceita "Cusco FC (2.62) x Cienciano (2.44)" e tambem "TimeA x TimeB"
+  const cleanTeamName = (s: string): string =>
+    s.replace(/\(\s*\d+(?:[.,]\d+)?\s*\)/g, "").replace(/\s+/g, " ").trim();
+  const extractOdd = (s: string): number | null =>
+    parseNum(s.match(/\(\s*(\d+(?:[.,]\d+)?)\s*\)/)?.[1] ?? null);
+
+  const partidaLine =
+    text.match(/Partida\s*:\s*([^\n\r]+)/i)?.[1] ??
+    text.match(/^\s*([^\n\r]+?\s+(?:x|vs)\s+[^\n\r]+)\s*$/im)?.[1] ??
+    "";
+  const fixtureSplit = partidaLine.match(/^\s*(.+?)\s+(?:x|vs)\s+(.+?)\s*$/i);
+  const homeRaw = fixtureSplit?.[1] ?? "";
+  const awayRaw = fixtureSplit?.[2] ?? "";
+  const home_team = cleanTeamName(homeRaw);
+  const away_team = cleanTeamName(awayRaw);
+  const home_moneyline_odd = extractOdd(homeRaw);
+  const away_moneyline_odd = extractOdd(awayRaw);
 
   const compM = text.match(/Campeonato\s*:\s*([^\n\r]+)/i);
   let competition = "";
@@ -436,8 +456,28 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
     text.match(/Odd\s+Esperada(?:\s*\(VE\))?\s*:\s*(-?\d+(?:[.,]\d+)?)/i)?.[1] ??
       text.match(/Odd\s+Justa\s*:\s*(-?\d+(?:[.,]\d+)?)/i)?.[1],
   );
-  // EV no padrao PackBall vem em percentual ja (0.18 = 0.18%, nao 18%) — preservamos.
-  const ev_original = parseNum(text.match(/\bEV\s*:\s*(-?\d+(?:[.,]\d+)?)/i)?.[1] ?? text.match(/\bVE\s*:\s*(-?\d+(?:[.,]\d+)?)/i)?.[1]);
+  // EV bruto da fonte (PackBall pode mandar "0.47" como gap odd-odd, nao percentual real).
+  const ev_raw_match = text.match(/\bEV\s*:\s*(-?\d+(?:[.,]\d+)?)/i) ?? text.match(/\bVE\s*:\s*(-?\d+(?:[.,]\d+)?)/i);
+  const ev_original = parseNum(ev_raw_match?.[1]);
+  const ev_display = ev_raw_match?.[1] ?? null;
+
+  // EV recalculado pelo ASP: EV% = (probabilidade × odd ofertada) - 1, em %.
+  const calculated_ev_pct =
+    probability !== null && offered_odd !== null
+      ? Math.round(((probability / 100) * offered_odd - 1) * 10000) / 100
+      : null;
+  const odd_gap =
+    offered_odd !== null && fair_odd !== null
+      ? Math.round((offered_odd - fair_odd) * 100) / 100
+      : null;
+  // Classifica o EV bruto: se ele bate (aprox.) com calculated_ev_pct → percentual real;
+  // se bate com odd_gap → gap de odd; caso contrario, desconhecido.
+  let source_ev_type: "percent" | "odd_gap_or_unknown" | null = null;
+  if (ev_original !== null) {
+    if (calculated_ev_pct !== null && Math.abs(ev_original - calculated_ev_pct) <= 1.5) source_ev_type = "percent";
+    else if (odd_gap !== null && Math.abs(ev_original - odd_gap) <= 0.05) source_ev_type = "odd_gap_or_unknown";
+    else source_ev_type = "odd_gap_or_unknown";
+  }
 
   // --- Particiona em secao "Ultimos 5 jogos" (geral) e "Casa/Fora" ---
   const splitIdx = text.toLowerCase().indexOf("(casa/fora)");
@@ -537,7 +577,18 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
 
   notes.push("Dados interpretados a partir de texto colado (input_source: pasted_text).");
   if (splitIdx >= 0) notes.push("Identificadas duas secoes: medias gerais e medias casa/fora.");
-  if (ev_original !== null) notes.push(`EV original preservado em formato percentual: ${ev_original}%.`);
+  if (ev_original !== null) {
+    if (source_ev_type === "percent") {
+      notes.push(`EV bruto da fonte (${ev_display}) compativel com EV percentual recalculado (${calculated_ev_pct}%).`);
+    } else {
+      notes.push(
+        `EV bruto da fonte (${ev_display}) NAO e percentual confiavel — provavel gap de odd. EV recalculado pelo ASP: ${calculated_ev_pct ?? "n/d"}%.`,
+      );
+    }
+  }
+  if (home_moneyline_odd !== null || away_moneyline_odd !== null) {
+    notes.push(`Odds 1x2 detectadas na linha "Partida": ${home_team} ${home_moneyline_odd ?? "?"} x ${away_moneyline_odd ?? "?"} ${away_team}.`);
+  }
 
   return {
     input_source: "pasted_text",
@@ -576,6 +627,13 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
       source_probability: probability,
       source_ev: ev_original,
       source_fair_odd: fair_odd,
+      source_ev_raw: ev_original,
+      source_ev_display: ev_display,
+      source_ev_type,
+      calculated_ev_pct,
+      odd_gap,
+      home_moneyline_odd,
+      away_moneyline_odd,
     },
     fixture: {
       league,
