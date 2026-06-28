@@ -337,10 +337,12 @@ function AspValidatorPage() {
   const [updatingRecord, setUpdatingRecord] = useState(false);
 
   const validatorModel = useMemo(() => inferValidatorModel(form.market, form.pick), [form.market, form.pick]);
-  const canValidate = useMemo(
+  const hasManualCore = useMemo(
     () => Boolean(form.sport && form.source_platform && form.home_team && form.away_team && form.market && form.pick),
     [form],
   );
+  // Permite validar tambem quando ha uploads (OCR podera preencher campos automaticamente)
+  const canValidate = hasManualCore || uploads.length > 0;
 
   const update = (field: keyof ValidatorForm, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -401,8 +403,11 @@ function AspValidatorPage() {
 
   const validate = async () => {
     if (!canValidate) {
-      toast.error("Preencha esporte, origem, confronto, mercado e pick.");
+      toast.error("Preencha esporte, origem, confronto, mercado e pick, ou adicione uploads para OCR.");
       return;
+    }
+    if (!hasManualCore && uploads.length > 0) {
+      toast.info("Validando com base nos uploads/OCR. Campos manuais ausentes serao inferidos quando possivel.");
     }
     setSaving(true);
     const next = await validateWithAiFallback(buildFormValidationContext(form, uploads, validatorModel));
@@ -4332,7 +4337,9 @@ function normalizeProbability(value: number | null): number | null {
 function normalizeSourceEv(value: number | null, sourcePlatform?: string | null): number | null {
   if (value === null) return null;
   const platform = normalize(sourcePlatform || "");
-  if (platform.includes("packball") && value > 5 && value < 100) return round(value / 100, 2);
+  // PackBall: EV vem como inteiro percentual (ex.: 18 = 0.18%, 41 = 0.41%).
+  // Se o usuario digitar 0.18 mantemos. Threshold > 1 cobre 18, 41, etc.
+  if (platform.includes("packball") && value > 1 && value < 100) return round(value / 100, 2);
   return round(value, 2);
 }
 
