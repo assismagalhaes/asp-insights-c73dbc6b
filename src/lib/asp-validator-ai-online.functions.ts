@@ -49,6 +49,10 @@ Regras obrigatorias:
 - Se simulation_json existir (status diferente de not_applicable/failed), trate como simulacao DISPONIVEL: cite obrigatoriamente model, market_probability, fair_odd, ev e a composicao tecnica usada. NUNCA escreva "simulacao nao disponivel" ou "sem simulacao" quando simulation_json estiver presente com dados.
 - Para mercados de Over/Under de escanteios, o modelo de referencia e corner_total_over_simplified.
 - NUNCA calcule expectativa de cantos somando diretamente as medias totais de cada time (ex.: "10.0 + 12.6"). Use composicao tecnica: expectativa mandante = media(mandante marcados em casa, visitante sofridos como visitante); expectativa visitante = media(visitante marcados como visitante, mandante sofridos em casa); total esperado = expectativa mandante + expectativa visitante.
+- NUNCA escreva argumentos como "medias gerais somadas indicam jogo de alto volume" usando soma bruta de medias totais (ex.: "11.8 + 12.6 = 24.4"). Esse calculo e proibido e nao deve aparecer no resumo online, no parecer final nem em qualquer bloco. Use apenas a expectativa tecnica ajustada da simulacao (composta: mandante esperado + visitante esperado) e a frequencia Over X.5 quando disponivel.
+- Quando houver simulacao para Over/Under de escanteios, cite: expectativa tecnica ajustada total, mandante esperado, visitante esperado e a frequencia Over X.5 extraida (quando existir). Nao some medias totais brutas dos times como argumento.
+
+
 
 
 Busque quando possivel:
@@ -234,14 +238,16 @@ function buildAnalysisContext(context: Record<string, unknown>, sources: Array<{
   const usage = context.data_usage && typeof context.data_usage === "object" ? (context.data_usage as Record<string, unknown>) : {};
   return [
     "ASP Validator - IA + Pesquisa",
-    `Usou OCR: ${usage.used_ocr ? "sim" : "nao"}`,
+    `Usou OCR real: ${usage.used_ocr ? "sim" : "nao"}`,
+    `Usou texto colado: ${usage.used_pasted_text ? "sim" : "nao"}`,
     `Usou JSON estruturado: ${usage.used_structured_json ? "sim" : "nao"}`,
     `Usou simulacao: ${usage.used_simulation ? "sim" : "nao"}`,
     `Buscas realizadas: ${searches.length}`,
     `Fontes consultadas: ${sources.length}`,
-    "Regras: pesquisa online e complementar; ausencia de achados nao reprova sozinha; em duvida relevante, PULAR.",
+    "Regras: pesquisa online e complementar; ausencia de achados nao reprova sozinha; em duvida relevante, PULAR; proibido somar medias brutas (ex.: 11.8 + 12.6).",
   ].join("\n");
 }
+
 
 function normalizeConfidence(value: unknown): "Baixo" | "Medio" | "Alto" {
   const text = String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();

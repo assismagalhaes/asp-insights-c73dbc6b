@@ -869,6 +869,11 @@ function AspValidatorPage() {
   const validateSelectedRecordWithOnlineAi = async () => {
     if (!selectedRecord) return;
     setValidatingOnlineRecord(true);
+    const before = {
+      decision: selectedRecord.decision as string,
+      adjusted_probability: selectedRecord.adjusted_probability,
+      adjusted_ev: selectedRecord.adjusted_ev,
+    };
     try {
       const currentUploads = await ensureOcrForStoredUploads();
       const context = {
@@ -883,7 +888,38 @@ function AspValidatorPage() {
           analysis_context: selectedRecord.analysis_context,
         },
       };
-      const next = await validateAspValidatorWithOnlineAi({ data: { context } });
+      const raw = await validateAspValidatorWithOnlineAi({ data: { context } });
+      // Reforco de protecao de banca tambem na IA + Pesquisa.
+      const insufficientEv = raw.adjusted_ev === null || raw.adjusted_ev === undefined || raw.adjusted_ev < 3;
+      const fairAboveOffered =
+        raw.offered_odd !== null && raw.adjusted_fair_odd !== null && raw.adjusted_fair_odd >= raw.offered_odd;
+      const adjustedAlerts = [...(raw.alerts ?? [])];
+      let next = raw;
+      let guardrailReason = "";
+      if (raw.decision === "CONFIRMAR" && (insufficientEv || fairAboveOffered)) {
+        guardrailReason = `Protecao de banca: EV ajustado ${raw.adjusted_ev === null ? "indisponivel" : `${raw.adjusted_ev}%`} ou odd justa ${raw.adjusted_fair_odd ?? "?"} vs ofertada ${raw.offered_odd ?? "?"} nao atingem 3% de margem.`;
+        adjustedAlerts.push(`${guardrailReason} Decisao rebaixada para PULAR.`);
+        next = { ...raw, decision: "PULAR", alerts: adjustedAlerts };
+      }
+      const decisionHistory = {
+        before,
+        after: {
+          decision: next.decision,
+          adjusted_probability: next.adjusted_probability,
+          adjusted_ev: next.adjusted_ev,
+        },
+        reason: guardrailReason
+          ? guardrailReason
+          : before.decision === next.decision
+            ? "IA + Pesquisa manteve a decisao apos verificacao online."
+            : next.decision === "CONFIRMAR"
+              ? "Contexto online elevou probabilidade/EV ajustado acima do limite minimo de protecao de banca."
+              : "Contexto online reduziu probabilidade/EV ajustado abaixo do limite minimo de protecao de banca.",
+      };
+      const onlineContextWithHistory = {
+        ...next.online_context_json,
+        decision_history: decisionHistory,
+      };
       const { error } = await validatorDb
         .from("asp_validator_registros")
         .update({
@@ -894,7 +930,7 @@ function AspValidatorPage() {
           adjusted_probability: next.adjusted_probability,
           adjusted_fair_odd: next.adjusted_fair_odd,
           adjusted_ev: next.adjusted_ev,
-          online_context_json: next.online_context_json,
+          online_context_json: onlineContextWithHistory,
           favorable_blocks: next.favorable_blocks,
           against_blocks: next.against_blocks,
           alerts: next.alerts,
@@ -904,7 +940,9 @@ function AspValidatorPage() {
         })
         .eq("id", selectedRecord.id);
       if (error) throw error;
-      setSelectedRecord((prev) => (prev ? applyOnlineAiResult(prev, next) : prev));
+      setSelectedRecord((prev) =>
+        prev ? applyOnlineAiResult(prev, { ...next, online_context_json: onlineContextWithHistory }) : prev,
+      );
       toast.success("IA + Pesquisa concluida.");
       await loadHistory();
     } catch (error) {
@@ -920,6 +958,7 @@ function AspValidatorPage() {
       setValidatingOnlineRecord(false);
     }
   };
+
 
   const saveRecordResult = async () => {
     if (!selectedRecord || !resultForm) return;
@@ -1398,62 +1437,89 @@ function RecordDetailDialog({
               <Info label="EV ajustado" value={formatPercent(record.adjusted_ev)} />
             </div>
 
-            <UploadsDetail
-              uploads={uploads}
-              uploadComments={uploadComments}
-              canEdit={canEdit}
-              ocrFilesByUpload={ocrFilesByUpload}
-              processingOcr={processingOcr}
-              onUpdateUploadComment={onUpdateUploadComment}
-              onAttachOcrFile={onAttachOcrFile}
-              onProcessUploadOcr={onProcessUploadOcr}
-            />
+            {(() => {
+              const { isPasted } = detectPastedRecord(record, uploads);
+              return (
+                <>
+                  {!isPasted ? (
+                    <UploadsDetail
+                      uploads={uploads}
+                      uploadComments={uploadComments}
+                      canEdit={canEdit}
+                      ocrFilesByUpload={ocrFilesByUpload}
+                      processingOcr={processingOcr}
+                      onUpdateUploadComment={onUpdateUploadComment}
+                      onAttachOcrFile={onAttachOcrFile}
+                      onProcessUploadOcr={onProcessUploadOcr}
+                    />
+                  ) : null}
 
-            <SignalBlock title="Blocos favoraveis" items={record.favorable_blocks ?? []} tone="good" />
-            <SignalBlock title="Blocos contrarios" items={record.against_blocks ?? []} tone="bad" />
-            <SignalBlock title="Alertas" items={record.alerts ?? []} tone="warn" />
+                  <SignalBlock title="Blocos favoraveis" items={record.favorable_blocks ?? []} tone="good" />
+                  <SignalBlock title="Blocos contrarios" items={record.against_blocks ?? []} tone="bad" />
+                  <SignalBlock title="Alertas" items={record.alerts ?? []} tone="warn" />
 
-            <div className="rounded-md border border-border bg-muted/20 p-3">
-              <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Parecer final</p>
-              <p className="text-sm leading-relaxed">{record.final_analysis}</p>
-            </div>
+                  <div className="rounded-md border border-border bg-muted/20 p-3">
+                    <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Parecer final</p>
+                    <p className="text-sm leading-relaxed">{record.final_analysis}</p>
+                  </div>
 
-            <PendingTechFields record={record} />
+                  <PendingTechFields record={record} pasted={isPasted} />
 
-            <StructuredOcrPanel record={record} uploads={uploads} />
+                  {isPasted ? (
+                    <>
+                      <PastedDataPanel record={record} />
+                      <PastedDiagnosticsPanel record={record} />
+                    </>
+                  ) : (
+                    <>
+                      <StructuredOcrPanel record={record} uploads={uploads} />
+                      <OcrDiagnosticsPanel record={record} uploads={uploads} />
+                    </>
+                  )}
 
-            <OcrDiagnosticsPanel record={record} uploads={uploads} />
+                  <SimulationPanel record={record} />
 
-            <SimulationPanel record={record} />
+                  <AiAnalysisContextPanel record={record} uploads={uploads} />
 
-            <AiAnalysisContextPanel record={record} />
+                  <OnlineContextPanel record={record} />
 
-            <OnlineContextPanel record={record} />
+                  <ResultRegistrationPanel record={record} form={resultForm} onUpdate={onUpdateResult} onSave={onSaveResult} />
 
-            <ResultRegistrationPanel record={record} form={resultForm} onUpdate={onUpdateResult} onSave={onSaveResult} />
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" onClick={() => void onValidateAi()} disabled={validatingAiRecord} className="gap-2">
+                      {validatingAiRecord ? <Loader2 className="h-4 w-4 animate-spin" /> : <BrainCircuit className="h-4 w-4" />}
+                      Validar com IA
+                    </Button>
+                    {!isPasted ? (
+                      <>
+                        <Button variant="outline" onClick={() => void onProcessAllAvailableOcr()} className="gap-2">
+                          <ImageUp className="h-4 w-4" />
+                          Processar todos os OCRs disponiveis
+                        </Button>
+                        <Button variant="outline" onClick={() => void onStructureOcr()} disabled={structuringRecord} className="gap-2">
+                          {structuringRecord ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileJson className="h-4 w-4" />}
+                          {record.structured_status === "completed" ? "Reestruturar OCR" : "Estruturar OCR"}
+                        </Button>
+                      </>
+                    ) : (
+                      <Button variant="outline" onClick={onApplyOcrToForm} disabled={!canEdit} className="gap-2">
+                        <FileJson className="h-4 w-4" />
+                        Reinterpretar texto colado
+                      </Button>
+                    )}
+                    <Button variant="outline" onClick={() => void onRunSimulation()} disabled={simulatingRecord} className="gap-2">
+                      {simulatingRecord ? <Loader2 className="h-4 w-4 animate-spin" /> : <Microscope className="h-4 w-4" />}
+                      Executar simulacao
+                    </Button>
+                    <Button variant="outline" onClick={() => void onValidateOnlineAi()} disabled={validatingOnlineRecord} className="gap-2">
+                      {validatingOnlineRecord ? <Loader2 className="h-4 w-4 animate-spin" /> : <Cloud className="h-4 w-4" />}
+                      Validar com IA + Pesquisa
+                    </Button>
+                  </div>
+                </>
+              );
+            })()}
 
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={() => void onValidateAi()} disabled={validatingAiRecord} className="gap-2">
-                {validatingAiRecord ? <Loader2 className="h-4 w-4 animate-spin" /> : <BrainCircuit className="h-4 w-4" />}
-                Validar com IA
-              </Button>
-              <Button variant="outline" onClick={() => void onProcessAllAvailableOcr()} className="gap-2">
-                <ImageUp className="h-4 w-4" />
-                Processar todos os OCRs disponiveis
-              </Button>
-              <Button variant="outline" onClick={() => void onStructureOcr()} disabled={structuringRecord} className="gap-2">
-                {structuringRecord ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileJson className="h-4 w-4" />}
-                {record.structured_status === "completed" ? "Reestruturar OCR" : "Estruturar OCR"}
-              </Button>
-              <Button variant="outline" onClick={() => void onRunSimulation()} disabled={simulatingRecord} className="gap-2">
-                {simulatingRecord ? <Loader2 className="h-4 w-4 animate-spin" /> : <Microscope className="h-4 w-4" />}
-                Executar simulacao
-              </Button>
-              <Button variant="outline" onClick={() => void onValidateOnlineAi()} disabled={validatingOnlineRecord} className="gap-2">
-                {validatingOnlineRecord ? <Loader2 className="h-4 w-4 animate-spin" /> : <Cloud className="h-4 w-4" />}
-                Validar com IA + Pesquisa
-              </Button>
-            </div>
 
             <div className="flex flex-wrap justify-between gap-2 border-t border-border pt-4">
               <Button variant="destructive" onClick={onDelete} disabled={!canEdit} className="gap-2">
@@ -1609,9 +1675,16 @@ function UploadsDetail({
   );
 }
 
-function PendingTechFields({ record }: { record: ValidatorRecord }) {
+function PendingTechFields({ record, pasted = false }: { record: ValidatorRecord; pasted?: boolean }) {
   const items = [
-    { title: "OCR", value: record.ocr_raw_text ? "OCR processado e texto bruto salvo." : "Aguardando processamento OCR dos uploads." },
+    {
+      title: pasted ? "Texto colado" : "OCR",
+      value: pasted
+        ? "Texto colado interpretado e salvo."
+        : record.ocr_raw_text
+          ? "OCR processado e texto bruto salvo."
+          : "Aguardando processamento OCR dos uploads.",
+    },
     {
       title: "Simulacao probabilistica",
       value: hasJsonContent(record.simulation_json) ? "Dados de simulacao registrados." : "Disponivel apos OCR estruturado ou dados manuais suficientes.",
@@ -1621,6 +1694,7 @@ function PendingTechFields({ record }: { record: ValidatorRecord }) {
       value: hasJsonContent(record.online_context_json) ? "Contexto online registrado." : "Disponivel para validacao complementar quando necessario.",
     },
   ];
+
   return (
     <div className="grid gap-3 md:grid-cols-3">
       {items.map((item) => (
@@ -2040,25 +2114,126 @@ function SimulationPanel({ record }: { record: ValidatorRecord }) {
   );
 }
 
-function AiAnalysisContextPanel({ record }: { record: ValidatorRecord }) {
+function detectPastedRecord(record: ValidatorRecord, uploads: ValidatorUploadRecord[] = []): {
+  isPasted: boolean;
+  hasRealOcr: boolean;
+  pastedText: string;
+} {
   const rawOcr = record.ocr_raw_text?.trim() ?? "";
   const isPastedSummary = rawOcr.startsWith("[TEXTO COLADO INTERPRETADO]");
   const structured = (record.structured_json ?? {}) as { input_source?: unknown; raw_pasted_text?: unknown };
   const ocrStructured = (record.ocr_structured_data ?? {}) as { input_source?: unknown; raw_pasted_text?: unknown };
-  const usedPasted =
+  const isPasted =
     isPastedSummary ||
     structured.input_source === "pasted_text" ||
     ocrStructured.input_source === "pasted_text" ||
     Boolean(structured.raw_pasted_text) ||
     Boolean(ocrStructured.raw_pasted_text);
-  const usedRealOcr = Boolean(rawOcr) && !isPastedSummary && !usedPasted;
-  const usedStructured = hasJsonContent(record.structured_json);
-  const usedSimulation = hasJsonContent(record.simulation_json);
+  const hasRealOcr =
+    uploads.some((upload) => Boolean(upload.file_path) || Boolean(upload.ocr_text?.trim())) ||
+    (Boolean(rawOcr) && !isPastedSummary && !isPasted);
   const pastedText = String(
     (structured.raw_pasted_text as string | undefined) ??
       (ocrStructured.raw_pasted_text as string | undefined) ??
       (isPastedSummary ? rawOcr.replace(/^\[TEXTO COLADO INTERPRETADO\][\s\S]*?\n\n/, "") : ""),
   );
+  return { isPasted, hasRealOcr, pastedText };
+}
+
+function PastedDataPanel({ record }: { record: ValidatorRecord }) {
+  const structured = (record.structured_json ?? {}) as Record<string, unknown>;
+  const quality =
+    typeof record.ocr_data_quality_score === "number"
+      ? record.ocr_data_quality_score
+      : typeof (structured as { data_quality_score?: unknown }).data_quality_score === "number"
+        ? ((structured as { data_quality_score?: number }).data_quality_score ?? 0)
+        : null;
+  const fieldsCount =
+    record.ocr_structured_fields_count ??
+    (typeof (structured as { structured_fields_count?: unknown }).structured_fields_count === "number"
+      ? ((structured as { structured_fields_count?: number }).structured_fields_count ?? 0)
+      : 0);
+  const qualityTone =
+    quality === null
+      ? "text-muted-foreground"
+      : quality >= 0.75
+        ? "text-emerald-400"
+        : quality >= 0.5
+          ? "text-amber-400"
+          : "text-red-400";
+  return (
+    <div className="space-y-3 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-sm font-semibold">Dados estruturados do texto colado</div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            JSON interpretado a partir do prognostico colado, usado como base para simulacao e IA.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {quality !== null ? (
+            <Badge variant="outline" className={qualityTone}>
+              Qualidade da extracao: {(quality * 100).toFixed(0)}%
+            </Badge>
+          ) : null}
+          <Badge variant="outline">Campos estruturados: {fieldsCount}</Badge>
+        </div>
+      </div>
+      {hasJsonContent(structured) ? (
+        <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded border border-border bg-background/50 p-3 text-xs text-muted-foreground">
+          {JSON.stringify(structured, null, 2)}
+        </pre>
+      ) : (
+        <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
+          Texto colado sem JSON estruturado salvo.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PastedDiagnosticsPanel({ record }: { record: ValidatorRecord }) {
+  const { pastedText } = detectPastedRecord(record);
+  const quality =
+    typeof record.ocr_data_quality_score === "number" ? record.ocr_data_quality_score : null;
+  const fields = record.ocr_structured_fields_count ?? 0;
+  return (
+    <div className="space-y-3 rounded-md border border-border bg-muted/10 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-sm font-semibold">Diagnostico do texto colado</div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Texto interpretado pelo parser ASP, sem dependencia de OCR de imagem.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="default">Texto colado interpretado</Badge>
+          <Badge variant="outline">Simulacao: {record.simulation_type || (hasJsonContent(record.simulation_json) ? "completed" : "pending")}</Badge>
+        </div>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        <Info label="Qualidade da extracao" value={quality === null ? "-" : `${(quality * 100).toFixed(0)}%`} />
+        <Info label="Campos extraidos" value={String(fields)} />
+        <Info label="Fonte" value="Texto colado" />
+      </div>
+      {pastedText ? (
+        <details className="rounded-md border border-border/60 bg-background/40 p-3">
+          <summary className="cursor-pointer select-none text-xs uppercase tracking-wide text-muted-foreground">
+            Texto colado original
+          </summary>
+          <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">{pastedText}</pre>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+
+
+function AiAnalysisContextPanel({ record, uploads = [] }: { record: ValidatorRecord; uploads?: ValidatorUploadRecord[] }) {
+  const { isPasted, hasRealOcr, pastedText } = detectPastedRecord(record, uploads);
+  const usedStructured = hasJsonContent(record.structured_json);
+  const usedSimulation = hasJsonContent(record.simulation_json);
   return (
     <div className="space-y-3 rounded-md border border-border bg-muted/10 p-3">
       <div>
@@ -2068,11 +2243,12 @@ function AiAnalysisContextPanel({ record }: { record: ValidatorRecord }) {
         </p>
       </div>
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-        <Info label="Usou OCR real" value={usedRealOcr ? "Sim" : "Nao"} />
-        <Info label="Usou texto colado" value={usedPasted ? "Sim" : "Nao"} />
+        {hasRealOcr ? <Info label="Usou OCR real" value="Sim" /> : null}
+        <Info label="Usou texto colado" value={isPasted ? "Sim" : "Nao"} />
         <Info label="Usou JSON estruturado" value={usedStructured ? "Sim" : "Nao"} />
         <Info label="Usou simulacao" value={usedSimulation ? "Sim" : "Nao"} />
       </div>
+
       {pastedText ? (
         <details className="rounded-md border border-border/60 bg-background/40 p-3">
           <summary className="cursor-pointer select-none text-xs uppercase tracking-wide text-muted-foreground">
@@ -2109,10 +2285,33 @@ function OnlineContextPanel({ record }: { record: ValidatorRecord }) {
 
       {online ? (
         <>
+          {online.decision_history ? (
+            <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3">
+              <p className="mb-2 text-xs uppercase tracking-wide text-emerald-300">Historico da decisao</p>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded border border-border bg-background/40 p-2 text-xs">
+                  <div className="font-semibold text-muted-foreground">Antes da pesquisa</div>
+                  <div>Decisao: <span className="font-mono">{online.decision_history.before.decision ?? "-"}</span></div>
+                  <div>Probabilidade: <span className="font-mono">{formatPercent(online.decision_history.before.adjusted_probability)}</span></div>
+                  <div>EV ajustado: <span className="font-mono">{formatPercent(online.decision_history.before.adjusted_ev)}</span></div>
+                </div>
+                <div className="rounded border border-border bg-background/40 p-2 text-xs">
+                  <div className="font-semibold text-muted-foreground">Apos a pesquisa</div>
+                  <div>Decisao: <span className="font-mono">{online.decision_history.after.decision ?? "-"}</span></div>
+                  <div>Probabilidade: <span className="font-mono">{formatPercent(online.decision_history.after.adjusted_probability)}</span></div>
+                  <div>EV ajustado: <span className="font-mono">{formatPercent(online.decision_history.after.adjusted_ev)}</span></div>
+                </div>
+              </div>
+              {online.decision_history.reason ? (
+                <p className="mt-2 text-xs text-muted-foreground">Motivo: {online.decision_history.reason}</p>
+              ) : null}
+            </div>
+          ) : null}
           <div className="rounded-md border border-border bg-background/50 p-3">
             <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Resumo online</p>
             <p className="text-sm leading-relaxed">{online.online_summary}</p>
           </div>
+
           <SignalBlock title="Achados relevantes" items={online.relevant_findings} tone="good" />
           <SignalBlock title="Ausencia de achados" items={online.no_relevant_findings} tone="warn" />
           <SignalBlock title="Alertas contextuais" items={online.contextual_alerts} tone="bad" />
@@ -2948,15 +3147,20 @@ function buildRecordValidationContext(record: ValidatorRecord, uploads: Validato
     simulation_type: record.simulation_type,
     structured_json: record.structured_json,
     simulation_json: record.simulation_json,
-    data_usage: {
-      used_ocr: Boolean(record.ocr_raw_text?.trim()),
-      used_structured_json: hasJsonContent(record.structured_json),
-      used_simulation: hasJsonContent(record.simulation_json),
-      used_upload_comments: uploads.some((upload) => upload.user_comment?.trim()),
-      used_online_search: hasJsonContent(record.online_context_json),
-      has_structured_ocr_data: Boolean((record.structured_json as { has_structured_ocr_data?: unknown } | null)?.has_structured_ocr_data) || Number(record.ocr_structured_fields_count ?? 0) > 0,
-      structured_fields_count: record.ocr_structured_fields_count ?? countStructuredFields(record.structured_json),
-    },
+    data_usage: (() => {
+      const { isPasted, hasRealOcr } = detectPastedRecord(record, uploads);
+      return {
+        used_ocr: hasRealOcr && !isPasted,
+        used_pasted_text: isPasted,
+        used_structured_json: hasJsonContent(record.structured_json),
+        used_simulation: hasJsonContent(record.simulation_json),
+        used_upload_comments: uploads.some((upload) => upload.user_comment?.trim()),
+        used_online_search: hasJsonContent(record.online_context_json),
+        has_structured_ocr_data: Boolean((record.structured_json as { has_structured_ocr_data?: unknown } | null)?.has_structured_ocr_data) || Number(record.ocr_structured_fields_count ?? 0) > 0,
+        structured_fields_count: record.ocr_structured_fields_count ?? countStructuredFields(record.structured_json),
+      };
+    })(),
+
   };
 }
 
@@ -2986,6 +3190,8 @@ function buildLocalAnalysisContext(context: Record<string, unknown>, aiParsed: b
     "ASP Validator - Validacao IA consolidada",
     `Resposta IA interpretada: ${aiParsed ? "sim" : "nao"}`,
     `Usou OCR real: ${usage.used_ocr ? "sim" : "nao"}`,
+    `Usou texto colado: ${usage.used_pasted_text ? "sim" : "nao"}`,
+
     `Usou comentarios dos uploads: ${usage.used_upload_comments ? "sim" : "nao"}`,
     `Usou dados manuais: ${context.prediction ? "sim" : "nao"}`,
     `Usou JSON estruturado: ${usage.used_structured_json ? "sim" : "nao"}`,
@@ -4386,6 +4592,12 @@ function parseSimulationResult(value: Record<string, unknown> | null): AspValida
   };
 }
 
+type DecisionHistoryEntry = {
+  before: { decision: string | null; adjusted_probability: number | null; adjusted_ev: number | null };
+  after: { decision: string | null; adjusted_probability: number | null; adjusted_ev: number | null };
+  reason: string;
+};
+
 type OnlineContextView = {
   status: "completed" | "failed";
   online_summary: string;
@@ -4395,12 +4607,31 @@ type OnlineContextView = {
   sources: Array<{ title: string; url: string }>;
   searches: string[];
   error?: string;
+  decision_history?: DecisionHistoryEntry | null;
 };
 
 function parseOnlineContext(value: Record<string, unknown> | null): OnlineContextView | null {
   if (!value || !Object.keys(value).length) return null;
   const status = value.status === "completed" ? "completed" : value.status === "failed" ? "failed" : null;
   if (!status) return null;
+  const dh = value.decision_history && typeof value.decision_history === "object"
+    ? (value.decision_history as Record<string, unknown>)
+    : null;
+  const decisionHistory: DecisionHistoryEntry | null = dh && dh.before && dh.after
+    ? {
+        before: {
+          decision: (dh.before as Record<string, unknown>).decision == null ? null : String((dh.before as Record<string, unknown>).decision),
+          adjusted_probability: typeof (dh.before as Record<string, unknown>).adjusted_probability === "number" ? ((dh.before as Record<string, unknown>).adjusted_probability as number) : null,
+          adjusted_ev: typeof (dh.before as Record<string, unknown>).adjusted_ev === "number" ? ((dh.before as Record<string, unknown>).adjusted_ev as number) : null,
+        },
+        after: {
+          decision: (dh.after as Record<string, unknown>).decision == null ? null : String((dh.after as Record<string, unknown>).decision),
+          adjusted_probability: typeof (dh.after as Record<string, unknown>).adjusted_probability === "number" ? ((dh.after as Record<string, unknown>).adjusted_probability as number) : null,
+          adjusted_ev: typeof (dh.after as Record<string, unknown>).adjusted_ev === "number" ? ((dh.after as Record<string, unknown>).adjusted_ev as number) : null,
+        },
+        reason: typeof dh.reason === "string" ? dh.reason : "",
+      }
+    : null;
   return {
     status,
     online_summary:
@@ -4418,8 +4649,10 @@ function parseOnlineContext(value: Record<string, unknown> | null): OnlineContex
       : [],
     searches: Array.isArray(value.searches) ? value.searches.map(String) : [],
     error: typeof value.error === "string" ? value.error : undefined,
+    decision_history: decisionHistory,
   };
 }
+
 
 type SimulationRecordUpdate = {
   simulation_json: AspValidatorSimulationResult;
