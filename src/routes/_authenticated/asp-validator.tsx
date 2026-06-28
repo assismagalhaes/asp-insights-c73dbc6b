@@ -1398,62 +1398,89 @@ function RecordDetailDialog({
               <Info label="EV ajustado" value={formatPercent(record.adjusted_ev)} />
             </div>
 
-            <UploadsDetail
-              uploads={uploads}
-              uploadComments={uploadComments}
-              canEdit={canEdit}
-              ocrFilesByUpload={ocrFilesByUpload}
-              processingOcr={processingOcr}
-              onUpdateUploadComment={onUpdateUploadComment}
-              onAttachOcrFile={onAttachOcrFile}
-              onProcessUploadOcr={onProcessUploadOcr}
-            />
+            {(() => {
+              const { isPasted } = detectPastedRecord(record, uploads);
+              return (
+                <>
+                  {!isPasted ? (
+                    <UploadsDetail
+                      uploads={uploads}
+                      uploadComments={uploadComments}
+                      canEdit={canEdit}
+                      ocrFilesByUpload={ocrFilesByUpload}
+                      processingOcr={processingOcr}
+                      onUpdateUploadComment={onUpdateUploadComment}
+                      onAttachOcrFile={onAttachOcrFile}
+                      onProcessUploadOcr={onProcessUploadOcr}
+                    />
+                  ) : null}
 
-            <SignalBlock title="Blocos favoraveis" items={record.favorable_blocks ?? []} tone="good" />
-            <SignalBlock title="Blocos contrarios" items={record.against_blocks ?? []} tone="bad" />
-            <SignalBlock title="Alertas" items={record.alerts ?? []} tone="warn" />
+                  <SignalBlock title="Blocos favoraveis" items={record.favorable_blocks ?? []} tone="good" />
+                  <SignalBlock title="Blocos contrarios" items={record.against_blocks ?? []} tone="bad" />
+                  <SignalBlock title="Alertas" items={record.alerts ?? []} tone="warn" />
 
-            <div className="rounded-md border border-border bg-muted/20 p-3">
-              <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Parecer final</p>
-              <p className="text-sm leading-relaxed">{record.final_analysis}</p>
-            </div>
+                  <div className="rounded-md border border-border bg-muted/20 p-3">
+                    <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Parecer final</p>
+                    <p className="text-sm leading-relaxed">{record.final_analysis}</p>
+                  </div>
 
-            <PendingTechFields record={record} />
+                  <PendingTechFields record={record} pasted={isPasted} />
 
-            <StructuredOcrPanel record={record} uploads={uploads} />
+                  {isPasted ? (
+                    <>
+                      <PastedDataPanel record={record} />
+                      <PastedDiagnosticsPanel record={record} />
+                    </>
+                  ) : (
+                    <>
+                      <StructuredOcrPanel record={record} uploads={uploads} />
+                      <OcrDiagnosticsPanel record={record} uploads={uploads} />
+                    </>
+                  )}
 
-            <OcrDiagnosticsPanel record={record} uploads={uploads} />
+                  <SimulationPanel record={record} />
 
-            <SimulationPanel record={record} />
+                  <AiAnalysisContextPanel record={record} uploads={uploads} />
 
-            <AiAnalysisContextPanel record={record} />
+                  <OnlineContextPanel record={record} />
 
-            <OnlineContextPanel record={record} />
+                  <ResultRegistrationPanel record={record} form={resultForm} onUpdate={onUpdateResult} onSave={onSaveResult} />
 
-            <ResultRegistrationPanel record={record} form={resultForm} onUpdate={onUpdateResult} onSave={onSaveResult} />
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" onClick={() => void onValidateAi()} disabled={validatingAiRecord} className="gap-2">
+                      {validatingAiRecord ? <Loader2 className="h-4 w-4 animate-spin" /> : <BrainCircuit className="h-4 w-4" />}
+                      Validar com IA
+                    </Button>
+                    {!isPasted ? (
+                      <>
+                        <Button variant="outline" onClick={() => void onProcessAllAvailableOcr()} className="gap-2">
+                          <ImageUp className="h-4 w-4" />
+                          Processar todos os OCRs disponiveis
+                        </Button>
+                        <Button variant="outline" onClick={() => void onStructureOcr()} disabled={structuringRecord} className="gap-2">
+                          {structuringRecord ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileJson className="h-4 w-4" />}
+                          {record.structured_status === "completed" ? "Reestruturar OCR" : "Estruturar OCR"}
+                        </Button>
+                      </>
+                    ) : (
+                      <Button variant="outline" onClick={onApplyOcrToForm} disabled={!canEdit} className="gap-2">
+                        <FileJson className="h-4 w-4" />
+                        Reinterpretar texto colado
+                      </Button>
+                    )}
+                    <Button variant="outline" onClick={() => void onRunSimulation()} disabled={simulatingRecord} className="gap-2">
+                      {simulatingRecord ? <Loader2 className="h-4 w-4 animate-spin" /> : <Microscope className="h-4 w-4" />}
+                      Executar simulacao
+                    </Button>
+                    <Button variant="outline" onClick={() => void onValidateOnlineAi()} disabled={validatingOnlineRecord} className="gap-2">
+                      {validatingOnlineRecord ? <Loader2 className="h-4 w-4 animate-spin" /> : <Cloud className="h-4 w-4" />}
+                      Validar com IA + Pesquisa
+                    </Button>
+                  </div>
+                </>
+              );
+            })()}
 
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={() => void onValidateAi()} disabled={validatingAiRecord} className="gap-2">
-                {validatingAiRecord ? <Loader2 className="h-4 w-4 animate-spin" /> : <BrainCircuit className="h-4 w-4" />}
-                Validar com IA
-              </Button>
-              <Button variant="outline" onClick={() => void onProcessAllAvailableOcr()} className="gap-2">
-                <ImageUp className="h-4 w-4" />
-                Processar todos os OCRs disponiveis
-              </Button>
-              <Button variant="outline" onClick={() => void onStructureOcr()} disabled={structuringRecord} className="gap-2">
-                {structuringRecord ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileJson className="h-4 w-4" />}
-                {record.structured_status === "completed" ? "Reestruturar OCR" : "Estruturar OCR"}
-              </Button>
-              <Button variant="outline" onClick={() => void onRunSimulation()} disabled={simulatingRecord} className="gap-2">
-                {simulatingRecord ? <Loader2 className="h-4 w-4 animate-spin" /> : <Microscope className="h-4 w-4" />}
-                Executar simulacao
-              </Button>
-              <Button variant="outline" onClick={() => void onValidateOnlineAi()} disabled={validatingOnlineRecord} className="gap-2">
-                {validatingOnlineRecord ? <Loader2 className="h-4 w-4 animate-spin" /> : <Cloud className="h-4 w-4" />}
-                Validar com IA + Pesquisa
-              </Button>
-            </div>
 
             <div className="flex flex-wrap justify-between gap-2 border-t border-border pt-4">
               <Button variant="destructive" onClick={onDelete} disabled={!canEdit} className="gap-2">
