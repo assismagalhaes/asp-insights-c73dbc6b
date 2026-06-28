@@ -3114,7 +3114,7 @@ async function saveValidation(
       }
     }
     const fxLeague = form.league || pasted?.fixture.league || "";
-    const fxDate = form.match_date || pasted?.fixture.date || "";
+    const fxDate = form.match_date || pasted?.form_patch.match_date || "";
     const fxHome = form.home_team || pasted?.match.home_team || "";
     const fxAway = form.away_team || pasted?.match.away_team || "";
     const fxMarket = form.market || pasted?.market.name || "";
