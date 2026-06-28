@@ -603,7 +603,13 @@ function estimateLambdas(input: AspValidatorSimulationInput): LambdaEstimate {
       lambdaAway = 2.2;
     }
   }
-  const confidence = evidence >= 4 ? "high" : evidence >= 2 ? "medium" : "low";
+  // Guardrail 1X2: lambdas altos sem medias estruturadas confiaveis derrubam confianca
+  // para evitar projecoes infladas de vitoria mandante/visitante a partir de blob bruto.
+  let confidence: "low" | "medium" | "high" = evidence >= 4 ? "high" : evidence >= 2 ? "medium" : "low";
+  if (is1x2 && !hasStructuredGoalsBlocks && (lambdaHome > 2.5 || lambdaAway > 2.5)) {
+    warnings.push("Lambda alto gerado sem medias estruturadas confiaveis; simulacao 1X2 marcada como baixa confianca.");
+    confidence = "low";
+  }
   if (confidence === "low") warnings.push("Poucas evidencias numericas foram encontradas para calibrar a simulacao.");
   return { lambdaHome, lambdaAway, confidence, notes, warnings };
 }
