@@ -480,8 +480,21 @@ function AspValidatorPage() {
 
   const openRecord = (record: ValidatorRecord) => {
     setSelectedRecord(record);
-    setEditingRecord(recordToEditable(record));
-    setOcrAppliedFields({});
+    const baseEditable = recordToEditable(record);
+    // Auto-fill missing fields from structured_json / form_patch
+    const patch = buildEditablePatchFromStructured(record);
+    const merged: EditableRecord = { ...baseEditable };
+    const applied: Partial<Record<keyof EditableRecord, boolean>> = {};
+    for (const [key, value] of Object.entries(patch) as Array<[keyof EditableRecord, string | undefined]>) {
+      if (!value) continue;
+      const current = String(merged[key] ?? "").trim();
+      if (!current) {
+        merged[key] = value as never;
+        applied[key] = true;
+      }
+    }
+    setEditingRecord(merged);
+    setOcrAppliedFields(applied);
     setResultForm(recordToResultForm(record, cfg?.valor_unidade_padrao ?? 10));
     setEditingUploadComments(
       Object.fromEntries((uploadsByRecord[record.id] ?? []).map((upload) => [upload.id, upload.user_comment ?? ""])),
