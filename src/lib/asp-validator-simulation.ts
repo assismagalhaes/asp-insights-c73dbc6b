@@ -686,18 +686,29 @@ function calculateMarketProbability(matrix: ScoreCell[], marketText: string, inp
     return push > 0 && push < 1 ? raw / (1 - push) : raw;
   }
 
-  if (marketText.includes("1x2") || marketText.includes("resultado") || marketText.includes("moneyline")) {
-    return matrix.reduce((sum, cell) => {
-      const hit =
-        pickText === "1" || pickText.includes(home) || pickText.includes("casa")
-          ? cell.home > cell.away
-          : pickText === "x" || pickText.includes("empate") || pickText.includes("draw")
-            ? cell.home === cell.away
-            : pickText === "2" || pickText.includes(away) || pickText.includes("visitante")
-              ? cell.away > cell.home
-              : false;
-      return sum + (hit ? cell.probability : 0);
-    }, 0);
+  if (is1x2Market(marketText)) {
+    const homeWin = matrix.reduce((s, c) => s + (c.home > c.away ? c.probability : 0), 0);
+    const draw = matrix.reduce((s, c) => s + (c.home === c.away ? c.probability : 0), 0);
+    const awayWin = matrix.reduce((s, c) => s + (c.away > c.home ? c.probability : 0), 0);
+    const wantsDraw = /empate|draw|^x$/.test(pickText) || pickText === "x";
+    const wantsAway =
+      !wantsDraw &&
+      (/visitante|away|\bfora\b/.test(pickText) || (away && pickText.includes(away)) || pickText === "2");
+    const wantsHome =
+      !wantsDraw && !wantsAway &&
+      (/mandante|home|\bcasa\b/.test(pickText) || (home && pickText.includes(home)) || pickText === "1");
+
+    let raw = wantsDraw ? draw : wantsAway ? awayWin : wantsHome ? homeWin : 0;
+    if (!wantsDraw && (wantsHome || wantsAway)) {
+      // Penaliza vitoria seca em jogos com draw alto: para cada ponto
+      // percentual de draw acima de 27%, reduz 0.6% da prob. selecionada.
+      const drawPct = draw * 100;
+      if (drawPct >= 27) {
+        const penalty = Math.min(0.12, (drawPct - 27) * 0.006);
+        raw = Math.max(0.05, raw * (1 - penalty));
+      }
+    }
+    return raw;
   }
 
   return null;
