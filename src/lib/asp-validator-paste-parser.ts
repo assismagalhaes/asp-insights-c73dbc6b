@@ -554,7 +554,7 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
     detection.market_type === "goals_total" ||
     detection.market_type === "btts";
   let generalPerf: GeneralPerformanceBlock | null = wantsGeneralPerf
-    ? parseFootballGeneralPerformance(generalText, home_team, away_team)
+    ? parseFootballGeneralPerformance(generalText, home_team, away_team, detection.period)
     : null;
   // Fallback: se o bloco "Desempenho geral" aparece sem o marcador "(Todos os locais)",
   // ele pode nao cair em generalText. Reparseia do texto completo nesse caso.
@@ -565,12 +565,13 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
       b.away.wins === null && b.away.draws === null && b.away.losses === null &&
       b.away.efficiency_pct === null && b.away.avg_possession_pct === null);
   if (wantsGeneralPerf && isPerfEmpty(generalPerf)) {
-    generalPerf = parseFootballGeneralPerformance(text, home_team, away_team);
+    const performanceBlocks = extractPerformanceScopeTexts(text);
+    generalPerf = parseFootballGeneralPerformance(performanceBlocks.generalText || text, home_team, away_team, detection.period);
   }
-  const generalPerfHA: GeneralPerformanceBlock | null =
-    generalPerf && homeAwayText
-      ? parseFootballGeneralPerformance(homeAwayText, home_team, away_team)
-      : null;
+  const performanceBlocks = wantsGeneralPerf ? extractPerformanceScopeTexts(text) : { generalText: "", homeAwayText: "" };
+  const generalPerfHA: GeneralPerformanceBlock | null = wantsGeneralPerf
+    ? parseFootballGeneralPerformance(performanceBlocks.homeAwayText || homeAwayText, home_team, away_team, detection.period)
+    : null;
   const bttsBlock: BttsBlock | null = goalsBlock ? parseFootballBttsData(goalsBlock) : null;
   const bttsBlockHA: BttsBlock | null = goalsBlock
     ? {
