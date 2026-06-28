@@ -373,7 +373,7 @@ function runCornerTotalOverSimulation(
       `  - media geral por time (somente referencia): mandante total ${formatNumber(homeTotal)}, visitante total ${formatNumber(awayTotal)}`,
       `  - total esperado consolidado ≈ ${formatNumber(expectedTotal)} cantos (NUNCA somar ${formatNumber(homeTotal)} + ${formatNumber(awayTotal)} diretamente)`,
 
-      `Frequencia ${wantsUnder ? "Under" : "Over"} ${line}.5 observada: ${formatProb(frequencyProb)} (lembrando: "+${thresholdKey}" = Over ${thresholdKey}.5, ou seja ${Math.trunc(line) + 1}+ cantos).`,
+      `Frequencia ${wantsUnder ? "Under" : "Over"} ${formatLineLabel(line)} observada: ${formatProb(frequencyProb)} (lembrando: "+${formatLineLabel(line)}" significa Over ${formatLineLabel(line)}, ou seja ${Math.trunc(line) + 1}+ cantos).`,
       `Pesos finais: prob. original ${formatProb(sourceProb)}, odd implicita ${formatProb(marketProb)}, suporte medias ${formatProb(avgSupport)}, frequencia ${formatProb(frequencyProb)}, qualidade dados ${formatProb(quality)}.`,
     ],
 
