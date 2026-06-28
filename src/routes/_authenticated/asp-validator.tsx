@@ -4731,7 +4731,7 @@ function recordToResultForm(record: ValidatorRecord, defaultUnitValue: number): 
   return {
     result_status: record.result_status || "GREEN",
     final_odd: numberToInput(record.offered_odd),
-    stake_units: numberToInput(record.stake_units ?? (record.decision === "PULAR" ? 1 : null)),
+    stake_units: numberToInput(record.stake_units ?? 1),
     unit_value_brl: numberToInput(record.unit_value_brl ?? defaultUnitValue),
     clv: numberToInput(record.clv),
     final_score: record.final_score ?? "",
