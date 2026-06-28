@@ -562,5 +562,14 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
     },
     form_patch,
     notes,
+    market_type: detection.market_type,
+    period: detection.period,
+    pick_normalized: detection.pick_normalized,
+    validator_model: detection.validator_model,
+    goals,
+    cards,
+    general_performance,
+    btts,
   };
 }
+
