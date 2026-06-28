@@ -21,6 +21,7 @@ import {
   parseFootballCardsData,
   parseFootballGeneralPerformance,
   parseFootballBttsData,
+  partitionByLocationScope,
   type GoalsBlock,
   type CardsBlock,
   type GeneralPerformanceBlock,
@@ -481,10 +482,11 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
     else source_ev_type = "odd_gap_or_unknown";
   }
 
-  // --- Particiona em secao "Ultimos 5 jogos" (geral) e "Casa/Fora" ---
-  const splitIdx = text.toLowerCase().indexOf("(casa/fora)");
-  const generalText = splitIdx >= 0 ? text.slice(0, splitIdx) : text;
-  const homeAwayText = splitIdx >= 0 ? text.slice(splitIdx) : "";
+  // --- Particiona em "Todos os locais" (geral) e "Casa/Fora" (home_away),
+  //     respeitando ordem intercalada das secoes (Total Gols, Ambas Marcam, etc.) ---
+  const { generalText, homeAwayText } = partitionByLocationScope(text);
+  const hasHomeAwaySection = homeAwayText.trim().length > 0;
+
 
   const general = { home: emptySide(), away: emptySide() };
   fillSideFromText(general.home, generalText, home_team, away_team, "general");
@@ -596,7 +598,7 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
   );
 
   notes.push("Dados interpretados a partir de texto colado (input_source: pasted_text).");
-  if (splitIdx >= 0) notes.push("Identificadas duas secoes: medias gerais e medias casa/fora.");
+  if (hasHomeAwaySection) notes.push("Identificadas duas secoes: medias gerais e medias casa/fora.");
   if (ev_original !== null) {
     if (source_ev_type === "percent") {
       notes.push(`EV bruto da fonte (${ev_display}) compativel com EV percentual recalculado (${calculated_ev_pct}%).`);

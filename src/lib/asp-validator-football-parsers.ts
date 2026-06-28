@@ -18,6 +18,34 @@
 
 import type { FootballPeriod } from "./asp-validator-market-detector";
 
+/**
+ * Particiona o texto colado em duas faixas — "geral" (Todos os locais)
+ * e "home_away" (Casa/Fora para locais) — considerando que os marcadores
+ * podem aparecer INTERCALADOS por seção (Total Gols, Ambas Marcam,
+ * Desempenho geral, etc). Cada trecho entre um marcador e o próximo é
+ * atribuído ao escopo do marcador que o abre. Texto antes do primeiro
+ * marcador (cabeçalho da partida) é tratado como "geral".
+ */
+export function partitionByLocationScope(text: string): { generalText: string; homeAwayText: string } {
+  const markerRe = /\(\s*(Todos\s+os\s+locais|Casa\s*\/\s*Fora(?:\s+para\s+(?:os\s+)?locais?)?)\s*\)/gi;
+  const matches = [...text.matchAll(markerRe)];
+  if (matches.length === 0) return { generalText: text, homeAwayText: "" };
+  let generalText = "";
+  let homeAwayText = "";
+  const firstIdx = matches[0].index ?? 0;
+  generalText += text.slice(0, firstIdx) + "\n";
+  for (let i = 0; i < matches.length; i++) {
+    const m = matches[i];
+    const start = m.index ?? 0;
+    const end = i + 1 < matches.length ? (matches[i + 1].index ?? text.length) : text.length;
+    const chunk = text.slice(start, end);
+    const isHA = /casa\s*\/\s*fora/i.test(m[1]);
+    if (isHA) homeAwayText += chunk + "\n";
+    else generalText += chunk + "\n";
+  }
+  return { generalText, homeAwayText };
+}
+
 export type GoalsLines = Record<string, number>;
 
 export type GoalsSide = {
@@ -313,9 +341,7 @@ export function parseFootballGoalsData(
     home_away: { home: emptyGoalsSide(), away: emptyGoalsSide() },
   };
 
-  const splitIdx = text.toLowerCase().indexOf("(casa/fora)");
-  const generalText = splitIdx >= 0 ? text.slice(0, splitIdx) : text;
-  const homeAwayText = splitIdx >= 0 ? text.slice(splitIdx) : "";
+  const { generalText, homeAwayText } = partitionByLocationScope(text);
 
   fillGoalsSection(out.general, generalText, homeTeam, awayTeam);
   if (homeAwayText) fillGoalsSection(out.home_away, homeAwayText, homeTeam, awayTeam);
@@ -432,9 +458,7 @@ export function parseFootballCardsData(
     home_away: { home: emptyCardsSide(), away: emptyCardsSide() },
   };
 
-  const splitIdx = text.toLowerCase().indexOf("(casa/fora)");
-  const generalText = splitIdx >= 0 ? text.slice(0, splitIdx) : text;
-  const homeAwayText = splitIdx >= 0 ? text.slice(splitIdx) : "";
+  const { generalText, homeAwayText } = partitionByLocationScope(text);
 
   fillCardsSection(out.general, generalText, homeTeam, awayTeam);
   if (homeAwayText) fillCardsSection(out.home_away, homeAwayText, homeTeam, awayTeam);
