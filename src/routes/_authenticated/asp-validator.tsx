@@ -317,6 +317,8 @@ const INITIAL_DASHBOARD_FILTERS: ValidatorDashboardFilters = {
 function AspValidatorPage() {
   const { data: cfg } = useConfiguracao();
   const [form, setForm] = useState<ValidatorForm>(INITIAL_FORM);
+  const [pastedText, setPastedText] = useState("");
+  const [pastedParsed, setPastedParsed] = useState<PastedParsedData | null>(null);
   const [uploads, setUploads] = useState<ValidatorUploadDraft[]>([]);
   const [result, setResult] = useState<ValidationResult | null>(null);
   const [saving, setSaving] = useState(false);
