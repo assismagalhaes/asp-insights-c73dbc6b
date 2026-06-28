@@ -111,17 +111,18 @@ function detectSelectionSide(
   homeTeam?: string | null,
   awayTeam?: string | null,
 ): FootballSelectionSide {
-  if (type !== "x1x2" && type !== "double_chance") return null;
+  if (type !== "x1x2" && type !== "double_chance" && type !== "first_goal") return null;
   const t = norm(`${pick} ${market}`);
   const home = norm(homeTeam ?? "");
   const away = norm(awayTeam ?? "");
-  if (/empate|draw|\bx\b/.test(t) && type === "x1x2") return "draw";
+  if (type === "x1x2" && /empate|draw|\bx\b/.test(t)) return "draw";
   if (/visitante|away|\bfora\b/.test(t)) return "away";
   if (/mandante|home|\bcasa\b/.test(t)) return "home";
   if (away && t.includes(away)) return "away";
   if (home && t.includes(home)) return "home";
   return null;
 }
+
 
 export function detectFootballMarketType(
   rawText: string,
