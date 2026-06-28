@@ -268,15 +268,23 @@ function runCornerTotalOverSimulation(
   const awayTotal = readNumber(away.avg_total);
   const homeAwayTotal = readNumber(home.home_away_avg_total);
   const awayHomeTotal = readNumber(away.home_away_avg_total);
+  // Composicao tecnica: expectativa de cantos = (mandante marcados + visitante sofridos)/2 + (visitante marcados + mandante sofridos)/2
+  // NUNCA somar diretamente avg_total do mandante com avg_total do visitante (dupla contagem).
+  const homeForHome = readNumber(home.home_away_avg_for) ?? homeFor;
+  const homeAgainstHome = readNumber(home.home_away_avg_against) ?? homeAgainst;
+  const awayForAway = readNumber(away.home_away_avg_for) ?? awayFor;
+  const awayAgainstAway = readNumber(away.home_away_avg_against) ?? awayAgainst;
+  const expHome = homeForHome !== null && awayAgainstAway !== null ? (homeForHome + awayAgainstAway) / 2 : null;
+  const expAway = awayForAway !== null && homeAgainstHome !== null ? (awayForAway + homeAgainstHome) / 2 : null;
+  const matchupTotal = expHome !== null && expAway !== null ? expHome + expAway : null;
+  const generalAverageTotal = homeTotal !== null && awayTotal !== null ? (homeTotal + awayTotal) / 2 : null;
   const expectedPieces = [
-    homeTotal,
-    awayTotal,
-    homeFor !== null && awayAgainst !== null ? homeFor + awayAgainst : null,
-    awayFor !== null && homeAgainst !== null ? awayFor + homeAgainst : null,
-    homeAwayTotal,
-    awayHomeTotal,
+    matchupTotal,
+    generalAverageTotal,
+    homeAwayTotal !== null && awayHomeTotal !== null ? (homeAwayTotal + awayHomeTotal) / 2 : null,
   ].filter((value): value is number => value !== null && Number.isFinite(value));
   const expectedTotal = expectedPieces.length ? average(expectedPieces) : null;
+
   const avgSupport = expectedTotal !== null
     ? wantsUnder
       ? clampDecimal((line + 1.5 - expectedTotal) / Math.max(line + 1.5, 1), 0.08, 0.78)
@@ -340,10 +348,16 @@ function runCornerTotalOverSimulation(
     goal_distribution: {},
     notes: [
       `Modelo corner_total_over_simplified para ${wantsUnder ? "Under" : "Over"} ${line} escanteios.`,
-      `Medias usadas: mandante marcados ${formatNumber(homeFor)}, mandante sofridos ${formatNumber(homeAgainst)}, visitante marcados ${formatNumber(awayFor)}, visitante sofridos ${formatNumber(awayAgainst)}, total esperado ${formatNumber(expectedTotal)}.`,
-      `Frequencia ${wantsUnder ? "-" : "+"}${thresholdKey}: ${formatProb(frequencyProb)}. Para Over 9.5, +9 representa 10 ou mais cantos.`,
-      `Composicao: probabilidade original ${formatProb(sourceProb)}, mercado ${formatProb(marketProb)}, medias ${formatProb(avgSupport)}, frequencia ${formatProb(frequencyProb)}, qualidade OCR ${formatProb(quality)}.`,
+      `Composicao tecnica do total esperado (NAO somar diretamente medias totais):`,
+      `  - expectativa mandante = media(${formatNumber(homeForHome)} marcados em casa, ${formatNumber(awayAgainstAway)} sofridos como visitante) = ${formatNumber(expHome)}`,
+      `  - expectativa visitante = media(${formatNumber(awayForAway)} marcados como visitante, ${formatNumber(homeAgainstHome)} sofridos em casa) = ${formatNumber(expAway)}`,
+      `  - media geral por time (somente referencia): mandante total ${formatNumber(homeTotal)}, visitante total ${formatNumber(awayTotal)}`,
+      `  - total esperado consolidado ≈ ${formatNumber(expectedTotal)} cantos (NUNCA somar ${formatNumber(homeTotal)} + ${formatNumber(awayTotal)} diretamente)`,
+
+      `Frequencia ${wantsUnder ? "Under" : "Over"} ${line}.5 observada: ${formatProb(frequencyProb)} (lembrando: "+${thresholdKey}" = Over ${thresholdKey}.5, ou seja ${Math.trunc(line) + 1}+ cantos).`,
+      `Pesos finais: prob. original ${formatProb(sourceProb)}, odd implicita ${formatProb(marketProb)}, suporte medias ${formatProb(avgSupport)}, frequencia ${formatProb(frequencyProb)}, qualidade dados ${formatProb(quality)}.`,
     ],
+
     warnings: components.length < 3 ? ["Simulacao de baixa confiabilidade por pouca evidencia estruturada."] : [],
   };
 }

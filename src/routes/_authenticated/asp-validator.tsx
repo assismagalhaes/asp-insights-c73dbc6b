@@ -991,16 +991,6 @@ function AspValidatorPage() {
               <div className="mt-1 font-semibold">{validatorModel}</div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Contexto geral do usuario</Label>
-              <Textarea
-                value={form.user_context}
-                onChange={(event) => update("user_context", event.target.value)}
-                placeholder="Cole observacoes, leitura do jogo, dados tecnicos, resumo de print ou contexto da fonte externa."
-                className="min-h-32"
-              />
-            </div>
-
             <PastedTextSection
               value={pastedText}
               parsed={pastedParsed}
@@ -1010,7 +1000,16 @@ function AspValidatorPage() {
               onClear={clearPastedText}
             />
 
-            <UploadsWithComments uploads={uploads} onAddFiles={addUploads} onUpdate={updateUpload} onRemove={removeUpload} />
+            <details className="rounded-md border border-border/60 bg-muted/10 p-3 text-sm">
+              <summary className="cursor-pointer select-none text-xs uppercase tracking-wide text-muted-foreground">
+                Recurso secundario: uploads com OCR (opcional)
+              </summary>
+              <div className="mt-3">
+                <UploadsWithComments uploads={uploads} onAddFiles={addUploads} onUpdate={updateUpload} onRemove={removeUpload} />
+              </div>
+            </details>
+
+
 
 
             <Button onClick={validate} disabled={!canValidate || saving} className="gap-2">
@@ -1353,15 +1352,20 @@ function RecordDetailDialog({
               <TextField label="EV original (%)" value={editingRecord.source_ev} onChange={(value) => onUpdateRecord("source_ev", value)} disabled={!canEdit} hint={ocrAppliedFields.source_ev ? "preenchido via OCR" : undefined} />
             </div>
 
-            <div className="space-y-2">
-              <Label>Contexto do usuario</Label>
-              <Textarea
-                value={editingRecord.user_context}
-                disabled={!canEdit}
-                onChange={(event) => onUpdateRecord("user_context", event.target.value)}
-                className="min-h-28"
-              />
-            </div>
+            {editingRecord.user_context?.trim() ? (
+              <details className="space-y-2 rounded-md border border-border/60 bg-muted/10 p-3">
+                <summary className="cursor-pointer select-none text-xs uppercase tracking-wide text-muted-foreground">
+                  Contexto antigo do usuario (legado)
+                </summary>
+                <Textarea
+                  value={editingRecord.user_context}
+                  disabled={!canEdit}
+                  onChange={(event) => onUpdateRecord("user_context", event.target.value)}
+                  className="mt-2 min-h-28"
+                />
+              </details>
+            ) : null}
+
 
             {!canEdit ? (
               <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
@@ -2778,6 +2782,27 @@ function buildFormValidationContext(
   const pastedSummary = pasted
     ? `[TEXTO COLADO INTERPRETADO]\nQualidade: ${(pasted.data_quality_score * 100).toFixed(0)}% | Campos: ${pasted.structured_fields_count}\n\n${pasted.raw_pasted_text}`
     : null;
+
+  let simulationJson: Record<string, unknown> | null = null;
+  if (structuredJson) {
+    try {
+      const sim = runAspValidatorSimulation({
+        sport: form.sport || pasted?.match.sport || "Futebol",
+        market: form.market || pasted?.market.name || null,
+        pick: form.pick || pasted?.market.pick || null,
+        line: form.line || (pasted?.market.line ?? null),
+        offered_odd: offeredOdd,
+        home_team: form.home_team || pasted?.match.home_team || null,
+        away_team: form.away_team || pasted?.match.away_team || null,
+        user_context: form.user_context ?? null,
+        structured_json: structuredJson,
+      });
+      simulationJson = sim as unknown as Record<string, unknown>;
+    } catch {
+      simulationJson = null;
+    }
+  }
+
   return {
     source_platform: form.source_platform,
     sport: form.sport || pasted?.match.sport || "Futebol",
@@ -2809,18 +2834,19 @@ function buildFormValidationContext(
     ocr_raw_text: pastedSummary,
     ocr_structured_data: structuredJson,
     structured_json: structuredJson,
-    simulation_json: null,
+    simulation_json: simulationJson,
     data_usage: {
       used_ocr: false,
       used_pasted_text: Boolean(structuredJson),
       used_structured_json: Boolean(structuredJson),
-      used_simulation: false,
+      used_simulation: Boolean(simulationJson),
       used_upload_comments: uploads.some((upload) => upload.user_comment.trim()),
       has_structured_ocr_data: Boolean(pasted?.has_structured_ocr_data),
       structured_fields_count: pasted?.structured_fields_count ?? 0,
     },
   };
 }
+
 
 
 function buildRecordValidationContext(record: ValidatorRecord, uploads: ValidatorUploadRecord[]): Record<string, unknown> {
@@ -3039,6 +3065,28 @@ async function saveValidation(
     const pastedRawText = pasted
       ? `[TEXTO COLADO INTERPRETADO]\nQualidade: ${(pasted.data_quality_score * 100).toFixed(0)}% | Campos: ${pasted.structured_fields_count}\n\n${pasted.raw_pasted_text}`
       : null;
+    let simulationPayload: Record<string, unknown> = {};
+    let simulationType: string | null = null;
+    if (pastedStructured) {
+      try {
+        const sim = runAspValidatorSimulation({
+          sport: form.sport || pasted?.match.sport || "Futebol",
+          market: form.market || pasted?.market.name || null,
+          pick: form.pick || pasted?.market.pick || null,
+          line: form.line || (pasted?.market.line ?? null),
+          offered_odd: result.offered_odd ?? pasted?.market.offered_odd ?? null,
+          home_team: form.home_team || pasted?.match.home_team || null,
+          away_team: form.away_team || pasted?.match.away_team || null,
+          user_context: form.user_context ?? null,
+          structured_json: pastedStructured,
+        });
+        simulationPayload = sim as unknown as Record<string, unknown>;
+        simulationType = sim.model;
+      } catch {
+        simulationPayload = {};
+        simulationType = null;
+      }
+    }
     const payload: ValidatorInsert = {
       ...form,
       match_date: form.match_date || "",
@@ -3057,7 +3105,7 @@ async function saveValidation(
       against_blocks: result.against_blocks,
       alerts: result.alerts,
       final_analysis: result.final_analysis,
-      simulation_json: {},
+      simulation_json: simulationPayload,
       online_context_json: {},
       ocr_raw_text: pastedRawText,
       ocr_structured_data: pastedStructured ?? {},
@@ -3079,10 +3127,11 @@ async function saveValidation(
       result_settled_at: null,
       final_score: null,
       result_notes: null,
-      simulation_type: null,
+      simulation_type: simulationType,
       is_simulated_result: false,
       bankroll_applied: false,
     };
+
 
     const insertPayload = {
       ...payload,
