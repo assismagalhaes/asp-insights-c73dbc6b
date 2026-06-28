@@ -453,22 +453,27 @@ function AspValidatorPage() {
 
   const validate = async () => {
     if (!canValidate) {
-      toast.error("Preencha esporte, origem, confronto, mercado e pick, ou adicione uploads para OCR.");
+      toast.error("Preencha esporte, origem, confronto, mercado e pick, cole dados do prognostico ou adicione uploads.");
       return;
     }
-    if (!hasManualCore && uploads.length > 0) {
+    if (!hasManualCore && pastedParsed) {
+      toast.info("Validando com base no texto colado. Campos manuais ausentes serao inferidos a partir do JSON estruturado.");
+    } else if (!hasManualCore && uploads.length > 0) {
       toast.info("Validando com base nos uploads/OCR. Campos manuais ausentes serao inferidos quando possivel.");
     }
     setSaving(true);
-    const next = await validateWithAiFallback(buildFormValidationContext(form, uploads, validatorModel));
+    const next = await validateWithAiFallback(buildFormValidationContext(form, uploads, validatorModel, pastedParsed));
     setSaving(false);
     setResult(next);
-    const saved = await saveValidation(form, next, uploads, setSaving);
+    const saved = await saveValidation(form, next, uploads, setSaving, pastedParsed);
     if (saved) {
       setUploads([]);
+      setPastedText("");
+      setPastedParsed(null);
       await loadHistory();
     }
   };
+
 
   const openRecord = (record: ValidatorRecord) => {
     setSelectedRecord(record);
