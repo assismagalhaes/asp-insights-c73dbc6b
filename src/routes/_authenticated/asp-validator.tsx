@@ -1678,7 +1678,25 @@ function UploadsDetail({
             <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
               <div className="space-y-2">
                 <Label>Arquivo alternativo para reprocessar OCR</Label>
-                <Input type="file" onChange={(event) => onAttachOcrFile(upload.id, event.target.files?.[0] ?? null)} />
+                <Input
+                  type="file"
+                  accept={ASP_VALIDATOR_ACCEPT_ATTR}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] ?? null;
+                    if (!file) {
+                      onAttachOcrFile(upload.id, null);
+                      return;
+                    }
+                    const result = validateAspValidatorUpload(file);
+                    if (!result.ok) {
+                      toast.error(result.reason);
+                      event.target.value = "";
+                      return;
+                    }
+                    onAttachOcrFile(upload.id, file);
+                  }}
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">{ASP_VALIDATOR_UPLOAD_HINT}</p>
                 <p className="text-xs text-muted-foreground">
                   {ocrFilesByUpload[upload.id]
                     ? `Arquivo pronto para OCR: ${ocrFilesByUpload[upload.id].name}`
