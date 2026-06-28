@@ -2889,31 +2889,81 @@ function PastedMarketCards({
       </div>
       {showGoals && parsed.goals ? (
         <div className="grid gap-3 md:grid-cols-2">
-          <GoalsSideCard title={`${home} — gols (${parsed.goals.period})`} side={parsed.goals.general.home} fmtPct={fmtPct} fmtNum={fmtNum} />
-          <GoalsSideCard title={`${away} — gols (${parsed.goals.period})`} side={parsed.goals.general.away} fmtPct={fmtPct} fmtNum={fmtNum} />
+          <GoalsSideCard
+            title={`${home} — gols (${parsed.goals.period})`}
+            side={parsed.goals.general.home}
+            sideHA={parsed.goals.home_away.home}
+            haLabel="Casa"
+            fmtPct={fmtPct}
+            fmtNum={fmtNum}
+          />
+          <GoalsSideCard
+            title={`${away} — gols (${parsed.goals.period})`}
+            side={parsed.goals.general.away}
+            sideHA={parsed.goals.home_away.away}
+            haLabel="Fora"
+            fmtPct={fmtPct}
+            fmtNum={fmtNum}
+          />
         </div>
       ) : null}
       {showCards && parsed.cards ? (
         <div className="grid gap-3 md:grid-cols-2">
-          <CardsSideCard title={`${home} — cartoes (${parsed.cards.period})`} side={parsed.cards.general.home} fmtPct={fmtPct} fmtNum={fmtNum} />
-          <CardsSideCard title={`${away} — cartoes (${parsed.cards.period})`} side={parsed.cards.general.away} fmtPct={fmtPct} fmtNum={fmtNum} />
+          <CardsSideCard
+            title={`${home} — cartoes (${parsed.cards.period})`}
+            side={parsed.cards.general.home}
+            sideHA={parsed.cards.home_away.home}
+            haLabel="Casa"
+            fmtPct={fmtPct}
+            fmtNum={fmtNum}
+          />
+          <CardsSideCard
+            title={`${away} — cartoes (${parsed.cards.period})`}
+            side={parsed.cards.general.away}
+            sideHA={parsed.cards.home_away.away}
+            haLabel="Fora"
+            fmtPct={fmtPct}
+            fmtNum={fmtNum}
+          />
         </div>
       ) : null}
       {showGeneral && parsed.general_performance ? (
         <div className="grid gap-3 md:grid-cols-2">
-          <GeneralSideCard title={`${home} — desempenho`} side={parsed.general_performance.home} fmtPct={fmtPct} />
-          <GeneralSideCard title={`${away} — desempenho`} side={parsed.general_performance.away} fmtPct={fmtPct} />
+          <GeneralSideCard
+            title={`${home} — desempenho`}
+            side={parsed.general_performance.home}
+            sideHA={parsed.general_performance_home_away?.home ?? null}
+            haLabel="Casa"
+            fmtPct={fmtPct}
+          />
+          <GeneralSideCard
+            title={`${away} — desempenho`}
+            side={parsed.general_performance.away}
+            sideHA={parsed.general_performance_home_away?.away ?? null}
+            haLabel="Fora"
+            fmtPct={fmtPct}
+          />
         </div>
       ) : null}
       {mt === "btts" && parsed.btts ? (
         <div className="grid gap-3 md:grid-cols-2 text-xs">
           <div className="rounded border border-border p-2">
             <div className="font-semibold">{home} — BTTS</div>
-            <div>Sim: {fmtPct(parsed.btts.home.yes_pct)} · Nao: {fmtPct(parsed.btts.home.no_pct)}</div>
+            <div>Geral · Sim: {fmtPct(parsed.btts.home.yes_pct)} · Nao: {fmtPct(parsed.btts.home.no_pct)}</div>
+            {parsed.btts_home_away ? (
+              <div className="text-muted-foreground">
+                Casa · Sim: {fmtPct(parsed.btts_home_away.home.yes_pct)} · Nao: {fmtPct(parsed.btts_home_away.home.no_pct)}
+              </div>
+            ) : null}
           </div>
           <div className="rounded border border-border p-2">
             <div className="font-semibold">{away} — BTTS</div>
-            <div>Sim: {fmtPct(parsed.btts.away.yes_pct)} · Nao: {fmtPct(parsed.btts.away.no_pct)}</div>
+            <div>Geral · Sim: {fmtPct(parsed.btts.away.yes_pct)} · Nao: {fmtPct(parsed.btts.away.no_pct)}</div>
+            {parsed.btts_home_away ? (
+              <div className="text-muted-foreground">
+                Fora · Sim: {fmtPct(parsed.btts_home_away.away.yes_pct)} · Nao: {fmtPct(parsed.btts_home_away.away.no_pct)}
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}
