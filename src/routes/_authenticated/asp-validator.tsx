@@ -3113,9 +3113,31 @@ async function saveValidation(
         simulationType = null;
       }
     }
+    const fxLeague = form.league || pasted?.fixture.league || "";
+    const fxDate = form.match_date || pasted?.fixture.date || "";
+    const fxHome = form.home_team || pasted?.match.home_team || "";
+    const fxAway = form.away_team || pasted?.match.away_team || "";
+    const fxMarket = form.market || pasted?.market.name || "";
+    const fxPick = form.pick || pasted?.market.pick || "";
+    const fxLine = form.line || (pasted?.market.line != null ? String(pasted.market.line) : "");
+    const fxSport = form.sport || pasted?.match.sport || "Futebol";
+    const fxPlatform = form.source_platform || "Manual";
+    const inferredModel = inferValidatorModel(fxMarket, fxPick);
+    const validatorModelFinal =
+      result.validator_model && result.validator_model !== "ASP Market Validator"
+        ? result.validator_model
+        : inferredModel;
     const payload: ValidatorInsert = {
       ...form,
-      match_date: form.match_date || "",
+      sport: fxSport,
+      source_platform: fxPlatform,
+      league: fxLeague,
+      match_date: fxDate,
+      home_team: fxHome,
+      away_team: fxAway,
+      market: fxMarket,
+      pick: fxPick,
+      line: fxLine,
       offered_odd: result.offered_odd ?? pasted?.market.offered_odd ?? null,
       source_probability: result.source_probability ?? pasted?.market.probability_original ?? null,
       source_ev: result.source_ev ?? pasted?.market.ev_original ?? null,
@@ -3125,7 +3147,7 @@ async function saveValidation(
       adjusted_ev: result.adjusted_ev,
       decision: result.decision,
       confidence: result.confidence,
-      validator_model: result.validator_model,
+      validator_model: validatorModelFinal,
       analysis_context: result.analysis_context,
       favorable_blocks: result.favorable_blocks,
       against_blocks: result.against_blocks,
