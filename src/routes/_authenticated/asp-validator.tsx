@@ -2889,31 +2889,81 @@ function PastedMarketCards({
       </div>
       {showGoals && parsed.goals ? (
         <div className="grid gap-3 md:grid-cols-2">
-          <GoalsSideCard title={`${home} — gols (${parsed.goals.period})`} side={parsed.goals.general.home} fmtPct={fmtPct} fmtNum={fmtNum} />
-          <GoalsSideCard title={`${away} — gols (${parsed.goals.period})`} side={parsed.goals.general.away} fmtPct={fmtPct} fmtNum={fmtNum} />
+          <GoalsSideCard
+            title={`${home} — gols (${parsed.goals.period})`}
+            side={parsed.goals.general.home}
+            sideHA={parsed.goals.home_away.home}
+            haLabel="Casa"
+            fmtPct={fmtPct}
+            fmtNum={fmtNum}
+          />
+          <GoalsSideCard
+            title={`${away} — gols (${parsed.goals.period})`}
+            side={parsed.goals.general.away}
+            sideHA={parsed.goals.home_away.away}
+            haLabel="Fora"
+            fmtPct={fmtPct}
+            fmtNum={fmtNum}
+          />
         </div>
       ) : null}
       {showCards && parsed.cards ? (
         <div className="grid gap-3 md:grid-cols-2">
-          <CardsSideCard title={`${home} — cartoes (${parsed.cards.period})`} side={parsed.cards.general.home} fmtPct={fmtPct} fmtNum={fmtNum} />
-          <CardsSideCard title={`${away} — cartoes (${parsed.cards.period})`} side={parsed.cards.general.away} fmtPct={fmtPct} fmtNum={fmtNum} />
+          <CardsSideCard
+            title={`${home} — cartoes (${parsed.cards.period})`}
+            side={parsed.cards.general.home}
+            sideHA={parsed.cards.home_away.home}
+            haLabel="Casa"
+            fmtPct={fmtPct}
+            fmtNum={fmtNum}
+          />
+          <CardsSideCard
+            title={`${away} — cartoes (${parsed.cards.period})`}
+            side={parsed.cards.general.away}
+            sideHA={parsed.cards.home_away.away}
+            haLabel="Fora"
+            fmtPct={fmtPct}
+            fmtNum={fmtNum}
+          />
         </div>
       ) : null}
       {showGeneral && parsed.general_performance ? (
         <div className="grid gap-3 md:grid-cols-2">
-          <GeneralSideCard title={`${home} — desempenho`} side={parsed.general_performance.home} fmtPct={fmtPct} />
-          <GeneralSideCard title={`${away} — desempenho`} side={parsed.general_performance.away} fmtPct={fmtPct} />
+          <GeneralSideCard
+            title={`${home} — desempenho`}
+            side={parsed.general_performance.home}
+            sideHA={parsed.general_performance_home_away?.home ?? null}
+            haLabel="Casa"
+            fmtPct={fmtPct}
+          />
+          <GeneralSideCard
+            title={`${away} — desempenho`}
+            side={parsed.general_performance.away}
+            sideHA={parsed.general_performance_home_away?.away ?? null}
+            haLabel="Fora"
+            fmtPct={fmtPct}
+          />
         </div>
       ) : null}
       {mt === "btts" && parsed.btts ? (
         <div className="grid gap-3 md:grid-cols-2 text-xs">
           <div className="rounded border border-border p-2">
             <div className="font-semibold">{home} — BTTS</div>
-            <div>Sim: {fmtPct(parsed.btts.home.yes_pct)} · Nao: {fmtPct(parsed.btts.home.no_pct)}</div>
+            <div>Geral · Sim: {fmtPct(parsed.btts.home.yes_pct)} · Nao: {fmtPct(parsed.btts.home.no_pct)}</div>
+            {parsed.btts_home_away ? (
+              <div className="text-muted-foreground">
+                Casa · Sim: {fmtPct(parsed.btts_home_away.home.yes_pct)} · Nao: {fmtPct(parsed.btts_home_away.home.no_pct)}
+              </div>
+            ) : null}
           </div>
           <div className="rounded border border-border p-2">
             <div className="font-semibold">{away} — BTTS</div>
-            <div>Sim: {fmtPct(parsed.btts.away.yes_pct)} · Nao: {fmtPct(parsed.btts.away.no_pct)}</div>
+            <div>Geral · Sim: {fmtPct(parsed.btts.away.yes_pct)} · Nao: {fmtPct(parsed.btts.away.no_pct)}</div>
+            {parsed.btts_home_away ? (
+              <div className="text-muted-foreground">
+                Fora · Sim: {fmtPct(parsed.btts_home_away.away.yes_pct)} · Nao: {fmtPct(parsed.btts_home_away.away.no_pct)}
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -2924,22 +2974,49 @@ function PastedMarketCards({
 function GoalsSideCard({
   title,
   side,
+  sideHA,
+  haLabel,
   fmtPct,
   fmtNum,
 }: {
   title: string;
   side: NonNullable<PastedParsedData["goals"]>["general"]["home"];
+  sideHA?: NonNullable<PastedParsedData["goals"]>["home_away"]["home"] | null;
+  haLabel?: string;
   fmtPct: (v: number | null | undefined) => string;
   fmtNum: (v: number | null | undefined) => string;
 }) {
   const overs = Object.entries(side.over_lines).slice(0, 5);
+  const oversHA = sideHA ? Object.entries(sideHA.over_lines).slice(0, 5) : [];
+  const hasHA =
+    !!sideHA &&
+    (sideHA.avg_for !== null ||
+      sideHA.avg_against !== null ||
+      sideHA.avg_total !== null ||
+      sideHA.btts_yes_pct !== null ||
+      oversHA.length > 0);
   return (
     <div className="rounded border border-border p-2 text-xs space-y-1">
       <div className="font-semibold text-primary">{title}</div>
-      <div>Media marcados: {fmtNum(side.avg_for)} · sofridos: {fmtNum(side.avg_against)} · total: {fmtNum(side.avg_total)}</div>
-      <div>BTTS Sim: {fmtPct(side.btts_yes_pct)} · Nao: {fmtPct(side.btts_no_pct)}</div>
+      <div>Geral · marcados: {fmtNum(side.avg_for)} · sofridos: {fmtNum(side.avg_against)} · total: {fmtNum(side.avg_total)}</div>
+      <div>Geral · BTTS Sim: {fmtPct(side.btts_yes_pct)} · Nao: {fmtPct(side.btts_no_pct)}</div>
       {overs.length ? (
-        <div>Over: {overs.map(([k, v]) => `${k}: ${v}%`).join(" · ")}</div>
+        <div>Geral · Over: {overs.map(([k, v]) => `${k}: ${v}%`).join(" · ")}</div>
+      ) : null}
+      {hasHA && sideHA ? (
+        <>
+          <div className="text-muted-foreground">
+            {haLabel ?? "Casa/Fora"} · marcados: {fmtNum(sideHA.avg_for)} · sofridos: {fmtNum(sideHA.avg_against)} · total: {fmtNum(sideHA.avg_total)}
+          </div>
+          <div className="text-muted-foreground">
+            {haLabel ?? "Casa/Fora"} · BTTS Sim: {fmtPct(sideHA.btts_yes_pct)} · Nao: {fmtPct(sideHA.btts_no_pct)}
+          </div>
+          {oversHA.length ? (
+            <div className="text-muted-foreground">
+              {haLabel ?? "Casa/Fora"} · Over: {oversHA.map(([k, v]) => `${k}: ${v}%`).join(" · ")}
+            </div>
+          ) : null}
+        </>
       ) : null}
     </div>
   );
@@ -2948,22 +3025,45 @@ function GoalsSideCard({
 function CardsSideCard({
   title,
   side,
+  sideHA,
+  haLabel,
   fmtPct,
   fmtNum,
 }: {
   title: string;
   side: NonNullable<PastedParsedData["cards"]>["general"]["home"];
+  sideHA?: NonNullable<PastedParsedData["cards"]>["home_away"]["home"] | null;
+  haLabel?: string;
   fmtPct: (v: number | null | undefined) => string;
   fmtNum: (v: number | null | undefined) => string;
 }) {
   const overs = Object.entries(side.over_lines).slice(0, 5);
+  const oversHA = sideHA ? Object.entries(sideHA.over_lines).slice(0, 5) : [];
+  const hasHA =
+    !!sideHA &&
+    (sideHA.avg_total_cards !== null ||
+      sideHA.avg_cards_for !== null ||
+      sideHA.avg_cards_against !== null ||
+      oversHA.length > 0);
   return (
     <div className="rounded border border-border p-2 text-xs space-y-1">
       <div className="font-semibold text-primary">{title}</div>
-      <div>Media total: {fmtNum(side.avg_total_cards)} · amarelos: {fmtNum(side.avg_yellow_total)} · vermelhos: {fmtNum(side.avg_red_total)}</div>
-      <div>Aplicados: {fmtNum(side.avg_cards_for)} · sofridos: {fmtNum(side.avg_cards_against)}</div>
+      <div>Geral · total: {fmtNum(side.avg_total_cards)} · amarelos: {fmtNum(side.avg_yellow_total)} · vermelhos: {fmtNum(side.avg_red_total)}</div>
+      <div>Geral · aplicados: {fmtNum(side.avg_cards_for)} · sofridos: {fmtNum(side.avg_cards_against)}</div>
       {overs.length ? (
-        <div>Over: {overs.map(([k, v]) => `${k}: ${fmtPct(v)}`).join(" · ")}</div>
+        <div>Geral · Over: {overs.map(([k, v]) => `${k}: ${fmtPct(v)}`).join(" · ")}</div>
+      ) : null}
+      {hasHA && sideHA ? (
+        <>
+          <div className="text-muted-foreground">
+            {haLabel ?? "Casa/Fora"} · total: {fmtNum(sideHA.avg_total_cards)} · aplicados: {fmtNum(sideHA.avg_cards_for)} · sofridos: {fmtNum(sideHA.avg_cards_against)}
+          </div>
+          {oversHA.length ? (
+            <div className="text-muted-foreground">
+              {haLabel ?? "Casa/Fora"} · Over: {oversHA.map(([k, v]) => `${k}: ${fmtPct(v)}`).join(" · ")}
+            </div>
+          ) : null}
+        </>
       ) : null}
     </div>
   );
@@ -2972,17 +3072,32 @@ function CardsSideCard({
 function GeneralSideCard({
   title,
   side,
+  sideHA,
+  haLabel,
   fmtPct,
 }: {
   title: string;
   side: NonNullable<PastedParsedData["general_performance"]>["home"];
+  sideHA?: NonNullable<PastedParsedData["general_performance"]>["home"] | null;
+  haLabel?: string;
   fmtPct: (v: number | null | undefined) => string;
 }) {
+  const hasHA =
+    !!sideHA &&
+    (sideHA.wins !== null ||
+      sideHA.draws !== null ||
+      sideHA.losses !== null ||
+      sideHA.efficiency_pct !== null ||
+      sideHA.avg_possession_pct !== null);
   return (
     <div className="rounded border border-border p-2 text-xs space-y-1">
       <div className="font-semibold text-primary">{title}</div>
-      <div>V/E/D: {side.wins ?? "-"}/{side.draws ?? "-"}/{side.losses ?? "-"}</div>
-      <div>Eficiencia: {fmtPct(side.efficiency_pct)} · Posse: {fmtPct(side.avg_possession_pct)}</div>
+      <div>Geral · V/E/D: {side.wins ?? "-"}/{side.draws ?? "-"}/{side.losses ?? "-"} · Eficiencia: {fmtPct(side.efficiency_pct)} · Posse: {fmtPct(side.avg_possession_pct)}</div>
+      {hasHA && sideHA ? (
+        <div className="text-muted-foreground">
+          {haLabel ?? "Casa/Fora"} · V/E/D: {sideHA.wins ?? "-"}/{sideHA.draws ?? "-"}/{sideHA.losses ?? "-"} · Eficiencia: {fmtPct(sideHA.efficiency_pct)} · Posse: {fmtPct(sideHA.avg_possession_pct)}
+        </div>
+      ) : null}
     </div>
   );
 }

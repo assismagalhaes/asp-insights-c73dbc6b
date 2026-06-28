@@ -141,7 +141,9 @@ export type PastedParsedData = {
   goals: GoalsBlock | null;
   cards: CardsBlock | null;
   general_performance: GeneralPerformanceBlock | null;
+  general_performance_home_away: GeneralPerformanceBlock | null;
   btts: BttsBlock | null;
+  btts_home_away: BttsBlock | null;
 };
 
 
@@ -549,9 +551,27 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
     detection.market_type === "double_chance" ||
     detection.market_type === "goals_total" ||
     detection.market_type === "btts"
-      ? parseFootballGeneralPerformance(text, home_team, away_team)
+      ? parseFootballGeneralPerformance(generalText, home_team, away_team)
+      : null;
+  const generalPerfHA: GeneralPerformanceBlock | null =
+    generalPerf && homeAwayText
+      ? parseFootballGeneralPerformance(homeAwayText, home_team, away_team)
       : null;
   const bttsBlock: BttsBlock | null = goalsBlock ? parseFootballBttsData(goalsBlock) : null;
+  const bttsBlockHA: BttsBlock | null = goalsBlock
+    ? {
+        home: {
+          yes_pct: goalsBlock.home_away.home.btts_yes_pct,
+          no_pct: goalsBlock.home_away.home.btts_no_pct,
+          first_goal_pct: goalsBlock.home_away.home.first_goal_pct,
+        },
+        away: {
+          yes_pct: goalsBlock.home_away.away.btts_yes_pct,
+          no_pct: goalsBlock.home_away.away.btts_no_pct,
+          first_goal_pct: goalsBlock.home_away.away.first_goal_pct,
+        },
+      }
+    : null;
 
 
   const missing_critical_fields: string[] = [];
@@ -650,7 +670,9 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
     goals: goalsBlock,
     cards: cardsBlock,
     general_performance: generalPerf,
+    general_performance_home_away: generalPerfHA,
     btts: bttsBlock,
+    btts_home_away: bttsBlockHA,
 
   };
 }
