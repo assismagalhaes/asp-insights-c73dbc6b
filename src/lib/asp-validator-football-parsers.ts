@@ -241,7 +241,7 @@ function parseTwoSidedPercent(line: string, team: string): number | null {
 
 function extractSection(text: string, titles: string[]): string {
   for (const t of titles) {
-    const re = new RegExp(`---\\s*${t}\\s*---([\\s\\S]*?)(?:---|$)`, "i");
+    const re = new RegExp(`---\\s*${t}[^\\n]*---([\\s\\S]*?)(?:---|$)`, "i");
     const m = text.match(re);
     if (m) return m[1];
   }
@@ -251,7 +251,7 @@ function extractSection(text: string, titles: string[]): string {
 function extractPreferredSection(text: string, titles: string[], period?: FootballPeriod): string {
   const candidates: Array<{ body: string; context: string }> = [];
   for (const title of titles) {
-    const re = new RegExp(`---\\s*${title}\\s*---([\\s\\S]*?)(?=\\n\\s*---|$)`, "gi");
+    const re = new RegExp(`---\\s*${title}[^\\n]*---([\\s\\S]*?)(?=\\n\\s*---|$)`, "gi");
     for (const match of text.matchAll(re)) {
       const start = match.index ?? 0;
       candidates.push({
