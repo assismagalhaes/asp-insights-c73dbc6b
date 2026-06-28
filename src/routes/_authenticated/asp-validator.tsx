@@ -2157,7 +2157,7 @@ function ResultRegistrationPanel({
   if (!form) return null;
   const status = form.result_status.toUpperCase();
   const odd = parseNumber(form.final_odd) ?? record.offered_odd ?? 1;
-  const stake = parseNumber(form.stake_units) ?? (record.decision === "PULAR" ? 1 : 0);
+  const stake = parseNumber(form.stake_units) ?? 1;
   const unitValue = parseNumber(form.unit_value_brl) ?? 0;
   const profitUnits = calculateValidatorProfitUnits(status, record.decision === "PULAR" ? 1 : stake, odd);
   const profitBrl = round(profitUnits * unitValue, 2);
