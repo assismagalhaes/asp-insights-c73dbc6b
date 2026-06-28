@@ -1328,7 +1328,7 @@ function RecordDetailDialog({
             <div className="flex flex-wrap justify-end gap-2">
               <Button variant="outline" onClick={onApplyOcrToForm} disabled={!canEdit} className="gap-2">
                 <FileJson className="h-4 w-4" />
-                Aplicar dados OCR ao formulario
+                Aplicar dados estruturados ao formulario
               </Button>
             </div>
 
