@@ -2717,10 +2717,33 @@ async function validateWithAiFallback(context: Record<string, unknown>): Promise
 }
 
 function aiResultToValidationResult(result: AspValidatorAiResult, context: Record<string, unknown>): ValidationResult {
+  const prediction = (context.prediction && typeof context.prediction === "object" ? context.prediction : {}) as Record<string, unknown>;
+  const validatorModel = inferValidatorModel(
+    String(prediction.market || context.market || ""),
+    String(prediction.pick || context.pick || ""),
+  ) || String(context.validator_model || "ASP Market Validator");
+
+  // Reforco de protecao de banca: CONFIRMAR exige margem minima positiva.
+  let decision = result.decision;
+  let alerts = [...(result.alerts ?? [])];
+  let finalAnalysis = result.final_analysis;
+  const adjustedEv = result.adjusted_ev;
+  const offered = result.offered_odd;
+  const adjustedFair = result.adjusted_fair_odd;
+  const insufficientEv = adjustedEv === null || adjustedEv === undefined || adjustedEv < 3;
+  const fairAboveOffered = offered !== null && adjustedFair !== null && adjustedFair >= offered;
+  if (decision === "CONFIRMAR" && (insufficientEv || fairAboveOffered)) {
+    decision = "PULAR";
+    alerts.push(
+      `Protecao de banca: EV ajustado ${adjustedEv === null ? "indisponivel" : `${adjustedEv}%`} e odd justa ajustada ${adjustedFair ?? "?"} vs ofertada ${offered ?? "?"} nao atingem a margem minima (3%). Decisao rebaixada para PULAR.`,
+    );
+    finalAnalysis = `${finalAnalysis ? finalAnalysis + " " : ""}Decisao ajustada automaticamente para PULAR por falta de margem positiva minima no EV ajustado.`;
+  }
+
   return {
-    decision: result.decision,
+    decision,
     confidence: result.confidence,
-    validator_model: String(context.validator_model || "ASP Market Validator"),
+    validator_model: validatorModel,
     source_probability: result.source_probability,
     source_fair_odd: result.source_fair_odd,
     offered_odd: result.offered_odd,
@@ -2731,8 +2754,8 @@ function aiResultToValidationResult(result: AspValidatorAiResult, context: Recor
     simulation_summary: result.simulation_summary,
     favorable_blocks: result.favorable_blocks,
     against_blocks: result.against_blocks,
-    alerts: result.alerts,
-    final_analysis: result.final_analysis,
+    alerts,
+    final_analysis: finalAnalysis,
     analysis_context: result.analysis_context,
   };
 }
