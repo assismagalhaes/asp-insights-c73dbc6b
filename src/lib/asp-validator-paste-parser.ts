@@ -515,7 +515,7 @@ function classifyMarket(rawMarket: string): { name: string; pick: string; line: 
 }
 
 export function parsePastedPrognostico(raw: string): PastedParsedData {
-  const text = (raw || "").trim();
+  const text = normalizeCompactPastedText((raw || "").trim());
   const notes: string[] = [];
 
   // --- Cabecalho do prognostico ---
