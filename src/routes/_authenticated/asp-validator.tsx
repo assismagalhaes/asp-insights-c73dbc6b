@@ -970,8 +970,33 @@ function AspValidatorPage() {
     if (!selectedRecord || !resultForm) return;
     if (selectedRecord.result_status && !window.confirm("Este registro ja possui resultado. Deseja editar o resultado mesmo assim?")) return;
     const status = resultForm.result_status.toUpperCase();
+    if (status === "PENDENTE" || status === "") {
+      // Limpa o resultado e devolve o registro ao estado "sem resultado registrado".
+      try {
+        const payload = {
+          result_status: null,
+          result_settled_at: null,
+          final_score: null,
+          result_notes: resultForm.result_notes || null,
+          profit_units: null,
+          profit_brl: null,
+          clv: null,
+          is_simulated_result: false,
+          bankroll_applied: false,
+          updated_at: new Date().toISOString(),
+        };
+        const { error } = await validatorDb.from("asp_validator_registros").update(payload).eq("id", selectedRecord.id);
+        if (error) throw error;
+        setSelectedRecord((prev) => (prev ? { ...prev, ...payload } : prev));
+        toast.success("Resultado removido. Registro voltou a 'Sem resultado registrado'.");
+        await loadHistory();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Nao foi possivel limpar o resultado.");
+      }
+      return;
+    }
     if (!["GREEN", "RED", "PUSH", "VOID"].includes(status)) {
-      toast.error("Selecione Green, Red, Push ou Void.");
+      toast.error("Selecione Pendente, Green, Red, Push ou Void.");
       return;
     }
     const odd = parseNumber(resultForm.final_odd) ?? selectedRecord.offered_odd ?? 1;
@@ -2383,7 +2408,7 @@ function ResultRegistrationPanel({
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
-        <SelectField label="Status" value={form.result_status} options={["GREEN", "RED", "PUSH", "VOID"]} onChange={(value) => onUpdate("result_status", value)} />
+        <SelectField label="Status" value={form.result_status || "PENDENTE"} options={["PENDENTE", "GREEN", "RED", "PUSH", "VOID"]} onChange={(value) => onUpdate("result_status", value)} />
         <TextField label="Odd final usada" value={form.final_odd} onChange={(value) => onUpdate("final_odd", value)} />
         <TextField
           label="Stake (u)"
@@ -5098,7 +5123,7 @@ function recordToEditable(record: ValidatorRecord): EditableRecord {
 
 function recordToResultForm(record: ValidatorRecord, defaultUnitValue: number): ResultForm {
   return {
-    result_status: record.result_status || "GREEN",
+    result_status: record.result_status || "PENDENTE",
     final_odd: numberToInput(record.offered_odd),
     stake_units: numberToInput(record.stake_units ?? 1),
     unit_value_brl: numberToInput(record.unit_value_brl ?? defaultUnitValue),
