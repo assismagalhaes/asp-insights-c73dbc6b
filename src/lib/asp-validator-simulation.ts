@@ -285,23 +285,42 @@ function runCornerTotalOverSimulation(
   ].filter((value): value is number => value !== null && Number.isFinite(value));
   const expectedTotal = expectedPieces.length ? average(expectedPieces) : null;
 
+  // Suporte por medias: 50% quando expectedTotal == line; cada 1 canto de diferenca
+  // ajusta ~8 pontos percentuais; limitado entre 30% e 78%.
   const avgSupport = expectedTotal !== null
     ? wantsUnder
-      ? clampDecimal((line + 1.5 - expectedTotal) / Math.max(line + 1.5, 1), 0.08, 0.78)
-      : clampDecimal((expectedTotal - Math.max(line - 2.5, 1)) / Math.max(5, line + 1), 0.25, 0.82)
+      ? clampDecimal(0.5 - (expectedTotal - line) * 0.08, 0.30, 0.78)
+      : clampDecimal(0.5 + (expectedTotal - line) * 0.08, 0.30, 0.78)
     : null;
-  const thresholdKey = String(Math.trunc(line));
+  const generalCorners = (corners.general ?? {}) as Record<string, any>;
+  const homeAwayCorners = (corners.home_away ?? {}) as Record<string, any>;
+  const genHome = (generalCorners.home ?? {}) as Record<string, any>;
+  const genAway = (generalCorners.away ?? {}) as Record<string, any>;
+  const haHome = (homeAwayCorners.home ?? {}) as Record<string, any>;
+  const haAway = (homeAwayCorners.away ?? {}) as Record<string, any>;
   const totalFreq = averagePercentValues([
-    readLinePercent(home.over_lines, thresholdKey),
-    readLinePercent(away.over_lines, thresholdKey),
-    readLinePercent(home.home_away_over_lines, thresholdKey),
-    readLinePercent(away.home_away_over_lines, thresholdKey),
+    readLinePercent(home.over_lines, line),
+    readLinePercent(away.over_lines, line),
+    readLinePercent(home.home_away_over_lines, line),
+    readLinePercent(away.home_away_over_lines, line),
+    readLinePercent(genHome.over_lines, line),
+    readLinePercent(genAway.over_lines, line),
+    readLinePercent(haHome.home_away_over_lines, line),
+    readLinePercent(haAway.home_away_over_lines, line),
+    readLinePercent(haHome.over_lines, line),
+    readLinePercent(haAway.over_lines, line),
   ]);
   const underFreq = averagePercentValues([
-    readLinePercent(home.under_lines, thresholdKey),
-    readLinePercent(away.under_lines, thresholdKey),
-    readLinePercent(home.home_away_under_lines, thresholdKey),
-    readLinePercent(away.home_away_under_lines, thresholdKey),
+    readLinePercent(home.under_lines, line),
+    readLinePercent(away.under_lines, line),
+    readLinePercent(home.home_away_under_lines, line),
+    readLinePercent(away.home_away_under_lines, line),
+    readLinePercent(genHome.under_lines, line),
+    readLinePercent(genAway.under_lines, line),
+    readLinePercent(haHome.home_away_under_lines, line),
+    readLinePercent(haAway.home_away_under_lines, line),
+    readLinePercent(haHome.under_lines, line),
+    readLinePercent(haAway.under_lines, line),
   ]);
   const frequencyProb = percentToDecimal(wantsUnder ? underFreq : totalFreq);
   const quality = readNumber(structured.data_quality_score) ?? readNumber(structured.data_quality?.score) ?? 0.5;
@@ -354,7 +373,7 @@ function runCornerTotalOverSimulation(
       `  - media geral por time (somente referencia): mandante total ${formatNumber(homeTotal)}, visitante total ${formatNumber(awayTotal)}`,
       `  - total esperado consolidado ≈ ${formatNumber(expectedTotal)} cantos (NUNCA somar ${formatNumber(homeTotal)} + ${formatNumber(awayTotal)} diretamente)`,
 
-      `Frequencia ${wantsUnder ? "Under" : "Over"} ${line}.5 observada: ${formatProb(frequencyProb)} (lembrando: "+${thresholdKey}" = Over ${thresholdKey}.5, ou seja ${Math.trunc(line) + 1}+ cantos).`,
+      `Frequencia ${wantsUnder ? "Under" : "Over"} ${formatLineLabel(line)} observada: ${formatProb(frequencyProb)} (lembrando: "+${formatLineLabel(line)}" significa Over ${formatLineLabel(line)}, ou seja ${Math.trunc(line) + 1}+ cantos).`,
       `Pesos finais: prob. original ${formatProb(sourceProb)}, odd implicita ${formatProb(marketProb)}, suporte medias ${formatProb(avgSupport)}, frequencia ${formatProb(frequencyProb)}, qualidade dados ${formatProb(quality)}.`,
     ],
 
@@ -371,10 +390,30 @@ function isCornerTotalOverUnderMarket(marketText: string, pick: string, line: nu
   return hasCorner && hasTotalSide && !hasRace;
 }
 
-function readLinePercent(lines: unknown, key: string): number | null {
+function readLinePercent(lines: unknown, key: string | number): number | null {
   if (!lines || typeof lines !== "object") return null;
   const map = lines as Record<string, unknown>;
-  return readNumber(map[key] ?? map[`+${key}`] ?? map[`-${key}`] ?? map[`${key}.0`]);
+  const num = typeof key === "number" ? key : Number(String(key).replace(",", "."));
+  const candidates: string[] = [];
+  if (typeof key === "string") candidates.push(key);
+  if (Number.isFinite(num)) {
+    const exact = String(num);
+    const intPart = String(Math.trunc(num));
+    const dec = `${intPart}.5`;
+    candidates.push(exact, `+${exact}`, `-${exact}`, intPart, `+${intPart}`, `-${intPart}`, dec, `+${dec}`, `${exact}.0`);
+  }
+  for (const c of candidates) {
+    if (c in map) {
+      const value = readNumber(map[c]);
+      if (value !== null) return value;
+    }
+  }
+  return null;
+}
+
+function formatLineLabel(line: number): string {
+  if (!Number.isFinite(line)) return String(line);
+  return Number.isInteger(line) ? `${line}.5` : String(line);
 }
 
 function averagePercentValues(values: Array<number | null>): number | null {

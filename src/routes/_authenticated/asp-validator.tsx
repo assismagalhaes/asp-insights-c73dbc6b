@@ -339,7 +339,10 @@ function AspValidatorPage() {
   const [validatingOnlineRecord, setValidatingOnlineRecord] = useState(false);
   const [updatingRecord, setUpdatingRecord] = useState(false);
 
-  const validatorModel = useMemo(() => inferValidatorModel(form.market, form.pick), [form.market, form.pick]);
+  const validatorModel = useMemo(
+    () => inferValidatorModel(form.market || pastedParsed?.market.name || "", form.pick || pastedParsed?.market.pick || ""),
+    [form.market, form.pick, pastedParsed],
+  );
   const hasManualCore = useMemo(
     () => Boolean(form.sport && form.source_platform && form.home_team && form.away_team && form.market && form.pick),
     [form],
@@ -477,8 +480,21 @@ function AspValidatorPage() {
 
   const openRecord = (record: ValidatorRecord) => {
     setSelectedRecord(record);
-    setEditingRecord(recordToEditable(record));
-    setOcrAppliedFields({});
+    const baseEditable = recordToEditable(record);
+    // Auto-fill missing fields from structured_json / form_patch
+    const patch = buildEditablePatchFromStructured(record);
+    const merged: EditableRecord = { ...baseEditable };
+    const applied: Partial<Record<keyof EditableRecord, boolean>> = {};
+    for (const [key, value] of Object.entries(patch) as Array<[keyof EditableRecord, string | undefined]>) {
+      if (!value) continue;
+      const current = String(merged[key] ?? "").trim();
+      if (!current) {
+        merged[key] = value as never;
+        applied[key] = true;
+      }
+    }
+    setEditingRecord(merged);
+    setOcrAppliedFields(applied);
     setResultForm(recordToResultForm(record, cfg?.valor_unidade_padrao ?? 10));
     setEditingUploadComments(
       Object.fromEntries((uploadsByRecord[record.id] ?? []).map((upload) => [upload.id, upload.user_comment ?? ""])),
@@ -914,7 +930,7 @@ function AspValidatorPage() {
       return;
     }
     const odd = parseNumber(resultForm.final_odd) ?? selectedRecord.offered_odd ?? 1;
-    const stake = parseNumber(resultForm.stake_units) ?? (selectedRecord.decision === "PULAR" ? 1 : 0);
+    const stake = parseNumber(resultForm.stake_units) ?? 1;
     const unitValue = parseNumber(resultForm.unit_value_brl) ?? cfg?.valor_unidade_padrao ?? 0;
     if (selectedRecord.decision === "CONFIRMAR" && stake <= 0) {
       toast.error("Informe a stake em unidades para uma entrada CONFIRMADA.");
@@ -1312,7 +1328,7 @@ function RecordDetailDialog({
             <div className="flex flex-wrap justify-end gap-2">
               <Button variant="outline" onClick={onApplyOcrToForm} disabled={!canEdit} className="gap-2">
                 <FileJson className="h-4 w-4" />
-                Aplicar dados OCR ao formulario
+                Aplicar dados estruturados ao formulario
               </Button>
             </div>
 
@@ -2025,22 +2041,46 @@ function SimulationPanel({ record }: { record: ValidatorRecord }) {
 }
 
 function AiAnalysisContextPanel({ record }: { record: ValidatorRecord }) {
-  const usedOcr = Boolean(record.ocr_raw_text?.trim());
+  const rawOcr = record.ocr_raw_text?.trim() ?? "";
+  const isPastedSummary = rawOcr.startsWith("[TEXTO COLADO INTERPRETADO]");
+  const structured = (record.structured_json ?? {}) as { input_source?: unknown; raw_pasted_text?: unknown };
+  const ocrStructured = (record.ocr_structured_data ?? {}) as { input_source?: unknown; raw_pasted_text?: unknown };
+  const usedPasted =
+    isPastedSummary ||
+    structured.input_source === "pasted_text" ||
+    ocrStructured.input_source === "pasted_text" ||
+    Boolean(structured.raw_pasted_text) ||
+    Boolean(ocrStructured.raw_pasted_text);
+  const usedRealOcr = Boolean(rawOcr) && !isPastedSummary && !usedPasted;
   const usedStructured = hasJsonContent(record.structured_json);
   const usedSimulation = hasJsonContent(record.simulation_json);
+  const pastedText = String(
+    (structured.raw_pasted_text as string | undefined) ??
+      (ocrStructured.raw_pasted_text as string | undefined) ??
+      (isPastedSummary ? rawOcr.replace(/^\[TEXTO COLADO INTERPRETADO\][\s\S]*?\n\n/, "") : ""),
+  );
   return (
     <div className="space-y-3 rounded-md border border-border bg-muted/10 p-3">
       <div>
         <div className="text-sm font-semibold">Dados usados na analise IA</div>
         <p className="mt-1 text-xs text-muted-foreground">
-          A validacao IA consolidada usa campos manuais como prioridade e OCR/JSON/simulacao como apoio tecnico.
+          A validacao IA consolidada usa campos manuais como prioridade e OCR/texto colado/JSON/simulacao como apoio tecnico.
         </p>
       </div>
-      <div className="grid gap-3 md:grid-cols-3">
-        <Info label="Usou OCR" value={usedOcr ? "Sim" : "Nao"} />
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+        <Info label="Usou OCR real" value={usedRealOcr ? "Sim" : "Nao"} />
+        <Info label="Usou texto colado" value={usedPasted ? "Sim" : "Nao"} />
         <Info label="Usou JSON estruturado" value={usedStructured ? "Sim" : "Nao"} />
         <Info label="Usou simulacao" value={usedSimulation ? "Sim" : "Nao"} />
       </div>
+      {pastedText ? (
+        <details className="rounded-md border border-border/60 bg-background/40 p-3">
+          <summary className="cursor-pointer select-none text-xs uppercase tracking-wide text-muted-foreground">
+            Texto colado original
+          </summary>
+          <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">{pastedText}</pre>
+        </details>
+      ) : null}
       {record.analysis_context ? (
         <div className="rounded-md border border-border bg-background/50 p-3">
           <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Contexto da IA</p>
@@ -2117,7 +2157,7 @@ function ResultRegistrationPanel({
   if (!form) return null;
   const status = form.result_status.toUpperCase();
   const odd = parseNumber(form.final_odd) ?? record.offered_odd ?? 1;
-  const stake = parseNumber(form.stake_units) ?? (record.decision === "PULAR" ? 1 : 0);
+  const stake = parseNumber(form.stake_units) ?? 1;
   const unitValue = parseNumber(form.unit_value_brl) ?? 0;
   const profitUnits = calculateValidatorProfitUnits(status, record.decision === "PULAR" ? 1 : stake, odd);
   const profitBrl = round(profitUnits * unitValue, 2);
@@ -2714,10 +2754,33 @@ async function validateWithAiFallback(context: Record<string, unknown>): Promise
 }
 
 function aiResultToValidationResult(result: AspValidatorAiResult, context: Record<string, unknown>): ValidationResult {
+  const prediction = (context.prediction && typeof context.prediction === "object" ? context.prediction : {}) as Record<string, unknown>;
+  const validatorModel = inferValidatorModel(
+    String(prediction.market || context.market || ""),
+    String(prediction.pick || context.pick || ""),
+  ) || String(context.validator_model || "ASP Market Validator");
+
+  // Reforco de protecao de banca: CONFIRMAR exige margem minima positiva.
+  let decision = result.decision;
+  let alerts = [...(result.alerts ?? [])];
+  let finalAnalysis = result.final_analysis;
+  const adjustedEv = result.adjusted_ev;
+  const offered = result.offered_odd;
+  const adjustedFair = result.adjusted_fair_odd;
+  const insufficientEv = adjustedEv === null || adjustedEv === undefined || adjustedEv < 3;
+  const fairAboveOffered = offered !== null && adjustedFair !== null && adjustedFair >= offered;
+  if (decision === "CONFIRMAR" && (insufficientEv || fairAboveOffered)) {
+    decision = "PULAR";
+    alerts.push(
+      `Protecao de banca: EV ajustado ${adjustedEv === null ? "indisponivel" : `${adjustedEv}%`} e odd justa ajustada ${adjustedFair ?? "?"} vs ofertada ${offered ?? "?"} nao atingem a margem minima (3%). Decisao rebaixada para PULAR.`,
+    );
+    finalAnalysis = `${finalAnalysis ? finalAnalysis + " " : ""}Decisao ajustada automaticamente para PULAR por falta de margem positiva minima no EV ajustado.`;
+  }
+
   return {
-    decision: result.decision,
+    decision,
     confidence: result.confidence,
-    validator_model: String(context.validator_model || "ASP Market Validator"),
+    validator_model: validatorModel,
     source_probability: result.source_probability,
     source_fair_odd: result.source_fair_odd,
     offered_odd: result.offered_odd,
@@ -2728,8 +2791,8 @@ function aiResultToValidationResult(result: AspValidatorAiResult, context: Recor
     simulation_summary: result.simulation_summary,
     favorable_blocks: result.favorable_blocks,
     against_blocks: result.against_blocks,
-    alerts: result.alerts,
-    final_analysis: result.final_analysis,
+    alerts,
+    final_analysis: finalAnalysis,
     analysis_context: result.analysis_context,
   };
 }
@@ -3087,9 +3150,31 @@ async function saveValidation(
         simulationType = null;
       }
     }
+    const fxLeague = form.league || pasted?.fixture.league || "";
+    const fxDate = form.match_date || pasted?.form_patch.match_date || "";
+    const fxHome = form.home_team || pasted?.match.home_team || "";
+    const fxAway = form.away_team || pasted?.match.away_team || "";
+    const fxMarket = form.market || pasted?.market.name || "";
+    const fxPick = form.pick || pasted?.market.pick || "";
+    const fxLine = form.line || (pasted?.market.line != null ? String(pasted.market.line) : "");
+    const fxSport = form.sport || pasted?.match.sport || "Futebol";
+    const fxPlatform = form.source_platform || "Manual";
+    const inferredModel = inferValidatorModel(fxMarket, fxPick);
+    const validatorModelFinal =
+      result.validator_model && result.validator_model !== "ASP Market Validator"
+        ? result.validator_model
+        : inferredModel;
     const payload: ValidatorInsert = {
       ...form,
-      match_date: form.match_date || "",
+      sport: fxSport,
+      source_platform: fxPlatform,
+      league: fxLeague,
+      match_date: fxDate,
+      home_team: fxHome,
+      away_team: fxAway,
+      market: fxMarket,
+      pick: fxPick,
+      line: fxLine,
       offered_odd: result.offered_odd ?? pasted?.market.offered_odd ?? null,
       source_probability: result.source_probability ?? pasted?.market.probability_original ?? null,
       source_ev: result.source_ev ?? pasted?.market.ev_original ?? null,
@@ -3099,7 +3184,7 @@ async function saveValidation(
       adjusted_ev: result.adjusted_ev,
       decision: result.decision,
       confidence: result.confidence,
-      validator_model: result.validator_model,
+      validator_model: validatorModelFinal,
       analysis_context: result.analysis_context,
       favorable_blocks: result.favorable_blocks,
       against_blocks: result.against_blocks,
@@ -4646,7 +4731,7 @@ function recordToResultForm(record: ValidatorRecord, defaultUnitValue: number): 
   return {
     result_status: record.result_status || "GREEN",
     final_odd: numberToInput(record.offered_odd),
-    stake_units: numberToInput(record.stake_units ?? (record.decision === "PULAR" ? 1 : null)),
+    stake_units: numberToInput(record.stake_units ?? 1),
     unit_value_brl: numberToInput(record.unit_value_brl ?? defaultUnitValue),
     clv: numberToInput(record.clv),
     final_score: record.final_score ?? "",
