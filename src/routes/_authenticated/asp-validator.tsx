@@ -148,8 +148,22 @@ type ValidatorUploadRecord = {
 
 type EditableRecord = Pick<
   ValidatorForm,
-  "league" | "match_date" | "home_team" | "away_team" | "market" | "pick" | "line" | "offered_odd" | "source_probability" | "source_ev" | "user_context"
->;
+  | "sport"
+  | "source_platform"
+  | "league"
+  | "match_date"
+  | "home_team"
+  | "away_team"
+  | "market"
+  | "pick"
+  | "line"
+  | "offered_odd"
+  | "source_probability"
+  | "source_ev"
+  | "user_context"
+> & {
+  source_fair_odd: string;
+};
 
 type ResultForm = {
   result_status: string;
@@ -311,6 +325,7 @@ function AspValidatorPage() {
   const [dashboardFilters, setDashboardFilters] = useState<ValidatorDashboardFilters>(INITIAL_DASHBOARD_FILTERS);
   const [selectedRecord, setSelectedRecord] = useState<ValidatorRecord | null>(null);
   const [editingRecord, setEditingRecord] = useState<EditableRecord | null>(null);
+  const [ocrAppliedFields, setOcrAppliedFields] = useState<Partial<Record<keyof EditableRecord, boolean>>>({});
   const [resultForm, setResultForm] = useState<ResultForm | null>(null);
   const [editingUploadComments, setEditingUploadComments] = useState<Record<string, string>>({});
   const [ocrFilesByUpload, setOcrFilesByUpload] = useState<Record<string, File>>({});
@@ -403,6 +418,7 @@ function AspValidatorPage() {
   const openRecord = (record: ValidatorRecord) => {
     setSelectedRecord(record);
     setEditingRecord(recordToEditable(record));
+    setOcrAppliedFields({});
     setResultForm(recordToResultForm(record, cfg?.valor_unidade_padrao ?? 10));
     setEditingUploadComments(
       Object.fromEntries((uploadsByRecord[record.id] ?? []).map((upload) => [upload.id, upload.user_comment ?? ""])),
@@ -412,6 +428,52 @@ function AspValidatorPage() {
 
   const updateEdit = (field: keyof EditableRecord, value: string) => {
     setEditingRecord((prev) => (prev ? { ...prev, [field]: value } : prev));
+    setOcrAppliedFields((prev) => ({ ...prev, [field]: false }));
+  };
+
+  const applyOcrDataToEditingRecord = () => {
+    if (!selectedRecord || !editingRecord) return;
+    const patch = buildEditablePatchFromStructured(selectedRecord);
+    const entries = Object.entries(patch).filter((entry): entry is [keyof EditableRecord, string] => Boolean(entry[1]?.trim()));
+    if (!entries.length) {
+      toast.message("Nenhum dado OCR estruturado disponivel para aplicar ao formulario.");
+      return;
+    }
+
+    const next = { ...editingRecord };
+    const applied: Partial<Record<keyof EditableRecord, boolean>> = {};
+    const conflicts: Array<[keyof EditableRecord, string]> = [];
+
+    for (const [field, value] of entries) {
+      const current = String(next[field] ?? "").trim();
+      if (!current) {
+        next[field] = value as never;
+        applied[field] = true;
+      } else if (normalize(current) !== normalize(value)) {
+        conflicts.push([field, value]);
+      }
+    }
+
+    if (conflicts.length) {
+      const shouldOverwrite = window.confirm(
+        `O OCR encontrou ${conflicts.length} campo(s) diferente(s) do formulario. Deseja substituir esses campos pelos dados OCR?`,
+      );
+      if (shouldOverwrite) {
+        for (const [field, value] of conflicts) {
+          next[field] = value as never;
+          applied[field] = true;
+        }
+      }
+    }
+
+    if (!Object.keys(applied).length) {
+      toast.message("Dados OCR revisados; nenhum campo vazio foi alterado.");
+      return;
+    }
+
+    setEditingRecord(next);
+    setOcrAppliedFields((prev) => ({ ...prev, ...applied }));
+    toast.success("Dados OCR aplicados ao formulario. Revise e salve as alteracoes.");
   };
 
   const updateResultForm = (field: keyof ResultForm, value: string) => {
@@ -428,11 +490,14 @@ function AspValidatorPage() {
     try {
       const sourceProbability = normalizeProbability(parseNumber(editingRecord.source_probability));
       const offeredOdd = parseNumber(editingRecord.offered_odd);
-      const sourceEv = parseNumber(editingRecord.source_ev);
+      const sourceEv = normalizeSourceEv(parseNumber(editingRecord.source_ev), editingRecord.source_platform);
+      const sourceFairOdd = parseNumber(editingRecord.source_fair_odd);
       const validatorModel = inferValidatorModel(editingRecord.market, editingRecord.pick);
       const { error } = await validatorDb
         .from("asp_validator_registros")
         .update({
+          sport: editingRecord.sport,
+          source_platform: editingRecord.source_platform,
           league: editingRecord.league || null,
           match_date: editingRecord.match_date || null,
           home_team: editingRecord.home_team,
@@ -443,7 +508,7 @@ function AspValidatorPage() {
           offered_odd: offeredOdd,
           source_probability: sourceProbability,
           source_ev: sourceEv,
-          source_fair_odd: sourceProbability ? round(1 / (sourceProbability / 100), 2) : null,
+          source_fair_odd: sourceFairOdd ?? (sourceProbability ? round(1 / (sourceProbability / 100), 2) : null),
           validator_model: validatorModel,
           user_context: editingRecord.user_context || null,
           updated_at: new Date().toISOString(),
@@ -904,6 +969,8 @@ function AspValidatorPage() {
           if (!open) setSelectedRecord(null);
         }}
         onUpdateRecord={updateEdit}
+        ocrAppliedFields={ocrAppliedFields}
+        onApplyOcrToForm={applyOcrDataToEditingRecord}
         onUpdateResult={updateResultForm}
         onUpdateUploadComment={(uploadId, value) => setEditingUploadComments((prev) => ({ ...prev, [uploadId]: value }))}
         ocrFilesByUpload={ocrFilesByUpload}
@@ -1098,6 +1165,8 @@ function RecordDetailDialog({
   onUpdateRecord,
   onUpdateResult,
   onUpdateUploadComment,
+  ocrAppliedFields,
+  onApplyOcrToForm,
   onAttachOcrFile,
   onProcessUploadOcr,
   onProcessAllAvailableOcr,
@@ -1125,6 +1194,8 @@ function RecordDetailDialog({
   onUpdateRecord: (field: keyof EditableRecord, value: string) => void;
   onUpdateResult: (field: keyof ResultForm, value: string) => void;
   onUpdateUploadComment: (uploadId: string, value: string) => void;
+  ocrAppliedFields: Partial<Record<keyof EditableRecord, boolean>>;
+  onApplyOcrToForm: () => void;
   onAttachOcrFile: (uploadId: string, file: File | null) => void;
   onProcessUploadOcr: (upload: ValidatorUploadRecord) => Promise<boolean>;
   onProcessAllAvailableOcr: () => Promise<void>;
@@ -1155,22 +1226,47 @@ function RecordDetailDialog({
               {record.result_status ? <Badge variant="outline">Resultado: {record.result_status}</Badge> : <Badge variant="outline">Sem resultado registrado</Badge>}
             </div>
 
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button variant="outline" onClick={onApplyOcrToForm} disabled={!canEdit} className="gap-2">
+                <FileJson className="h-4 w-4" />
+                Aplicar dados OCR ao formulario
+              </Button>
+            </div>
+
             <div className="grid gap-4 md:grid-cols-2">
-              <TextField label="Liga" value={editingRecord.league} onChange={(value) => onUpdateRecord("league", value)} disabled={!canEdit} />
-              <TextField label="Data do jogo" type="date" value={editingRecord.match_date} onChange={(value) => onUpdateRecord("match_date", value)} disabled={!canEdit} />
-              <TextField label="Mandante" value={editingRecord.home_team} onChange={(value) => onUpdateRecord("home_team", value)} disabled={!canEdit} />
-              <TextField label="Visitante" value={editingRecord.away_team} onChange={(value) => onUpdateRecord("away_team", value)} disabled={!canEdit} />
-              <SelectField label="Mercado" value={editingRecord.market} options={MARKETS} onChange={(value) => onUpdateRecord("market", value)} disabled={!canEdit} />
-              <TextField label="Pick" value={editingRecord.pick} onChange={(value) => onUpdateRecord("pick", value)} disabled={!canEdit} />
-              <TextField label="Linha" value={editingRecord.line} onChange={(value) => onUpdateRecord("line", value)} disabled={!canEdit} />
-              <TextField label="Odd" value={editingRecord.offered_odd} onChange={(value) => onUpdateRecord("offered_odd", value)} disabled={!canEdit} />
+              <SelectField
+                label="Esporte"
+                value={editingRecord.sport}
+                options={SPORTS}
+                onChange={(value) => onUpdateRecord("sport", value)}
+                disabled={!canEdit}
+                hint={ocrAppliedFields.sport ? "preenchido via OCR" : undefined}
+              />
+              <SelectField
+                label="Plataforma de origem"
+                value={editingRecord.source_platform}
+                options={PLATFORMS}
+                onChange={(value) => onUpdateRecord("source_platform", value)}
+                disabled={!canEdit}
+                hint={ocrAppliedFields.source_platform ? "preenchido via OCR" : undefined}
+              />
+              <TextField label="Liga" value={editingRecord.league} onChange={(value) => onUpdateRecord("league", value)} disabled={!canEdit} hint={ocrAppliedFields.league ? "preenchido via OCR" : undefined} />
+              <TextField label="Data do jogo" type="date" value={editingRecord.match_date} onChange={(value) => onUpdateRecord("match_date", value)} disabled={!canEdit} hint={ocrAppliedFields.match_date ? "preenchido via OCR" : undefined} />
+              <TextField label="Mandante" value={editingRecord.home_team} onChange={(value) => onUpdateRecord("home_team", value)} disabled={!canEdit} hint={ocrAppliedFields.home_team ? "preenchido via OCR" : undefined} />
+              <TextField label="Visitante" value={editingRecord.away_team} onChange={(value) => onUpdateRecord("away_team", value)} disabled={!canEdit} hint={ocrAppliedFields.away_team ? "preenchido via OCR" : undefined} />
+              <SelectField label="Mercado" value={editingRecord.market} options={MARKETS} onChange={(value) => onUpdateRecord("market", value)} disabled={!canEdit} hint={ocrAppliedFields.market ? "preenchido via OCR" : undefined} />
+              <TextField label="Pick" value={editingRecord.pick} onChange={(value) => onUpdateRecord("pick", value)} disabled={!canEdit} hint={ocrAppliedFields.pick ? "preenchido via OCR" : undefined} />
+              <TextField label="Linha" value={editingRecord.line} onChange={(value) => onUpdateRecord("line", value)} disabled={!canEdit} hint={ocrAppliedFields.line ? "preenchido via OCR" : undefined} />
+              <TextField label="Odd" value={editingRecord.offered_odd} onChange={(value) => onUpdateRecord("offered_odd", value)} disabled={!canEdit} hint={ocrAppliedFields.offered_odd ? "preenchido via OCR" : undefined} />
               <TextField
                 label="Probabilidade original (%)"
                 value={editingRecord.source_probability}
                 onChange={(value) => onUpdateRecord("source_probability", value)}
                 disabled={!canEdit}
+                hint={ocrAppliedFields.source_probability ? "preenchido via OCR" : undefined}
               />
-              <TextField label="EV original (%)" value={editingRecord.source_ev} onChange={(value) => onUpdateRecord("source_ev", value)} disabled={!canEdit} />
+              <TextField label="Odd justa original" value={editingRecord.source_fair_odd} onChange={(value) => onUpdateRecord("source_fair_odd", value)} disabled={!canEdit} hint={ocrAppliedFields.source_fair_odd ? "preenchido via OCR" : undefined} />
+              <TextField label="EV original (%)" value={editingRecord.source_ev} onChange={(value) => onUpdateRecord("source_ev", value)} disabled={!canEdit} hint={ocrAppliedFields.source_ev ? "preenchido via OCR" : undefined} />
             </div>
 
             <div className="space-y-2">
@@ -1533,9 +1629,10 @@ function StructuredOcrPanel({ record, uploads }: { record: ValidatorRecord; uplo
 function ExtractedImageDataPanel({ structured }: { structured: StructuredValidatorJson }) {
   const market = structured.market ?? structured.prediction;
   const corners = structured.corners;
+  const preMatchAverage = structured.pre_match_odds?.length ? average(structured.pre_match_odds.map((item) => item.odd)) : null;
   return (
     <details className="rounded-md border border-border bg-background/50 p-3" open>
-      <summary className="cursor-pointer text-sm font-semibold">Dados extraidos das imagens</summary>
+      <summary className="cursor-pointer text-sm font-semibold">Dados extraidos por recorte</summary>
       <div className="mt-3 grid gap-3 md:grid-cols-4">
         <Info label="Mercado identificado" value={market?.name || structured.prediction?.market || "-"} />
         <Info label="Pick" value={market?.pick || structured.prediction?.pick || "-"} />
@@ -1543,31 +1640,125 @@ function ExtractedImageDataPanel({ structured }: { structured: StructuredValidat
         <Info label="Probabilidade" value={formatPercent(Number(market?.probability_original ?? structured.prediction?.source_probability ?? 0) || null)} />
         <Info label="Odd justa" value={formatOdd(Number(market?.fair_odd_original ?? structured.prediction?.source_fair_odd ?? 0) || null)} />
         <Info label="EV" value={formatPercent(Number(market?.ev_original ?? structured.prediction?.source_ev ?? 0) || null)} />
+        <Info label="Horario OCR" value={structured.match?.time || "-"} />
         <Info label="Qualidade" value={`${Math.round((structured.data_quality_score ?? 0) * 100)}%`} />
         <Info label="Campos extraidos" value={String(structured.structured_fields_count ?? 0)} />
       </div>
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         <div className="rounded-md border border-border p-3">
-          <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">{structured.match?.home_team || "Mandante"}</div>
+          <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Geral - {structured.match?.home_team || "Mandante"}</div>
           <div className="grid gap-2 md:grid-cols-2">
             <Info label="Corners marcados" value={formatNumber(corners?.home?.avg_for)} />
             <Info label="Corners sofridos" value={formatNumber(corners?.home?.avg_against)} />
             <Info label="Total medio" value={formatNumber(corners?.home?.avg_total)} />
-            <Info label="Race 5" value={formatPercent(corners?.home?.race_to_5_pct ?? null)} />
+            <Info label="Total cantos" value={formatNumber(corners?.home?.total_corners)} />
+            <Info label="Marcados total" value={formatNumber(corners?.home?.total_for)} />
+            <Info label="Sofridos total" value={formatNumber(corners?.home?.total_against)} />
           </div>
+          <LinePercentBadges title="Mais escanteios" values={corners?.home?.over_lines ?? {}} prefix="+" />
+          <LinePercentBadges title="Menos escanteios" values={corners?.home?.under_lines ?? {}} prefix="-" />
         </div>
         <div className="rounded-md border border-border p-3">
-          <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">{structured.match?.away_team || "Visitante"}</div>
+          <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Geral - {structured.match?.away_team || "Visitante"}</div>
           <div className="grid gap-2 md:grid-cols-2">
             <Info label="Corners marcados" value={formatNumber(corners?.away?.avg_for)} />
             <Info label="Corners sofridos" value={formatNumber(corners?.away?.avg_against)} />
             <Info label="Total medio" value={formatNumber(corners?.away?.avg_total)} />
+            <Info label="Total cantos" value={formatNumber(corners?.away?.total_corners)} />
+            <Info label="Marcados total" value={formatNumber(corners?.away?.total_for)} />
+            <Info label="Sofridos total" value={formatNumber(corners?.away?.total_against)} />
+          </div>
+          <LinePercentBadges title="Mais escanteios" values={corners?.away?.over_lines ?? {}} prefix="+" />
+          <LinePercentBadges title="Menos escanteios" values={corners?.away?.under_lines ?? {}} prefix="-" />
+        </div>
+      </div>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <div className="rounded-md border border-border p-3">
+          <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Casa/Fora - {structured.match?.home_team || "Mandante"}</div>
+          <div className="grid gap-2 md:grid-cols-3">
+            <Info label="Marcados" value={formatNumber(corners?.home?.home_away_avg_for)} />
+            <Info label="Sofridos" value={formatNumber(corners?.home?.home_away_avg_against)} />
+            <Info label="Total medio" value={formatNumber(corners?.home?.home_away_avg_total)} />
+          </div>
+          <LinePercentBadges title="Mais casa/fora" values={corners?.home?.home_away_over_lines ?? {}} prefix="+" />
+          <LinePercentBadges title="Menos casa/fora" values={corners?.home?.home_away_under_lines ?? {}} prefix="-" />
+        </div>
+        <div className="rounded-md border border-border p-3">
+          <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Casa/Fora - {structured.match?.away_team || "Visitante"}</div>
+          <div className="grid gap-2 md:grid-cols-3">
+            <Info label="Marcados" value={formatNumber(corners?.away?.home_away_avg_for)} />
+            <Info label="Sofridos" value={formatNumber(corners?.away?.home_away_avg_against)} />
+            <Info label="Total medio" value={formatNumber(corners?.away?.home_away_avg_total)} />
+          </div>
+          <LinePercentBadges title="Mais casa/fora" values={corners?.away?.home_away_over_lines ?? {}} prefix="+" />
+          <LinePercentBadges title="Menos casa/fora" values={corners?.away?.home_away_under_lines ?? {}} prefix="-" />
+        </div>
+      </div>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <div className="rounded-md border border-border p-3">
+          <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Race/primeiro - {structured.match?.home_team || "Mandante"}</div>
+          <div className="grid gap-2 md:grid-cols-3">
+            <Info label="Primeiro escanteio" value={formatPercent(corners?.home?.first_corner_pct ?? null)} />
+            <Info label="Race 3" value={formatPercent(corners?.home?.race_to_3_pct ?? null)} />
+            <Info label="Race 5" value={formatPercent(corners?.home?.race_to_5_pct ?? null)} />
+            <Info label="Race 7" value={formatPercent(corners?.home?.race_to_7_pct ?? null)} />
+            <Info label="Race 9" value={formatPercent(corners?.home?.race_to_9_pct ?? null)} />
+            <Info label="Mais escanteios 1x2" value={formatPercent(corners?.home?.most_corners_1x2_pct ?? null)} />
+          </div>
+        </div>
+        <div className="rounded-md border border-border p-3">
+          <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Race/primeiro - {structured.match?.away_team || "Visitante"}</div>
+          <div className="grid gap-2 md:grid-cols-3">
+            <Info label="Primeiro escanteio" value={formatPercent(corners?.away?.first_corner_pct ?? null)} />
+            <Info label="Race 3" value={formatPercent(corners?.away?.race_to_3_pct ?? null)} />
             <Info label="Race 5" value={formatPercent(corners?.away?.race_to_5_pct ?? null)} />
+            <Info label="Race 7" value={formatPercent(corners?.away?.race_to_7_pct ?? null)} />
+            <Info label="Race 9" value={formatPercent(corners?.away?.race_to_9_pct ?? null)} />
+            <Info label="Mais escanteios 1x2" value={formatPercent(corners?.away?.most_corners_1x2_pct ?? null)} />
+          </div>
+        </div>
+      </div>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <div className="rounded-md border border-border p-3">
+          <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Odds pre-jogo</div>
+          <div className="grid gap-2 md:grid-cols-2">
+            {(structured.pre_match_odds ?? []).map((item) => (
+              <Info key={item.bookmaker} label={item.bookmaker} value={formatOdd(item.odd)} />
+            ))}
+            <Info label="Media" value={formatOdd(preMatchAverage)} />
+          </div>
+        </div>
+        <div className="rounded-md border border-border p-3">
+          <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Recomendacao PackBall</div>
+          <div className="grid gap-2 md:grid-cols-2">
+            <Info label="Mercado" value={structured.packball_recommendation?.market || "-"} />
+            <Info label="Pick" value={structured.packball_recommendation?.pick || "-"} />
+            <Info label="Odd ofertada" value={formatOdd(structured.packball_recommendation?.offered_odd ?? null)} />
+            <Info label="Chance" value={formatPercent(structured.packball_recommendation?.probability_original ?? null)} />
+            <Info label="Odd justa" value={formatOdd(structured.packball_recommendation?.fair_odd_original ?? null)} />
+            <Info label="EV" value={formatPercent(structured.packball_recommendation?.ev_original ?? null)} />
           </div>
         </div>
       </div>
       {structured.missing_critical_fields?.length ? <SignalBlock title="Campos criticos ausentes" items={structured.missing_critical_fields} tone="warn" /> : null}
     </details>
+  );
+}
+
+function LinePercentBadges({ title, values, prefix }: { title: string; values: Record<string, number>; prefix: string }) {
+  const entries = Object.entries(values).sort(([a], [b]) => Number(a) - Number(b));
+  if (!entries.length) return null;
+  return (
+    <div className="mt-3 rounded-md border border-border bg-muted/10 p-2">
+      <div className="mb-2 text-[10px] uppercase tracking-wide text-muted-foreground">{title}</div>
+      <div className="flex flex-wrap gap-2">
+        {entries.map(([line, pct]) => (
+          <Badge key={`${prefix}${line}`} variant="outline">
+            {prefix}{line}: {formatPercent(pct)}
+          </Badge>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -1954,6 +2145,7 @@ function TextField({
   placeholder,
   type = "text",
   disabled = false,
+  hint,
 }: {
   label: string;
   value: string;
@@ -1961,10 +2153,14 @@ function TextField({
   placeholder?: string;
   type?: string;
   disabled?: boolean;
+  hint?: string;
 }) {
   return (
     <div className="space-y-2">
-      <Label>{label}</Label>
+      <div className="flex items-center justify-between gap-2">
+        <Label>{label}</Label>
+        {hint ? <span className="text-[10px] uppercase tracking-wide text-emerald-300">{hint}</span> : null}
+      </div>
       <Input type={type} value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
     </div>
   );
@@ -1977,6 +2173,7 @@ function SelectField({
   onChange,
   placeholder,
   disabled = false,
+  hint,
 }: {
   label: string;
   value: string;
@@ -1984,10 +2181,14 @@ function SelectField({
   onChange: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  hint?: string;
 }) {
   return (
     <div className="space-y-2">
-      <Label>{label}</Label>
+      <div className="flex items-center justify-between gap-2">
+        <Label>{label}</Label>
+        {hint ? <span className="text-[10px] uppercase tracking-wide text-emerald-300">{hint}</span> : null}
+      </div>
       <Select value={value} onValueChange={onChange} disabled={disabled}>
         <SelectTrigger>
           <SelectValue placeholder={placeholder} />
@@ -2381,7 +2582,8 @@ function buildRecordValidationContext(record: ValidatorRecord, uploads: Validato
       used_simulation: hasJsonContent(record.simulation_json),
       used_upload_comments: uploads.some((upload) => upload.user_comment?.trim()),
       used_online_search: hasJsonContent(record.online_context_json),
-      has_structured_ocr_data: Boolean((record.structured_json as { has_structured_ocr_data?: unknown } | null)?.has_structured_ocr_data),
+      has_structured_ocr_data: Boolean((record.structured_json as { has_structured_ocr_data?: unknown } | null)?.has_structured_ocr_data) || Number(record.ocr_structured_fields_count ?? 0) > 0,
+      structured_fields_count: record.ocr_structured_fields_count ?? countStructuredFields(record.structured_json),
     },
   };
 }
@@ -2595,53 +2797,71 @@ async function saveValidation(form: ValidatorForm, result: ValidationResult, upl
     };
     const { data, error } = await validatorDb.from("asp_validator_registros").insert(insertPayload).select("id").single();
     if (error) throw error;
+    const uploadWarnings: string[] = [];
     if (uploads.length && data?.id) {
       const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError) throw userError;
       const userId = userData.user?.id;
-      if (!userId) throw new Error("Usuario autenticado nao encontrado para salvar uploads.");
+      if (userError || !userId) {
+        uploadWarnings.push("Uploads nao foram salvos porque o usuario autenticado nao foi identificado.");
+      } else {
+        const uploadPayloads = [];
+        for (const upload of uploads) {
+          const uploadId = crypto.randomUUID();
+          const filePath = buildStoragePath(userId, data.id, uploadId, upload.file.name);
+          let savedPath: string | null = filePath;
+          let ocrStatus = "pending";
+          let ocrError: string | null = null;
 
-      const uploadPayloads = [];
-      for (const upload of uploads) {
-        const uploadId = crypto.randomUUID();
-        const filePath = buildStoragePath(userId, data.id, uploadId, upload.file.name);
-        const { error: storageError } = await supabase.storage
-          .from(ASP_VALIDATOR_UPLOAD_BUCKET)
-          .upload(filePath, upload.file, {
-            cacheControl: "3600",
-            contentType: upload.file.type || "application/octet-stream",
-            upsert: false,
+          try {
+            const { error: storageError } = await supabase.storage
+              .from(ASP_VALIDATOR_UPLOAD_BUCKET)
+              .upload(filePath, upload.file, {
+                cacheControl: "3600",
+                contentType: upload.file.type || "application/octet-stream",
+                upsert: false,
+              });
+            if (storageError) throw storageError;
+          } catch (storageError) {
+            savedPath = null;
+            ocrStatus = "failed";
+            ocrError = buildStorageTechnicalMessage(storageError, filePath);
+            uploadWarnings.push(ocrError);
+          }
+
+          uploadPayloads.push({
+            id: uploadId,
+            validator_id: data.id,
+            user_id: userId,
+            file_name: upload.file.name,
+            file_path: savedPath,
+            storage_bucket: ASP_VALIDATOR_UPLOAD_BUCKET,
+            file_type: upload.file.type || null,
+            mime_type: upload.file.type || null,
+            file_size: upload.file.size,
+            upload_source: upload.upload_source,
+            upload_category: upload.upload_category,
+            user_comment: upload.user_comment || null,
+            upload_order: upload.upload_order,
+            ocr_status: ocrStatus,
+            ocr_text: null,
+            ocr_error: ocrError,
+            ocr_structured_data: {},
+            ocr_data_quality_score: null,
+            ocr_structured_fields_count: 0,
+            structured_json: {},
+            structured_status: "pending",
+            structured_error: null,
           });
-        if (storageError) throw storageError;
-        uploadPayloads.push({
-          id: uploadId,
-          validator_id: data.id,
-          user_id: userId,
-          file_name: upload.file.name,
-          file_path: filePath,
-          storage_bucket: ASP_VALIDATOR_UPLOAD_BUCKET,
-          file_type: upload.file.type || null,
-          mime_type: upload.file.type || null,
-          file_size: upload.file.size,
-          upload_source: upload.upload_source,
-          upload_category: upload.upload_category,
-          user_comment: upload.user_comment || null,
-          upload_order: upload.upload_order,
-          ocr_status: "pending",
-          ocr_text: null,
-          ocr_error: null,
-          ocr_structured_data: {},
-          ocr_data_quality_score: null,
-          ocr_structured_fields_count: 0,
-          structured_json: {},
-          structured_status: "pending",
-          structured_error: null,
-        });
+        }
+        const { error: uploadError } = await validatorDb.from("asp_validator_uploads").insert(uploadPayloads);
+        if (uploadError) uploadWarnings.push(`Registro salvo, mas falhou ao vincular uploads: ${uploadError.message}`);
       }
-      const { error: uploadError } = await validatorDb.from("asp_validator_uploads").insert(uploadPayloads);
-      if (uploadError) throw uploadError;
     }
-    toast.success(uploads.length ? "Validacao e arquivos salvos para OCR." : "Validacao salva no ASP Validator.");
+    if (uploadWarnings.length) {
+      toast.warning(`Validacao salva no historico. ${uploadWarnings[0]}`);
+    } else {
+      toast.success(uploads.length ? "Validacao e arquivos salvos para OCR." : "Validacao salva no ASP Validator.");
+    }
     return true;
   } catch (error) {
     toast.error(error instanceof Error ? error.message : "Nao foi possivel salvar a validacao.");
@@ -2663,6 +2883,14 @@ function uploadMetadata(upload: ValidatorUploadDraft) {
     upload_order: upload.upload_order,
     ocr_status: "pending",
   };
+}
+
+function buildStorageTechnicalMessage(error: unknown, filePath: string): string {
+  const rawMessage = error instanceof Error ? error.message : typeof error === "object" && error && "message" in error ? String((error as { message?: unknown }).message) : String(error || "erro desconhecido");
+  const bucketHint = rawMessage.toLowerCase().includes("bucket") || rawMessage.toLowerCase().includes("not found")
+    ? "Bucket possivelmente ausente. Aplique a migration que cria asp-validator-uploads e suas policies."
+    : "Falha de Storage ao salvar arquivo.";
+  return `${bucketHint} bucket=${ASP_VALIDATOR_UPLOAD_BUCKET} file_path=${filePath}. Detalhe: ${rawMessage}`;
 }
 
 type StructuredUpload = {
@@ -2688,6 +2916,7 @@ type StructuredValidatorJson = {
     competition: string;
     round: string;
     date: string;
+    time: string;
     home_team: string;
     away_team: string;
   };
@@ -2704,6 +2933,15 @@ type StructuredValidatorJson = {
   corners: {
     home: CornerSideStats;
     away: CornerSideStats;
+  };
+  pre_match_odds: Array<{ bookmaker: string; odd: number }>;
+  packball_recommendation: {
+    market: string;
+    pick: string;
+    offered_odd: number | null;
+    probability_original: number | null;
+    fair_odd_original: number | null;
+    ev_original: number | null;
   };
   goals: Record<string, unknown>;
   raw_ocr_text: string;
@@ -2758,6 +2996,12 @@ type CornerSideStats = {
   avg_for: number | null;
   avg_against: number | null;
   avg_total: number | null;
+  total_corners: number | null;
+  total_for: number | null;
+  total_against: number | null;
+  home_away_avg_for: number | null;
+  home_away_avg_against: number | null;
+  home_away_avg_total: number | null;
   first_corner_pct: number | null;
   race_to_3_pct: number | null;
   race_to_5_pct: number | null;
@@ -2765,6 +3009,9 @@ type CornerSideStats = {
   race_to_9_pct: number | null;
   most_corners_1x2_pct: number | null;
   over_lines: Record<string, number>;
+  under_lines: Record<string, number>;
+  home_away_over_lines: Record<string, number>;
+  home_away_under_lines: Record<string, number>;
 };
 
 type OcrIntelligenceData = {
@@ -2778,6 +3025,7 @@ type OcrIntelligenceData = {
     competition: string;
     round: string;
     date: string;
+    time: string;
     home_team: string;
     away_team: string;
   };
@@ -2794,6 +3042,15 @@ type OcrIntelligenceData = {
   corners: {
     home: CornerSideStats;
     away: CornerSideStats;
+  };
+  pre_match_odds: Array<{ bookmaker: string; odd: number }>;
+  packball_recommendation: {
+    market: string;
+    pick: string;
+    offered_odd: number | null;
+    probability_original: number | null;
+    fair_odd_original: number | null;
+    ev_original: number | null;
   };
   goals: Record<string, unknown>;
   raw_ocr_text: string;
@@ -2848,6 +3105,8 @@ function buildStructuredOcrJson(record: ValidatorRecord, uploads: ValidatorUploa
     match: intelligence.match,
     market: intelligence.market,
     corners: intelligence.corners,
+    pre_match_odds: intelligence.pre_match_odds,
+    packball_recommendation: intelligence.packball_recommendation,
     goals: intelligence.goals,
     raw_ocr_text: combinedText,
     fixture: {
@@ -2930,11 +3189,22 @@ function buildOcrIntelligence(
   };
   const market = extractMarketFromOcr(record, normalizedText, mergedSignals, match);
   const corners = extractCornerStats(normalizedText, match.home_team || record.home_team, match.away_team || record.away_team);
+  const preMatchOdds = extractPreMatchOdds(normalizedText);
+  const packballRecommendation = {
+    market: market.name,
+    pick: market.pick,
+    offered_odd: market.offered_odd,
+    probability_original: market.probability_original,
+    fair_odd_original: market.fair_odd_original,
+    ev_original: market.ev_original,
+  };
   const goals = extractGoalStats(normalizedText);
   const structuredFieldsCount = countStructuredFields({
     match,
     market,
     corners,
+    pre_match_odds: preMatchOdds,
+    packball_recommendation: packballRecommendation,
     goals,
     extracted_numbers: extractPercentagesAndNumbers(combinedText),
   });
@@ -2943,7 +3213,7 @@ function buildOcrIntelligence(
   const hasStructuredOcrData =
     structuredFieldsCount >= 4 ||
     Boolean(market.offered_odd || market.probability_original || market.ev_original || market.fair_odd_original) ||
-    Boolean(corners.home.avg_for || corners.away.avg_for || corners.home.race_to_5_pct || corners.away.race_to_5_pct);
+    Boolean(corners.home.avg_for || corners.away.avg_for || corners.home.avg_against || corners.away.avg_against || corners.home.race_to_5_pct || corners.away.race_to_5_pct || Object.keys(corners.home.over_lines).length || Object.keys(corners.away.over_lines).length);
   const dataQualityScore = calculateOcrDataQualityScore(structuredFieldsCount, missingCriticalFields.length, textVolume, hasStructuredOcrData);
 
   return {
@@ -2955,6 +3225,8 @@ function buildOcrIntelligence(
     match,
     market,
     corners,
+    pre_match_odds: preMatchOdds,
+    packball_recommendation: packballRecommendation,
     goals,
     raw_ocr_text: combinedText,
     notes: [
@@ -2969,8 +3241,7 @@ function buildOcrIntelligence(
 function extractRobustPredictionSignals(text: string): ReturnType<typeof extractPredictionSignals> {
   const odd =
     matchNumber(text, /\b(?:odd|odds|cotacao|cotacao)\s*(?:ofertada|oferecida|oferecidas)?\s*[:=]?\s*(\d+(?:\.\d+)?)/i) ??
-    matchNumber(text, /\(odds?\s*oferecid[ao]s?\)\s*=?\s*(\d+(?:\.\d+)?)/i) ??
-    matchNumber(text, /\bavg\s*[:=]?\s*(\d+(?:\.\d+)?)/i);
+    matchNumber(text, /\(odds?\s*oferecid[ao]s?\)\s*=?\s*(\d+(?:\.\d+)?)/i);
   const probability =
     matchNumber(text, /\b(?:probabilidade|prob\.?|probability|chance)\s*(?:\(\s*%\s*\))?\s*[:=]?\s*(\d+(?:\.\d+)?)\s*%?/i) ??
     matchNumber(text, /\b(\d+(?:\.\d+)?)\s*%\b[^\n]{0,70}(?:chance|previs|recomend|best)/i);
@@ -2991,6 +3262,7 @@ function extractRobustPredictionSignals(text: string): ReturnType<typeof extract
 function extractMatchFromOcr(record: ValidatorRecord, text: string): OcrIntelligenceData["match"] {
   const competitionMatch =
     text.match(/(?:World|Mundo|Competicao|Competição|Liga)\s*[:\-]\s*([^\n\r]+?)(?:\s*-\s*Rodada\s*[:\-]?\s*([^\n\r]+))?(?:\n|$)/i) ??
+    text.match(/\b(Brazil\s*:\s*Serie\s*B)\s*-\s*(Rodada\s*\d+)/i) ??
     text.match(/\b([A-Z][A-Za-z\s]+(?:Cup|League|Liga|Division|Championship))[^\n\r]*/);
   const fixtureMatch = text.match(/([A-Za-zÀ-ÿ .'-]{2,40})\s+(?:vs|x)\s+([A-Za-zÀ-ÿ .'-]{2,40})/i);
   const dateMatch = text.match(/(\d{2}\/\d{2}\/\d{4})(?:\s+(\d{1,2}:\d{2}))?/);
@@ -2999,6 +3271,7 @@ function extractMatchFromOcr(record: ValidatorRecord, text: string): OcrIntellig
     competition: record.league || cleanOcrValue(competitionMatch?.[1] ?? ""),
     round: cleanOcrValue(competitionMatch?.[2] ?? ""),
     date: record.match_date || cleanOcrValue(dateMatch ? `${dateMatch[1]}${dateMatch[2] ? ` ${dateMatch[2]}` : ""}` : ""),
+    time: cleanOcrValue(dateMatch?.[2] ?? ""),
     home_team: record.home_team || cleanOcrValue(fixtureMatch?.[1] ?? ""),
     away_team: record.away_team || cleanOcrValue(fixtureMatch?.[2] ?? ""),
   };
@@ -3014,16 +3287,29 @@ function extractMarketFromOcr(
   const raceMatch = text.match(/(?:fora|visitante|away|casa|mandante|home)?\s*(?:cobrar|chegar|marcar)?\s*(\d+)\s*(?:escanteios|cantos|corners?)\s*(?:primeiro|first)/i);
   const raceLine = raceMatch?.[1] ?? text.match(/(\d+)\s*primeiro/i)?.[1] ?? null;
   const isCornerRace = Boolean(raceLine) || normalized.includes("corrida de escanteios") || normalized.includes("race to");
+  const totalCornerMatch =
+    text.match(/\b(?:mais\s+de|over)\s*(\d+(?:\.\d+)?)\s*(?:escanteios|cantos|corners?)/i) ??
+    text.match(/\b(?:menos\s+de|under)\s*(\d+(?:\.\d+)?)\s*(?:escanteios|cantos|corners?)/i);
+  const totalCornerLine = totalCornerMatch?.[1] ?? null;
+  const isCornerTotal = Boolean(totalCornerLine) && !isCornerRace;
   const selectionTeam =
     inferSelectionTeam(record.pick, match, text) ||
     (/\bfora\b|\bvisitante\b|\baway\b/i.test(text) ? match.away_team : "") ||
     (/\bcasa\b|\bmandante\b|\bhome\b/i.test(text) ? match.home_team : "");
-  const marketName = record.market || (isCornerRace ? `Race to ${raceLine ?? ""} Corners`.trim() : inferMarketNameFromText(text));
-  const pick = record.pick || (isCornerRace ? `${selectionTeam || "Visitante"} cobrar ${raceLine ?? ""} escanteios primeiro`.trim() : "");
+  const manualMarketIsGeneric = !record.market || ["escanteios", "outro"].includes(normalize(record.market));
+  const detectedTotalName = totalCornerLine ? `${normalized.includes("under") || normalized.includes("menos de") ? "Menos de" : "Mais de"} ${totalCornerLine} escanteios` : "";
+  const marketName = manualMarketIsGeneric
+    ? isCornerTotal
+      ? detectedTotalName
+      : isCornerRace
+        ? `Race to ${raceLine ?? ""} Corners`.trim()
+        : inferMarketNameFromText(text)
+    : record.market;
+  const pick = record.pick || (isCornerTotal ? `${normalized.includes("under") || normalized.includes("menos de") ? "Under" : "Over"} ${totalCornerLine} escanteios` : isCornerRace ? `${selectionTeam || "Visitante"} cobrar ${raceLine ?? ""} escanteios primeiro`.trim() : "");
 
   return {
     name: marketName,
-    line: record.line || inferred.line || raceLine || null,
+    line: record.line || inferred.line || totalCornerLine || raceLine || null,
     pick,
     selection_team: selectionTeam,
     offered_odd: record.offered_odd ?? inferred.offered_odd ?? null,
@@ -3045,31 +3331,55 @@ function extractCornerStats(text: string, homeTeam: string, awayTeam: string): O
   const race9 = twoSidedPercent(text, /9\s*primeiro/i);
   const mostCorners = twoSidedPercent(text, /mais\s+escanteios|1x2/i);
   const overLines = extractCornerOverLines(text);
+  const totalCorners = metricPairNumbers(text, /total\s+(?:cantos|corners|escanteios)/i);
+  const totalFor = metricPairNumbers(text, /marcados\s+total|total\s+marcados/i);
+  const totalAgainst = metricPairNumbers(text, /sofridos\s+total|total\s+sofridos/i);
+  const homeBlockStats = extractCornerSideStatsFromBlock(extractTeamTextBlock(text, homeTeam, awayTeam));
+  const awayBlockStats = extractCornerSideStatsFromBlock(extractTeamTextBlock(text, awayTeam, homeTeam));
+  const homeAwaySplit = extractHomeAwayCornerSplit(text, homeTeam, awayTeam);
 
   return {
     home: {
-      avg_for: numberAt(avgFor, 0) ?? numberNearTeam(text, homeTeam, /marcados/i),
-      avg_against: numberAt(avgAgainst, 0) ?? numberNearTeam(text, homeTeam, /sofridos/i),
-      avg_total: numberAt(avgTotalPair, 0),
-      first_corner_pct: first.home,
-      race_to_3_pct: race3.home,
-      race_to_5_pct: race5.home,
-      race_to_7_pct: race7.home,
-      race_to_9_pct: race9.home,
-      most_corners_1x2_pct: mostCorners.home,
-      over_lines: overLines.home,
+      avg_for: homeBlockStats.avg_for ?? numberAt(avgFor, 0) ?? numberNearTeam(text, homeTeam, /marcados/i),
+      avg_against: homeBlockStats.avg_against ?? numberAt(avgAgainst, 0) ?? numberNearTeam(text, homeTeam, /sofridos/i),
+      avg_total: homeBlockStats.avg_total ?? numberAt(avgTotalPair, 0),
+      total_corners: homeBlockStats.total_corners ?? numberAt(totalCorners, 0),
+      total_for: homeBlockStats.total_for ?? numberAt(totalFor, 0),
+      total_against: homeBlockStats.total_against ?? numberAt(totalAgainst, 0),
+      home_away_avg_for: homeAwaySplit.home.avg_for,
+      home_away_avg_against: homeAwaySplit.home.avg_against,
+      home_away_avg_total: homeAwaySplit.home.avg_total,
+      first_corner_pct: homeBlockStats.first_corner_pct ?? first.home,
+      race_to_3_pct: homeBlockStats.race_to_3_pct ?? race3.home,
+      race_to_5_pct: homeBlockStats.race_to_5_pct ?? race5.home,
+      race_to_7_pct: homeBlockStats.race_to_7_pct ?? race7.home,
+      race_to_9_pct: homeBlockStats.race_to_9_pct ?? race9.home,
+      most_corners_1x2_pct: homeBlockStats.most_corners_1x2_pct ?? mostCorners.home,
+      over_lines: { ...overLines.home, ...homeBlockStats.over_lines },
+      under_lines: { ...overLines.home_under, ...homeBlockStats.under_lines },
+      home_away_over_lines: homeAwaySplit.home.over_lines,
+      home_away_under_lines: homeAwaySplit.home.under_lines,
     },
     away: {
-      avg_for: numberAt(avgFor, 1) ?? numberNearTeam(text, awayTeam, /marcados/i),
-      avg_against: numberAt(avgAgainst, 1) ?? numberNearTeam(text, awayTeam, /sofridos/i),
-      avg_total: numberAt(avgTotalPair, 1),
-      first_corner_pct: first.away,
-      race_to_3_pct: race3.away,
-      race_to_5_pct: race5.away,
-      race_to_7_pct: race7.away,
-      race_to_9_pct: race9.away,
-      most_corners_1x2_pct: mostCorners.away,
-      over_lines: overLines.away,
+      avg_for: awayBlockStats.avg_for ?? numberAt(avgFor, 1) ?? numberNearTeam(text, awayTeam, /marcados/i),
+      avg_against: awayBlockStats.avg_against ?? numberAt(avgAgainst, 1) ?? numberNearTeam(text, awayTeam, /sofridos/i),
+      avg_total: awayBlockStats.avg_total ?? numberAt(avgTotalPair, 1),
+      total_corners: awayBlockStats.total_corners ?? numberAt(totalCorners, 1),
+      total_for: awayBlockStats.total_for ?? numberAt(totalFor, 1),
+      total_against: awayBlockStats.total_against ?? numberAt(totalAgainst, 1),
+      home_away_avg_for: homeAwaySplit.away.avg_for,
+      home_away_avg_against: homeAwaySplit.away.avg_against,
+      home_away_avg_total: homeAwaySplit.away.avg_total,
+      first_corner_pct: awayBlockStats.first_corner_pct ?? first.away,
+      race_to_3_pct: awayBlockStats.race_to_3_pct ?? race3.away,
+      race_to_5_pct: awayBlockStats.race_to_5_pct ?? race5.away,
+      race_to_7_pct: awayBlockStats.race_to_7_pct ?? race7.away,
+      race_to_9_pct: awayBlockStats.race_to_9_pct ?? race9.away,
+      most_corners_1x2_pct: awayBlockStats.most_corners_1x2_pct ?? mostCorners.away,
+      over_lines: { ...overLines.away, ...awayBlockStats.over_lines },
+      under_lines: { ...overLines.away_under, ...awayBlockStats.under_lines },
+      home_away_over_lines: homeAwaySplit.away.over_lines,
+      home_away_under_lines: homeAwaySplit.away.under_lines,
     },
   };
 }
@@ -3136,23 +3446,142 @@ function labelNumbers(text: string, label: RegExp): number[] {
     .slice(0, 8);
 }
 
-function extractCornerOverLines(text: string): { home: Record<string, number>; away: Record<string, number> } {
+function extractCornerOverLines(text: string): { home: Record<string, number>; away: Record<string, number>; home_under: Record<string, number>; away_under: Record<string, number> } {
   const home: Record<string, number> = {};
   const away: Record<string, number> = {};
+  const homeUnder: Record<string, number> = {};
+  const awayUnder: Record<string, number> = {};
   for (const line of text.replace(/,/g, ".").split(/\r?\n/)) {
     const lineMatch = line.match(/([+-]?\d+(?:\.\d+)?)/);
     const pctMatches = [...line.matchAll(/(\d+(?:\.\d+)?)\s*%/g)].map((match) => Number(match[1]));
     if (!lineMatch || pctMatches.length < 1 || !/(over|under|mais\/menos|\+\d|-?\d)/i.test(line)) continue;
-    const key = lineMatch[1];
-    if (pctMatches[0] !== undefined) home[key] = pctMatches[0];
-    if (pctMatches[1] !== undefined) away[key] = pctMatches[1];
+    const key = lineMatch[1].replace(/^[+-]/, "");
+    const isUnder = /under|menos|-\d/i.test(line);
+    const targetHome = isUnder ? homeUnder : home;
+    const targetAway = isUnder ? awayUnder : away;
+    if (pctMatches[0] !== undefined) targetHome[key] = pctMatches[0];
+    if (pctMatches[1] !== undefined) targetAway[key] = pctMatches[1];
   }
-  return { home, away };
+  return { home, away, home_under: homeUnder, away_under: awayUnder };
 }
 
-function numberAt(values: number[], index: number): number | null {
-  const value = values[index];
+function extractTeamTextBlock(text: string, team: string, otherTeam: string): string {
+  if (!team) return "";
+  const lines = text.split(/\r?\n/);
+  const teamKey = normalize(team);
+  const otherKey = normalize(otherTeam || "");
+  const start = lines.findIndex((line) => normalize(line).includes(teamKey));
+  if (start < 0) return "";
+  const block: string[] = [];
+  for (let index = start; index < lines.length; index += 1) {
+    const line = lines[index];
+    const normalizedLine = normalize(line);
+    if (index > start && otherKey && normalizedLine.includes(otherKey)) break;
+    if (index > start + 2 && /^\s*$/.test(line)) break;
+    block.push(line);
+  }
+  return block.join("\n");
+}
+
+function extractCornerSideStatsFromBlock(block: string): Pick<
+  CornerSideStats,
+  | "avg_for"
+  | "avg_against"
+  | "avg_total"
+  | "total_corners"
+  | "total_for"
+  | "total_against"
+  | "first_corner_pct"
+  | "race_to_3_pct"
+  | "race_to_5_pct"
+  | "race_to_7_pct"
+  | "race_to_9_pct"
+  | "most_corners_1x2_pct"
+  | "over_lines"
+  | "under_lines"
+> {
+  return {
+    avg_for: labeledNumber(block, /(?:corners?|cantos?|escanteios)?\s*marcados/i),
+    avg_against: labeledNumber(block, /(?:corners?|cantos?|escanteios)?\s*sofridos/i),
+    avg_total: labeledNumber(block, /total\s+medio|total\s+medio|media\s+total|marcados\s*\+\s*sofridos/i),
+    total_corners: labeledNumber(block, /total\s+(?:cantos|corners|escanteios)/i),
+    total_for: labeledNumber(block, /marcados\s+total|total\s+marcados/i),
+    total_against: labeledNumber(block, /sofridos\s+total|total\s+sofridos/i),
+    first_corner_pct: labeledPercent(block, /primeiro\s+(?:escanteio|canto)|primeiro\s+do\s+jogo/i),
+    race_to_3_pct: labeledPercent(block, /race\s*3|3\s*primeiro/i),
+    race_to_5_pct: labeledPercent(block, /race\s*5|5\s*primeiro/i),
+    race_to_7_pct: labeledPercent(block, /race\s*7|7\s*primeiro/i),
+    race_to_9_pct: labeledPercent(block, /race\s*9|9\s*primeiro/i),
+    most_corners_1x2_pct: labeledPercent(block, /mais\s+escanteios\s*1x2|mais\s+escanteios/i),
+    over_lines: extractSingleSideLinePercents(block, "over"),
+    under_lines: extractSingleSideLinePercents(block, "under"),
+  };
+}
+
+function extractHomeAwayCornerSplit(
+  text: string,
+  homeTeam: string,
+  awayTeam: string,
+): { home: Pick<CornerSideStats, "avg_for" | "avg_against" | "avg_total" | "over_lines" | "under_lines">; away: Pick<CornerSideStats, "avg_for" | "avg_against" | "avg_total" | "over_lines" | "under_lines"> } {
+  const lower = normalize(text);
+  const markerIndex = Math.max(lower.indexOf("casa/fora"), lower.indexOf("home/away"));
+  if (markerIndex < 0) {
+    return {
+      home: { avg_for: null, avg_against: null, avg_total: null, over_lines: {}, under_lines: {} },
+      away: { avg_for: null, avg_against: null, avg_total: null, over_lines: {}, under_lines: {} },
+    };
+  }
+  const slice = text.slice(markerIndex);
+  return {
+    home: extractCornerSideStatsFromBlock(extractTeamTextBlock(slice, homeTeam, awayTeam)),
+    away: extractCornerSideStatsFromBlock(extractTeamTextBlock(slice, awayTeam, homeTeam)),
+  };
+}
+
+function labeledNumber(text: string, label: RegExp): number | null {
+  const line = text.split(/\r?\n/).find((item) => label.test(item));
+  if (!line) return null;
+  const values = [...line.replace(/,/g, ".").matchAll(/-?\d+(?:\.\d+)?/g)].map((match) => Number(match[0])).filter(Number.isFinite);
+  return values.find((value) => value >= 0 && value <= 200) ?? null;
+}
+
+function labeledPercent(text: string, label: RegExp): number | null {
+  const line = text.split(/\r?\n/).find((item) => label.test(item));
+  if (!line) return null;
+  const match = line.replace(/,/g, ".").match(/(-?\d+(?:\.\d+)?)\s*%/);
+  if (!match?.[1]) return null;
+  const value = Number(match[1]);
   return Number.isFinite(value) ? value : null;
+}
+
+function extractSingleSideLinePercents(text: string, side: "over" | "under"): Record<string, number> {
+  const values: Record<string, number> = {};
+  for (const line of text.replace(/,/g, ".").split(/\r?\n/)) {
+    const isOver = /\+\s*\d|over|mais/i.test(line);
+    const isUnder = /-\s*\d|under|menos/i.test(line);
+    if (side === "over" ? !isOver : !isUnder) continue;
+    const lineMatch = line.match(/[+-]?\s*(\d+(?:\.\d+)?)/);
+    const pctMatch = line.match(/(\d+(?:\.\d+)?)\s*%/);
+    if (!lineMatch?.[1] || !pctMatch?.[1]) continue;
+    values[lineMatch[1]] = Number(pctMatch[1]);
+  }
+  return values;
+}
+
+function extractPreMatchOdds(text: string): Array<{ bookmaker: string; odd: number }> {
+  const bookmakers = ["Pinnacle", "1xbet", "Unibet"];
+  return bookmakers
+    .map((bookmaker) => {
+      const match = text.replace(/,/g, ".").match(new RegExp(`${bookmaker}\\s*[:=\\-]?\\s*(\\d+(?:\\.\\d+)?)`, "i"));
+      const odd = match?.[1] ? Number(match[1]) : null;
+      return odd && Number.isFinite(odd) ? { bookmaker, odd } : null;
+    })
+    .filter((item): item is { bookmaker: string; odd: number } => Boolean(item));
+}
+
+function numberAt(values: number[] | null, index: number): number | null {
+  const value = values?.[index];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function numberNearTeam(text: string, team: string, label: RegExp): number | null {
@@ -3186,7 +3615,9 @@ function buildOcrCriticalMissingFields(
   if (!market.offered_odd) missing.push("odd ofertada");
   if (!market.probability_original) missing.push("probabilidade original");
   if (normalize(`${market.name} ${market.pick}`).includes("escanteio") || normalize(`${market.name} ${market.pick}`).includes("corner")) {
-    if (!corners.home.race_to_5_pct && !corners.away.race_to_5_pct) missing.push("race_to_5 corners");
+    const isTotal = normalize(`${market.name} ${market.pick}`).includes("over") || normalize(`${market.name} ${market.pick}`).includes("under") || normalize(`${market.name} ${market.pick}`).includes("mais de") || normalize(`${market.name} ${market.pick}`).includes("menos de");
+    if (!isTotal && !corners.home.race_to_5_pct && !corners.away.race_to_5_pct) missing.push("race_to_5 corners");
+    if (isTotal && !Object.keys(corners.home.over_lines).length && !Object.keys(corners.away.over_lines).length) missing.push("percentuais over/under corners");
     if (!corners.home.avg_for) missing.push("corners marcados mandante");
     if (!corners.away.avg_for) missing.push("corners marcados visitante");
     if (!corners.home.avg_against) missing.push("corners sofridos mandante");
@@ -3369,7 +3800,7 @@ function parseSimulationResult(value: Record<string, unknown> | null): AspValida
   if (!value || !Object.keys(value).length) return null;
   const status = typeof value.status === "string" ? value.status : "";
   const model = typeof value.model === "string" ? value.model : "";
-  if (!["poisson_score_matrix", "corner_race_simplified", "corner_volume_matrix", "low_confidence_corner_race"].includes(model) || !["completed", "low_confidence", "not_applicable", "failed"].includes(status)) return null;
+  if (!["poisson_score_matrix", "corner_race_simplified", "corner_volume_matrix", "corner_total_over_simplified", "low_confidence_corner_race"].includes(model) || !["completed", "low_confidence", "not_applicable", "failed"].includes(status)) return null;
   return {
     model: model as AspValidatorSimulationResult["model"],
     status: status as AspValidatorSimulationResult["status"],
@@ -3653,8 +4084,71 @@ function groupUploads(uploads: ValidatorUploadRecord[]): Record<string, Validato
   }, {});
 }
 
+function buildEditablePatchFromStructured(record: ValidatorRecord): Partial<Record<keyof EditableRecord, string>> {
+  const structured = (record.ocr_structured_data && hasJsonContent(record.ocr_structured_data) ? record.ocr_structured_data : record.structured_json) as
+    | StructuredValidatorJson
+    | null;
+  if (!structured || !hasJsonContent(structured as unknown as Record<string, unknown>)) return {};
+  const match = structured.match ?? {};
+  const market = structured.market ?? {};
+  const prediction = structured.prediction ?? {};
+  const league = [readStringValue(match.competition), readStringValue(match.round)].filter(Boolean).join(" - ");
+  const matchDate = parseOcrDateToInput(readStringValue(match.date || structured.fixture?.date));
+  const platform = readStringValue(structured.source_platform) || inferSourcePlatformFromStructured(structured);
+  const sourceProbability = readNumberLike(market.probability_original ?? prediction.source_probability);
+  const sourceEv = readNumberLike(market.ev_original ?? prediction.source_ev);
+  const sourceFairOdd = readNumberLike(market.fair_odd_original ?? prediction.source_fair_odd);
+  const offeredOdd = readNumberLike(market.offered_odd ?? prediction.offered_odd);
+  const line = market.line ?? prediction.line;
+
+  return {
+    sport: readStringValue(match.sport || structured.sport),
+    source_platform: platform,
+    league,
+    match_date: matchDate,
+    home_team: readStringValue(match.home_team || structured.fixture?.home_team),
+    away_team: readStringValue(match.away_team || structured.fixture?.away_team),
+    market: readStringValue(market.name || prediction.market),
+    pick: readStringValue(market.pick || prediction.pick),
+    line: line === null || line === undefined ? "" : String(line),
+    offered_odd: numberToInput(offeredOdd),
+    source_probability: numberToInput(sourceProbability),
+    source_fair_odd: numberToInput(sourceFairOdd),
+    source_ev: numberToInput(sourceEv),
+    user_context: "",
+  };
+}
+
+function readStringValue(value: unknown): string {
+  return typeof value === "string" ? value.trim() : value === null || value === undefined ? "" : String(value).trim();
+}
+
+function readNumberLike(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") return parseNumber(value);
+  return null;
+}
+
+function parseOcrDateToInput(value: string): string {
+  const text = value.trim();
+  const iso = text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const br = text.match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/);
+  if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+  return "";
+}
+
+function inferSourcePlatformFromStructured(structured: StructuredValidatorJson): string {
+  const text = normalize(`${structured.raw_ocr_text || ""} ${JSON.stringify(structured.packball_recommendation ?? {})}`);
+  if (text.includes("packball")) return "PackBall";
+  if (text.includes("flashscore")) return "Flashscore";
+  return "";
+}
+
 function recordToEditable(record: ValidatorRecord): EditableRecord {
   return {
+    sport: record.sport,
+    source_platform: record.source_platform,
     league: record.league ?? "",
     match_date: record.match_date ?? "",
     home_team: record.home_team,
@@ -3664,6 +4158,7 @@ function recordToEditable(record: ValidatorRecord): EditableRecord {
     line: record.line ?? "",
     offered_odd: numberToInput(record.offered_odd),
     source_probability: numberToInput(record.source_probability),
+    source_fair_odd: numberToInput(record.source_fair_odd),
     source_ev: numberToInput(record.source_ev),
     user_context: record.user_context ?? "",
   };
