@@ -458,9 +458,7 @@ export function parseFootballCardsData(
     home_away: { home: emptyCardsSide(), away: emptyCardsSide() },
   };
 
-  const splitIdx = text.toLowerCase().indexOf("(casa/fora)");
-  const generalText = splitIdx >= 0 ? text.slice(0, splitIdx) : text;
-  const homeAwayText = splitIdx >= 0 ? text.slice(splitIdx) : "";
+  const { generalText, homeAwayText } = partitionByLocationScope(text);
 
   fillCardsSection(out.general, generalText, homeTeam, awayTeam);
   if (homeAwayText) fillCardsSection(out.home_away, homeAwayText, homeTeam, awayTeam);
