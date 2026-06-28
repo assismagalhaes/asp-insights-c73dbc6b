@@ -10,6 +10,25 @@
  * Mapeia +N escanteios → Over N.5 e -N → Under N.5.
  */
 
+import {
+  detectFootballMarketType,
+  type FootballMarketType,
+  type FootballPeriod,
+  type ValidatorModel,
+} from "./asp-validator-market-detector";
+import {
+  parseFootballGoalsData,
+  parseFootballCardsData,
+  parseFootballGeneralPerformance,
+  parseFootballBttsData,
+  type GoalsBlock,
+  type CardsBlock,
+  type GeneralPerformanceBlock,
+  type BttsBlock,
+} from "./asp-validator-football-parsers";
+
+
+
 export type PasteCornerLines = Record<string, number>;
 
 export type PasteCornerSide = {
