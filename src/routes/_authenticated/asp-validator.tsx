@@ -342,9 +342,13 @@ function AspValidatorPage() {
   const [updatingRecord, setUpdatingRecord] = useState(false);
 
   const validatorModel = useMemo(
-    () => inferValidatorModel(form.market || pastedParsed?.market.name || "", form.pick || pastedParsed?.market.pick || ""),
+    () =>
+      pastedParsed?.validator_model && pastedParsed.validator_model !== "ASP Market Validator"
+        ? pastedParsed.validator_model
+        : inferValidatorModel(form.market || pastedParsed?.market.name || "", form.pick || pastedParsed?.market.pick || ""),
     [form.market, form.pick, pastedParsed],
   );
+
   const hasManualCore = useMemo(
     () => Boolean(form.sport && form.source_platform && form.home_team && form.away_team && form.market && form.pick),
     [form],
