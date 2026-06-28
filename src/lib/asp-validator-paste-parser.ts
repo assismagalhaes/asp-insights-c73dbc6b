@@ -475,7 +475,7 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
 
   const marketRaw = text.match(/Mercado\s*:\s*([^\n\r]+)/i)?.[1]?.trim() ?? "";
   const marketInfo = classifyMarket(marketRaw);
-  const detection = detectFootballMarketType(text, marketRaw, marketInfo.pick);
+  const detection = detectFootballMarketType(text, marketRaw, marketInfo.pick, home_team, away_team);
 
 
   const probability = parseNum(
