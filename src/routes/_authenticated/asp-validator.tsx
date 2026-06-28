@@ -3329,12 +3329,32 @@ function buildFormValidationContext(
         const base = { ...pasted, input_source: "pasted_text" } as unknown as Record<string, unknown> & {
           market_type?: string | null;
           corners?: unknown;
+          btts?: unknown;
+          btts_home_away?: unknown;
+          cards?: unknown;
+          goals?: unknown;
         };
         // Nao popular corners quando o mercado nao for escanteios — evita
         // contaminar simulacao/IA com linhas Over/Under de gols rotuladas
         // como escanteios.
         if (base.market_type && base.market_type !== "corners") {
           base.corners = null;
+        }
+        // BTTS so e mercado principal quando market_type === "btts". Caso
+        // contrario (ex.: 1X2, gols, dupla chance), os blocos BTTS viram
+        // apenas dado de apoio (mantidos sob supporting_data).
+        if (base.market_type && base.market_type !== "btts") {
+          (base as Record<string, unknown>).supporting_data = {
+            ...((base as Record<string, unknown>).supporting_data as Record<string, unknown> | undefined),
+            btts: base.btts ?? null,
+            btts_home_away: base.btts_home_away ?? null,
+          };
+          base.btts = null;
+          base.btts_home_away = null;
+        }
+        // Cards so e mercado principal quando market_type === "cards".
+        if (base.market_type && base.market_type !== "cards") {
+          base.cards = null;
         }
         return base as Record<string, unknown>;
       })()
