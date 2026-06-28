@@ -2974,22 +2974,49 @@ function PastedMarketCards({
 function GoalsSideCard({
   title,
   side,
+  sideHA,
+  haLabel,
   fmtPct,
   fmtNum,
 }: {
   title: string;
   side: NonNullable<PastedParsedData["goals"]>["general"]["home"];
+  sideHA?: NonNullable<PastedParsedData["goals"]>["home_away"]["home"] | null;
+  haLabel?: string;
   fmtPct: (v: number | null | undefined) => string;
   fmtNum: (v: number | null | undefined) => string;
 }) {
   const overs = Object.entries(side.over_lines).slice(0, 5);
+  const oversHA = sideHA ? Object.entries(sideHA.over_lines).slice(0, 5) : [];
+  const hasHA =
+    !!sideHA &&
+    (sideHA.avg_for !== null ||
+      sideHA.avg_against !== null ||
+      sideHA.avg_total !== null ||
+      sideHA.btts_yes_pct !== null ||
+      oversHA.length > 0);
   return (
     <div className="rounded border border-border p-2 text-xs space-y-1">
       <div className="font-semibold text-primary">{title}</div>
-      <div>Media marcados: {fmtNum(side.avg_for)} · sofridos: {fmtNum(side.avg_against)} · total: {fmtNum(side.avg_total)}</div>
-      <div>BTTS Sim: {fmtPct(side.btts_yes_pct)} · Nao: {fmtPct(side.btts_no_pct)}</div>
+      <div>Geral · marcados: {fmtNum(side.avg_for)} · sofridos: {fmtNum(side.avg_against)} · total: {fmtNum(side.avg_total)}</div>
+      <div>Geral · BTTS Sim: {fmtPct(side.btts_yes_pct)} · Nao: {fmtPct(side.btts_no_pct)}</div>
       {overs.length ? (
-        <div>Over: {overs.map(([k, v]) => `${k}: ${v}%`).join(" · ")}</div>
+        <div>Geral · Over: {overs.map(([k, v]) => `${k}: ${v}%`).join(" · ")}</div>
+      ) : null}
+      {hasHA && sideHA ? (
+        <>
+          <div className="text-muted-foreground">
+            {haLabel ?? "Casa/Fora"} · marcados: {fmtNum(sideHA.avg_for)} · sofridos: {fmtNum(sideHA.avg_against)} · total: {fmtNum(sideHA.avg_total)}
+          </div>
+          <div className="text-muted-foreground">
+            {haLabel ?? "Casa/Fora"} · BTTS Sim: {fmtPct(sideHA.btts_yes_pct)} · Nao: {fmtPct(sideHA.btts_no_pct)}
+          </div>
+          {oversHA.length ? (
+            <div className="text-muted-foreground">
+              {haLabel ?? "Casa/Fora"} · Over: {oversHA.map(([k, v]) => `${k}: ${v}%`).join(" · ")}
+            </div>
+          ) : null}
+        </>
       ) : null}
     </div>
   );
@@ -2998,22 +3025,45 @@ function GoalsSideCard({
 function CardsSideCard({
   title,
   side,
+  sideHA,
+  haLabel,
   fmtPct,
   fmtNum,
 }: {
   title: string;
   side: NonNullable<PastedParsedData["cards"]>["general"]["home"];
+  sideHA?: NonNullable<PastedParsedData["cards"]>["home_away"]["home"] | null;
+  haLabel?: string;
   fmtPct: (v: number | null | undefined) => string;
   fmtNum: (v: number | null | undefined) => string;
 }) {
   const overs = Object.entries(side.over_lines).slice(0, 5);
+  const oversHA = sideHA ? Object.entries(sideHA.over_lines).slice(0, 5) : [];
+  const hasHA =
+    !!sideHA &&
+    (sideHA.avg_total_cards !== null ||
+      sideHA.avg_cards_for !== null ||
+      sideHA.avg_cards_against !== null ||
+      oversHA.length > 0);
   return (
     <div className="rounded border border-border p-2 text-xs space-y-1">
       <div className="font-semibold text-primary">{title}</div>
-      <div>Media total: {fmtNum(side.avg_total_cards)} · amarelos: {fmtNum(side.avg_yellow_total)} · vermelhos: {fmtNum(side.avg_red_total)}</div>
-      <div>Aplicados: {fmtNum(side.avg_cards_for)} · sofridos: {fmtNum(side.avg_cards_against)}</div>
+      <div>Geral · total: {fmtNum(side.avg_total_cards)} · amarelos: {fmtNum(side.avg_yellow_total)} · vermelhos: {fmtNum(side.avg_red_total)}</div>
+      <div>Geral · aplicados: {fmtNum(side.avg_cards_for)} · sofridos: {fmtNum(side.avg_cards_against)}</div>
       {overs.length ? (
-        <div>Over: {overs.map(([k, v]) => `${k}: ${fmtPct(v)}`).join(" · ")}</div>
+        <div>Geral · Over: {overs.map(([k, v]) => `${k}: ${fmtPct(v)}`).join(" · ")}</div>
+      ) : null}
+      {hasHA && sideHA ? (
+        <>
+          <div className="text-muted-foreground">
+            {haLabel ?? "Casa/Fora"} · total: {fmtNum(sideHA.avg_total_cards)} · aplicados: {fmtNum(sideHA.avg_cards_for)} · sofridos: {fmtNum(sideHA.avg_cards_against)}
+          </div>
+          {oversHA.length ? (
+            <div className="text-muted-foreground">
+              {haLabel ?? "Casa/Fora"} · Over: {oversHA.map(([k, v]) => `${k}: ${fmtPct(v)}`).join(" · ")}
+            </div>
+          ) : null}
+        </>
       ) : null}
     </div>
   );
@@ -3022,17 +3072,32 @@ function CardsSideCard({
 function GeneralSideCard({
   title,
   side,
+  sideHA,
+  haLabel,
   fmtPct,
 }: {
   title: string;
   side: NonNullable<PastedParsedData["general_performance"]>["home"];
+  sideHA?: NonNullable<PastedParsedData["general_performance"]>["home"] | null;
+  haLabel?: string;
   fmtPct: (v: number | null | undefined) => string;
 }) {
+  const hasHA =
+    !!sideHA &&
+    (sideHA.wins !== null ||
+      sideHA.draws !== null ||
+      sideHA.losses !== null ||
+      sideHA.efficiency_pct !== null ||
+      sideHA.avg_possession_pct !== null);
   return (
     <div className="rounded border border-border p-2 text-xs space-y-1">
       <div className="font-semibold text-primary">{title}</div>
-      <div>V/E/D: {side.wins ?? "-"}/{side.draws ?? "-"}/{side.losses ?? "-"}</div>
-      <div>Eficiencia: {fmtPct(side.efficiency_pct)} · Posse: {fmtPct(side.avg_possession_pct)}</div>
+      <div>Geral · V/E/D: {side.wins ?? "-"}/{side.draws ?? "-"}/{side.losses ?? "-"} · Eficiencia: {fmtPct(side.efficiency_pct)} · Posse: {fmtPct(side.avg_possession_pct)}</div>
+      {hasHA && sideHA ? (
+        <div className="text-muted-foreground">
+          {haLabel ?? "Casa/Fora"} · V/E/D: {sideHA.wins ?? "-"}/{sideHA.draws ?? "-"}/{sideHA.losses ?? "-"} · Eficiencia: {fmtPct(sideHA.efficiency_pct)} · Posse: {fmtPct(sideHA.avg_possession_pct)}
+        </div>
+      ) : null}
     </div>
   );
 }
