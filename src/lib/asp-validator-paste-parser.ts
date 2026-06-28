@@ -616,6 +616,13 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
       source_probability: probability,
       source_ev: ev_original,
       source_fair_odd: fair_odd,
+      source_ev_raw: ev_original,
+      source_ev_display: ev_display,
+      source_ev_type,
+      calculated_ev_pct,
+      odd_gap,
+      home_moneyline_odd,
+      away_moneyline_odd,
     },
     fixture: {
       league,
