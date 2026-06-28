@@ -2866,16 +2866,28 @@ function inferValidatorModel(market: string, pick: string): string {
   return "ASP Market Validator";
 }
 
-async function saveValidation(form: ValidatorForm, result: ValidationResult, uploads: ValidatorUploadDraft[], setSaving: (saving: boolean) => void): Promise<boolean> {
+async function saveValidation(
+  form: ValidatorForm,
+  result: ValidationResult,
+  uploads: ValidatorUploadDraft[],
+  setSaving: (saving: boolean) => void,
+  pasted?: PastedParsedData | null,
+): Promise<boolean> {
   setSaving(true);
   try {
+    const pastedStructured = pasted
+      ? ({ ...pasted, input_source: "pasted_text" } as unknown as Record<string, unknown>)
+      : null;
+    const pastedRawText = pasted
+      ? `[TEXTO COLADO INTERPRETADO]\nQualidade: ${(pasted.data_quality_score * 100).toFixed(0)}% | Campos: ${pasted.structured_fields_count}\n\n${pasted.raw_pasted_text}`
+      : null;
     const payload: ValidatorInsert = {
       ...form,
       match_date: form.match_date || "",
-      offered_odd: result.offered_odd,
-      source_probability: result.source_probability,
-      source_ev: result.source_ev,
-      source_fair_odd: result.source_fair_odd,
+      offered_odd: result.offered_odd ?? pasted?.market.offered_odd ?? null,
+      source_probability: result.source_probability ?? pasted?.market.probability_original ?? null,
+      source_ev: result.source_ev ?? pasted?.market.ev_original ?? null,
+      source_fair_odd: result.source_fair_odd ?? pasted?.market.fair_odd_original ?? null,
       adjusted_probability: result.adjusted_probability,
       adjusted_fair_odd: result.adjusted_fair_odd,
       adjusted_ev: result.adjusted_ev,
@@ -2889,16 +2901,16 @@ async function saveValidation(form: ValidatorForm, result: ValidationResult, upl
       final_analysis: result.final_analysis,
       simulation_json: {},
       online_context_json: {},
-      ocr_raw_text: null,
-      ocr_structured_data: {},
-      ocr_data_quality_score: null,
-      ocr_structured_fields_count: 0,
-      structured_json: {
+      ocr_raw_text: pastedRawText,
+      ocr_structured_data: pastedStructured ?? {},
+      ocr_data_quality_score: pasted?.data_quality_score ?? null,
+      ocr_structured_fields_count: pasted?.structured_fields_count ?? 0,
+      structured_json: pastedStructured ?? {
         form,
         result,
         uploads: uploads.map((upload) => uploadMetadata(upload)),
       },
-      structured_status: "pending",
+      structured_status: pastedStructured ? "completed" : "pending",
       structured_error: null,
       result_status: null,
       stake_units: null,
@@ -2913,6 +2925,7 @@ async function saveValidation(form: ValidatorForm, result: ValidationResult, upl
       is_simulated_result: false,
       bankroll_applied: false,
     };
+
     const insertPayload = {
       ...payload,
       match_date: payload.match_date || null,
