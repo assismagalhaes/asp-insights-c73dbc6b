@@ -10,6 +10,25 @@
  * Mapeia +N escanteios → Over N.5 e -N → Under N.5.
  */
 
+import {
+  detectFootballMarketType,
+  type FootballMarketType,
+  type FootballPeriod,
+  type ValidatorModel,
+} from "./asp-validator-market-detector";
+import {
+  parseFootballGoalsData,
+  parseFootballCardsData,
+  parseFootballGeneralPerformance,
+  parseFootballBttsData,
+  type GoalsBlock,
+  type CardsBlock,
+  type GeneralPerformanceBlock,
+  type BttsBlock,
+} from "./asp-validator-football-parsers";
+
+
+
 export type PasteCornerLines = Record<string, number>;
 
 export type PasteCornerSide = {
@@ -108,7 +127,16 @@ export type PastedParsedData = {
   };
   form_patch: PasteFormPatch;
   notes: string[];
+  market_type: FootballMarketType | null;
+  period: FootballPeriod;
+  pick_normalized: string;
+  validator_model: ValidatorModel;
+  goals: GoalsBlock | null;
+  cards: CardsBlock | null;
+  general_performance: GeneralPerformanceBlock | null;
+  btts: BttsBlock | null;
 };
+
 
 function emptySide(): PasteCornerSide {
   return {
@@ -396,6 +424,8 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
 
   const marketRaw = text.match(/Mercado\s*:\s*([^\n\r]+)/i)?.[1]?.trim() ?? "";
   const marketInfo = classifyMarket(marketRaw);
+  const detection = detectFootballMarketType(text, marketRaw, marketInfo.pick);
+
 
   const probability = parseNum(
     text.match(/Chance\s*\(?%?\)?\s*:\s*(-?\d+(?:[.,]\d+)?)/i)?.[1] ??
@@ -462,6 +492,27 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
     home: general.home,
     away: general.away,
   };
+
+  const goalsBlock: GoalsBlock | null =
+    detection.market_type === "goals_total" ||
+    detection.market_type === "btts" ||
+    detection.market_type === "x1x2" ||
+    detection.market_type === "double_chance"
+      ? parseFootballGoalsData(text, home_team, away_team, detection.period)
+      : null;
+  const cardsBlock: CardsBlock | null =
+    detection.market_type === "cards"
+      ? parseFootballCardsData(text, home_team, away_team, detection.period)
+      : null;
+  const generalPerf: GeneralPerformanceBlock | null =
+    detection.market_type === "x1x2" ||
+    detection.market_type === "double_chance" ||
+    detection.market_type === "goals_total" ||
+    detection.market_type === "btts"
+      ? parseFootballGeneralPerformance(text, home_team, away_team)
+      : null;
+  const bttsBlock: BttsBlock | null = goalsBlock ? parseFootballBttsData(goalsBlock) : null;
+
 
   const missing_critical_fields: string[] = [];
   if (!home_team) missing_critical_fields.push("mandante");
@@ -534,5 +585,15 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
     },
     form_patch,
     notes,
+    market_type: detection.market_type,
+    period: detection.period,
+    pick_normalized: detection.pick_normalized,
+    validator_model: detection.validator_model,
+    goals: goalsBlock,
+    cards: cardsBlock,
+    general_performance: generalPerf,
+    btts: bttsBlock,
+
   };
 }
+

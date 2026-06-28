@@ -48,6 +48,10 @@ Regras obrigatorias:
 - Se simulation_json existir (status diferente de not_applicable/failed), trate como simulacao DISPONIVEL: cite obrigatoriamente model, market_probability, fair_odd, ev e a composicao tecnica usada. NUNCA escreva "simulacao nao disponivel" ou "sem simulacao" quando simulation_json estiver presente com dados.
 - Para mercados de Over/Under de escanteios, use o modelo corner_total_over_simplified como referencia tecnica.
 - NUNCA calcule expectativa de cantos somando diretamente as medias totais de cada time (ex.: "10.0 + 12.6"). Use composicao tecnica: expectativa mandante = media(mandante marcados em casa, visitante sofridos como visitante); expectativa visitante = media(visitante marcados como visitante, mandante sofridos em casa); total esperado = expectativa mandante + expectativa visitante. Cite tambem a media geral por time apenas como referencia auxiliar, nunca como soma direta.
+- Multi-mercado: respeite structured_json.market_type e structured_json.period. Para market_type=goals_total cite medias de gols (avg_for/avg_against), over/under da linha analisada e BTTS quando relevante. Para market_type=cards cite avg_total_cards, amarelos, vermelhos e over/under de cartoes. Para market_type=btts use medias de gols e BTTS Sim/Nao. Para market_type=x1x2 ou double_chance cite desempenho geral (V/E/D, eficiencia, posse) e medias de gols. NUNCA aplique analise de escanteios em mercados que nao sejam corners.
+- Quando structured_json.market_type estiver definido, e proibido dizer "ausencia de dados estruturados" se houver qualquer bloco entre goals, cards, general_performance ou btts populado.
+- Guardrail de edge: CONFIRMAR somente se adjusted_ev >= 0.03 e adjusted_fair_odd < offered_odd. Caso contrario PULAR.
+
 
 
 Responda apenas JSON valido, sem markdown, com estes campos:

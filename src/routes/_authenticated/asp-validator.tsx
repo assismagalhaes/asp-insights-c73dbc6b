@@ -14,6 +14,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { validateAspValidatorWithAi, type AspValidatorAiResult } from "@/lib/asp-validator-ai.functions";
 import { validateAspValidatorWithOnlineAi, type AspValidatorOnlineAiResult } from "@/lib/asp-validator-ai-online.functions";
 import { runAspValidatorSimulation, type AspValidatorSimulationResult } from "@/lib/asp-validator-simulation";
+import { routeSimulation } from "@/lib/asp-validator-football-simulation";
+
 import { parsePastedPrognostico, type PastedParsedData } from "@/lib/asp-validator-paste-parser";
 import { useConfiguracao } from "@/lib/db";
 import { processAspValidatorOcr } from "@/lib/scraper-api.functions";
@@ -340,9 +342,13 @@ function AspValidatorPage() {
   const [updatingRecord, setUpdatingRecord] = useState(false);
 
   const validatorModel = useMemo(
-    () => inferValidatorModel(form.market || pastedParsed?.market.name || "", form.pick || pastedParsed?.market.pick || ""),
+    () =>
+      pastedParsed?.validator_model && pastedParsed.validator_model !== "ASP Market Validator"
+        ? pastedParsed.validator_model
+        : inferValidatorModel(form.market || pastedParsed?.market.name || "", form.pick || pastedParsed?.market.pick || ""),
     [form.market, form.pick, pastedParsed],
   );
+
   const hasManualCore = useMemo(
     () => Boolean(form.sport && form.source_platform && form.home_team && form.away_team && form.market && form.pick),
     [form],
@@ -2813,12 +2819,17 @@ function PastedDataPreview({ parsed }: { parsed: PastedParsedData }) {
         <Info label="Probabilidade" value={fmtPct(parsed.market.probability_original)} />
         <Info label="EV original" value={fmtPct(parsed.market.ev_original)} />
       </div>
-      <div className="grid gap-3 md:grid-cols-2">
-        <PastedCornerCard title={`${home} — geral`} side={parsed.corners.general.home} fmtNum={fmtNum} fmtPct={fmtPct} />
-        <PastedCornerCard title={`${away} — geral`} side={parsed.corners.general.away} fmtNum={fmtNum} fmtPct={fmtPct} />
-        <PastedCornerCard title={`${home} — casa`} side={parsed.corners.home_away.home} fmtNum={fmtNum} fmtPct={fmtPct} homeAway />
-        <PastedCornerCard title={`${away} — fora`} side={parsed.corners.home_away.away} fmtNum={fmtNum} fmtPct={fmtPct} homeAway />
-      </div>
+      {parsed.market_type === "corners" || !parsed.market_type ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          <PastedCornerCard title={`${home} — geral`} side={parsed.corners.general.home} fmtNum={fmtNum} fmtPct={fmtPct} />
+          <PastedCornerCard title={`${away} — geral`} side={parsed.corners.general.away} fmtNum={fmtNum} fmtPct={fmtPct} />
+          <PastedCornerCard title={`${home} — casa`} side={parsed.corners.home_away.home} fmtNum={fmtNum} fmtPct={fmtPct} homeAway />
+          <PastedCornerCard title={`${away} — fora`} side={parsed.corners.home_away.away} fmtNum={fmtNum} fmtPct={fmtPct} homeAway />
+        </div>
+      ) : (
+        <PastedMarketCards parsed={parsed} home={home} away={away} fmtPct={fmtPct} fmtNum={fmtNum} />
+      )}
+
       {parsed.missing_critical_fields.length ? (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2 text-xs text-amber-300">
           Campos ausentes: {parsed.missing_critical_fields.join(", ")}
@@ -2827,6 +2838,131 @@ function PastedDataPreview({ parsed }: { parsed: PastedParsedData }) {
     </div>
   );
 }
+
+function PastedMarketCards({
+  parsed,
+  home,
+  away,
+  fmtPct,
+  fmtNum,
+}: {
+  parsed: PastedParsedData;
+  home: string;
+  away: string;
+  fmtPct: (v: number | null | undefined) => string;
+  fmtNum: (v: number | null | undefined) => string;
+}) {
+  const mt = parsed.market_type;
+  const showGoals = mt === "goals_total" || mt === "btts" || mt === "x1x2" || mt === "double_chance";
+  const showCards = mt === "cards";
+  const showGeneral = mt === "x1x2" || mt === "double_chance" || mt === "goals_total" || mt === "btts";
+  return (
+    <div className="space-y-3">
+      <div className="text-xs text-muted-foreground">
+        Mercado detectado: <span className="text-primary">{mt ?? "indefinido"}</span> · Periodo:{" "}
+        <span className="text-primary">{parsed.period}</span> · Modelo: {parsed.validator_model}
+      </div>
+      {showGoals && parsed.goals ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          <GoalsSideCard title={`${home} — gols (${parsed.goals.period})`} side={parsed.goals.general.home} fmtPct={fmtPct} fmtNum={fmtNum} />
+          <GoalsSideCard title={`${away} — gols (${parsed.goals.period})`} side={parsed.goals.general.away} fmtPct={fmtPct} fmtNum={fmtNum} />
+        </div>
+      ) : null}
+      {showCards && parsed.cards ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          <CardsSideCard title={`${home} — cartoes (${parsed.cards.period})`} side={parsed.cards.general.home} fmtPct={fmtPct} fmtNum={fmtNum} />
+          <CardsSideCard title={`${away} — cartoes (${parsed.cards.period})`} side={parsed.cards.general.away} fmtPct={fmtPct} fmtNum={fmtNum} />
+        </div>
+      ) : null}
+      {showGeneral && parsed.general_performance ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          <GeneralSideCard title={`${home} — desempenho`} side={parsed.general_performance.home} fmtPct={fmtPct} />
+          <GeneralSideCard title={`${away} — desempenho`} side={parsed.general_performance.away} fmtPct={fmtPct} />
+        </div>
+      ) : null}
+      {mt === "btts" && parsed.btts ? (
+        <div className="grid gap-3 md:grid-cols-2 text-xs">
+          <div className="rounded border border-border p-2">
+            <div className="font-semibold">{home} — BTTS</div>
+            <div>Sim: {fmtPct(parsed.btts.home.yes_pct)} · Nao: {fmtPct(parsed.btts.home.no_pct)}</div>
+          </div>
+          <div className="rounded border border-border p-2">
+            <div className="font-semibold">{away} — BTTS</div>
+            <div>Sim: {fmtPct(parsed.btts.away.yes_pct)} · Nao: {fmtPct(parsed.btts.away.no_pct)}</div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function GoalsSideCard({
+  title,
+  side,
+  fmtPct,
+  fmtNum,
+}: {
+  title: string;
+  side: NonNullable<PastedParsedData["goals"]>["general"]["home"];
+  fmtPct: (v: number | null | undefined) => string;
+  fmtNum: (v: number | null | undefined) => string;
+}) {
+  const overs = Object.entries(side.over_lines).slice(0, 5);
+  return (
+    <div className="rounded border border-border p-2 text-xs space-y-1">
+      <div className="font-semibold text-primary">{title}</div>
+      <div>Media marcados: {fmtNum(side.avg_for)} · sofridos: {fmtNum(side.avg_against)} · total: {fmtNum(side.avg_total)}</div>
+      <div>BTTS Sim: {fmtPct(side.btts_yes_pct)} · Nao: {fmtPct(side.btts_no_pct)}</div>
+      {overs.length ? (
+        <div>Over: {overs.map(([k, v]) => `${k}: ${v}%`).join(" · ")}</div>
+      ) : null}
+    </div>
+  );
+}
+
+function CardsSideCard({
+  title,
+  side,
+  fmtPct,
+  fmtNum,
+}: {
+  title: string;
+  side: NonNullable<PastedParsedData["cards"]>["general"]["home"];
+  fmtPct: (v: number | null | undefined) => string;
+  fmtNum: (v: number | null | undefined) => string;
+}) {
+  const overs = Object.entries(side.over_lines).slice(0, 5);
+  return (
+    <div className="rounded border border-border p-2 text-xs space-y-1">
+      <div className="font-semibold text-primary">{title}</div>
+      <div>Media total: {fmtNum(side.avg_total_cards)} · amarelos: {fmtNum(side.avg_yellow_total)} · vermelhos: {fmtNum(side.avg_red_total)}</div>
+      <div>Aplicados: {fmtNum(side.avg_cards_for)} · sofridos: {fmtNum(side.avg_cards_against)}</div>
+      {overs.length ? (
+        <div>Over: {overs.map(([k, v]) => `${k}: ${fmtPct(v)}`).join(" · ")}</div>
+      ) : null}
+    </div>
+  );
+}
+
+function GeneralSideCard({
+  title,
+  side,
+  fmtPct,
+}: {
+  title: string;
+  side: NonNullable<PastedParsedData["general_performance"]>["home"];
+  fmtPct: (v: number | null | undefined) => string;
+}) {
+  return (
+    <div className="rounded border border-border p-2 text-xs space-y-1">
+      <div className="font-semibold text-primary">{title}</div>
+      <div>V/E/D: {side.wins ?? "-"}/{side.draws ?? "-"}/{side.losses ?? "-"}</div>
+      <div>Eficiencia: {fmtPct(side.efficiency_pct)} · Posse: {fmtPct(side.avg_possession_pct)}</div>
+    </div>
+  );
+}
+
+
 
 function PastedCornerCard({
   title,
@@ -3048,7 +3184,7 @@ function buildFormValidationContext(
   let simulationJson: Record<string, unknown> | null = null;
   if (structuredJson) {
     try {
-      const sim = runAspValidatorSimulation({
+      const sim = routeSimulation({
         sport: form.sport || pasted?.match.sport || "Futebol",
         market: form.market || pasted?.market.name || null,
         pick: form.pick || pasted?.market.pick || null,
@@ -3338,7 +3474,7 @@ async function saveValidation(
     let simulationType: string | null = null;
     if (pastedStructured) {
       try {
-        const sim = runAspValidatorSimulation({
+        const sim = routeSimulation({
           sport: form.sport || pasted?.match.sport || "Futebol",
           market: form.market || pasted?.market.name || null,
           pick: form.pick || pasted?.market.pick || null,
@@ -4663,7 +4799,7 @@ type SimulationRecordUpdate = {
 };
 
 async function persistSimulationResult(record: ValidatorRecord): Promise<SimulationRecordUpdate> {
-  const simulation = runAspValidatorSimulation({
+  const simulation = routeSimulation({
     sport: record.sport,
     market: record.market,
     pick: record.pick,
