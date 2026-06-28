@@ -3147,15 +3147,20 @@ function buildRecordValidationContext(record: ValidatorRecord, uploads: Validato
     simulation_type: record.simulation_type,
     structured_json: record.structured_json,
     simulation_json: record.simulation_json,
-    data_usage: {
-      used_ocr: Boolean(record.ocr_raw_text?.trim()),
-      used_structured_json: hasJsonContent(record.structured_json),
-      used_simulation: hasJsonContent(record.simulation_json),
-      used_upload_comments: uploads.some((upload) => upload.user_comment?.trim()),
-      used_online_search: hasJsonContent(record.online_context_json),
-      has_structured_ocr_data: Boolean((record.structured_json as { has_structured_ocr_data?: unknown } | null)?.has_structured_ocr_data) || Number(record.ocr_structured_fields_count ?? 0) > 0,
-      structured_fields_count: record.ocr_structured_fields_count ?? countStructuredFields(record.structured_json),
-    },
+    data_usage: (() => {
+      const { isPasted, hasRealOcr } = detectPastedRecord(record, uploads);
+      return {
+        used_ocr: hasRealOcr && !isPasted,
+        used_pasted_text: isPasted,
+        used_structured_json: hasJsonContent(record.structured_json),
+        used_simulation: hasJsonContent(record.simulation_json),
+        used_upload_comments: uploads.some((upload) => upload.user_comment?.trim()),
+        used_online_search: hasJsonContent(record.online_context_json),
+        has_structured_ocr_data: Boolean((record.structured_json as { has_structured_ocr_data?: unknown } | null)?.has_structured_ocr_data) || Number(record.ocr_structured_fields_count ?? 0) > 0,
+        structured_fields_count: record.ocr_structured_fields_count ?? countStructuredFields(record.structured_json),
+      };
+    })(),
+
   };
 }
 
