@@ -216,3 +216,12 @@ function round(value: number, digits = 2): number {
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
 }
+
+function hasSimulationData(context: Record<string, unknown>): boolean {
+  const sim = context.simulation_json;
+  if (!sim || typeof sim !== "object") return false;
+  const status = (sim as Record<string, unknown>).status;
+  if (status === "not_applicable" || status === "failed") return false;
+  return Object.keys(sim as Record<string, unknown>).length > 0;
+}
+
