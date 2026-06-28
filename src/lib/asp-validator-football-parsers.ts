@@ -341,9 +341,7 @@ export function parseFootballGoalsData(
     home_away: { home: emptyGoalsSide(), away: emptyGoalsSide() },
   };
 
-  const splitIdx = text.toLowerCase().indexOf("(casa/fora)");
-  const generalText = splitIdx >= 0 ? text.slice(0, splitIdx) : text;
-  const homeAwayText = splitIdx >= 0 ? text.slice(splitIdx) : "";
+  const { generalText, homeAwayText } = partitionByLocationScope(text);
 
   fillGoalsSection(out.general, generalText, homeTeam, awayTeam);
   if (homeAwayText) fillGoalsSection(out.home_away, homeAwayText, homeTeam, awayTeam);
