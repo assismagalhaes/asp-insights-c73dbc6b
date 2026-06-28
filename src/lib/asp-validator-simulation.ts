@@ -538,7 +538,8 @@ function estimateLambdas(input: AspValidatorSimulationInput): LambdaEstimate {
   const hasStructuredGoalsBlocks =
     Object.keys((goalsBlock.home_away ?? {}) as Record<string, any>).length > 0 ||
     Object.keys((goalsBlock.general ?? {}) as Record<string, any>).length > 0;
-  if ((lambdaHome === null || lambdaAway === null) && !(isBtts && hasStructuredGoalsBlocks)) {
+  const is1x2 = is1x2Market(marketText);
+  if ((lambdaHome === null || lambdaAway === null) && !(isBtts && hasStructuredGoalsBlocks) && !(is1x2 && !hasStructuredGoalsBlocks ? false : is1x2)) {
     const text = [input.user_context ?? "", JSON.stringify(input.structured_json ?? {})].join("\n");
     const normalized = text.replace(/,/g, ".");
     const homeScored = firstNumber(normalized, [
