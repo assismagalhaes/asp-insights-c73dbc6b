@@ -2782,6 +2782,27 @@ function buildFormValidationContext(
   const pastedSummary = pasted
     ? `[TEXTO COLADO INTERPRETADO]\nQualidade: ${(pasted.data_quality_score * 100).toFixed(0)}% | Campos: ${pasted.structured_fields_count}\n\n${pasted.raw_pasted_text}`
     : null;
+
+  let simulationJson: Record<string, unknown> | null = null;
+  if (structuredJson) {
+    try {
+      const sim = runAspValidatorSimulation({
+        sport: form.sport || pasted?.match.sport || "Futebol",
+        market: form.market || pasted?.market.name || null,
+        pick: form.pick || pasted?.market.pick || null,
+        line: form.line || (pasted?.market.line ?? null),
+        offered_odd: offeredOdd,
+        home_team: form.home_team || pasted?.match.home_team || null,
+        away_team: form.away_team || pasted?.match.away_team || null,
+        user_context: form.user_context ?? null,
+        structured_json: structuredJson,
+      });
+      simulationJson = sim as unknown as Record<string, unknown>;
+    } catch {
+      simulationJson = null;
+    }
+  }
+
   return {
     source_platform: form.source_platform,
     sport: form.sport || pasted?.match.sport || "Futebol",
@@ -2813,18 +2834,19 @@ function buildFormValidationContext(
     ocr_raw_text: pastedSummary,
     ocr_structured_data: structuredJson,
     structured_json: structuredJson,
-    simulation_json: null,
+    simulation_json: simulationJson,
     data_usage: {
       used_ocr: false,
       used_pasted_text: Boolean(structuredJson),
       used_structured_json: Boolean(structuredJson),
-      used_simulation: false,
+      used_simulation: Boolean(simulationJson),
       used_upload_comments: uploads.some((upload) => upload.user_comment.trim()),
       has_structured_ocr_data: Boolean(pasted?.has_structured_ocr_data),
       structured_fields_count: pasted?.structured_fields_count ?? 0,
     },
   };
 }
+
 
 
 function buildRecordValidationContext(record: ValidatorRecord, uploads: ValidatorUploadRecord[]): Record<string, unknown> {
