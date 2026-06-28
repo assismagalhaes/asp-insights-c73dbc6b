@@ -930,7 +930,7 @@ function AspValidatorPage() {
       return;
     }
     const odd = parseNumber(resultForm.final_odd) ?? selectedRecord.offered_odd ?? 1;
-    const stake = parseNumber(resultForm.stake_units) ?? (selectedRecord.decision === "PULAR" ? 1 : 0);
+    const stake = parseNumber(resultForm.stake_units) ?? 1;
     const unitValue = parseNumber(resultForm.unit_value_brl) ?? cfg?.valor_unidade_padrao ?? 0;
     if (selectedRecord.decision === "CONFIRMAR" && stake <= 0) {
       toast.error("Informe a stake em unidades para uma entrada CONFIRMADA.");
