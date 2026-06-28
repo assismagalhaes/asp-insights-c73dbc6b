@@ -65,6 +65,7 @@ type ValidatorUploadDraft = {
   upload_category: string;
   user_comment: string;
   upload_order: number;
+  upload_source: "manual" | "drag_drop" | "clipboard";
 };
 
 type ValidatorRecord = {
@@ -123,15 +124,21 @@ type ValidatorUploadRecord = {
   id: string;
   validator_id: string;
   file_name: string;
+  file_path: string | null;
+  storage_bucket: string | null;
   file_type: string | null;
   mime_type: string | null;
   file_size: number | null;
+  upload_source: string | null;
   upload_category: string;
   user_comment: string | null;
   upload_order: number;
   ocr_status: string;
   ocr_text: string | null;
   ocr_error: string | null;
+  ocr_structured_data: Record<string, unknown> | null;
+  ocr_data_quality_score: number | null;
+  ocr_structured_fields_count: number | null;
   structured_json: Record<string, unknown> | null;
   structured_status: "pending" | "processing" | "completed" | "failed" | string;
   structured_error: string | null;
@@ -237,6 +244,8 @@ const validatorDb = supabase as unknown as {
     };
   };
 };
+
+const ASP_VALIDATOR_UPLOAD_BUCKET = "asp-validator-uploads";
 
 const INITIAL_FORM: ValidatorForm = {
   sport: "Futebol",
@@ -354,7 +363,7 @@ function AspValidatorPage() {
     void loadHistory();
   }, []);
 
-  const addUploads = (files: FileList | null) => {
+  const addUploads = (files: FileList | null, uploadSource: ValidatorUploadDraft["upload_source"] = "manual") => {
     if (!files?.length) return;
     setUploads((prev) => {
       const nextFiles = Array.from(files).map((file, index) => ({
@@ -363,6 +372,7 @@ function AspValidatorPage() {
         upload_category: UPLOAD_CATEGORIES[0],
         user_comment: "",
         upload_order: prev.length + index + 1,
+        upload_source: uploadSource,
       }));
       return [...prev, ...nextFiles];
     });
@@ -485,14 +495,10 @@ function AspValidatorPage() {
 
   const processUploadOcr = async (upload: ValidatorUploadRecord) => {
     if (!selectedRecord) return;
-    const file = ocrFilesByUpload[upload.id];
-    if (!file) {
-      toast.error("Arquivo original nao disponivel para OCR. Reenvie o arquivo para processar.");
-      return;
-    }
 
     setProcessingOcr((prev) => ({ ...prev, [upload.id]: true }));
     try {
+      const file = await getUploadFileForOcr(upload, ocrFilesByUpload[upload.id]);
       await validatorDb.from("asp_validator_uploads").update({ ocr_status: "processing", ocr_error: null, updated_at: new Date().toISOString() }).eq("id", upload.id);
       const contentBase64 = await fileToBase64(file);
       const payload = await processAspValidatorOcr({
@@ -509,7 +515,21 @@ function AspValidatorPage() {
         },
       });
       const ocrPayload = parseOcrPayload(payload);
-      await persistOcrResult(selectedRecord, uploadsByRecord[selectedRecord.id] ?? [], upload, ocrPayload);
+      const baseUploads = uploadsByRecord[selectedRecord.id] ?? [];
+      const nextUploads = updateUploadInList(baseUploads.length ? baseUploads : [upload], upload.id, ocrPayload);
+      await persistOcrResult(selectedRecord, baseUploads, upload, ocrPayload);
+      const structured = await persistStructuredOcr(selectedRecord, nextUploads);
+      const recordWithStructured = {
+        ...selectedRecord,
+        ocr_raw_text: buildCombinedOcrText(nextUploads),
+        structured_json: structured,
+        ocr_structured_data: structured,
+        ocr_data_quality_score: structured.data_quality_score,
+        ocr_structured_fields_count: structured.structured_fields_count,
+        structured_status: "completed",
+        structured_error: null,
+      };
+      const simulationUpdate = await persistSimulationResult(recordWithStructured);
       setOcrFilesByUpload((prev) => {
         const next = { ...prev };
         delete next[upload.id];
@@ -519,7 +539,16 @@ function AspValidatorPage() {
         ocrPayload.ocr_status === "completed" ? "OCR concluido." : ocrPayload.ocr_error || "OCR falhou.",
       );
       await loadHistory();
-      setSelectedRecord((prev) => (prev ? { ...prev, ocr_raw_text: buildCombinedOcrText(updateUploadInList(uploadsByRecord[prev.id] ?? [], upload.id, ocrPayload)) } : prev));
+      setSelectedRecord((prev) =>
+        prev
+          ? {
+              ...prev,
+              ...recordWithStructured,
+              ...simulationUpdate,
+            }
+          : prev,
+      );
+      setUploadsByRecord((prev) => ({ ...prev, [selectedRecord.id]: applyStructuredUploads(nextUploads, structured) }));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erro ao processar OCR.";
       await validatorDb
@@ -535,9 +564,9 @@ function AspValidatorPage() {
   const processAllAvailableOcr = async () => {
     if (!selectedRecord) return;
     const currentUploads = uploadsByRecord[selectedRecord.id] ?? [];
-    const available = currentUploads.filter((upload) => Boolean(ocrFilesByUpload[upload.id]));
+    const available = currentUploads.filter((upload) => Boolean(ocrFilesByUpload[upload.id]) || Boolean(upload.file_path));
     if (!available.length) {
-      toast.error("Nenhum arquivo reenviado esta disponivel para OCR.");
+      toast.error("Nenhum arquivo salvo esta disponivel para OCR.");
       return;
     }
     for (const upload of available) {
@@ -550,64 +579,29 @@ function AspValidatorPage() {
     const currentUploads = uploadsByRecord[selectedRecord.id] ?? [];
     setStructuringRecord(true);
     try {
-      await validatorDb
-        .from("asp_validator_registros")
-        .update({ structured_status: "processing", structured_error: null, updated_at: new Date().toISOString() })
-        .eq("id", selectedRecord.id);
-
-      const structured = buildStructuredOcrJson(selectedRecord, currentUploads);
-      const uploadStructures = structured.uploads.filter((upload) => upload.upload_id);
-
-      for (const upload of uploadStructures) {
-        const { error: uploadError } = await validatorDb
-          .from("asp_validator_uploads")
-          .update({
-            structured_json: upload,
-            structured_status: "completed",
-            structured_error: null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", String(upload.upload_id));
-        if (uploadError) throw uploadError;
-      }
-
-      const { error } = await validatorDb
-        .from("asp_validator_registros")
-        .update({
-          structured_json: structured,
-          ocr_structured_data: structured,
-          ocr_data_quality_score: structured.data_quality_score,
-          ocr_structured_fields_count: structured.structured_fields_count,
-          structured_status: "completed",
-          structured_error: null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", selectedRecord.id);
-      if (error) throw error;
+      const structured = await persistStructuredOcr(selectedRecord, currentUploads);
+      const recordWithStructured = {
+        ...selectedRecord,
+        structured_json: structured,
+        ocr_structured_data: structured,
+        ocr_data_quality_score: structured.data_quality_score,
+        ocr_structured_fields_count: structured.structured_fields_count,
+        structured_status: "completed",
+        structured_error: null,
+      };
+      const simulationUpdate = await persistSimulationResult(recordWithStructured);
 
       toast.success("OCR estruturado em JSON.");
       setSelectedRecord((prev) =>
         prev
           ? {
               ...prev,
-              structured_json: structured,
-              ocr_structured_data: structured,
-              ocr_data_quality_score: structured.data_quality_score,
-              ocr_structured_fields_count: structured.structured_fields_count,
-              structured_status: "completed",
-              structured_error: null,
+              ...recordWithStructured,
+              ...simulationUpdate,
             }
           : prev,
       );
-      setUploadsByRecord((prev) => ({
-        ...prev,
-        [selectedRecord.id]: (prev[selectedRecord.id] ?? currentUploads).map((upload) => {
-          const nextStructured = uploadStructures.find((item) => item.upload_id === upload.id);
-          return nextStructured
-            ? { ...upload, structured_json: nextStructured, structured_status: "completed", structured_error: null }
-            : upload;
-        }),
-      }));
+      setUploadsByRecord((prev) => ({ ...prev, [selectedRecord.id]: applyStructuredUploads(prev[selectedRecord.id] ?? currentUploads, structured) }));
       await loadHistory();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Nao foi possivel estruturar o OCR.";
@@ -626,42 +620,14 @@ function AspValidatorPage() {
     if (!selectedRecord) return;
     setSimulatingRecord(true);
     try {
-      const simulation = runAspValidatorSimulation({
-        sport: selectedRecord.sport,
-        market: selectedRecord.market,
-        pick: selectedRecord.pick,
-        line: selectedRecord.line,
-        offered_odd: selectedRecord.offered_odd,
-        home_team: selectedRecord.home_team,
-        away_team: selectedRecord.away_team,
-        user_context: selectedRecord.user_context,
-        structured_json: selectedRecord.structured_json,
-      });
-      const adjustedProbability = simulation.market_probability !== null ? round(simulation.market_probability * 100, 2) : selectedRecord.adjusted_probability;
-      const adjustedFairOdd = simulation.fair_odd ?? selectedRecord.adjusted_fair_odd;
-      const adjustedEv = simulation.ev !== null ? round(simulation.ev * 100, 2) : selectedRecord.adjusted_ev;
-      const { error } = await validatorDb
-        .from("asp_validator_registros")
-        .update({
-          simulation_json: simulation,
-          simulation_type: simulation.status === "completed" && simulation.notes.some((note) => normalize(note).includes("simplificada")) ? "simplified_ocr" : simulation.status,
-          adjusted_probability: adjustedProbability,
-          adjusted_fair_odd: adjustedFairOdd,
-          adjusted_ev: adjustedEv,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", selectedRecord.id);
-      if (error) throw error;
+      const simulationUpdate = await persistSimulationResult(selectedRecord);
+      const simulation = simulationUpdate.simulation_json;
 
       setSelectedRecord((prev) =>
         prev
           ? {
               ...prev,
-              simulation_json: simulation,
-              simulation_type: simulation.status === "completed" && simulation.notes.some((note) => normalize(note).includes("simplificada")) ? "simplified_ocr" : simulation.status,
-              adjusted_probability: adjustedProbability,
-              adjusted_fair_odd: adjustedFairOdd,
-              adjusted_ev: adjustedEv,
+              ...simulationUpdate,
             }
           : prev,
       );
@@ -1246,6 +1212,8 @@ function RecordDetailDialog({
 
             <StructuredOcrPanel record={record} uploads={uploads} />
 
+            <OcrDiagnosticsPanel record={record} uploads={uploads} />
+
             <SimulationPanel record={record} />
 
             <AiAnalysisContextPanel record={record} />
@@ -1313,11 +1281,36 @@ function UploadsDetail({
   onAttachOcrFile: (uploadId: string, file: File | null) => void;
   onProcessUploadOcr: (upload: ValidatorUploadRecord) => Promise<void>;
 }) {
+  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let active = true;
+    const loadPreviewUrls = async () => {
+      const imageUploads = uploads.filter((upload) => upload.file_path && (upload.mime_type || "").startsWith("image/"));
+      const entries = await Promise.all(
+        imageUploads.map(async (upload) => {
+          try {
+            const url = await createUploadSignedUrl(upload);
+            return [upload.id, url] as const;
+          } catch {
+            return [upload.id, null] as const;
+          }
+        }),
+      );
+      if (!active) return;
+      setPreviewUrls(Object.fromEntries(entries.filter((entry): entry is readonly [string, string] => Boolean(entry[1]))));
+    };
+    void loadPreviewUrls();
+    return () => {
+      active = false;
+    };
+  }, [uploads]);
+
   return (
     <div className="space-y-3 rounded-md border border-border bg-muted/10 p-3">
       <div>
         <div className="text-sm font-semibold">Uploads vinculados</div>
-        <p className="mt-1 text-xs text-muted-foreground">Arquivos ainda nao ficam em storage nesta fase; os metadados e comentarios ficam preservados.</p>
+        <p className="mt-1 text-xs text-muted-foreground">Arquivos ficam armazenados e podem ser reprocessados por OCR sem reenviar o print.</p>
       </div>
       {uploads.length ? (
         uploads.map((upload) => (
@@ -1333,9 +1326,15 @@ function UploadsDetail({
               </Badge>
               <span className="text-sm font-semibold">{upload.file_name}</span>
               <span className="text-xs text-muted-foreground">
-                {formatFileSize(upload.file_size ?? 0)} | {upload.mime_type || "mime type desconhecido"}
+                {formatFileSize(upload.file_size ?? 0)} | {upload.mime_type || "mime type desconhecido"} | origem {formatUploadSource(upload.upload_source)}
               </span>
+              {upload.file_path ? <Badge variant="outline">Storage OK</Badge> : <Badge variant="destructive">Sem arquivo salvo</Badge>}
             </div>
+            {previewUrls[upload.id] ? (
+              <div className="mb-3 overflow-hidden rounded-md border border-border bg-muted/10">
+                <img src={previewUrls[upload.id]} alt={upload.file_name} className="max-h-72 w-full object-contain" />
+              </div>
+            ) : null}
             <div className="space-y-2">
               <Label>Comentario</Label>
               <Textarea
@@ -1348,15 +1347,28 @@ function UploadsDetail({
 
             <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
               <div className="space-y-2">
-                <Label>Reenviar arquivo para OCR</Label>
+                <Label>Arquivo alternativo para reprocessar OCR</Label>
                 <Input type="file" onChange={(event) => onAttachOcrFile(upload.id, event.target.files?.[0] ?? null)} />
                 <p className="text-xs text-muted-foreground">
                   {ocrFilesByUpload[upload.id]
                     ? `Arquivo pronto para OCR: ${ocrFilesByUpload[upload.id].name}`
-                    : "Arquivo original nao disponivel para OCR. Reenvie o arquivo para processar."}
+                    : upload.file_path
+                      ? "OCR usara o arquivo salvo no Storage. Reenvie apenas se quiser substituir para este processamento."
+                      : "Arquivo original nao encontrado. Reenvie o arquivo para processar."}
                 </p>
               </div>
-              <div className="flex items-end">
+              <div className="flex flex-wrap items-end gap-2">
+                {upload.file_path ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void createUploadSignedUrl(upload).then((url) => url && window.open(url, "_blank"))}
+                    className="gap-2"
+                  >
+                    <Eye className="h-4 w-4" />
+                    Visualizar
+                  </Button>
+                ) : null}
                 <Button onClick={() => void onProcessUploadOcr(upload)} disabled={processingOcr[upload.id]} className="gap-2">
                   {processingOcr[upload.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageUp className="h-4 w-4" />}
                   {upload.ocr_text ? "Reprocessar OCR" : "Processar OCR"}
@@ -1384,16 +1396,22 @@ function UploadsDetail({
 
 function PendingTechFields({ record }: { record: ValidatorRecord }) {
   const items = [
-    { title: "OCR", value: record.ocr_raw_text },
-    { title: "Simulacao probabilistica", value: hasJsonContent(record.simulation_json) ? "Dados de simulacao registrados." : "" },
-    { title: "IA + Pesquisa", value: hasJsonContent(record.online_context_json) ? "Contexto online registrado." : "" },
+    { title: "OCR", value: record.ocr_raw_text ? "OCR processado e texto bruto salvo." : "Aguardando processamento OCR dos uploads." },
+    {
+      title: "Simulacao probabilistica",
+      value: hasJsonContent(record.simulation_json) ? "Dados de simulacao registrados." : "Disponivel apos OCR estruturado ou dados manuais suficientes.",
+    },
+    {
+      title: "IA + Pesquisa",
+      value: hasJsonContent(record.online_context_json) ? "Contexto online registrado." : "Disponivel para validacao complementar quando necessario.",
+    },
   ];
   return (
     <div className="grid gap-3 md:grid-cols-3">
       {items.map((item) => (
         <div key={item.title} className="rounded-md border border-dashed border-border bg-muted/10 p-3">
           <div className="text-sm font-semibold">{item.title}</div>
-          <p className="mt-1 text-xs text-muted-foreground">{item.value || "Ainda nao implementado."}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{item.value}</p>
         </div>
       ))}
     </div>
@@ -1528,6 +1546,79 @@ function ExtractedImageDataPanel({ structured }: { structured: StructuredValidat
       </div>
       {structured.missing_critical_fields?.length ? <SignalBlock title="Campos criticos ausentes" items={structured.missing_critical_fields} tone="warn" /> : null}
     </details>
+  );
+}
+
+function OcrDiagnosticsPanel({ record, uploads }: { record: ValidatorRecord; uploads: ValidatorUploadRecord[] }) {
+  const structured = record.ocr_structured_data ?? record.structured_json;
+  const quality = extractDataQuality(structured);
+  const missing = Array.isArray(quality?.missing_fields)
+    ? quality.missing_fields.map(String)
+    : Array.isArray((structured as { missing_critical_fields?: unknown[] } | null)?.missing_critical_fields)
+      ? ((structured as { missing_critical_fields?: unknown[] }).missing_critical_fields ?? []).map(String)
+      : [];
+  const fieldsCount = record.ocr_structured_fields_count ?? countStructuredFields(structured);
+  const score = record.ocr_data_quality_score ?? (typeof (structured as { data_quality_score?: unknown } | null)?.data_quality_score === "number"
+    ? ((structured as { data_quality_score?: number }).data_quality_score ?? 0)
+    : null);
+  return (
+    <div className="space-y-3 rounded-md border border-border bg-muted/10 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-sm font-semibold">Diagnostico OCR</div>
+          <p className="mt-1 text-xs text-muted-foreground">Rastreio do arquivo processado, texto bruto, extracao inteligente e simulacao.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant={record.ocr_raw_text ? "default" : "outline"}>OCR: {record.ocr_raw_text ? "completed" : "pending"}</Badge>
+          <Badge variant={record.structured_status === "completed" ? "default" : record.structured_status === "failed" ? "destructive" : "outline"}>
+            JSON: {record.structured_status || "pending"}
+          </Badge>
+          <Badge variant="outline">Simulacao: {record.simulation_type || (hasJsonContent(record.simulation_json) ? "completed" : "pending")}</Badge>
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <Info label="Arquivos" value={`${uploads.length}`} />
+        <Info label="Campos extraidos" value={String(fieldsCount || 0)} />
+        <Info label="Qualidade extracao" value={score === null ? "-" : `${(score * 100).toFixed(0)}%`} />
+      </div>
+
+      {uploads.length ? (
+        <div className="grid gap-2">
+          {uploads.map((upload) => (
+            <div key={upload.id} className="rounded-md border border-border bg-background/40 p-3 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">#{upload.upload_order}</Badge>
+                <Badge variant={upload.ocr_status === "completed" ? "default" : upload.ocr_status === "failed" ? "destructive" : "outline"}>
+                  OCR: {upload.ocr_status}
+                </Badge>
+                <Badge variant={upload.structured_status === "completed" ? "default" : upload.structured_status === "failed" ? "destructive" : "outline"}>
+                  JSON: {upload.structured_status || "pending"}
+                </Badge>
+                <span className="font-semibold">{upload.file_name}</span>
+                <span className="text-muted-foreground">{formatFileSize(upload.file_size ?? 0)}</span>
+                <span className="text-muted-foreground">origem {formatUploadSource(upload.upload_source)}</span>
+              </div>
+              {upload.ocr_error ? <div className="mt-2 text-red-300">{upload.ocr_error}</div> : null}
+              {upload.ocr_text ? (
+                <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap rounded border border-border bg-muted/20 p-2 text-muted-foreground">
+                  {upload.ocr_text}
+                </pre>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {missing.length ? <SignalBlock title="Campos criticos ausentes" items={missing} tone="warn" /> : null}
+
+      {hasJsonContent(structured) ? (
+        <div className="rounded-md border border-border bg-background/50 p-3">
+          <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Campos extraidos / JSON OCR</p>
+          <pre className="max-h-80 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">{JSON.stringify(structured, null, 2)}</pre>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -1949,7 +2040,7 @@ function UploadsWithComments({
   onRemove,
 }: {
   uploads: ValidatorUploadDraft[];
-  onAddFiles: (files: FileList | null) => void;
+  onAddFiles: (files: FileList | null, uploadSource?: ValidatorUploadDraft["upload_source"]) => void;
   onUpdate: (localId: string, patch: Partial<Pick<ValidatorUploadDraft, "upload_category" | "user_comment">>) => void;
   onRemove: (localId: string) => void;
 }) {
@@ -1957,11 +2048,11 @@ function UploadsWithComments({
   const [pasteFeedback, setPasteFeedback] = useState("");
   const pasteTimerRef = useRef<number | null>(null);
 
-  const addFileArray = (files: File[]) => {
+  const addFileArray = (files: File[], uploadSource: ValidatorUploadDraft["upload_source"]) => {
     if (!files.length) return;
     const dataTransfer = new DataTransfer();
     files.forEach((file) => dataTransfer.items.add(file));
-    onAddFiles(dataTransfer.files);
+    onAddFiles(dataTransfer.files, uploadSource);
   };
 
   const handlePaste = (event: ClipboardEvent<HTMLDivElement>) => {
@@ -1974,6 +2065,7 @@ function UploadsWithComments({
         const extension = file.type.includes("png") ? "png" : file.type.includes("jpeg") || file.type.includes("jpg") ? "jpg" : "png";
         return new File([file], file.name || `screenshot-colado-${Date.now()}-${index + 1}.${extension}`, { type: file.type || "image/png" });
       }),
+      "clipboard",
     );
     setPasteFeedback(`${imageFiles.length} imagem(ns) colada(s) e adicionada(s) aos uploads.`);
     if (pasteTimerRef.current) window.clearTimeout(pasteTimerRef.current);
@@ -1983,7 +2075,7 @@ function UploadsWithComments({
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsDragging(false);
-    onAddFiles(event.dataTransfer.files);
+    onAddFiles(event.dataTransfer.files, "drag_drop");
   };
 
   return (
@@ -2009,7 +2101,7 @@ function UploadsWithComments({
           <label>
             <Plus className="h-4 w-4" />
             Adicionar arquivo
-            <input type="file" multiple className="hidden" onChange={(event) => onAddFiles(event.target.files)} />
+            <input type="file" multiple className="hidden" onChange={(event) => onAddFiles(event.target.files, "manual")} />
           </label>
         </Button>
       </div>
@@ -2026,7 +2118,7 @@ function UploadsWithComments({
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold">{upload.file.name}</div>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    {formatFileSize(upload.file.size)} | {upload.file.type || "mime type desconhecido"} | ordem {upload.upload_order}
+                    {formatFileSize(upload.file.size)} | {upload.file.type || "mime type desconhecido"} | origem {formatUploadSource(upload.upload_source)} | ordem {upload.upload_order}
                   </div>
                 </div>
                 <Button variant="destructive" size="sm" onClick={() => onRemove(upload.local_id)} className="gap-2">
@@ -2474,25 +2566,52 @@ async function saveValidation(form: ValidatorForm, result: ValidationResult, upl
     const { data, error } = await validatorDb.from("asp_validator_registros").insert(insertPayload).select("id").single();
     if (error) throw error;
     if (uploads.length && data?.id) {
-      const uploadPayloads = uploads.map((upload) => ({
-        validator_id: data.id,
-        file_name: upload.file.name,
-        file_type: upload.file.type || null,
-        mime_type: upload.file.type || null,
-        file_size: upload.file.size,
-        upload_category: upload.upload_category,
-        user_comment: upload.user_comment || null,
-        upload_order: upload.upload_order,
-        ocr_status: "pending",
-        ocr_text: null,
-        structured_json: {},
-        structured_status: "pending",
-        structured_error: null,
-      }));
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      const userId = userData.user?.id;
+      if (!userId) throw new Error("Usuario autenticado nao encontrado para salvar uploads.");
+
+      const uploadPayloads = [];
+      for (const upload of uploads) {
+        const uploadId = crypto.randomUUID();
+        const filePath = buildStoragePath(userId, data.id, uploadId, upload.file.name);
+        const { error: storageError } = await supabase.storage
+          .from(ASP_VALIDATOR_UPLOAD_BUCKET)
+          .upload(filePath, upload.file, {
+            cacheControl: "3600",
+            contentType: upload.file.type || "application/octet-stream",
+            upsert: false,
+          });
+        if (storageError) throw storageError;
+        uploadPayloads.push({
+          id: uploadId,
+          validator_id: data.id,
+          user_id: userId,
+          file_name: upload.file.name,
+          file_path: filePath,
+          storage_bucket: ASP_VALIDATOR_UPLOAD_BUCKET,
+          file_type: upload.file.type || null,
+          mime_type: upload.file.type || null,
+          file_size: upload.file.size,
+          upload_source: upload.upload_source,
+          upload_category: upload.upload_category,
+          user_comment: upload.user_comment || null,
+          upload_order: upload.upload_order,
+          ocr_status: "pending",
+          ocr_text: null,
+          ocr_error: null,
+          ocr_structured_data: {},
+          ocr_data_quality_score: null,
+          ocr_structured_fields_count: 0,
+          structured_json: {},
+          structured_status: "pending",
+          structured_error: null,
+        });
+      }
       const { error: uploadError } = await validatorDb.from("asp_validator_uploads").insert(uploadPayloads);
       if (uploadError) throw uploadError;
     }
-    toast.success(uploads.length ? "Validacao e metadados dos uploads salvos." : "Validacao salva no ASP Validator.");
+    toast.success(uploads.length ? "Validacao e arquivos salvos para OCR." : "Validacao salva no ASP Validator.");
     return true;
   } catch (error) {
     toast.error(error instanceof Error ? error.message : "Nao foi possivel salvar a validacao.");
@@ -2508,6 +2627,7 @@ function uploadMetadata(upload: ValidatorUploadDraft) {
     file_type: upload.file.type || null,
     mime_type: upload.file.type || null,
     file_size: upload.file.size,
+    upload_source: upload.upload_source,
     upload_category: upload.upload_category,
     user_comment: upload.user_comment || null,
     upload_order: upload.upload_order,
@@ -2933,11 +3053,16 @@ function extractGoalStats(text: string): Record<string, unknown> {
 function twoSidedPercent(text: string, label: RegExp): { home: number | null; away: number | null } {
   const line = text.split(/\r?\n/).find((item) => label.test(item));
   if (line) {
-    const values = [...line.matchAll(/(\d+(?:\.\d+)?)\s*%/g)].map((match) => Number(match[1])).filter(Number.isFinite);
+    let values = [...line.matchAll(/(\d+(?:\.\d+)?)\s*%/g)].map((match) => Number(match[1])).filter(Number.isFinite);
+    if (values.length < 2) {
+      values = [...line.replace(/,/g, ".").matchAll(/(\d+(?:\.\d+)?)/g)].map((match) => Number(match[1])).filter(Number.isFinite);
+      const labelNumber = line.match(/\b(3|5|7|9)\s*primeiro\b/i)?.[1];
+      if (labelNumber && values[0] === Number(labelNumber)) values = values.slice(1);
+    }
     if (values.length >= 2) return { home: values[0], away: values[1] };
   }
   const compact = text.replace(/\s+/g, " ");
-  const match = compact.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*%[^%]{0,80}${label.source}[^%]{0,80}(\\d+(?:\\.\\d+)?)\\s*%`, "i"));
+  const match = compact.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*%?[^%]{0,80}${label.source}[^%]{0,80}(\\d+(?:\\.\\d+)?)\\s*%?`, "i"));
   return { home: match ? Number(match[1]) : null, away: match ? Number(match[2]) : null };
 }
 
@@ -3200,6 +3325,45 @@ function parseOnlineContext(value: Record<string, unknown> | null): OnlineContex
   };
 }
 
+type SimulationRecordUpdate = {
+  simulation_json: AspValidatorSimulationResult;
+  simulation_type: string;
+  adjusted_probability: number | null;
+  adjusted_fair_odd: number | null;
+  adjusted_ev: number | null;
+};
+
+async function persistSimulationResult(record: ValidatorRecord): Promise<SimulationRecordUpdate> {
+  const simulation = runAspValidatorSimulation({
+    sport: record.sport,
+    market: record.market,
+    pick: record.pick,
+    line: record.line,
+    offered_odd: record.offered_odd,
+    home_team: record.home_team,
+    away_team: record.away_team,
+    user_context: record.user_context,
+    structured_json: record.structured_json,
+  });
+  const adjustedProbability = simulation.market_probability !== null ? round(simulation.market_probability * 100, 2) : record.adjusted_probability;
+  const adjustedFairOdd = simulation.fair_odd ?? record.adjusted_fair_odd;
+  const adjustedEv = simulation.ev !== null ? round(simulation.ev * 100, 2) : record.adjusted_ev;
+  const simulationType = simulation.status === "completed" && simulation.notes.some((note) => normalize(note).includes("simplificada")) ? "simplified_ocr" : simulation.status;
+  const update = {
+    simulation_json: simulation,
+    simulation_type: simulationType,
+    adjusted_probability: adjustedProbability,
+    adjusted_fair_odd: adjustedFairOdd,
+    adjusted_ev: adjustedEv,
+  };
+  const { error } = await validatorDb
+    .from("asp_validator_registros")
+    .update({ ...update, updated_at: new Date().toISOString() })
+    .eq("id", record.id);
+  if (error) throw error;
+  return update;
+}
+
 async function persistOcrResult(record: ValidatorRecord, allUploads: ValidatorUploadRecord[], upload: ValidatorUploadRecord, result: OcrResultPayload) {
   const { error } = await validatorDb
     .from("asp_validator_uploads")
@@ -3219,6 +3383,103 @@ async function persistOcrResult(record: ValidatorRecord, allUploads: ValidatorUp
     .update({ ocr_raw_text: nextText || null, updated_at: new Date().toISOString() })
     .eq("id", record.id);
   if (recordError) throw recordError;
+}
+
+async function persistStructuredOcr(record: ValidatorRecord, uploads: ValidatorUploadRecord[]): Promise<StructuredValidatorJson> {
+  await validatorDb
+    .from("asp_validator_registros")
+    .update({ structured_status: "processing", structured_error: null, updated_at: new Date().toISOString() })
+    .eq("id", record.id);
+
+  const recordWithLatestOcr = { ...record, ocr_raw_text: buildCombinedOcrText(uploads) };
+  const structured = buildStructuredOcrJson(recordWithLatestOcr, uploads);
+  const uploadStructures = structured.uploads.filter((upload) => upload.upload_id);
+
+  for (const upload of uploadStructures) {
+    const fieldsCount = countStructuredFields(upload.extracted_data);
+    const uploadIntelligence = (upload.extracted_data as { ocr_intelligence?: OcrIntelligenceData }).ocr_intelligence;
+    const qualityScore = calculateOcrDataQualityScore(
+      fieldsCount,
+      uploadIntelligence?.missing_critical_fields.length ?? 0,
+      String(upload.ocr_text || "").length,
+      Boolean(uploadIntelligence?.has_structured_ocr_data || fieldsCount > 0),
+    );
+    const { error: uploadError } = await validatorDb
+      .from("asp_validator_uploads")
+      .update({
+        structured_json: upload,
+        structured_status: "completed",
+        structured_error: null,
+        ocr_structured_data: upload.extracted_data,
+        ocr_data_quality_score: qualityScore,
+        ocr_structured_fields_count: fieldsCount,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", String(upload.upload_id));
+    if (uploadError) throw uploadError;
+  }
+
+  const { error } = await validatorDb
+    .from("asp_validator_registros")
+    .update({
+      ocr_raw_text: recordWithLatestOcr.ocr_raw_text || null,
+      structured_json: structured,
+      ocr_structured_data: structured,
+      ocr_data_quality_score: structured.data_quality_score,
+      ocr_structured_fields_count: structured.structured_fields_count,
+      structured_status: "completed",
+      structured_error: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", record.id);
+  if (error) throw error;
+
+  return structured;
+}
+
+function applyStructuredUploads(uploads: ValidatorUploadRecord[], structured: StructuredValidatorJson): ValidatorUploadRecord[] {
+  return uploads.map((upload) => {
+    const nextStructured = structured.uploads.find((item) => item.upload_id === upload.id);
+    if (!nextStructured) return upload;
+    const fieldsCount = countStructuredFields(nextStructured.extracted_data);
+    const uploadIntelligence = (nextStructured.extracted_data as { ocr_intelligence?: OcrIntelligenceData }).ocr_intelligence;
+    const qualityScore = calculateOcrDataQualityScore(
+      fieldsCount,
+      uploadIntelligence?.missing_critical_fields.length ?? 0,
+      String(nextStructured.ocr_text || "").length,
+      Boolean(uploadIntelligence?.has_structured_ocr_data || fieldsCount > 0),
+    );
+    return {
+      ...upload,
+      structured_json: nextStructured,
+      structured_status: "completed",
+      structured_error: null,
+      ocr_structured_data: nextStructured.extracted_data,
+      ocr_data_quality_score: qualityScore,
+      ocr_structured_fields_count: fieldsCount,
+    };
+  });
+}
+
+async function getUploadFileForOcr(upload: ValidatorUploadRecord, localFile?: File): Promise<File> {
+  if (localFile) return localFile;
+  if (!upload.file_path) {
+    throw new Error("Arquivo original nao encontrado no Storage. Reenvie o arquivo para processar.");
+  }
+  const bucket = upload.storage_bucket || ASP_VALIDATOR_UPLOAD_BUCKET;
+  const { data, error } = await supabase.storage.from(bucket).download(upload.file_path);
+  if (error) throw error;
+  return new File([data], upload.file_name || "asp-validator-upload", {
+    type: upload.mime_type || data.type || "application/octet-stream",
+  });
+}
+
+async function createUploadSignedUrl(upload: ValidatorUploadRecord): Promise<string | null> {
+  if (!upload.file_path) return null;
+  const bucket = upload.storage_bucket || ASP_VALIDATOR_UPLOAD_BUCKET;
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(upload.file_path, 60 * 10);
+  if (error) throw error;
+  return data.signedUrl;
 }
 
 type OcrResultPayload = {
@@ -3520,4 +3781,21 @@ function formatFileSize(bytes: number): string {
   const units = ["B", "KB", "MB", "GB"];
   const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
   return `${round(bytes / 1024 ** index, index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
+function formatUploadSource(source?: string | null): string {
+  if (source === "clipboard") return "CTRL+V";
+  if (source === "drag_drop") return "drag/drop";
+  if (source === "manual") return "upload manual";
+  return "nao informado";
+}
+
+function buildStoragePath(userId: string, validatorId: string, uploadId: string, fileName: string): string {
+  const cleanName = (fileName || "upload")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 120) || "upload";
+  return `${userId}/${validatorId}/${uploadId}/${cleanName}`;
 }
