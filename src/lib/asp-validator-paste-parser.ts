@@ -387,6 +387,29 @@ function countNonNull(obj: unknown): number {
   return 0;
 }
 
+function extractPerformanceScopeTexts(text: string): { generalText: string; homeAwayText: string } {
+  const starts = [...text.matchAll(/^\s*---\s*DESEMPENHO\s+GERAL[^(\n]*(?:\([^\n]*\))?\s*---\s*$/gim)];
+  if (starts.length === 0) return { generalText: "", homeAwayText: "" };
+
+  let generalText = "";
+  let homeAwayText = "";
+
+  for (let i = 0; i < starts.length; i += 1) {
+    const start = starts[i].index ?? 0;
+    const nextStart = i + 1 < starts.length ? (starts[i + 1].index ?? text.length) : text.length;
+    const previousPartida = text.lastIndexOf("Partida:", start);
+    const previousFiltro = text.lastIndexOf("Filtro:", start);
+    const contextStart = Math.max(0, previousPartida, previousFiltro);
+    const chunk = text.slice(contextStart, nextStart);
+    const firstHeader = chunk.match(/Filtro\s*:\s*([^\n\r]+)/i)?.[1] ?? chunk.slice(0, 260);
+    const isHomeAway = /casa\s*\/\s*fora/i.test(firstHeader);
+    if (isHomeAway) homeAwayText += chunk + "\n";
+    else generalText += chunk + "\n";
+  }
+
+  return { generalText, homeAwayText };
+}
+
 function inferSport(market: string): string {
   const n = normalize(market);
   if (n.includes("escanteio") || n.includes("corner") || n.includes("gol") || n.includes("btts")) return "Futebol";
@@ -566,7 +589,9 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
       b.away.efficiency_pct === null && b.away.avg_possession_pct === null);
   if (wantsGeneralPerf && isPerfEmpty(generalPerf)) {
     const performanceBlocks = extractPerformanceScopeTexts(text);
-    generalPerf = parseFootballGeneralPerformance(performanceBlocks.generalText || text, home_team, away_team, detection.period);
+    if (performanceBlocks.generalText) {
+      generalPerf = parseFootballGeneralPerformance(performanceBlocks.generalText, home_team, away_team, detection.period);
+    }
   }
   const performanceBlocks = wantsGeneralPerf ? extractPerformanceScopeTexts(text) : { generalText: "", homeAwayText: "" };
   const generalPerfHA: GeneralPerformanceBlock | null = wantsGeneralPerf
