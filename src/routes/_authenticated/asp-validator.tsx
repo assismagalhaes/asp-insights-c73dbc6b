@@ -3050,7 +3050,7 @@ function buildFormValidationContext(
   let simulationJson: Record<string, unknown> | null = null;
   if (structuredJson) {
     try {
-      const sim = runAspValidatorSimulation({
+      const sim = routeSimulation({
         sport: form.sport || pasted?.match.sport || "Futebol",
         market: form.market || pasted?.market.name || null,
         pick: form.pick || pasted?.market.pick || null,
@@ -3340,7 +3340,7 @@ async function saveValidation(
     let simulationType: string | null = null;
     if (pastedStructured) {
       try {
-        const sim = runAspValidatorSimulation({
+        const sim = routeSimulation({
           sport: form.sport || pasted?.match.sport || "Futebol",
           market: form.market || pasted?.market.name || null,
           pick: form.pick || pasted?.market.pick || null,
@@ -4665,7 +4665,7 @@ type SimulationRecordUpdate = {
 };
 
 async function persistSimulationResult(record: ValidatorRecord): Promise<SimulationRecordUpdate> {
-  const simulation = runAspValidatorSimulation({
+  const simulation = routeSimulation({
     sport: record.sport,
     market: record.market,
     pick: record.pick,
