@@ -141,7 +141,9 @@ export type PastedParsedData = {
   goals: GoalsBlock | null;
   cards: CardsBlock | null;
   general_performance: GeneralPerformanceBlock | null;
+  general_performance_home_away: GeneralPerformanceBlock | null;
   btts: BttsBlock | null;
+  btts_home_away: BttsBlock | null;
 };
 
 
