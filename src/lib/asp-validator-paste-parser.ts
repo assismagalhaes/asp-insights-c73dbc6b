@@ -118,6 +118,13 @@ export type PastedParsedData = {
     source_probability: number | null;
     source_ev: number | null;
     source_fair_odd: number | null;
+    source_ev_raw: number | null;
+    source_ev_display: string | null;
+    source_ev_type: "percent" | "odd_gap_or_unknown" | null;
+    calculated_ev_pct: number | null;
+    odd_gap: number | null;
+    home_moneyline_odd: number | null;
+    away_moneyline_odd: number | null;
   };
   fixture: {
     league: string;
