@@ -277,9 +277,11 @@ function extractTeamPercent(block: string, team: string): number | null {
   const tKey = teamKey(team);
   if (!tKey) return null;
   for (const line of block.split(/\r?\n/)) {
-    if (!teamKey(line).includes(tKey)) continue;
-    const pct = line.match(/(-?\d+(?:[.,]\d+)?)\s*%/);
-    if (pct) return num(pct[1]);
+    for (const part of line.split(/\s*\|\s*/)) {
+      if (!teamKey(part).includes(tKey)) continue;
+      const pct = part.match(/(-?\d+(?:[.,]\d+)?)\s*%/);
+      if (pct) return num(pct[1]);
+    }
   }
   return null;
 }
