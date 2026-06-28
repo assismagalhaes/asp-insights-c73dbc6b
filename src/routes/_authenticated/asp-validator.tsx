@@ -2819,12 +2819,17 @@ function PastedDataPreview({ parsed }: { parsed: PastedParsedData }) {
         <Info label="Probabilidade" value={fmtPct(parsed.market.probability_original)} />
         <Info label="EV original" value={fmtPct(parsed.market.ev_original)} />
       </div>
-      <div className="grid gap-3 md:grid-cols-2">
-        <PastedCornerCard title={`${home} — geral`} side={parsed.corners.general.home} fmtNum={fmtNum} fmtPct={fmtPct} />
-        <PastedCornerCard title={`${away} — geral`} side={parsed.corners.general.away} fmtNum={fmtNum} fmtPct={fmtPct} />
-        <PastedCornerCard title={`${home} — casa`} side={parsed.corners.home_away.home} fmtNum={fmtNum} fmtPct={fmtPct} homeAway />
-        <PastedCornerCard title={`${away} — fora`} side={parsed.corners.home_away.away} fmtNum={fmtNum} fmtPct={fmtPct} homeAway />
-      </div>
+      {parsed.market_type === "corners" || !parsed.market_type ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          <PastedCornerCard title={`${home} — geral`} side={parsed.corners.general.home} fmtNum={fmtNum} fmtPct={fmtPct} />
+          <PastedCornerCard title={`${away} — geral`} side={parsed.corners.general.away} fmtNum={fmtNum} fmtPct={fmtPct} />
+          <PastedCornerCard title={`${home} — casa`} side={parsed.corners.home_away.home} fmtNum={fmtNum} fmtPct={fmtPct} homeAway />
+          <PastedCornerCard title={`${away} — fora`} side={parsed.corners.home_away.away} fmtNum={fmtNum} fmtPct={fmtPct} homeAway />
+        </div>
+      ) : (
+        <PastedMarketCards parsed={parsed} home={home} away={away} fmtPct={fmtPct} fmtNum={fmtNum} />
+      )}
+
       {parsed.missing_critical_fields.length ? (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2 text-xs text-amber-300">
           Campos ausentes: {parsed.missing_critical_fields.join(", ")}
