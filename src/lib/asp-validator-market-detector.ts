@@ -184,7 +184,9 @@ function inferValidatorModelFromType(type: FootballMarketType | null): Validator
     case "btts":
     case "x1x2":
     case "double_chance":
+    case "first_goal":
       return "ASP Goal Validator";
+
     default:
       return "ASP Market Validator";
   }
