@@ -67,6 +67,13 @@ export function routeSimulation(input: AspValidatorSimulationInput): RoutedSimul
     return { ...sim, market_type: "cards", period, model_name: "football_cards_total_simplified" };
   }
 
+  // Primeiro a marcar - simulador dedicado
+  if (declared === "first_goal" || /marcar\s+primeiro|marca\s+primeiro|primeiro\s+(a|para)\s+marcar|first\s+goal|first\s+to\s+score|abrir\s+o\s+placar/.test(blob)) {
+    const sim = simulateFirstGoal(input, period);
+    return { ...sim, market_type: "first_goal", period, model_name: "football_first_goal_simplified" };
+  }
+
+
   // Mercados delegados ao Poisson / corner simulator existente
   const base = runAspValidatorSimulation(input);
   let proxy_used: string | null = null;
