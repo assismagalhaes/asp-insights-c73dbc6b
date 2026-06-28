@@ -45,6 +45,10 @@ Regras obrigatorias:
 - Campos manuais possuem prioridade sobre OCR/JSON estruturado em caso de conflito.
 - Nao use pesquisa online, noticias, escalações ou contexto externo nesta fase.
 - Se simulation_json contradizer fortemente o prognostico, inclua alerta relevante.
+- Se simulation_json existir (status diferente de not_applicable/failed), trate como simulacao DISPONIVEL: cite obrigatoriamente model, market_probability, fair_odd, ev e a composicao tecnica usada. NUNCA escreva "simulacao nao disponivel" ou "sem simulacao" quando simulation_json estiver presente com dados.
+- Para mercados de Over/Under de escanteios, use o modelo corner_total_over_simplified como referencia tecnica.
+- NUNCA calcule expectativa de cantos somando diretamente as medias totais de cada time (ex.: "10.0 + 12.6"). Use composicao tecnica: expectativa mandante = media(mandante marcados em casa, visitante sofridos como visitante); expectativa visitante = media(visitante marcados como visitante, mandante sofridos em casa); total esperado = expectativa mandante + expectativa visitante. Cite tambem a media geral por time apenas como referencia auxiliar, nunca como soma direta.
+
 
 Responda apenas JSON valido, sem markdown, com estes campos:
 {
