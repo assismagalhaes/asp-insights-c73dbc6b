@@ -3315,7 +3315,19 @@ function buildFormValidationContext(
   const offeredOdd = parseNumber(form.offered_odd) ?? pasted?.market.offered_odd ?? null;
   const sourceEv = parseNumber(form.source_ev) ?? pasted?.market.ev_original ?? null;
   const structuredJson = pasted
-    ? ({ ...pasted, input_source: "pasted_text" } as unknown as Record<string, unknown>)
+    ? (() => {
+        const base = { ...pasted, input_source: "pasted_text" } as unknown as Record<string, unknown> & {
+          market_type?: string | null;
+          corners?: unknown;
+        };
+        // Nao popular corners quando o mercado nao for escanteios — evita
+        // contaminar simulacao/IA com linhas Over/Under de gols rotuladas
+        // como escanteios.
+        if (base.market_type && base.market_type !== "corners") {
+          base.corners = null;
+        }
+        return base as Record<string, unknown>;
+      })()
     : null;
   const pastedSummary = pasted
     ? `[TEXTO COLADO INTERPRETADO]\nQualidade: ${(pasted.data_quality_score * 100).toFixed(0)}% | Campos: ${pasted.structured_fields_count}\n\n${pasted.raw_pasted_text}`
