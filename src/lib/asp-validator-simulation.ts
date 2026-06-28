@@ -153,12 +153,37 @@ function isSupportedMarket(text: string): boolean {
     text.includes("1x2") ||
     text.includes("resultado") ||
     text.includes("moneyline") ||
+    text.includes("match odds") ||
+    text.includes("vencer") ||
+    text.includes("vence") ||
+    text.includes("vitoria") ||
+    text.includes("empate") ||
+    text.includes("draw") ||
+    text.includes("home win") ||
+    text.includes("away win") ||
     text.includes("dupla chance") ||
     text.includes("double chance") ||
     text.includes("handicap") ||
     text.includes("corner") ||
     text.includes("escanteio") ||
     text.includes("canto")
+  );
+}
+
+function is1x2Market(text: string): boolean {
+  return (
+    text.includes("1x2") ||
+    text.includes("resultado") ||
+    text.includes("moneyline") ||
+    text.includes("match odds") ||
+    text.includes("vencer") ||
+    text.includes("vence ") ||
+    text.includes("vitoria") ||
+    text.includes("home win") ||
+    text.includes("away win") ||
+    /\bvence\b/.test(text) ||
+    /\bempate\b/.test(text) ||
+    /\bdraw\b/.test(text)
   );
 }
 
