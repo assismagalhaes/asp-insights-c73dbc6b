@@ -339,7 +339,10 @@ function AspValidatorPage() {
   const [validatingOnlineRecord, setValidatingOnlineRecord] = useState(false);
   const [updatingRecord, setUpdatingRecord] = useState(false);
 
-  const validatorModel = useMemo(() => inferValidatorModel(form.market, form.pick), [form.market, form.pick]);
+  const validatorModel = useMemo(
+    () => inferValidatorModel(form.market || pastedParsed?.market.name || "", form.pick || pastedParsed?.market.pick || ""),
+    [form.market, form.pick, pastedParsed],
+  );
   const hasManualCore = useMemo(
     () => Boolean(form.sport && form.source_platform && form.home_team && form.away_team && form.market && form.pick),
     [form],
