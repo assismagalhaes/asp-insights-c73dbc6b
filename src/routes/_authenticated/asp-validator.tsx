@@ -916,11 +916,21 @@ function AspValidatorPage() {
         },
         reason: guardrailReason
           ? guardrailReason
-          : before.decision === next.decision
-            ? "IA + Pesquisa manteve a decisao apos verificacao online."
-            : next.decision === "CONFIRMAR"
-              ? "Contexto online elevou probabilidade/EV ajustado acima do limite minimo de protecao de banca."
-              : "Contexto online reduziu probabilidade/EV ajustado abaixo do limite minimo de protecao de banca.",
+          : (() => {
+              const dp = Math.abs(((next.adjusted_probability ?? 0) - (before.adjusted_probability ?? 0)));
+              const de = Math.abs(((next.adjusted_ev ?? 0) - (before.adjusted_ev ?? 0)));
+              const sameDecision = before.decision === next.decision;
+              const noMaterialChange = dp < 1 && de < 1;
+              if (sameDecision && noMaterialChange) {
+                return "Pesquisa reforcou a decisao, sem alterar materialmente a probabilidade nem o EV ajustado.";
+              }
+              if (sameDecision) {
+                return "IA + Pesquisa manteve a decisao apos verificacao online (probabilidade/EV ajustados marginalmente).";
+              }
+              return next.decision === "CONFIRMAR"
+                ? "Contexto online elevou probabilidade/EV ajustado acima do limite minimo de protecao de banca."
+                : "Contexto online reduziu probabilidade/EV ajustado abaixo do limite minimo de protecao de banca.";
+            })(),
       };
       const onlineContextWithHistory = {
         ...next.online_context_json,
@@ -3315,7 +3325,19 @@ function buildFormValidationContext(
   const offeredOdd = parseNumber(form.offered_odd) ?? pasted?.market.offered_odd ?? null;
   const sourceEv = parseNumber(form.source_ev) ?? pasted?.market.ev_original ?? null;
   const structuredJson = pasted
-    ? ({ ...pasted, input_source: "pasted_text" } as unknown as Record<string, unknown>)
+    ? (() => {
+        const base = { ...pasted, input_source: "pasted_text" } as unknown as Record<string, unknown> & {
+          market_type?: string | null;
+          corners?: unknown;
+        };
+        // Nao popular corners quando o mercado nao for escanteios — evita
+        // contaminar simulacao/IA com linhas Over/Under de gols rotuladas
+        // como escanteios.
+        if (base.market_type && base.market_type !== "corners") {
+          base.corners = null;
+        }
+        return base as Record<string, unknown>;
+      })()
     : null;
   const pastedSummary = pasted
     ? `[TEXTO COLADO INTERPRETADO]\nQualidade: ${(pasted.data_quality_score * 100).toFixed(0)}% | Campos: ${pasted.structured_fields_count}\n\n${pasted.raw_pasted_text}`

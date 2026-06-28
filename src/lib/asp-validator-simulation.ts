@@ -428,11 +428,12 @@ function estimateLambdas(input: AspValidatorSimulationInput): LambdaEstimate {
   let lambdaAway: number | null = null;
   let evidence = 0;
 
-  // 1) Primary source: structured_json.goals extracted by OCR
   const structured = (input.structured_json ?? {}) as Record<string, any>;
   const goalsBlock = (structured.goals ?? {}) as Record<string, any>;
   const home = (goalsBlock.home ?? {}) as Record<string, any>;
   const away = (goalsBlock.away ?? {}) as Record<string, any>;
+  const marketText = normalize(`${input.market ?? ""} ${input.pick ?? ""}`);
+  const isBtts = marketText.includes("btts") || marketText.includes("ambas");
 
   const expHome = readNumber(home.expected_goals);
   const expAway = readNumber(away.expected_goals);
@@ -443,6 +444,44 @@ function estimateLambdas(input: AspValidatorSimulationInput): LambdaEstimate {
     notes.push(`Lambdas extraidos da forca esperada de gols: mandante ${formatNumber(expHome)}, visitante ${formatNumber(expAway)}.`);
   }
 
+  // Composicao tecnica via GoalsBlock estruturado do parser de texto colado.
+  // Prioridade: home_away (recorte relevante) > general. Sem fallback de regex
+  // quando esta fonte existir.
+  if (lambdaHome === null || lambdaAway === null) {
+    const ha = (goalsBlock.home_away ?? {}) as Record<string, any>;
+    const gen = (goalsBlock.general ?? {}) as Record<string, any>;
+    const haHome = (ha.home ?? {}) as Record<string, any>;
+    const haAway = (ha.away ?? {}) as Record<string, any>;
+    const genHome = (gen.home ?? {}) as Record<string, any>;
+    const genAway = (gen.away ?? {}) as Record<string, any>;
+    const homeForHA = readNumber(haHome.avg_for);
+    const awayAgainstHA = readNumber(haAway.avg_against);
+    const awayForHA = readNumber(haAway.avg_for);
+    const homeAgainstHA = readNumber(haHome.avg_against);
+    const homeForGen = readNumber(genHome.avg_for);
+    const awayAgainstGen = readNumber(genAway.avg_against);
+    const awayForGen = readNumber(genAway.avg_for);
+    const homeAgainstGen = readNumber(genHome.avg_against);
+    if (lambdaHome === null && homeForHA !== null && awayAgainstHA !== null) {
+      lambdaHome = (homeForHA + awayAgainstHA) / 2;
+      evidence += 2;
+      notes.push(`Lambda mandante por composicao casa/fora: media(${formatNumber(homeForHA)} marcados em casa, ${formatNumber(awayAgainstHA)} sofridos como visitante) = ${formatNumber(lambdaHome)}.`);
+    } else if (lambdaHome === null && homeForGen !== null && awayAgainstGen !== null) {
+      lambdaHome = (homeForGen + awayAgainstGen) / 2;
+      evidence += 2;
+      notes.push(`Lambda mandante por composicao geral: media(${formatNumber(homeForGen)} marcados, ${formatNumber(awayAgainstGen)} sofridos) = ${formatNumber(lambdaHome)}.`);
+    }
+    if (lambdaAway === null && awayForHA !== null && homeAgainstHA !== null) {
+      lambdaAway = (awayForHA + homeAgainstHA) / 2;
+      evidence += 2;
+      notes.push(`Lambda visitante por composicao casa/fora: media(${formatNumber(awayForHA)} marcados como visitante, ${formatNumber(homeAgainstHA)} sofridos em casa) = ${formatNumber(lambdaAway)}.`);
+    } else if (lambdaAway === null && awayForGen !== null && homeAgainstGen !== null) {
+      lambdaAway = (awayForGen + homeAgainstGen) / 2;
+      evidence += 2;
+      notes.push(`Lambda visitante por composicao geral: media(${formatNumber(awayForGen)} marcados, ${formatNumber(homeAgainstGen)} sofridos) = ${formatNumber(lambdaAway)}.`);
+    }
+  }
+
   if (lambdaHome === null || lambdaAway === null) {
     const homeFor = readNumber(home.home_avg_for) ?? readNumber(home.avg_for);
     const homeAgainst = readNumber(home.home_avg_against) ?? readNumber(home.avg_against);
@@ -451,11 +490,11 @@ function estimateLambdas(input: AspValidatorSimulationInput): LambdaEstimate {
 
     const homeParts = [homeFor, awayAgainst].filter((value): value is number => value !== null && Number.isFinite(value));
     const awayParts = [awayFor, homeAgainst].filter((value): value is number => value !== null && Number.isFinite(value));
-    if (homeParts.length) {
+    if (lambdaHome === null && homeParts.length) {
       lambdaHome = average(homeParts);
       evidence += homeParts.length;
     }
-    if (awayParts.length) {
+    if (lambdaAway === null && awayParts.length) {
       lambdaAway = average(awayParts);
       evidence += awayParts.length;
     }
@@ -468,8 +507,13 @@ function estimateLambdas(input: AspValidatorSimulationInput): LambdaEstimate {
 
   const expectedTotalStruct = readNumber(goalsBlock.expected_total_goals);
 
-  // 2) Fallback: regex over text blob (user_context + JSON)
-  if (lambdaHome === null || lambdaAway === null) {
+  // Fallback por regex. Para BTTS, NAO entra quando ja existem blocos
+  // estruturados de gols (mesmo parciais) — evita inflar lambdas com numeros
+  // soltos do blob.
+  const hasStructuredGoalsBlocks =
+    Object.keys((goalsBlock.home_away ?? {}) as Record<string, any>).length > 0 ||
+    Object.keys((goalsBlock.general ?? {}) as Record<string, any>).length > 0;
+  if ((lambdaHome === null || lambdaAway === null) && !(isBtts && hasStructuredGoalsBlocks)) {
     const text = [input.user_context ?? "", JSON.stringify(input.structured_json ?? {})].join("\n");
     const normalized = text.replace(/,/g, ".");
     const homeScored = firstNumber(normalized, [
@@ -516,6 +560,18 @@ function estimateLambdas(input: AspValidatorSimulationInput): LambdaEstimate {
 
   lambdaHome = clamp(lambdaHome, 0.1, 5.5);
   lambdaAway = clamp(lambdaAway, 0.1, 5.5);
+  // Cap especifico BTTS: limita lambda inicial em 2.2/equipe para evitar
+  // inflar P(BTTS) por dado solto puxando media para cima.
+  if (isBtts) {
+    if (lambdaHome > 2.2) {
+      notes.push(`Lambda mandante limitado de ${formatNumber(lambdaHome)} para 2.20 (cap BTTS).`);
+      lambdaHome = 2.2;
+    }
+    if (lambdaAway > 2.2) {
+      notes.push(`Lambda visitante limitado de ${formatNumber(lambdaAway)} para 2.20 (cap BTTS).`);
+      lambdaAway = 2.2;
+    }
+  }
   const confidence = evidence >= 4 ? "high" : evidence >= 2 ? "medium" : "low";
   if (confidence === "low") warnings.push("Poucas evidencias numericas foram encontradas para calibrar a simulacao.");
   return { lambdaHome, lambdaAway, confidence, notes, warnings };
@@ -527,7 +583,28 @@ function calculateMarketProbability(matrix: ScoreCell[], marketText: string, inp
   const away = normalize(input.away_team ?? "");
 
   if (marketText.includes("btts") || marketText.includes("ambas")) {
-    const yes = matrix.reduce((sum, cell) => sum + (cell.home > 0 && cell.away > 0 ? cell.probability : 0), 0);
+    const yesPoisson = matrix.reduce((sum, cell) => sum + (cell.home > 0 && cell.away > 0 ? cell.probability : 0), 0);
+    const structured = (input.structured_json ?? {}) as Record<string, any>;
+    const goalsBlock = (structured.goals ?? {}) as Record<string, any>;
+    const genHome = ((goalsBlock.general ?? {}) as Record<string, any>).home ?? {};
+    const genAway = ((goalsBlock.general ?? {}) as Record<string, any>).away ?? {};
+    const haHome = ((goalsBlock.home_away ?? {}) as Record<string, any>).home ?? {};
+    const haAway = ((goalsBlock.home_away ?? {}) as Record<string, any>).away ?? {};
+    const bttsValues = [genHome.btts_yes_pct, genAway.btts_yes_pct, haHome.btts_yes_pct, haAway.btts_yes_pct]
+      .map((v) => readNumber(v))
+      .filter((v): v is number => v !== null && Number.isFinite(v));
+    let yes = yesPoisson;
+    if (bttsValues.length >= 2) {
+      const freqAvg = average(bttsValues) / 100;
+      // Blend 60% Poisson + 40% frequencia historica BTTS para nao inflar.
+      yes = clamp(yesPoisson * 0.6 + freqAvg * 0.4, 0.05, 0.95);
+    }
+    // Penalizacao quando o mandante tem BTTS Sim <= 40% no geral E casa/fora.
+    const homeGen = readNumber(genHome.btts_yes_pct);
+    const homeHA = readNumber(haHome.btts_yes_pct);
+    if (homeGen !== null && homeHA !== null && homeGen <= 40 && homeHA <= 40) {
+      yes = clamp(yes * 0.9, 0.05, 0.95);
+    }
     return pickText.includes("nao") || pickText.includes("no") ? 1 - yes : yes;
   }
 
