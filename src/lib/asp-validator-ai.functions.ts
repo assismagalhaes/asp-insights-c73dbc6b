@@ -131,7 +131,7 @@ function normalizeAiResult(value: Record<string, unknown>, context: Record<strin
     adjusted_probability: round(adjustedProbability),
     adjusted_fair_odd: round(adjustedFairOdd),
     adjusted_ev: adjustedEv,
-    simulation_summary: readString(value.simulation_summary) || "Simulacao nao disponivel ou nao conclusiva.",
+    simulation_summary: readString(value.simulation_summary) || (hasSimulationData(context) ? "Simulacao disponivel mas nao resumida pela IA." : "Simulacao nao disponivel ou nao conclusiva."),
     favorable_blocks: readStringArray(value.favorable_blocks),
     against_blocks: readStringArray(value.against_blocks),
     alerts: readStringArray(value.alerts),
