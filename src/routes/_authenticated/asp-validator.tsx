@@ -869,6 +869,11 @@ function AspValidatorPage() {
   const validateSelectedRecordWithOnlineAi = async () => {
     if (!selectedRecord) return;
     setValidatingOnlineRecord(true);
+    const before = {
+      decision: selectedRecord.decision as string,
+      adjusted_probability: selectedRecord.adjusted_probability,
+      adjusted_ev: selectedRecord.adjusted_ev,
+    };
     try {
       const currentUploads = await ensureOcrForStoredUploads();
       const context = {
@@ -883,7 +888,38 @@ function AspValidatorPage() {
           analysis_context: selectedRecord.analysis_context,
         },
       };
-      const next = await validateAspValidatorWithOnlineAi({ data: { context } });
+      const raw = await validateAspValidatorWithOnlineAi({ data: { context } });
+      // Reforco de protecao de banca tambem na IA + Pesquisa.
+      const insufficientEv = raw.adjusted_ev === null || raw.adjusted_ev === undefined || raw.adjusted_ev < 3;
+      const fairAboveOffered =
+        raw.offered_odd !== null && raw.adjusted_fair_odd !== null && raw.adjusted_fair_odd >= raw.offered_odd;
+      const adjustedAlerts = [...(raw.alerts ?? [])];
+      let next = raw;
+      let guardrailReason = "";
+      if (raw.decision === "CONFIRMAR" && (insufficientEv || fairAboveOffered)) {
+        guardrailReason = `Protecao de banca: EV ajustado ${raw.adjusted_ev === null ? "indisponivel" : `${raw.adjusted_ev}%`} ou odd justa ${raw.adjusted_fair_odd ?? "?"} vs ofertada ${raw.offered_odd ?? "?"} nao atingem 3% de margem.`;
+        adjustedAlerts.push(`${guardrailReason} Decisao rebaixada para PULAR.`);
+        next = { ...raw, decision: "PULAR", alerts: adjustedAlerts };
+      }
+      const decisionHistory = {
+        before,
+        after: {
+          decision: next.decision,
+          adjusted_probability: next.adjusted_probability,
+          adjusted_ev: next.adjusted_ev,
+        },
+        reason: guardrailReason
+          ? guardrailReason
+          : before.decision === next.decision
+            ? "IA + Pesquisa manteve a decisao apos verificacao online."
+            : next.decision === "CONFIRMAR"
+              ? "Contexto online elevou probabilidade/EV ajustado acima do limite minimo de protecao de banca."
+              : "Contexto online reduziu probabilidade/EV ajustado abaixo do limite minimo de protecao de banca.",
+      };
+      const onlineContextWithHistory = {
+        ...next.online_context_json,
+        decision_history: decisionHistory,
+      };
       const { error } = await validatorDb
         .from("asp_validator_registros")
         .update({
@@ -894,7 +930,7 @@ function AspValidatorPage() {
           adjusted_probability: next.adjusted_probability,
           adjusted_fair_odd: next.adjusted_fair_odd,
           adjusted_ev: next.adjusted_ev,
-          online_context_json: next.online_context_json,
+          online_context_json: onlineContextWithHistory,
           favorable_blocks: next.favorable_blocks,
           against_blocks: next.against_blocks,
           alerts: next.alerts,
@@ -904,7 +940,9 @@ function AspValidatorPage() {
         })
         .eq("id", selectedRecord.id);
       if (error) throw error;
-      setSelectedRecord((prev) => (prev ? applyOnlineAiResult(prev, next) : prev));
+      setSelectedRecord((prev) =>
+        prev ? applyOnlineAiResult(prev, { ...next, online_context_json: onlineContextWithHistory }) : prev,
+      );
       toast.success("IA + Pesquisa concluida.");
       await loadHistory();
     } catch (error) {
@@ -920,6 +958,7 @@ function AspValidatorPage() {
       setValidatingOnlineRecord(false);
     }
   };
+
 
   const saveRecordResult = async () => {
     if (!selectedRecord || !resultForm) return;
