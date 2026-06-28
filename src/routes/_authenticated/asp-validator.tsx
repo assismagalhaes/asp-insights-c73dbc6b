@@ -1655,6 +1655,7 @@ function ExtractedImageDataPanel({ structured }: { structured: StructuredValidat
       <div className="mt-3 grid gap-3 md:grid-cols-4">
         <Info label="Mercado identificado" value={market?.name || structured.prediction?.market || "-"} />
         <Info label="Pick" value={market?.pick || structured.prediction?.pick || "-"} />
+        <Info label="Mercado normalizado" value={(market as { market_normalized?: string | null } | undefined)?.market_normalized || "-"} />
         <Info label="Odd" value={formatOdd(Number(market?.offered_odd ?? structured.prediction?.offered_odd ?? 0) || null)} />
         <Info label="Probabilidade" value={formatPercent(Number(market?.probability_original ?? structured.prediction?.source_probability ?? 0) || null)} />
         <Info label="Odd justa" value={formatOdd(Number(market?.fair_odd_original ?? structured.prediction?.source_fair_odd ?? 0) || null)} />
@@ -1663,6 +1664,7 @@ function ExtractedImageDataPanel({ structured }: { structured: StructuredValidat
         <Info label="Qualidade" value={`${Math.round((structured.data_quality_score ?? 0) * 100)}%`} />
         <Info label="Campos extraidos" value={String(structured.structured_fields_count ?? 0)} />
       </div>
+      <NormalizedCornerLinesPanel home={corners?.home?.normalized_market_lines ?? []} away={corners?.away?.normalized_market_lines ?? []} />
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         <div className="rounded-md border border-border p-3">
           <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Geral - {structured.match?.home_team || "Mandante"}</div>
