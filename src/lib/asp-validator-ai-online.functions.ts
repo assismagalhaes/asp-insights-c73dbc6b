@@ -56,18 +56,14 @@ export const validateAspValidatorWithOnlineAi = createServerFn({ method: "POST" 
 
     const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
     const { firecrawlSearch, firecrawlScrape } = await import("@/lib/firecrawl.server");
+    const { slimAspValidatorContext } = await import("@/lib/asp-validator-ai-slim");
     const gateway = createLovableAiGatewayProvider(key);
     const searches: string[] = [];
     const sources: Array<{ title: string; url: string }> = [];
     let scrapeCount = 0;
 
-    const prompt = [
-      "Analise o contexto consolidado abaixo.",
-      "A ordem de leitura deve ser: campos manuais, JSON estruturado/OCR, simulacao probabilistica, parecer IA anterior e finalmente pesquisa online.",
-      "Use as ferramentas online de forma objetiva para procurar somente fatores externos relevantes.",
-      "Retorne apenas JSON valido.",
-      JSON.stringify(data.context, null, 2),
-    ].join("\n\n");
+    const slim = slimAspValidatorContext(data.context);
+    const prompt = `Contexto consolidado (ordem: manual > structured_json > simulation_json > parecer IA anterior > pesquisa online). Use web_search/web_scrape de forma objetiva. Retorne JSON valido.\n\n${JSON.stringify(slim)}`;
 
     const { text } = await generateText({
       model: gateway("google/gemini-3-flash-preview"),
