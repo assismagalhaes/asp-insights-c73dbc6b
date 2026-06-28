@@ -583,7 +583,28 @@ function calculateMarketProbability(matrix: ScoreCell[], marketText: string, inp
   const away = normalize(input.away_team ?? "");
 
   if (marketText.includes("btts") || marketText.includes("ambas")) {
-    const yes = matrix.reduce((sum, cell) => sum + (cell.home > 0 && cell.away > 0 ? cell.probability : 0), 0);
+    const yesPoisson = matrix.reduce((sum, cell) => sum + (cell.home > 0 && cell.away > 0 ? cell.probability : 0), 0);
+    const structured = (input.structured_json ?? {}) as Record<string, any>;
+    const goalsBlock = (structured.goals ?? {}) as Record<string, any>;
+    const genHome = ((goalsBlock.general ?? {}) as Record<string, any>).home ?? {};
+    const genAway = ((goalsBlock.general ?? {}) as Record<string, any>).away ?? {};
+    const haHome = ((goalsBlock.home_away ?? {}) as Record<string, any>).home ?? {};
+    const haAway = ((goalsBlock.home_away ?? {}) as Record<string, any>).away ?? {};
+    const bttsValues = [genHome.btts_yes_pct, genAway.btts_yes_pct, haHome.btts_yes_pct, haAway.btts_yes_pct]
+      .map((v) => readNumber(v))
+      .filter((v): v is number => v !== null && Number.isFinite(v));
+    let yes = yesPoisson;
+    if (bttsValues.length >= 2) {
+      const freqAvg = average(bttsValues) / 100;
+      // Blend 60% Poisson + 40% frequencia historica BTTS para nao inflar.
+      yes = clamp(yesPoisson * 0.6 + freqAvg * 0.4, 0.05, 0.95);
+    }
+    // Penalizacao quando o mandante tem BTTS Sim <= 40% no geral E casa/fora.
+    const homeGen = readNumber(genHome.btts_yes_pct);
+    const homeHA = readNumber(haHome.btts_yes_pct);
+    if (homeGen !== null && homeHA !== null && homeGen <= 40 && homeHA <= 40) {
+      yes = clamp(yes * 0.9, 0.05, 0.95);
+    }
     return pickText.includes("nao") || pickText.includes("no") ? 1 - yes : yes;
   }
 
