@@ -2246,10 +2246,33 @@ function OnlineContextPanel({ record }: { record: ValidatorRecord }) {
 
       {online ? (
         <>
+          {online.decision_history ? (
+            <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3">
+              <p className="mb-2 text-xs uppercase tracking-wide text-emerald-300">Historico da decisao</p>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded border border-border bg-background/40 p-2 text-xs">
+                  <div className="font-semibold text-muted-foreground">Antes da pesquisa</div>
+                  <div>Decisao: <span className="font-mono">{online.decision_history.before.decision ?? "-"}</span></div>
+                  <div>Probabilidade: <span className="font-mono">{formatPercent(online.decision_history.before.adjusted_probability)}</span></div>
+                  <div>EV ajustado: <span className="font-mono">{formatPercent(online.decision_history.before.adjusted_ev)}</span></div>
+                </div>
+                <div className="rounded border border-border bg-background/40 p-2 text-xs">
+                  <div className="font-semibold text-muted-foreground">Apos a pesquisa</div>
+                  <div>Decisao: <span className="font-mono">{online.decision_history.after.decision ?? "-"}</span></div>
+                  <div>Probabilidade: <span className="font-mono">{formatPercent(online.decision_history.after.adjusted_probability)}</span></div>
+                  <div>EV ajustado: <span className="font-mono">{formatPercent(online.decision_history.after.adjusted_ev)}</span></div>
+                </div>
+              </div>
+              {online.decision_history.reason ? (
+                <p className="mt-2 text-xs text-muted-foreground">Motivo: {online.decision_history.reason}</p>
+              ) : null}
+            </div>
+          ) : null}
           <div className="rounded-md border border-border bg-background/50 p-3">
             <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Resumo online</p>
             <p className="text-sm leading-relaxed">{online.online_summary}</p>
           </div>
+
           <SignalBlock title="Achados relevantes" items={online.relevant_findings} tone="good" />
           <SignalBlock title="Ausencia de achados" items={online.no_relevant_findings} tone="warn" />
           <SignalBlock title="Alertas contextuais" items={online.contextual_alerts} tone="bad" />
