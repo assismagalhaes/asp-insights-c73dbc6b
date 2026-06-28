@@ -67,6 +67,13 @@ export function routeSimulation(input: AspValidatorSimulationInput): RoutedSimul
     return { ...sim, market_type: "cards", period, model_name: "football_cards_total_simplified" };
   }
 
+  // Primeiro a marcar - simulador dedicado
+  if (declared === "first_goal" || /marcar\s+primeiro|marca\s+primeiro|primeiro\s+(a|para)\s+marcar|first\s+goal|first\s+to\s+score|abrir\s+o\s+placar/.test(blob)) {
+    const sim = simulateFirstGoal(input, period);
+    return { ...sim, market_type: "first_goal", period, model_name: "football_first_goal_simplified" };
+  }
+
+
   // Mercados delegados ao Poisson / corner simulator existente
   const base = runAspValidatorSimulation(input);
   let proxy_used: string | null = null;
@@ -218,4 +225,149 @@ function fmt(v: number | null): string {
 
 function fmtPct(v: number | null): string {
   return v === null ? "indisponivel" : `${Math.round(v * 10000) / 100}%`;
+}
+
+// ============================================================================
+// Simulador de "primeiro a marcar" - football_first_goal_simplified
+// ============================================================================
+
+function simulateFirstGoal(
+  input: AspValidatorSimulationInput,
+  period: string,
+): AspValidatorSimulationResult {
+  const structured = (input.structured_json ?? {}) as Record<string, any>;
+  const market = (structured.market ?? structured.prediction ?? {}) as Record<string, any>;
+  const prediction = (structured.prediction ?? {}) as Record<string, any>;
+  const goals = (structured.goals ?? {}) as Record<string, any>;
+  const general = (goals.general ?? {}) as Record<string, any>;
+  const homeAway = (goals.home_away ?? {}) as Record<string, any>;
+  const ghGeneral = (general.home ?? {}) as Record<string, any>;
+  const gaGeneral = (general.away ?? {}) as Record<string, any>;
+  const ghHA = (homeAway.home ?? {}) as Record<string, any>;
+  const gaHA = (homeAway.away ?? {}) as Record<string, any>;
+
+  // Determinar lado escolhido
+  const pickText = norm(`${input.pick ?? market.pick ?? ""} ${input.market ?? ""}`);
+  const homeName = norm(input.home_team ?? "");
+  const awayName = norm(input.away_team ?? "");
+  let side: "home" | "away" | null = null;
+  if (/visitante|away|\bfora\b/.test(pickText) || (awayName && pickText.includes(awayName))) side = "away";
+  else if (/mandante|home|\bcasa\b/.test(pickText) || (homeName && pickText.includes(homeName))) side = "home";
+
+  const offeredOdd = input.offered_odd ?? readNumber(market.offered_odd ?? prediction.offered_odd);
+  const sourceProb = readPct(market.probability_original ?? prediction.source_probability);
+  const marketProb = offeredOdd && offeredOdd > 1 ? 1 / offeredOdd : null;
+
+  if (!side) {
+    return {
+      model: "poisson_score_matrix",
+      status: "low_confidence",
+      lambda_home: null,
+      lambda_away: null,
+      market_probability: null,
+      fair_odd: null,
+      ev: null,
+      most_likely_scores: [],
+      goal_distribution: {},
+      notes: ["Simulacao 'primeiro a marcar' nao realizada: lado (mandante/visitante) nao identificado."],
+      warnings: ["Selecao de lado ausente para mercado first_goal."],
+    };
+  }
+
+  // Componente 1: frequencia direta (prioriza recorte casa/fora; fallback geral)
+  const sideGeneral = side === "home" ? ghGeneral : gaGeneral;
+  const sideHA = side === "home" ? ghHA : gaHA;
+  const oppGeneral = side === "home" ? gaGeneral : ghGeneral;
+  const oppHA = side === "home" ? gaHA : ghHA;
+
+  const fgRateHA = readPct(sideHA.first_goal_pct);
+  const fgRateGeneral = readPct(sideGeneral.first_goal_pct);
+  const directRate = fgRateHA ?? fgRateGeneral;
+  // Penalizacao se adversario tambem marca primeiro com frequencia
+  const oppFgRate = readPct(oppHA.first_goal_pct) ?? readPct(oppGeneral.first_goal_pct);
+
+  // Componente 2: pressao ofensiva = avg_for(selecionado) - avg_against(adversario)
+  const sideAvgFor = readNumber(sideHA.avg_for) ?? readNumber(sideGeneral.avg_for);
+  const oppAvgAgainst = readNumber(oppHA.avg_against) ?? readNumber(oppGeneral.avg_against);
+  let goalPressure: number | null = null;
+  if (sideAvgFor !== null && oppAvgAgainst !== null) {
+    // mapeia (avg_for + opp_avg_against) / 2 em [0.5..3.5] para [0.3..0.85]
+    const lambda = (sideAvgFor + oppAvgAgainst) / 2;
+    goalPressure = clamp(0.3 + (lambda - 0.5) * 0.18, 0.3, 0.85);
+  }
+
+  // Componente 3: iniciativa/eficiencia
+  const perf = (structured.general_performance_home_away ?? structured.general_performance ?? {}) as Record<string, any>;
+  const sidePerf = (perf[side] ?? {}) as Record<string, any>;
+  const oppPerf = (perf[side === "home" ? "away" : "home"] ?? {}) as Record<string, any>;
+  const sideEff = readPct(sidePerf.efficiency_pct);
+  const sidePoss = readPct(sidePerf.avg_possession_pct);
+  let initiative: number | null = null;
+  if (sideEff !== null || sidePoss !== null) {
+    initiative = clamp(((sideEff ?? 0.5) + (sidePoss ?? 0.5)) / 2, 0.25, 0.85);
+  }
+
+  // Combinacao ponderada
+  const components: Array<{ v: number; w: number; label: string }> = [];
+  if (directRate !== null) components.push({ v: directRate, w: 0.45, label: "first_goal_pct" });
+  if (goalPressure !== null) components.push({ v: goalPressure, w: 0.25, label: "pressao ofensiva" });
+  if (initiative !== null) components.push({ v: initiative, w: 0.15, label: "iniciativa" });
+  if (sourceProb !== null) components.push({ v: sourceProb, w: 0.1, label: "prob. fonte" });
+  if (marketProb !== null) components.push({ v: marketProb, w: 0.05, label: "odd implicita" });
+
+  if (!components.length) {
+    return {
+      model: "poisson_score_matrix",
+      status: "low_confidence",
+      lambda_home: null,
+      lambda_away: null,
+      market_probability: null,
+      fair_odd: null,
+      ev: null,
+      most_likely_scores: [],
+      goal_distribution: {},
+      notes: ["Simulacao first_goal nao realizada: sem first_goal_pct nem dados ofensivos."],
+      warnings: ["Dados insuficientes para mercado 'primeiro a marcar'."],
+    };
+  }
+
+  const wsum = components.reduce((s, c) => s + c.w, 0);
+  let prob = components.reduce((s, c) => s + c.v * c.w, 0) / wsum;
+
+  // Penalizacao: se adversario tambem tem first_goal_pct alto (>= selecionado), reduz
+  const warnings: string[] = [];
+  if (directRate !== null && oppFgRate !== null && oppFgRate >= directRate) {
+    prob *= 0.9;
+    warnings.push(`Adversario tem first_goal_pct igual ou superior (${fmtPct(oppFgRate)} vs ${fmtPct(directRate)}); probabilidade penalizada em 10%.`);
+  }
+  // Guardrail odd baixa
+  if (offeredOdd !== null && offeredOdd < 1.3 && prob < 0.85) {
+    warnings.push(`Odd baixa (${offeredOdd}) exige probabilidade ajustada >= 85%. Atual: ${fmtPct(prob)}.`);
+  }
+  prob = clamp(prob, 0.05, 0.95);
+
+  const fair = prob > 0 ? round(1 / prob, 2) : null;
+  const ev = offeredOdd && offeredOdd > 1 ? round(offeredOdd * prob - 1, 4) : null;
+
+  const status = components.length >= 3 && directRate !== null ? "completed" : "low_confidence";
+
+  return {
+    model: "poisson_score_matrix",
+    status,
+    lambda_home: null,
+    lambda_away: null,
+    market_probability: round(prob, 4),
+    fair_odd: fair,
+    ev,
+    most_likely_scores: [],
+    goal_distribution: {},
+    notes: [
+      `Modelo football_first_goal_simplified - ${side === "home" ? "Mandante" : "Visitante"} marca primeiro (${period}).`,
+      `first_goal_pct (recorte ${fgRateHA !== null ? "casa/fora" : "geral"}): ${fmtPct(directRate)}; adversario: ${fmtPct(oppFgRate)}.`,
+      `Pressao ofensiva ~ ${fmt(sideAvgFor)} marcados x ${fmt(oppAvgAgainst)} sofridos do adversario => score ${fmtPct(goalPressure)}.`,
+      `Iniciativa (eficiencia/posse): ${fmtPct(initiative)}.`,
+      `Componentes usados: ${components.map((c) => c.label).join(", ")}.`,
+    ],
+    warnings,
+  };
 }

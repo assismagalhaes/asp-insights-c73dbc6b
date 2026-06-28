@@ -647,7 +647,8 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
     detection.market_type === "goals_total" ||
     detection.market_type === "btts" ||
     detection.market_type === "x1x2" ||
-    detection.market_type === "double_chance"
+    detection.market_type === "double_chance" ||
+    detection.market_type === "first_goal"
       ? parseFootballGoalsData(text, home_team, away_team, detection.period)
       : null;
   const cardsBlock: CardsBlock | null =
@@ -658,7 +659,9 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
     detection.market_type === "x1x2" ||
     detection.market_type === "double_chance" ||
     detection.market_type === "goals_total" ||
-    detection.market_type === "btts";
+    detection.market_type === "btts" ||
+    detection.market_type === "first_goal";
+
   let generalPerf: GeneralPerformanceBlock | null = wantsGeneralPerf
     ? parseFootballGeneralPerformance(generalText, home_team, away_team, detection.period)
     : null;

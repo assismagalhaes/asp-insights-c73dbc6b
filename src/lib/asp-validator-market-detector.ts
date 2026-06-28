@@ -19,7 +19,9 @@ export type FootballMarketType =
   | "x1x2"
   | "double_chance"
   | "corners"
-  | "cards";
+  | "cards"
+  | "first_goal";
+
 
 export type FootballPeriod = "FT" | "HT" | "ST";
 
@@ -79,6 +81,11 @@ export function detectFootballPeriod(text: string): FootballPeriod {
 function detectTypeFromMarketLine(line: string): FootballMarketType | null {
   if (!line.trim()) return null;
   const t = norm(line);
+  // Prioridade maxima: "Primeiro a marcar" deve vir ANTES de 1X2/escanteios,
+  // pois pode conter palavras como "Casa"/nome do time que confundem 1X2.
+  if (/marcar\s+primeiro|marca\s+primeiro|primeiro\s+(a|para)\s+marcar|first\s+goal|first\s+to\s+score|team\s+to\s+score\s+first|abrir\s+o\s+placar/.test(t)) {
+    return "first_goal";
+  }
   if (/escanteio|corner|canto/.test(t)) return "corners";
   if (/cartao|cartoes|cards?|amarel|vermelh/.test(t)) return "cards";
   if (
@@ -96,6 +103,7 @@ function detectTypeFromMarketLine(line: string): FootballMarketType | null {
   return null;
 }
 
+
 function detectSelectionSide(
   type: FootballMarketType | null,
   pick: string,
@@ -103,17 +111,18 @@ function detectSelectionSide(
   homeTeam?: string | null,
   awayTeam?: string | null,
 ): FootballSelectionSide {
-  if (type !== "x1x2" && type !== "double_chance") return null;
+  if (type !== "x1x2" && type !== "double_chance" && type !== "first_goal") return null;
   const t = norm(`${pick} ${market}`);
   const home = norm(homeTeam ?? "");
   const away = norm(awayTeam ?? "");
-  if (/empate|draw|\bx\b/.test(t) && type === "x1x2") return "draw";
+  if (type === "x1x2" && /empate|draw|\bx\b/.test(t)) return "draw";
   if (/visitante|away|\bfora\b/.test(t)) return "away";
   if (/mandante|home|\bcasa\b/.test(t)) return "home";
   if (away && t.includes(away)) return "away";
   if (home && t.includes(home)) return "home";
   return null;
 }
+
 
 export function detectFootballMarketType(
   rawText: string,
@@ -131,7 +140,9 @@ export function detectFootballMarketType(
 
   // 2. So depois caimos para deteccao por blocos estatisticos auxiliares.
   if (!market_type) {
-    if (/escanteio|corner|canto/.test(blob)) market_type = "corners";
+    if (/marcar\s+primeiro|marca\s+primeiro|primeiro\s+(a|para)\s+marcar|first\s+goal|first\s+to\s+score|team\s+to\s+score\s+first|abrir\s+o\s+placar/.test(blob))
+      market_type = "first_goal";
+    else if (/escanteio|corner|canto/.test(blob)) market_type = "corners";
     else if (/cartao|cartoes|cards?|amarel|vermelh/.test(blob)) market_type = "cards";
     else if (
       /\b1\s*x\s*2\b|match\s*odds|moneyline|resultado\s+final|vencedor|\b(home|away)\s*win\b|para\s+vencer/.test(
@@ -145,6 +156,7 @@ export function detectFootballMarketType(
     else if (/(mais\s+de|menos\s+de|over|under|gol|goal|total)/.test(blob))
       market_type = "goals_total";
   }
+
 
   const line = extractLine(`${formPick || ""} ${formMarket || ""}`);
   const pick_normalized = normalizePick(formMarket || "", formPick || "", market_type, period, line, homeTeam, awayTeam);
@@ -172,7 +184,9 @@ function inferValidatorModelFromType(type: FootballMarketType | null): Validator
     case "btts":
     case "x1x2":
     case "double_chance":
+    case "first_goal":
       return "ASP Goal Validator";
+
     default:
       return "ASP Market Validator";
   }
@@ -226,8 +240,20 @@ function normalizePick(
       return `Mandante vence${homeTeam ? ` (${homeTeam})` : ""}${periodSuffix}`.trim();
     }
   }
+  if (type === "first_goal") {
+    const aw = norm(awayTeam ?? "");
+    const hm = norm(homeTeam ?? "");
+    if (/visitante|away|\bfora\b/.test(lower) || (aw && lower.includes(aw))) {
+      return `Visitante marca primeiro${awayTeam ? ` (${awayTeam})` : ""}${periodSuffix}`.trim();
+    }
+    if (/mandante|home|\bcasa\b/.test(lower) || (hm && lower.includes(hm))) {
+      return `Mandante marca primeiro${homeTeam ? ` (${homeTeam})` : ""}${periodSuffix}`.trim();
+    }
+    return `Marca primeiro${periodSuffix}`.trim();
+  }
   return raw;
 }
+
 
 /**
  * Sinonimos de "mando": retorna "all", "home" ou "away" se conseguir inferir
