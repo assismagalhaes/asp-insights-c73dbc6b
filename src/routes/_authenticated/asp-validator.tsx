@@ -345,11 +345,58 @@ function AspValidatorPage() {
     [form],
   );
   // Permite validar tambem quando ha uploads (OCR podera preencher campos automaticamente)
-  const canValidate = hasManualCore || uploads.length > 0;
+  // ou quando ha texto colado interpretado (fluxo principal a partir desta versao).
+  const canValidate = hasManualCore || uploads.length > 0 || Boolean(pastedParsed);
 
   const update = (field: keyof ValidatorForm, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
+
+  const interpretPastedText = () => {
+    const raw = pastedText.trim();
+    if (!raw) {
+      toast.error("Cole os dados do prognostico antes de interpretar.");
+      return;
+    }
+    try {
+      const parsed = parsePastedPrognostico(pastedText);
+      setPastedParsed(parsed);
+      toast.success(
+        `Texto interpretado: ${parsed.structured_fields_count} campos estruturados (qualidade ${(parsed.data_quality_score * 100).toFixed(0)}%).`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao interpretar o texto colado.");
+    }
+  };
+
+  const applyPastedToForm = () => {
+    if (!pastedParsed) {
+      toast.error("Interprete o texto colado antes de aplicar.");
+      return;
+    }
+    const p = pastedParsed.form_patch;
+    setForm((prev) => ({
+      ...prev,
+      sport: p.sport || prev.sport,
+      league: p.league || prev.league,
+      match_date: p.match_date || prev.match_date,
+      home_team: p.home_team || prev.home_team,
+      away_team: p.away_team || prev.away_team,
+      market: p.market || prev.market,
+      pick: p.pick || prev.pick,
+      line: p.line || prev.line,
+      offered_odd: p.offered_odd || prev.offered_odd,
+      source_probability: p.source_probability || prev.source_probability,
+      source_ev: p.source_ev || prev.source_ev,
+    }));
+    toast.success("Formulario preenchido com os dados colados. Revise antes de validar.");
+  };
+
+  const clearPastedText = () => {
+    setPastedText("");
+    setPastedParsed(null);
+  };
+
 
   const loadHistory = async () => {
     setLoadingHistory(true);
