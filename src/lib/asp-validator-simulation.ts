@@ -268,15 +268,23 @@ function runCornerTotalOverSimulation(
   const awayTotal = readNumber(away.avg_total);
   const homeAwayTotal = readNumber(home.home_away_avg_total);
   const awayHomeTotal = readNumber(away.home_away_avg_total);
+  // Composicao tecnica: expectativa de cantos = (mandante marcados + visitante sofridos)/2 + (visitante marcados + mandante sofridos)/2
+  // NUNCA somar diretamente avg_total do mandante com avg_total do visitante (dupla contagem).
+  const homeForHome = readNumber(home.home_away_avg_for) ?? homeFor;
+  const homeAgainstHome = readNumber(home.home_away_avg_against) ?? homeAgainst;
+  const awayForAway = readNumber(away.home_away_avg_for) ?? awayFor;
+  const awayAgainstAway = readNumber(away.home_away_avg_against) ?? awayAgainst;
+  const expHome = homeForHome !== null && awayAgainstAway !== null ? (homeForHome + awayAgainstAway) / 2 : null;
+  const expAway = awayForAway !== null && homeAgainstHome !== null ? (awayForAway + homeAgainstHome) / 2 : null;
+  const matchupTotal = expHome !== null && expAway !== null ? expHome + expAway : null;
+  const generalAverageTotal = homeTotal !== null && awayTotal !== null ? (homeTotal + awayTotal) / 2 : null;
   const expectedPieces = [
-    homeTotal,
-    awayTotal,
-    homeFor !== null && awayAgainst !== null ? homeFor + awayAgainst : null,
-    awayFor !== null && homeAgainst !== null ? awayFor + homeAgainst : null,
-    homeAwayTotal,
-    awayHomeTotal,
+    matchupTotal,
+    generalAverageTotal,
+    homeAwayTotal !== null && awayHomeTotal !== null ? (homeAwayTotal + awayHomeTotal) / 2 : null,
   ].filter((value): value is number => value !== null && Number.isFinite(value));
   const expectedTotal = expectedPieces.length ? average(expectedPieces) : null;
+
   const avgSupport = expectedTotal !== null
     ? wantsUnder
       ? clampDecimal((line + 1.5 - expectedTotal) / Math.max(line + 1.5, 1), 0.08, 0.78)
