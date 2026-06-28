@@ -2191,25 +2191,10 @@ function PastedDiagnosticsPanel({ record }: { record: ValidatorRecord }) {
 
 
 
-function AiAnalysisContextPanel({ record }: { record: ValidatorRecord }) {
-  const rawOcr = record.ocr_raw_text?.trim() ?? "";
-  const isPastedSummary = rawOcr.startsWith("[TEXTO COLADO INTERPRETADO]");
-  const structured = (record.structured_json ?? {}) as { input_source?: unknown; raw_pasted_text?: unknown };
-  const ocrStructured = (record.ocr_structured_data ?? {}) as { input_source?: unknown; raw_pasted_text?: unknown };
-  const usedPasted =
-    isPastedSummary ||
-    structured.input_source === "pasted_text" ||
-    ocrStructured.input_source === "pasted_text" ||
-    Boolean(structured.raw_pasted_text) ||
-    Boolean(ocrStructured.raw_pasted_text);
-  const usedRealOcr = Boolean(rawOcr) && !isPastedSummary && !usedPasted;
+function AiAnalysisContextPanel({ record, uploads = [] }: { record: ValidatorRecord; uploads?: ValidatorUploadRecord[] }) {
+  const { isPasted, hasRealOcr, pastedText } = detectPastedRecord(record, uploads);
   const usedStructured = hasJsonContent(record.structured_json);
   const usedSimulation = hasJsonContent(record.simulation_json);
-  const pastedText = String(
-    (structured.raw_pasted_text as string | undefined) ??
-      (ocrStructured.raw_pasted_text as string | undefined) ??
-      (isPastedSummary ? rawOcr.replace(/^\[TEXTO COLADO INTERPRETADO\][\s\S]*?\n\n/, "") : ""),
-  );
   return (
     <div className="space-y-3 rounded-md border border-border bg-muted/10 p-3">
       <div>
@@ -2219,11 +2204,12 @@ function AiAnalysisContextPanel({ record }: { record: ValidatorRecord }) {
         </p>
       </div>
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-        <Info label="Usou OCR real" value={usedRealOcr ? "Sim" : "Nao"} />
-        <Info label="Usou texto colado" value={usedPasted ? "Sim" : "Nao"} />
+        {hasRealOcr ? <Info label="Usou OCR real" value="Sim" /> : null}
+        <Info label="Usou texto colado" value={isPasted ? "Sim" : "Nao"} />
         <Info label="Usou JSON estruturado" value={usedStructured ? "Sim" : "Nao"} />
         <Info label="Usou simulacao" value={usedSimulation ? "Sim" : "Nao"} />
       </div>
+
       {pastedText ? (
         <details className="rounded-md border border-border/60 bg-background/40 p-3">
           <summary className="cursor-pointer select-none text-xs uppercase tracking-wide text-muted-foreground">
