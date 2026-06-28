@@ -128,7 +128,7 @@ function normalizeOnlineResult(
   const adjustedProbability = clampNumber(readNumber(value.adjusted_probability), 0, 100) ?? manual.source_probability ?? 50;
   const offeredOdd = readNumber(value.offered_odd) ?? manual.offered_odd;
   const adjustedFairOdd = readNumber(value.adjusted_fair_odd) ?? (adjustedProbability > 0 ? round(100 / adjustedProbability) : 2);
-  const adjustedEv = readNumber(value.adjusted_ev) ?? (offeredOdd ? round((offeredOdd * (adjustedProbability / 100) - 1) * 100) : null);
+  const adjustedEv = normalizeEvPercent(readNumber(value.adjusted_ev)) ?? (offeredOdd ? round((offeredOdd * (adjustedProbability / 100) - 1) * 100) : null);
   const onlineSummary =
     readString(value.online_summary) ||
     "Verificacao online sem achados relevantes. Nao ha noticia ou contexto externo suficiente para alterar a analise.";
