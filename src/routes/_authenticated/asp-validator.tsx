@@ -493,8 +493,8 @@ function AspValidatorPage() {
     setOcrFilesByUpload((prev) => ({ ...prev, [uploadId]: file }));
   };
 
-  const processUploadOcr = async (upload: ValidatorUploadRecord) => {
-    if (!selectedRecord) return;
+  const processUploadOcr = async (upload: ValidatorUploadRecord): Promise<boolean> => {
+    if (!selectedRecord) return false;
 
     setProcessingOcr((prev) => ({ ...prev, [upload.id]: true }));
     try {
@@ -549,6 +549,7 @@ function AspValidatorPage() {
           : prev,
       );
       setUploadsByRecord((prev) => ({ ...prev, [selectedRecord.id]: applyStructuredUploads(nextUploads, structured) }));
+      return ocrPayload.ocr_status === "completed";
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erro ao processar OCR.";
       await validatorDb
@@ -556,6 +557,7 @@ function AspValidatorPage() {
         .update({ ocr_status: "failed", ocr_error: message, updated_at: new Date().toISOString() })
         .eq("id", upload.id);
       toast.error(message);
+      return false;
     } finally {
       setProcessingOcr((prev) => ({ ...prev, [upload.id]: false }));
     }
@@ -569,9 +571,17 @@ function AspValidatorPage() {
       toast.error("Nenhum arquivo salvo esta disponivel para OCR.");
       return;
     }
+    let processed = 0;
+    let failed = 0;
     for (const upload of available) {
-      await processUploadOcr(upload);
+      const ok = await processUploadOcr(upload);
+      if (ok) {
+        processed += 1;
+      } else {
+        failed += 1;
+      }
     }
+    toast.message(`OCR em lote finalizado: ${available.length} encontrado(s), ${processed} processado(s), ${failed} falha(s).`);
   };
 
   const structureSelectedRecordOcr = async () => {
@@ -1116,7 +1126,7 @@ function RecordDetailDialog({
   onUpdateResult: (field: keyof ResultForm, value: string) => void;
   onUpdateUploadComment: (uploadId: string, value: string) => void;
   onAttachOcrFile: (uploadId: string, file: File | null) => void;
-  onProcessUploadOcr: (upload: ValidatorUploadRecord) => Promise<void>;
+  onProcessUploadOcr: (upload: ValidatorUploadRecord) => Promise<boolean>;
   onProcessAllAvailableOcr: () => Promise<void>;
   onStructureOcr: () => Promise<void>;
   onRunSimulation: () => Promise<void>;
@@ -1279,7 +1289,7 @@ function UploadsDetail({
   processingOcr: Record<string, boolean>;
   onUpdateUploadComment: (uploadId: string, value: string) => void;
   onAttachOcrFile: (uploadId: string, file: File | null) => void;
-  onProcessUploadOcr: (upload: ValidatorUploadRecord) => Promise<void>;
+  onProcessUploadOcr: (upload: ValidatorUploadRecord) => Promise<boolean>;
 }) {
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
 
@@ -1310,7 +1320,12 @@ function UploadsDetail({
     <div className="space-y-3 rounded-md border border-border bg-muted/10 p-3">
       <div>
         <div className="text-sm font-semibold">Uploads vinculados</div>
-        <p className="mt-1 text-xs text-muted-foreground">Arquivos ficam armazenados e podem ser reprocessados por OCR sem reenviar o print.</p>
+        <p className="mt-1 text-xs text-muted-foreground">Arquivos armazenados no Supabase Storage e vinculados ao registro para auditoria e reprocessamento.</p>
+        <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+          <Badge variant="outline">Storage: {uploads.filter((upload) => upload.file_path).length}/{uploads.length}</Badge>
+          <Badge variant="outline">OCR completed: {uploads.filter((upload) => upload.ocr_status === "completed").length}</Badge>
+          <Badge variant="outline">Falhas: {uploads.filter((upload) => upload.ocr_status === "failed").length}</Badge>
+        </div>
       </div>
       {uploads.length ? (
         uploads.map((upload) => (
@@ -1322,7 +1337,7 @@ function UploadsDetail({
                 OCR: {upload.ocr_status}
               </Badge>
               <Badge variant={upload.structured_status === "completed" ? "default" : upload.structured_status === "failed" ? "destructive" : "outline"}>
-                JSON: {upload.structured_status || "pending"}
+                JSON: {upload.structured_status === "completed" && upload.ocr_status !== "completed" ? "completed (manual/comentario)" : upload.structured_status || "pending"}
               </Badge>
               <span className="text-sm font-semibold">{upload.file_name}</span>
               <span className="text-xs text-muted-foreground">
@@ -1481,6 +1496,13 @@ function StructuredOcrPanel({ record, uploads }: { record: ValidatorRecord; uplo
       {quality?.missing_fields && Array.isArray(quality.missing_fields) && quality.missing_fields.length ? (
         <SignalBlock title="Campos faltantes" items={quality.missing_fields.map(String)} tone="warn" />
       ) : null}
+      {hasJsonContent((structured as { field_sources?: Record<string, string> } | null)?.field_sources ?? null) ? (
+        <SignalBlock
+          title="Origem dos dados estruturados"
+          items={Object.entries(((structured as { field_sources?: Record<string, string> } | null)?.field_sources ?? {})).map(([key, value]) => `${key}: ${value}`)}
+          tone="good"
+        />
+      ) : null}
       {quality?.conflicts && Array.isArray(quality.conflicts) && quality.conflicts.length ? (
         <SignalBlock title="Conflitos detectados" items={quality.conflicts.map(String)} tone="bad" />
       ) : null}
@@ -1558,6 +1580,7 @@ function OcrDiagnosticsPanel({ record, uploads }: { record: ValidatorRecord; upl
       ? ((structured as { missing_critical_fields?: unknown[] }).missing_critical_fields ?? []).map(String)
       : [];
   const fieldsCount = record.ocr_structured_fields_count ?? countStructuredFields(structured);
+  const sources = ((structured as { field_sources?: Record<string, string> } | null)?.field_sources ?? {}) as Record<string, string>;
   const score = record.ocr_data_quality_score ?? (typeof (structured as { data_quality_score?: unknown } | null)?.data_quality_score === "number"
     ? ((structured as { data_quality_score?: number }).data_quality_score ?? 0)
     : null);
@@ -1581,6 +1604,9 @@ function OcrDiagnosticsPanel({ record, uploads }: { record: ValidatorRecord; upl
         <Info label="Arquivos" value={`${uploads.length}`} />
         <Info label="Campos extraidos" value={String(fieldsCount || 0)} />
         <Info label="Qualidade extracao" value={score === null ? "-" : `${(score * 100).toFixed(0)}%`} />
+        <Info label="Usou OCR real" value={sources.raw_ocr ? "Sim" : "Nao"} />
+        <Info label="Usou comentarios" value={sources.upload_comment ? "Sim" : "Nao"} />
+        <Info label="Usou dados manuais" value={sources.manual_form ? "Sim" : "Nao"} />
       </div>
 
       {uploads.length ? (
@@ -1593,7 +1619,7 @@ function OcrDiagnosticsPanel({ record, uploads }: { record: ValidatorRecord; upl
                   OCR: {upload.ocr_status}
                 </Badge>
                 <Badge variant={upload.structured_status === "completed" ? "default" : upload.structured_status === "failed" ? "destructive" : "outline"}>
-                  JSON: {upload.structured_status || "pending"}
+                  JSON: {upload.structured_status === "completed" && upload.ocr_status !== "completed" ? "completed (manual/comentario)" : upload.structured_status || "pending"}
                 </Badge>
                 <span className="font-semibold">{upload.file_name}</span>
                 <span className="text-muted-foreground">{formatFileSize(upload.file_size ?? 0)}</span>
@@ -2354,6 +2380,7 @@ function buildRecordValidationContext(record: ValidatorRecord, uploads: Validato
       used_structured_json: hasJsonContent(record.structured_json),
       used_simulation: hasJsonContent(record.simulation_json),
       used_upload_comments: uploads.some((upload) => upload.user_comment?.trim()),
+      used_online_search: hasJsonContent(record.online_context_json),
       has_structured_ocr_data: Boolean((record.structured_json as { has_structured_ocr_data?: unknown } | null)?.has_structured_ocr_data),
     },
   };
@@ -2384,9 +2411,12 @@ function buildLocalAnalysisContext(context: Record<string, unknown>, aiParsed: b
   return [
     "ASP Validator - Validacao IA consolidada",
     `Resposta IA interpretada: ${aiParsed ? "sim" : "nao"}`,
-    `Usou OCR: ${usage.used_ocr ? "sim" : "nao"}`,
+    `Usou OCR real: ${usage.used_ocr ? "sim" : "nao"}`,
+    `Usou comentarios dos uploads: ${usage.used_upload_comments ? "sim" : "nao"}`,
+    `Usou dados manuais: ${context.prediction ? "sim" : "nao"}`,
     `Usou JSON estruturado: ${usage.used_structured_json ? "sim" : "nao"}`,
     `Usou simulacao: ${usage.used_simulation ? "sim" : "nao"}`,
+    `Usou IA + Pesquisa: ${usage.used_online_search ? "sim" : "nao"}`,
     "Regras: previsao externa e apenas ponto de partida; EV+/55% nao sao gatilhos obrigatorios; em duvida relevante, PULAR; foco em protecao de banca.",
   ].join("\n");
 }
@@ -2394,7 +2424,7 @@ function buildLocalAnalysisContext(context: Record<string, unknown>, aiParsed: b
 function buildValidatorDecision(form: ValidatorForm): ValidationResult {
   const offeredOdd = parseNumber(form.offered_odd);
   const sourceProbability = normalizeProbability(parseNumber(form.source_probability));
-  const sourceEv = parseNumber(form.source_ev);
+  const sourceEv = normalizeSourceEv(parseNumber(form.source_ev), form.source_platform);
   const sourceFairOdd = sourceProbability ? round(1 / (sourceProbability / 100), 2) : null;
   const context = form.user_context.toLowerCase();
   const validatorModel = inferValidatorModel(form.market, form.pick);
@@ -2646,6 +2676,7 @@ type StructuredUpload = {
 
 type StructuredValidatorJson = {
   extracted_from_ocr: boolean;
+  field_sources: Record<string, string>;
   data_quality_score: number;
   has_structured_ocr_data: boolean;
   structured_fields_count: number;
@@ -2718,6 +2749,7 @@ type StructuredValidatorJson = {
     missing_fields: string[];
     missing_critical_fields: string[];
     conflicts: string[];
+    critical_missing_fields: string[];
     needs_manual_review: boolean;
   };
 };
@@ -2806,6 +2838,7 @@ function buildStructuredOcrJson(record: ValidatorRecord, uploads: ValidatorUploa
 
   return {
     extracted_from_ocr: intelligence.extracted_from_ocr,
+    field_sources: buildFieldSources(record, structuredUploads, intelligence),
     data_quality_score: intelligence.data_quality_score,
     has_structured_ocr_data: intelligence.has_structured_ocr_data,
     structured_fields_count: intelligence.structured_fields_count,
@@ -2850,6 +2883,7 @@ function buildStructuredOcrJson(record: ValidatorRecord, uploads: ValidatorUploa
       has_structured_ocr_data: intelligence.has_structured_ocr_data,
       missing_fields: missingFields,
       missing_critical_fields: intelligence.missing_critical_fields,
+      critical_missing_fields: intelligence.missing_critical_fields,
       conflicts,
       needs_manual_review: intelligence.data_quality_score < 0.55 || conflicts.length > 0 || ocrQuality === "low",
     },
@@ -2872,7 +2906,7 @@ function extractPredictionSignals(text: string): {
   return {
     offered_odd: odd,
     source_probability: probability !== null ? normalizeProbability(probability) : null,
-    source_ev: ev,
+    source_ev: normalizeExtractedEv(ev, text),
     source_fair_odd: fairOdd,
     line: lineMatch?.[1] ?? null,
   };
@@ -2904,7 +2938,7 @@ function buildOcrIntelligence(
     goals,
     extracted_numbers: extractPercentagesAndNumbers(combinedText),
   });
-  const missingCriticalFields = buildOcrCriticalMissingFields(match, market, structuredFieldsCount);
+  const missingCriticalFields = buildOcrCriticalMissingFields(match, market, corners, structuredFieldsCount);
   const textVolume = uploads.reduce((sum, upload) => sum + (upload.ocr_text?.trim().length ?? 0), 0);
   const hasStructuredOcrData =
     structuredFieldsCount >= 4 ||
@@ -2948,7 +2982,7 @@ function extractRobustPredictionSignals(text: string): ReturnType<typeof extract
   return {
     offered_odd: odd,
     source_probability: probability !== null ? normalizeProbability(probability) : null,
-    source_ev: ev,
+    source_ev: normalizeExtractedEv(ev, text),
     source_fair_odd: fairOdd,
     line: lineMatch?.[1] ?? null,
   };
@@ -3000,9 +3034,10 @@ function extractMarketFromOcr(
 }
 
 function extractCornerStats(text: string, homeTeam: string, awayTeam: string): OcrIntelligenceData["corners"] {
-  const avgFor = labelNumbers(text, /marcados/gi);
-  const avgAgainst = labelNumbers(text, /sofridos/gi);
+  const avgFor = metricPairNumbers(text, /marcados/i, { requireDecimal: true }) ?? labelNumbers(text, /marcados/gi);
+  const avgAgainst = metricPairNumbers(text, /sofridos/i, { requireDecimal: true }) ?? labelNumbers(text, /sofridos/gi);
   const avgTotal = labelNumbers(text, /marcados\s*\+\s*sofridos|total\s+escanteios|m[eé]dia\s+escanteios/gi);
+  const avgTotalPair = metricPairNumbers(text, /marcados\s*\+\s*sofridos|m[eÃ©]dia\s+escanteios/i, { requireDecimal: true }) ?? avgTotal;
   const first = twoSidedPercent(text, /primeiro\s+do\s+jogo/i);
   const race3 = twoSidedPercent(text, /3\s*primeiro/i);
   const race5 = twoSidedPercent(text, /5\s*primeiro/i);
@@ -3015,7 +3050,7 @@ function extractCornerStats(text: string, homeTeam: string, awayTeam: string): O
     home: {
       avg_for: numberAt(avgFor, 0) ?? numberNearTeam(text, homeTeam, /marcados/i),
       avg_against: numberAt(avgAgainst, 0) ?? numberNearTeam(text, homeTeam, /sofridos/i),
-      avg_total: numberAt(avgTotal, 0),
+      avg_total: numberAt(avgTotalPair, 0),
       first_corner_pct: first.home,
       race_to_3_pct: race3.home,
       race_to_5_pct: race5.home,
@@ -3027,7 +3062,7 @@ function extractCornerStats(text: string, homeTeam: string, awayTeam: string): O
     away: {
       avg_for: numberAt(avgFor, 1) ?? numberNearTeam(text, awayTeam, /marcados/i),
       avg_against: numberAt(avgAgainst, 1) ?? numberNearTeam(text, awayTeam, /sofridos/i),
-      avg_total: numberAt(avgTotal, 1),
+      avg_total: numberAt(avgTotalPair, 1),
       first_corner_pct: first.away,
       race_to_3_pct: race3.away,
       race_to_5_pct: race5.away,
@@ -3037,6 +3072,32 @@ function extractCornerStats(text: string, homeTeam: string, awayTeam: string): O
       over_lines: overLines.away,
     },
   };
+}
+
+function metricPairNumbers(text: string, label: RegExp, options: { requireDecimal?: boolean } = {}): number[] | null {
+  for (const rawLine of text.replace(/,/g, ".").split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!label.test(line)) continue;
+    if (/total\s+escanteios/i.test(line) && !/m[eé]dia|marcados\s*\+\s*sofridos/i.test(line)) continue;
+    const values = [...line.matchAll(/(\d+(?:\.\d+)?)/g)]
+      .map((match) => match[1])
+      .filter((value) => !options.requireDecimal || value.includes("."))
+      .map(Number)
+      .filter((value) => Number.isFinite(value) && value >= 0 && value <= 15);
+    if (values.length >= 2) return values.slice(0, 2);
+  }
+
+  const compact = text.replace(/,/g, ".").replace(/\s+/g, " ");
+  const beforeAfter = compact.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s+${label.source}\\s+(\\d+(?:\\.\\d+)?)`, "i"));
+  if (beforeAfter) {
+    const values = [beforeAfter[1], beforeAfter[2]]
+      .filter((value) => !options.requireDecimal || value.includes("."))
+      .map(Number)
+      .filter((value) => Number.isFinite(value) && value >= 0 && value <= 15);
+    if (values.length === 2) return values;
+  }
+
+  return null;
 }
 
 function extractGoalStats(text: string): Record<string, unknown> {
@@ -3111,7 +3172,12 @@ function countStructuredFields(value: unknown): number {
   return 0;
 }
 
-function buildOcrCriticalMissingFields(match: OcrIntelligenceData["match"], market: OcrIntelligenceData["market"], structuredFieldsCount: number): string[] {
+function buildOcrCriticalMissingFields(
+  match: OcrIntelligenceData["match"],
+  market: OcrIntelligenceData["market"],
+  corners: OcrIntelligenceData["corners"],
+  structuredFieldsCount: number,
+): string[] {
   const missing: string[] = [];
   if (!match.home_team) missing.push("mandante");
   if (!match.away_team) missing.push("visitante");
@@ -3119,15 +3185,22 @@ function buildOcrCriticalMissingFields(match: OcrIntelligenceData["match"], mark
   if (!market.pick) missing.push("pick");
   if (!market.offered_odd) missing.push("odd ofertada");
   if (!market.probability_original) missing.push("probabilidade original");
+  if (normalize(`${market.name} ${market.pick}`).includes("escanteio") || normalize(`${market.name} ${market.pick}`).includes("corner")) {
+    if (!corners.home.race_to_5_pct && !corners.away.race_to_5_pct) missing.push("race_to_5 corners");
+    if (!corners.home.avg_for) missing.push("corners marcados mandante");
+    if (!corners.away.avg_for) missing.push("corners marcados visitante");
+    if (!corners.home.avg_against) missing.push("corners sofridos mandante");
+    if (!corners.away.avg_against) missing.push("corners sofridos visitante");
+  }
   if (structuredFieldsCount < 4) missing.push("dados quantitativos OCR");
   return missing;
 }
 
 function calculateOcrDataQualityScore(fieldCount: number, missingCount: number, textVolume: number, hasStructuredData: boolean): number {
-  const fieldScore = Math.min(0.55, fieldCount * 0.025);
+  const fieldScore = Math.min(0.5, fieldCount * 0.022);
   const textScore = Math.min(0.2, textVolume / 5000);
   const structuredBonus = hasStructuredData ? 0.2 : 0;
-  const penalty = Math.min(0.35, missingCount * 0.05);
+  const penalty = Math.min(0.5, missingCount * 0.08);
   return round(Math.max(0, Math.min(1, 0.1 + fieldScore + textScore + structuredBonus - penalty)), 2);
 }
 
@@ -3154,6 +3227,19 @@ function inferSelectionTeam(pick: string, match: OcrIntelligenceData["match"], t
 
 function cleanOcrValue(value: string): string {
   return value.replace(/\s+/g, " ").replace(/[|•]+/g, "").trim();
+}
+
+function normalizeExtractedEv(value: number | null, text: string): number | null {
+  if (value === null) return null;
+  const source = normalize(text);
+  const looksLikePackballDecimal =
+    source.includes("packball") ||
+    source.includes("chance") ||
+    source.includes("odds esperadas") ||
+    source.includes("odds oferecidas") ||
+    source.includes("base de calculo simples");
+  if (looksLikePackballDecimal && value > 5 && value < 100) return round(value / 100, 2);
+  return round(value, 2);
 }
 
 function matchNumber(text: string, pattern: RegExp): number | null {
@@ -3232,6 +3318,22 @@ function buildMissingFields(record: ValidatorRecord, uploads: StructuredUpload[]
   return missing;
 }
 
+function buildFieldSources(record: ValidatorRecord, uploads: StructuredUpload[], intelligence: OcrIntelligenceData): Record<string, string> {
+  const sources: Record<string, string> = {};
+  const hasUploadComment = uploads.some((upload) => upload.comment.trim());
+  const hasRawOcr = uploads.some((upload) => upload.ocr_text.trim());
+  if (record.league || record.match_date || record.home_team || record.away_team || record.market || record.pick || record.offered_odd !== null) {
+    sources.manual_form = "Campos principais informados pelo usuario";
+  }
+  if (record.user_context?.trim()) sources.user_context = "Contexto geral informado pelo usuario";
+  if (hasUploadComment) sources.upload_comment = "Comentarios vinculados aos uploads";
+  if (hasRawOcr) sources.raw_ocr = "Texto bruto extraido dos arquivos por OCR";
+  if (intelligence.has_structured_ocr_data) {
+    sources.ocr_intelligence = intelligence.extracted_from_ocr ? "Parser aplicado ao OCR real" : "Parser aplicado a dados manuais/comentarios";
+  }
+  return sources;
+}
+
 function buildStructuredConflicts(record: ValidatorRecord, inferred: ReturnType<typeof extractPredictionSignals>): string[] {
   const conflicts: string[] = [];
   if (record.offered_odd && inferred.offered_odd && Math.abs(record.offered_odd - inferred.offered_odd) > 0.05) {
@@ -3267,9 +3369,9 @@ function parseSimulationResult(value: Record<string, unknown> | null): AspValida
   if (!value || !Object.keys(value).length) return null;
   const status = typeof value.status === "string" ? value.status : "";
   const model = typeof value.model === "string" ? value.model : "";
-  if (model !== "poisson_score_matrix" || !["completed", "low_confidence", "not_applicable", "failed"].includes(status)) return null;
+  if (!["poisson_score_matrix", "corner_race_simplified", "corner_volume_matrix", "low_confidence_corner_race"].includes(model) || !["completed", "low_confidence", "not_applicable", "failed"].includes(status)) return null;
   return {
-    model: "poisson_score_matrix",
+    model: model as AspValidatorSimulationResult["model"],
     status: status as AspValidatorSimulationResult["status"],
     lambda_home: typeof value.lambda_home === "number" ? value.lambda_home : null,
     lambda_away: typeof value.lambda_away === "number" ? value.lambda_away : null,
@@ -3348,7 +3450,11 @@ async function persistSimulationResult(record: ValidatorRecord): Promise<Simulat
   const adjustedProbability = simulation.market_probability !== null ? round(simulation.market_probability * 100, 2) : record.adjusted_probability;
   const adjustedFairOdd = simulation.fair_odd ?? record.adjusted_fair_odd;
   const adjustedEv = simulation.ev !== null ? round(simulation.ev * 100, 2) : record.adjusted_ev;
-  const simulationType = simulation.status === "completed" && simulation.notes.some((note) => normalize(note).includes("simplificada")) ? "simplified_ocr" : simulation.status;
+  const simulationType = simulation.model !== "poisson_score_matrix"
+    ? simulation.model
+    : simulation.status === "completed" && simulation.notes.some((note) => normalize(note).includes("simplificada"))
+      ? "simplified_ocr"
+      : simulation.status;
   const update = {
     simulation_json: simulation,
     simulation_type: simulationType,
@@ -3464,11 +3570,13 @@ function applyStructuredUploads(uploads: ValidatorUploadRecord[], structured: St
 async function getUploadFileForOcr(upload: ValidatorUploadRecord, localFile?: File): Promise<File> {
   if (localFile) return localFile;
   if (!upload.file_path) {
-    throw new Error("Arquivo original nao encontrado no Storage. Reenvie o arquivo para processar.");
+    throw new Error(
+      `Arquivo original nao encontrado no Storage para este upload. file_path=${upload.file_path ?? "null"} bucket=${upload.storage_bucket || ASP_VALIDATOR_UPLOAD_BUCKET}. Reenvie o arquivo ou valide se a migration de Storage foi aplicada.`,
+    );
   }
   const bucket = upload.storage_bucket || ASP_VALIDATOR_UPLOAD_BUCKET;
   const { data, error } = await supabase.storage.from(bucket).download(upload.file_path);
-  if (error) throw error;
+  if (error) throw new Error(`Falha ao baixar arquivo do Storage. bucket=${bucket} file_path=${upload.file_path}. ${error.message}`);
   return new File([data], upload.file_name || "asp-validator-upload", {
     type: upload.mime_type || data.type || "application/octet-stream",
   });
@@ -3724,6 +3832,13 @@ function normalizeProbability(value: number | null): number | null {
   if (value === null) return null;
   if (value > 0 && value <= 1) return round(value * 100, 2);
   return round(Math.max(0, Math.min(100, value)), 2);
+}
+
+function normalizeSourceEv(value: number | null, sourcePlatform?: string | null): number | null {
+  if (value === null) return null;
+  const platform = normalize(sourcePlatform || "");
+  if (platform.includes("packball") && value > 5 && value < 100) return round(value / 100, 2);
+  return round(value, 2);
 }
 
 function normalize(value: string): string {
