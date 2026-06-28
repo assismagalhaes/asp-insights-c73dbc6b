@@ -30,7 +30,7 @@ const SYSTEM_PROMPT = `Voce e o ASP Validator (validacao IA offline de prognosti
 Regras (todas obrigatorias):
 1. Decisao: somente CONFIRMAR ou PULAR. Em duvida relevante, PULAR. Foco em protecao de banca.
 2. Previsao externa nao confirma sozinha; campos manuais > structured_json > simulacao.
-3. Guardrail: CONFIRMAR somente se adjusted_ev >= 0.03 e adjusted_fair_odd < offered_odd. Caso contrario PULAR.
+3. Guardrail: CONFIRMAR somente se adjusted_ev >= 3 (em percentual; 3 representa 3%, nunca 0.03) e adjusted_fair_odd < offered_odd. Caso contrario PULAR. IMPORTANTE: adjusted_ev e source_ev SEMPRE em percentual (ex.: 5 = 5%, -2 = -2%). NUNCA enviar fracao decimal (0.05).
 4. Se simulation_json existir (status != not_applicable/failed), cite obrigatoriamente model, market_probability, fair_odd, ev e expected_total. Proibido escrever "simulacao nao disponivel".
 5. Se structured_json tiver qualquer bloco populado, proibido dizer "ausencia de dados estruturados".
 6. Multi-mercado: respeite structured_json.market_type. NUNCA aplique analise de escanteios fora de market_type=corners.
@@ -90,14 +90,14 @@ function normalizeAiResult(value: Record<string, unknown>, context: Record<strin
   const adjustedProbability = clampNumber(readNumber(value.adjusted_probability), 0, 100) ?? manual.source_probability ?? 50;
   const adjustedFairOdd = readNumber(value.adjusted_fair_odd) ?? (adjustedProbability > 0 ? round(100 / adjustedProbability) : 2);
   const offeredOdd = readNumber(value.offered_odd) ?? manual.offered_odd;
-  const adjustedEv = readNumber(value.adjusted_ev) ?? (offeredOdd && adjustedProbability ? round((offeredOdd * (adjustedProbability / 100) - 1) * 100) : null);
+  const adjustedEv = normalizeEvPercent(readNumber(value.adjusted_ev)) ?? (offeredOdd && adjustedProbability ? round((offeredOdd * (adjustedProbability / 100) - 1) * 100) : null);
   return {
     decision: value.decision === "CONFIRMAR" ? "CONFIRMAR" : "PULAR",
     confidence: normalizeConfidence(value.confidence),
     source_probability: readNumber(value.source_probability) ?? manual.source_probability,
     source_fair_odd: readNumber(value.source_fair_odd) ?? manual.source_fair_odd,
     offered_odd: offeredOdd,
-    source_ev: readNumber(value.source_ev) ?? manual.source_ev,
+    source_ev: normalizeEvPercent(readNumber(value.source_ev)) ?? manual.source_ev,
     adjusted_probability: round(adjustedProbability),
     adjusted_fair_odd: round(adjustedFairOdd),
     adjusted_ev: adjustedEv,
@@ -185,6 +185,14 @@ function clampNumber(value: number | null, min: number, max: number): number | n
 function round(value: number, digits = 2): number {
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
+}
+
+// Normaliza EV para percentual. Se a IA enviar fracao decimal (|x| < 1 e != 0),
+// converte para percentual multiplicando por 100. Caso ja venha em percentual, mantem.
+function normalizeEvPercent(value: number | null): number | null {
+  if (value === null || value === undefined || !Number.isFinite(value)) return null;
+  if (value !== 0 && Math.abs(value) < 1) return round(value * 100);
+  return round(value);
 }
 
 function hasSimulationData(context: Record<string, unknown>): boolean {

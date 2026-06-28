@@ -30,7 +30,7 @@ const SYSTEM_PROMPT = `Voce e o ASP Validator com IA + Pesquisa. Valida prognost
 Regras (obrigatorias):
 1. Decisao: somente CONFIRMAR ou PULAR. Em duvida relevante, PULAR. Proteja a banca.
 2. Previsao externa nao confirma sozinha; manual > structured_json > simulacao > online.
-3. Guardrail: CONFIRMAR somente se adjusted_ev >= 0.03 e adjusted_fair_odd < offered_odd. Caso contrario PULAR.
+3. Guardrail: CONFIRMAR somente se adjusted_ev >= 3 (em percentual; 3 representa 3%, nunca 0.03) e adjusted_fair_odd < offered_odd. Caso contrario PULAR. IMPORTANTE: adjusted_ev e source_ev SEMPRE em percentual (ex.: 5 = 5%, -2 = -2%). NUNCA enviar fracao decimal (0.05).
 4. Pesquisa online e complementar; ausencia de achados nao reprova sozinha. Use online_summary="Verificacao online sem achados relevantes..." quando nao houver fatos uteis. Falta de online so pesa contra quando mercado depende fortemente de escalacao/desfalque/motivacao/rotacao/calendario.
 5. Se simulation_json existir (status != not_applicable/failed), cite model, market_probability, fair_odd, ev e expected_total. Proibido "simulacao nao disponivel".
 6. Se structured_json tiver blocos populados, proibido "ausencia de dados estruturados".
@@ -128,7 +128,7 @@ function normalizeOnlineResult(
   const adjustedProbability = clampNumber(readNumber(value.adjusted_probability), 0, 100) ?? manual.source_probability ?? 50;
   const offeredOdd = readNumber(value.offered_odd) ?? manual.offered_odd;
   const adjustedFairOdd = readNumber(value.adjusted_fair_odd) ?? (adjustedProbability > 0 ? round(100 / adjustedProbability) : 2);
-  const adjustedEv = readNumber(value.adjusted_ev) ?? (offeredOdd ? round((offeredOdd * (adjustedProbability / 100) - 1) * 100) : null);
+  const adjustedEv = normalizeEvPercent(readNumber(value.adjusted_ev)) ?? (offeredOdd ? round((offeredOdd * (adjustedProbability / 100) - 1) * 100) : null);
   const onlineSummary =
     readString(value.online_summary) ||
     "Verificacao online sem achados relevantes. Nao ha noticia ou contexto externo suficiente para alterar a analise.";
@@ -142,7 +142,7 @@ function normalizeOnlineResult(
     source_probability: readNumber(value.source_probability) ?? manual.source_probability,
     source_fair_odd: readNumber(value.source_fair_odd) ?? manual.source_fair_odd,
     offered_odd: offeredOdd,
-    source_ev: readNumber(value.source_ev) ?? manual.source_ev,
+    source_ev: normalizeEvPercent(readNumber(value.source_ev)) ?? manual.source_ev,
     adjusted_probability: round(adjustedProbability),
     adjusted_fair_odd: round(adjustedFairOdd),
     adjusted_ev: adjustedEv,
@@ -239,4 +239,12 @@ function clampNumber(value: number | null, min: number, max: number): number | n
 function round(value: number, digits = 2): number {
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
+}
+
+// Normaliza EV para percentual. Se a IA enviar fracao decimal (|x| < 1 e != 0),
+// converte para percentual multiplicando por 100. Caso ja venha em percentual, mantem.
+function normalizeEvPercent(value: number | null): number | null {
+  if (value === null || value === undefined || !Number.isFinite(value)) return null;
+  if (value !== 0 && Math.abs(value) < 1) return round(value * 100);
+  return round(value);
 }
