@@ -577,7 +577,18 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
 
   notes.push("Dados interpretados a partir de texto colado (input_source: pasted_text).");
   if (splitIdx >= 0) notes.push("Identificadas duas secoes: medias gerais e medias casa/fora.");
-  if (ev_original !== null) notes.push(`EV original preservado em formato percentual: ${ev_original}%.`);
+  if (ev_original !== null) {
+    if (source_ev_type === "percent") {
+      notes.push(`EV bruto da fonte (${ev_display}) compativel com EV percentual recalculado (${calculated_ev_pct}%).`);
+    } else {
+      notes.push(
+        `EV bruto da fonte (${ev_display}) NAO e percentual confiavel — provavel gap de odd. EV recalculado pelo ASP: ${calculated_ev_pct ?? "n/d"}%.`,
+      );
+    }
+  }
+  if (home_moneyline_odd !== null || away_moneyline_odd !== null) {
+    notes.push(`Odds 1x2 detectadas na linha "Partida": ${home_team} ${home_moneyline_odd ?? "?"} x ${away_moneyline_odd ?? "?"} ${away_team}.`);
+  }
 
   return {
     input_source: "pasted_text",
