@@ -538,7 +538,13 @@ function estimateLambdas(input: AspValidatorSimulationInput): LambdaEstimate {
   const hasStructuredGoalsBlocks =
     Object.keys((goalsBlock.home_away ?? {}) as Record<string, any>).length > 0 ||
     Object.keys((goalsBlock.general ?? {}) as Record<string, any>).length > 0;
-  if ((lambdaHome === null || lambdaAway === null) && !(isBtts && hasStructuredGoalsBlocks)) {
+  const is1x2 = is1x2Market(marketText);
+  // Bloqueia fallback regex para BTTS e 1X2 quando ja existem blocos estruturados
+  // (mesmo parciais) — evita inflar lambdas com numeros soltos do blob.
+  // Para 1X2, bloqueia sempre que NAO houver blocos estruturados confiaveis,
+  // pois regex frequentemente captura medias do oponente ou cabecalhos errados.
+  const blockRegexFallback = (isBtts && hasStructuredGoalsBlocks) || is1x2;
+  if ((lambdaHome === null || lambdaAway === null) && !blockRegexFallback) {
     const text = [input.user_context ?? "", JSON.stringify(input.structured_json ?? {})].join("\n");
     const normalized = text.replace(/,/g, ".");
     const homeScored = firstNumber(normalized, [
@@ -597,7 +603,13 @@ function estimateLambdas(input: AspValidatorSimulationInput): LambdaEstimate {
       lambdaAway = 2.2;
     }
   }
-  const confidence = evidence >= 4 ? "high" : evidence >= 2 ? "medium" : "low";
+  // Guardrail 1X2: lambdas altos sem medias estruturadas confiaveis derrubam confianca
+  // para evitar projecoes infladas de vitoria mandante/visitante a partir de blob bruto.
+  let confidence: "low" | "medium" | "high" = evidence >= 4 ? "high" : evidence >= 2 ? "medium" : "low";
+  if (is1x2 && !hasStructuredGoalsBlocks && (lambdaHome > 2.5 || lambdaAway > 2.5)) {
+    warnings.push("Lambda alto gerado sem medias estruturadas confiaveis; simulacao 1X2 marcada como baixa confianca.");
+    confidence = "low";
+  }
   if (confidence === "low") warnings.push("Poucas evidencias numericas foram encontradas para calibrar a simulacao.");
   return { lambdaHome, lambdaAway, confidence, notes, warnings };
 }
