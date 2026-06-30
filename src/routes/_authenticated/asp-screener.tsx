@@ -1659,7 +1659,7 @@ function ParsedContextPanel({ context }: { context: MlbBaseballReferenceMatchupC
             <div className="text-warning">Ausentes: {context.data_quality.missing_fields.join(", ")}</div>
           )}
           {context.data_quality.warnings.slice(0, 3).map((warning, index) => (
-            <div key={`${warning}-${index}`} className="text-warning">{warning}</div>
+            <div key={`warning-${index}`} className="text-warning">{formatAlertMessage(warning)}</div>
           ))}
         </div>
       </div>
