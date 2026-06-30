@@ -1270,7 +1270,7 @@ function MoneylineProjectionTable({ rows }: { rows: MlbMoneylineScreenerRow[] })
               </td>
               <td className="min-w-72 px-3 py-2 text-xs text-muted-foreground">
                 <div className="space-y-1">
-                  {row.alerts.slice(0, 4).map((alert, index) => <div key={`${row.game_id}-alert-${index}`}>{alert}</div>)}
+                  {row.alerts.slice(0, 4).map((alert, index) => <div key={`${row.game_id}-alert-${index}`}>{formatAlertMessage(alert)}</div>)}
                   {row.reasons.length > 0 && (
                     <div className="pt-1 text-foreground">{row.reasons.slice(0, 2).join(" | ")}</div>
                   )}
