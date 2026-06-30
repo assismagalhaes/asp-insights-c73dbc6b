@@ -1,0 +1,1735 @@
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import type { ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, ChevronDown, ClipboardCopy, DatabaseZap, RefreshCw, RotateCw, Send, Trophy, Upload } from "lucide-react";
+import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { fetchOddsRows } from "@/lib/coleta-dados";
+import {
+  getMlbStandingsSnapshotFn,
+  processManualMlbStandingsCsv,
+  refreshMlbStandingsFromBaseballReference,
+} from "@/lib/mlb-standings.functions";
+import { enrichMlbGamesWithStandings } from "@/lib/mlb/standings";
+import {
+  buildMlbCriticalValidationPayload,
+  buildMlbHandicapScreenerRows,
+  buildMlbMoneylineScreenerRows,
+  buildMlbOpportunityValidationPayload,
+  buildMlbOpportunityShortlist,
+  buildMlbValidatorHandoffPayload,
+  buildMlbTotalsScreenerRows,
+  buildMlbValidatorPrompt,
+  calculateMlbContextAlignment,
+  isMlbOpportunityEligibleForCriticalValidation,
+  parseBaseballReferenceMatchupText,
+  storeMlbValidatorHandoffDraft,
+  validateMlbValidatorHandoffPayload,
+} from "@/lib/mlb/projections";
+import type {
+  MlbHandicapCandidateStatus,
+  MlbHandicapFilter,
+  MlbHandicapScreenerRow,
+  MlbMoneylineScreenerRow,
+  MlbOpportunityFilter,
+  MlbProjectionCandidateStatus,
+  MlbTotalsFilter,
+  MlbTotalsScreenerRow,
+  MlbUnifiedOpportunity,
+} from "@/types/mlbProjections";
+import type { MlbBaseballReferenceMatchupContext, MlbPreparedCriticalValidationPayload } from "@/types/mlbCriticalValidation";
+import type { MlbStandingsSnapshot, MlbTeamStanding } from "@/types/mlbStandings";
+
+export const Route = createFileRoute("/_authenticated/asp-screener")({
+  component: AspScreenerPage,
+});
+
+type SnapshotResponse = {
+  snapshot: MlbStandingsSnapshot | null;
+  oddsRowsCount: number;
+  fromCache: boolean;
+};
+
+function AspScreenerPage() {
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const [snapshotDate, setSnapshotDate] = useState(todayIso());
+  const [season, setSeason] = useState(new Date().getUTCFullYear());
+  const [busy, setBusy] = useState<string | null>(null);
+  const [csvOpen, setCsvOpen] = useState(false);
+  const [csvText, setCsvText] = useState("");
+  const [lastError, setLastError] = useState<string | null>(null);
+  const [projectionRows, setProjectionRows] = useState<MlbMoneylineScreenerRow[]>([]);
+  const [projectionFilter, setProjectionFilter] = useState<MlbProjectionCandidateStatus | "todos">("todos");
+  const [projectionGeneratedAt, setProjectionGeneratedAt] = useState<string | null>(null);
+  const [totalsRows, setTotalsRows] = useState<MlbTotalsScreenerRow[]>([]);
+  const [totalsFilter, setTotalsFilter] = useState<MlbTotalsFilter>("todos");
+  const [totalsGeneratedAt, setTotalsGeneratedAt] = useState<string | null>(null);
+  const [handicapRows, setHandicapRows] = useState<MlbHandicapScreenerRow[]>([]);
+  const [handicapFilter, setHandicapFilter] = useState<MlbHandicapFilter>("todos");
+  const [handicapGeneratedAt, setHandicapGeneratedAt] = useState<string | null>(null);
+  const [opportunityRows, setOpportunityRows] = useState<MlbUnifiedOpportunity[]>([]);
+  const [opportunityFilter, setOpportunityFilter] = useState<MlbOpportunityFilter>("shortlist");
+  const [opportunityGeneratedAt, setOpportunityGeneratedAt] = useState<string | null>(null);
+  const [hideCorrelatedAlternatives, setHideCorrelatedAlternatives] = useState(false);
+  const [minOpportunityEv, setMinOpportunityEv] = useState("");
+  const [minOpportunityScore, setMinOpportunityScore] = useState("");
+  const [selectedOpportunityIds, setSelectedOpportunityIds] = useState<string[]>([]);
+  const [baseballReferenceText, setBaseballReferenceText] = useState("");
+  const [parsedMatchupContext, setParsedMatchupContext] = useState<MlbBaseballReferenceMatchupContext | null>(null);
+  const [criticalPayloads, setCriticalPayloads] = useState<MlbPreparedCriticalValidationPayload[]>([]);
+
+  const queryKey = ["mlb-standings-snapshot", snapshotDate, season];
+  const { data, isFetching } = useQuery({
+    queryKey,
+    queryFn: () => getMlbStandingsSnapshotFn({ data: { snapshotDate, season } }) as Promise<SnapshotResponse>,
+  });
+  const { data: oddsRows = [] } = useQuery({
+    queryKey: ["odds-jogos-mlb-screener", snapshotDate],
+    queryFn: fetchOddsRows,
+  });
+
+  const snapshot = data?.snapshot ?? null;
+  const mlbOddsRows = useMemo(
+    () =>
+      oddsRows.filter((row) => {
+        if (row.data !== snapshotDate) return false;
+        if (row.esporte !== "Baseball") return false;
+        return !row.liga || /mlb/i.test(row.liga);
+      }),
+    [oddsRows, snapshotDate],
+  );
+  const alerts = useMemo(() => {
+    if (!snapshot) return [];
+    return [...snapshot.validation.errors, ...snapshot.validation.warnings];
+  }, [snapshot]);
+  const projectionStats = useMemo(() => getProjectionStats(projectionRows), [projectionRows]);
+  const filteredProjectionRows = useMemo(
+    () => projectionFilter === "todos" ? projectionRows : projectionRows.filter((row) => row.candidate_status === projectionFilter),
+    [projectionRows, projectionFilter],
+  );
+  const totalsStats = useMemo(() => getTotalsStats(totalsRows), [totalsRows]);
+  const filteredTotalsRows = useMemo(
+    () => filterTotalsRows(totalsRows, totalsFilter),
+    [totalsRows, totalsFilter],
+  );
+  const handicapStats = useMemo(() => getHandicapStats(handicapRows), [handicapRows]);
+  const filteredHandicapRows = useMemo(
+    () => filterHandicapRows(handicapRows, handicapFilter),
+    [handicapRows, handicapFilter],
+  );
+  const opportunityStats = useMemo(() => getOpportunityStats(opportunityRows), [opportunityRows]);
+  const filteredOpportunityRows = useMemo(
+    () => filterOpportunityRows(opportunityRows, {
+      filter: opportunityFilter,
+      hideCorrelatedAlternatives,
+      minEv: Number(minOpportunityEv),
+      minScore: Number(minOpportunityScore),
+    }),
+    [opportunityRows, opportunityFilter, hideCorrelatedAlternatives, minOpportunityEv, minOpportunityScore],
+  );
+  const selectedOpportunities = useMemo(
+    () => selectedOpportunityIds.map((id) => opportunityRows.find((row) => row.opportunity_id === id)).filter(Boolean) as MlbUnifiedOpportunity[],
+    [selectedOpportunityIds, opportunityRows],
+  );
+
+  useEffect(() => {
+    setProjectionRows([]);
+    setProjectionGeneratedAt(null);
+    setTotalsRows([]);
+    setTotalsGeneratedAt(null);
+    setHandicapRows([]);
+    setHandicapGeneratedAt(null);
+    setOpportunityRows([]);
+    setOpportunityGeneratedAt(null);
+    setSelectedOpportunityIds([]);
+    setParsedMatchupContext(null);
+    setCriticalPayloads([]);
+  }, [snapshotDate, season]);
+
+  async function refresh(forceRefresh = false) {
+    setBusy(forceRefresh ? "force" : "refresh");
+    setLastError(null);
+    try {
+      const result = await refreshMlbStandingsFromBaseballReference({
+        data: { snapshotDate, season, forceRefresh },
+      }) as SnapshotResponse;
+      qc.setQueryData(queryKey, result);
+      toast.success(result.fromCache ? "Snapshot MLB carregado do cache diario." : "MLB standings atualizado.");
+    } catch (error) {
+      const message = formatError(error);
+      setLastError(message);
+      toast.error(message);
+      setCsvOpen(true);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function processCsv() {
+    setBusy("csv");
+    setLastError(null);
+    try {
+      const result = await processManualMlbStandingsCsv({
+        data: { csv: csvText, snapshotDate, season, forceRefresh: true },
+      }) as SnapshotResponse;
+      qc.setQueryData(queryKey, result);
+      toast.success("CSV manual processado e salvo.");
+    } catch (error) {
+      const message = formatError(error);
+      setLastError(message);
+      toast.error(message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function generateMoneylineProjections() {
+    if (!snapshot?.teams.length) {
+      toast.error("Carregue um snapshot MLB antes de gerar projecoes.");
+      return;
+    }
+    const games = enrichMlbGamesWithStandings(mlbOddsRows, snapshot.teams);
+    const rows = buildMlbMoneylineScreenerRows(games);
+    setProjectionRows(rows);
+    setProjectionGeneratedAt(new Date().toISOString());
+    toast.success(`${rows.length} jogos avaliados no Moneyline Screener.`);
+  }
+
+  function generateTotalsProjections() {
+    if (!snapshot?.teams.length) {
+      toast.error("Carregue um snapshot MLB antes de gerar projecoes.");
+      return;
+    }
+    const games = enrichMlbGamesWithStandings(mlbOddsRows, snapshot.teams);
+    const rows = buildMlbTotalsScreenerRows({
+      games,
+      standings: snapshot.teams,
+      leagueAverageSnapshot: snapshot.league_average,
+    });
+    setTotalsRows(rows);
+    setTotalsGeneratedAt(new Date().toISOString());
+    toast.success(`${rows.length} linhas Over/Under avaliadas.`);
+  }
+
+  function generateHandicapProjections() {
+    if (!snapshot?.teams.length) {
+      toast.error("Carregue um snapshot MLB antes de gerar projecoes.");
+      return;
+    }
+    const games = enrichMlbGamesWithStandings(mlbOddsRows, snapshot.teams);
+    const rows = buildMlbHandicapScreenerRows({
+      games,
+      standings: snapshot.teams,
+      leagueAverageSnapshot: snapshot.league_average,
+    });
+    setHandicapRows(rows);
+    setHandicapGeneratedAt(new Date().toISOString());
+    toast.success(`${rows.length} linhas Handicap avaliadas.`);
+  }
+
+  function buildAllProjectionRows() {
+    if (!snapshot?.teams.length) {
+      toast.error("Carregue um snapshot MLB antes de gerar projecoes.");
+      return null;
+    }
+    const games = enrichMlbGamesWithStandings(mlbOddsRows, snapshot.teams);
+    return {
+      moneyline: buildMlbMoneylineScreenerRows(games),
+      totals: buildMlbTotalsScreenerRows({
+        games,
+        standings: snapshot.teams,
+        leagueAverageSnapshot: snapshot.league_average,
+      }),
+      handicap: buildMlbHandicapScreenerRows({
+        games,
+        standings: snapshot.teams,
+        leagueAverageSnapshot: snapshot.league_average,
+      }),
+    };
+  }
+
+  function generateOpportunityShortlist() {
+    if (!projectionRows.length || !totalsRows.length || !handicapRows.length) {
+      toast.error("Execute os screeners de Moneyline, Over/Under e Handicap antes de gerar a shortlist.");
+      return;
+    }
+    const result = buildMlbOpportunityShortlist({
+      moneylineRows: projectionRows,
+      totalsRows,
+      handicapRows,
+    });
+    setOpportunityRows(result.opportunities);
+    setOpportunityGeneratedAt(new Date().toISOString());
+    toast.success(`${result.opportunities.length} oportunidades avaliadas no Opportunity Score.`);
+  }
+
+  function generateAllScreenersAndShortlist() {
+    const rows = buildAllProjectionRows();
+    if (!rows) return;
+    const generatedAt = new Date().toISOString();
+    setProjectionRows(rows.moneyline);
+    setProjectionGeneratedAt(generatedAt);
+    setTotalsRows(rows.totals);
+    setTotalsGeneratedAt(generatedAt);
+    setHandicapRows(rows.handicap);
+    setHandicapGeneratedAt(generatedAt);
+    const result = buildMlbOpportunityShortlist({
+      moneylineRows: rows.moneyline,
+      totalsRows: rows.totals,
+      handicapRows: rows.handicap,
+    });
+    setOpportunityRows(result.opportunities);
+    setOpportunityGeneratedAt(generatedAt);
+    toast.success("Screeners MLB atualizados e shortlist recalculada.");
+  }
+
+  function toggleOpportunitySelection(opportunity: MlbUnifiedOpportunity) {
+    setSelectedOpportunityIds((current) => {
+      if (current.includes(opportunity.opportunity_id)) return current.filter((id) => id !== opportunity.opportunity_id);
+      if (current.length >= 5) {
+        toast.warning("Selecione no maximo 5 oportunidades para preparar validacao critica.");
+        return current;
+      }
+      const selectedGames = current
+        .map((id) => opportunityRows.find((row) => row.opportunity_id === id)?.game_id)
+        .filter(Boolean);
+      if (selectedGames.includes(opportunity.game_id)) {
+        toast.warning("Ha mais de uma oportunidade do mesmo jogo; o pacote sera marcado como correlacionado.");
+      }
+      return [...current, opportunity.opportunity_id];
+    });
+  }
+
+  function prepareSingleOpportunity(opportunity: MlbUnifiedOpportunity) {
+    setSelectedOpportunityIds([opportunity.opportunity_id]);
+    toast.success("Oportunidade enviada para a Etapa 05.");
+  }
+
+  function processBaseballReferenceContext() {
+    if (!baseballReferenceText.trim()) {
+      toast.error("Cole o texto do Baseball-Reference antes de processar.");
+      return;
+    }
+    const context = parseBaseballReferenceMatchupText(baseballReferenceText);
+    setParsedMatchupContext(context);
+    setCriticalPayloads([]);
+    if (context.data_quality.missing_fields.length) {
+      toast.warning("Contexto processado com campos ausentes.");
+    } else {
+      toast.success("Contexto Baseball-Reference processado.");
+    }
+  }
+
+  function generateCriticalPayloads() {
+    if (!selectedOpportunities.length) {
+      toast.error("Selecione pelo menos uma oportunidade da shortlist.");
+      return;
+    }
+    if (!parsedMatchupContext) {
+      toast.error("Processee o contexto Baseball-Reference antes de gerar o payload critico.");
+      return;
+    }
+    if (!parsedMatchupContext.teams.away.team_name || !parsedMatchupContext.teams.home.team_name) {
+      toast.error("O texto colado nao identificou os dois times. Revise o contexto antes de gerar o payload.");
+      return;
+    }
+    const payloads = selectedOpportunities
+      .filter((opportunity) => {
+        const eligible = isMlbOpportunityEligibleForCriticalValidation(opportunity);
+        if (!eligible) toast.warning(`${opportunity.pick_label ?? opportunity.market_label} pode ser visualizada, mas foi bloqueada para payload critico principal.`);
+        return eligible;
+      })
+      .map((opportunity) => {
+        const alignment = calculateMlbContextAlignment(opportunity, parsedMatchupContext);
+        return buildMlbCriticalValidationPayload(opportunity, parsedMatchupContext, alignment);
+      });
+    setCriticalPayloads(payloads);
+    toast.success(`${payloads.length} payload(s) critico(s) gerado(s).`);
+  }
+
+  async function copyCriticalJson() {
+    if (!criticalPayloads.length) {
+      toast.error("Gere o payload critico antes de copiar.");
+      return;
+    }
+    await copyText(JSON.stringify(criticalPayloads.length === 1 ? criticalPayloads[0] : criticalPayloads, null, 2), "JSON critico copiado.");
+  }
+
+  async function copyValidatorPrompt() {
+    if (!criticalPayloads.length) {
+      toast.error("Gere o payload critico antes de copiar o prompt.");
+      return;
+    }
+    await copyText(criticalPayloads.map(buildMlbValidatorPrompt).join("\n\n---\n\n"), "Prompt para Validator copiado.");
+  }
+
+  function sendCriticalPayloadToValidator(payload: MlbPreparedCriticalValidationPayload) {
+    const handoff = buildMlbValidatorHandoffPayload(payload);
+    const validation = validateMlbValidatorHandoffPayload(handoff);
+    if (!validation.valid) {
+      toast.error(validation.errors[0] ?? "Payload nao esta pronto para envio ao ASP Validator.");
+      return;
+    }
+    if (validation.warnings.length) {
+      toast.warning(validation.warnings[0]);
+    }
+    const storageResult = storeMlbValidatorHandoffDraft(handoff);
+    if (!storageResult.valid) {
+      toast.error(storageResult.errors[0] ?? "Nao foi possivel salvar o rascunho para o ASP Validator.");
+      return;
+    }
+    toast.success("Rascunho enviado para ASP Validator. Revise antes de validar.");
+    void navigate({ to: "/asp-validator" });
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+            <DatabaseZap className="h-6 w-6 text-primary" />
+            ASP Screener
+          </h1>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Badge variant="outline">Etapa 02</Badge>
+            <Badge variant="outline">Dados MLB</Badge>
+            <Badge variant="outline">Sem projeções</Badge>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field label="Snapshot">
+            <Input
+              type="date"
+              value={snapshotDate}
+              onChange={(event) => setSnapshotDate(event.target.value)}
+              className="[color-scheme:dark] w-40 text-foreground"
+            />
+          </Field>
+          <Field label="Season">
+            <Input
+              inputMode="numeric"
+              value={season}
+              onChange={(event) => setSeason(Number(event.target.value) || new Date().getUTCFullYear())}
+              className="w-28"
+            />
+          </Field>
+        </div>
+      </div>
+
+      <Tabs defaultValue="baseball-mlb" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="baseball-mlb" className="gap-2">
+            <Trophy className="h-4 w-4" />
+            Baseball - MLB
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="baseball-mlb" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between gap-3 text-base">
+                <span>MLB Detailed Standings</span>
+                <Badge variant={snapshot?.validation.valid ? "outline" : snapshot ? "destructive" : "secondary"}>
+                  {snapshot?.validation.valid ? "validado" : snapshot ? "pendente" : "sem snapshot"}
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-2 md:grid-cols-4">
+                <Info label="Ultima atualizacao" value={snapshot?.imported_at ? formatDateTime(snapshot.imported_at) : isFetching ? "Carregando..." : "-"} />
+                <Info label="Fonte" value={sourceLabel(snapshot?.source)} />
+                <Info label="Snapshot" value={snapshot?.snapshot_date ?? snapshotDate} />
+                <Info label="Times importados" value={snapshot?.teams.length ?? 0} />
+                <Info label="Times conciliados" value={snapshot?.validation.matchedTeams ?? 0} />
+                <Info label="Odds MLB do dia" value={data?.oddsRowsCount ?? 0} />
+                <Info label="Avisos" value={alerts.length} />
+                <Info label="Cache" value={data?.fromCache ? "diario" : snapshot ? "atualizado" : "-"} />
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => refresh(false)} disabled={Boolean(busy)}>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  {busy === "refresh" ? "Atualizando..." : "Atualizar MLB Standings"}
+                </Button>
+                <Button variant="outline" onClick={() => refresh(true)} disabled={Boolean(busy)}>
+                  <RotateCw className="mr-2 h-4 w-4" />
+                  {busy === "force" ? "Forcando..." : "Forcar atualizacao"}
+                </Button>
+              </div>
+
+              {(lastError || alerts.length > 0) && (
+                <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
+                  <div className="mb-1 flex items-center gap-2 font-medium">
+                    <AlertTriangle className="h-4 w-4" />
+                    Alertas
+                  </div>
+                  <ul className="list-inside list-disc space-y-1">
+                    {lastError && <li>{lastError}</li>}
+                    {alerts.map((alert, index) => <li key={`${alert}-${index}`}>{alert}</li>)}
+                  </ul>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Collapsible open={csvOpen} onOpenChange={setCsvOpen}>
+            <Card>
+              <CardHeader>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" className="w-full justify-between px-0">
+                    <span className="flex items-center gap-2 font-semibold">
+                      <Upload className="h-4 w-4" />
+                      CSV manual
+                    </span>
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </CollapsibleTrigger>
+              </CardHeader>
+              <CollapsibleContent>
+                <CardContent className="space-y-3">
+                  <Textarea
+                    value={csvText}
+                    onChange={(event) => setCsvText(event.target.value)}
+                    placeholder="Rk,Tm,W,L,W-L%,Strk,R,RA,Rdiff,SOS,SRS,pythWL,Luck,..."
+                    className="min-h-44 font-mono text-xs"
+                  />
+                  <Button onClick={processCsv} disabled={busy === "csv" || !csvText.trim()}>
+                    <Upload className="mr-2 h-4 w-4" />
+                    {busy === "csv" ? "Processando..." : "Processar CSV manual"}
+                  </Button>
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Preview normalizado</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <StandingsTable rows={snapshot?.teams ?? []} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex flex-wrap items-center justify-between gap-3 text-base">
+                <span>Etapa 03A - Moneyline Screener</span>
+                <Badge variant="outline">Triagem preliminar</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
+                Modelo simples de screener. Ainda nao considera starters, lineups, bullpen, clima ou validacao critica.
+              </div>
+
+              <div className="grid gap-2 md:grid-cols-4">
+                <Info label="Snapshot usado" value={snapshot?.snapshot_date ?? "-"} />
+                <Info label="Gerado em" value={projectionGeneratedAt ? formatDateTime(projectionGeneratedAt) : "-"} />
+                <Info label="Jogos analisados" value={projectionStats.total} />
+                <Info label="Sem dados" value={projectionStats.missing_data} />
+                <Info label="Analisar" value={projectionStats.analisar} />
+                <Info label="Monitorar" value={projectionStats.monitorar} />
+                <Info label="Pular" value={projectionStats.pular} />
+                <Info label="Odds MLB carregadas" value={mlbOddsRows.length} />
+              </div>
+
+              <div className="flex flex-wrap items-end gap-3">
+                <Button onClick={generateMoneylineProjections} disabled={!snapshot?.teams.length || Boolean(busy)}>
+                  <Trophy className="mr-2 h-4 w-4" />
+                  Gerar projecoes Moneyline
+                </Button>
+                <Field label="Filtro">
+                  <Select value={projectionFilter} onValueChange={(value) => setProjectionFilter(value as MlbProjectionCandidateStatus | "todos")}>
+                    <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos</SelectItem>
+                      <SelectItem value="analisar">Analisar</SelectItem>
+                      <SelectItem value="monitorar">Monitorar</SelectItem>
+                      <SelectItem value="pular">Pular</SelectItem>
+                      <SelectItem value="missing_data">Missing data</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+
+              <MoneylineProjectionTable rows={filteredProjectionRows} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex flex-wrap items-center justify-between gap-3 text-base">
+                <span>Etapa 03B - Over/Under Screener</span>
+                <Badge variant="outline">Triagem preliminar</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
+                Modelo simples de screener. Ainda nao considera starters, bullpens, lineups confirmados, park factor ou clima. Use apenas para triagem preliminar.
+              </div>
+
+              <div className="grid gap-2 md:grid-cols-4">
+                <Info label="Snapshot usado" value={snapshot?.snapshot_date ?? "-"} />
+                <Info label="Gerado em" value={totalsGeneratedAt ? formatDateTime(totalsGeneratedAt) : "-"} />
+                <Info label="Jogos analisados" value={totalsStats.games} />
+                <Info label="Linhas O/U" value={totalsStats.total} />
+                <Info label="Linhas principais" value={totalsStats.main} />
+                <Info label="Alternativas" value={totalsStats.alternate} />
+                <Info label="Analisar" value={totalsStats.analisar} />
+                <Info label="Monitorar" value={totalsStats.monitorar} />
+                <Info label="Pular" value={totalsStats.pular} />
+                <Info label="Missing data" value={totalsStats.missing_data} />
+              </div>
+
+              <div className="flex flex-wrap items-end gap-3">
+                <Button onClick={generateTotalsProjections} disabled={!snapshot?.teams.length || Boolean(busy)}>
+                  <Trophy className="mr-2 h-4 w-4" />
+                  Gerar projecoes Over/Under
+                </Button>
+                <Field label="Filtro">
+                  <Select value={totalsFilter} onValueChange={(value) => setTotalsFilter(value as MlbTotalsFilter)}>
+                    <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos</SelectItem>
+                      <SelectItem value="analisar">Analisar</SelectItem>
+                      <SelectItem value="monitorar">Monitorar</SelectItem>
+                      <SelectItem value="pular">Pular</SelectItem>
+                      <SelectItem value="missing_data">Missing data</SelectItem>
+                      <SelectItem value="main">Linha principal</SelectItem>
+                      <SelectItem value="alternate">Linhas alternativas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+
+              <TotalsProjectionTable rows={filteredTotalsRows} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex flex-wrap items-center justify-between gap-3 text-base">
+                <span>Etapa 03C - Asian Handicap / Run Line Screener</span>
+                <Badge variant="outline">Triagem preliminar</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
+                Modelo simples de screener. Ainda nao considera starters, bullpens, lineups confirmados, park factor ou clima. Use apenas para triagem preliminar.
+              </div>
+
+              <div className="grid gap-2 md:grid-cols-4">
+                <Info label="Snapshot usado" value={snapshot?.snapshot_date ?? "-"} />
+                <Info label="Gerado em" value={handicapGeneratedAt ? formatDateTime(handicapGeneratedAt) : "-"} />
+                <Info label="Jogos analisados" value={handicapStats.games} />
+                <Info label="Linhas Handicap" value={handicapStats.total} />
+                <Info label="Linhas principais" value={handicapStats.main} />
+                <Info label="Alternativas" value={handicapStats.alternate} />
+                <Info label="Analisar" value={handicapStats.analisar} />
+                <Info label="Monitorar" value={handicapStats.monitorar} />
+                <Info label="Pular" value={handicapStats.pular} />
+                <Info label="Missing data" value={handicapStats.missing_data} />
+                <Info label="Unsupported line" value={handicapStats.unsupported_line} />
+              </div>
+
+              <div className="flex flex-wrap items-end gap-3">
+                <Button onClick={generateHandicapProjections} disabled={!snapshot?.teams.length || Boolean(busy)}>
+                  <Trophy className="mr-2 h-4 w-4" />
+                  Gerar projecoes Handicap
+                </Button>
+                <Field label="Filtro">
+                  <Select value={handicapFilter} onValueChange={(value) => setHandicapFilter(value as MlbHandicapFilter)}>
+                    <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos</SelectItem>
+                      <SelectItem value="analisar">Analisar</SelectItem>
+                      <SelectItem value="monitorar">Monitorar</SelectItem>
+                      <SelectItem value="pular">Pular</SelectItem>
+                      <SelectItem value="missing_data">Missing data</SelectItem>
+                      <SelectItem value="unsupported_line">Unsupported line</SelectItem>
+                      <SelectItem value="main">Linha principal</SelectItem>
+                      <SelectItem value="alternate">Linhas alternativas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+
+              <HandicapProjectionTable rows={filteredHandicapRows} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex flex-wrap items-center justify-between gap-3 text-base">
+                <span>Etapa 04 - Opportunity Score / Shortlist</span>
+                <Badge variant="outline">Shortlist unificada</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
+                Opportunity Score e uma triagem preliminar. Ainda nao considera starters, lineups, bullpens, clima, park factor ou validacao critica. Nao representa prognostico final.
+              </div>
+              <div className="rounded-md border bg-background/50 p-3 text-sm text-muted-foreground">
+                A shortlist e uma triagem. O limite final de no maximo 3 prognosticos sera aplicado apos validacao critica.
+              </div>
+
+              <div className="grid gap-2 md:grid-cols-4">
+                <Info label="Gerado em" value={opportunityGeneratedAt ? formatDateTime(opportunityGeneratedAt) : "-"} />
+                <Info label="Oportunidades avaliadas" value={opportunityStats.total} />
+                <Info label="Analisar" value={opportunityStats.ANALISAR} />
+                <Info label="Monitorar" value={opportunityStats.MONITORAR} />
+                <Info label="Pular" value={opportunityStats.PULAR} />
+                <Info label="Missing data" value={opportunityStats.MISSING_DATA} />
+                <Info label="Unsupported line" value={opportunityStats.UNSUPPORTED_LINE} />
+                <Info label="Shortlist principal" value={opportunityStats.primaryShortlist} />
+                <Info label="Alternativas correl." value={opportunityStats.correlatedAlternatives} />
+                <Info label="Melhor score" value={formatScore(opportunityStats.bestScore)} />
+                <Info label="Maior EV" value={formatEv(opportunityStats.bestEv)} />
+              </div>
+
+              <div className="flex flex-wrap items-end gap-3">
+                <Button onClick={generateOpportunityShortlist} disabled={!projectionRows.length || !totalsRows.length || !handicapRows.length}>
+                  <Trophy className="mr-2 h-4 w-4" />
+                  Gerar shortlist
+                </Button>
+                <Button variant="outline" onClick={generateAllScreenersAndShortlist} disabled={!snapshot?.teams.length || Boolean(busy)}>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Gerar todos os screeners + shortlist
+                </Button>
+                <Field label="Filtro">
+                  <Select value={opportunityFilter} onValueChange={(value) => setOpportunityFilter(value as MlbOpportunityFilter)}>
+                    <SelectTrigger className="w-60"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos</SelectItem>
+                      <SelectItem value="shortlist">Shortlist principal</SelectItem>
+                      <SelectItem value="analisar">Analisar</SelectItem>
+                      <SelectItem value="monitorar">Monitorar</SelectItem>
+                      <SelectItem value="pular">Pular</SelectItem>
+                      <SelectItem value="missing_data">Missing data</SelectItem>
+                      <SelectItem value="unsupported_line">Unsupported line</SelectItem>
+                      <SelectItem value="moneyline">Moneyline</SelectItem>
+                      <SelectItem value="totals">Over/Under</SelectItem>
+                      <SelectItem value="handicap">Handicap</SelectItem>
+                      <SelectItem value="main">Linha principal</SelectItem>
+                      <SelectItem value="alternate">Linhas alternativas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="EV minimo (%)">
+                  <Input
+                    inputMode="decimal"
+                    value={minOpportunityEv}
+                    onChange={(event) => setMinOpportunityEv(event.target.value)}
+                    placeholder="ex: 5"
+                    className="w-28"
+                  />
+                </Field>
+                <Field label="Score minimo">
+                  <Input
+                    inputMode="decimal"
+                    value={minOpportunityScore}
+                    onChange={(event) => setMinOpportunityScore(event.target.value)}
+                    placeholder="ex: 70"
+                    className="w-28"
+                  />
+                </Field>
+                <label className="flex items-center gap-2 pb-2 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={hideCorrelatedAlternatives}
+                    onChange={(event) => setHideCorrelatedAlternatives(event.target.checked)}
+                  />
+                  Ocultar alternativas correlacionadas
+                </label>
+              </div>
+
+              <OpportunityTable
+                rows={filteredOpportunityRows}
+                selectedIds={selectedOpportunityIds}
+                onToggleSelection={toggleOpportunitySelection}
+                onPrepare={prepareSingleOpportunity}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex flex-wrap items-center justify-between gap-3 text-base">
+                <span>Etapa 05 - Pacote de Validacao Critica MLB</span>
+                <Badge variant="outline">Preparacao</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
+                Esta etapa apenas prepara contexto detalhado e payload copiavel. Nao cria prognostico, nao envia ao Validator e nao altera bankroll.
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-2">
+                  <div className="text-sm font-semibold">Oportunidades selecionadas</div>
+                  {selectedOpportunities.map((opportunity) => (
+                    <div key={opportunity.opportunity_id} className="rounded-md border bg-background/50 p-3 text-sm">
+                      <div className="font-medium">{opportunity.matchup}</div>
+                      <div className="text-muted-foreground">
+                        {opportunity.market_label} | {opportunity.pick_label ?? "-"} | Score {formatScore(opportunity.opportunity_score)} | EV {formatEv(opportunity.ev)}
+                      </div>
+                      {!isMlbOpportunityEligibleForCriticalValidation(opportunity) && (
+                        <div className="mt-1 text-xs text-warning">Visualizacao permitida, mas bloqueada para payload critico principal.</div>
+                      )}
+                    </div>
+                  ))}
+                  {!selectedOpportunities.length && (
+                    <div className="rounded-md border bg-background/50 p-6 text-sm text-muted-foreground">
+                      Selecione oportunidades na Etapa 04. Recomenda-se priorizar no maximo 3 para validacao final.
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">Texto Baseball-Reference Matchup</Label>
+                  <Textarea
+                    value={baseballReferenceText}
+                    onChange={(event) => setBaseballReferenceText(event.target.value)}
+                    placeholder="Cole aqui o texto bruto do Baseball-Reference Matchups/Preview..."
+                    className="min-h-56 font-mono text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={processBaseballReferenceContext} disabled={!baseballReferenceText.trim()}>
+                  Processar contexto Baseball-Reference
+                </Button>
+                <Button onClick={generateCriticalPayloads} disabled={!selectedOpportunities.length || !parsedMatchupContext}>
+                  Gerar payload critico
+                </Button>
+                <Button variant="outline" onClick={copyCriticalJson} disabled={!criticalPayloads.length}>
+                  <ClipboardCopy className="mr-2 h-4 w-4" />
+                  Copiar JSON critico
+                </Button>
+                <Button variant="outline" onClick={copyValidatorPrompt} disabled={!criticalPayloads.length}>
+                  <ClipboardCopy className="mr-2 h-4 w-4" />
+                  Copiar prompt para Validator
+                </Button>
+              </div>
+
+              {parsedMatchupContext && <ParsedContextPanel context={parsedMatchupContext} />}
+              {criticalPayloads.length > 0 && <CriticalPayloadPanel payloads={criticalPayloads} onSendToValidator={sendCriticalPayloadToValidator} />}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function StandingsTable({ rows }: { rows: MlbTeamStanding[] }) {
+  return (
+    <div className="max-h-[560px] overflow-auto rounded-md border">
+      <table className="w-full text-sm">
+        <thead className="sticky top-0 bg-card text-xs uppercase text-muted-foreground">
+          <tr>
+            {["Rk", "Team", "W", "L", "W-L%", "R/G", "RA/G", "Rdiff", "SOS", "SRS", "pythWL", "Luck", "Home", "Road", "vRHP", "vLHP", "last10", "last20", "last30"].map((header) => (
+              <th key={header} className="whitespace-nowrap px-3 py-2 text-left">{header}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.team_key} className="border-t">
+              <td className="px-3 py-2 font-mono">{row.rank ?? "-"}</td>
+              <td className="min-w-48 px-3 py-2 font-medium">{row.team_name}</td>
+              <td className="px-3 py-2 font-mono">{row.wins ?? "-"}</td>
+              <td className="px-3 py-2 font-mono">{row.losses ?? "-"}</td>
+              <td className="px-3 py-2 font-mono">{formatPct(row.win_pct)}</td>
+              <td className="px-3 py-2 font-mono">{formatNumber(row.runs_per_game)}</td>
+              <td className="px-3 py-2 font-mono">{formatNumber(row.runs_allowed_per_game)}</td>
+              <td className="px-3 py-2 font-mono">{formatNumber(row.run_diff_per_game)}</td>
+              <td className="px-3 py-2 font-mono">{formatNumber(row.sos)}</td>
+              <td className="px-3 py-2 font-mono">{formatNumber(row.srs)}</td>
+              <td className="px-3 py-2 font-mono">{formatRecord(row.pyth_wins, row.pyth_losses)}</td>
+              <td className="px-3 py-2 font-mono">{row.luck ?? "-"}</td>
+              <td className="px-3 py-2 font-mono">{formatRecord(row.home_wins, row.home_losses)}</td>
+              <td className="px-3 py-2 font-mono">{formatRecord(row.road_wins, row.road_losses)}</td>
+              <td className="px-3 py-2 font-mono">{formatRecord(row.vs_rhp_wins, row.vs_rhp_losses)}</td>
+              <td className="px-3 py-2 font-mono">{formatRecord(row.vs_lhp_wins, row.vs_lhp_losses)}</td>
+              <td className="px-3 py-2 font-mono">{formatRecord(row.last10_wins, row.last10_losses)}</td>
+              <td className="px-3 py-2 font-mono">{formatRecord(row.last20_wins, row.last20_losses)}</td>
+              <td className="px-3 py-2 font-mono">{formatRecord(row.last30_wins, row.last30_losses)}</td>
+            </tr>
+          ))}
+          {!rows.length && (
+            <tr>
+              <td colSpan={19} className="px-3 py-12 text-center text-sm text-muted-foreground">
+                Nenhum snapshot carregado.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function MoneylineProjectionTable({ rows }: { rows: MlbMoneylineScreenerRow[] }) {
+  return (
+    <div className="max-h-[620px] overflow-auto rounded-md border">
+      <table className="w-full text-sm">
+        <thead className="sticky top-0 bg-card text-xs uppercase text-muted-foreground">
+          <tr>
+            {[
+              "Data",
+              "Hora",
+              "Jogo",
+              "Mandante",
+              "Visitante",
+              "Odd Mandante",
+              "Odd Visitante",
+              "Mercado Mand. No-Vig",
+              "ASP Mandante",
+              "Justa Mandante",
+              "EV Mandante",
+              "Mercado Visit. No-Vig",
+              "ASP Visitante",
+              "Justa Visitante",
+              "EV Visitante",
+              "Recomendacao preliminar",
+              "Status",
+              "Alertas",
+            ].map((header) => (
+              <th key={header} className="whitespace-nowrap px-3 py-2 text-left">{header}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.game_id} className="border-t align-top">
+              <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{row.date ?? "-"}</td>
+              <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{row.time ?? "-"}</td>
+              <td className="min-w-64 px-3 py-2 font-medium">{row.home_team} vs {row.away_team}</td>
+              <td className="min-w-44 px-3 py-2">{row.home_team}</td>
+              <td className="min-w-44 px-3 py-2">{row.away_team}</td>
+              <td className="px-3 py-2 font-mono">{formatOdd(row.home_odd)}</td>
+              <td className="px-3 py-2 font-mono">{formatOdd(row.away_odd)}</td>
+              <td className="px-3 py-2 font-mono">{formatProbability(row.home_market_implied_prob_no_vig)}</td>
+              <td className="px-3 py-2 font-mono">{formatProbability(row.home_model_prob)}</td>
+              <td className="px-3 py-2 font-mono">{formatOdd(row.home_fair_odd)}</td>
+              <td className={evClass(row.home_ev)}>{formatEv(row.home_ev)}</td>
+              <td className="px-3 py-2 font-mono">{formatProbability(row.away_market_implied_prob_no_vig)}</td>
+              <td className="px-3 py-2 font-mono">{formatProbability(row.away_model_prob)}</td>
+              <td className="px-3 py-2 font-mono">{formatOdd(row.away_fair_odd)}</td>
+              <td className={evClass(row.away_ev)}>{formatEv(row.away_ev)}</td>
+              <td className="min-w-52 px-3 py-2">
+                {row.recommended_side ? (
+                  <div className="space-y-1">
+                    <div className="font-medium">{row.recommended_side}</div>
+                    <div className="font-mono text-xs text-muted-foreground">
+                      EV {formatEv(row.recommended_ev)} | justa {formatOdd(row.recommended_fair_odd)}
+                    </div>
+                  </div>
+                ) : (
+                  <span className="text-muted-foreground">Sem EV positivo</span>
+                )}
+              </td>
+              <td className="px-3 py-2">
+                <Badge variant={statusBadgeVariant(row.candidate_status)}>{statusLabel(row.candidate_status)}</Badge>
+              </td>
+              <td className="min-w-72 px-3 py-2 text-xs text-muted-foreground">
+                <div className="space-y-1">
+                  {row.alerts.slice(0, 4).map((alert, index) => <div key={`${row.game_id}-alert-${index}`}>{alert}</div>)}
+                  {row.reasons.length > 0 && (
+                    <div className="pt-1 text-foreground">{row.reasons.slice(0, 2).join(" | ")}</div>
+                  )}
+                  {row.missing_fields.length > 0 && (
+                    <div className="text-destructive">Faltando: {row.missing_fields.join(", ")}</div>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
+          {!rows.length && (
+            <tr>
+              <td colSpan={18} className="px-3 py-12 text-center text-sm text-muted-foreground">
+                Nenhuma projecao gerada para o filtro atual.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function TotalsProjectionTable({ rows }: { rows: MlbTotalsScreenerRow[] }) {
+  return (
+    <div className="max-h-[620px] overflow-auto rounded-md border">
+      <table className="w-full text-sm">
+        <thead className="sticky top-0 bg-card text-xs uppercase text-muted-foreground">
+          <tr>
+            {[
+              "Data",
+              "Hora",
+              "Jogo",
+              "Linha",
+              "Tipo",
+              "Odd Over",
+              "Odd Under",
+              "Total ASP",
+              "Gap",
+              "Mercado Over No-Vig",
+              "ASP Over",
+              "Justa Over",
+              "EV Over",
+              "Mercado Under No-Vig",
+              "ASP Under",
+              "Justa Under",
+              "EV Under",
+              "Recomendacao preliminar",
+              "Status",
+              "Alertas",
+            ].map((header) => (
+              <th key={header} className="whitespace-nowrap px-3 py-2 text-left">{header}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.row_id} className="border-t align-top">
+              <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{row.date ?? "-"}</td>
+              <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{row.time ?? "-"}</td>
+              <td className="min-w-64 px-3 py-2 font-medium">{row.home_team} vs {row.away_team}</td>
+              <td className="px-3 py-2 font-mono">{row.line ?? "-"}</td>
+              <td className="px-3 py-2">
+                <Badge variant={row.is_main_total_line ? "outline" : "secondary"}>
+                  {row.is_main_total_line ? "principal" : "alternativa"}
+                </Badge>
+              </td>
+              <td className="px-3 py-2 font-mono">{formatOdd(row.over_odd)}</td>
+              <td className="px-3 py-2 font-mono">{formatOdd(row.under_odd)}</td>
+              <td className="px-3 py-2 font-mono">{formatNumber2(row.projected_total_runs)}</td>
+              <td className={gapClass(row.total_gap_vs_line)}>{formatSignedNumber(row.total_gap_vs_line)}</td>
+              <td className="px-3 py-2 font-mono">{formatProbability(row.over_market_implied_prob_no_vig)}</td>
+              <td className="px-3 py-2 font-mono">{formatProbability(row.over_model_prob)}</td>
+              <td className="px-3 py-2 font-mono">{formatOdd(row.over_fair_odd)}</td>
+              <td className={evClass(row.over_ev)}>{formatEv(row.over_ev)}</td>
+              <td className="px-3 py-2 font-mono">{formatProbability(row.under_market_implied_prob_no_vig)}</td>
+              <td className="px-3 py-2 font-mono">{formatProbability(row.under_model_prob)}</td>
+              <td className="px-3 py-2 font-mono">{formatOdd(row.under_fair_odd)}</td>
+              <td className={evClass(row.under_ev)}>{formatEv(row.under_ev)}</td>
+              <td className="min-w-52 px-3 py-2">
+                {row.recommended_side ? (
+                  <div className="space-y-1">
+                    <div className="font-medium">{row.recommended_side} {row.line}</div>
+                    <div className="font-mono text-xs text-muted-foreground">
+                      EV {formatEv(row.recommended_ev)} | justa {formatOdd(row.recommended_fair_odd)}
+                    </div>
+                  </div>
+                ) : (
+                  <span className="text-muted-foreground">Sem EV positivo</span>
+                )}
+              </td>
+              <td className="px-3 py-2">
+                <Badge variant={statusBadgeVariant(row.candidate_status)}>{statusLabel(row.candidate_status)}</Badge>
+              </td>
+              <td className="min-w-80 px-3 py-2 text-xs text-muted-foreground">
+                <div className="space-y-1">
+                  <div>Media liga: {formatNumber2(row.league_avg_runs_per_team)} ({leagueAverageSourceLabel(row.league_average_source)})</div>
+                  {row.push_prob ? <div>Push: {formatProbability(row.push_prob)}</div> : null}
+                  {row.alerts.slice(0, 5).map((alert, index) => <div key={`${row.row_id}-alert-${index}`}>{alert}</div>)}
+                  {row.reasons.length > 0 && (
+                    <div className="pt-1 text-foreground">{row.reasons.slice(0, 2).join(" | ")}</div>
+                  )}
+                  {row.missing_fields.length > 0 && (
+                    <div className="text-destructive">Faltando: {row.missing_fields.join(", ")}</div>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
+          {!rows.length && (
+            <tr>
+              <td colSpan={20} className="px-3 py-12 text-center text-sm text-muted-foreground">
+                Nenhuma projecao Over/Under gerada para o filtro atual.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function HandicapProjectionTable({ rows }: { rows: MlbHandicapScreenerRow[] }) {
+  return (
+    <div className="max-h-[620px] overflow-auto rounded-md border">
+      <table className="w-full text-sm">
+        <thead className="sticky top-0 bg-card text-xs uppercase text-muted-foreground">
+          <tr>
+            {[
+              "Data",
+              "Hora",
+              "Jogo",
+              "Linha mandante",
+              "Odd mandante",
+              "Linha visitante",
+              "Odd visitante",
+              "Tipo",
+              "Exp. mandante",
+              "Exp. visitante",
+              "Margem ASP",
+              "Mercado Mand. No-Vig",
+              "ASP Cover Mand.",
+              "Push Mand.",
+              "Justa Mand.",
+              "EV Mand.",
+              "Mercado Visit. No-Vig",
+              "ASP Cover Visit.",
+              "Push Visit.",
+              "Justa Visit.",
+              "EV Visit.",
+              "Recomendacao preliminar",
+              "Status",
+              "Alertas",
+            ].map((header) => (
+              <th key={header} className="whitespace-nowrap px-3 py-2 text-left">{header}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.row_id} className="border-t align-top">
+              <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{row.date ?? "-"}</td>
+              <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{row.time ?? "-"}</td>
+              <td className="min-w-64 px-3 py-2 font-medium">{row.home_team} vs {row.away_team}</td>
+              <td className="px-3 py-2 font-mono">{formatHandicapLine(row.home_handicap_line)}</td>
+              <td className="px-3 py-2 font-mono">{formatOdd(row.home_handicap_odd)}</td>
+              <td className="px-3 py-2 font-mono">{formatHandicapLine(row.away_handicap_line)}</td>
+              <td className="px-3 py-2 font-mono">{formatOdd(row.away_handicap_odd)}</td>
+              <td className="px-3 py-2">
+                <Badge variant={row.is_main_handicap_line ? "outline" : "secondary"}>
+                  {row.is_main_handicap_line ? "principal" : "alternativa"}
+                </Badge>
+              </td>
+              <td className="px-3 py-2 font-mono">{formatNumber2(row.home_expected_runs)}</td>
+              <td className="px-3 py-2 font-mono">{formatNumber2(row.away_expected_runs)}</td>
+              <td className={gapClass(row.projected_margin)}>{formatSignedNumber(row.projected_margin)}</td>
+              <td className="px-3 py-2 font-mono">{formatProbability(row.home_market_implied_prob_no_vig)}</td>
+              <td className="px-3 py-2 font-mono">{formatProbability(row.home_cover_prob)}</td>
+              <td className="px-3 py-2 font-mono">{formatProbability(row.home_push_prob)}</td>
+              <td className="px-3 py-2 font-mono">{formatOdd(row.home_fair_odd)}</td>
+              <td className={evClass(row.home_handicap_ev)}>{formatEv(row.home_handicap_ev)}</td>
+              <td className="px-3 py-2 font-mono">{formatProbability(row.away_market_implied_prob_no_vig)}</td>
+              <td className="px-3 py-2 font-mono">{formatProbability(row.away_cover_prob)}</td>
+              <td className="px-3 py-2 font-mono">{formatProbability(row.away_push_prob)}</td>
+              <td className="px-3 py-2 font-mono">{formatOdd(row.away_fair_odd)}</td>
+              <td className={evClass(row.away_handicap_ev)}>{formatEv(row.away_handicap_ev)}</td>
+              <td className="min-w-56 px-3 py-2">
+                {row.recommended_pick ? (
+                  <div className="space-y-1">
+                    <div className="font-medium">{row.recommended_pick} {formatHandicapLine(row.recommended_line)}</div>
+                    <div className="font-mono text-xs text-muted-foreground">
+                      EV {formatEv(row.recommended_ev)} | justa {formatOdd(row.recommended_fair_odd)}
+                    </div>
+                  </div>
+                ) : (
+                  <span className="text-muted-foreground">Sem EV positivo</span>
+                )}
+              </td>
+              <td className="px-3 py-2">
+                <Badge variant={statusBadgeVariant(row.candidate_status)}>{statusLabel(row.candidate_status)}</Badge>
+              </td>
+              <td className="min-w-96 px-3 py-2 text-xs text-muted-foreground">
+                <div className="space-y-1">
+                  <div>
+                    Max runs: {row.components.margin_distribution_summary.distribution_max_runs ?? "-"} |
+                    Massa: {formatProbability(row.components.margin_distribution_summary.distribution_mass_before_normalization)}
+                  </div>
+                  {row.alerts.slice(0, 6).map((alert, index) => <div key={`${row.row_id}-alert-${index}`}>{alert}</div>)}
+                  {row.reasons.length > 0 && (
+                    <div className="pt-1 text-foreground">{row.reasons.slice(0, 2).join(" | ")}</div>
+                  )}
+                  {row.missing_fields.length > 0 && (
+                    <div className="text-destructive">Faltando: {row.missing_fields.join(", ")}</div>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
+          {!rows.length && (
+            <tr>
+              <td colSpan={24} className="px-3 py-12 text-center text-sm text-muted-foreground">
+                Nenhuma projecao Handicap gerada para o filtro atual.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function OpportunityTable({
+  rows,
+  selectedIds,
+  onToggleSelection,
+  onPrepare,
+}: {
+  rows: MlbUnifiedOpportunity[];
+  selectedIds: string[];
+  onToggleSelection: (row: MlbUnifiedOpportunity) => void;
+  onPrepare: (row: MlbUnifiedOpportunity) => void;
+}) {
+  async function copyPayload(row: MlbUnifiedOpportunity) {
+    const payload = buildMlbOpportunityValidationPayload(row);
+    try {
+      await copyText(JSON.stringify(payload, null, 2), "Payload copiado.");
+    } catch (error) {
+      toast.error(formatError(error));
+    }
+  }
+
+  return (
+    <div className="max-h-[700px] overflow-auto rounded-md border">
+      <table className="w-full text-sm">
+        <thead className="sticky top-0 bg-card text-xs uppercase text-muted-foreground">
+          <tr>
+            {[
+              "Selecionar",
+              "Acoes",
+              "Rank",
+              "Data",
+              "Hora",
+              "Jogo",
+              "Mercado",
+              "Pick",
+              "Linha",
+              "Odd",
+              "Prob. Mercado No-Vig",
+              "Prob. ASP",
+              "Edge Prob.",
+              "Odd Justa",
+              "EV",
+              "Gap do Modelo",
+              "Score",
+              "Confianca",
+              "Status",
+              "Correlacao",
+              "Motivos",
+              "Alertas",
+            ].map((header) => (
+              <th key={header} className="whitespace-nowrap px-3 py-2 text-left">{header}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.opportunity_id} className="border-t align-top">
+              <td className="px-3 py-2">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.includes(row.opportunity_id)}
+                  onChange={() => onToggleSelection(row)}
+                />
+              </td>
+              <td className="min-w-40 px-3 py-2">
+                <Button size="sm" variant="outline" onClick={() => onPrepare(row)}>
+                  Preparar validacao critica
+                </Button>
+              </td>
+              <td className="px-3 py-2 font-mono">{row.rank ?? "-"}</td>
+              <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{row.date ?? "-"}</td>
+              <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{row.time ?? "-"}</td>
+              <td className="min-w-64 px-3 py-2 font-medium">{row.matchup}</td>
+              <td className="px-3 py-2">{row.market_label}</td>
+              <td className="min-w-56 px-3 py-2 font-medium">{row.pick_label ?? "-"}</td>
+              <td className="px-3 py-2 font-mono">{row.line == null ? "-" : row.market_family === "handicap" ? formatHandicapLine(row.line) : formatNumber2(row.line)}</td>
+              <td className="px-3 py-2 font-mono">{formatOdd(row.offered_odd)}</td>
+              <td className="px-3 py-2 font-mono">{formatProbability(row.market_prob_no_vig)}</td>
+              <td className="px-3 py-2 font-mono">{formatProbability(row.model_prob)}</td>
+              <td className={edgeClass(row.probability_edge)}>{formatProbabilitySigned(row.probability_edge)}</td>
+              <td className="px-3 py-2 font-mono">{formatOdd(row.fair_odd)}</td>
+              <td className={evClass(row.ev)}>{formatEv(row.ev)}</td>
+              <td className="min-w-48 px-3 py-2 font-mono">
+                {row.model_gap_value == null ? "-" : `${formatNumber2(row.model_gap_value)} | ${row.model_gap_label}`}
+              </td>
+              <td className={scoreClass(row.opportunity_score)}>{formatScore(row.opportunity_score)}</td>
+              <td className="px-3 py-2 font-mono">{formatScore(row.confidence_score)}</td>
+              <td className="px-3 py-2">
+                <Badge variant={opportunityStatusBadgeVariant(row.priority_status)}>{row.priority_status}</Badge>
+              </td>
+              <td className="min-w-44 px-3 py-2 text-xs text-muted-foreground">{correlationLabel(row)}</td>
+              <td className="min-w-72 px-3 py-2 text-xs text-muted-foreground">
+                <details>
+                  <summary className="cursor-pointer text-foreground">Detalhes</summary>
+                  <div className="mt-2 space-y-2">
+                    <div>{row.score_explanation}</div>
+                    <div className="text-foreground">{row.reasons.slice(0, 5).join(" | ") || "-"}</div>
+                    <div>Componentes: EV {formatScore(row.score_components.ev_quality_score)}, Edge {formatScore(row.score_components.probability_edge_score)}, Linha {formatScore(row.score_components.market_line_quality_score)}, Dados {formatScore(row.score_components.data_quality_score)}, Penalidade {formatScore(row.score_components.risk_penalty)}</div>
+                    {row.risk_flags.length > 0 && <div>Penalidades: {row.risk_flags.join(" | ")}</div>}
+                    <Button size="sm" variant="outline" onClick={() => copyPayload(row)}>
+                      <ClipboardCopy className="mr-2 h-3 w-3" />
+                      Copiar payload
+                    </Button>
+                    <pre className="max-h-56 overflow-auto rounded border bg-background p-2 text-[10px]">
+                      {JSON.stringify(buildMlbOpportunityValidationPayload(row), null, 2)}
+                    </pre>
+                  </div>
+                </details>
+              </td>
+              <td className="min-w-80 px-3 py-2 text-xs text-muted-foreground">
+                <div className="space-y-1">
+                  {row.alerts.slice(0, 5).map((alert, index) => <div key={`${row.opportunity_id}-alert-${index}`}>{alert}</div>)}
+                  {row.risk_flags.length > 0 && <div className="text-warning">{row.risk_flags.slice(0, 3).join(" | ")}</div>}
+                </div>
+              </td>
+            </tr>
+          ))}
+          {!rows.length && (
+            <tr>
+              <td colSpan={22} className="px-3 py-12 text-center text-sm text-muted-foreground">
+                Nenhuma oportunidade gerada para o filtro atual.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ParsedContextPanel({ context }: { context: MlbBaseballReferenceMatchupContext }) {
+  return (
+    <div className="grid gap-3 md:grid-cols-3">
+      <div className="rounded-md border bg-background/50 p-3">
+        <div className="text-sm font-semibold">Times identificados</div>
+        <div className="mt-2 space-y-2 text-sm text-muted-foreground">
+          <TeamContextLine label="Visitante" team={context.teams.away} />
+          <TeamContextLine label="Mandante" team={context.teams.home} />
+        </div>
+      </div>
+      <div className="rounded-md border bg-background/50 p-3">
+        <div className="text-sm font-semibold">Starters identificados</div>
+        <div className="mt-2 space-y-2 text-sm text-muted-foreground">
+          <StarterContextLine label="Visitante" starter={context.starting_pitchers.away} />
+          <StarterContextLine label="Mandante" starter={context.starting_pitchers.home} />
+        </div>
+      </div>
+      <div className="rounded-md border bg-background/50 p-3">
+        <div className="text-sm font-semibold">Qualidade do parser</div>
+        <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+          <div>Campos: {context.data_quality.parsed_fields_count}</div>
+          <div>Confianca: {formatScore(context.data_quality.confidence)}</div>
+          <div>Season series: {context.season_series.games.length}</div>
+          <div>H2H: {context.head_to_head.games.length}</div>
+          {context.data_quality.missing_fields.length > 0 && (
+            <div className="text-warning">Ausentes: {context.data_quality.missing_fields.join(", ")}</div>
+          )}
+          {context.data_quality.warnings.slice(0, 3).map((warning, index) => (
+            <div key={`${warning}-${index}`} className="text-warning">{warning}</div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CriticalPayloadPanel({
+  payloads,
+  onSendToValidator,
+}: {
+  payloads: MlbPreparedCriticalValidationPayload[];
+  onSendToValidator: (payload: MlbPreparedCriticalValidationPayload) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="text-sm font-semibold">Confronto Screener x Contexto Detalhado</div>
+      {payloads.map((payload) => {
+        const handoffValidation = validateMlbValidatorHandoffPayload(buildMlbValidatorHandoffPayload(payload));
+        return (
+          <div key={`${payload.game.game_id}-${payload.opportunity.market}-${payload.opportunity.pick}`} className="rounded-md border bg-background/50 p-3 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="font-medium">{payload.game.matchup} | {payload.opportunity.market} | {payload.opportunity.pick}</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">{payload.validation_preparation.readiness_status}</Badge>
+                <Button size="sm" onClick={() => onSendToValidator(payload)} disabled={!handoffValidation.canSend}>
+                  <Send className="mr-2 h-4 w-4" />
+                  Enviar esta para ASP Validator
+                </Button>
+              </div>
+            </div>
+            {handoffValidation.warnings.length > 0 && (
+              <div className="mt-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+                {handoffValidation.warnings[0]}
+              </div>
+            )}
+            {handoffValidation.errors.length > 0 && (
+              <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {handoffValidation.errors[0]}
+              </div>
+            )}
+          <div className="mt-2 grid gap-2 md:grid-cols-4">
+            <Info label="Alignment" value={payload.context_alignment.alignment_status} />
+            <Info label="Alignment score" value={payload.context_alignment.alignment_score} />
+            <Info label="Readiness" value={payload.validation_preparation.validation_readiness_score} />
+            <Info label="Flags" value={payload.context_alignment.critical_flags.length} />
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div>
+              <div className="text-xs font-semibold uppercase text-muted-foreground">Fatores de suporte</div>
+              <ul className="mt-1 list-inside list-disc text-muted-foreground">
+                {payload.context_alignment.supporting_factors.map((item) => <li key={item}>{item}</li>)}
+                {!payload.context_alignment.supporting_factors.length && <li>-</li>}
+              </ul>
+            </div>
+            <div>
+              <div className="text-xs font-semibold uppercase text-muted-foreground">Fatores de conflito</div>
+              <ul className="mt-1 list-inside list-disc text-muted-foreground">
+                {payload.context_alignment.conflicting_factors.map((item) => <li key={item}>{item}</li>)}
+                {!payload.context_alignment.conflicting_factors.length && <li>-</li>}
+              </ul>
+            </div>
+          </div>
+          <details className="mt-3">
+            <summary className="cursor-pointer text-sm font-medium">Payload critico</summary>
+            <pre className="mt-2 max-h-80 overflow-auto rounded border bg-background p-2 text-[10px]">
+              {JSON.stringify(payload, null, 2)}
+            </pre>
+          </details>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TeamContextLine({ label, team }: { label: string; team: MlbBaseballReferenceMatchupContext["teams"]["home"] }) {
+  return (
+    <div>
+      <div className="font-medium text-foreground">{label}: {team.team_name ?? "-"}</div>
+      <div>Record: {team.record?.raw ?? "-"} | Last10: {team.last10?.raw ?? "-"} | Last20: {team.last20?.raw ?? "-"} | Last30: {team.last30?.raw ?? "-"}</div>
+      <div>Home: {team.home_record?.raw ?? "-"} | Away: {team.away_record?.raw ?? "-"} | vs LHP: {team.vs_lhp_record?.raw ?? "-"} | vs RHP: {team.vs_rhp_record?.raw ?? "-"}</div>
+    </div>
+  );
+}
+
+function StarterContextLine({ label, starter }: { label: string; starter: MlbBaseballReferenceMatchupContext["starting_pitchers"]["home"] }) {
+  return (
+    <div>
+      <div className="font-medium text-foreground">{label}: {starter.name ?? "-"}</div>
+      <div>{starter.throwing_hand ?? "-"} | {starter.season_record?.raw ?? "-"} | ERA {starter.era ?? "-"} | IP {starter.innings_pitched_display ?? "-"}</div>
+      <div>K {starter.strikeouts ?? "-"} | BB {starter.walks ?? "-"} | HR {starter.home_runs_allowed ?? "-"} | Score {starter.starter_quality_score ?? "-"}</div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</Label>
+      {children}
+    </div>
+  );
+}
+
+function Info({ label, value }: { label: string; value: unknown }) {
+  return (
+    <div className="rounded-md border bg-background/50 p-3">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="mt-1 truncate text-sm font-semibold">{String(value ?? "-")}</div>
+    </div>
+  );
+}
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function sourceLabel(source: string | null | undefined) {
+  if (source === "baseball_reference") return "Baseball-Reference";
+  if (source === "csv_manual") return "CSV manual";
+  return "-";
+}
+
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
+function formatRecord(wins: number | null, losses: number | null) {
+  return wins == null || losses == null ? "-" : `${wins}-${losses}`;
+}
+
+function formatPct(value: number | null) {
+  if (value == null) return "-";
+  return value.toFixed(3).replace(/^0/, "");
+}
+
+function formatNumber(value: number | null) {
+  return value == null ? "-" : Number(value).toFixed(1);
+}
+
+function formatNumber2(value: number | null) {
+  return value == null ? "-" : Number(value).toFixed(2);
+}
+
+function formatOdd(value: number | null) {
+  return value == null ? "-" : Number(value).toFixed(2);
+}
+
+function formatProbability(value: number | null) {
+  return value == null ? "-" : `${(value * 100).toFixed(1)}%`;
+}
+
+function formatProbabilitySigned(value: number | null) {
+  if (value == null) return "-";
+  const prefix = value > 0 ? "+" : "";
+  return `${prefix}${(value * 100).toFixed(1)} p.p.`;
+}
+
+function formatEv(value: number | null) {
+  if (value == null) return "-";
+  const prefix = value > 0 ? "+" : "";
+  return `${prefix}${(value * 100).toFixed(2)}%`;
+}
+
+function formatSignedNumber(value: number | null) {
+  if (value == null) return "-";
+  const prefix = value > 0 ? "+" : "";
+  return `${prefix}${value.toFixed(2)}`;
+}
+
+function formatHandicapLine(value: number | null) {
+  if (value == null) return "-";
+  const prefix = value > 0 ? "+" : "";
+  return `${prefix}${value.toFixed(1)}`;
+}
+
+function formatScore(value: number | null) {
+  return value == null || !Number.isFinite(value) ? "-" : value.toFixed(1);
+}
+
+function evClass(value: number | null) {
+  const base = "px-3 py-2 font-mono";
+  if (value == null) return base;
+  if (value >= 0.05) return `${base} text-success`;
+  if (value >= 0.02) return `${base} text-warning`;
+  if (value < 0) return `${base} text-muted-foreground`;
+  return base;
+}
+
+function edgeClass(value: number | null) {
+  const base = "px-3 py-2 font-mono";
+  if (value == null) return base;
+  if (value >= 0.05) return `${base} text-success`;
+  if (value >= 0.025) return `${base} text-warning`;
+  return `${base} text-muted-foreground`;
+}
+
+function scoreClass(value: number | null) {
+  const base = "px-3 py-2 font-mono font-semibold";
+  if (value == null) return base;
+  if (value >= 75) return `${base} text-success`;
+  if (value >= 60) return `${base} text-warning`;
+  return `${base} text-muted-foreground`;
+}
+
+function gapClass(value: number | null) {
+  const base = "px-3 py-2 font-mono";
+  if (value == null) return base;
+  if (Math.abs(value) >= 0.7) return `${base} text-success`;
+  if (Math.abs(value) >= 0.45) return `${base} text-warning`;
+  return `${base} text-muted-foreground`;
+}
+
+function getProjectionStats(rows: MlbMoneylineScreenerRow[]) {
+  return rows.reduce(
+    (acc, row) => {
+      acc.total += 1;
+      acc[row.candidate_status] += 1;
+      return acc;
+    },
+    { total: 0, analisar: 0, monitorar: 0, pular: 0, missing_data: 0 },
+  );
+}
+
+function getTotalsStats(rows: MlbTotalsScreenerRow[]) {
+  return rows.reduce(
+    (acc, row) => {
+      acc.total += 1;
+      acc[row.candidate_status] += 1;
+      if (row.is_main_total_line) acc.main += 1;
+      else acc.alternate += 1;
+      acc.gameIds.add(row.game_id);
+      return acc;
+    },
+    {
+      total: 0,
+      analisar: 0,
+      monitorar: 0,
+      pular: 0,
+      missing_data: 0,
+      main: 0,
+      alternate: 0,
+      gameIds: new Set<string>(),
+      get games() {
+        return this.gameIds.size;
+      },
+    },
+  );
+}
+
+function filterTotalsRows(rows: MlbTotalsScreenerRow[], filter: MlbTotalsFilter) {
+  if (filter === "todos") return rows;
+  if (filter === "main") return rows.filter((row) => row.is_main_total_line);
+  if (filter === "alternate") return rows.filter((row) => !row.is_main_total_line);
+  return rows.filter((row) => row.candidate_status === filter);
+}
+
+function getHandicapStats(rows: MlbHandicapScreenerRow[]) {
+  return rows.reduce(
+    (acc, row) => {
+      acc.total += 1;
+      acc[row.candidate_status] += 1;
+      if (row.is_main_handicap_line) acc.main += 1;
+      else acc.alternate += 1;
+      acc.gameIds.add(row.game_id);
+      return acc;
+    },
+    {
+      total: 0,
+      analisar: 0,
+      monitorar: 0,
+      pular: 0,
+      missing_data: 0,
+      unsupported_line: 0,
+      main: 0,
+      alternate: 0,
+      gameIds: new Set<string>(),
+      get games() {
+        return this.gameIds.size;
+      },
+    },
+  );
+}
+
+function filterHandicapRows(rows: MlbHandicapScreenerRow[], filter: MlbHandicapFilter) {
+  if (filter === "todos") return rows;
+  if (filter === "main") return rows.filter((row) => row.is_main_handicap_line);
+  if (filter === "alternate") return rows.filter((row) => !row.is_main_handicap_line);
+  return rows.filter((row) => row.candidate_status === filter);
+}
+
+function getOpportunityStats(rows: MlbUnifiedOpportunity[]) {
+  return rows.reduce(
+    (acc, row) => {
+      acc.total += 1;
+      acc[row.priority_status] += 1;
+      if (row.is_primary_shortlist) acc.primaryShortlist += 1;
+      if (row.correlation_status === "correlated_alternative") acc.correlatedAlternatives += 1;
+      if (acc.bestScore == null || row.opportunity_score > acc.bestScore) acc.bestScore = row.opportunity_score;
+      if (row.ev != null && (acc.bestEv == null || row.ev > acc.bestEv)) acc.bestEv = row.ev;
+      return acc;
+    },
+    {
+      total: 0,
+      ANALISAR: 0,
+      MONITORAR: 0,
+      PULAR: 0,
+      MISSING_DATA: 0,
+      UNSUPPORTED_LINE: 0,
+      primaryShortlist: 0,
+      correlatedAlternatives: 0,
+      bestScore: null as number | null,
+      bestEv: null as number | null,
+    },
+  );
+}
+
+function filterOpportunityRows(
+  rows: MlbUnifiedOpportunity[],
+  opts: {
+    filter: MlbOpportunityFilter;
+    hideCorrelatedAlternatives: boolean;
+    minEv: number;
+    minScore: number;
+  },
+) {
+  const minEv = Number.isFinite(opts.minEv) ? opts.minEv / 100 : null;
+  const minScore = Number.isFinite(opts.minScore) ? opts.minScore : null;
+  return rows.filter((row) => {
+    if (opts.hideCorrelatedAlternatives && row.correlation_status === "correlated_alternative") return false;
+    if (minEv != null && (row.ev == null || row.ev < minEv)) return false;
+    if (minScore != null && row.opportunity_score < minScore) return false;
+    if (opts.filter === "todos") return true;
+    if (opts.filter === "shortlist") return row.is_primary_shortlist;
+    if (opts.filter === "analisar") return row.priority_status === "ANALISAR";
+    if (opts.filter === "monitorar") return row.priority_status === "MONITORAR";
+    if (opts.filter === "pular") return row.priority_status === "PULAR";
+    if (opts.filter === "missing_data") return row.priority_status === "MISSING_DATA";
+    if (opts.filter === "unsupported_line") return row.priority_status === "UNSUPPORTED_LINE";
+    if (opts.filter === "moneyline") return row.market_family === "moneyline";
+    if (opts.filter === "totals") return row.market_family === "totals";
+    if (opts.filter === "handicap") return row.market_family === "handicap";
+    if (opts.filter === "main") return row.is_main_line;
+    if (opts.filter === "alternate") return !row.is_main_line;
+    return true;
+  });
+}
+
+function correlationLabel(row: MlbUnifiedOpportunity) {
+  if (row.correlation_status === "primary") return "Primaria do jogo";
+  if (row.correlation_status === "correlated_alternative") return "Alternativa correlacionada";
+  return "Standalone";
+}
+
+function opportunityStatusBadgeVariant(status: MlbUnifiedOpportunity["priority_status"]) {
+  if (status === "MISSING_DATA" || status === "UNSUPPORTED_LINE") return "destructive";
+  if (status === "ANALISAR") return "outline";
+  return "secondary";
+}
+
+async function copyText(text: string, successMessage: string) {
+  await navigator.clipboard.writeText(text);
+  toast.success(successMessage);
+}
+
+function leagueAverageSourceLabel(source: MlbTotalsScreenerRow["league_average_source"]) {
+  if (source === "average_row") return "Average";
+  if (source === "computed_from_teams") return "times";
+  return "fallback";
+}
+
+function statusLabel(status: MlbProjectionCandidateStatus | MlbHandicapCandidateStatus) {
+  const labels: Record<MlbProjectionCandidateStatus | MlbHandicapCandidateStatus, string> = {
+    analisar: "ANALISAR",
+    monitorar: "MONITORAR",
+    pular: "PULAR",
+    missing_data: "MISSING_DATA",
+    unsupported_line: "UNSUPPORTED_LINE",
+  };
+  return labels[status];
+}
+
+function statusBadgeVariant(status: MlbProjectionCandidateStatus | MlbHandicapCandidateStatus) {
+  if (status === "missing_data" || status === "unsupported_line") return "destructive";
+  if (status === "analisar") return "outline";
+  if (status === "monitorar") return "secondary";
+  return "secondary";
+}
+
+function formatError(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}

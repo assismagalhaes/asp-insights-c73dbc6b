@@ -23,6 +23,7 @@ import { Route as AuthenticatedColetaDadosRouteImport } from './routes/_authenti
 import { Route as AuthenticatedBaseDadosRouteImport } from './routes/_authenticated/base-dados'
 import { Route as AuthenticatedBankrollRouteImport } from './routes/_authenticated/bankroll'
 import { Route as AuthenticatedAspValidatorRouteImport } from './routes/_authenticated/asp-validator'
+import { Route as AuthenticatedAspScreenerRouteImport } from './routes/_authenticated/asp-screener'
 import { Route as AuthenticatedAprendizadoIaRouteImport } from './routes/_authenticated/aprendizado-ia'
 
 const AuthRoute = AuthRouteImport.update({
@@ -99,6 +100,12 @@ const AuthenticatedAspValidatorRoute =
     path: '/asp-validator',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedAspScreenerRoute =
+  AuthenticatedAspScreenerRouteImport.update({
+    id: '/asp-screener',
+    path: '/asp-screener',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedAprendizadoIaRoute =
   AuthenticatedAprendizadoIaRouteImport.update({
     id: '/aprendizado-ia',
@@ -110,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
   '/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
+  '/asp-screener': typeof AuthenticatedAspScreenerRoute
   '/asp-validator': typeof AuthenticatedAspValidatorRoute
   '/bankroll': typeof AuthenticatedBankrollRoute
   '/base-dados': typeof AuthenticatedBaseDadosRoute
@@ -125,6 +133,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
+  '/asp-screener': typeof AuthenticatedAspScreenerRoute
   '/asp-validator': typeof AuthenticatedAspValidatorRoute
   '/bankroll': typeof AuthenticatedBankrollRoute
   '/base-dados': typeof AuthenticatedBaseDadosRoute
@@ -143,6 +152,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
+  '/_authenticated/asp-screener': typeof AuthenticatedAspScreenerRoute
   '/_authenticated/asp-validator': typeof AuthenticatedAspValidatorRoute
   '/_authenticated/bankroll': typeof AuthenticatedBankrollRoute
   '/_authenticated/base-dados': typeof AuthenticatedBaseDadosRoute
@@ -162,6 +172,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/aprendizado-ia'
+    | '/asp-screener'
     | '/asp-validator'
     | '/bankroll'
     | '/base-dados'
@@ -177,6 +188,7 @@ export interface FileRouteTypes {
   to:
     | '/auth'
     | '/aprendizado-ia'
+    | '/asp-screener'
     | '/asp-validator'
     | '/bankroll'
     | '/base-dados'
@@ -194,6 +206,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/aprendizado-ia'
+    | '/_authenticated/asp-screener'
     | '/_authenticated/asp-validator'
     | '/_authenticated/bankroll'
     | '/_authenticated/base-dados'
@@ -313,6 +326,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAspValidatorRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/asp-screener': {
+      id: '/_authenticated/asp-screener'
+      path: '/asp-screener'
+      fullPath: '/asp-screener'
+      preLoaderRoute: typeof AuthenticatedAspScreenerRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/aprendizado-ia': {
       id: '/_authenticated/aprendizado-ia'
       path: '/aprendizado-ia'
@@ -325,6 +345,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAprendizadoIaRoute: typeof AuthenticatedAprendizadoIaRoute
+  AuthenticatedAspScreenerRoute: typeof AuthenticatedAspScreenerRoute
   AuthenticatedAspValidatorRoute: typeof AuthenticatedAspValidatorRoute
   AuthenticatedBankrollRoute: typeof AuthenticatedBankrollRoute
   AuthenticatedBaseDadosRoute: typeof AuthenticatedBaseDadosRoute
@@ -341,6 +362,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAprendizadoIaRoute: AuthenticatedAprendizadoIaRoute,
+  AuthenticatedAspScreenerRoute: AuthenticatedAspScreenerRoute,
   AuthenticatedAspValidatorRoute: AuthenticatedAspValidatorRoute,
   AuthenticatedBankrollRoute: AuthenticatedBankrollRoute,
   AuthenticatedBaseDadosRoute: AuthenticatedBaseDadosRoute,
@@ -365,3 +387,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
