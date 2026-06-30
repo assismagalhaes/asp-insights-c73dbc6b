@@ -1369,7 +1369,7 @@ function TotalsProjectionTable({ rows }: { rows: MlbTotalsScreenerRow[] }) {
                 <div className="space-y-1">
                   <div>Media liga: {formatNumber2(row.league_avg_runs_per_team)} ({leagueAverageSourceLabel(row.league_average_source)})</div>
                   {row.push_prob ? <div>Push: {formatProbability(row.push_prob)}</div> : null}
-                  {row.alerts.slice(0, 5).map((alert, index) => <div key={`${row.row_id}-alert-${index}`}>{alert}</div>)}
+                  {row.alerts.slice(0, 5).map((alert, index) => <div key={`${row.row_id}-alert-${index}`}>{formatAlertMessage(alert)}</div>)}
                   {row.reasons.length > 0 && (
                     <div className="pt-1 text-foreground">{row.reasons.slice(0, 2).join(" | ")}</div>
                   )}
