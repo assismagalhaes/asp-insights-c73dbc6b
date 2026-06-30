@@ -3389,5 +3389,28 @@ function statusBadgeVariant(status: MlbProjectionCandidateStatus | MlbHandicapCa
 }
 
 function formatError(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
+  return formatAlertMessage(error);
+}
+
+function formatAlertMessage(alert: unknown): string {
+  if (alert == null) return "Alerta desconhecido";
+  if (typeof alert === "string") return alert;
+  if (typeof alert === "number" || typeof alert === "boolean") return String(alert);
+  if (alert instanceof Error) return alert.message || "Erro desconhecido";
+  if (typeof alert === "object") {
+    const obj = alert as Record<string, unknown>;
+    if (typeof obj.message === "string" && obj.message) return obj.message;
+    if (typeof obj.error === "string" && obj.error) return obj.error;
+    if (typeof obj.details === "string" && obj.details) return obj.details;
+    if (typeof obj.description === "string" && obj.description) return obj.description;
+    if (typeof obj.statusText === "string" && obj.statusText) return obj.statusText;
+    try {
+      const json = JSON.stringify(obj);
+      if (json && json !== "{}") return json;
+    } catch {
+      /* fallthrough */
+    }
+    return "Alerta nao estruturado";
+  }
+  return String(alert);
 }
