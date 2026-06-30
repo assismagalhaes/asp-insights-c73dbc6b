@@ -188,7 +188,7 @@ export function normalizeMlbTeamText(input: string) {
     .replace(/\b(s\.?\s*f\.?|sf)\b/gi, "sf")
     .replace(/\b(s\.?\s*d\.?|sd)\b/gi, "sd")
     .replace(/\b(t\.?\s*b\.?|tb)\b/gi, "tb")
-    .replace(/\b(st\.?|saint)\s*/gi, "st ")
+    .replace(/\b(st\.?|saint)\b\s*/gi, "st ")
     .replace(/['`]/g, "")
     .replace(/[^a-zA-Z0-9]+/g, " ")
     .trim()
