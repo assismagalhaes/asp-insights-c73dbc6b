@@ -39,6 +39,7 @@ import {
   markHandoffValidationFailed,
   markHandoffValidationStarted,
 } from "@/lib/mlb/screenerHandoffAuditService";
+import { linkMlbOpportunitySnapshotToValidatorRecord } from "@/lib/mlb/screenerSnapshotService";
 import { processAspValidatorOcr } from "@/lib/scraper-api.functions";
 import { supabase } from "@/lib/supabase-public";
 import type { MlbValidatorHandoffPayload } from "@/types/mlbValidatorHandoff";
@@ -629,9 +630,10 @@ function AspValidatorPage() {
       if (importedHandoff) {
         try {
           await linkHandoffToValidatorRecord(importedHandoff, savedRecordId, next);
+          await linkMlbOpportunitySnapshotToValidatorRecord(importedHandoff.handoff_id, savedRecordId, next.decision);
         } catch (error) {
-          console.warn("Validacao salva, mas falhou ao vincular auditoria do handoff.", error);
-          toast.warning("Validacao salva, mas auditoria do handoff nao foi vinculada.");
+          console.warn("Validacao salva, mas falhou ao vincular auditoria/snapshot do handoff.", error);
+          toast.warning("Validacao salva, mas auditoria/snapshot do handoff nao foi vinculado.");
         }
       }
       setUploads([]);
