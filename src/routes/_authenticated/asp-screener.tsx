@@ -712,8 +712,8 @@ function AspScreenerPage() {
                     Alertas
                   </div>
                   <ul className="list-inside list-disc space-y-1">
-                    {lastError && <li>{lastError}</li>}
-                    {alerts.map((alert, index) => <li key={`${alert}-${index}`}>{alert}</li>)}
+                    {lastError && <li>{formatAlertMessage(lastError)}</li>}
+                    {alerts.map((alert, index) => <li key={`alert-${index}`}>{formatAlertMessage(alert)}</li>)}
                   </ul>
                 </div>
               )}
@@ -1270,7 +1270,7 @@ function MoneylineProjectionTable({ rows }: { rows: MlbMoneylineScreenerRow[] })
               </td>
               <td className="min-w-72 px-3 py-2 text-xs text-muted-foreground">
                 <div className="space-y-1">
-                  {row.alerts.slice(0, 4).map((alert, index) => <div key={`${row.game_id}-alert-${index}`}>{alert}</div>)}
+                  {row.alerts.slice(0, 4).map((alert, index) => <div key={`${row.game_id}-alert-${index}`}>{formatAlertMessage(alert)}</div>)}
                   {row.reasons.length > 0 && (
                     <div className="pt-1 text-foreground">{row.reasons.slice(0, 2).join(" | ")}</div>
                   )}
@@ -1369,7 +1369,7 @@ function TotalsProjectionTable({ rows }: { rows: MlbTotalsScreenerRow[] }) {
                 <div className="space-y-1">
                   <div>Media liga: {formatNumber2(row.league_avg_runs_per_team)} ({leagueAverageSourceLabel(row.league_average_source)})</div>
                   {row.push_prob ? <div>Push: {formatProbability(row.push_prob)}</div> : null}
-                  {row.alerts.slice(0, 5).map((alert, index) => <div key={`${row.row_id}-alert-${index}`}>{alert}</div>)}
+                  {row.alerts.slice(0, 5).map((alert, index) => <div key={`${row.row_id}-alert-${index}`}>{formatAlertMessage(alert)}</div>)}
                   {row.reasons.length > 0 && (
                     <div className="pt-1 text-foreground">{row.reasons.slice(0, 2).join(" | ")}</div>
                   )}
@@ -1478,7 +1478,7 @@ function HandicapProjectionTable({ rows }: { rows: MlbHandicapScreenerRow[] }) {
                     Max runs: {row.components.margin_distribution_summary.distribution_max_runs ?? "-"} |
                     Massa: {formatProbability(row.components.margin_distribution_summary.distribution_mass_before_normalization)}
                   </div>
-                  {row.alerts.slice(0, 6).map((alert, index) => <div key={`${row.row_id}-alert-${index}`}>{alert}</div>)}
+                  {row.alerts.slice(0, 6).map((alert, index) => <div key={`${row.row_id}-alert-${index}`}>{formatAlertMessage(alert)}</div>)}
                   {row.reasons.length > 0 && (
                     <div className="pt-1 text-foreground">{row.reasons.slice(0, 2).join(" | ")}</div>
                   )}
@@ -1612,7 +1612,7 @@ function OpportunityTable({
               </td>
               <td className="min-w-80 px-3 py-2 text-xs text-muted-foreground">
                 <div className="space-y-1">
-                  {row.alerts.slice(0, 5).map((alert, index) => <div key={`${row.opportunity_id}-alert-${index}`}>{alert}</div>)}
+                  {row.alerts.slice(0, 5).map((alert, index) => <div key={`${row.opportunity_id}-alert-${index}`}>{formatAlertMessage(alert)}</div>)}
                   {row.risk_flags.length > 0 && <div className="text-warning">{row.risk_flags.slice(0, 3).join(" | ")}</div>}
                 </div>
               </td>
@@ -1659,7 +1659,7 @@ function ParsedContextPanel({ context }: { context: MlbBaseballReferenceMatchupC
             <div className="text-warning">Ausentes: {context.data_quality.missing_fields.join(", ")}</div>
           )}
           {context.data_quality.warnings.slice(0, 3).map((warning, index) => (
-            <div key={`${warning}-${index}`} className="text-warning">{warning}</div>
+            <div key={`warning-${index}`} className="text-warning">{formatAlertMessage(warning)}</div>
           ))}
         </div>
       </div>
@@ -1693,12 +1693,12 @@ function CriticalPayloadPanel({
             </div>
             {handoffValidation.warnings.length > 0 && (
               <div className="mt-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
-                {handoffValidation.warnings[0]}
+                {formatAlertMessage(handoffValidation.warnings[0])}
               </div>
             )}
             {handoffValidation.errors.length > 0 && (
               <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                {handoffValidation.errors[0]}
+                {formatAlertMessage(handoffValidation.errors[0])}
               </div>
             )}
           <div className="mt-2 grid gap-2 md:grid-cols-4">
@@ -3389,5 +3389,28 @@ function statusBadgeVariant(status: MlbProjectionCandidateStatus | MlbHandicapCa
 }
 
 function formatError(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
+  return formatAlertMessage(error);
+}
+
+function formatAlertMessage(alert: unknown): string {
+  if (alert == null) return "Alerta desconhecido";
+  if (typeof alert === "string") return alert;
+  if (typeof alert === "number" || typeof alert === "boolean") return String(alert);
+  if (alert instanceof Error) return alert.message || "Erro desconhecido";
+  if (typeof alert === "object") {
+    const obj = alert as Record<string, unknown>;
+    if (typeof obj.message === "string" && obj.message) return obj.message;
+    if (typeof obj.error === "string" && obj.error) return obj.error;
+    if (typeof obj.details === "string" && obj.details) return obj.details;
+    if (typeof obj.description === "string" && obj.description) return obj.description;
+    if (typeof obj.statusText === "string" && obj.statusText) return obj.statusText;
+    try {
+      const json = JSON.stringify(obj);
+      if (json && json !== "{}") return json;
+    } catch {
+      /* fallthrough */
+    }
+    return "Alerta nao estruturado";
+  }
+  return String(alert);
 }
