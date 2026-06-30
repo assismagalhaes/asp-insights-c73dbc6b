@@ -99,6 +99,19 @@ function AspScreenerPage() {
   const [auditDecisionFilter, setAuditDecisionFilter] = useState<"all" | "CONFIRMAR" | "PULAR" | "pending">("all");
   const [auditMinScore, setAuditMinScore] = useState("");
   const [auditMinEv, setAuditMinEv] = useState("");
+  const [calibrationStatusFilter, setCalibrationStatusFilter] = useState<MlbScreenerHandoffAuditStatus | "all">("all");
+  const [calibrationMarketFilter, setCalibrationMarketFilter] = useState("all");
+  const [calibrationDecisionFilter, setCalibrationDecisionFilter] = useState<"all" | "CONFIRMAR" | "PULAR" | "pending">("all");
+  const [calibrationPriorityFilter, setCalibrationPriorityFilter] = useState("all");
+  const [calibrationReadinessFilter, setCalibrationReadinessFilter] = useState("all");
+  const [calibrationAlignmentFilter, setCalibrationAlignmentFilter] = useState("all");
+  const [calibrationMinScore, setCalibrationMinScore] = useState("");
+  const [calibrationMaxScore, setCalibrationMaxScore] = useState("");
+  const [calibrationMinConfidence, setCalibrationMinConfidence] = useState("");
+  const [calibrationMaxConfidence, setCalibrationMaxConfidence] = useState("");
+  const [calibrationMinEv, setCalibrationMinEv] = useState("");
+  const [calibrationHomeTeam, setCalibrationHomeTeam] = useState("");
+  const [calibrationAwayTeam, setCalibrationAwayTeam] = useState("");
 
   const queryKey = ["mlb-standings-snapshot", snapshotDate, season];
   const { data, isFetching } = useQuery({
@@ -176,6 +189,41 @@ function AspScreenerPage() {
     () => Array.from(new Set(handoffAuditRows.map((row) => row.market).filter(Boolean) as string[])),
     [handoffAuditRows],
   );
+  const calibrationRows = useMemo(
+    () => filterCalibrationRows(handoffAuditRows, {
+      status: calibrationStatusFilter,
+      market: calibrationMarketFilter,
+      decision: calibrationDecisionFilter,
+      priorityStatus: calibrationPriorityFilter,
+      readinessStatus: calibrationReadinessFilter,
+      alignmentStatus: calibrationAlignmentFilter,
+      minScore: Number(calibrationMinScore),
+      maxScore: Number(calibrationMaxScore),
+      minConfidence: Number(calibrationMinConfidence),
+      maxConfidence: Number(calibrationMaxConfidence),
+      minEv: Number(calibrationMinEv),
+      homeTeam: calibrationHomeTeam,
+      awayTeam: calibrationAwayTeam,
+    }),
+    [
+      handoffAuditRows,
+      calibrationStatusFilter,
+      calibrationMarketFilter,
+      calibrationDecisionFilter,
+      calibrationPriorityFilter,
+      calibrationReadinessFilter,
+      calibrationAlignmentFilter,
+      calibrationMinScore,
+      calibrationMaxScore,
+      calibrationMinConfidence,
+      calibrationMaxConfidence,
+      calibrationMinEv,
+      calibrationHomeTeam,
+      calibrationAwayTeam,
+    ],
+  );
+  const calibrationModel = useMemo(() => buildCalibrationModel(calibrationRows), [calibrationRows]);
+  const calibrationOptionSets = useMemo(() => buildCalibrationOptionSets(handoffAuditRows), [handoffAuditRows]);
 
   useEffect(() => {
     setProjectionRows([]);
@@ -899,6 +947,41 @@ function AspScreenerPage() {
             onDecisionChange={setAuditDecisionFilter}
             onMinScoreChange={setAuditMinScore}
             onMinEvChange={setAuditMinEv}
+            onRefresh={() => void refetchHandoffAudit()}
+          />
+
+          <MlbCalibrationPanel
+            rows={calibrationRows}
+            model={calibrationModel}
+            loading={loadingHandoffAudit}
+            marketOptions={handoffAuditMarketOptions}
+            optionSets={calibrationOptionSets}
+            status={calibrationStatusFilter}
+            market={calibrationMarketFilter}
+            decision={calibrationDecisionFilter}
+            priority={calibrationPriorityFilter}
+            readiness={calibrationReadinessFilter}
+            alignment={calibrationAlignmentFilter}
+            minScore={calibrationMinScore}
+            maxScore={calibrationMaxScore}
+            minConfidence={calibrationMinConfidence}
+            maxConfidence={calibrationMaxConfidence}
+            minEv={calibrationMinEv}
+            homeTeam={calibrationHomeTeam}
+            awayTeam={calibrationAwayTeam}
+            onStatusChange={setCalibrationStatusFilter}
+            onMarketChange={setCalibrationMarketFilter}
+            onDecisionChange={setCalibrationDecisionFilter}
+            onPriorityChange={setCalibrationPriorityFilter}
+            onReadinessChange={setCalibrationReadinessFilter}
+            onAlignmentChange={setCalibrationAlignmentFilter}
+            onMinScoreChange={setCalibrationMinScore}
+            onMaxScoreChange={setCalibrationMaxScore}
+            onMinConfidenceChange={setCalibrationMinConfidence}
+            onMaxConfidenceChange={setCalibrationMaxConfidence}
+            onMinEvChange={setCalibrationMinEv}
+            onHomeTeamChange={setCalibrationHomeTeam}
+            onAwayTeamChange={setCalibrationAwayTeam}
             onRefresh={() => void refetchHandoffAudit()}
           />
         </TabsContent>
@@ -1655,6 +1738,375 @@ function HandoffAuditPanel({
   );
 }
 
+type CalibrationModel = ReturnType<typeof buildCalibrationModel>;
+type CalibrationOptionSets = ReturnType<typeof buildCalibrationOptionSets>;
+
+function MlbCalibrationPanel({
+  rows,
+  model,
+  loading,
+  marketOptions,
+  optionSets,
+  status,
+  market,
+  decision,
+  priority,
+  readiness,
+  alignment,
+  minScore,
+  maxScore,
+  minConfidence,
+  maxConfidence,
+  minEv,
+  homeTeam,
+  awayTeam,
+  onStatusChange,
+  onMarketChange,
+  onDecisionChange,
+  onPriorityChange,
+  onReadinessChange,
+  onAlignmentChange,
+  onMinScoreChange,
+  onMaxScoreChange,
+  onMinConfidenceChange,
+  onMaxConfidenceChange,
+  onMinEvChange,
+  onHomeTeamChange,
+  onAwayTeamChange,
+  onRefresh,
+}: {
+  rows: MlbScreenerHandoffAuditRecord[];
+  model: CalibrationModel;
+  loading: boolean;
+  marketOptions: string[];
+  optionSets: CalibrationOptionSets;
+  status: MlbScreenerHandoffAuditStatus | "all";
+  market: string;
+  decision: "all" | "CONFIRMAR" | "PULAR" | "pending";
+  priority: string;
+  readiness: string;
+  alignment: string;
+  minScore: string;
+  maxScore: string;
+  minConfidence: string;
+  maxConfidence: string;
+  minEv: string;
+  homeTeam: string;
+  awayTeam: string;
+  onStatusChange: (value: MlbScreenerHandoffAuditStatus | "all") => void;
+  onMarketChange: (value: string) => void;
+  onDecisionChange: (value: "all" | "CONFIRMAR" | "PULAR" | "pending") => void;
+  onPriorityChange: (value: string) => void;
+  onReadinessChange: (value: string) => void;
+  onAlignmentChange: (value: string) => void;
+  onMinScoreChange: (value: string) => void;
+  onMaxScoreChange: (value: string) => void;
+  onMinConfidenceChange: (value: string) => void;
+  onMaxConfidenceChange: (value: string) => void;
+  onMinEvChange: (value: string) => void;
+  onHomeTeamChange: (value: string) => void;
+  onAwayTeamChange: (value: string) => void;
+  onRefresh: () => void;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex flex-wrap items-center justify-between gap-3 text-base">
+          <span>Etapa 07 - Calibracao do Screener MLB</span>
+          <Badge variant="outline">Somente leitura</Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="rounded-md border bg-background/50 p-3 text-sm text-muted-foreground">
+          Dashboard de calibracao baseado apenas na auditoria de handoffs. Nao cria prognostico, nao executa IA, nao altera Validator e nao toca na banca.
+        </div>
+
+        <div className="flex flex-wrap items-end gap-3">
+          <Field label="Status">
+            <Select value={status} onValueChange={(value) => onStatusChange(value as MlbScreenerHandoffAuditStatus | "all")}>
+              <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {HANDOFF_AUDIT_STATUSES.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Mercado">
+            <Select value={market} onValueChange={onMarketChange}>
+              <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {marketOptions.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Decisao">
+            <Select value={decision} onValueChange={(value) => onDecisionChange(value as "all" | "CONFIRMAR" | "PULAR" | "pending")}>
+              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="CONFIRMAR">CONFIRMAR</SelectItem>
+                <SelectItem value="PULAR">PULAR</SelectItem>
+                <SelectItem value="pending">Sem decisao</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <FilterSelect label="Priority" value={priority} options={optionSets.priorityStatuses} onChange={onPriorityChange} />
+          <FilterSelect label="Readiness" value={readiness} options={optionSets.readinessStatuses} onChange={onReadinessChange} />
+          <FilterSelect label="Alignment" value={alignment} options={optionSets.alignmentStatuses} onChange={onAlignmentChange} />
+          <Field label="Score min/max">
+            <div className="flex gap-2">
+              <Input inputMode="decimal" value={minScore} onChange={(event) => onMinScoreChange(event.target.value)} className="w-20" />
+              <Input inputMode="decimal" value={maxScore} onChange={(event) => onMaxScoreChange(event.target.value)} className="w-20" />
+            </div>
+          </Field>
+          <Field label="Conf. min/max">
+            <div className="flex gap-2">
+              <Input inputMode="decimal" value={minConfidence} onChange={(event) => onMinConfidenceChange(event.target.value)} className="w-20" />
+              <Input inputMode="decimal" value={maxConfidence} onChange={(event) => onMaxConfidenceChange(event.target.value)} className="w-20" />
+            </div>
+          </Field>
+          <Field label="EV minimo (%)">
+            <Input inputMode="decimal" value={minEv} onChange={(event) => onMinEvChange(event.target.value)} className="w-28" />
+          </Field>
+          <Field label="Mandante">
+            <Input value={homeTeam} onChange={(event) => onHomeTeamChange(event.target.value)} className="w-40" />
+          </Field>
+          <Field label="Visitante">
+            <Input value={awayTeam} onChange={(event) => onAwayTeamChange(event.target.value)} className="w-40" />
+          </Field>
+          <Button variant="outline" onClick={onRefresh} disabled={loading}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            {loading ? "Atualizando..." : "Atualizar dados"}
+          </Button>
+          <Button variant="outline" onClick={() => exportCalibrationCsv(rows)} disabled={!rows.length}>
+            Exportar CSV
+          </Button>
+        </div>
+
+        <div className="grid gap-2 md:grid-cols-4">
+          <Info label="Handoffs enviados" value={model.funnel.sent} />
+          <Info label="Aplicados" value={model.funnel.applied} />
+          <Info label="Descartados" value={model.funnel.discarded} />
+          <Info label="Expirados" value={model.funnel.expired} />
+          <Info label="Validacoes iniciadas" value={model.funnel.started} />
+          <Info label="Validacoes concluidas" value={model.funnel.completed} />
+          <Info label="Validacoes falhas" value={model.funnel.failed} />
+          <Info label="CONFIRMAR" value={model.funnel.confirmed} />
+          <Info label="PULAR" value={model.funnel.skipped} />
+          <Info label="Envio -> aplicacao" value={formatRate(model.funnel.sentToAppliedRate)} />
+          <Info label="Aplicacao -> validacao" value={formatRate(model.funnel.appliedToCompletedRate)} />
+          <Info label="Validacao -> confirmar" value={formatRate(model.funnel.completedToConfirmRate)} />
+          <Info label="Validacao -> pular" value={formatRate(model.funnel.completedToSkipRate)} />
+        </div>
+
+        <div className="grid gap-3 xl:grid-cols-2">
+          <CalibrationAverages title="Medias - todos os handoffs" stats={model.averages.all} />
+          <CalibrationAverages title="Medias - validacoes concluidas" stats={model.averages.completed} />
+          <CalibrationAverages title="Medias - CONFIRMAR" stats={model.averages.confirmed} />
+          <CalibrationAverages title="Medias - PULAR" stats={model.averages.skipped} />
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          <CalibrationGroupTable title="Faixas de Opportunity Score" rows={model.scoreBands} />
+          <CalibrationGroupTable title="Faixas de Confidence Score" rows={model.confidenceBands} />
+          <CalibrationGroupTable title="Mercados" rows={model.marketGroups} />
+          <CalibrationGroupTable title="Readiness" rows={model.readinessGroups} />
+          <CalibrationGroupTable title="Alignment" rows={model.alignmentGroups} />
+          <CalibrationRankingTable title="Risk flags mais comuns" rows={model.riskFlagRanking} total={rows.length} />
+          <CalibrationRankingTable title="Alertas mais comuns" rows={model.alertRanking} total={rows.length} />
+        </div>
+
+        <div className="rounded-md border bg-background/50 p-3 text-sm text-muted-foreground">
+          Performance financeira indisponivel ate liquidacao confiavel dos resultados vinculados no ASP Validator. Esta etapa nao mistura handoff analisado com aposta real.
+        </div>
+
+        <CalibrationDetailTable rows={rows} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function FilterSelect({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
+  return (
+    <Field label={label}>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos</SelectItem>
+          {options.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </Field>
+  );
+}
+
+function CalibrationAverages({ title, stats }: { title: string; stats: CalibrationAverageStats }) {
+  return (
+    <div className="rounded-md border bg-background/50 p-3">
+      <div className="mb-3 text-sm font-semibold">{title}</div>
+      <div className="grid gap-2 md:grid-cols-4">
+        <Info label="Score medio" value={formatScore(stats.opportunityScore)} />
+        <Info label="Confidence medio" value={formatScore(stats.confidenceScore)} />
+        <Info label="EV medio" value={formatEv(stats.ev)} />
+        <Info label="Prob. ASP" value={formatPercentDecimal(stats.modelProbability)} />
+        <Info label="Prob. mercado" value={formatPercentDecimal(stats.marketProbability)} />
+        <Info label="Edge medio" value={formatPercentDecimal(stats.edge)} />
+        <Info label="Readiness medio" value={formatScore(stats.readinessScore)} />
+        <Info label="Alignment medio" value={formatScore(stats.alignmentScore)} />
+      </div>
+    </div>
+  );
+}
+
+function CalibrationGroupTable({ title, rows }: { title: string; rows: CalibrationGroupRow[] }) {
+  return (
+    <div className="overflow-hidden rounded-md border">
+      <div className="border-b bg-background/60 px-3 py-2 text-sm font-semibold">{title}</div>
+      <div className="overflow-auto">
+        <table className="w-full min-w-[760px] text-sm">
+          <thead className="bg-card text-xs uppercase text-muted-foreground">
+            <tr>
+              {["Grupo", "Total", "Aplic.", "Concl.", "CONF.", "PULAR", "Taxa CONF.", "EV", "Score", "Conf.", "Ready", "Align"].map((header) => (
+                <th key={header} className="px-3 py-2 text-left">{header}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.label} className="border-t">
+                <td className="px-3 py-2 font-medium">{row.label}</td>
+                <td className="px-3 py-2">{row.total}</td>
+                <td className="px-3 py-2">{row.applied}</td>
+                <td className="px-3 py-2">{row.completed}</td>
+                <td className="px-3 py-2">{row.confirmed}</td>
+                <td className="px-3 py-2">{row.skipped}</td>
+                <td className="px-3 py-2">
+                  <RateBar value={row.confirmRate} />
+                </td>
+                <td className="px-3 py-2 font-mono">{formatEv(row.averageEv)}</td>
+                <td className="px-3 py-2 font-mono">{formatScore(row.averageScore)}</td>
+                <td className="px-3 py-2 font-mono">{formatScore(row.averageConfidence)}</td>
+                <td className="px-3 py-2 font-mono">{formatScore(row.averageReadiness)}</td>
+                <td className="px-3 py-2 font-mono">{formatScore(row.averageAlignment)}</td>
+              </tr>
+            ))}
+            {!rows.length && (
+              <tr><td colSpan={12} className="px-3 py-6 text-center text-muted-foreground">Sem dados para este agrupamento.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function CalibrationRankingTable({ title, rows, total }: { title: string; rows: CalibrationRankingRow[]; total: number }) {
+  return (
+    <div className="overflow-hidden rounded-md border">
+      <div className="border-b bg-background/60 px-3 py-2 text-sm font-semibold">{title}</div>
+      <div className="overflow-auto">
+        <table className="w-full min-w-[560px] text-sm">
+          <thead className="bg-card text-xs uppercase text-muted-foreground">
+            <tr>
+              {["Item", "Qtd.", "% handoffs", "Taxa CONF.", "Taxa PULAR"].map((header) => (
+                <th key={header} className="px-3 py-2 text-left">{header}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.label} className="border-t">
+                <td className="px-3 py-2 font-medium">{row.label}</td>
+                <td className="px-3 py-2">{row.count}</td>
+                <td className="px-3 py-2">{formatRate(total ? (row.count / total) * 100 : 0)}</td>
+                <td className="px-3 py-2">{formatRate(row.confirmRate)}</td>
+                <td className="px-3 py-2">{formatRate(row.skipRate)}</td>
+              </tr>
+            ))}
+            {!rows.length && (
+              <tr><td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">Sem itens ranqueados.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function CalibrationDetailTable({ rows }: { rows: MlbScreenerHandoffAuditRecord[] }) {
+  return (
+    <div className="overflow-hidden rounded-md border">
+      <div className="border-b bg-background/60 px-3 py-2 text-sm font-semibold">Tabela detalhada de calibracao</div>
+      <div className="overflow-auto">
+        <table className="w-full min-w-[1320px] text-sm">
+          <thead className="bg-card text-xs uppercase text-muted-foreground">
+            <tr>
+              {["Data envio", "Jogo", "Mercado", "Pick", "Linha", "Odd", "EV", "Score", "Confidence", "Readiness", "Alignment", "Status", "Decisao", "Validator", "Risk flags", "Acoes"].map((header) => (
+                <th key={header} className="px-3 py-2 text-left">{header}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const riskFlags = getRiskFlags(row);
+              return (
+                <tr key={row.id} className="border-t align-top">
+                  <td className="whitespace-nowrap px-3 py-2">{formatDateTime(row.created_at)}</td>
+                  <td className="px-3 py-2 font-medium">{row.matchup ?? `${row.away_team ?? "-"} @ ${row.home_team ?? "-"}`}</td>
+                  <td className="px-3 py-2">{row.market ?? "-"}</td>
+                  <td className="px-3 py-2">{row.pick ?? "-"}</td>
+                  <td className="px-3 py-2">{row.line ?? "-"}</td>
+                  <td className="px-3 py-2 font-mono">{formatOdd(row.odd)}</td>
+                  <td className="px-3 py-2 font-mono">{formatEv(row.ev)}</td>
+                  <td className="px-3 py-2 font-mono">{formatScore(row.opportunity_score)}</td>
+                  <td className="px-3 py-2 font-mono">{formatScore(row.confidence_score)}</td>
+                  <td className="px-3 py-2">{row.readiness_status ?? "-"}</td>
+                  <td className="px-3 py-2">{row.alignment_status ?? "-"}</td>
+                  <td className="px-3 py-2"><Badge variant="outline">{row.status}</Badge></td>
+                  <td className="px-3 py-2">{row.validator_decision ?? "-"}</td>
+                  <td className="px-3 py-2 font-mono text-xs">{row.validator_record_id ?? "-"}</td>
+                  <td className="px-3 py-2 text-xs">{riskFlags.join(", ") || "-"}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" onClick={() => void copyCalibrationPayload(row)}>
+                        <ClipboardCopy className="mr-2 h-3 w-3" />
+                        Payload
+                      </Button>
+                      <details className="w-full">
+                        <summary className="cursor-pointer text-xs text-muted-foreground">Ver payload</summary>
+                        <pre className="mt-2 max-h-72 overflow-auto rounded border bg-background p-2 text-[10px]">
+                          {JSON.stringify(row.handoff_payload || row.critical_payload, null, 2)}
+                        </pre>
+                      </details>
+                      {row.validator_record_id && <Badge variant="secondary">Validator vinculado</Badge>}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            {!rows.length && (
+              <tr><td colSpan={16} className="px-3 py-6 text-center text-muted-foreground">Nenhum handoff para os filtros da calibracao.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function RateBar({ value }: { value: number }) {
+  const width = `${Math.max(0, Math.min(100, value))}%`;
+  return (
+    <div className="min-w-32">
+      <div className="mb-1 font-mono text-xs">{formatRate(value)}</div>
+      <div className="h-2 overflow-hidden rounded bg-muted">
+        <div className="h-full bg-primary" style={{ width }} />
+      </div>
+    </div>
+  );
+}
+
 function TeamContextLine({ label, team }: { label: string; team: MlbBaseballReferenceMatchupContext["teams"]["home"] }) {
   return (
     <div>
@@ -1746,6 +2198,318 @@ function getHandoffAuditStats(rows: MlbScreenerHandoffAuditRecord[]) {
   };
 }
 
+type CalibrationAverageStats = ReturnType<typeof getCalibrationAverages>;
+type CalibrationGroupRow = {
+  label: string;
+  total: number;
+  applied: number;
+  completed: number;
+  confirmed: number;
+  skipped: number;
+  confirmRate: number;
+  averageEv: number | null;
+  averageScore: number | null;
+  averageConfidence: number | null;
+  averageReadiness: number | null;
+  averageAlignment: number | null;
+};
+type CalibrationRankingRow = {
+  label: string;
+  count: number;
+  confirmRate: number;
+  skipRate: number;
+};
+
+function filterCalibrationRows(
+  rows: MlbScreenerHandoffAuditRecord[],
+  filters: {
+    status: MlbScreenerHandoffAuditStatus | "all";
+    market: string;
+    decision: "all" | "CONFIRMAR" | "PULAR" | "pending";
+    priorityStatus: string;
+    readinessStatus: string;
+    alignmentStatus: string;
+    minScore: number;
+    maxScore: number;
+    minConfidence: number;
+    maxConfidence: number;
+    minEv: number;
+    homeTeam: string;
+    awayTeam: string;
+  },
+) {
+  return rows.filter((row) => {
+    if (filters.status !== "all" && row.status !== filters.status) return false;
+    if (filters.market !== "all" && row.market !== filters.market) return false;
+    if (filters.decision === "pending" && row.validator_decision) return false;
+    if (filters.decision !== "all" && filters.decision !== "pending" && row.validator_decision !== filters.decision) return false;
+    if (filters.priorityStatus !== "all" && row.priority_status !== filters.priorityStatus) return false;
+    if (filters.readinessStatus !== "all" && row.readiness_status !== filters.readinessStatus) return false;
+    if (filters.alignmentStatus !== "all" && row.alignment_status !== filters.alignmentStatus) return false;
+    if (Number.isFinite(filters.minScore) && filters.minScore > 0 && (row.opportunity_score ?? 0) < filters.minScore) return false;
+    if (Number.isFinite(filters.maxScore) && filters.maxScore > 0 && (row.opportunity_score ?? 0) > filters.maxScore) return false;
+    if (Number.isFinite(filters.minConfidence) && filters.minConfidence > 0 && (row.confidence_score ?? 0) < filters.minConfidence) return false;
+    if (Number.isFinite(filters.maxConfidence) && filters.maxConfidence > 0 && (row.confidence_score ?? 0) > filters.maxConfidence) return false;
+    if (Number.isFinite(filters.minEv) && filters.minEv > 0 && ((row.ev ?? 0) * 100) < filters.minEv) return false;
+    if (filters.homeTeam.trim() && !normalizeText(row.home_team).includes(normalizeText(filters.homeTeam))) return false;
+    if (filters.awayTeam.trim() && !normalizeText(row.away_team).includes(normalizeText(filters.awayTeam))) return false;
+    return true;
+  });
+}
+
+function buildCalibrationOptionSets(rows: MlbScreenerHandoffAuditRecord[]) {
+  return {
+    priorityStatuses: uniqueValues(rows.map((row) => row.priority_status)),
+    readinessStatuses: uniqueValues(rows.map((row) => row.readiness_status)),
+    alignmentStatuses: uniqueValues(rows.map((row) => row.alignment_status)),
+  };
+}
+
+function buildCalibrationModel(rows: MlbScreenerHandoffAuditRecord[]) {
+  const completedRows = rows.filter(isValidationCompleted);
+  const confirmedRows = rows.filter((row) => row.validator_decision === "CONFIRMAR");
+  const skippedRows = rows.filter((row) => row.validator_decision === "PULAR");
+  const applied = rows.filter(isAppliedInValidator).length;
+  const started = rows.filter(isValidationStarted).length;
+  const completed = completedRows.length;
+  const confirmed = confirmedRows.length;
+  const skipped = skippedRows.length;
+
+  return {
+    funnel: {
+      sent: rows.length,
+      applied,
+      discarded: rows.filter((row) => row.status === "discarded").length,
+      expired: rows.filter((row) => row.status === "expired").length,
+      started,
+      completed,
+      failed: rows.filter((row) => row.status === "validation_failed").length,
+      confirmed,
+      skipped,
+      sentToAppliedRate: rows.length ? (applied / rows.length) * 100 : 0,
+      appliedToCompletedRate: applied ? (completed / applied) * 100 : 0,
+      completedToConfirmRate: completed ? (confirmed / completed) * 100 : 0,
+      completedToSkipRate: completed ? (skipped / completed) * 100 : 0,
+    },
+    averages: {
+      all: getCalibrationAverages(rows),
+      completed: getCalibrationAverages(completedRows),
+      confirmed: getCalibrationAverages(confirmedRows),
+      skipped: getCalibrationAverages(skippedRows),
+    },
+    scoreBands: groupByRanges(rows, [
+      ["0-59", 0, 59],
+      ["60-69", 60, 69],
+      ["70-79", 70, 79],
+      ["80-89", 80, 89],
+      ["90-100", 90, 100],
+    ], (row) => row.opportunity_score),
+    confidenceBands: groupByRanges(rows, [
+      ["0-49", 0, 49],
+      ["50-57", 50, 57],
+      ["58-65", 58, 65],
+      ["66-72", 66, 72],
+      ["73-78", 73, 78],
+    ], (row) => row.confidence_score),
+    marketGroups: groupByValue(rows, (row) => row.market ?? "Sem mercado"),
+    readinessGroups: groupByValue(rows, (row) => row.readiness_status ?? "Sem readiness"),
+    alignmentGroups: groupByValue(rows, (row) => row.alignment_status ?? "Sem alignment"),
+    riskFlagRanking: rankCalibrationItems(rows, getRiskFlags),
+    alertRanking: rankCalibrationItems(rows, getAlerts),
+  };
+}
+
+function getCalibrationAverages(rows: MlbScreenerHandoffAuditRecord[]) {
+  return {
+    opportunityScore: average(rows.map((row) => row.opportunity_score)),
+    confidenceScore: average(rows.map((row) => row.confidence_score)),
+    ev: average(rows.map((row) => row.ev)),
+    modelProbability: average(rows.map((row) => row.model_probability)),
+    marketProbability: average(rows.map((row) => row.market_probability_no_vig)),
+    edge: average(rows.map((row) => getProbabilityEdge(row))),
+    readinessScore: average(rows.map((row) => getReadinessScore(row.readiness_status))),
+    alignmentScore: average(rows.map((row) => row.alignment_score)),
+  };
+}
+
+function groupByRanges(
+  rows: MlbScreenerHandoffAuditRecord[],
+  ranges: Array<[string, number, number]>,
+  getValue: (row: MlbScreenerHandoffAuditRecord) => number | null,
+) {
+  return ranges.map(([label, min, max]) => buildCalibrationGroupRow(
+    label,
+    rows.filter((row) => {
+      const value = getValue(row);
+      return value != null && value >= min && value <= max;
+    }),
+  ));
+}
+
+function groupByValue(rows: MlbScreenerHandoffAuditRecord[], getValue: (row: MlbScreenerHandoffAuditRecord) => string) {
+  return uniqueValues(rows.map(getValue)).map((label) => buildCalibrationGroupRow(label, rows.filter((row) => getValue(row) === label)));
+}
+
+function buildCalibrationGroupRow(label: string, rows: MlbScreenerHandoffAuditRecord[]): CalibrationGroupRow {
+  const completed = rows.filter(isValidationCompleted).length;
+  const confirmed = rows.filter((row) => row.validator_decision === "CONFIRMAR").length;
+  return {
+    label,
+    total: rows.length,
+    applied: rows.filter(isAppliedInValidator).length,
+    completed,
+    confirmed,
+    skipped: rows.filter((row) => row.validator_decision === "PULAR").length,
+    confirmRate: completed ? (confirmed / completed) * 100 : 0,
+    averageEv: average(rows.map((row) => row.ev)),
+    averageScore: average(rows.map((row) => row.opportunity_score)),
+    averageConfidence: average(rows.map((row) => row.confidence_score)),
+    averageReadiness: average(rows.map((row) => getReadinessScore(row.readiness_status))),
+    averageAlignment: average(rows.map((row) => row.alignment_score)),
+  };
+}
+
+function rankCalibrationItems(rows: MlbScreenerHandoffAuditRecord[], getItems: (row: MlbScreenerHandoffAuditRecord) => string[]): CalibrationRankingRow[] {
+  const counts = new Map<string, MlbScreenerHandoffAuditRecord[]>();
+  for (const row of rows) {
+    for (const item of getItems(row)) {
+      counts.set(item, [...(counts.get(item) ?? []), row]);
+    }
+  }
+  return [...counts.entries()]
+    .map(([label, itemRows]) => {
+      const completed = itemRows.filter(isValidationCompleted).length;
+      const confirmed = itemRows.filter((row) => row.validator_decision === "CONFIRMAR").length;
+      const skipped = itemRows.filter((row) => row.validator_decision === "PULAR").length;
+      return {
+        label,
+        count: itemRows.length,
+        confirmRate: completed ? (confirmed / completed) * 100 : 0,
+        skipRate: completed ? (skipped / completed) * 100 : 0,
+      };
+    })
+    .sort((a, b) => b.count - a.count || b.confirmRate - a.confirmRate)
+    .slice(0, 12);
+}
+
+async function copyCalibrationPayload(row: MlbScreenerHandoffAuditRecord) {
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(row.handoff_payload || row.critical_payload, null, 2));
+    toast.success("Payload de calibracao copiado.");
+  } catch {
+    toast.error("Nao foi possivel copiar o payload.");
+  }
+}
+
+function exportCalibrationCsv(rows: MlbScreenerHandoffAuditRecord[]) {
+  const headers = [
+    "handoff_id",
+    "created_at",
+    "game_id",
+    "matchup",
+    "market",
+    "pick",
+    "line",
+    "odd",
+    "ev",
+    "opportunity_score",
+    "confidence_score",
+    "readiness_status",
+    "alignment_status",
+    "status",
+    "validator_decision",
+    "validator_record_id",
+    "risk_flags",
+  ];
+  const csvRows = rows.map((row) => [
+    row.handoff_id,
+    row.created_at,
+    row.game_id,
+    row.matchup,
+    row.market,
+    row.pick,
+    row.line,
+    row.odd,
+    row.ev,
+    row.opportunity_score,
+    row.confidence_score,
+    row.readiness_status,
+    row.alignment_status,
+    row.status,
+    row.validator_decision,
+    row.validator_record_id,
+    getRiskFlags(row).join("|"),
+  ]);
+  const csv = [headers, ...csvRows].map((line) => line.map(csvCell).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `asp-screener-mlb-calibracao-${todayIso()}.csv`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function getRiskFlags(row: MlbScreenerHandoffAuditRecord) {
+  return safeStringArray(row.opportunity_payload?.risk_flags);
+}
+
+function getAlerts(row: MlbScreenerHandoffAuditRecord) {
+  return safeStringArray(row.opportunity_payload?.alerts);
+}
+
+function getProbabilityEdge(row: MlbScreenerHandoffAuditRecord) {
+  if (row.model_probability == null || row.market_probability_no_vig == null) return null;
+  return row.model_probability - row.market_probability_no_vig;
+}
+
+function getReadinessScore(status: string | null) {
+  if (status === "pronto_para_validator") return 100;
+  if (status === "revisar_antes_do_validator") return 70;
+  if (status === "contexto_incompleto") return 40;
+  if (status === "nao_recomendado_para_validator") return 0;
+  return null;
+}
+
+function isAppliedInValidator(row: MlbScreenerHandoffAuditRecord) {
+  return Boolean(row.applied_at) || ["applied_in_validator", "validation_started", "validation_completed", "validation_failed"].includes(row.status);
+}
+
+function isValidationStarted(row: MlbScreenerHandoffAuditRecord) {
+  return Boolean(row.validation_started_at) || ["validation_started", "validation_completed", "validation_failed"].includes(row.status);
+}
+
+function isValidationCompleted(row: MlbScreenerHandoffAuditRecord) {
+  return row.status === "validation_completed" || Boolean(row.validation_completed_at) || Boolean(row.validator_record_id);
+}
+
+function average(values: Array<number | null | undefined>) {
+  const valid = values.filter((value): value is number => value != null && Number.isFinite(value));
+  if (!valid.length) return null;
+  return valid.reduce((sum, value) => sum + value, 0) / valid.length;
+}
+
+function uniqueValues(values: Array<string | null | undefined>) {
+  return Array.from(new Set(values.filter((value): value is string => Boolean(value)))).sort((a, b) => a.localeCompare(b));
+}
+
+function safeStringArray(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+}
+
+function csvCell(value: unknown) {
+  const text = value == null ? "" : String(value);
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function normalizeText(value: string | null | undefined) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -1798,6 +2562,14 @@ function formatEv(value: number | null) {
   if (value == null) return "-";
   const prefix = value > 0 ? "+" : "";
   return `${prefix}${(value * 100).toFixed(2)}%`;
+}
+
+function formatPercentDecimal(value: number | null) {
+  return value == null ? "-" : `${(value * 100).toFixed(2)}%`;
+}
+
+function formatRate(value: number) {
+  return Number.isFinite(value) ? `${value.toFixed(1)}%` : "-";
 }
 
 function formatSignedNumber(value: number | null) {
