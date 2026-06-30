@@ -1693,12 +1693,12 @@ function CriticalPayloadPanel({
             </div>
             {handoffValidation.warnings.length > 0 && (
               <div className="mt-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
-                {handoffValidation.warnings[0]}
+                {formatAlertMessage(handoffValidation.warnings[0])}
               </div>
             )}
             {handoffValidation.errors.length > 0 && (
               <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                {handoffValidation.errors[0]}
+                {formatAlertMessage(handoffValidation.errors[0])}
               </div>
             )}
           <div className="mt-2 grid gap-2 md:grid-cols-4">
