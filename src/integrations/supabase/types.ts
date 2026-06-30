@@ -424,6 +424,234 @@ export type Database = {
         }
         Relationships: []
       }
+      mlb_league_average_snapshots: {
+        Row: {
+          created_at: string
+          home_record_average: string | null
+          id: string
+          last10_average: string | null
+          raw: Json
+          road_record_average: string | null
+          runs_allowed_per_game_average: number | null
+          runs_per_game_average: number | null
+          season: number
+          snapshot_date: string
+          source: string
+          source_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          home_record_average?: string | null
+          id?: string
+          last10_average?: string | null
+          raw?: Json
+          road_record_average?: string | null
+          runs_allowed_per_game_average?: number | null
+          runs_per_game_average?: number | null
+          season: number
+          snapshot_date: string
+          source: string
+          source_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          home_record_average?: string | null
+          id?: string
+          last10_average?: string | null
+          raw?: Json
+          road_record_average?: string | null
+          runs_allowed_per_game_average?: number | null
+          runs_per_game_average?: number | null
+          season?: number
+          snapshot_date?: string
+          source?: string
+          source_url?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      mlb_team_standings_snapshots: {
+        Row: {
+          created_at: string
+          extra_innings_losses: number | null
+          extra_innings_wins: number | null
+          home_losses: number | null
+          home_win_pct: number | null
+          home_wins: number | null
+          id: string
+          interleague_losses: number | null
+          interleague_wins: number | null
+          last10_losses: number | null
+          last10_wins: number | null
+          last20_losses: number | null
+          last20_wins: number | null
+          last30_losses: number | null
+          last30_wins: number | null
+          losses: number | null
+          luck: number | null
+          one_run_losses: number | null
+          one_run_wins: number | null
+          pyth_losses: number | null
+          pyth_win_pct: number | null
+          pyth_wins: number | null
+          rank: number | null
+          raw: Json
+          road_losses: number | null
+          road_win_pct: number | null
+          road_wins: number | null
+          run_diff_per_game: number | null
+          runs_allowed_per_game: number | null
+          runs_per_game: number | null
+          season: number
+          snapshot_date: string
+          sos: number | null
+          source: string
+          source_url: string | null
+          srs: number | null
+          streak_count: number | null
+          streak_result: string | null
+          team_key: string
+          team_name: string
+          updated_at: string
+          v_cent_losses: number | null
+          v_cent_wins: number | null
+          v_east_losses: number | null
+          v_east_wins: number | null
+          v_west_losses: number | null
+          v_west_wins: number | null
+          vs_500_minus_losses: number | null
+          vs_500_minus_wins: number | null
+          vs_500_plus_losses: number | null
+          vs_500_plus_wins: number | null
+          vs_lhp_losses: number | null
+          vs_lhp_wins: number | null
+          vs_rhp_losses: number | null
+          vs_rhp_wins: number | null
+          win_pct: number | null
+          wins: number | null
+        }
+        Insert: {
+          created_at?: string
+          extra_innings_losses?: number | null
+          extra_innings_wins?: number | null
+          home_losses?: number | null
+          home_win_pct?: number | null
+          home_wins?: number | null
+          id?: string
+          interleague_losses?: number | null
+          interleague_wins?: number | null
+          last10_losses?: number | null
+          last10_wins?: number | null
+          last20_losses?: number | null
+          last20_wins?: number | null
+          last30_losses?: number | null
+          last30_wins?: number | null
+          losses?: number | null
+          luck?: number | null
+          one_run_losses?: number | null
+          one_run_wins?: number | null
+          pyth_losses?: number | null
+          pyth_win_pct?: number | null
+          pyth_wins?: number | null
+          rank?: number | null
+          raw?: Json
+          road_losses?: number | null
+          road_win_pct?: number | null
+          road_wins?: number | null
+          run_diff_per_game?: number | null
+          runs_allowed_per_game?: number | null
+          runs_per_game?: number | null
+          season: number
+          snapshot_date: string
+          sos?: number | null
+          source: string
+          source_url?: string | null
+          srs?: number | null
+          streak_count?: number | null
+          streak_result?: string | null
+          team_key: string
+          team_name: string
+          updated_at?: string
+          v_cent_losses?: number | null
+          v_cent_wins?: number | null
+          v_east_losses?: number | null
+          v_east_wins?: number | null
+          v_west_losses?: number | null
+          v_west_wins?: number | null
+          vs_500_minus_losses?: number | null
+          vs_500_minus_wins?: number | null
+          vs_500_plus_losses?: number | null
+          vs_500_plus_wins?: number | null
+          vs_lhp_losses?: number | null
+          vs_lhp_wins?: number | null
+          vs_rhp_losses?: number | null
+          vs_rhp_wins?: number | null
+          win_pct?: number | null
+          wins?: number | null
+        }
+        Update: {
+          created_at?: string
+          extra_innings_losses?: number | null
+          extra_innings_wins?: number | null
+          home_losses?: number | null
+          home_win_pct?: number | null
+          home_wins?: number | null
+          id?: string
+          interleague_losses?: number | null
+          interleague_wins?: number | null
+          last10_losses?: number | null
+          last10_wins?: number | null
+          last20_losses?: number | null
+          last20_wins?: number | null
+          last30_losses?: number | null
+          last30_wins?: number | null
+          losses?: number | null
+          luck?: number | null
+          one_run_losses?: number | null
+          one_run_wins?: number | null
+          pyth_losses?: number | null
+          pyth_win_pct?: number | null
+          pyth_wins?: number | null
+          rank?: number | null
+          raw?: Json
+          road_losses?: number | null
+          road_win_pct?: number | null
+          road_wins?: number | null
+          run_diff_per_game?: number | null
+          runs_allowed_per_game?: number | null
+          runs_per_game?: number | null
+          season?: number
+          snapshot_date?: string
+          sos?: number | null
+          source?: string
+          source_url?: string | null
+          srs?: number | null
+          streak_count?: number | null
+          streak_result?: string | null
+          team_key?: string
+          team_name?: string
+          updated_at?: string
+          v_cent_losses?: number | null
+          v_cent_wins?: number | null
+          v_east_losses?: number | null
+          v_east_wins?: number | null
+          v_west_losses?: number | null
+          v_west_wins?: number | null
+          vs_500_minus_losses?: number | null
+          vs_500_minus_wins?: number | null
+          vs_500_plus_losses?: number | null
+          vs_500_plus_wins?: number | null
+          vs_lhp_losses?: number | null
+          vs_lhp_wins?: number | null
+          vs_rhp_losses?: number | null
+          vs_rhp_wins?: number | null
+          win_pct?: number | null
+          wins?: number | null
+        }
+        Relationships: []
+      }
       odds_jogos: {
         Row: {
           bookmaker: string | null
