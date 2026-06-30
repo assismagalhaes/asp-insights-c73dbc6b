@@ -712,8 +712,8 @@ function AspScreenerPage() {
                     Alertas
                   </div>
                   <ul className="list-inside list-disc space-y-1">
-                    {lastError && <li>{lastError}</li>}
-                    {alerts.map((alert, index) => <li key={`${alert}-${index}`}>{alert}</li>)}
+                    {lastError && <li>{formatAlertMessage(lastError)}</li>}
+                    {alerts.map((alert, index) => <li key={`alert-${index}`}>{formatAlertMessage(alert)}</li>)}
                   </ul>
                 </div>
               )}
