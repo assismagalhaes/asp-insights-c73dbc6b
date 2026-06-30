@@ -1478,7 +1478,7 @@ function HandicapProjectionTable({ rows }: { rows: MlbHandicapScreenerRow[] }) {
                     Max runs: {row.components.margin_distribution_summary.distribution_max_runs ?? "-"} |
                     Massa: {formatProbability(row.components.margin_distribution_summary.distribution_mass_before_normalization)}
                   </div>
-                  {row.alerts.slice(0, 6).map((alert, index) => <div key={`${row.row_id}-alert-${index}`}>{alert}</div>)}
+                  {row.alerts.slice(0, 6).map((alert, index) => <div key={`${row.row_id}-alert-${index}`}>{formatAlertMessage(alert)}</div>)}
                   {row.reasons.length > 0 && (
                     <div className="pt-1 text-foreground">{row.reasons.slice(0, 2).join(" | ")}</div>
                   )}
