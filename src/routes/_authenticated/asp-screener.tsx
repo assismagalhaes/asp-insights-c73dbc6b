@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ChevronDown, ClipboardCopy, DatabaseZap, RefreshCw, RotateCw, Send, Trophy, Upload } from "lucide-react";
+import { AlertTriangle, ChevronDown, ClipboardCopy, DatabaseZap, FileJson, RefreshCw, RotateCw, Send, Trophy, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,10 @@ import {
   processManualMlbStandingsCsv,
   refreshMlbStandingsFromBaseballReference,
 } from "@/lib/mlb-standings.functions";
+import {
+  createScreenerValidatorHandoffAudit,
+  listScreenerValidatorHandoffs,
+} from "@/lib/mlb/screenerHandoffAuditService";
 import { enrichMlbGamesWithStandings } from "@/lib/mlb/standings";
 import {
   buildMlbCriticalValidationPayload,
@@ -47,7 +51,9 @@ import type {
   MlbUnifiedOpportunity,
 } from "@/types/mlbProjections";
 import type { MlbBaseballReferenceMatchupContext, MlbPreparedCriticalValidationPayload } from "@/types/mlbCriticalValidation";
+import type { MlbScreenerHandoffAuditRecord, MlbScreenerHandoffAuditStatus } from "@/types/mlbScreenerHandoffAudit";
 import type { MlbStandingsSnapshot, MlbTeamStanding } from "@/types/mlbStandings";
+import type { MlbValidatorHandoffPayload } from "@/types/mlbValidatorHandoff";
 
 export const Route = createFileRoute("/_authenticated/asp-screener")({
   component: AspScreenerPage,
@@ -87,6 +93,12 @@ function AspScreenerPage() {
   const [baseballReferenceText, setBaseballReferenceText] = useState("");
   const [parsedMatchupContext, setParsedMatchupContext] = useState<MlbBaseballReferenceMatchupContext | null>(null);
   const [criticalPayloads, setCriticalPayloads] = useState<MlbPreparedCriticalValidationPayload[]>([]);
+  const [auditPeriod, setAuditPeriod] = useState<"all" | "today" | "7d" | "30d">("30d");
+  const [auditStatusFilter, setAuditStatusFilter] = useState<MlbScreenerHandoffAuditStatus | "all">("all");
+  const [auditMarketFilter, setAuditMarketFilter] = useState("all");
+  const [auditDecisionFilter, setAuditDecisionFilter] = useState<"all" | "CONFIRMAR" | "PULAR" | "pending">("all");
+  const [auditMinScore, setAuditMinScore] = useState("");
+  const [auditMinEv, setAuditMinEv] = useState("");
 
   const queryKey = ["mlb-standings-snapshot", snapshotDate, season];
   const { data, isFetching } = useQuery({
@@ -96,6 +108,14 @@ function AspScreenerPage() {
   const { data: oddsRows = [] } = useQuery({
     queryKey: ["odds-jogos-mlb-screener", snapshotDate],
     queryFn: fetchOddsRows,
+  });
+  const {
+    data: handoffAuditRows = [],
+    isFetching: loadingHandoffAudit,
+    refetch: refetchHandoffAudit,
+  } = useQuery({
+    queryKey: ["mlb-screener-validator-handoffs", auditPeriod],
+    queryFn: () => listScreenerValidatorHandoffs({ period: auditPeriod, limit: 500 }),
   });
 
   const snapshot = data?.snapshot ?? null;
@@ -140,6 +160,21 @@ function AspScreenerPage() {
   const selectedOpportunities = useMemo(
     () => selectedOpportunityIds.map((id) => opportunityRows.find((row) => row.opportunity_id === id)).filter(Boolean) as MlbUnifiedOpportunity[],
     [selectedOpportunityIds, opportunityRows],
+  );
+  const filteredHandoffAuditRows = useMemo(
+    () => filterHandoffAuditRows(handoffAuditRows, {
+      status: auditStatusFilter,
+      market: auditMarketFilter,
+      decision: auditDecisionFilter,
+      minScore: Number(auditMinScore),
+      minEv: Number(auditMinEv),
+    }),
+    [handoffAuditRows, auditStatusFilter, auditMarketFilter, auditDecisionFilter, auditMinScore, auditMinEv],
+  );
+  const handoffAuditStats = useMemo(() => getHandoffAuditStats(handoffAuditRows), [handoffAuditRows]);
+  const handoffAuditMarketOptions = useMemo(
+    () => Array.from(new Set(handoffAuditRows.map((row) => row.market).filter(Boolean) as string[])),
+    [handoffAuditRows],
   );
 
   useEffect(() => {
@@ -373,7 +408,7 @@ function AspScreenerPage() {
     await copyText(criticalPayloads.map(buildMlbValidatorPrompt).join("\n\n---\n\n"), "Prompt para Validator copiado.");
   }
 
-  function sendCriticalPayloadToValidator(payload: MlbPreparedCriticalValidationPayload) {
+  async function sendCriticalPayloadToValidator(payload: MlbPreparedCriticalValidationPayload) {
     const handoff = buildMlbValidatorHandoffPayload(payload);
     const validation = validateMlbValidatorHandoffPayload(handoff);
     if (!validation.valid) {
@@ -387,6 +422,24 @@ function AspScreenerPage() {
     if (!storageResult.valid) {
       toast.error(storageResult.errors[0] ?? "Nao foi possivel salvar o rascunho para o ASP Validator.");
       return;
+    }
+    let handoffForValidator: MlbValidatorHandoffPayload = handoff;
+    try {
+      const auditRecord = await createScreenerValidatorHandoffAudit(handoff);
+      handoffForValidator = {
+        ...handoff,
+        audit: {
+          record_id: auditRecord.id,
+          status: auditRecord.status,
+          sent_at: auditRecord.sent_at,
+          applied_at: auditRecord.applied_at,
+        },
+      };
+      storeMlbValidatorHandoffDraft(handoffForValidator);
+      void refetchHandoffAudit();
+    } catch (error) {
+      console.warn("Handoff enviado ao Validator, mas auditoria nao foi salva.", error);
+      toast.warning("Handoff enviado ao Validator, mas auditoria nao foi salva.");
     }
     toast.success("Rascunho enviado para ASP Validator. Revise antes de validar.");
     void navigate({ to: "/asp-validator" });
@@ -828,6 +881,26 @@ function AspScreenerPage() {
               {criticalPayloads.length > 0 && <CriticalPayloadPanel payloads={criticalPayloads} onSendToValidator={sendCriticalPayloadToValidator} />}
             </CardContent>
           </Card>
+
+          <HandoffAuditPanel
+            rows={filteredHandoffAuditRows}
+            stats={handoffAuditStats}
+            loading={loadingHandoffAudit}
+            marketOptions={handoffAuditMarketOptions}
+            period={auditPeriod}
+            status={auditStatusFilter}
+            market={auditMarketFilter}
+            decision={auditDecisionFilter}
+            minScore={auditMinScore}
+            minEv={auditMinEv}
+            onPeriodChange={setAuditPeriod}
+            onStatusChange={setAuditStatusFilter}
+            onMarketChange={setAuditMarketFilter}
+            onDecisionChange={setAuditDecisionFilter}
+            onMinScoreChange={setAuditMinScore}
+            onMinEvChange={setAuditMinEv}
+            onRefresh={() => void refetchHandoffAudit()}
+          />
         </TabsContent>
       </Tabs>
     </div>
@@ -1349,7 +1422,7 @@ function CriticalPayloadPanel({
   onSendToValidator,
 }: {
   payloads: MlbPreparedCriticalValidationPayload[];
-  onSendToValidator: (payload: MlbPreparedCriticalValidationPayload) => void;
+  onSendToValidator: (payload: MlbPreparedCriticalValidationPayload) => void | Promise<void>;
 }) {
   return (
     <div className="space-y-3">
@@ -1362,7 +1435,7 @@ function CriticalPayloadPanel({
               <div className="font-medium">{payload.game.matchup} | {payload.opportunity.market} | {payload.opportunity.pick}</div>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">{payload.validation_preparation.readiness_status}</Badge>
-                <Button size="sm" onClick={() => onSendToValidator(payload)} disabled={!handoffValidation.canSend}>
+                <Button size="sm" onClick={() => void onSendToValidator(payload)} disabled={!handoffValidation.canSend}>
                   <Send className="mr-2 h-4 w-4" />
                   Enviar esta para ASP Validator
                 </Button>
@@ -1413,6 +1486,175 @@ function CriticalPayloadPanel({
   );
 }
 
+type HandoffAuditStats = ReturnType<typeof getHandoffAuditStats>;
+
+function HandoffAuditPanel({
+  rows,
+  stats,
+  loading,
+  marketOptions,
+  period,
+  status,
+  market,
+  decision,
+  minScore,
+  minEv,
+  onPeriodChange,
+  onStatusChange,
+  onMarketChange,
+  onDecisionChange,
+  onMinScoreChange,
+  onMinEvChange,
+  onRefresh,
+}: {
+  rows: MlbScreenerHandoffAuditRecord[];
+  stats: HandoffAuditStats;
+  loading: boolean;
+  marketOptions: string[];
+  period: "all" | "today" | "7d" | "30d";
+  status: MlbScreenerHandoffAuditStatus | "all";
+  market: string;
+  decision: "all" | "CONFIRMAR" | "PULAR" | "pending";
+  minScore: string;
+  minEv: string;
+  onPeriodChange: (value: "all" | "today" | "7d" | "30d") => void;
+  onStatusChange: (value: MlbScreenerHandoffAuditStatus | "all") => void;
+  onMarketChange: (value: string) => void;
+  onDecisionChange: (value: "all" | "CONFIRMAR" | "PULAR" | "pending") => void;
+  onMinScoreChange: (value: string) => void;
+  onMinEvChange: (value: string) => void;
+  onRefresh: () => void;
+}) {
+  const markets = ["all", ...marketOptions];
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex flex-wrap items-center justify-between gap-3 text-base">
+          <span>Historico de Handoffs para Validator</span>
+          <Badge variant="outline">Auditoria</Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="rounded-md border bg-background/50 p-3 text-sm text-muted-foreground">
+          Auditoria de fluxo do Screener para o Validator. Nao cria prognostico, nao altera bankroll e nao alimenta o dashboard geral.
+        </div>
+
+        <div className="grid gap-2 md:grid-cols-4">
+          <Info label="Handoffs enviados" value={stats.sent} />
+          <Info label="Aplicados" value={stats.applied} />
+          <Info label="Descartados" value={stats.discarded} />
+          <Info label="Expirados" value={stats.expired} />
+          <Info label="Validacoes concluidas" value={stats.completed} />
+          <Info label="CONFIRMAR" value={stats.confirmed} />
+          <Info label="PULAR" value={stats.skipped} />
+          <Info label="Envio -> validacao" value={`${stats.sentToValidationRate.toFixed(1)}%`} />
+          <Info label="Validacao -> confirmar" value={`${stats.validationToConfirmRate.toFixed(1)}%`} />
+        </div>
+
+        <div className="flex flex-wrap items-end gap-3">
+          <Field label="Periodo">
+            <Select value={period} onValueChange={(value) => onPeriodChange(value as "all" | "today" | "7d" | "30d")}>
+              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="today">Hoje</SelectItem>
+                <SelectItem value="7d">7 dias</SelectItem>
+                <SelectItem value="30d">30 dias</SelectItem>
+                <SelectItem value="all">Tudo</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Status">
+            <Select value={status} onValueChange={(value) => onStatusChange(value as MlbScreenerHandoffAuditStatus | "all")}>
+              <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {HANDOFF_AUDIT_STATUSES.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Mercado">
+            <Select value={market} onValueChange={onMarketChange}>
+              <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {markets.map((item) => <SelectItem key={item} value={item}>{item === "all" ? "Todos" : item}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Decisao Validator">
+            <Select value={decision} onValueChange={(value) => onDecisionChange(value as "all" | "CONFIRMAR" | "PULAR" | "pending")}>
+              <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="CONFIRMAR">CONFIRMAR</SelectItem>
+                <SelectItem value="PULAR">PULAR</SelectItem>
+                <SelectItem value="pending">Sem decisao</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Score minimo">
+            <Input inputMode="decimal" value={minScore} onChange={(event) => onMinScoreChange(event.target.value)} className="w-28" />
+          </Field>
+          <Field label="EV minimo (%)">
+            <Input inputMode="decimal" value={minEv} onChange={(event) => onMinEvChange(event.target.value)} className="w-28" />
+          </Field>
+          <Button variant="outline" onClick={onRefresh} disabled={loading}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            {loading ? "Atualizando..." : "Atualizar historico"}
+          </Button>
+        </div>
+
+        <div className="overflow-auto rounded-md border">
+          <table className="w-full min-w-[1100px] text-sm">
+            <thead className="bg-card text-xs uppercase text-muted-foreground">
+              <tr>
+                {["Data", "Jogo", "Mercado", "Pick", "Odd", "EV", "Score", "Conf.", "Readiness", "Status", "Decisao", "Validator", "Payload"].map((header) => (
+                  <th key={header} className="px-3 py-2 text-left">{header}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.id} className="border-t">
+                  <td className="whitespace-nowrap px-3 py-2">{formatDateTime(row.created_at)}</td>
+                  <td className="px-3 py-2 font-medium">{row.matchup ?? `${row.away_team ?? "-"} @ ${row.home_team ?? "-"}`}</td>
+                  <td className="px-3 py-2">{row.market ?? "-"}</td>
+                  <td className="px-3 py-2">{row.pick ?? "-"}</td>
+                  <td className="px-3 py-2 font-mono">{formatOdd(row.odd)}</td>
+                  <td className="px-3 py-2 font-mono">{formatEv(row.ev)}</td>
+                  <td className="px-3 py-2 font-mono">{formatScore(row.opportunity_score)}</td>
+                  <td className="px-3 py-2 font-mono">{formatScore(row.confidence_score)}</td>
+                  <td className="px-3 py-2">{row.readiness_status ?? "-"}</td>
+                  <td className="px-3 py-2"><Badge variant="outline">{row.status}</Badge></td>
+                  <td className="px-3 py-2">{row.validator_decision ?? "-"}</td>
+                  <td className="px-3 py-2 font-mono text-xs">{row.validator_record_id ?? "-"}</td>
+                  <td className="px-3 py-2">
+                    <details>
+                      <summary className="cursor-pointer text-xs text-muted-foreground">
+                        <FileJson className="mr-1 inline h-3 w-3" />
+                        ver
+                      </summary>
+                      <pre className="mt-2 max-h-72 overflow-auto rounded border bg-background p-2 text-[10px]">
+                        {JSON.stringify(row.handoff_payload || row.critical_payload, null, 2)}
+                      </pre>
+                    </details>
+                  </td>
+                </tr>
+              ))}
+              {!rows.length && (
+                <tr>
+                  <td colSpan={13} className="px-3 py-6 text-center text-muted-foreground">
+                    Nenhum handoff encontrado para os filtros atuais.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function TeamContextLine({ label, team }: { label: string; team: MlbBaseballReferenceMatchupContext["teams"]["home"] }) {
   return (
     <div>
@@ -1449,6 +1691,59 @@ function Info({ label, value }: { label: string; value: unknown }) {
       <div className="mt-1 truncate text-sm font-semibold">{String(value ?? "-")}</div>
     </div>
   );
+}
+
+const HANDOFF_AUDIT_STATUSES: MlbScreenerHandoffAuditStatus[] = [
+  "created",
+  "sent_to_validator",
+  "applied_in_validator",
+  "discarded",
+  "expired",
+  "validation_started",
+  "validation_completed",
+  "validation_failed",
+];
+
+function filterHandoffAuditRows(
+  rows: MlbScreenerHandoffAuditRecord[],
+  filters: {
+    status: MlbScreenerHandoffAuditStatus | "all";
+    market: string;
+    decision: "all" | "CONFIRMAR" | "PULAR" | "pending";
+    minScore: number;
+    minEv: number;
+  },
+) {
+  return rows.filter((row) => {
+    if (filters.status !== "all" && row.status !== filters.status) return false;
+    if (filters.market !== "all" && row.market !== filters.market) return false;
+    if (filters.decision === "pending" && row.validator_decision) return false;
+    if (filters.decision !== "all" && filters.decision !== "pending" && row.validator_decision !== filters.decision) return false;
+    if (Number.isFinite(filters.minScore) && filters.minScore > 0 && (row.opportunity_score ?? 0) < filters.minScore) return false;
+    if (Number.isFinite(filters.minEv) && filters.minEv > 0 && ((row.ev ?? 0) * 100) < filters.minEv) return false;
+    return true;
+  });
+}
+
+function getHandoffAuditStats(rows: MlbScreenerHandoffAuditRecord[]) {
+  const sent = rows.length;
+  const applied = rows.filter((row) => row.status === "applied_in_validator" || row.applied_at).length;
+  const discarded = rows.filter((row) => row.status === "discarded").length;
+  const expired = rows.filter((row) => row.status === "expired").length;
+  const completed = rows.filter((row) => row.status === "validation_completed").length;
+  const confirmed = rows.filter((row) => row.validator_decision === "CONFIRMAR").length;
+  const skipped = rows.filter((row) => row.validator_decision === "PULAR").length;
+  return {
+    sent,
+    applied,
+    discarded,
+    expired,
+    completed,
+    confirmed,
+    skipped,
+    sentToValidationRate: sent ? (completed / sent) * 100 : 0,
+    validationToConfirmRate: completed ? (confirmed / completed) * 100 : 0,
+  };
 }
 
 function todayIso() {

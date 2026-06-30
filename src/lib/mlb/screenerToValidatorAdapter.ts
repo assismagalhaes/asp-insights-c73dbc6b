@@ -164,10 +164,14 @@ export function readMlbValidatorHandoffDraft(now = new Date()): MlbValidatorHand
 
   const payload = deserializeMlbValidatorHandoff(stored);
   const validation = validateMlbValidatorHandoffPayload(payload, now);
-  if (!payload || validation.expired || validation.errors.some((error) => /incompativel|Versao|Origem|Destino|Esporte\/liga/.test(error))) {
+  if (!payload) {
+    clearMlbValidatorHandoffDraft();
+    return { payload: null, validation };
+  }
+  if (validation.expired || validation.errors.some((error) => /incompativel|Versao|Origem|Destino|Esporte\/liga/.test(error))) {
     clearMlbValidatorHandoffDraft();
   }
-  return { payload: validation.valid ? payload : null, validation };
+  return { payload, validation };
 }
 
 export function clearMlbValidatorHandoffDraft() {
