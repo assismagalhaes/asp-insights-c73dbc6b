@@ -28,8 +28,17 @@ import {
   buildMlbValidatorImportedContextText,
   clearMlbValidatorHandoffDraft,
   readMlbValidatorHandoffDraft,
+  storeMlbValidatorHandoffDraft,
   validateMlbValidatorHandoffPayload,
 } from "@/lib/mlb/projections";
+import {
+  linkHandoffToValidatorRecord,
+  markHandoffAppliedInValidator,
+  markHandoffDiscarded,
+  markHandoffExpired,
+  markHandoffValidationFailed,
+  markHandoffValidationStarted,
+} from "@/lib/mlb/screenerHandoffAuditService";
 import { processAspValidatorOcr } from "@/lib/scraper-api.functions";
 import { supabase } from "@/lib/supabase-public";
 import type { MlbValidatorHandoffPayload } from "@/types/mlbValidatorHandoff";
@@ -406,7 +415,15 @@ function AspValidatorPage() {
     }
   };
 
-  const discardImportedHandoff = () => {
+  const discardImportedHandoff = async () => {
+    if (importedHandoff) {
+      try {
+        await markHandoffDiscarded(importedHandoff);
+      } catch (error) {
+        console.warn("Nao foi possivel marcar handoff como descartado.", error);
+        toast.warning("Rascunho descartado, mas auditoria nao foi atualizada.");
+      }
+    }
     clearMlbValidatorHandoffDraft();
     setImportedHandoff(null);
     setImportedHandoffWarnings([]);
@@ -423,6 +440,12 @@ function AspValidatorPage() {
     } catch {
       toast.error("Nao foi possivel copiar o payload importado.");
     }
+  };
+
+  const openImportedHandoffAudit = () => {
+    if (!importedHandoff || typeof window === "undefined") return;
+    window.sessionStorage.setItem("asp_screener_focus_handoff", importedHandoff.handoff_id);
+    window.location.assign("/asp-screener");
   };
 
   const interpretPastedText = () => {
@@ -511,16 +534,39 @@ function AspValidatorPage() {
       }
       return;
     }
+    if (validation.expired) {
+      setImportedHandoffErrors(validation.errors);
+      void markHandoffExpired(payload).catch((error) => {
+        console.warn("Nao foi possivel marcar handoff como expirado.", error);
+      });
+      return;
+    }
     const nextValidation = validateMlbValidatorHandoffPayload(payload);
     if (!nextValidation.valid) {
       setImportedHandoffErrors(nextValidation.errors);
       setImportedHandoffWarnings(nextValidation.warnings);
       return;
     }
-    setImportedHandoff(payload);
+    const appliedPayload = {
+      ...payload,
+      audit: payload.audit
+        ? {
+            ...payload.audit,
+            status: "applied_in_validator" as const,
+            applied_at: new Date().toISOString(),
+          }
+        : payload.audit,
+    };
+    setImportedHandoff(appliedPayload);
     setImportedHandoffWarnings(nextValidation.warnings);
     setImportedHandoffErrors([]);
-    applyImportedHandoffToForm(payload, true);
+    applyImportedHandoffToForm(appliedPayload, true);
+    void markHandoffAppliedInValidator(payload)
+      .then(() => storeMlbValidatorHandoffDraft(appliedPayload))
+      .catch((error) => {
+        console.warn("Nao foi possivel marcar handoff como aplicado no Validator.", error);
+        toast.warning("Handoff aplicado, mas auditoria nao foi atualizada.");
+      });
     toast.success("Validacao importada do ASP Screener MLB. Revise antes de validar.");
   }, []);
 
@@ -557,12 +603,37 @@ function AspValidatorPage() {
     } else if (!hasManualCore && uploads.length > 0) {
       toast.info("Validando com base nos uploads/OCR. Campos manuais ausentes serao inferidos quando possivel.");
     }
+    if (importedHandoff) {
+      void markHandoffValidationStarted(importedHandoff).catch((error) => {
+        console.warn("Nao foi possivel marcar inicio da validacao do handoff.", error);
+      });
+    }
     setSaving(true);
-    const next = await validateWithAiFallback(buildFormValidationContext(form, uploads, validatorModel, pastedParsed));
+    let next: ValidationResult;
+    try {
+      next = await validateWithAiFallback(buildFormValidationContext(form, uploads, validatorModel, pastedParsed));
+    } catch (error) {
+      setSaving(false);
+      if (importedHandoff) {
+        void markHandoffValidationFailed(importedHandoff, error).catch((auditError) => {
+          console.warn("Nao foi possivel marcar falha da validacao do handoff.", auditError);
+        });
+      }
+      toast.error(error instanceof Error ? error.message : "Nao foi possivel validar com IA.");
+      return;
+    }
     setSaving(false);
     setResult(next);
-    const saved = await saveValidation(form, next, uploads, setSaving, pastedParsed);
-    if (saved) {
+    const savedRecordId = await saveValidation(form, next, uploads, setSaving, pastedParsed);
+    if (savedRecordId) {
+      if (importedHandoff) {
+        try {
+          await linkHandoffToValidatorRecord(importedHandoff, savedRecordId, next);
+        } catch (error) {
+          console.warn("Validacao salva, mas falhou ao vincular auditoria do handoff.", error);
+          toast.warning("Validacao salva, mas auditoria do handoff nao foi vinculada.");
+        }
+      }
       setUploads([]);
       setPastedText("");
       setPastedParsed(null);
@@ -574,6 +645,10 @@ function AspValidatorPage() {
         setShowImportedPayload(false);
       }
       await loadHistory();
+    } else if (importedHandoff) {
+      void markHandoffValidationFailed(importedHandoff, "Falha ao salvar registro final do ASP Validator.").catch((error) => {
+        console.warn("Nao foi possivel marcar falha de persistencia do handoff.", error);
+      });
     }
   };
 
@@ -1162,6 +1237,7 @@ function AspValidatorPage() {
           onDiscard={discardImportedHandoff}
           onTogglePayload={() => setShowImportedPayload((prev) => !prev)}
           onCopyPayload={copyImportedHandoffPayload}
+          onOpenAudit={openImportedHandoffAudit}
         />
       )}
 
@@ -2673,6 +2749,7 @@ function ImportedMlbScreenerBanner({
   onDiscard,
   onTogglePayload,
   onCopyPayload,
+  onOpenAudit,
 }: {
   payload: MlbValidatorHandoffPayload | null;
   warnings: string[];
@@ -2682,8 +2759,10 @@ function ImportedMlbScreenerBanner({
   onDiscard: () => void;
   onTogglePayload: () => void;
   onCopyPayload: () => void;
+  onOpenAudit: () => void;
 }) {
   const prefill = payload?.validator_prefill;
+  const audit = payload?.audit;
   return (
     <Card className="border-primary/30 bg-primary/5">
       <CardContent className="space-y-3 p-4">
@@ -2711,6 +2790,10 @@ function ImportedMlbScreenerBanner({
               <ClipboardCopy className="mr-2 h-4 w-4" />
               Copiar payload importado
             </Button>
+            <Button size="sm" variant="outline" onClick={onOpenAudit} disabled={!payload?.audit?.record_id}>
+              <Search className="mr-2 h-4 w-4" />
+              Ver auditoria do handoff
+            </Button>
             <Button size="sm" variant="ghost" onClick={onDiscard}>
               <Trash2 className="mr-2 h-4 w-4" />
               Descartar rascunho
@@ -2720,6 +2803,10 @@ function ImportedMlbScreenerBanner({
 
         {prefill && (
           <div className="grid gap-2 md:grid-cols-4">
+            <Info label="Handoff ID" value={payload?.handoff_id ?? "-"} />
+            <Info label="Auditoria" value={audit?.status ?? "-"} />
+            <Info label="Enviado em" value={audit?.sent_at ? formatDateTime(audit.sent_at) : "-"} />
+            <Info label="Aplicado em" value={audit?.applied_at ? formatDateTime(audit.applied_at) : "-"} />
             <Info label="Jogo" value={prefill.matchup} />
             <Info label="Mercado" value={prefill.market} />
             <Info label="Pick" value={prefill.pick ?? "-"} />
@@ -3872,7 +3959,7 @@ async function saveValidation(
   uploads: ValidatorUploadDraft[],
   setSaving: (saving: boolean) => void,
   pasted?: PastedParsedData | null,
-): Promise<boolean> {
+): Promise<string | null> {
   setSaving(true);
   try {
     const pastedStructured = pasted
@@ -4045,10 +4132,10 @@ async function saveValidation(
     } else {
       toast.success(uploads.length ? "Validacao e arquivos salvos para OCR." : "Validacao salva no ASP Validator.");
     }
-    return true;
+    return data?.id ?? null;
   } catch (error) {
     toast.error(error instanceof Error ? error.message : "Nao foi possivel salvar a validacao.");
-    return false;
+    return null;
   } finally {
     setSaving(false);
   }

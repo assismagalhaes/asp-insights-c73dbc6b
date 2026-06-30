@@ -1,5 +1,23 @@
 import type { MlbValidationReadinessStatus, MlbPreparedCriticalValidationPayload } from "@/types/mlbCriticalValidation";
 
+export type MlbScreenerHandoffAuditStatus =
+  | "created"
+  | "sent_to_validator"
+  | "applied_in_validator"
+  | "discarded"
+  | "expired"
+  | "validation_started"
+  | "validation_completed"
+  | "validation_failed";
+
+export interface MlbScreenerHandoffAuditRef {
+  record_id: string | null;
+  status: MlbScreenerHandoffAuditStatus | null;
+  sent_at: string | null;
+  applied_at: string | null;
+  last_error?: string | null;
+}
+
 export type MlbValidatorHandoffVersion = "1.0.0";
 export type MlbValidatorHandoffSourceModule = "ASP Screener MLB";
 export type MlbValidatorHandoffTargetModule = "ASP Validator";
@@ -37,6 +55,7 @@ export interface MlbValidatorHandoffPayload {
   created_at: string;
   expires_at: string;
   validator_prefill: MlbValidatorHandoffPrefill;
+  audit?: MlbScreenerHandoffAuditRef;
   imported_context: {
     summary: string;
     supporting_factors: string[];
