@@ -439,6 +439,10 @@ function canonicalHeader(header: string): string | null {
     "wl%": "win_pct",
     win_loss_perc: "win_pct",
     winlossperc: "win_pct",
+    win_pct: "win_pct",
+    winpct: "win_pct",
+    "win%": "win_pct",
+
     strk: "streak",
     streak: "streak",
     r: "runs",
