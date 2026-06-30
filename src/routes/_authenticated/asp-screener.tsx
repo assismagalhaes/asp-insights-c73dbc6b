@@ -1612,7 +1612,7 @@ function OpportunityTable({
               </td>
               <td className="min-w-80 px-3 py-2 text-xs text-muted-foreground">
                 <div className="space-y-1">
-                  {row.alerts.slice(0, 5).map((alert, index) => <div key={`${row.opportunity_id}-alert-${index}`}>{alert}</div>)}
+                  {row.alerts.slice(0, 5).map((alert, index) => <div key={`${row.opportunity_id}-alert-${index}`}>{formatAlertMessage(alert)}</div>)}
                   {row.risk_flags.length > 0 && <div className="text-warning">{row.risk_flags.slice(0, 3).join(" | ")}</div>}
                 </div>
               </td>
