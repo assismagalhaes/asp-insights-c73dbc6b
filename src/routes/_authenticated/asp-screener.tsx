@@ -640,8 +640,24 @@ function AspScreenerPage() {
         console.warn("Handoff enviado, mas snapshot sombra nao foi vinculado.", error);
       });
     }
-    toast.success("Rascunho enviado para ASP Validator. Revise antes de validar.");
+    toast.success("Rascunho enviado para ASP Validator (teste). Revise antes de validar.");
     void navigate({ to: "/asp-validator" });
+  }
+
+  async function sendCriticalPayloadToCriticalValidation(payload: MlbPreparedCriticalValidationPayload) {
+    const draft = buildMlbCriticalValidationDraft(payload);
+    const validation = validateCriticalValidationDraft(draft);
+    if (!validation.valid) {
+      toast.error(validation.errors[0] ?? "Rascunho não está pronto para envio à Validação Crítica.");
+      return;
+    }
+    const storageResult = storeCriticalValidationDraft(draft);
+    if (!storageResult.valid) {
+      toast.error(storageResult.errors[0] ?? "Não foi possível salvar o rascunho para a Validação Crítica.");
+      return;
+    }
+    toast.success("Rascunho enviado para Validação Crítica. Nenhum prognóstico foi criado ainda.");
+    void navigate({ to: "/validacao" });
   }
 
   return (
