@@ -39,24 +39,51 @@ export function parseBaseballReferenceMatchupText(
   expectedTeams?: MlbMatchupExpectedTeams,
 ): MlbBaseballReferenceMatchupContext {
   const text = normalizeRawText(rawText);
-  // Team names in TEXT ORDER (not alphabetical).
+  // Team names in TEXT ORDER (not alphabetical), with character position.
   const teamsInOrder = extractKnownTeamNames(text)
-    .map((name) => ({ name, index: text.search(new RegExp(escapeRegex(name), "i")) }))
+    .map((name) => ({ name, index: text.search(new RegExp(`\\b${escapeRegex(name)}\\b`, "i")) }))
     .filter((entry) => entry.index >= 0)
     .sort((a, b) => a.index - b.index);
 
   const firstName = teamsInOrder[0]?.name ?? null;
   const secondName = teamsInOrder[1]?.name ?? null;
-  const firstBlock = firstName ? extractTeamBlock(text, firstName, secondName) : "";
-  const secondBlock = secondName ? extractTeamBlock(text, secondName, null) : "";
+  const firstStart = teamsInOrder[0]?.index ?? -1;
+  const secondStart = teamsInOrder[1]?.index ?? -1;
+  const firstEnd = secondStart > firstStart ? secondStart : text.length;
+  const secondEnd = text.length;
+  const firstBlock = firstName ? text.slice(firstStart, firstEnd) : "";
+  const secondBlock = secondName ? text.slice(secondStart, secondEnd) : "";
 
-  // Pitcher candidates come out in text order; associate each to the team whose
-  // block contains the pitcher header line.
+  // Pitcher candidates with absolute character position in text.
   const pitcherCandidates = extractPitcherCandidates(text);
   const firstSummary = buildTeamSummary(firstName, firstBlock || text);
   const secondSummary = buildTeamSummary(secondName, secondBlock || text);
-  const firstPitcher = buildPitcher(pickPitcherForTeam(pitcherCandidates, firstBlock));
-  const secondPitcher = buildPitcher(pickPitcherForTeam(pitcherCandidates, secondBlock));
+
+  // Strict block-based association: each pitcher is assigned to the team whose
+  // block contains the pitcher header line. Once assigned, a candidate cannot
+  // be re-used for the other team.
+  const warnings: string[] = [];
+  const usedIndices = new Set<number>();
+  const pickForRange = (start: number, end: number): PitcherCandidate | null => {
+    if (start < 0) return null;
+    for (let i = 0; i < pitcherCandidates.length; i += 1) {
+      if (usedIndices.has(i)) continue;
+      const cand = pitcherCandidates[i];
+      if (cand.absoluteIndex >= start && cand.absoluteIndex < end) {
+        usedIndices.add(i);
+        return cand;
+      }
+    }
+    return null;
+  };
+
+  const firstCand = pickForRange(firstStart, firstEnd);
+  const secondCand = pickForRange(secondStart, secondEnd);
+  const firstPitcher = buildPitcher(firstCand);
+  const secondPitcher = buildPitcher(secondCand);
+
+  if (firstName && !firstCand) warnings.push(`Starter do bloco de ${firstName} nao encontrado.`);
+  if (secondName && !secondCand) warnings.push(`Starter do bloco de ${secondName} nao encontrado.`);
 
   // Default assumption: BRef often shows away first, then home. This may be
   // overridden below by expectedTeams/season-series alignment.
@@ -64,7 +91,6 @@ export function parseBaseballReferenceMatchupText(
   let homeSummary = secondSummary;
   let awayPitcher = firstPitcher;
   let homePitcher = secondPitcher;
-  const warnings: string[] = [];
 
   const expectedHomeKey = expectedTeams?.home_team_key ?? (expectedTeams?.home_team ? matchMlbTeamName(expectedTeams.home_team) : null);
   const expectedAwayKey = expectedTeams?.away_team_key ?? (expectedTeams?.away_team ? matchMlbTeamName(expectedTeams.away_team) : null);
@@ -77,7 +103,7 @@ export function parseBaseballReferenceMatchupText(
     const secondIsHome = expectedHomeKey && secondKey === expectedHomeKey;
     const secondIsAway = expectedAwayKey && secondKey === expectedAwayKey;
     if (firstIsHome || secondIsAway) {
-      // First block is HOME → invert default (away-first) assumption.
+      // First block is HOME → swap team AND its associated starter together.
       awaySummary = secondSummary; homeSummary = firstSummary;
       awayPitcher = secondPitcher; homePitcher = firstPitcher;
     } else if (firstIsAway || secondIsHome) {
@@ -96,6 +122,16 @@ export function parseBaseballReferenceMatchupText(
         awayPitcher = secondPitcher; homePitcher = firstPitcher;
       }
     }
+  }
+
+  // Final safety: never allow silent duplication of the same pitcher in the payload.
+  if (
+    awayPitcher.name && homePitcher.name &&
+    awayPitcher.name === homePitcher.name &&
+    awayPitcher.jersey_number === homePitcher.jersey_number
+  ) {
+    warnings.push("Possivel duplicacao de starter: mesmo pitcher atribuido aos dois times — starter mandante removido.");
+    homePitcher = emptyPitcher();
   }
 
   const context: MlbBaseballReferenceMatchupContext = {
@@ -131,15 +167,6 @@ export function parseBaseballReferenceMatchupText(
   return context;
 }
 
-function pickPitcherForTeam(candidates: PitcherCandidate[], teamBlock: string): PitcherCandidate | null {
-  if (!teamBlock) return candidates[0] ?? null;
-  for (const cand of candidates) {
-    if (cand.name && teamBlock.includes(cand.name)) return cand;
-    // Match by header block presence
-    if (cand.block && teamBlock.includes(cand.block.split("\n")[0].trim())) return cand;
-  }
-  return null;
-}
 
 function detectAwayFromSeasonSeries(text: string): string | null {
   // Look for patterns like "LAD @ATH" or "LAD @ ATH"
