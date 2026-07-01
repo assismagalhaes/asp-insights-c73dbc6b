@@ -156,7 +156,12 @@ export interface MlbBaseballReferenceMatchupContext {
   };
 }
 
-export type MlbContextAlignmentStatus = "supports_screener" | "conflicts_with_screener" | "mixed" | "insufficient_context";
+export type MlbContextAlignmentStatus =
+  | "supports_screener"
+  | "conflicts_with_screener"
+  | "mixed"
+  | "mixed_to_conflicting"
+  | "insufficient_context";
 export type MlbValidationReadinessStatus =
   | "pronto_para_validator"
   | "revisar_antes_do_validator"
