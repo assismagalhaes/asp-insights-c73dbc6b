@@ -240,21 +240,67 @@ export function normalizeOddsJson(raw: unknown, opts?: { esporte?: string | null
 
 export function normalizeVmNormalizedPayload(payload: unknown, opts?: { esporte?: string | null }): NormalizedCollection {
   const root = isRecord(payload) ? payload : {};
-  const nested = isRecord(root.data) ? root.data : isRecord(root.result) ? root.result : root;
-  const linhas = Array.isArray(nested.linhas)
-    ? nested.linhas
-    : Array.isArray(nested.rows)
-      ? nested.rows
-      : Array.isArray(nested.normalized_json)
-        ? nested.normalized_json
-        : Array.isArray(payload)
-          ? payload
-          : [];
+  const nested = isRecord(root.data)
+    ? root.data
+    : isRecord(root.result)
+      ? root.result
+      : isRecord(root.normalized_json)
+        ? (root.normalized_json as Record<string, unknown>)
+        : root;
 
-  const rows = linhas
+  const flatCandidate: unknown[] =
+    (Array.isArray(nested.linhas) && (nested.linhas as unknown[])) ||
+    (Array.isArray(nested.rows) && (nested.rows as unknown[])) ||
+    (Array.isArray(nested.odds) && (nested.odds as unknown[])) ||
+    (Array.isArray(nested.items) && (nested.items as unknown[])) ||
+    (Array.isArray(nested.results) && (nested.results as unknown[])) ||
+    (Array.isArray(nested.normalized_json) && (nested.normalized_json as unknown[])) ||
+    (Array.isArray(payload) && (payload as unknown[])) ||
+    [];
+
+  // Só trata como "linhas planas" quando os itens parecem registros de odd.
+  const flat = flatCandidate
     .filter(isRecord)
+    .filter(
+      (r) =>
+        "odd" in r || "price" in r || "odds" in r || "mercado" in r || "market" in r || "pick" in r || "selection" in r,
+    );
+
+  const rows: NormalizedOdd[] = flat
     .map((row) => normalizeVmRow(row, opts?.esporte))
     .filter((row) => row.odd > 0);
+
+  // Fallback: payload com estrutura de jogos (odds: { market: { period: [[headers],[row]] } })
+  if (!rows.length) {
+    try {
+      const gameShaped = normalizeOddsJson(payload, opts);
+      if (gameShaped.rows.length) {
+        if (typeof console !== "undefined") {
+          console.log(
+            "[normalizeVmNormalizedPayload] fallback games-shape utilizado:",
+            gameShaped.rows.length,
+            "linhas",
+          );
+        }
+        return gameShaped;
+      }
+    } catch (err) {
+      if (typeof console !== "undefined") {
+        console.warn("[normalizeVmNormalizedPayload] fallback games-shape falhou:", err);
+      }
+    }
+  }
+
+  if (!rows.length && typeof console !== "undefined") {
+    const topKeys = isRecord(payload) ? Object.keys(payload).join(", ") : typeof payload;
+    console.warn(
+      "[normalizeVmNormalizedPayload] nenhuma linha extraída. chaves de topo:",
+      topKeys,
+      "payload:",
+      payload,
+    );
+  }
+
   const dates = rows.map((row) => row.data).filter(Boolean).sort() as string[];
   const mercados = [...new Set(rows.map((row) => row.mercado).filter(Boolean))].sort();
   const ligas = [...new Set(rows.map((row) => row.liga).filter(Boolean))];
