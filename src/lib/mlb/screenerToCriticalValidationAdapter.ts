@@ -94,6 +94,18 @@ function formatPercent(value: number | null): string {
   return `${(value * 100).toFixed(2)}%`;
 }
 
+function formatNumber(value: number | null | undefined, digits = 2): string {
+  if (value == null || !Number.isFinite(value as number)) return "-";
+  return (value as number).toFixed(digits);
+}
+
+function formatBrDate(iso: string | null): string {
+  if (!iso) return "-";
+  const [y, m, d] = iso.split("-");
+  if (!y || !m || !d) return iso;
+  return `${d}/${m}/${y}`;
+}
+
 function buildDraftId(payload: MlbPreparedCriticalValidationPayload): string {
   const cryptoSource = typeof globalThis !== "undefined" ? globalThis.crypto : undefined;
   const randomId =
@@ -103,62 +115,193 @@ function buildDraftId(payload: MlbPreparedCriticalValidationPayload): string {
   return `mlb-critical-validation-draft:${payload.game.game_id}:${payload.opportunity.market}:${payload.opportunity.pick ?? "pick"}:${randomId}`;
 }
 
-function buildImportedContextSummary(payload: MlbPreparedCriticalValidationPayload): string {
-  const homeStarter = payload.baseball_reference_context?.starting_pitchers?.home;
-  const awayStarter = payload.baseball_reference_context?.starting_pitchers?.away;
-  const formatStarterLine = (s: typeof homeStarter): string => {
-    if (!s || !s.name) return "não identificado";
-    const parts = [s.name];
-    if (s.throwing_hand) parts.push(s.throwing_hand);
-    if (s.era != null) parts.push(`ERA ${s.era}`);
-    if (s.k_per_9 != null) parts.push(`K/9 ${s.k_per_9}`);
-    if (s.hr_per_9 != null) parts.push(`HR/9 ${s.hr_per_9}`);
-    return parts.join(" · ");
-  };
-  const lines: string[] = [
-    "Importado do ASP Screener MLB para análise crítica manual.",
-    `Jogo: ${payload.game.matchup}`,
-    `Mercado: ${payload.opportunity.market}`,
-    `Pick: ${payload.opportunity.pick ?? "-"}`,
-    `Linha: ${payload.opportunity.line ?? "-"}`,
-    `Odd ofertada: ${payload.opportunity.odd ?? "-"}`,
-    `Odd justa (ASP): ${payload.opportunity.fair_odd ?? "-"}`,
-    `Probabilidade ASP: ${formatPercent(payload.opportunity.model_probability)}`,
-    `Probabilidade no-vig do mercado: ${formatPercent(payload.opportunity.market_probability_no_vig)}`,
-    `Edge de probabilidade: ${formatPercent(payload.opportunity.probability_edge)}`,
-    `EV ASP: ${formatPercent(payload.opportunity.ev)}`,
-    `Opportunity Score (bruto): ${payload.validation_preparation.raw_opportunity_score}`,
-    `Confidence (bruto): ${payload.validation_preparation.raw_confidence_score}`,
-    `Score pós-contexto: ${payload.validation_preparation.critical_adjusted_score}`,
-    `Confiança pós-contexto: ${payload.validation_preparation.critical_adjusted_confidence}`,
-    `Alinhamento: ${payload.context_alignment.alignment_status} (${payload.context_alignment.alignment_score})`,
-    `Readiness: ${payload.validation_preparation.readiness_status}`,
-    `Próximo passo recomendado: ${payload.validation_preparation.recommended_next_step}`,
+type StarterLike = NonNullable<MlbPreparedCriticalValidationPayload["baseball_reference_context"]>["starting_pitchers"]["home"] | null | undefined;
+type TeamLike = NonNullable<MlbPreparedCriticalValidationPayload["baseball_reference_context"]>["teams"]["home"] | null | undefined;
+
+function rawOf(r: { raw?: string | null } | null | undefined): string {
+  return r?.raw ? r.raw : "não informado";
+}
+
+function buildTeamStatsBlock(label: string, team: TeamLike): string[] {
+  if (!team) return [`${label}: dados não disponíveis`];
+  return [
+    `${label}:`,
+    `- Record: ${rawOf(team.record)}`,
+    `- Last10: ${rawOf(team.last10)}`,
+    `- Last20: ${rawOf(team.last20)}`,
+    `- Last30: ${rawOf(team.last30)}`,
+    `- Home: ${rawOf(team.home_record)}`,
+    `- Away: ${rawOf(team.away_record)}`,
+    `- vs LHP: ${rawOf(team.vs_lhp_record)}`,
+    `- vs RHP: ${rawOf(team.vs_rhp_record)}`,
+    `- Extra innings: ${rawOf(team.extra_innings_record)}`,
+    `- One run: ${rawOf(team.one_run_record)}`,
+    `- Standing: ${team.standing ?? "não informado"}${team.games_back ? ` (GB ${team.games_back})` : ""}`,
   ];
-  lines.push(
-    "",
-    "[STARTERS]",
-    `Mandante (${payload.game.home_team}): ${formatStarterLine(homeStarter)}`,
-    `Visitante (${payload.game.away_team}): ${formatStarterLine(awayStarter)}`,
-    "",
+}
+
+function buildStarterBlock(label: string, s: StarterLike): string[] {
+  if (!s || !s.name) return [`${label}: não identificado`];
+  return [
+    `${label}:`,
+    `- Nome: ${s.name}`,
+    `- Mão: ${s.throwing_hand ?? "não informado"}`,
+    `- ERA: ${s.era ?? "não informado"}`,
+    `- IP: ${s.innings_pitched_display ?? formatNumber(s.innings_pitched_decimal)}`,
+    `- K: ${s.strikeouts ?? "não informado"}`,
+    `- BB: ${s.walks ?? "não informado"}`,
+    `- HR: ${s.home_runs_allowed ?? "não informado"}`,
+    `- K/9: ${s.k_per_9 ?? "não informado"}`,
+    `- BB/9: ${s.bb_per_9 ?? "não informado"}`,
+    `- HR/9: ${s.hr_per_9 ?? "não informado"}`,
+    `- K/BB: ${s.k_bb_ratio ?? "não informado"}`,
+    `- Últimos 7: ${rawOf(s.last_7_games_record)} · ERA ${s.last_7_era ?? "-"} · IP ${s.last_7_ip_display ?? "-"}`,
+    `- vs oponente: ${s.vs_opponent_summary ?? "não informado"}`,
+  ];
+}
+
+function buildTechnicalProjectionBlock(payload: MlbPreparedCriticalValidationPayload): string[] {
+  const src = payload.source_projection_payload as unknown as Record<string, unknown> | null;
+  if (!src) return ["- Projeção técnica: dados não disponíveis"];
+  const num = (k: string, digits = 2): string => {
+    const v = src[k];
+    return typeof v === "number" && Number.isFinite(v) ? v.toFixed(digits) : "-";
+  };
+  const str = (k: string): string => {
+    const v = src[k];
+    return typeof v === "string" && v ? v : "-";
+  };
+  const bool = (k: string): string => {
+    const v = src[k];
+    return typeof v === "boolean" ? (v ? "sim" : "não") : "-";
+  };
+  const modelProb = src["recommended_model_prob"];
+  const ev = src["recommended_ev"];
+  return [
+    `- home_expected_runs: ${num("home_expected_runs")}`,
+    `- away_expected_runs: ${num("away_expected_runs")}`,
+    `- projected_total_runs: ${num("projected_total_runs")}`,
+    `- total_gap_vs_line: ${num("total_gap_vs_line")}`,
+    `- model_prob: ${formatPercent(typeof modelProb === "number" ? modelProb : null)}`,
+    `- fair_odd: ${num("recommended_fair_odd")}`,
+    `- EV: ${formatPercent(typeof ev === "number" ? ev : null)}`,
+    `- line_type: ${str("line_type")}`,
+    `- is_main_line: ${bool("is_main_total_line") !== "-" ? bool("is_main_total_line") : bool("is_main_line")}`,
+    `- distance_from_main_line: ${num("distance_from_main_line")}`,
+    `- candidate_status: ${str("candidate_status")}`,
+    `- projection_status: ${str("projection_status")}`,
+  ];
+}
+
+function buildImportedContextSummary(payload: MlbPreparedCriticalValidationPayload): string {
+  const ctx = payload.baseball_reference_context;
+  const homeStarter = ctx?.starting_pitchers?.home ?? null;
+  const awayStarter = ctx?.starting_pitchers?.away ?? null;
+  const homeTeam = ctx?.teams?.home ?? null;
+  const awayTeam = ctx?.teams?.away ?? null;
+
+  const out: string[] = [];
+
+  out.push("[ORIGEM]");
+  out.push("Importado do ASP Screener MLB para Validação Crítica.");
+  out.push("");
+
+  out.push("[JOGO]");
+  out.push(`${payload.game.home_team} vs ${payload.game.away_team}`);
+  out.push(
+    `Data/Hora: ${formatBrDate(payload.game.date)}${payload.game.time ? ` às ${payload.game.time}` : ""}`,
   );
+  out.push(`Liga: ${payload.league}`);
+  out.push(`Mercado: ${payload.opportunity.market}`);
+  out.push(`Pick: ${payload.opportunity.pick ?? "-"}`);
+  out.push(`Linha: ${payload.opportunity.line ?? "-"}`);
+  out.push(`Odd ofertada: ${payload.opportunity.odd ?? "-"}`);
+  out.push("");
+
+  out.push("[PROJEÇÃO DO SCREENER]");
+  out.push(`Probabilidade ASP: ${formatPercent(payload.opportunity.model_probability)}`);
+  out.push(`Probabilidade no-vig mercado: ${formatPercent(payload.opportunity.market_probability_no_vig)}`);
+  const edgePP =
+    payload.opportunity.probability_edge != null && Number.isFinite(payload.opportunity.probability_edge)
+      ? `${(payload.opportunity.probability_edge * 100).toFixed(2)} p.p.`
+      : "-";
+  out.push(`Edge de probabilidade: ${edgePP}`);
+  out.push(`Odd justa ASP: ${payload.opportunity.fair_odd ?? "-"}`);
+  out.push(`EV ASP: ${formatPercent(payload.opportunity.ev)}`);
+  out.push(`Opportunity Score bruto: ${payload.validation_preparation.raw_opportunity_score}`);
+  out.push(`Confidence bruto: ${payload.validation_preparation.raw_confidence_score}`);
+  out.push(`Score pós-contexto: ${payload.validation_preparation.critical_adjusted_score}`);
+  out.push(`Confiança pós-contexto: ${payload.validation_preparation.critical_adjusted_confidence}`);
+  out.push(
+    `Alinhamento: ${payload.context_alignment.alignment_status} (${payload.context_alignment.alignment_score})`,
+  );
+  out.push(`Readiness: ${payload.validation_preparation.readiness_status}`);
+  out.push(`Próximo passo recomendado: ${payload.validation_preparation.recommended_next_step}`);
+  out.push("");
+
   const sections: [string, string[]][] = [
-    ["Fatores de suporte", payload.context_alignment.supporting_factors],
-    ["Fatores de conflito", payload.context_alignment.conflicting_factors],
-    ["Notas de mercado", payload.context_alignment.market_specific_notes],
-    ["Flags críticos", payload.context_alignment.critical_flags],
-    ["Perguntas críticas", payload.validation_preparation.critical_questions],
-    ["Motivos (Screener)", payload.opportunity.reasons],
-    ["Alertas (Screener)", payload.opportunity.alerts],
-    ["Risk flags (Screener)", payload.opportunity.risk_flags],
-    ["Risk flags pós-contexto", payload.validation_preparation.post_context_risk_flags],
+    ["[FATORES DE SUPORTE]", payload.context_alignment.supporting_factors],
+    ["[FATORES DE CONFLITO]", payload.context_alignment.conflicting_factors],
+    [
+      "[ALERTAS / RISK FLAGS]",
+      [
+        ...payload.opportunity.alerts,
+        ...payload.opportunity.risk_flags,
+        ...payload.validation_preparation.post_context_risk_flags,
+        ...payload.context_alignment.critical_flags,
+      ],
+    ],
+    ["[PERGUNTAS CRÍTICAS]", payload.validation_preparation.critical_questions],
+    ["[NOTAS DE MERCADO]", payload.context_alignment.market_specific_notes],
+    ["[MOTIVOS DO SCREENER]", payload.opportunity.reasons],
   ];
   for (const [label, items] of sections) {
     if (!items?.length) continue;
-    lines.push(`${label}:`);
-    for (const item of items) lines.push(`- ${item}`);
+    out.push(label);
+    for (const item of items) out.push(`- ${item}`);
+    out.push("");
   }
-  return lines.join("\n");
+
+  out.push("[ESTATÍSTICAS DA PARTIDA]");
+  out.push(...buildTeamStatsBlock(`Mandante (${payload.game.home_team})`, homeTeam));
+  out.push("");
+  out.push(...buildTeamStatsBlock(`Visitante (${payload.game.away_team})`, awayTeam));
+  out.push("");
+
+  out.push("[STARTERS PROVÁVEIS / CONFIRMADOS]");
+  out.push(...buildStarterBlock(`Mandante (${payload.game.home_team})`, homeStarter));
+  out.push("");
+  out.push(...buildStarterBlock(`Visitante (${payload.game.away_team})`, awayStarter));
+  out.push("");
+
+  const seasonSummary = ctx?.season_series?.summary;
+  const h2hSummary = ctx?.head_to_head?.summary;
+  const h2hLast = ctx?.head_to_head?.last_10_games ?? [];
+  const completed = ctx?.season_series?.completed_games ?? [];
+  const upcoming = ctx?.season_series?.upcoming_games ?? [];
+  if (seasonSummary || h2hSummary || h2hLast.length || completed.length || upcoming.length) {
+    out.push("[MATCHUPS / PREVIEW]");
+    if (seasonSummary) out.push(`Season series: ${seasonSummary}`);
+    if (h2hSummary) out.push(`H2H: ${h2hSummary}`);
+    if (h2hLast.length) {
+      out.push("Últimos H2H:");
+      for (const g of h2hLast.slice(0, 5)) out.push(`- ${g.raw_line}`);
+    }
+    if (completed.length) {
+      out.push("Season series (jogos concluídos):");
+      for (const g of completed.slice(0, 6)) out.push(`- ${g.raw_line}`);
+    }
+    if (upcoming.length) {
+      out.push("Season series (próximos):");
+      for (const g of upcoming.slice(0, 4)) out.push(`- ${g.raw_line}`);
+    }
+    out.push("");
+  }
+
+  out.push("[PROJEÇÃO TÉCNICA DO SCREENER]");
+  out.push(...buildTechnicalProjectionBlock(payload));
+
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 export function mapMlbOpportunityToCriticalValidationInput(
