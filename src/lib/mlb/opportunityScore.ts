@@ -443,14 +443,20 @@ function finalizeOpportunity(base: OpportunityBase): MlbUnifiedOpportunity {
     score_explanation: "",
   };
   const riskFlags = applyMlbOpportunityRiskPenalties(placeholder);
-  const scoreComponents = calculateScoreComponents(placeholder);
-  const opportunityScore = calculateMlbOpportunityScore({ ...placeholder, risk_flags: riskFlags, score_components: scoreComponents });
-  const confidenceScore = calculateMlbOpportunityConfidence(placeholder);
+  const primed = { ...placeholder, risk_flags: riskFlags };
+  const breakdown = calculateMlbOpportunityScoreBreakdown(primed);
+  const scoreComponents: MlbOpportunityScoreComponents = {
+    ...calculateScoreComponentsBase(primed),
+    raw_score: breakdown.raw_score,
+    final_score: breakdown.final_score,
+    applied_penalties: breakdown.applied_penalties,
+  };
+  const confidenceScore = calculateMlbOpportunityConfidence(primed);
   const next = {
     ...placeholder,
     risk_flags: riskFlags,
     score_components: scoreComponents,
-    opportunity_score: opportunityScore,
+    opportunity_score: breakdown.final_score,
     confidence_score: confidenceScore,
   };
   return {
@@ -460,7 +466,28 @@ function finalizeOpportunity(base: OpportunityBase): MlbUnifiedOpportunity {
   };
 }
 
-function calculateScoreComponents(opportunity: MlbUnifiedOpportunity): MlbOpportunityScoreComponents {
+export function applyMlbCriticalValidationRescore(
+  opportunity: MlbUnifiedOpportunity,
+  ctx: MlbCriticalValidationContext,
+): MlbUnifiedOpportunity {
+  const breakdown = calculateMlbOpportunityScoreBreakdown(opportunity, ctx);
+  const confidence = calculateMlbOpportunityConfidence(opportunity, ctx);
+  const scoreComponents: MlbOpportunityScoreComponents = {
+    ...opportunity.score_components,
+    raw_score: breakdown.raw_score,
+    final_score: breakdown.final_score,
+    applied_penalties: breakdown.applied_penalties,
+  };
+  const next: MlbUnifiedOpportunity = {
+    ...opportunity,
+    opportunity_score: breakdown.final_score,
+    confidence_score: confidence,
+    score_components: scoreComponents,
+  };
+  return { ...next, priority_status: getPriorityStatus(next), score_explanation: buildScoreExplanation(next) };
+}
+
+function calculateScoreComponentsBase(opportunity: MlbUnifiedOpportunity): Omit<MlbOpportunityScoreComponents, "raw_score" | "final_score" | "applied_penalties"> {
   return {
     ev_quality_score: normalizePositive(opportunity.ev, 0.15),
     probability_edge_score: normalizePositive(opportunity.probability_edge, 0.10),
