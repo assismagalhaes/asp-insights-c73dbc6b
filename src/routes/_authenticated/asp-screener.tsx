@@ -1666,8 +1666,14 @@ function ParsedContextPanel({ context }: { context: MlbBaseballReferenceMatchupC
         <div className="mt-2 space-y-1 text-sm text-muted-foreground">
           <div>Campos: {context.data_quality.parsed_fields_count}</div>
           <div>Confianca: {formatScore(context.data_quality.confidence)}</div>
-          <div>Season series: {context.season_series.games.length}</div>
-          <div>H2H: {context.head_to_head.games.length}</div>
+          <div>
+            Season series: {context.season_series.completed_games.length} concluído{context.season_series.completed_games.length === 1 ? "" : "s"} /{" "}
+            {context.season_series.upcoming_games.length} futuro{context.season_series.upcoming_games.length === 1 ? "" : "s"}
+            {Object.keys(context.season_series.yearly_summary).length > 0
+              ? ` · resumo: ${Object.keys(context.season_series.yearly_summary).length} linhas`
+              : ""}
+          </div>
+          <div>H2H (últimos jogos): {context.head_to_head.last_10_games.length}</div>
           {context.data_quality.missing_fields.length > 0 && (
             <div className="text-warning">Ausentes: {context.data_quality.missing_fields.join(", ")}</div>
           )}
