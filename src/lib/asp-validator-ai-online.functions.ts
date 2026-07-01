@@ -191,3 +191,33 @@ function buildAnalysisContext(context: Record<string, unknown>, sources: Array<{
     "Regras: pesquisa online e complementar; ausencia de achados nao reprova sozinha; em duvida relevante, PULAR; proibido somar medias brutas (ex.: 11.8 + 12.6).",
   ].join("\n");
 }
+
+function buildResearchQueryHint(context: Record<string, unknown>): string {
+  const get = (path: string[]): string => {
+    let cur: unknown = context;
+    for (const p of path) {
+      if (!cur || typeof cur !== "object") return "";
+      cur = (cur as Record<string, unknown>)[p];
+    }
+    return typeof cur === "string" ? cur.trim() : "";
+  };
+  const home = get(["fixture", "home_team"]) || get(["home_team"]);
+  const away = get(["fixture", "away_team"]) || get(["away_team"]);
+  const date = get(["fixture", "date"]) || get(["match_date"]);
+  const venue = get(["fixture", "venue"]) || get(["structured_json", "venue"]);
+  const market = get(["prediction", "market"]) || get(["market"]);
+  const pick = get(["prediction", "pick"]) || get(["pick"]);
+  const homeStarter =
+    get(["structured_json", "home_starter"]) ||
+    get(["source_projection_payload", "home_starter_name"]) ||
+    get(["source_projection_payload", "home_projected_pitcher"]);
+  const awayStarter =
+    get(["structured_json", "away_starter"]) ||
+    get(["source_projection_payload", "away_starter_name"]) ||
+    get(["source_projection_payload", "away_projected_pitcher"]);
+  return [home, away, date, venue, homeStarter, awayStarter, market, pick, "preview"]
+    .filter((piece) => piece && piece.length > 0)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
