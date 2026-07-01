@@ -33,6 +33,7 @@ import {
   createScrapingJob,
   getScrapingJobCsv,
   getScrapingJobNormalized,
+  getScrapingJobRaw,
   getScrapingJobStatus,
 } from "@/lib/scraper-api.functions";
 
@@ -148,12 +149,7 @@ function ColetaDadosPage() {
   const importarNormalizedDaVm = async (coleta: ColetaOdds) => {
     if (!coleta.job_id) throw new Error("Coleta sem job_id para consultar na VM.");
     setRemoteStatus("Buscando dados normalizados...");
-    const result = await getScrapingJobNormalized({ data: { job_id: coleta.job_id } });
-    const raw = result.normalized_json;
-    const normalizedData = normalizeVmNormalizedPayload(raw, { esporte: coleta.esporte });
-    if (!normalizedData.total_odds) {
-      throw new Error("Retorno /normalized da VM nao trouxe odds para importar.");
-    }
+    const { raw, normalizedData } = await carregarOddsDaVm(coleta.job_id, coleta.esporte, setRemoteStatus);
 
     setRemoteStatus("Salvando odds no banco...");
     const imported = await completeRemoteCollection(coleta.id, raw, normalizedData);
@@ -246,9 +242,7 @@ function ColetaDadosPage() {
     if (!coleta.job_id) return;
     setRemoteBusy(`normalized:${coleta.id}`);
     try {
-      const result = await getScrapingJobNormalized({ data: { job_id: coleta.job_id } });
-      const raw = result.normalized_json;
-      const normalizedData = normalizeVmNormalizedPayload(raw, { esporte: coleta.esporte });
+      const { raw, normalizedData } = await carregarOddsDaVm(coleta.job_id, coleta.esporte, setRemoteStatus);
       if (!normalizedData.total_odds) {
         throw new Error("JSON retornado pela VM não gerou odds normalizadas.");
       }
@@ -666,6 +660,39 @@ async function pollVmJob(
 
 function sleep(ms: number) {
   return new Promise((resolve) => globalThis.setTimeout(resolve, ms));
+}
+
+async function carregarOddsDaVm(
+  jobId: string,
+  esporte: string | null,
+  onStatus?: (status: string) => void,
+) {
+  const normalizedResult = await getScrapingJobNormalized({ data: { job_id: jobId } });
+  const normalizedRaw = normalizedResult.normalized_json;
+  const normalizedData = normalizeVmNormalizedPayload(normalizedRaw, { esporte });
+  if (normalizedData.total_odds) {
+    return { raw: normalizedRaw, normalizedData };
+  }
+
+  onStatus?.("Normalizado veio vazio; tentando importar a partir do JSON bruto da VM...");
+  const rawResult = await getScrapingJobRaw({ data: { job_id: jobId } });
+  const raw = rawResult.raw_json;
+  const rawNormalizedData = normalizeVmNormalizedPayload(raw, { esporte });
+  if (rawNormalizedData.total_odds) {
+    return { raw, normalizedData: rawNormalizedData };
+  }
+
+  const normalizedKeys = payloadKeys(normalizedRaw);
+  const rawKeys = payloadKeys(raw);
+  throw new Error(
+    `Retorno da VM nao trouxe odds importaveis. /normalized keys: ${normalizedKeys}; /raw keys: ${rawKeys}.`,
+  );
+}
+
+function payloadKeys(payload: unknown) {
+  if (Array.isArray(payload)) return `array(${payload.length})`;
+  if (isObj(payload)) return Object.keys(payload).slice(0, 20).join(", ") || "(objeto vazio)";
+  return typeof payload;
 }
 
 function isRunningStatus(status: string | null | undefined) {
