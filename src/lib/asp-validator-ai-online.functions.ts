@@ -181,7 +181,7 @@ function buildAnalysisContext(context: Record<string, unknown>, sources: Array<{
   const route = routeValidator(context);
   return [
     "ASP Validator - IA + Pesquisa",
-    `Esporte detectado: ${route.sport} | Mercado detectado: ${route.market}`,
+    `Esporte detectado: ${route.sport} | Mercado detectado: ${route.marketDetected}`,
     `Usou OCR real: ${usage.used_ocr ? "sim" : "nao"}`,
     `Usou texto colado: ${usage.used_pasted_text ? "sim" : "nao"}`,
     `Usou JSON estruturado: ${usage.used_structured_json ? "sim" : "nao"}`,
