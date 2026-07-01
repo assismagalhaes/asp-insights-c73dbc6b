@@ -261,6 +261,12 @@ export interface MlbHandicapThresholds {
   maxAnalyzeOdd: number;
   minAnalyzeOdd: number;
   tailMassWarning: number;
+  runlineMinusMargin: number;
+  runlineMinusEv: number;
+  runlineMinusProbGap: number;
+  runlinePlusEv: number;
+  runlinePlusProbGap: number;
+  maxAnalyzeAbsLine: number;
 }
 
 export interface MlbHandicapProjectionConfig {
