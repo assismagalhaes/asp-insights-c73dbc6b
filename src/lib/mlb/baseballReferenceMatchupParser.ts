@@ -192,11 +192,11 @@ export function extractMlbRecentGames() {
 }
 
 export function extractMlbHeadToHead(rawText: string) {
-  return extractHeadToHead(normalizeRawText(rawText));
+  return extractSeasonSeriesAndHeadToHead(normalizeRawText(rawText)).head_to_head;
 }
 
 export function extractMlbSeasonSeries(rawText: string) {
-  return extractSeasonSeries(normalizeRawText(rawText));
+  return extractSeasonSeriesAndHeadToHead(normalizeRawText(rawText)).season_series;
 }
 
 export function parseWinLossRecord(value: string | null | undefined): MlbParsedWinLossRecord | null {
