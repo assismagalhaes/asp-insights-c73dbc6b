@@ -251,6 +251,7 @@ export function calculateMlbTotalsProjection(params: {
   const candidateStatus = classifyTotalCandidate({
     recommendedEv: recommendation.recommended_ev,
     recommendedOdd: recommendation.recommended_odd,
+    recommendedFairOdd: recommendation.recommended_fair_odd,
     recommendedProbGap: probGap,
     runGap: Math.abs(totalGapVsLine),
     distanceFromMainLine,
@@ -261,6 +262,7 @@ export function calculateMlbTotalsProjection(params: {
     candidateStatus,
     distanceFromMainLine,
     recommendedOdd: recommendation.recommended_odd,
+    recommendedFairOdd: recommendation.recommended_fair_odd,
     leagueAverage: params.leagueAverage,
     home: projected.home,
     away: projected.away,
