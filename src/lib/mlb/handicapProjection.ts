@@ -698,14 +698,28 @@ function buildHandicapAlerts(input: {
   candidateStatus: MlbHandicapCandidateStatus;
   distanceFromMain: number | null;
   recommendedOdd: number | null;
+  recommendedLine: number | null;
+  recommendedSide: MlbHandicapSide | null;
+  projectedMargin: number;
   distributionTailWarning: boolean;
   leagueAverage: MlbLeagueAverageContext;
   homePushProb: number;
   awayPushProb: number;
 }) {
   const alerts = [...input.row.alerts];
+  const line = input.recommendedLine ?? 0;
+  const absLine = Math.abs(line);
   if (input.distanceFromMain != null && input.distanceFromMain > MLB_HANDICAP_THRESHOLDS.maxAnalyzeDistanceFromMainLine) {
-    alerts.push("Linha alternativa distante da linha principal; risco de falso edge.");
+    alerts.push("alternate_handicap_line_risk: linha alternativa distante da principal.");
+  }
+  if (absLine >= 2.5) {
+    alerts.push("alternate_handicap_line_risk: linha |>=2.5| limitada a MONITORAR.");
+  }
+  if (line <= -1.5) {
+    const marginForSide = input.recommendedSide === "home" ? input.projectedMargin : -input.projectedMargin;
+    if (marginForSide < MLB_HANDICAP_THRESHOLDS.runlineMinusMargin) {
+      alerts.push("runline_margin_risk: margem ASP < 0.75 run para -1.5.");
+    }
   }
   if (input.recommendedOdd != null && input.recommendedOdd < MLB_HANDICAP_THRESHOLDS.minAnalyzeOdd) {
     alerts.push("Odd baixa demais para screener preliminar.");
