@@ -240,7 +240,62 @@ export function calculateMlbValidationReadinessScore(
   );
   if (!parsedContext.teams.home.team_name || !parsedContext.teams.away.team_name) score = Math.min(score, 39);
   if (!parsedContext.starting_pitchers.home.name || !parsedContext.starting_pitchers.away.name) score = Math.min(score, 79);
-  const readinessStatus = getReadinessStatus(score);
+
+  // --- Score pós-contexto (caps por conflito / divergência / flags) ---
+  const rawScore = opportunity.opportunity_score;
+  const rawConfidence = opportunity.confidence_score;
+  let adjScore = rawScore;
+  let adjConf = rawConfidence;
+  const postFlags: string[] = [];
+
+  // Divergência absoluta vs mercado no-vig (em pontos percentuais)
+  const marketDivergencePP =
+    opportunity.model_prob != null && opportunity.market_prob_no_vig != null
+      ? Math.abs(opportunity.model_prob - opportunity.market_prob_no_vig) * 100
+      : 0;
+
+  const isConflict = alignment.alignment_status === "conflicts_with_screener";
+  const lowAlign = alignmentScore <= 35;
+  const highDivergence = marketDivergencePP >= 15;
+  const criticalFlagsCount = alignment.critical_flags.length;
+
+  if (isConflict) {
+    adjScore = Math.min(adjScore, 55);
+    adjConf = Math.min(adjConf, 50);
+    score = Math.min(score, 59);
+  }
+  if (lowAlign) {
+    adjScore = Math.min(adjScore, 55);
+    score = Math.min(score, 59);
+  }
+  if (highDivergence) {
+    adjConf = Math.min(adjConf, 55);
+    postFlags.push("market_divergence_high");
+  }
+  if (highDivergence && isConflict) {
+    adjScore = Math.min(adjScore, 50);
+    postFlags.push("strong_conflict_with_divergence");
+  }
+  if (criticalFlagsCount >= 2) {
+    score = Math.min(score, 69);
+  }
+  if (criticalFlagsCount >= 2 && lowAlign) {
+    score = Math.min(score, 59);
+  }
+
+  let readinessStatus = getReadinessStatus(score);
+  // Nunca marcar como pronto quando há conflito forte com Screener.
+  if (isConflict && readinessStatus === "pronto_para_validator") {
+    readinessStatus = "revisar_antes_do_validator";
+  }
+
+  const criticalAdjustedStatus: MlbValidationPreparation["critical_adjusted_status"] =
+    isConflict || (highDivergence && lowAlign)
+      ? "strong_conflict"
+      : lowAlign || highDivergence || criticalFlagsCount >= 2
+        ? "review_before_validator"
+        : "aligned";
+
   return {
     validation_readiness_score: score,
     readiness_status: readinessStatus,
@@ -248,6 +303,12 @@ export function calculateMlbValidationReadinessScore(
     recommended_next_step: readinessStatus === "pronto_para_validator"
       ? "Pacote pronto para copiar e revisar no Validator em etapa futura."
       : "Revisar contexto colado e completar dados antes de enviar ao Validator em etapa futura.",
+    raw_opportunity_score: rawScore,
+    raw_confidence_score: rawConfidence,
+    critical_adjusted_score: adjScore,
+    critical_adjusted_confidence: adjConf,
+    critical_adjusted_status: criticalAdjustedStatus,
+    post_context_risk_flags: [...new Set(postFlags)],
   };
 }
 
