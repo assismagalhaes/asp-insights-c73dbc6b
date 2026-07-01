@@ -2081,7 +2081,9 @@ function ExtractedImageDataPanel({ structured, sport }: { structured: Structured
         <NormalizedCornerLinesPanel home={corners?.home?.normalized_market_lines ?? []} away={corners?.away?.normalized_market_lines ?? []} />
       ) : null}
 
+      {showCorners ? (<>
       <div className="mt-3 grid gap-3 md:grid-cols-2">
+
         <div className="rounded-md border border-border p-3">
           <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Geral - {structured.match?.home_team || "Mandante"}</div>
           <div className="grid gap-2 md:grid-cols-2">
@@ -2155,7 +2157,9 @@ function ExtractedImageDataPanel({ structured, sport }: { structured: Structured
           </div>
         </div>
       </div>
+      </>) : null}
       <div className="mt-3 grid gap-3 md:grid-cols-2">
+
         <div className="rounded-md border border-border p-3">
           <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Odds pre-jogo</div>
           <div className="grid gap-2 md:grid-cols-2">
