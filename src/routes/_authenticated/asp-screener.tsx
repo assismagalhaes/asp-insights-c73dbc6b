@@ -45,6 +45,11 @@ import {
   storeMlbValidatorHandoffDraft,
   validateMlbValidatorHandoffPayload,
 } from "@/lib/mlb/projections";
+import {
+  buildMlbCriticalValidationDraft,
+  storeCriticalValidationDraft,
+  validateCriticalValidationDraft,
+} from "@/lib/mlb/screenerToCriticalValidationAdapter";
 import type {
   MlbHandicapCandidateStatus,
   MlbHandicapFilter,
