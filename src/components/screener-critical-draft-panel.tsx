@@ -200,7 +200,7 @@ export function ScreenerCriticalDraftPanel({ onApplied }: { onApplied?: () => vo
     setBusy(decisao === "CONFIRMA" ? "confirmar" : "pular");
     try {
       const prognosticoId = await criarPrognosticoAPartirDoDraft(decisao);
-      const stakeNum = decisao === "CONFIRMA" ? Number(stake) || 1 : 1;
+      const stakeNum = decisao === "CONFIRMA" ? Number(stake) || 1 : 0;
       await createVal.mutateAsync({
         prognostico_id: prognosticoId,
         decisao,
