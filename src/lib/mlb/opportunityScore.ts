@@ -1,9 +1,11 @@
 import type {
+  MlbCriticalValidationContext,
   MlbCriticalValidationPayload,
   MlbHandicapCandidateStatus,
   MlbHandicapProjectionStatus,
   MlbHandicapScreenerRow,
   MlbMoneylineScreenerRow,
+  MlbOpportunityAppliedPenalty,
   MlbOpportunityMarketFamily,
   MlbOpportunityPriorityStatus,
   MlbOpportunityScoreComponents,
@@ -13,6 +15,11 @@ import type {
   MlbTotalsScreenerRow,
   MlbUnifiedOpportunity,
 } from "@/types/mlbProjections";
+
+export const MLB_PRE_CRITICAL_MAX_SCORE = 92;
+export const MLB_PRE_CRITICAL_MAX_CONFIDENCE = 72;
+
+const TOP5_EXCLUDED_FLAGS = new Set(["alternate_total_line_risk", "alternate_handicap_line_risk"]);
 
 export const MLB_OPPORTUNITY_SCORE_WEIGHTS = {
   evQuality: 0.35,
@@ -189,9 +196,14 @@ export function buildMlbUnifiedOpportunities(params: {
   ];
 }
 
-export function calculateMlbOpportunityScore(opportunity: MlbUnifiedOpportunity): number {
-  if (hasHardBlock(opportunity)) return 0;
-  const components = calculateScoreComponents(opportunity);
+export function calculateMlbOpportunityScoreBreakdown(
+  opportunity: MlbUnifiedOpportunity,
+  ctx?: MlbCriticalValidationContext | null,
+): { raw_score: number; final_score: number; applied_penalties: MlbOpportunityAppliedPenalty[] } {
+  if (hasHardBlock(opportunity)) {
+    return { raw_score: 0, final_score: 0, applied_penalties: [] };
+  }
+  const components = calculateScoreComponentsBase(opportunity);
   const weighted =
     components.ev_quality_score * MLB_OPPORTUNITY_SCORE_WEIGHTS.evQuality +
     components.probability_edge_score * MLB_OPPORTUNITY_SCORE_WEIGHTS.probabilityEdge +
@@ -200,10 +212,37 @@ export function calculateMlbOpportunityScore(opportunity: MlbUnifiedOpportunity)
     components.data_quality_score * MLB_OPPORTUNITY_SCORE_WEIGHTS.dataQuality +
     components.base_status_coherence_score * MLB_OPPORTUNITY_SCORE_WEIGHTS.baseStatusCoherence -
     components.risk_penalty;
-  return round(clamp(weighted, 0, 100), 1);
+  const rawScore = round(clamp(weighted, 0, 100), 1);
+
+  const penalties: MlbOpportunityAppliedPenalty[] = [];
+  const pushPenalty = (flag: string, delta: number) => penalties.push({ flag, delta });
+  const hasAlert = (pattern: RegExp) => opportunity.alerts.some((alert) => pattern.test(alert));
+
+  if (opportunity.market_family === "moneyline") pushPenalty("moneyline_no_pitcher_context", -8);
+  if (isHighEdgeWithoutPitchers(opportunity)) pushPenalty("high_edge_without_pitchers", -12);
+  if (hasAlert(/low_fair_odd_tail_risk/i)) pushPenalty("low_fair_odd_tail_risk", -8);
+  if (hasAlert(/alternate_total_line_risk/i)) pushPenalty("alternate_total_line_risk", -12);
+  if (hasAlert(/alternate_handicap_line_risk/i)) pushPenalty("alternate_handicap_line_risk", -10);
+  if (hasAlert(/runline_margin_risk/i)) pushPenalty("runline_margin_risk", -8);
+
+  const totalPenalty = penalties.reduce((sum, item) => sum + item.delta, 0);
+  const afterPenalty = rawScore + totalPenalty;
+  const cap = isCriticalValidationPass(ctx) ? 100 : MLB_PRE_CRITICAL_MAX_SCORE;
+  const finalScore = round(clamp(afterPenalty, 0, cap), 1);
+  return { raw_score: rawScore, final_score: finalScore, applied_penalties: penalties };
 }
 
-export function calculateMlbOpportunityConfidence(opportunity: MlbUnifiedOpportunity): number {
+export function calculateMlbOpportunityScore(
+  opportunity: MlbUnifiedOpportunity,
+  ctx?: MlbCriticalValidationContext | null,
+): number {
+  return calculateMlbOpportunityScoreBreakdown(opportunity, ctx).final_score;
+}
+
+export function calculateMlbOpportunityConfidence(
+  opportunity: MlbUnifiedOpportunity,
+  ctx?: MlbCriticalValidationContext | null,
+): number {
   if (opportunity.projection_status === "missing_data" || opportunity.projection_status === "unsupported_line") return 0;
   let score = 60;
   if (opportunity.is_main_line) score += 10;
@@ -218,8 +257,18 @@ export function calculateMlbOpportunityConfidence(opportunity: MlbUnifiedOpportu
   if (hasFallbackAverage(opportunity)) score -= 10;
   if (countRelevantAlerts(opportunity.alerts) >= 4) score -= 10;
   if (hasTailWarning(opportunity)) score -= 15;
-  if (isHighEdgeWithoutPitchers(opportunity)) score -= 15;
-  return round(clamp(score, 0, 78), 1);
+  if (opportunity.market_family === "moneyline") score -= 8;
+  if (isHighEdgeWithoutPitchers(opportunity)) score -= 10;
+  const cap = isCriticalValidationPass(ctx) ? 100 : MLB_PRE_CRITICAL_MAX_CONFIDENCE;
+  return round(clamp(score, 0, cap), 1);
+}
+
+function isCriticalValidationPass(ctx?: MlbCriticalValidationContext | null) {
+  return Boolean(
+    ctx &&
+      ctx.readiness_status === "pronto_para_validator" &&
+      ctx.alignment_status === "supports_screener",
+  );
 }
 
 export function applyMlbOpportunityRiskPenalties(opportunity: MlbUnifiedOpportunity): string[] {
@@ -314,7 +363,18 @@ export function applyMlbCorrelationGuard(opportunities: MlbUnifiedOpportunity[])
       top.push(item);
     }
   }
-  const rankedPrimary = [...top, ...deferred]
+  // Rule: alternate_total_line_risk e alternate_handicap_line_risk nao podem ocupar top 5.
+  const combined = [...top, ...deferred];
+  const safeTop5: MlbUnifiedOpportunity[] = [];
+  const laterSlots: MlbUnifiedOpportunity[] = [];
+  const heldForLater: MlbUnifiedOpportunity[] = [];
+  for (const item of combined) {
+    const excludedFromTop5 = item.risk_flags.some((flag) => TOP5_EXCLUDED_FLAGS.has(flag));
+    if (excludedFromTop5) heldForLater.push(item);
+    else if (safeTop5.length < 5) safeTop5.push(item);
+    else laterSlots.push(item);
+  }
+  const rankedPrimary = [...safeTop5, ...laterSlots, ...heldForLater]
     .slice(0, 10)
     .map((item, index) => ({ ...item, rank: index + 1 }));
   const primaryIds = new Map(rankedPrimary.map((item) => [item.opportunity_id, item]));
@@ -394,14 +454,20 @@ function finalizeOpportunity(base: OpportunityBase): MlbUnifiedOpportunity {
     score_explanation: "",
   };
   const riskFlags = applyMlbOpportunityRiskPenalties(placeholder);
-  const scoreComponents = calculateScoreComponents(placeholder);
-  const opportunityScore = calculateMlbOpportunityScore({ ...placeholder, risk_flags: riskFlags, score_components: scoreComponents });
-  const confidenceScore = calculateMlbOpportunityConfidence(placeholder);
+  const primed = { ...placeholder, risk_flags: riskFlags };
+  const breakdown = calculateMlbOpportunityScoreBreakdown(primed);
+  const scoreComponents: MlbOpportunityScoreComponents = {
+    ...calculateScoreComponentsBase(primed),
+    raw_score: breakdown.raw_score,
+    final_score: breakdown.final_score,
+    applied_penalties: breakdown.applied_penalties,
+  };
+  const confidenceScore = calculateMlbOpportunityConfidence(primed);
   const next = {
     ...placeholder,
     risk_flags: riskFlags,
     score_components: scoreComponents,
-    opportunity_score: opportunityScore,
+    opportunity_score: breakdown.final_score,
     confidence_score: confidenceScore,
   };
   return {
@@ -411,7 +477,28 @@ function finalizeOpportunity(base: OpportunityBase): MlbUnifiedOpportunity {
   };
 }
 
-function calculateScoreComponents(opportunity: MlbUnifiedOpportunity): MlbOpportunityScoreComponents {
+export function applyMlbCriticalValidationRescore(
+  opportunity: MlbUnifiedOpportunity,
+  ctx: MlbCriticalValidationContext,
+): MlbUnifiedOpportunity {
+  const breakdown = calculateMlbOpportunityScoreBreakdown(opportunity, ctx);
+  const confidence = calculateMlbOpportunityConfidence(opportunity, ctx);
+  const scoreComponents: MlbOpportunityScoreComponents = {
+    ...opportunity.score_components,
+    raw_score: breakdown.raw_score,
+    final_score: breakdown.final_score,
+    applied_penalties: breakdown.applied_penalties,
+  };
+  const next: MlbUnifiedOpportunity = {
+    ...opportunity,
+    opportunity_score: breakdown.final_score,
+    confidence_score: confidence,
+    score_components: scoreComponents,
+  };
+  return { ...next, priority_status: getPriorityStatus(next), score_explanation: buildScoreExplanation(next) };
+}
+
+function calculateScoreComponentsBase(opportunity: MlbUnifiedOpportunity): Omit<MlbOpportunityScoreComponents, "raw_score" | "final_score" | "applied_penalties"> {
   return {
     ev_quality_score: normalizePositive(opportunity.ev, 0.15),
     probability_edge_score: normalizePositive(opportunity.probability_edge, 0.10),
@@ -559,11 +646,24 @@ function getMoneylineRecommendedSide(row: MlbMoneylineScreenerRow): "home" | "aw
 function compareOpportunityPriority(a: MlbUnifiedOpportunity, b: MlbUnifiedOpportunity) {
   return (
     b.opportunity_score - a.opportunity_score ||
-    getLineQuality(b) - getLineQuality(a) ||
     b.confidence_score - a.confidence_score ||
-    (b.ev ?? 0) - (a.ev ?? 0) ||
+    Number(b.is_main_line) - Number(a.is_main_line) ||
+    a.risk_flags.length - b.risk_flags.length ||
+    Number(isOddInPreferredBand(b.offered_odd)) - Number(isOddInPreferredBand(a.offered_odd)) ||
+    getAdjustedEv(b) - getAdjustedEv(a) ||
+    getLineQuality(b) - getLineQuality(a) ||
     getStructuralRiskRank(a) - getStructuralRiskRank(b)
   );
+}
+
+function isOddInPreferredBand(odd: number | null) {
+  return odd != null && odd >= 1.70 && odd <= 2.10;
+}
+
+function getAdjustedEv(opportunity: MlbUnifiedOpportunity) {
+  const ev = opportunity.ev ?? 0;
+  const scoreFactor = clamp(opportunity.opportunity_score / 100, 0, 1);
+  return ev * scoreFactor;
 }
 
 function compareOpportunityDisplay(a: MlbUnifiedOpportunity, b: MlbUnifiedOpportunity) {
@@ -609,6 +709,9 @@ function zeroScoreComponents(): MlbOpportunityScoreComponents {
     data_quality_score: 0,
     base_status_coherence_score: 0,
     risk_penalty: 0,
+    raw_score: 0,
+    final_score: 0,
+    applied_penalties: [],
   };
 }
 

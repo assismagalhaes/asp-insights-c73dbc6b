@@ -1602,6 +1602,7 @@ function OpportunityTable({
                     <div>{row.score_explanation}</div>
                     <div className="text-foreground">{row.reasons.slice(0, 5).join(" | ") || "-"}</div>
                     <div>Componentes: EV {formatScore(row.score_components.ev_quality_score)}, Edge {formatScore(row.score_components.probability_edge_score)}, Linha {formatScore(row.score_components.market_line_quality_score)}, Dados {formatScore(row.score_components.data_quality_score)}, Penalidade {formatScore(row.score_components.risk_penalty)}</div>
+                    <div>Score bruto {formatScore(row.score_components.raw_score)} | Score final {formatScore(row.score_components.final_score)}{row.score_components.applied_penalties.length > 0 ? ` | Penalidades aplicadas: ${row.score_components.applied_penalties.map((p) => `${p.flag} ${p.delta}`).join(", ")}` : ""}</div>
                     {row.risk_flags.length > 0 && <div>Penalidades: {row.risk_flags.join(" | ")}</div>}
                     <Button size="sm" variant="outline" onClick={() => copyPayload(row)}>
                       <ClipboardCopy className="mr-2 h-3 w-3" />
