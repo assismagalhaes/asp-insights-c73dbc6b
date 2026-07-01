@@ -4,6 +4,7 @@ import { generateText } from "ai";
 import { z } from "zod";
 import {
   clampNumber,
+  enforceHardGuardrails,
   extractManualPrediction,
   hasSimulationData,
   normalizeConfidence,
