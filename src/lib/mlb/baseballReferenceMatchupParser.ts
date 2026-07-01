@@ -100,7 +100,7 @@ export function parseBaseballReferenceMatchupText(
 
   const context: MlbBaseballReferenceMatchupContext = {
     source: "baseball_reference_matchup_text",
-    parser_version: "1.1.0",
+    parser_version: "1.2.0",
     raw_text: rawText,
     parsed_at: new Date().toISOString(),
     teams: {
