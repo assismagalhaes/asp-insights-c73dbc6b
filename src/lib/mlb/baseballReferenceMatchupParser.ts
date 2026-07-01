@@ -1,8 +1,11 @@
 import type {
   MlbBaseballReferenceMatchupContext,
+  MlbHeadToHeadGame,
   MlbParsedStartingPitcher,
   MlbParsedTeamSummary,
   MlbParsedWinLossRecord,
+  MlbSeasonSeriesCompletedGame,
+  MlbSeasonSeriesUpcomingGame,
 } from "@/types/mlbCriticalValidation";
 import { matchMlbTeamName } from "@/utils/mlbTeamNameMap";
 
