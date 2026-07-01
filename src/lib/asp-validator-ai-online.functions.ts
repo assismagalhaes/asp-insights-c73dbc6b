@@ -132,9 +132,10 @@ function normalizeOnlineResult(
     50;
   const offeredOdd = readNumber(value.offered_odd) ?? manual.offered_odd;
   const adjustedFairOdd = readNumber(value.adjusted_fair_odd) ?? (adjustedProbability > 0 ? round(100 / adjustedProbability) : 2);
+  const suggestedEv = normalizeEvPercent(readNumber(value.adjusted_ev));
   const adjustedEv =
-    normalizeEvPercent(readNumber(value.adjusted_ev)) ??
-    (offeredOdd ? round((offeredOdd * (adjustedProbability / 100) - 1) * 100) : null);
+    assertEvConsistency(suggestedEv, adjustedProbability, offeredOdd ?? null, "asp-validator-ai-online") ??
+    calculateEvPercent(adjustedProbability, offeredOdd ?? null);
   const onlineSummary =
     readString(value.online_summary) ||
     "Verificacao online sem achados relevantes. Nao ha noticia ou contexto externo suficiente para alterar a analise.";
