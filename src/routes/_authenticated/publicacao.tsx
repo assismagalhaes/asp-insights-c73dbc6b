@@ -377,7 +377,7 @@ function PublicadasRecentes({ prognosticos }: { prognosticos: Prognostico[] }) {
               {publicadas.map((p) => (
                 <tr key={p.id} className="border-t border-border">
                   <td className="px-3 py-2 font-mono text-xs">
-                    {p.data_publicacao ? new Date(p.data_publicacao).toLocaleString() : "—"}
+                    {p.data_publicacao ? new Date(p.data_publicacao).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—"}
                   </td>
                   <td className="px-3 py-2">{p.jogo}</td>
                   <td className="px-3 py-2">{p.pick}</td>
