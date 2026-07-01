@@ -1130,3 +1130,10 @@ function isValidationSuccess(validation: ValidationResult) {
 function formatError(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
+
+function isScraperUnavailableError(message: string) {
+  return /1016|failed to fetch|resolve host|ENOTFOUND|ECONNREFUSED|network|timeout|Timeout|origin dns/i.test(
+    message,
+  );
+}
+
