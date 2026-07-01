@@ -25,10 +25,10 @@ export const MLB_MONEYLINE_LOGISTIC_SCALE = 0.85;
 
 export const MLB_MONEYLINE_THRESHOLDS = {
   analyzeEv: 0.05,
-  analyzeProbGap: 0.04,
+  analyzeProbGap: 0.05,
   monitorEv: 0.02,
   monitorProbGap: 0.025,
-  minOdd: 1.50,
+  minOdd: 1.55,
   maxOdd: 2.80,
 } satisfies MlbMoneylineProjectionConfig["thresholds"];
 
@@ -36,8 +36,8 @@ export const MLB_MONEYLINE_PROJECTION_CONFIG: MlbMoneylineProjectionConfig = {
   weights: MLB_SIMPLE_RATING_WEIGHTS,
   homeFieldAdvantage: MLB_HOME_FIELD_ADVANTAGE,
   logisticScale: MLB_MONEYLINE_LOGISTIC_SCALE,
-  minModelProb: 0.25,
-  maxModelProb: 0.75,
+  minModelProb: 0.30,
+  maxModelProb: 0.70,
   thresholds: MLB_MONEYLINE_THRESHOLDS,
 };
 
@@ -439,6 +439,7 @@ function buildAlerts(input: {
   if (input.awayRating.missing_fields.length) alerts.push(`Standings incompletos para visitante: ${input.awayRating.missing_fields.join(", ")}`);
   if (input.candidateStatus === "monitorar") alerts.push("Edge pequeno contra mercado");
   if (Math.max(input.homeEv, input.awayEv) < 0.02) alerts.push("EV preliminar abaixo do corte minimo");
+  if (Math.max(input.homeEv, input.awayEv) >= 0.15) alerts.push("high_edge_without_pitchers: EV >= 15% sem considerar starters/bullpen");
   return alerts;
 }
 

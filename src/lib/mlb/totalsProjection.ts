@@ -10,8 +10,8 @@ import type {
 } from "@/types/mlbProjections";
 
 export const MLB_TOTALS_THRESHOLDS = {
-  analyzeEv: 0.05,
-  analyzeProbGap: 0.04,
+  analyzeEv: 0.06,
+  analyzeProbGap: 0.05,
   analyzeRunGap: 0.70,
   monitorEv: 0.02,
   monitorProbGap: 0.025,
@@ -19,8 +19,10 @@ export const MLB_TOTALS_THRESHOLDS = {
   minOdd: 1.55,
   maxOdd: 2.60,
   maxAnalyzeDistanceFromMainLine: 1.0,
+  maxMonitorDistanceFromMainLine: 1.5,
+  minAnalyzeFairOdd: 1.35,
   maxAnalyzeOdd: 2.80,
-  minAnalyzeOdd: 1.50,
+  minAnalyzeOdd: 1.55,
 } satisfies MlbTotalsProjectionConfig["thresholds"];
 
 export const MLB_TOTALS_PROJECTION_CONFIG: MlbTotalsProjectionConfig = {
@@ -249,6 +251,7 @@ export function calculateMlbTotalsProjection(params: {
   const candidateStatus = classifyTotalCandidate({
     recommendedEv: recommendation.recommended_ev,
     recommendedOdd: recommendation.recommended_odd,
+    recommendedFairOdd: recommendation.recommended_fair_odd,
     recommendedProbGap: probGap,
     runGap: Math.abs(totalGapVsLine),
     distanceFromMainLine,
@@ -259,6 +262,7 @@ export function calculateMlbTotalsProjection(params: {
     candidateStatus,
     distanceFromMainLine,
     recommendedOdd: recommendation.recommended_odd,
+    recommendedFairOdd: recommendation.recommended_fair_odd,
     leagueAverage: params.leagueAverage,
     home: projected.home,
     away: projected.away,
@@ -590,6 +594,7 @@ function getTotalRecommendation(input: {
 function classifyTotalCandidate(input: {
   recommendedEv: number | null;
   recommendedOdd: number | null;
+  recommendedFairOdd: number | null;
   recommendedProbGap: number;
   runGap: number;
   distanceFromMainLine: number | null;
@@ -597,15 +602,19 @@ function classifyTotalCandidate(input: {
 }): MlbProjectionCandidateStatus {
   const ev = input.recommendedEv ?? Number.NEGATIVE_INFINITY;
   const odd = input.recommendedOdd ?? 0;
+  const fairOdd = input.recommendedFairOdd ?? 0;
   const distance = input.distanceFromMainLine ?? 0;
   const { thresholds } = input.config;
+  if (distance > thresholds.maxMonitorDistanceFromMainLine) return "pular";
   const canAnalyzeAlternate = distance <= thresholds.maxAnalyzeDistanceFromMainLine;
-  const canAnalyzeOdd = odd >= thresholds.minOdd && odd <= thresholds.maxOdd;
+  const canAnalyzeOdd = odd >= thresholds.minAnalyzeOdd && odd <= thresholds.maxAnalyzeOdd;
+  const canAnalyzeFairOdd = fairOdd >= thresholds.minAnalyzeFairOdd;
   if (
     ev >= thresholds.analyzeEv &&
     input.recommendedProbGap >= thresholds.analyzeProbGap &&
     input.runGap >= thresholds.analyzeRunGap &&
     canAnalyzeOdd &&
+    canAnalyzeFairOdd &&
     canAnalyzeAlternate
   ) {
     return "analisar";
@@ -631,12 +640,24 @@ function buildTotalReasons(input: {
   const isOver = input.recommendationSide === "Over";
   const offeredOdd = isOver ? input.overOdd : input.underOdd;
   const fairOdd = isOver ? input.overFairOdd : input.underFairOdd;
+  const homeOffenseHigh = input.home != null && input.home.offense_index > 1;
+  const awayOffenseHigh = input.away != null && input.away.offense_index > 1;
+  const homeOffenseLow = input.home != null && input.home.offense_index < 1;
+  const awayOffenseLow = input.away != null && input.away.offense_index < 1;
+  const defenseWeakForHome = input.away != null && input.away.opponent_defense_index > 1;
+  const defenseWeakForAway = input.home != null && input.home.opponent_defense_index > 1;
+  const defenseStrongForHome = input.away != null && input.away.opponent_defense_index < 1;
+  const defenseStrongForAway = input.home != null && input.home.opponent_defense_index < 1;
   const reasons = [
     isOver ? "Total projetado ASP acima da linha de mercado" : "Total projetado ASP abaixo da linha de mercado",
-    input.home && input.home.offense_index > 1 ? "Ataque mandante acima da media da liga" : null,
-    input.away && input.away.offense_index > 1 ? "Ataque visitante acima da media da liga" : null,
-    input.away && input.away.opponent_defense_index > 1 ? "Defesa mandante permite corridas acima da media" : null,
-    input.home && input.home.opponent_defense_index > 1 ? "Defesa visitante permite corridas acima da media" : null,
+    isOver && homeOffenseHigh ? "Ataque mandante acima da media da liga" : null,
+    isOver && awayOffenseHigh ? "Ataque visitante acima da media da liga" : null,
+    isOver && defenseWeakForHome ? "Defesa visitante permite corridas acima da media" : null,
+    isOver && defenseWeakForAway ? "Defesa mandante permite corridas acima da media" : null,
+    !isOver && homeOffenseLow ? "Ataque mandante abaixo da media da liga" : null,
+    !isOver && awayOffenseLow ? "Ataque visitante abaixo da media da liga" : null,
+    !isOver && defenseStrongForHome ? "Defesa visitante segura corridas abaixo da media" : null,
+    !isOver && defenseStrongForAway ? "Defesa mandante segura corridas abaixo da media" : null,
     Math.abs(input.totalGapVsLine) >= MLB_TOTALS_THRESHOLDS.monitorRunGap ? "Gap de corridas relevante contra a linha" : null,
     fairOdd != null && offeredOdd > fairOdd ? "Odd ofertada acima da odd justa ASP" : null,
   ].filter(Boolean) as string[];
@@ -648,19 +669,23 @@ function buildTotalAlerts(input: {
   candidateStatus: MlbProjectionCandidateStatus;
   distanceFromMainLine: number | null;
   recommendedOdd: number | null;
+  recommendedFairOdd: number | null;
   leagueAverage: MlbLeagueAverageContext;
   home: MlbExpectedRunsComponents | null;
   away: MlbExpectedRunsComponents | null;
 }) {
   const alerts = [...input.row.alerts];
   if (input.distanceFromMainLine != null && input.distanceFromMainLine > MLB_TOTALS_THRESHOLDS.maxAnalyzeDistanceFromMainLine) {
-    alerts.push("Linha alternativa distante da linha principal; risco de falso edge.");
+    alerts.push("alternate_total_line_risk: linha alternativa distante da linha principal.");
   }
   if (input.recommendedOdd != null && input.recommendedOdd < MLB_TOTALS_THRESHOLDS.minAnalyzeOdd) {
     alerts.push("Odd baixa demais para screener preliminar.");
   }
   if (input.recommendedOdd != null && input.recommendedOdd > MLB_TOTALS_THRESHOLDS.maxAnalyzeOdd) {
     alerts.push("Odd alta e sensivel a cauda da distribuicao.");
+  }
+  if (input.recommendedFairOdd != null && input.recommendedFairOdd < MLB_TOTALS_THRESHOLDS.minAnalyzeFairOdd) {
+    alerts.push("low_fair_odd_tail_risk: odd justa muito baixa (< 1.35) - risco de cauda.");
   }
   if (input.home?.missing_fields.length || input.away?.missing_fields.length) {
     alerts.push("Dados de standings incompletos.");

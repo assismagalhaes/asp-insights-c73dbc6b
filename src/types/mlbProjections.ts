@@ -147,6 +147,8 @@ export interface MlbTotalsThresholds {
   minOdd: number;
   maxOdd: number;
   maxAnalyzeDistanceFromMainLine: number;
+  maxMonitorDistanceFromMainLine: number;
+  minAnalyzeFairOdd: number;
   maxAnalyzeOdd: number;
   minAnalyzeOdd: number;
 }
@@ -259,6 +261,12 @@ export interface MlbHandicapThresholds {
   maxAnalyzeOdd: number;
   minAnalyzeOdd: number;
   tailMassWarning: number;
+  runlineMinusMargin: number;
+  runlineMinusEv: number;
+  runlineMinusProbGap: number;
+  runlinePlusEv: number;
+  runlinePlusProbGap: number;
+  maxAnalyzeAbsLine: number;
 }
 
 export interface MlbHandicapProjectionConfig {

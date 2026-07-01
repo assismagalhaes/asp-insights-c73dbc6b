@@ -238,6 +238,11 @@ export function applyMlbOpportunityRiskPenalties(opportunity: MlbUnifiedOpportun
   const relevantAlerts = countRelevantAlerts(opportunity.alerts);
   if (relevantAlerts >= 6) flags.push("muitos alertas criticos");
   else if (relevantAlerts >= 3) flags.push("alertas condicionais relevantes");
+  if (opportunity.market_family === "moneyline" && (opportunity.ev ?? 0) >= 0.15) flags.push("high_edge_without_pitchers");
+  if (opportunity.alerts.some((alert) => /alternate_total_line_risk/i.test(alert))) flags.push("alternate_total_line_risk");
+  if (opportunity.alerts.some((alert) => /low_fair_odd_tail_risk/i.test(alert))) flags.push("low_fair_odd_tail_risk");
+  if (opportunity.alerts.some((alert) => /alternate_handicap_line_risk/i.test(alert))) flags.push("alternate_handicap_line_risk");
+  if (opportunity.alerts.some((alert) => /runline_margin_risk/i.test(alert))) flags.push("runline_margin_risk");
   return [...new Set(flags)];
 }
 
@@ -378,24 +383,28 @@ function getPriorityStatus(opportunity: MlbUnifiedOpportunity): MlbOpportunityPr
   if (opportunity.projection_status === "missing_data") return "MISSING_DATA";
   if (opportunity.projection_status === "unsupported_line") return "UNSUPPORTED_LINE";
   if (hasHardBlock(opportunity)) return "PULAR";
-  const edgeThreshold = opportunity.market_family === "handicap" ? 0.05 : 0.04;
+  const edgeThreshold = opportunity.market_family === "moneyline" ? 0.05 : 0.05;
+  const evThreshold = opportunity.market_family === "totals" ? 0.06 : 0.05;
   const alternativeFar = !opportunity.is_main_line && (opportunity.distance_from_main_line ?? 0) > 1;
   const odd = opportunity.offered_odd ?? 0;
+  const maxOdd = opportunity.market_family === "handicap" ? 3.00 : 2.80;
+  const baseAnalisar = opportunity.base_candidate_status === "analisar";
   if (
+    baseAnalisar &&
     opportunity.opportunity_score >= 75 &&
     opportunity.confidence_score >= 58 &&
-    (opportunity.ev ?? 0) >= 0.05 &&
+    (opportunity.ev ?? 0) >= evThreshold &&
     (opportunity.probability_edge ?? 0) >= edgeThreshold &&
     !alternativeFar &&
     odd >= 1.55 &&
-    odd <= 2.80
+    odd <= maxOdd
   ) {
     return "ANALISAR";
   }
   if (
     opportunity.opportunity_score >= 60 ||
-    ((opportunity.ev ?? 0) >= 0.02 && (opportunity.ev ?? 0) < 0.05) ||
-    ((opportunity.probability_edge ?? 0) >= 0.025 && (opportunity.probability_edge ?? 0) < 0.04)
+    ((opportunity.ev ?? 0) >= 0.02 && (opportunity.ev ?? 0) < evThreshold) ||
+    ((opportunity.probability_edge ?? 0) >= 0.025 && (opportunity.probability_edge ?? 0) < edgeThreshold)
   ) {
     return "MONITORAR";
   }
