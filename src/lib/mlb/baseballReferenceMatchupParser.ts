@@ -24,25 +24,85 @@ const LAST7_ROW_REGEX =
 const LAST5_VS_REGEX =
   /^Last\s+5\s+v\.?([A-Z]{2,4})\s+(\d+-\d+)\s+([\d.]+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+([\d.]+)(?:\s+(\d+))?/i;
 
-export function parseBaseballReferenceMatchupText(rawText: string): MlbBaseballReferenceMatchupContext {
+export interface MlbMatchupExpectedTeams {
+  home_team?: string | null;
+  away_team?: string | null;
+  home_team_key?: string | null;
+  away_team_key?: string | null;
+}
+
+export function parseBaseballReferenceMatchupText(
+  rawText: string,
+  expectedTeams?: MlbMatchupExpectedTeams,
+): MlbBaseballReferenceMatchupContext {
   const text = normalizeRawText(rawText);
-  const teamNames = extractKnownTeamNames(text);
-  const awayName = teamNames[0] ?? null;
-  const homeName = teamNames[1] ?? teamNames.find((team) => team !== awayName) ?? null;
-  const awayBlock = awayName ? extractTeamBlock(text, awayName, homeName) : "";
-  const homeBlock = homeName ? extractTeamBlock(text, homeName, null) : "";
+  // Team names in TEXT ORDER (not alphabetical).
+  const teamsInOrder = extractKnownTeamNames(text)
+    .map((name) => ({ name, index: text.search(new RegExp(escapeRegex(name), "i")) }))
+    .filter((entry) => entry.index >= 0)
+    .sort((a, b) => a.index - b.index);
+
+  const firstName = teamsInOrder[0]?.name ?? null;
+  const secondName = teamsInOrder[1]?.name ?? null;
+  const firstBlock = firstName ? extractTeamBlock(text, firstName, secondName) : "";
+  const secondBlock = secondName ? extractTeamBlock(text, secondName, null) : "";
+
+  // Pitcher candidates come out in text order; associate each to the team whose
+  // block contains the pitcher header line.
   const pitcherCandidates = extractPitcherCandidates(text);
-  const awayPitcher = buildPitcher(pitcherCandidates[0] ?? null);
-  const homePitcher = buildPitcher(pitcherCandidates[1] ?? null);
+  const firstSummary = buildTeamSummary(firstName, firstBlock || text);
+  const secondSummary = buildTeamSummary(secondName, secondBlock || text);
+  const firstPitcher = buildPitcher(pickPitcherForTeam(pitcherCandidates, firstBlock));
+  const secondPitcher = buildPitcher(pickPitcherForTeam(pitcherCandidates, secondBlock));
+
+  // Default assumption: BRef often shows away first, then home. This may be
+  // overridden below by expectedTeams/season-series alignment.
+  let awaySummary = firstSummary;
+  let homeSummary = secondSummary;
+  let awayPitcher = firstPitcher;
+  let homePitcher = secondPitcher;
+  const warnings: string[] = [];
+
+  const expectedHomeKey = expectedTeams?.home_team_key ?? (expectedTeams?.home_team ? matchMlbTeamName(expectedTeams.home_team) : null);
+  const expectedAwayKey = expectedTeams?.away_team_key ?? (expectedTeams?.away_team ? matchMlbTeamName(expectedTeams.away_team) : null);
+
+  if (expectedHomeKey || expectedAwayKey) {
+    const firstKey = firstSummary.team_key;
+    const secondKey = secondSummary.team_key;
+    const firstIsHome = expectedHomeKey && firstKey === expectedHomeKey;
+    const firstIsAway = expectedAwayKey && firstKey === expectedAwayKey;
+    const secondIsHome = expectedHomeKey && secondKey === expectedHomeKey;
+    const secondIsAway = expectedAwayKey && secondKey === expectedAwayKey;
+    if (firstIsHome || secondIsAway) {
+      // First block is HOME → invert default (away-first) assumption.
+      awaySummary = secondSummary; homeSummary = firstSummary;
+      awayPitcher = secondPitcher; homePitcher = firstPitcher;
+    } else if (firstIsAway || secondIsHome) {
+      // Default already correct.
+    } else if (firstKey || secondKey) {
+      warnings.push("Times do Baseball-Reference nao conferem com a oportunidade selecionada.");
+    }
+  } else {
+    // No expected teams: use season series line "AAA @BBB" as fallback hint.
+    const hint = detectAwayFromSeasonSeries(text);
+    if (hint && firstSummary.team_key && secondSummary.team_key) {
+      if (hint === firstSummary.team_key) {
+        // away=first, home=second — already default.
+      } else if (hint === secondSummary.team_key) {
+        awaySummary = secondSummary; homeSummary = firstSummary;
+        awayPitcher = secondPitcher; homePitcher = firstPitcher;
+      }
+    }
+  }
 
   const context: MlbBaseballReferenceMatchupContext = {
     source: "baseball_reference_matchup_text",
-    parser_version: "1.0.0",
+    parser_version: "1.1.0",
     raw_text: rawText,
     parsed_at: new Date().toISOString(),
     teams: {
-      away: buildTeamSummary(awayName, awayBlock || text),
-      home: buildTeamSummary(homeName, homeBlock || text),
+      away: awaySummary,
+      home: homeSummary,
     },
     starting_pitchers: {
       away: awayPitcher,
@@ -63,7 +123,44 @@ export function parseBaseballReferenceMatchupText(rawText: string): MlbBaseballR
   };
 
   context.data_quality = calculateParserQuality(context);
+  if (warnings.length) {
+    context.data_quality.warnings = [...warnings, ...context.data_quality.warnings];
+  }
   return context;
+}
+
+function pickPitcherForTeam(candidates: PitcherCandidate[], teamBlock: string): PitcherCandidate | null {
+  if (!teamBlock) return candidates[0] ?? null;
+  for (const cand of candidates) {
+    if (cand.name && teamBlock.includes(cand.name)) return cand;
+    // Match by header block presence
+    if (cand.block && teamBlock.includes(cand.block.split("\n")[0].trim())) return cand;
+  }
+  return null;
+}
+
+function detectAwayFromSeasonSeries(text: string): string | null {
+  // Look for patterns like "LAD @ATH" or "LAD @ ATH"
+  const match = text.match(/\b([A-Z]{2,4})\s*@\s*([A-Z]{2,4})\b/);
+  if (!match) return null;
+  const awayAbbrev = match[1].toUpperCase();
+  return abbrevToTeamKey(awayAbbrev);
+}
+
+function abbrevToTeamKey(abbrev: string): string | null {
+  const map: Record<string, string> = {
+    ARI: "arizona_diamondbacks", ATH: "athletics", OAK: "athletics", ATL: "atlanta_braves",
+    BAL: "baltimore_orioles", BOS: "boston_red_sox", CHC: "chicago_cubs", CHW: "chicago_white_sox",
+    CWS: "chicago_white_sox", CIN: "cincinnati_reds", CLE: "cleveland_guardians", COL: "colorado_rockies",
+    DET: "detroit_tigers", HOU: "houston_astros", KC: "kansas_city_royals", KCR: "kansas_city_royals",
+    LAA: "los_angeles_angels", LAD: "los_angeles_dodgers", MIA: "miami_marlins", MIL: "milwaukee_brewers",
+    MIN: "minnesota_twins", NYM: "new_york_mets", NYY: "new_york_yankees", PHI: "philadelphia_phillies",
+    PIT: "pittsburgh_pirates", SD: "san_diego_padres", SDP: "san_diego_padres", SF: "san_francisco_giants",
+    SFG: "san_francisco_giants", SEA: "seattle_mariners", STL: "st_louis_cardinals", TB: "tampa_bay_rays",
+    TBR: "tampa_bay_rays", TEX: "texas_rangers", TOR: "toronto_blue_jays", WSH: "washington_nationals",
+    WSN: "washington_nationals",
+  };
+  return map[abbrev] ?? null;
 }
 
 export function normalizeMlbMatchupContext(context: MlbBaseballReferenceMatchupContext) {
