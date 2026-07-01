@@ -5820,6 +5820,23 @@ function percentToInput(value: number | null): string {
   return value === null || value === undefined || !Number.isFinite(value) ? "" : String(round(value * 100, 2));
 }
 
+// Remove previous imported-screener block(s) from a user_context value.
+// Keeps only the free-form manual portion, avoiding "Importado do ASP Screener..." duplication.
+function extractManualOnlyContext(value: string | null | undefined): string {
+  if (!value) return "";
+  const text = String(value);
+  const importedMarker = "Importado do ASP Screener MLB";
+  const manualMarker = "Contexto adicional manual:";
+  if (!text.includes(importedMarker)) return text.trim();
+  // If a manual section exists after the imported block, keep only that section content.
+  const manualIdx = text.lastIndexOf(manualMarker);
+  if (manualIdx >= 0) {
+    return text.slice(manualIdx + manualMarker.length).trim();
+  }
+  // Only imported context, no manual addition -> nothing to preserve.
+  return "";
+}
+
 function formatDate(value: string | null): string {
   if (!value) return "-";
   const parsed = new Date(`${value}T00:00:00-03:00`);
