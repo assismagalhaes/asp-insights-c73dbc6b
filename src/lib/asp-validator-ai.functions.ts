@@ -122,7 +122,7 @@ function buildFallbackResult(context: Record<string, unknown>, alert: string): A
     source_ev: manual.source_ev,
     adjusted_probability: probability,
     adjusted_fair_odd: probability > 0 ? round(100 / probability) : 2,
-    adjusted_ev: manual.offered_odd ? round((manual.offered_odd * (probability / 100) - 1) * 100) : null,
+    adjusted_ev: calculateEvPercent(probability, manual.offered_odd ?? null),
     simulation_summary: "Fallback seguro aplicado; simulacao nao foi suficiente para decisao automatica.",
     favorable_blocks: [],
     against_blocks: ["Validacao automatica inconclusiva."],
