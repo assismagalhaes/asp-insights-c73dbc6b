@@ -274,7 +274,7 @@ export function ScreenerCriticalDraftPanel({ onApplied }: { onApplied?: () => vo
               Revisar antes de decidir
             </Badge>
           )}
-          <Badge variant="outline">{input.readiness_status}</Badge>
+          <Badge variant="outline">{displayReadiness(input.readiness_status)}</Badge>
           <Button
             size="sm"
             variant="ghost"
