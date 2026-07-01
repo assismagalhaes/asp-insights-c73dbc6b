@@ -124,7 +124,7 @@ export function ScreenerCriticalDraftPanel({ onApplied }: { onApplied?: () => vo
         setStake(r.stake_sugerida.toFixed(1));
       }
       const decisao = r.decisao_sugerida === "CONFIRMA" ? "CONFIRMAR" : "PULAR";
-      const resumo = `${decisao}${r.pick_escolhida_fallback ?? ""}${r.stake_sugerida ? ` - ${r.stake_sugerida}u` : ""}`;
+      const resumo = `${decisao}${r.stake_sugerida ? ` - ${r.stake_sugerida}u` : ""}`;
       setParecer((p) => p || resumo);
       toast.success(modo === "online" ? "Análise online concluída" : "Análise local gerada");
     } catch (e) {
