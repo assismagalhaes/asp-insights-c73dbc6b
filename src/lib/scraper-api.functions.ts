@@ -223,7 +223,15 @@ async function scraperRequest(path: string, init?: RequestInit) {
         requestBody,
         response: payload,
         expectedPayload: EXPECTED_JOB_PAYLOAD,
+        apiKeyLen: apiKey.length,
+        apiKeyPrefix: apiKey.substring(0, 4),
       });
+      if (res.status === 401 || res.status === 403) {
+        const detail = pickErrorMessage(payload) ?? stringifyDebug(payload);
+        throw new Error(
+          `API key da VM inválida ou sem permissão (HTTP ${res.status}). Atualize o secret SCRAPER_API_KEY em Backend → Secrets com uma chave válida emitida pela VM (${baseUrl}) e confirme que ela tem permissão para o endpoint ${path}. Detalhe da VM: ${detail}`,
+        );
+      }
       const message =
         res.status === 422 && path === "/scraping/jobs"
           ? `HTTP 422 ao chamar API da VM (${path}). Payload enviado: ${requestBody}. JSON esperado: ${stringifyDebug(EXPECTED_JOB_PAYLOAD)}. Resposta da VM: ${stringifyDebug(payload)}`
