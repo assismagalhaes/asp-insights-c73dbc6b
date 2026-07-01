@@ -31,7 +31,7 @@ export function mapMlbCriticalPayloadToValidatorInput(payload: MlbPreparedCritic
     away_team: payload.game.away_team,
     matchup: payload.game.matchup,
     market: payload.opportunity.market,
-    market_family: payload.source_projection_payload?.market_family ?? null,
+    market_family: (payload.source_projection_payload as { market_family?: string } | null)?.market_family ?? null,
     pick: payload.opportunity.pick,
     line: payload.opportunity.line,
     odd: payload.opportunity.odd,
