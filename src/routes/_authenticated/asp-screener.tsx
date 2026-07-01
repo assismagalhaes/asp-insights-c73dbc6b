@@ -1715,14 +1715,16 @@ function ParsedContextPanel({ context }: { context: MlbBaseballReferenceMatchupC
 
 function CriticalPayloadPanel({
   payloads,
+  onSendToCriticalValidation,
   onSendToValidator,
 }: {
   payloads: MlbPreparedCriticalValidationPayload[];
+  onSendToCriticalValidation: (payload: MlbPreparedCriticalValidationPayload) => void | Promise<void>;
   onSendToValidator: (payload: MlbPreparedCriticalValidationPayload) => void | Promise<void>;
 }) {
   return (
     <div className="space-y-3">
-      <div className="text-sm font-semibold">Confronto Screener x Contexto Detalhado</div>
+      <div className="text-sm font-semibold">Pacote para Validação Crítica</div>
       {payloads.map((payload) => {
         const handoffValidation = validateMlbValidatorHandoffPayload(buildMlbValidatorHandoffPayload(payload));
         const prep = payload.validation_preparation;
@@ -1738,13 +1740,16 @@ function CriticalPayloadPanel({
           payload.context_alignment.alignment_status === "conflicts_with_screener" ||
           alignmentScore <= 35 ||
           highDivergence;
-        const handleSend = () => {
+        const handleSendCritical = () => {
           if (shouldConfirm && typeof window !== "undefined") {
             const ok = window.confirm(
-              "Esta oportunidade possui conflito forte com o contexto detalhado. Enviar ao Validator apenas para revisão crítica?",
+              "Esta oportunidade possui conflito forte com o contexto detalhado. Enviar para Validação Crítica apenas para revisão manual?",
             );
             if (!ok) return;
           }
+          void onSendToCriticalValidation(payload);
+        };
+        const handleSendValidator = () => {
           void onSendToValidator(payload);
         };
         return (
@@ -1756,7 +1761,7 @@ function CriticalPayloadPanel({
                   <Badge variant="destructive">Conflito forte com o Screener</Badge>
                 )}
                 {isReviewBefore && !isStrongConflict && (
-                  <Badge variant="outline" className="border-warning/60 text-warning">Revisar antes do Validator</Badge>
+                  <Badge variant="outline" className="border-warning/60 text-warning">Revisar antes de enviar</Badge>
                 )}
                 {highDivergence && (
                   <Badge variant="outline" className="border-warning/60 text-warning">
@@ -1764,10 +1769,21 @@ function CriticalPayloadPanel({
                   </Badge>
                 )}
                 <Badge variant="outline">{prep.readiness_status}</Badge>
-                <Button size="sm" onClick={handleSend} disabled={!handoffValidation.canSend}>
+                <Button size="sm" onClick={handleSendCritical}>
                   <Send className="mr-2 h-4 w-4" />
-                  Enviar esta para ASP Validator
+                  Enviar para Validação Crítica
                 </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleSendValidator}
+                  disabled={!handoffValidation.canSend}
+                  title="Fluxo em teste. O destino principal agora é a Validação Crítica."
+                >
+                  ASP Validator (teste)
+                </Button>
+              </div>
+            </div>
               </div>
             </div>
             {handoffValidation.warnings.length > 0 && (
