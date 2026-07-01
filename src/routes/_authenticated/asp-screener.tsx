@@ -918,6 +918,9 @@ function AspScreenerPage() {
               <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
                 Opportunity Score e uma triagem preliminar. Ainda nao considera starters, lineups, bullpens, clima, park factor ou validacao critica. Nao representa prognostico final.
               </div>
+              <div className="rounded-md border border-primary/40 bg-primary/10 p-3 text-sm text-primary">
+                Screener endurecido: linhas alternativas distantes e odds baixas sao limitadas a MONITORAR/PULAR.
+              </div>
               <div className="rounded-md border bg-background/50 p-3 text-sm text-muted-foreground">
                 A shortlist e uma triagem. O limite final de no maximo 3 prognosticos sera aplicado apos validacao critica.
               </div>
