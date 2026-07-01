@@ -81,9 +81,12 @@ function normalizeAiResult(value: Record<string, unknown>, context: Record<strin
     50;
   const adjustedFairOdd = readNumber(value.adjusted_fair_odd) ?? (adjustedProbability > 0 ? round(100 / adjustedProbability) : 2);
   const offeredOdd = readNumber(value.offered_odd) ?? manual.offered_odd;
+  // Sempre recalcular o EV ajustado a partir de probabilidade x odd oferecida.
+  // A IA pode divergir por escala; guardrail em ev-math avisa em dev se |Δ| > 0.25 p.p.
+  const suggestedEv = normalizeEvPercent(readNumber(value.adjusted_ev));
   const adjustedEv =
-    normalizeEvPercent(readNumber(value.adjusted_ev)) ??
-    (offeredOdd && adjustedProbability ? round((offeredOdd * (adjustedProbability / 100) - 1) * 100) : null);
+    assertEvConsistency(suggestedEv, adjustedProbability, offeredOdd ?? null, "asp-validator-ai") ??
+    calculateEvPercent(adjustedProbability, offeredOdd ?? null);
   return {
     decision: value.decision === "CONFIRMAR" ? "CONFIRMAR" : "PULAR",
     confidence: normalizeConfidence(value.confidence),
