@@ -3,6 +3,21 @@ import { requireSupabaseAuth } from "@/lib/auth-middleware-public";
 import { generateText, stepCountIs, tool } from "ai";
 import { z } from "zod";
 import type { AspValidatorAiResult } from "@/lib/asp-validator-ai.functions";
+import {
+  clampNumber,
+  extractManualPrediction,
+  normalizeConfidence,
+  normalizeEvPercent,
+  normalizeProbabilityPercent,
+  parseJsonObject,
+  readNumber,
+  readString,
+  readStringArray,
+  round,
+  sanitizeBlocks,
+} from "@/lib/validator/core";
+import { buildSystemPrompt } from "@/lib/validator/prompts";
+import { routeValidator } from "@/lib/validator/sport-router";
 
 const ValidatorOnlineInputSchema = z.object({
   context: z.record(z.string(), z.unknown()),
@@ -25,29 +40,6 @@ export type AspValidatorOnlineAiResult = AspValidatorAiResult & {
 const MAX_SEARCHES = 5;
 const MAX_SCRAPES = 3;
 
-const SYSTEM_PROMPT = `Voce e o ASP Validator com IA + Pesquisa. Valida prognosticos usando dados internos + pesquisa online complementar. Responda apenas JSON valido, sem markdown.
-
-Regras (obrigatorias):
-1. Decisao: somente CONFIRMAR ou PULAR. Em duvida relevante, PULAR. Proteja a banca.
-2. Previsao externa nao confirma sozinha; manual > structured_json > simulacao > online.
-3. Guardrail: CONFIRMAR somente se adjusted_ev >= 3 (em percentual; 3 = 3%, nunca 0.03) e adjusted_fair_odd < offered_odd. Caso contrario PULAR. adjusted_ev e source_ev SEMPRE em percentual (ex.: 5 = 5%, -2 = -2%). NUNCA enviar fracao decimal (0.05).
-4. Mercado no-vig e ANCORA prudencial, NAO veto automatico. Divergencia ASP vs no-vig >= 12 p.p. vira risk_flag "market_divergence" em alerts; >= 18 p.p. reduz a confianca em um nivel. PULAR automatico somente se (a) adjusted_ev < 3% E (b) conflito contextual relevante OU critical_flags fortes OU ausencia de suporte tecnico suficiente.
-5. Redacao de EV negativo: NUNCA escrever "odd ofertada ACIMA da odd justa". Correto: "A probabilidade ajustada de X% implica odd justa Y. Como a odd ofertada e Z, ela esta ABAIXO da odd justa, resultando em EV ajustado negativo."
-6. favorable_blocks e against_blocks devem usar frases humanas. PROIBIDO usar tokens brutos (source_ev, adjusted_ev, market_no_vig_probability, source_probability, online_results). Ex.: "EV original positivo no Screener", "Probabilidade ASP acima da linha de mercado", "Mercado no-vig contradiz a projecao", "EV ajustado negativo", "Pesquisa online reforca cenario contrario".
-7. Pesquisa online e complementar; ausencia de achados nao reprova sozinha. Use online_summary="Verificacao online sem achados relevantes..." quando nao houver fatos uteis. Falta de online so pesa contra quando mercado depende fortemente de escalacao/desfalque/motivacao/rotacao/calendario.
-8. Se simulation_json existir (status != not_applicable/failed), cite model, market_probability, fair_odd, ev e expected_total. Proibido "simulacao nao disponivel".
-9. Se structured_json tiver blocos populados, proibido "ausencia de dados estruturados".
-10. Multi-mercado: respeite structured_json.market_type. Nao aplique escanteios fora de market_type=corners.
-11. Mercados de escanteios: "+N"=Over N.5, "-N"=Under N.5. Use normalized_market_lines como evidencia primaria.
-12. PROIBIDO somar medias totais brutas. Use composicao tecnica: expected_home = media(mandante marcados casa, visitante sofridos fora); expected_away = media(visitante marcados fora, mandante sofridos casa); expected_total = soma.
-13. Over/Under (baseball/futebol totals): NAO usar "time selecionado" nem "recorde do time selecionado". Usar "tese do Over/Under", "perfil de runs", "starters favorecem Over/Under", "ataques favorecem Over/Under", "bullpen/parque/clima favorecem Over/Under". Para Totals MLB, considere fatores como: ERA alta/baixa, Last 7 GS, HR/9, BB/9, forma dos ataques, park factor, H2H recente.
-14. Diferencie fatos encontrados, nao-encontrados e inferencias.
-
-Use as ferramentas web_search/web_scrape para procurar: classificacao, momento, necessidade de resultado, rotacao, calendario, desfalques, importancia, mando, movimento de odds.
-
-Formato de resposta JSON:
-{"decision":"CONFIRMAR|PULAR","confidence":"Baixo|Medio|Alto","source_probability":number|null,"source_fair_odd":number|null,"offered_odd":number|null,"source_ev":number|null,"adjusted_probability":number,"adjusted_fair_odd":number,"adjusted_ev":number|null,"online_summary":string,"simulation_summary":string,"favorable_blocks":string[],"against_blocks":string[],"alerts":string[],"final_analysis":string,"relevant_findings":string[],"no_relevant_findings":string[],"contextual_alerts":string[]}`;
-
 export const validateAspValidatorWithOnlineAi = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => ValidatorOnlineInputSchema.parse(input))
@@ -67,11 +59,13 @@ export const validateAspValidatorWithOnlineAi = createServerFn({ method: "POST" 
     let scrapeCount = 0;
 
     const slim = slimAspValidatorContext(data.context);
-    const prompt = `Contexto consolidado (ordem: manual > structured_json > simulation_json > parecer IA anterior > pesquisa online). Use web_search/web_scrape de forma objetiva. Retorne JSON valido.\n\n${JSON.stringify(slim)}`;
+    const route = routeValidator(data.context);
+    const systemPrompt = buildSystemPrompt("online", route);
+    const prompt = `Contexto consolidado (esporte=${route.sport}, mercado=${route.market}; ordem: manual > structured_json > simulation_json > parecer IA anterior > pesquisa online). Use web_search/web_scrape de forma objetiva. Retorne JSON valido.\n\n${JSON.stringify(slim)}`;
 
     const { text } = await generateText({
       model: gateway("google/gemini-3-flash-preview"),
-      system: SYSTEM_PROMPT,
+      system: systemPrompt,
       prompt,
       stopWhen: stepCountIs(35),
       tools: {
@@ -129,10 +123,15 @@ function normalizeOnlineResult(
   searches: string[],
 ): AspValidatorOnlineAiResult {
   const manual = extractManualPrediction(context);
-  const adjustedProbability = clampNumber(normalizeProbabilityPercent(readNumber(value.adjusted_probability)), 0, 100) ?? manual.source_probability ?? 50;
+  const adjustedProbability =
+    clampNumber(normalizeProbabilityPercent(readNumber(value.adjusted_probability)), 0, 100) ??
+    manual.source_probability ??
+    50;
   const offeredOdd = readNumber(value.offered_odd) ?? manual.offered_odd;
   const adjustedFairOdd = readNumber(value.adjusted_fair_odd) ?? (adjustedProbability > 0 ? round(100 / adjustedProbability) : 2);
-  const adjustedEv = normalizeEvPercent(readNumber(value.adjusted_ev)) ?? (offeredOdd ? round((offeredOdd * (adjustedProbability / 100) - 1) * 100) : null);
+  const adjustedEv =
+    normalizeEvPercent(readNumber(value.adjusted_ev)) ??
+    (offeredOdd ? round((offeredOdd * (adjustedProbability / 100) - 1) * 100) : null);
   const onlineSummary =
     readString(value.online_summary) ||
     "Verificacao online sem achados relevantes. Nao ha noticia ou contexto externo suficiente para alterar a analise.";
@@ -154,7 +153,6 @@ function normalizeOnlineResult(
     simulation_summary: readString(value.simulation_summary) || "Simulacao nao disponivel ou nao conclusiva.",
     favorable_blocks: sanitizeBlocks(readStringArray(value.favorable_blocks)),
     against_blocks: sanitizeBlocks(readStringArray(value.against_blocks)),
-
     alerts,
     final_analysis: readString(value.final_analysis) || "IA + Pesquisa nao forneceu parecer detalhado.",
     analysis_context: buildAnalysisContext(context, sources, searches),
@@ -174,34 +172,12 @@ function normalizeOnlineResult(
   };
 }
 
-function parseJsonObject(text: string): Record<string, unknown> | null {
-  try {
-    return JSON.parse(text) as Record<string, unknown>;
-  } catch {
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) return null;
-    try {
-      return JSON.parse(match[0]) as Record<string, unknown>;
-    } catch {
-      return null;
-    }
-  }
-}
-
-function extractManualPrediction(context: Record<string, unknown>) {
-  const prediction = context.prediction && typeof context.prediction === "object" ? (context.prediction as Record<string, unknown>) : {};
-  return {
-    source_probability: readNumber(prediction.source_probability),
-    source_fair_odd: readNumber(prediction.source_fair_odd),
-    offered_odd: readNumber(prediction.offered_odd),
-    source_ev: readNumber(prediction.source_ev),
-  };
-}
-
 function buildAnalysisContext(context: Record<string, unknown>, sources: Array<{ title: string; url: string }>, searches: string[]): string {
   const usage = context.data_usage && typeof context.data_usage === "object" ? (context.data_usage as Record<string, unknown>) : {};
+  const route = routeValidator(context);
   return [
     "ASP Validator - IA + Pesquisa",
+    `Esporte detectado: ${route.sport} | Mercado detectado: ${route.market}`,
     `Usou OCR real: ${usage.used_ocr ? "sim" : "nao"}`,
     `Usou texto colado: ${usage.used_pasted_text ? "sim" : "nao"}`,
     `Usou JSON estruturado: ${usage.used_structured_json ? "sim" : "nao"}`,
@@ -210,83 +186,4 @@ function buildAnalysisContext(context: Record<string, unknown>, sources: Array<{
     `Fontes consultadas: ${sources.length}`,
     "Regras: pesquisa online e complementar; ausencia de achados nao reprova sozinha; em duvida relevante, PULAR; proibido somar medias brutas (ex.: 11.8 + 12.6).",
   ].join("\n");
-}
-
-
-function normalizeConfidence(value: unknown): "Baixo" | "Medio" | "Alto" {
-  const text = String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  if (text.includes("alto")) return "Alto";
-  if (text.includes("medio") || text.includes("moderado")) return "Medio";
-  return "Baixo";
-}
-
-function readNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const parsed = Number(value.replace("%", "").replace(",", ".").trim());
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
-function readString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function readStringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
-}
-
-// See asp-validator-ai.functions.ts for the same guard rationale.
-const RAW_TOKEN_PATTERN = /\b(source_ev|adjusted_ev|source_probability|adjusted_probability|market_no_vig_probability|market_no_vig|no_vig_probability|online_results|structured_json|simulation_json|fair_odd_original|probability_original|ev_original)\b/gi;
-
-function sanitizeBlocks(items: string[]): string[] {
-  const cleaned: string[] = [];
-  const seen = new Set<string>();
-  for (const raw of items) {
-    let text = String(raw).trim();
-    if (!text) continue;
-    const looksLikeTokenDump = /^[\s\-*]*[a-z_]+\s*[:=]\s*[-+\d.%]+\s*$/i.test(text);
-    if (looksLikeTokenDump && RAW_TOKEN_PATTERN.test(text)) continue;
-    text = text
-      .replace(/market_no_vig_probability/gi, "probabilidade no-vig do mercado")
-      .replace(/no_vig_probability/gi, "probabilidade no-vig do mercado")
-      .replace(/market_no_vig/gi, "mercado no-vig")
-      .replace(/source_probability/gi, "probabilidade da fonte")
-      .replace(/adjusted_probability/gi, "probabilidade ajustada")
-      .replace(/source_ev/gi, "EV da fonte")
-      .replace(/adjusted_ev/gi, "EV ajustado")
-      .replace(/online_results/gi, "pesquisa online")
-      .replace(/structured_json/gi, "dados estruturados")
-      .replace(/simulation_json/gi, "simulacao");
-    const key = text.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    cleaned.push(text);
-  }
-  return cleaned;
-}
-
-
-function clampNumber(value: number | null, min: number, max: number): number | null {
-  return value === null ? null : Math.max(min, Math.min(max, value));
-}
-
-function round(value: number, digits = 2): number {
-  const factor = 10 ** digits;
-  return Math.round(value * factor) / factor;
-}
-
-// Normaliza EV para percentual. Se a IA enviar fracao decimal (|x| < 1 e != 0),
-// converte para percentual multiplicando por 100. Caso ja venha em percentual, mantem.
-function normalizeEvPercent(value: number | null): number | null {
-  if (value === null || value === undefined || !Number.isFinite(value)) return null;
-  if (value !== 0 && Math.abs(value) < 1) return round(value * 100);
-  return round(value);
-}
-
-function normalizeProbabilityPercent(value: number | null): number | null {
-  if (value === null || value === undefined || !Number.isFinite(value)) return null;
-  if (value > 0 && value <= 1) return round(value * 100);
-  return round(value);
 }
