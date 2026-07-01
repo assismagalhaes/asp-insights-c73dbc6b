@@ -257,7 +257,10 @@ export function calculateMlbValidationReadinessScore(
   const isConflict = alignment.alignment_status === "conflicts_with_screener";
   const lowAlign = alignmentScore <= 35;
   const highDivergence = marketDivergencePP >= 15;
+  const veryHighDivergence = marketDivergencePP >= 18;
   const criticalFlagsCount = alignment.critical_flags.length;
+  const startersMissing =
+    !parsedContext.starting_pitchers.home.name || !parsedContext.starting_pitchers.away.name;
 
   if (isConflict) {
     adjScore = Math.min(adjScore, 55);
@@ -271,6 +274,17 @@ export function calculateMlbValidationReadinessScore(
   if (highDivergence) {
     adjConf = Math.min(adjConf, 55);
     postFlags.push("market_divergence_high");
+    // Sem contexto crítico completo (starters/lineups/park/clima),
+    // divergência >= 15 p.p. não pode aparecer como "pronto".
+    if (startersMissing) {
+      adjScore = Math.min(adjScore, 75);
+      score = Math.min(score, 79);
+    }
+  }
+  if (veryHighDivergence) {
+    adjScore = Math.min(adjScore, 70);
+    score = Math.min(score, 75);
+    postFlags.push("market_divergence_very_high");
   }
   if (highDivergence && isConflict) {
     adjScore = Math.min(adjScore, 50);
@@ -284,8 +298,8 @@ export function calculateMlbValidationReadinessScore(
   }
 
   let readinessStatus = getReadinessStatus(score);
-  // Nunca marcar como pronto quando há conflito forte com Screener.
-  if (isConflict && readinessStatus === "pronto_para_validator") {
+  // Nunca marcar como pronto quando há conflito forte ou divergência alta.
+  if ((isConflict || highDivergence) && readinessStatus === "pronto_para_validator") {
     readinessStatus = "revisar_antes_do_validator";
   }
 
@@ -301,8 +315,8 @@ export function calculateMlbValidationReadinessScore(
     readiness_status: readinessStatus,
     critical_questions: buildCriticalQuestions(opportunity),
     recommended_next_step: readinessStatus === "pronto_para_validator"
-      ? "Pacote pronto para copiar e revisar no Validator em etapa futura."
-      : "Revisar contexto colado e completar dados antes de enviar ao Validator em etapa futura.",
+      ? "Pacote pronto para revisão na Validação Crítica."
+      : "Contexto incompleto: revise manualmente antes de decidir na Validação Crítica.",
     raw_opportunity_score: rawScore,
     raw_confidence_score: rawConfidence,
     critical_adjusted_score: adjScore,
