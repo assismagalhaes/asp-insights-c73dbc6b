@@ -685,6 +685,9 @@ function zeroScoreComponents(): MlbOpportunityScoreComponents {
     data_quality_score: 0,
     base_status_coherence_score: 0,
     risk_penalty: 0,
+    raw_score: 0,
+    final_score: 0,
+    applied_penalties: [],
   };
 }
 
