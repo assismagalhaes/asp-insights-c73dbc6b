@@ -16,6 +16,7 @@ import {
   round,
   sanitizeBlocks,
 } from "@/lib/validator/core";
+import { assertEvConsistency, calculateEvPercent } from "@/lib/validator/ev-math";
 import { buildSystemPrompt } from "@/lib/validator/prompts";
 import { routeValidator } from "@/lib/validator/sport-router";
 
