@@ -48,6 +48,7 @@ import { getAiCalibrationSummary } from "@/lib/ai-learning";
 import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { ScreenerCriticalDraftPanel } from "@/components/screener-critical-draft-panel";
 
 export const Route = createFileRoute("/_authenticated/validacao")({
   head: () => ({ meta: [{ title: "Validação Crítica - ASP Insights" }] }),
