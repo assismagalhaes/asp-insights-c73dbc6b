@@ -439,6 +439,7 @@ function buildAlerts(input: {
   if (input.awayRating.missing_fields.length) alerts.push(`Standings incompletos para visitante: ${input.awayRating.missing_fields.join(", ")}`);
   if (input.candidateStatus === "monitorar") alerts.push("Edge pequeno contra mercado");
   if (Math.max(input.homeEv, input.awayEv) < 0.02) alerts.push("EV preliminar abaixo do corte minimo");
+  if (Math.max(input.homeEv, input.awayEv) >= 0.15) alerts.push("high_edge_without_pitchers: EV >= 15% sem considerar starters/bullpen");
   return alerts;
 }
 
