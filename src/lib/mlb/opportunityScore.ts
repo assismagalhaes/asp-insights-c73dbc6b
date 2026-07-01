@@ -258,10 +258,24 @@ export function applyMlbCorrelationGuard(opportunities: MlbUnifiedOpportunity[])
 
   const updated: MlbUnifiedOpportunity[] = [];
   for (const group of grouped.values()) {
-    const eligible = group
-      .filter((item) => item.priority_status === "ANALISAR")
+    const analisar = group.filter((item) => item.priority_status === "ANALISAR");
+    const eligible = analisar
+      .filter((item) => isEligibleForPrimary(item))
       .sort(compareOpportunityPriority);
-    const primary = eligible[0] ?? null;
+
+    // Rule: high_edge_without_pitchers deve ser preterido se houver outra oportunidade
+    // do mesmo jogo com linha principal e menor risco estrutural.
+    let primary = eligible[0] ?? null;
+    if (primary && isHighEdgeWithoutPitchers(primary)) {
+      const saferMain = eligible.find(
+        (item) =>
+          item.opportunity_id !== primary!.opportunity_id &&
+          item.is_main_line &&
+          !isHighEdgeWithoutPitchers(item) &&
+          item.risk_flags.length <= primary!.risk_flags.length,
+      );
+      if (saferMain) primary = saferMain;
+    }
 
     for (const opportunity of group) {
       if (!primary || opportunity.opportunity_id === primary.opportunity_id) {
@@ -286,9 +300,21 @@ export function applyMlbCorrelationGuard(opportunities: MlbUnifiedOpportunity[])
     }
   }
 
-  const rankedPrimary = updated
+  const primaryRanked = updated
     .filter((item) => item.is_primary_shortlist)
-    .sort(compareOpportunityPriority)
+    .sort(compareOpportunityPriority);
+
+  // Rule: fair_odd < 1.35 não pode ocupar top 3 da shortlist.
+  const top: MlbUnifiedOpportunity[] = [];
+  const deferred: MlbUnifiedOpportunity[] = [];
+  for (const item of primaryRanked) {
+    if (top.length < 3 && (item.fair_odd ?? Number.POSITIVE_INFINITY) < 1.35) {
+      deferred.push(item);
+    } else {
+      top.push(item);
+    }
+  }
+  const rankedPrimary = [...top, ...deferred]
     .slice(0, 10)
     .map((item, index) => ({ ...item, rank: index + 1 }));
   const primaryIds = new Map(rankedPrimary.map((item) => [item.opportunity_id, item]));
@@ -296,6 +322,22 @@ export function applyMlbCorrelationGuard(opportunities: MlbUnifiedOpportunity[])
   return updated
     .map((item) => primaryIds.get(item.opportunity_id) ?? { ...item, is_primary_shortlist: false, rank: null })
     .sort(compareOpportunityDisplay);
+}
+
+function isEligibleForPrimary(opportunity: MlbUnifiedOpportunity): boolean {
+  // Totals alternate com distância > 1.0 excluído da shortlist principal.
+  if (
+    opportunity.market_family === "totals" &&
+    opportunity.line_type === "alternate" &&
+    (opportunity.distance_from_main_line ?? 0) > 1.0
+  ) {
+    return false;
+  }
+  // Handicap alternate nunca é primary (salvo configuração manual — não suportada).
+  if (opportunity.market_family === "handicap" && opportunity.line_type === "alternate") {
+    return false;
+  }
+  return true;
 }
 
 export function buildMlbOpportunityShortlist(params: {
