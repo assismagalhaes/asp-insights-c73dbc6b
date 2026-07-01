@@ -277,7 +277,14 @@ async function scraperFormRequest(path: string, formData: FormData) {
         status: res.status,
         path,
         response: payload,
+        apiKeyLen: apiKey.length,
+        apiKeyPrefix: apiKey.substring(0, 4),
       });
+      if (res.status === 401 || res.status === 403) {
+        throw new Error(
+          `API key da VM inválida ou sem permissão (HTTP ${res.status}) ao enviar arquivos. Atualize o secret SCRAPER_API_KEY em Backend → Secrets com uma chave válida da VM (${baseUrl}).`,
+        );
+      }
       throw new Error(pickErrorMessage(payload) ?? `Erro HTTP ${res.status} ao enviar arquivos para a VM.`);
     }
     return payload;
