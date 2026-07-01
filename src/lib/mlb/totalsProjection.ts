@@ -10,8 +10,8 @@ import type {
 } from "@/types/mlbProjections";
 
 export const MLB_TOTALS_THRESHOLDS = {
-  analyzeEv: 0.05,
-  analyzeProbGap: 0.04,
+  analyzeEv: 0.06,
+  analyzeProbGap: 0.05,
   analyzeRunGap: 0.70,
   monitorEv: 0.02,
   monitorProbGap: 0.025,
@@ -19,8 +19,10 @@ export const MLB_TOTALS_THRESHOLDS = {
   minOdd: 1.55,
   maxOdd: 2.60,
   maxAnalyzeDistanceFromMainLine: 1.0,
+  maxMonitorDistanceFromMainLine: 1.5,
+  minAnalyzeFairOdd: 1.35,
   maxAnalyzeOdd: 2.80,
-  minAnalyzeOdd: 1.50,
+  minAnalyzeOdd: 1.55,
 } satisfies MlbTotalsProjectionConfig["thresholds"];
 
 export const MLB_TOTALS_PROJECTION_CONFIG: MlbTotalsProjectionConfig = {
