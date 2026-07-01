@@ -24,6 +24,7 @@ import {
   validateAspValidatorUpload,
 } from "@/lib/asp-validator-upload-guard";
 import { useConfiguracao } from "@/lib/db";
+import { todayBR } from "@/lib/date-br";
 import {
   buildMlbValidatorImportedContextText,
   clearMlbValidatorHandoffDraft,
