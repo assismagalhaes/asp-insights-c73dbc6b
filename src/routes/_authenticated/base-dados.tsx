@@ -212,6 +212,7 @@ function BaseDadosPage() {
   const [seasonLeague, setSeasonLeague] = useState("MLB");
   const [seasonOriginYear, setSeasonOriginYear] = useState("");
   const [seasonTargetYear, setSeasonTargetYear] = useState("");
+  const [scraperUnavailable, setScraperUnavailable] = useState(false);
 
   const leagues = sport ? LEAGUES_BY_SPORT[sport] : [];
   const isBaseballMlb = sport === "baseball" && league === "MLB";
