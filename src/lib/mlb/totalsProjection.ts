@@ -640,12 +640,24 @@ function buildTotalReasons(input: {
   const isOver = input.recommendationSide === "Over";
   const offeredOdd = isOver ? input.overOdd : input.underOdd;
   const fairOdd = isOver ? input.overFairOdd : input.underFairOdd;
+  const homeOffenseHigh = input.home != null && input.home.offense_index > 1;
+  const awayOffenseHigh = input.away != null && input.away.offense_index > 1;
+  const homeOffenseLow = input.home != null && input.home.offense_index < 1;
+  const awayOffenseLow = input.away != null && input.away.offense_index < 1;
+  const defenseWeakForHome = input.away != null && input.away.opponent_defense_index > 1;
+  const defenseWeakForAway = input.home != null && input.home.opponent_defense_index > 1;
+  const defenseStrongForHome = input.away != null && input.away.opponent_defense_index < 1;
+  const defenseStrongForAway = input.home != null && input.home.opponent_defense_index < 1;
   const reasons = [
     isOver ? "Total projetado ASP acima da linha de mercado" : "Total projetado ASP abaixo da linha de mercado",
-    input.home && input.home.offense_index > 1 ? "Ataque mandante acima da media da liga" : null,
-    input.away && input.away.offense_index > 1 ? "Ataque visitante acima da media da liga" : null,
-    input.away && input.away.opponent_defense_index > 1 ? "Defesa mandante permite corridas acima da media" : null,
-    input.home && input.home.opponent_defense_index > 1 ? "Defesa visitante permite corridas acima da media" : null,
+    isOver && homeOffenseHigh ? "Ataque mandante acima da media da liga" : null,
+    isOver && awayOffenseHigh ? "Ataque visitante acima da media da liga" : null,
+    isOver && defenseWeakForHome ? "Defesa visitante permite corridas acima da media" : null,
+    isOver && defenseWeakForAway ? "Defesa mandante permite corridas acima da media" : null,
+    !isOver && homeOffenseLow ? "Ataque mandante abaixo da media da liga" : null,
+    !isOver && awayOffenseLow ? "Ataque visitante abaixo da media da liga" : null,
+    !isOver && defenseStrongForHome ? "Defesa visitante segura corridas abaixo da media" : null,
+    !isOver && defenseStrongForAway ? "Defesa mandante segura corridas abaixo da media" : null,
     Math.abs(input.totalGapVsLine) >= MLB_TOTALS_THRESHOLDS.monitorRunGap ? "Gap de corridas relevante contra a linha" : null,
     fairOdd != null && offeredOdd > fairOdd ? "Odd ofertada acima da odd justa ASP" : null,
   ].filter(Boolean) as string[];
