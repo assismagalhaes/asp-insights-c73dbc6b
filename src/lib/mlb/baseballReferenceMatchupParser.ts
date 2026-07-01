@@ -1,8 +1,11 @@
 import type {
   MlbBaseballReferenceMatchupContext,
+  MlbHeadToHeadGame,
   MlbParsedStartingPitcher,
   MlbParsedTeamSummary,
   MlbParsedWinLossRecord,
+  MlbSeasonSeriesCompletedGame,
+  MlbSeasonSeriesUpcomingGame,
 } from "@/types/mlbCriticalValidation";
 import { matchMlbTeamName } from "@/utils/mlbTeamNameMap";
 
@@ -97,7 +100,7 @@ export function parseBaseballReferenceMatchupText(
 
   const context: MlbBaseballReferenceMatchupContext = {
     source: "baseball_reference_matchup_text",
-    parser_version: "1.1.0",
+    parser_version: "1.2.0",
     raw_text: rawText,
     parsed_at: new Date().toISOString(),
     teams: {
@@ -112,8 +115,7 @@ export function parseBaseballReferenceMatchupText(
       away_last_10: [],
       home_last_10: [],
     },
-    season_series: extractSeasonSeries(text),
-    head_to_head: extractHeadToHead(text),
+    ...extractSeasonSeriesAndHeadToHead(text),
     data_quality: {
       parsed_fields_count: 0,
       missing_fields: [],
@@ -190,11 +192,11 @@ export function extractMlbRecentGames() {
 }
 
 export function extractMlbHeadToHead(rawText: string) {
-  return extractHeadToHead(normalizeRawText(rawText));
+  return extractSeasonSeriesAndHeadToHead(normalizeRawText(rawText)).head_to_head;
 }
 
 export function extractMlbSeasonSeries(rawText: string) {
-  return extractSeasonSeries(normalizeRawText(rawText));
+  return extractSeasonSeriesAndHeadToHead(normalizeRawText(rawText)).season_series;
 }
 
 export function parseWinLossRecord(value: string | null | undefined): MlbParsedWinLossRecord | null {
@@ -591,14 +593,180 @@ function extractTeamBlock(text: string, teamName: string, nextTeamName: string |
   return next > 0 ? rest.slice(0, teamName.length + next) : rest;
 }
 
-function extractSeasonSeries(text: string) {
-  const lines = text.split("\n").filter((line) => /season series|series|@\s*[A-Z]{2,3}|[A-Z]{2,3}\s*@/i.test(line)).slice(0, 12);
-  return { games: lines, summary: lines.find((line) => /season series/i.test(line)) ?? null };
+const DATE_LINE_REGEX = /^([A-Za-z]{3}),\s*([A-Za-z]{3})\s+(\d{1,2}),\s*(20\d{2})\b/;
+const TIME_TOKEN_REGEX = /^\d{1,2}:\d{2}\s*(?:am|pm)?$/i;
+const YEARLY_LINE_REGEX = /^(20\d{2}|all[-\s]?time)\b[\s\S]*$/i;
+
+interface ParsedGameLine {
+  kind: "completed" | "upcoming";
+  date: string;
+  away_team: string | null;
+  home_team: string | null;
+  away_score: number | null;
+  home_score: number | null;
+  time: string | null;
+  extra_innings: boolean;
+  raw_line: string;
 }
 
-function extractHeadToHead(text: string) {
-  const lines = text.split("\n").filter((line) => /head.?to.?head|all-time|leads|won|lost/i.test(line)).slice(0, 12);
-  return { games: lines, summary: lines.find((line) => /all-time|leads/i.test(line)) ?? null };
+function parseGameLine(line: string): ParsedGameLine | null {
+  const dateMatch = line.match(DATE_LINE_REGEX);
+  if (!dateMatch) return null;
+  const date = dateMatch[0];
+  const rest = line.slice(dateMatch[0].length);
+  const tokens = rest
+    .split("|")
+    .flatMap((chunk) => chunk.trim().split(/\s+/))
+    .filter(Boolean);
+  const extraInnings = /extra\s*innings|\(\s*\d+\s*innings?\s*\)/i.test(line);
+  const timeIdx = tokens.findIndex((t) => TIME_TOKEN_REGEX.test(t));
+
+  if (timeIdx >= 0) {
+    const time = tokens[timeIdx];
+    const teamTokens = tokens.filter((_, i) => i !== timeIdx).filter((t) => /^@?[A-Za-z]{2,4}$/.test(t));
+    if (teamTokens.length < 2) return null;
+    const [t1, t2] = teamTokens;
+    const t1Home = t1.startsWith("@");
+    const t2Home = t2.startsWith("@");
+    const home = t1Home ? t1.slice(1) : t2Home ? t2.slice(1) : t2;
+    const away = t1Home ? t2.replace(/^@/, "") : t1.replace(/^@/, "");
+    return {
+      kind: "upcoming", date,
+      away_team: away, home_team: home,
+      away_score: null, home_score: null,
+      time, extra_innings: extraInnings, raw_line: line,
+    };
+  }
+
+  // Completed: expect (TEAM, SCORE) pairs where one team is prefixed with '@'
+  const pairs: Array<{ team: string; score: number; isHome: boolean }> = [];
+  for (let i = 0; i < tokens.length - 1; i += 1) {
+    const t = tokens[i];
+    const s = tokens[i + 1];
+    if (/^@?[A-Za-z]{2,4}$/.test(t) && /^\d+$/.test(s)) {
+      pairs.push({ team: t.replace(/^@/, ""), score: Number(s), isHome: t.startsWith("@") });
+      i += 1;
+    }
+  }
+  if (pairs.length !== 2) return null;
+  const home = pairs.find((p) => p.isHome);
+  const away = pairs.find((p) => !p.isHome);
+  if (!home || !away) return null;
+  return {
+    kind: "completed", date,
+    away_team: away.team, home_team: home.team,
+    away_score: away.score, home_score: home.score,
+    time: null, extra_innings: extraInnings, raw_line: line,
+  };
+}
+
+function extractSeasonSeriesAndHeadToHead(text: string) {
+  const completed: MlbSeasonSeriesCompletedGame[] = [];
+  const upcoming: MlbSeasonSeriesUpcomingGame[] = [];
+  const h2h: MlbHeadToHeadGame[] = [];
+  const yearly: Record<string, string> = {};
+  let ssSummary: string | null = null;
+  let h2hSummary: string | null = null;
+
+  const rawLines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  type Mode = "none" | "ss" | "h2h";
+  let mode: Mode = "none";
+
+  for (const line of rawLines) {
+    if (/^last\s*10\s*games?\s*head[- ]?to[- ]?head\b/i.test(line)) {
+      mode = "h2h";
+      h2hSummary = h2hSummary ?? line;
+      continue;
+    }
+    if (/^season\s*series\b/i.test(line)) {
+      mode = "ss";
+      ssSummary = ssSummary ?? line;
+      continue;
+    }
+    // Yearly summary lines belong to season_series.yearly_summary regardless of mode
+    const yearlyMatch = line.match(YEARLY_LINE_REGEX);
+    if (yearlyMatch && !DATE_LINE_REGEX.test(line)) {
+      const rawKey = yearlyMatch[1];
+      const key = /^all/i.test(rawKey) ? "All-time" : rawKey;
+      yearly[key] = line;
+      continue;
+    }
+    if (mode === "none") continue;
+    if (!DATE_LINE_REGEX.test(line)) continue;
+    const parsed = parseGameLine(line);
+    if (!parsed) continue;
+
+    if (mode === "ss") {
+      if (parsed.kind === "upcoming") {
+        upcoming.push({
+          date: parsed.date,
+          away_team: parsed.away_team,
+          home_team: parsed.home_team,
+          time: parsed.time,
+          is_completed: false,
+          raw_line: parsed.raw_line,
+        });
+      } else {
+        const winner =
+          parsed.home_score != null && parsed.away_score != null
+            ? parsed.home_score > parsed.away_score ? parsed.home_team : parsed.away_team
+            : null;
+        const loser =
+          parsed.home_score != null && parsed.away_score != null
+            ? parsed.home_score > parsed.away_score ? parsed.away_team : parsed.home_team
+            : null;
+        completed.push({
+          date: parsed.date,
+          away_team: parsed.away_team,
+          home_team: parsed.home_team,
+          away_score: parsed.away_score,
+          home_score: parsed.home_score,
+          winner_team: winner,
+          loser_team: loser,
+          is_completed: true,
+          raw_line: parsed.raw_line,
+        });
+      }
+    } else if (mode === "h2h") {
+      if (parsed.kind !== "completed") continue; // upcoming can't be H2H
+      if (h2h.length >= 10) continue;
+      const winner =
+        parsed.home_score != null && parsed.away_score != null
+          ? parsed.home_score > parsed.away_score ? parsed.home_team : parsed.away_team
+          : null;
+      const loser =
+        parsed.home_score != null && parsed.away_score != null
+          ? parsed.home_score > parsed.away_score ? parsed.away_team : parsed.home_team
+          : null;
+      h2h.push({
+        date: parsed.date,
+        away_team: parsed.away_team,
+        home_team: parsed.home_team,
+        away_score: parsed.away_score,
+        home_score: parsed.home_score,
+        winner,
+        loser,
+        extra_innings: parsed.extra_innings,
+        winning_pitcher: null,
+        losing_pitcher: null,
+        save_pitcher: null,
+        raw_line: parsed.raw_line,
+      });
+    }
+  }
+
+  return {
+    season_series: {
+      completed_games: completed,
+      upcoming_games: upcoming,
+      yearly_summary: yearly,
+      summary: ssSummary,
+    },
+    head_to_head: {
+      last_10_games: h2h,
+      summary: h2hSummary,
+    },
+  };
 }
 
 function isPitcherValid(p: MlbParsedStartingPitcher): boolean {
@@ -654,8 +822,8 @@ function calculateParserQuality(context: MlbBaseballReferenceMatchupContext) {
   }
 
   // H2H / season series: up to +5
-  if (context.season_series.games.length > 0) score += 3;
-  if (context.head_to_head.games.length > 0) score += 2;
+  if (context.season_series.completed_games.length + context.season_series.upcoming_games.length > 0) score += 3;
+  if (context.head_to_head.last_10_games.length > 0) score += 2;
 
   let confidence = clamp(score, 0, 100);
 

@@ -85,9 +85,45 @@ export interface MlbParsedRecentGame {
   standings_after: string | null;
 }
 
+export interface MlbSeasonSeriesCompletedGame {
+  date: string | null;
+  away_team: string | null;
+  home_team: string | null;
+  away_score: number | null;
+  home_score: number | null;
+  winner_team: string | null;
+  loser_team: string | null;
+  is_completed: true;
+  raw_line: string;
+}
+
+export interface MlbSeasonSeriesUpcomingGame {
+  date: string | null;
+  away_team: string | null;
+  home_team: string | null;
+  time: string | null;
+  is_completed: false;
+  raw_line: string;
+}
+
+export interface MlbHeadToHeadGame {
+  date: string | null;
+  away_team: string | null;
+  home_team: string | null;
+  away_score: number | null;
+  home_score: number | null;
+  winner: string | null;
+  loser: string | null;
+  extra_innings: boolean;
+  winning_pitcher: string | null;
+  losing_pitcher: string | null;
+  save_pitcher: string | null;
+  raw_line: string;
+}
+
 export interface MlbBaseballReferenceMatchupContext {
   source: "baseball_reference_matchup_text";
-  parser_version: "1.0.0" | "1.1.0";
+  parser_version: "1.0.0" | "1.1.0" | "1.2.0";
   raw_text: string;
   parsed_at: string;
   teams: {
@@ -103,11 +139,13 @@ export interface MlbBaseballReferenceMatchupContext {
     home_last_10: MlbParsedRecentGame[];
   };
   season_series: {
-    games: string[];
+    completed_games: MlbSeasonSeriesCompletedGame[];
+    upcoming_games: MlbSeasonSeriesUpcomingGame[];
+    yearly_summary: Record<string, string>;
     summary: string | null;
   };
   head_to_head: {
-    games: string[];
+    last_10_games: MlbHeadToHeadGame[];
     summary: string | null;
   };
   data_quality: {
