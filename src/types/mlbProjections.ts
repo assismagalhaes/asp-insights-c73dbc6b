@@ -393,7 +393,7 @@ export interface MlbOpportunityScoreComponents {
 
 export interface MlbCriticalValidationContext {
   readiness_status: "pronto_para_validator" | "revisar_antes_do_validator" | "contexto_incompleto" | "nao_recomendado_para_validator";
-  alignment_status: "supports_screener" | "mixed" | "conflicts_with_screener" | "insufficient_context";
+  alignment_status: "supports_screener" | "mixed" | "mixed_to_conflicting" | "conflicts_with_screener" | "insufficient_context";
 }
 
 export interface MlbUnifiedOpportunity {
