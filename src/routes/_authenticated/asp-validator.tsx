@@ -1195,7 +1195,7 @@ function AspValidatorPage() {
     try {
       const payload = {
         result_status: status,
-        result_settled_at: resultForm.result_settled_at || new Date().toISOString().slice(0, 10),
+        result_settled_at: resultForm.result_settled_at || todayBR(),
         final_score: resultForm.final_score || null,
         result_notes: resultForm.result_notes || null,
         stake_units: selectedRecord.decision === "PULAR" ? 1 : stake,
