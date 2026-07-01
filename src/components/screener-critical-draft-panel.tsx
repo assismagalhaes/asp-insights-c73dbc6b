@@ -71,7 +71,6 @@ export function ScreenerCriticalDraftPanel({ onApplied }: { onApplied?: () => vo
 
   const callIA = useServerFn(analisarValidacao);
   const callIAOnline = useServerFn(analisarValidacaoOnline);
-  const createProg = useCreatePrognostico();
   const createVal = useCreateValidacao();
 
   useEffect(() => {
