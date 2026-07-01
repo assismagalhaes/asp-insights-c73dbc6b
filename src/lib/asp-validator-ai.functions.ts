@@ -137,7 +137,7 @@ function buildAnalysisContext(context: Record<string, unknown>, aiParsed: boolea
   const route = routeValidator(context);
   return [
     "ASP Validator - Validacao IA consolidada",
-    `Esporte detectado: ${route.sport} | Mercado detectado: ${route.market}`,
+    `Esporte detectado: ${route.sport} | Mercado detectado: ${route.marketDetected}`,
     `Resposta IA interpretada: ${aiParsed ? "sim" : "nao"}`,
     `Usou OCR: ${usage.used_ocr ? "sim" : "nao"}`,
     `Usou JSON estruturado: ${usage.used_structured_json ? "sim" : "nao"}`,
