@@ -62,7 +62,9 @@ export const validateAspValidatorWithOnlineAi = createServerFn({ method: "POST" 
     const slim = slimAspValidatorContext(data.context);
     const route = routeValidator(data.context);
     const systemPrompt = buildSystemPrompt("online", route);
-    const prompt = `Contexto consolidado (esporte=${route.sport}, mercado=${route.market}; ordem: manual > structured_json > simulation_json > parecer IA anterior > pesquisa online). Use web_search/web_scrape de forma objetiva. Retorne JSON valido.\n\n${JSON.stringify(slim)}`;
+    const queryHint = buildResearchQueryHint(data.context);
+    const prompt = `Contexto consolidado (esporte=${route.sport}, mercado=${route.marketDetected}; ordem: manual > structured_json > simulation_json > parecer IA anterior > pesquisa online). Use web_search/web_scrape de forma objetiva. Priorize fontes oficiais (MLB, ESPN, Baseball Savant, Baseball-Reference) e evite fontes sociais (Reddit, X, Instagram) como achado principal. Query sugerida: "${queryHint}". Retorne JSON valido.\n\n${JSON.stringify(slim)}`;
+
 
     const { text } = await generateText({
       model: gateway("google/gemini-3-flash-preview"),
