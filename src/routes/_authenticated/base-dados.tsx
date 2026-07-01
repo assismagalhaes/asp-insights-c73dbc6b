@@ -252,6 +252,7 @@ function BaseDadosPage() {
     getYears({ data: { esporte: apiSport, liga: apiLeague } })
       .then(async (payload) => {
         if (cancelled) return;
+        setScraperUnavailable(false);
         const parsed = parseYears(payload);
         const resolved = isBasketball ? await hydrateYearCounts(parsed, apiSport, apiLeague) : parsed;
         if (cancelled) return;
@@ -262,7 +263,15 @@ function BaseDadosPage() {
         setYear(defaultYear ? String(defaultYear) : "");
         if (!parsed.length) toast.warning(`A VM respondeu, mas nao retornou anos de base ${league}.`);
       })
-      .catch((e) => toast.error(formatError(e)))
+      .catch((e) => {
+        const msg = formatError(e);
+        if (isScraperUnavailableError(msg)) {
+          setScraperUnavailable(true);
+        } else {
+          toast.error(msg);
+        }
+      })
+
       .finally(() => {
         if (!cancelled) setBusy(null);
       });
