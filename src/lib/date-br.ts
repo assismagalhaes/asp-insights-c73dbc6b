@@ -58,7 +58,7 @@ export function formatBR(value: string | Date | null | undefined): string {
 }
 
 // Aceita "dd/MM/yyyy" (ou "dd-MM-yyyy") e devolve "YYYY-MM-DD". Retorna null se inválido.
-export function parseBrazilianDate(text: string | null | undefined): string | null {
+export function parseBrazilianDate(text: unknown): string | null {
   if (!text) return null;
   const trimmed = String(text).trim();
   const m = trimmed.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
