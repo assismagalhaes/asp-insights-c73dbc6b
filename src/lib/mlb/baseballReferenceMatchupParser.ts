@@ -115,8 +115,7 @@ export function parseBaseballReferenceMatchupText(
       away_last_10: [],
       home_last_10: [],
     },
-    season_series: extractSeasonSeries(text),
-    head_to_head: extractHeadToHead(text),
+    ...extractSeasonSeriesAndHeadToHead(text),
     data_quality: {
       parsed_fields_count: 0,
       missing_fields: [],
