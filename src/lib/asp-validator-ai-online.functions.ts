@@ -152,8 +152,9 @@ function normalizeOnlineResult(
     adjusted_ev: adjustedEv,
     online_summary: onlineSummary,
     simulation_summary: readString(value.simulation_summary) || "Simulacao nao disponivel ou nao conclusiva.",
-    favorable_blocks: readStringArray(value.favorable_blocks),
-    against_blocks: readStringArray(value.against_blocks),
+    favorable_blocks: sanitizeBlocks(readStringArray(value.favorable_blocks)),
+    against_blocks: sanitizeBlocks(readStringArray(value.against_blocks)),
+
     alerts,
     final_analysis: readString(value.final_analysis) || "IA + Pesquisa nao forneceu parecer detalhado.",
     analysis_context: buildAnalysisContext(context, sources, searches),
@@ -235,6 +236,37 @@ function readString(value: unknown): string {
 function readStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
 }
+
+// See asp-validator-ai.functions.ts for the same guard rationale.
+const RAW_TOKEN_PATTERN = /\b(source_ev|adjusted_ev|source_probability|adjusted_probability|market_no_vig_probability|market_no_vig|no_vig_probability|online_results|structured_json|simulation_json|fair_odd_original|probability_original|ev_original)\b/gi;
+
+function sanitizeBlocks(items: string[]): string[] {
+  const cleaned: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of items) {
+    let text = String(raw).trim();
+    if (!text) continue;
+    const looksLikeTokenDump = /^[\s\-*]*[a-z_]+\s*[:=]\s*[-+\d.%]+\s*$/i.test(text);
+    if (looksLikeTokenDump && RAW_TOKEN_PATTERN.test(text)) continue;
+    text = text
+      .replace(/market_no_vig_probability/gi, "probabilidade no-vig do mercado")
+      .replace(/no_vig_probability/gi, "probabilidade no-vig do mercado")
+      .replace(/market_no_vig/gi, "mercado no-vig")
+      .replace(/source_probability/gi, "probabilidade da fonte")
+      .replace(/adjusted_probability/gi, "probabilidade ajustada")
+      .replace(/source_ev/gi, "EV da fonte")
+      .replace(/adjusted_ev/gi, "EV ajustado")
+      .replace(/online_results/gi, "pesquisa online")
+      .replace(/structured_json/gi, "dados estruturados")
+      .replace(/simulation_json/gi, "simulacao");
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    cleaned.push(text);
+  }
+  return cleaned;
+}
+
 
 function clampNumber(value: number | null, min: number, max: number): number | null {
   return value === null ? null : Math.max(min, Math.min(max, value));
