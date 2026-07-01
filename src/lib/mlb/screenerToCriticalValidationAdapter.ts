@@ -135,6 +135,15 @@ function buildImportedContextSummary(payload: MlbPreparedCriticalValidationPaylo
     `Readiness: ${payload.validation_preparation.readiness_status}`,
     `Próximo passo recomendado: ${payload.validation_preparation.recommended_next_step}`,
   ];
+  lines.push(
+    "",
+    "[STARTERS]",
+    `Mandante (${payload.game.home_team}): ${formatStarterLine(homeStarter)}`,
+    `Visitante (${payload.game.away_team}): ${formatStarterLine(awayStarter)}`,
+    "",
+  );
+  const _sections: [string, string[]][] = [];
+  void _sections;
   const sections: [string, string[]][] = [
     ["Fatores de suporte", payload.context_alignment.supporting_factors],
     ["Fatores de conflito", payload.context_alignment.conflicting_factors],
