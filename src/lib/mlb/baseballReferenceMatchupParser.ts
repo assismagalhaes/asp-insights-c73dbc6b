@@ -288,10 +288,19 @@ interface PitcherCandidate {
   season_record: MlbParsedWinLossRecord | null;
   displayed_era: number | null;
   block: string;
+  absoluteIndex: number;
 }
 
 function extractPitcherCandidates(text: string): PitcherCandidate[] {
   const lines = text.split("\n");
+  // Precompute absolute char index at the start of each line.
+  const lineOffsets: number[] = [];
+  let offset = 0;
+  for (const line of lines) {
+    lineOffsets.push(offset);
+    offset += line.length + 1; // +1 for the "\n"
+  }
+
   const candidates: Array<PitcherCandidate & { startIndex: number }> = [];
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i].trim();
@@ -306,10 +315,11 @@ function extractPitcherCandidates(text: string): PitcherCandidate[] {
       season_record: parseWinLossRecord(match[5]),
       displayed_era: toDecimal(match[6]),
       block: "",
+      absoluteIndex: lineOffsets[i] ?? 0,
       startIndex: i,
     });
   }
-  // Build blocks: from this pitcher line until next pitcher line
+  // Build blocks: from this pitcher line until next pitcher line (max 2).
   return candidates.slice(0, 2).map((cand, idx) => {
     const end = candidates[idx + 1]?.startIndex ?? Math.min(lines.length, cand.startIndex + 40);
     const block = lines.slice(cand.startIndex, end).join("\n");
@@ -318,6 +328,7 @@ function extractPitcherCandidates(text: string): PitcherCandidate[] {
     return { ...rest, block };
   });
 }
+
 
 function cleanPitcherName(raw: string): string {
   // Remove leading garbage like "gb ", "up ", or standings prefixes
