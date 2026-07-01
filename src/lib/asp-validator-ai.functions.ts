@@ -67,7 +67,7 @@ export const validateAspValidatorWithAi = createServerFn({ method: "POST" })
       });
       const parsed = parseJsonObject(text);
       if (!parsed) return fallback;
-      return normalizeAiResult(parsed, data.context);
+      return enforceHardGuardrails(normalizeAiResult(parsed, data.context), data.context, route);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha desconhecida ao chamar IA.";
       return buildFallbackResult(data.context, message);
