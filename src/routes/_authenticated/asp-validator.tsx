@@ -394,24 +394,28 @@ function AspValidatorPage() {
   const applyImportedHandoffToForm = (handoff: MlbValidatorHandoffPayload, silent = false) => {
     const prefill = handoff.validator_prefill;
     const importedContext = buildMlbValidatorImportedContextText(handoff);
-    setForm((prev) => ({
-      ...prev,
-      sport: prefill.sport,
-      source_platform: prefill.source_platform,
-      league: prefill.league,
-      match_date: prefill.event_date ?? prev.match_date,
-      home_team: prefill.home_team,
-      away_team: prefill.away_team,
-      market: prefill.market,
-      pick: prefill.pick ?? prev.pick,
-      line: prefill.line == null ? prev.line : String(prefill.line),
-      offered_odd: numberToInput(prefill.odd),
-      source_probability: percentToInput(prefill.model_probability),
-      source_ev: percentToInput(prefill.ev),
-      user_context: prev.user_context.trim()
-        ? `${importedContext}\n\nContexto adicional manual:\n${prev.user_context}`
-        : importedContext,
-    }));
+    setForm((prev) => {
+      const manualOnly = extractManualOnlyContext(prev.user_context);
+      const nextContext = manualOnly
+        ? `${importedContext}\n\nContexto adicional manual:\n${manualOnly}`
+        : importedContext;
+      return {
+        ...prev,
+        sport: prefill.sport,
+        source_platform: prefill.source_platform,
+        league: prefill.league,
+        match_date: prefill.event_date ?? prev.match_date,
+        home_team: prefill.home_team,
+        away_team: prefill.away_team,
+        market: prefill.market,
+        pick: prefill.pick ?? prev.pick,
+        line: prefill.line == null ? prev.line : String(prefill.line),
+        offered_odd: numberToInput(prefill.odd),
+        source_probability: percentToInput(prefill.model_probability),
+        source_ev: percentToInput(prefill.ev),
+        user_context: nextContext,
+      };
+    });
     if (!silent) {
       toast.success("Dados importados aplicados ao formulario. Revise antes de validar.");
     }
