@@ -111,7 +111,12 @@ export function sanitizeBlocks(items: string[]): string[] {
       .replace(/adjusted_ev/gi, "EV ajustado")
       .replace(/online_results/gi, "pesquisa online")
       .replace(/structured_json/gi, "dados estruturados")
-      .replace(/simulation_json/gi, "simulacao");
+      .replace(/simulation_json/gi, "simulacao")
+      // Typos comuns / labels ruins vindos da IA
+      .replace(/\bStartes\b/g, "Starters")
+      .replace(/taxa de censores base por bolas/gi, "walks concedidos (BB/9)")
+      .replace(/censores base por bolas/gi, "walks concedidos (BB/9)")
+      .replace(/concessao de bases por bolas/gi, "walks concedidos (BB/9)");
     const key = text.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
