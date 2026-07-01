@@ -657,19 +657,23 @@ function buildTotalAlerts(input: {
   candidateStatus: MlbProjectionCandidateStatus;
   distanceFromMainLine: number | null;
   recommendedOdd: number | null;
+  recommendedFairOdd: number | null;
   leagueAverage: MlbLeagueAverageContext;
   home: MlbExpectedRunsComponents | null;
   away: MlbExpectedRunsComponents | null;
 }) {
   const alerts = [...input.row.alerts];
   if (input.distanceFromMainLine != null && input.distanceFromMainLine > MLB_TOTALS_THRESHOLDS.maxAnalyzeDistanceFromMainLine) {
-    alerts.push("Linha alternativa distante da linha principal; risco de falso edge.");
+    alerts.push("alternate_total_line_risk: linha alternativa distante da linha principal.");
   }
   if (input.recommendedOdd != null && input.recommendedOdd < MLB_TOTALS_THRESHOLDS.minAnalyzeOdd) {
     alerts.push("Odd baixa demais para screener preliminar.");
   }
   if (input.recommendedOdd != null && input.recommendedOdd > MLB_TOTALS_THRESHOLDS.maxAnalyzeOdd) {
     alerts.push("Odd alta e sensivel a cauda da distribuicao.");
+  }
+  if (input.recommendedFairOdd != null && input.recommendedFairOdd < MLB_TOTALS_THRESHOLDS.minAnalyzeFairOdd) {
+    alerts.push("low_fair_odd_tail_risk: odd justa muito baixa (< 1.35) - risco de cauda.");
   }
   if (input.home?.missing_fields.length || input.away?.missing_fields.length) {
     alerts.push("Dados de standings incompletos.");
