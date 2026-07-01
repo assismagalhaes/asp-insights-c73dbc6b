@@ -45,6 +45,11 @@ import {
   storeMlbValidatorHandoffDraft,
   validateMlbValidatorHandoffPayload,
 } from "@/lib/mlb/projections";
+import {
+  buildMlbCriticalValidationDraft,
+  storeCriticalValidationDraft,
+  validateCriticalValidationDraft,
+} from "@/lib/mlb/screenerToCriticalValidationAdapter";
 import type {
   MlbHandicapCandidateStatus,
   MlbHandicapFilter,
@@ -635,8 +640,24 @@ function AspScreenerPage() {
         console.warn("Handoff enviado, mas snapshot sombra nao foi vinculado.", error);
       });
     }
-    toast.success("Rascunho enviado para ASP Validator. Revise antes de validar.");
+    toast.success("Rascunho enviado para ASP Validator (teste). Revise antes de validar.");
     void navigate({ to: "/asp-validator" });
+  }
+
+  async function sendCriticalPayloadToCriticalValidation(payload: MlbPreparedCriticalValidationPayload) {
+    const draft = buildMlbCriticalValidationDraft(payload);
+    const validation = validateCriticalValidationDraft(draft);
+    if (!validation.valid) {
+      toast.error(validation.errors[0] ?? "Rascunho não está pronto para envio à Validação Crítica.");
+      return;
+    }
+    const storageResult = storeCriticalValidationDraft(draft);
+    if (!storageResult.valid) {
+      toast.error(storageResult.errors[0] ?? "Não foi possível salvar o rascunho para a Validação Crítica.");
+      return;
+    }
+    toast.success("Rascunho enviado para Validação Crítica. Nenhum prognóstico foi criado ainda.");
+    void navigate({ to: "/validacao" });
   }
 
   return (
@@ -1075,7 +1096,13 @@ function AspScreenerPage() {
               </div>
 
               {parsedMatchupContext && <ParsedContextPanel context={parsedMatchupContext} />}
-              {criticalPayloads.length > 0 && <CriticalPayloadPanel payloads={criticalPayloads} onSendToValidator={sendCriticalPayloadToValidator} />}
+              {criticalPayloads.length > 0 && (
+                <CriticalPayloadPanel
+                  payloads={criticalPayloads}
+                  onSendToCriticalValidation={sendCriticalPayloadToCriticalValidation}
+                  onSendToValidator={sendCriticalPayloadToValidator}
+                />
+              )}
             </CardContent>
           </Card>
 
@@ -1688,14 +1715,16 @@ function ParsedContextPanel({ context }: { context: MlbBaseballReferenceMatchupC
 
 function CriticalPayloadPanel({
   payloads,
+  onSendToCriticalValidation,
   onSendToValidator,
 }: {
   payloads: MlbPreparedCriticalValidationPayload[];
+  onSendToCriticalValidation: (payload: MlbPreparedCriticalValidationPayload) => void | Promise<void>;
   onSendToValidator: (payload: MlbPreparedCriticalValidationPayload) => void | Promise<void>;
 }) {
   return (
     <div className="space-y-3">
-      <div className="text-sm font-semibold">Confronto Screener x Contexto Detalhado</div>
+      <div className="text-sm font-semibold">Pacote para Validação Crítica</div>
       {payloads.map((payload) => {
         const handoffValidation = validateMlbValidatorHandoffPayload(buildMlbValidatorHandoffPayload(payload));
         const prep = payload.validation_preparation;
@@ -1711,13 +1740,16 @@ function CriticalPayloadPanel({
           payload.context_alignment.alignment_status === "conflicts_with_screener" ||
           alignmentScore <= 35 ||
           highDivergence;
-        const handleSend = () => {
+        const handleSendCritical = () => {
           if (shouldConfirm && typeof window !== "undefined") {
             const ok = window.confirm(
-              "Esta oportunidade possui conflito forte com o contexto detalhado. Enviar ao Validator apenas para revisão crítica?",
+              "Esta oportunidade possui conflito forte com o contexto detalhado. Enviar para Validação Crítica apenas para revisão manual?",
             );
             if (!ok) return;
           }
+          void onSendToCriticalValidation(payload);
+        };
+        const handleSendValidator = () => {
           void onSendToValidator(payload);
         };
         return (
@@ -1729,7 +1761,7 @@ function CriticalPayloadPanel({
                   <Badge variant="destructive">Conflito forte com o Screener</Badge>
                 )}
                 {isReviewBefore && !isStrongConflict && (
-                  <Badge variant="outline" className="border-warning/60 text-warning">Revisar antes do Validator</Badge>
+                  <Badge variant="outline" className="border-warning/60 text-warning">Revisar antes de enviar</Badge>
                 )}
                 {highDivergence && (
                   <Badge variant="outline" className="border-warning/60 text-warning">
@@ -1737,12 +1769,22 @@ function CriticalPayloadPanel({
                   </Badge>
                 )}
                 <Badge variant="outline">{prep.readiness_status}</Badge>
-                <Button size="sm" onClick={handleSend} disabled={!handoffValidation.canSend}>
+                <Button size="sm" onClick={handleSendCritical}>
                   <Send className="mr-2 h-4 w-4" />
-                  Enviar esta para ASP Validator
+                  Enviar para Validação Crítica
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleSendValidator}
+                  disabled={!handoffValidation.canSend}
+                  title="Fluxo em teste. O destino principal agora é a Validação Crítica."
+                >
+                  ASP Validator (teste)
                 </Button>
               </div>
             </div>
+
             {handoffValidation.warnings.length > 0 && (
               <div className="mt-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
                 {formatAlertMessage(handoffValidation.warnings[0])}
