@@ -5606,7 +5606,7 @@ function recordToResultForm(record: ValidatorRecord, defaultUnitValue: number): 
     clv: numberToInput(record.clv),
     final_score: record.final_score ?? "",
     result_notes: record.result_notes ?? "",
-    result_settled_at: record.result_settled_at ?? new Date().toISOString().slice(0, 10),
+    result_settled_at: record.result_settled_at ?? todayBR(),
   };
 }
 
