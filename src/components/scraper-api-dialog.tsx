@@ -187,13 +187,25 @@ export function ScraperApiDialog({ onRowsReady }: Props) {
       const norm = await callApi(`/scraping/jobs/${jobId}/normalized`, "GET");
       if (!norm.ok) throw new Error(`Falha ao buscar normalizado (HTTP ${norm.status})`);
 
-      const rows = extractRows(norm.data).map(normalizeRow);
+      const rawRows = extractRows(norm.data);
+      const rows = rawRows.map(normalizeRow);
+      // diagnóstico: sempre logar shape para depurar respostas /normalized
+      // eslint-disable-next-line no-console
+      console.log("[scraper /normalized] payload:", norm.data);
+      // eslint-disable-next-line no-console
+      console.log("[scraper /normalized] rawRows:", rawRows.length, "sample:", rawRows[0]);
       if (!rows.length) {
-        toast.error("O job concluiu mas não retornou linhas para esses filtros.");
+        const topKeys =
+          norm.data && typeof norm.data === "object" && !Array.isArray(norm.data)
+            ? Object.keys(norm.data as Record<string, unknown>).join(", ")
+            : Array.isArray(norm.data)
+              ? "array"
+              : typeof norm.data;
+        toast.error(
+          `O job concluiu mas /normalized não trouxe linhas. Chaves recebidas: ${topKeys}. Veja o console para o payload completo.`,
+        );
         return;
       }
-      onRowsReady([...TARGET_KEYS], rows);
-      toast.success(`${rows.length} linha(s) trazida(s) da API`);
       setOpen(false);
     } catch (e) {
       toast.error((e as Error).message || "Falha ao consultar a API");
