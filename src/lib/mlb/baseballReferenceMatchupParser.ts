@@ -6,7 +6,23 @@ import type {
 } from "@/types/mlbCriticalValidation";
 import { matchMlbTeamName } from "@/utils/mlbTeamNameMap";
 
-const EMPTY_RECORD = null;
+const CURRENT_SEASON = new Date().getFullYear();
+
+// Strict pitcher header: "José Soriano (#59, 27, RHP, 8-4, 3.32)"
+const PITCHER_HEADER_REGEX =
+  /^(.+?)\s*\(#(\d+),\s*(\d+),\s*(RHP|LHP),\s*(\d+-\d+),\s*(\d+(?:\.\d+)?)\)\s*$/i;
+
+// Season row: "2026   8-4   95.0   77 38 35 48 102 12 3.32"
+const SEASON_ROW_REGEX =
+  /^(20\d{2})\s+(\d+-\d+)\s+([\d.]+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+([\d.]+)/;
+
+// Last 7 GS row (ERA + optional GSc)
+const LAST7_ROW_REGEX =
+  /^Last\s+7\s+GS\s+(\d+-\d+)\s+([\d.]+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+([\d.]+)(?:\s+(\d+))?/i;
+
+// Last 5 v.XXX row
+const LAST5_VS_REGEX =
+  /^Last\s+5\s+v\.?([A-Z]{2,4})\s+(\d+-\d+)\s+([\d.]+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+([\d.]+)(?:\s+(\d+))?/i;
 
 export function parseBaseballReferenceMatchupText(rawText: string): MlbBaseballReferenceMatchupContext {
   const text = normalizeRawText(rawText);
@@ -16,8 +32,8 @@ export function parseBaseballReferenceMatchupText(rawText: string): MlbBaseballR
   const awayBlock = awayName ? extractTeamBlock(text, awayName, homeName) : "";
   const homeBlock = homeName ? extractTeamBlock(text, homeName, null) : "";
   const pitcherCandidates = extractPitcherCandidates(text);
-  const awayPitcher = buildPitcherFromBlock(pitcherCandidates[0] ?? awayBlock, pitcherCandidates[0]?.name ?? null);
-  const homePitcher = buildPitcherFromBlock(pitcherCandidates[1] ?? homeBlock, pitcherCandidates[1]?.name ?? null);
+  const awayPitcher = buildPitcher(pitcherCandidates[0] ?? null);
+  const homePitcher = buildPitcher(pitcherCandidates[1] ?? null);
 
   const context: MlbBaseballReferenceMatchupContext = {
     source: "baseball_reference_matchup_text",
@@ -67,8 +83,8 @@ export function extractMlbTeamSummary(rawText: string, teamName: string | null):
 export function extractMlbStartingPitchers(rawText: string) {
   const candidates = extractPitcherCandidates(normalizeRawText(rawText));
   return {
-    away: buildPitcherFromBlock(candidates[0] ?? "", candidates[0]?.name ?? null),
-    home: buildPitcherFromBlock(candidates[1] ?? "", candidates[1]?.name ?? null),
+    away: buildPitcher(candidates[0] ?? null),
+    home: buildPitcher(candidates[1] ?? null),
   };
 }
 
@@ -138,40 +154,97 @@ function buildTeamSummary(teamName: string | null, block: string): MlbParsedTeam
   };
 }
 
-function buildPitcherFromBlock(candidate: string | { name: string; block: string }, fallbackName: string | null): MlbParsedStartingPitcher {
-  const block = typeof candidate === "string" ? candidate : candidate.block;
-  const name = typeof candidate === "string" ? fallbackName ?? extractPitcherName(block) : candidate.name;
-  const seasonRecord = findRecord(block, /(?:record|w-l)\D{0,20}(\d+\s*-\s*\d+)/i) ?? firstRecord(block);
-  const ip = parseBaseballInnings(findText(block, /(\d+\.\d)\s*IP/i));
-  const last7Ip = parseBaseballInnings(findText(block, /last\s*7[\s\S]{0,80}?(\d+\.\d)\s*IP/i));
+interface PitcherCandidate {
+  name: string;
+  jersey_number: number | null;
+  age: number | null;
+  throwing_hand: "LHP" | "RHP";
+  season_record: MlbParsedWinLossRecord | null;
+  displayed_era: number | null;
+  block: string;
+}
+
+function extractPitcherCandidates(text: string): PitcherCandidate[] {
+  const lines = text.split("\n");
+  const candidates: Array<PitcherCandidate & { startIndex: number }> = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i].trim();
+    if (!line.includes("(#")) continue;
+    const match = line.match(PITCHER_HEADER_REGEX);
+    if (!match) continue;
+    candidates.push({
+      name: cleanPitcherName(match[1]),
+      jersey_number: toInt(match[2]),
+      age: toInt(match[3]),
+      throwing_hand: match[4].toUpperCase() as "LHP" | "RHP",
+      season_record: parseWinLossRecord(match[5]),
+      displayed_era: toDecimal(match[6]),
+      block: "",
+      startIndex: i,
+    });
+  }
+  // Build blocks: from this pitcher line until next pitcher line
+  return candidates.slice(0, 2).map((cand, idx) => {
+    const end = candidates[idx + 1]?.startIndex ?? Math.min(lines.length, cand.startIndex + 40);
+    const block = lines.slice(cand.startIndex, end).join("\n");
+    const { startIndex: _s, ...rest } = cand;
+    void _s;
+    return { ...rest, block };
+  });
+}
+
+function cleanPitcherName(raw: string): string {
+  // Remove leading garbage like "gb ", "up ", or standings prefixes
+  return raw
+    .replace(/^.*?\b(?:gb|up|back)\b\s+/i, "")
+    .trim();
+}
+
+function buildPitcher(candidate: PitcherCandidate | null): MlbParsedStartingPitcher {
+  if (!candidate) {
+    return emptyPitcher();
+  }
+  const block = candidate.block;
+  const seasonLine = findSeasonRow(block);
+  const last7 = findLast7Row(block);
+  const last5 = findLast5VsRow(block);
+
+  const era = seasonLine?.era ?? candidate.displayed_era;
+  const ip = parseBaseballInnings(seasonLine?.ip ?? null);
+  const last7Ip = parseBaseballInnings(last7?.ip ?? null);
+
+  const record = candidate.season_record ?? (seasonLine ? parseWinLossRecord(seasonLine.dec) : null);
+
   const pitcher: MlbParsedStartingPitcher = {
-    name,
-    jersey_number: findNumber(block, /#\s*(\d+)/),
-    age: findNumber(block, /age[:\s]+(\d+)/i),
-    throwing_hand: findHand(block),
-    season_record: seasonRecord,
-    wins: seasonRecord?.wins ?? null,
-    losses: seasonRecord?.losses ?? null,
-    era: findDecimal(block, /ERA\D{0,10}(\d+(?:\.\d+)?)/i),
+    name: candidate.name || null,
+    jersey_number: candidate.jersey_number,
+    age: candidate.age,
+    throwing_hand: candidate.throwing_hand,
+    season_record: record,
+    wins: record?.wins ?? null,
+    losses: record?.losses ?? null,
+    era,
     innings_pitched_display: ip.innings_pitched_display,
     innings_pitched_decimal: ip.innings_pitched_decimal,
-    hits_allowed: findNumber(block, /(\d+)\s*H\b/),
-    runs_allowed: findNumber(block, /(\d+)\s*R\b/),
-    earned_runs: findNumber(block, /(\d+)\s*ER\b/),
-    walks: findNumber(block, /(\d+)\s*BB\b/),
-    strikeouts: findNumber(block, /(\d+)\s*(?:SO|K)\b/),
-    home_runs_allowed: findNumber(block, /(\d+)\s*HR\b/),
-    last_7_games_record: findRecord(block, /last\s*7[\s\S]{0,80}?(\d+\s*-\s*\d+)/i),
+    hits_allowed: seasonLine?.h ?? null,
+    runs_allowed: seasonLine?.r ?? null,
+    earned_runs: seasonLine?.er ?? null,
+    walks: seasonLine?.bb ?? null,
+    strikeouts: seasonLine?.so ?? null,
+    home_runs_allowed: seasonLine?.hr ?? null,
+    last_7_games_record: last7 ? parseWinLossRecord(last7.dec) : null,
     last_7_ip_display: last7Ip.innings_pitched_display,
     last_7_ip_decimal: last7Ip.innings_pitched_decimal,
-    last_7_era: findDecimal(block, /last\s*7[\s\S]{0,120}?ERA\D{0,10}(\d+(?:\.\d+)?)/i),
-    last_7_hits: findNumber(block, /last\s*7[\s\S]{0,120}?(\d+)\s*H\b/i),
-    last_7_walks: findNumber(block, /last\s*7[\s\S]{0,120}?(\d+)\s*BB\b/i),
-    last_7_strikeouts: findNumber(block, /last\s*7[\s\S]{0,120}?(\d+)\s*(?:SO|K)\b/i),
-    last_7_home_runs: findNumber(block, /last\s*7[\s\S]{0,120}?(\d+)\s*HR\b/i),
+    last_7_era: last7?.era ?? null,
+    last_7_hits: last7?.h ?? null,
+    last_7_walks: last7?.bb ?? null,
+    last_7_strikeouts: last7?.so ?? null,
+    last_7_home_runs: last7?.hr ?? null,
     recent_starts: [],
-    vs_opponent_summary: findText(block, /(?:vs\.?|versus|against)\s+[A-Z][^\n]+/i),
-    has_faced_opponent: /never faced|has never faced|no starts/i.test(block) ? false : null,
+    vs_opponent_summary: last5
+      ? `Last 5 v.${last5.opp}: ${last5.dec}, ${last5.ip} IP, ${last5.so} K, ERA ${last5.era}`
+      : null,
+    has_faced_opponent: last5 ? true : null,
     current_form_notes: [],
     k_per_9: null,
     bb_per_9: null,
@@ -185,23 +258,207 @@ function buildPitcherFromBlock(candidate: string | { name: string; block: string
   return calculateStarterDerivedMetrics(pitcher);
 }
 
+function emptyPitcher(): MlbParsedStartingPitcher {
+  return {
+    name: null,
+    jersey_number: null,
+    age: null,
+    throwing_hand: null,
+    season_record: null,
+    wins: null,
+    losses: null,
+    era: null,
+    innings_pitched_display: null,
+    innings_pitched_decimal: null,
+    hits_allowed: null,
+    runs_allowed: null,
+    earned_runs: null,
+    walks: null,
+    strikeouts: null,
+    home_runs_allowed: null,
+    last_7_games_record: null,
+    last_7_ip_display: null,
+    last_7_ip_decimal: null,
+    last_7_era: null,
+    last_7_hits: null,
+    last_7_walks: null,
+    last_7_strikeouts: null,
+    last_7_home_runs: null,
+    recent_starts: [],
+    vs_opponent_summary: null,
+    has_faced_opponent: null,
+    current_form_notes: [],
+    k_per_9: null,
+    bb_per_9: null,
+    hr_per_9: null,
+    k_bb_ratio: null,
+    er_per_9: null,
+    recent_k_per_9: null,
+    recent_hr_per_9: null,
+    starter_quality_score: null,
+  };
+}
+
+interface SeasonRow {
+  season: number;
+  dec: string;
+  ip: string;
+  h: number;
+  r: number;
+  er: number;
+  bb: number;
+  so: number;
+  hr: number;
+  era: number;
+}
+
+function findSeasonRow(block: string): SeasonRow | null {
+  for (const rawLine of block.split("\n")) {
+    const line = rawLine.trim();
+    const match = line.match(SEASON_ROW_REGEX);
+    if (!match) continue;
+    const season = Number(match[1]);
+    // Prefer current season; fall back to any season row (last one wins).
+    if (season !== CURRENT_SEASON) continue;
+    return {
+      season,
+      dec: match[2],
+      ip: match[3],
+      h: Number(match[4]),
+      r: Number(match[5]),
+      er: Number(match[6]),
+      bb: Number(match[7]),
+      so: Number(match[8]),
+      hr: Number(match[9]),
+      era: Number(match[10]),
+    };
+  }
+  // Fallback: any season row
+  for (const rawLine of block.split("\n")) {
+    const match = rawLine.trim().match(SEASON_ROW_REGEX);
+    if (!match) continue;
+    return {
+      season: Number(match[1]),
+      dec: match[2],
+      ip: match[3],
+      h: Number(match[4]),
+      r: Number(match[5]),
+      er: Number(match[6]),
+      bb: Number(match[7]),
+      so: Number(match[8]),
+      hr: Number(match[9]),
+      era: Number(match[10]),
+    };
+  }
+  return null;
+}
+
+interface Last7Row {
+  dec: string;
+  ip: string;
+  h: number;
+  r: number;
+  er: number;
+  bb: number;
+  so: number;
+  hr: number;
+  era: number;
+  gsc: number | null;
+}
+
+function findLast7Row(block: string): Last7Row | null {
+  for (const rawLine of block.split("\n")) {
+    const match = rawLine.trim().match(LAST7_ROW_REGEX);
+    if (!match) continue;
+    return {
+      dec: match[1],
+      ip: match[2],
+      h: Number(match[3]),
+      r: Number(match[4]),
+      er: Number(match[5]),
+      bb: Number(match[6]),
+      so: Number(match[7]),
+      hr: Number(match[8]),
+      era: Number(match[9]),
+      gsc: match[10] ? Number(match[10]) : null,
+    };
+  }
+  return null;
+}
+
+interface Last5VsRow {
+  opp: string;
+  dec: string;
+  ip: string;
+  h: number;
+  r: number;
+  er: number;
+  bb: number;
+  so: number;
+  hr: number;
+  era: number;
+  gsc: number | null;
+}
+
+function findLast5VsRow(block: string): Last5VsRow | null {
+  for (const rawLine of block.split("\n")) {
+    const match = rawLine.trim().match(LAST5_VS_REGEX);
+    if (!match) continue;
+    return {
+      opp: match[1].toUpperCase(),
+      dec: match[2],
+      ip: match[3],
+      h: Number(match[4]),
+      r: Number(match[5]),
+      er: Number(match[6]),
+      bb: Number(match[7]),
+      so: Number(match[8]),
+      hr: Number(match[9]),
+      era: Number(match[10]),
+      gsc: match[11] ? Number(match[11]) : null,
+    };
+  }
+  return null;
+}
+
 function calculateStarterDerivedMetrics(pitcher: MlbParsedStartingPitcher): MlbParsedStartingPitcher {
   const ip = pitcher.innings_pitched_decimal;
   const last7Ip = pitcher.last_7_ip_decimal;
   const kPer9 = ratePer9(pitcher.strikeouts, ip);
   const bbPer9 = ratePer9(pitcher.walks, ip);
   const hrPer9 = ratePer9(pitcher.home_runs_allowed, ip);
-  let quality = 50;
-  if (pitcher.era != null && pitcher.era < 3) quality += 15;
-  else if (pitcher.era != null && pitcher.era < 4) quality += 8;
-  else if (pitcher.era != null && pitcher.era > 5) quality -= 10;
-  if (hrPer9 != null && hrPer9 > 1.5) quality -= 10;
-  if (hrPer9 != null && hrPer9 < 0.8) quality += 8;
   const kbb = pitcher.strikeouts != null && pitcher.walks ? pitcher.strikeouts / pitcher.walks : null;
-  if (kbb != null && kbb > 3) quality += 8;
-  if (kbb != null && kbb < 2) quality -= 6;
-  if (pitcher.last_7_era != null && pitcher.era != null && pitcher.last_7_era < pitcher.era) quality += 5;
-  if (pitcher.last_7_era != null && pitcher.era != null && pitcher.last_7_era > pitcher.era) quality -= 5;
+
+  // Quality score only if we have real data; otherwise null.
+  const hasData = pitcher.era != null || ip != null || pitcher.strikeouts != null;
+  let quality: number | null = null;
+  if (hasData) {
+    quality = 50;
+    if (pitcher.era != null) {
+      if (pitcher.era < 3) quality += 15;
+      else if (pitcher.era < 4) quality += 8;
+      else if (pitcher.era > 5) quality -= 10;
+      else quality -= 2;
+    }
+    if (hrPer9 != null) {
+      if (hrPer9 > 1.5) quality -= 10;
+      else if (hrPer9 < 0.8) quality += 8;
+    }
+    if (bbPer9 != null) {
+      if (bbPer9 > 4) quality -= 6;
+      else if (bbPer9 < 2.5) quality += 4;
+    }
+    if (kbb != null) {
+      if (kbb > 3) quality += 8;
+      else if (kbb < 2) quality -= 6;
+    }
+    if (pitcher.last_7_era != null && pitcher.era != null) {
+      if (pitcher.last_7_era < pitcher.era) quality += 5;
+      else if (pitcher.last_7_era > pitcher.era) quality -= 5;
+    }
+    if (ip != null && ip < 30) quality -= 5;
+    quality = clamp(quality, 0, 100);
+  }
 
   return {
     ...pitcher,
@@ -212,7 +469,7 @@ function calculateStarterDerivedMetrics(pitcher: MlbParsedStartingPitcher): MlbP
     er_per_9: ratePer9(pitcher.earned_runs, ip),
     recent_k_per_9: ratePer9(pitcher.last_7_strikeouts, last7Ip),
     recent_hr_per_9: ratePer9(pitcher.last_7_home_runs, last7Ip),
-    starter_quality_score: clamp(quality, 0, 100),
+    starter_quality_score: quality,
   };
 }
 
@@ -237,15 +494,6 @@ function extractTeamBlock(text: string, teamName: string, nextTeamName: string |
   return next > 0 ? rest.slice(0, teamName.length + next) : rest;
 }
 
-function extractPitcherCandidates(text: string): Array<{ name: string; block: string }> {
-  const matches = [...text.matchAll(/([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+)+)[^\n]{0,80}\b([LR]HP)\b/gi)];
-  return matches.slice(0, 2).map((match, index) => {
-    const start = Math.max(0, match.index ?? 0);
-    const end = matches[index + 1]?.index ?? Math.min(text.length, start + 1600);
-    return { name: match[1].trim(), block: text.slice(start, end) };
-  });
-}
-
 function extractSeasonSeries(text: string) {
   const lines = text.split("\n").filter((line) => /season series|series|@\s*[A-Z]{2,3}|[A-Z]{2,3}\s*@/i.test(line)).slice(0, 12);
   return { games: lines, summary: lines.find((line) => /season series/i.test(line)) ?? null };
@@ -256,31 +504,74 @@ function extractHeadToHead(text: string) {
   return { games: lines, summary: lines.find((line) => /all-time|leads/i.test(line)) ?? null };
 }
 
+function isPitcherValid(p: MlbParsedStartingPitcher): boolean {
+  return Boolean(p.name && p.throwing_hand && p.era != null && p.innings_pitched_decimal != null);
+}
+
 function calculateParserQuality(context: MlbBaseballReferenceMatchupContext) {
   const missing: string[] = [];
   const warnings: string[] = [];
-  let count = 0;
+  let score = 0;
+
+  // Team summaries: up to +35 (team name + record on each side)
   for (const side of ["away", "home"] as const) {
     const team = context.teams[side];
-    const pitcher = context.starting_pitchers[side];
-    if (!team.team_name) missing.push(`${side}_team_name`);
-    else count += 1;
-    if (!team.record) missing.push(`${side}_record`);
-    else count += 1;
-    if (!team.last10) warnings.push(`${side}: last10 nao identificado`);
-    else count += 1;
-    if (!pitcher.name) missing.push(`${side}_starter_name`);
-    else count += 1;
-    if (!pitcher.throwing_hand) warnings.push(`${side}: mao do starter nao identificada`);
-    else count += 1;
-    if (pitcher.era == null) warnings.push(`${side}: ERA do starter nao identificada`);
-    else count += 1;
+    if (team.team_name) score += 8;
+    else missing.push(`${side}_team_name`);
+    if (team.record) score += 7;
+    else missing.push(`${side}_record`);
+    if (team.last10) score += 2;
+    else warnings.push(`${side}: last10 nao identificado`);
+    if (team.home_record || team.away_record) score += 1;
   }
+
+  // Starters identified: up to +30
+  for (const side of ["away", "home"] as const) {
+    const p = context.starting_pitchers[side];
+    if (p.name && p.throwing_hand) score += 8;
+    else {
+      missing.push(`${side}_starter_name`);
+      warnings.push(side === "away"
+        ? "Starter visitante nao foi extraido corretamente."
+        : "Starter mandante nao foi extraido corretamente.");
+    }
+    if (p.season_record) score += 3;
+    if (p.age != null) score += 2;
+    if (p.jersey_number != null) score += 2;
+  }
+
+  // Season stats: up to +20 (10 per starter with era+ip+so+bb+hr)
+  for (const side of ["away", "home"] as const) {
+    const p = context.starting_pitchers[side];
+    const seasonStatsOk =
+      p.era != null && p.innings_pitched_decimal != null && p.strikeouts != null &&
+      p.walks != null && p.home_runs_allowed != null;
+    if (seasonStatsOk) score += 10;
+    else warnings.push(`${side}: estatisticas de temporada do starter ausentes.`);
+  }
+
+  // Last 7 GS: up to +10
+  for (const side of ["away", "home"] as const) {
+    const p = context.starting_pitchers[side];
+    if (p.last_7_era != null && p.last_7_ip_decimal != null) score += 5;
+  }
+
+  // H2H / season series: up to +5
+  if (context.season_series.games.length > 0) score += 3;
+  if (context.head_to_head.games.length > 0) score += 2;
+
+  let confidence = clamp(score, 0, 100);
+
+  // Hard caps for broken parses
+  const awayValid = isPitcherValid(context.starting_pitchers.away);
+  const homeValid = isPitcherValid(context.starting_pitchers.home);
+  if (!awayValid || !homeValid) confidence = Math.min(confidence, 65);
+
   return {
-    parsed_fields_count: count,
+    parsed_fields_count: score,
     missing_fields: missing,
     warnings,
-    confidence: clamp(Math.round((count / 12) * 100), 0, 100),
+    confidence,
   };
 }
 
@@ -301,18 +592,14 @@ function findNumber(block: string, pattern: RegExp) {
   return Number.isFinite(value) ? value : null;
 }
 
-function findDecimal(block: string, pattern: RegExp) {
-  const value = Number(block.match(pattern)?.[1]);
-  return Number.isFinite(value) ? value : null;
+function toInt(value: string | null | undefined) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.trunc(n) : null;
 }
 
-function findHand(block: string): "LHP" | "RHP" | null {
-  const match = block.match(/\b([LR]HP)\b/i);
-  return match ? match[1].toUpperCase() as "LHP" | "RHP" : null;
-}
-
-function extractPitcherName(block: string) {
-  return block.match(/([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+)+)/)?.[1]?.trim() ?? null;
+function toDecimal(value: string | null | undefined) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }
 
 function ratePer9(value: number | null, innings: number | null) {
