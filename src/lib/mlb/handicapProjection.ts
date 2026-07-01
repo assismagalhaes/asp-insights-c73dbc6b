@@ -545,21 +545,65 @@ function getMissingHandicapFields(game: EnrichedMlbGame, lineGroup: HandicapLine
 function classifyHandicapCandidate(input: {
   recommendedEv: number | null;
   recommendedOdd: number | null;
+  recommendedLine: number | null;
+  recommendedSide: MlbHandicapSide | null;
   recommendedProbGap: number;
+  projectedMargin: number;
   distanceFromMain: number | null;
   distributionTailWarning: boolean;
   config: MlbHandicapProjectionConfig;
 }): MlbHandicapCandidateStatus {
   const ev = input.recommendedEv ?? Number.NEGATIVE_INFINITY;
   const odd = input.recommendedOdd ?? 0;
+  const line = input.recommendedLine ?? 0;
+  const absLine = Math.abs(line);
   const distance = input.distanceFromMain ?? 0;
   const { thresholds } = input.config;
+  // Alternate handicap far from main line cannot ANALISAR
+  if (distance > thresholds.maxAnalyzeDistanceFromMainLine) {
+    if (ev >= thresholds.monitorEv || input.recommendedProbGap >= thresholds.monitorProbGap) return "monitorar";
+    return "pular";
+  }
+  // Cap: alt lines |line| >= 2.5 (i.e. +/-2.5, +/-3.5, +/-4.5) can only be MONITORAR at best
+  if (absLine >= 2.5) {
+    if (ev >= thresholds.monitorEv || input.recommendedProbGap >= thresholds.monitorProbGap) return "monitorar";
+    return "pular";
+  }
+  // Odd bounds
+  if (odd < thresholds.minAnalyzeOdd || odd > thresholds.maxAnalyzeOdd) {
+    if (ev >= thresholds.monitorEv || input.recommendedProbGap >= thresholds.monitorProbGap) return "monitorar";
+    return "pular";
+  }
+  // Runline -1.5 hardening
+  if (line <= -1.5) {
+    const marginForSide = input.recommendedSide === "home" ? input.projectedMargin : -input.projectedMargin;
+    if (
+      ev >= thresholds.runlineMinusEv &&
+      input.recommendedProbGap >= thresholds.runlineMinusProbGap &&
+      marginForSide >= thresholds.runlineMinusMargin &&
+      !input.distributionTailWarning
+    ) {
+      return "analisar";
+    }
+    if (ev >= thresholds.monitorEv || input.recommendedProbGap >= thresholds.monitorProbGap) return "monitorar";
+    return "pular";
+  }
+  // Runline +1.5 hardening
+  if (line >= 1.5) {
+    if (
+      ev >= thresholds.runlinePlusEv &&
+      input.recommendedProbGap >= thresholds.runlinePlusProbGap &&
+      !input.distributionTailWarning
+    ) {
+      return "analisar";
+    }
+    if (ev >= thresholds.monitorEv || input.recommendedProbGap >= thresholds.monitorProbGap) return "monitorar";
+    return "pular";
+  }
+  // Generic 0/+-0.5/+-1 lines: use base thresholds
   if (
     ev >= thresholds.analyzeEv &&
     input.recommendedProbGap >= thresholds.analyzeProbGap &&
-    odd >= thresholds.minOdd &&
-    odd <= thresholds.maxOdd &&
-    distance <= thresholds.maxAnalyzeDistanceFromMainLine &&
     !input.distributionTailWarning
   ) {
     return "analisar";
@@ -567,7 +611,7 @@ function classifyHandicapCandidate(input: {
   if (
     ev >= thresholds.monitorEv ||
     input.recommendedProbGap >= thresholds.monitorProbGap ||
-    (distance <= thresholds.maxAnalyzeDistanceFromMainLine && ev > 0)
+    ev > 0
   ) {
     return "monitorar";
   }
