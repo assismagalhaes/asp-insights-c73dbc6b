@@ -24,6 +24,7 @@ import {
   validateAspValidatorUpload,
 } from "@/lib/asp-validator-upload-guard";
 import { useConfiguracao } from "@/lib/db";
+import { todayBR } from "@/lib/date-br";
 import {
   buildMlbValidatorImportedContextText,
   clearMlbValidatorHandoffDraft,
@@ -1194,7 +1195,7 @@ function AspValidatorPage() {
     try {
       const payload = {
         result_status: status,
-        result_settled_at: resultForm.result_settled_at || new Date().toISOString().slice(0, 10),
+        result_settled_at: resultForm.result_settled_at || todayBR(),
         final_score: resultForm.final_score || null,
         result_notes: resultForm.result_notes || null,
         stake_units: selectedRecord.decision === "PULAR" ? 1 : stake,
@@ -5605,7 +5606,7 @@ function recordToResultForm(record: ValidatorRecord, defaultUnitValue: number): 
     clv: numberToInput(record.clv),
     final_score: record.final_score ?? "",
     result_notes: record.result_notes ?? "",
-    result_settled_at: record.result_settled_at ?? new Date().toISOString().slice(0, 10),
+    result_settled_at: record.result_settled_at ?? todayBR(),
   };
 }
 
@@ -5655,9 +5656,11 @@ function filterDashboardRecords(records: ValidatorRecord[], filters: ValidatorDa
 }
 
 function getDashboardMinDate(period: ValidatorDashboardFilters["period"]): string | null {
-  const now = new Date();
-  const date = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   if (period === "all") return null;
+  // Trabalha em fuso BR: usa componentes da data BR para construir a data local coerente.
+  const todayStr = todayBR();
+  const [y, m, d] = todayStr.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
   if (period === "7d") date.setDate(date.getDate() - 6);
   if (period === "30d") date.setDate(date.getDate() - 29);
   if (period === "month") date.setDate(1);
@@ -5665,7 +5668,10 @@ function getDashboardMinDate(period: ValidatorDashboardFilters["period"]): strin
     date.setMonth(0);
     date.setDate(1);
   }
-  return date.toISOString().slice(0, 10);
+  const yy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
 }
 
 function calculateValidatorDashboardStats(records: ValidatorRecord[]): DashboardStats {

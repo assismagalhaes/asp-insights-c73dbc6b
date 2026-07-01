@@ -643,10 +643,15 @@ function getAttr(attrs: string, name: string) {
 }
 
 function defaultParseOptions() {
-  const now = new Date();
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
   return {
-    snapshotDate: now.toISOString().slice(0, 10),
-    season: now.getUTCFullYear(),
+    snapshotDate: today,
+    season: Number(today.slice(0, 4)),
     source: "baseball_reference" as MlbStandingsSource,
   };
 }
