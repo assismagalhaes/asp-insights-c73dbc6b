@@ -223,7 +223,15 @@ async function scraperRequest(path: string, init?: RequestInit) {
         requestBody,
         response: payload,
         expectedPayload: EXPECTED_JOB_PAYLOAD,
+        apiKeyLen: apiKey.length,
+        apiKeyPrefix: apiKey.substring(0, 4),
       });
+      if (res.status === 401 || res.status === 403) {
+        const detail = pickErrorMessage(payload) ?? stringifyDebug(payload);
+        throw new Error(
+          `API key da VM inválida ou sem permissão (HTTP ${res.status}). Atualize o secret SCRAPER_API_KEY em Backend → Secrets com uma chave válida emitida pela VM (${baseUrl}) e confirme que ela tem permissão para o endpoint ${path}. Detalhe da VM: ${detail}`,
+        );
+      }
       const message =
         res.status === 422 && path === "/scraping/jobs"
           ? `HTTP 422 ao chamar API da VM (${path}). Payload enviado: ${requestBody}. JSON esperado: ${stringifyDebug(EXPECTED_JOB_PAYLOAD)}. Resposta da VM: ${stringifyDebug(payload)}`
@@ -269,7 +277,14 @@ async function scraperFormRequest(path: string, formData: FormData) {
         status: res.status,
         path,
         response: payload,
+        apiKeyLen: apiKey.length,
+        apiKeyPrefix: apiKey.substring(0, 4),
       });
+      if (res.status === 401 || res.status === 403) {
+        throw new Error(
+          `API key da VM inválida ou sem permissão (HTTP ${res.status}) ao enviar arquivos. Atualize o secret SCRAPER_API_KEY em Backend → Secrets com uma chave válida da VM (${baseUrl}).`,
+        );
+      }
       throw new Error(pickErrorMessage(payload) ?? `Erro HTTP ${res.status} ao enviar arquivos para a VM.`);
     }
     return payload;
@@ -301,7 +316,14 @@ async function scraperTextRequest(path: string) {
         status: res.status,
         path,
         response: text,
+        apiKeyLen: apiKey.length,
+        apiKeyPrefix: apiKey.substring(0, 4),
       });
+      if (res.status === 401 || res.status === 403) {
+        throw new Error(
+          `API key da VM inválida ou sem permissão (HTTP ${res.status}) ao baixar CSV. Atualize o secret SCRAPER_API_KEY em Backend → Secrets com uma chave válida da VM (${baseUrl}).`,
+        );
+      }
       throw new Error(`Erro HTTP ${res.status} ao baixar CSV da VM. Resposta: ${text}`);
     }
     return text;
