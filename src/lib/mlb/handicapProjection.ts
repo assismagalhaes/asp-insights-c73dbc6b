@@ -13,16 +13,22 @@ import { matchMlbTeamName } from "@/utils/mlbTeamNameMap";
 import { calculateMlbProjectedTotal, getLeagueAverageContext } from "@/lib/mlb/totalsProjection";
 
 export const MLB_HANDICAP_THRESHOLDS = {
-  analyzeEv: 0.05,
+  analyzeEv: 0.06,
   analyzeProbGap: 0.05,
   monitorEv: 0.02,
   monitorProbGap: 0.03,
   minOdd: 1.55,
-  maxOdd: 2.80,
+  maxOdd: 3.00,
   maxAnalyzeDistanceFromMainLine: 1.0,
   maxAnalyzeOdd: 3.00,
-  minAnalyzeOdd: 1.50,
+  minAnalyzeOdd: 1.55,
   tailMassWarning: 0.995,
+  runlineMinusMargin: 0.75,
+  runlineMinusEv: 0.08,
+  runlineMinusProbGap: 0.06,
+  runlinePlusEv: 0.06,
+  runlinePlusProbGap: 0.05,
+  maxAnalyzeAbsLine: 1.5,
 } satisfies MlbHandicapProjectionConfig["thresholds"];
 
 export const MLB_HANDICAP_PROJECTION_CONFIG: MlbHandicapProjectionConfig = {
