@@ -363,7 +363,18 @@ export function applyMlbCorrelationGuard(opportunities: MlbUnifiedOpportunity[])
       top.push(item);
     }
   }
-  const rankedPrimary = [...top, ...deferred]
+  // Rule: alternate_total_line_risk e alternate_handicap_line_risk nao podem ocupar top 5.
+  const combined = [...top, ...deferred];
+  const safeTop5: MlbUnifiedOpportunity[] = [];
+  const laterSlots: MlbUnifiedOpportunity[] = [];
+  const heldForLater: MlbUnifiedOpportunity[] = [];
+  for (const item of combined) {
+    const excludedFromTop5 = item.risk_flags.some((flag) => TOP5_EXCLUDED_FLAGS.has(flag));
+    if (excludedFromTop5) heldForLater.push(item);
+    else if (safeTop5.length < 5) safeTop5.push(item);
+    else laterSlots.push(item);
+  }
+  const rankedPrimary = [...safeTop5, ...laterSlots, ...heldForLater]
     .slice(0, 10)
     .map((item, index) => ({ ...item, rank: index + 1 }));
   const primaryIds = new Map(rankedPrimary.map((item) => [item.opportunity_id, item]));
