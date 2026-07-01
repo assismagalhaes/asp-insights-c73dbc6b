@@ -822,8 +822,8 @@ function calculateParserQuality(context: MlbBaseballReferenceMatchupContext) {
   }
 
   // H2H / season series: up to +5
-  if (context.season_series.games.length > 0) score += 3;
-  if (context.head_to_head.games.length > 0) score += 2;
+  if (context.season_series.completed_games.length + context.season_series.upcoming_games.length > 0) score += 3;
+  if (context.head_to_head.last_10_games.length > 0) score += 2;
 
   let confidence = clamp(score, 0, 100);
 
