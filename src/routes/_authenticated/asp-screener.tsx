@@ -454,10 +454,19 @@ function AspScreenerPage() {
       toast.error("Cole o texto do Baseball-Reference antes de processar.");
       return;
     }
-    const context = parseBaseballReferenceMatchupText(baseballReferenceText);
+    const primary = selectedOpportunities[0];
+    const expected = primary
+      ? {
+          home_team: primary.home_team,
+          away_team: primary.away_team,
+        }
+      : undefined;
+    const context = parseBaseballReferenceMatchupText(baseballReferenceText, expected);
     setParsedMatchupContext(context);
     setCriticalPayloads([]);
-    if (context.data_quality.missing_fields.length) {
+    if (context.data_quality.warnings.some((w) => typeof w === "string" && w.includes("nao conferem"))) {
+      toast.warning("Times do Baseball-Reference nao conferem com a oportunidade selecionada.");
+    } else if (context.data_quality.missing_fields.length) {
       toast.warning("Contexto processado com campos ausentes.");
     } else {
       toast.success("Contexto Baseball-Reference processado.");
