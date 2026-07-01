@@ -218,6 +218,7 @@ export function calculateMlbOpportunityConfidence(opportunity: MlbUnifiedOpportu
   if (hasFallbackAverage(opportunity)) score -= 10;
   if (countRelevantAlerts(opportunity.alerts) >= 4) score -= 10;
   if (hasTailWarning(opportunity)) score -= 15;
+  if (isHighEdgeWithoutPitchers(opportunity)) score -= 15;
   return round(clamp(score, 0, 78), 1);
 }
 
@@ -238,7 +239,8 @@ export function applyMlbOpportunityRiskPenalties(opportunity: MlbUnifiedOpportun
   const relevantAlerts = countRelevantAlerts(opportunity.alerts);
   if (relevantAlerts >= 6) flags.push("muitos alertas criticos");
   else if (relevantAlerts >= 3) flags.push("alertas condicionais relevantes");
-  if (opportunity.market_family === "moneyline" && (opportunity.ev ?? 0) >= 0.15) flags.push("high_edge_without_pitchers");
+  if (isHighEdgeWithoutPitchers(opportunity)) flags.push("high_edge_without_pitchers");
+  if (opportunity.market_family === "totals" && opportunity.line_type === "alternate") flags.push("alternate_total_line_penalty");
   if (opportunity.alerts.some((alert) => /alternate_total_line_risk/i.test(alert))) flags.push("alternate_total_line_risk");
   if (opportunity.alerts.some((alert) => /low_fair_odd_tail_risk/i.test(alert))) flags.push("low_fair_odd_tail_risk");
   if (opportunity.alerts.some((alert) => /alternate_handicap_line_risk/i.test(alert))) flags.push("alternate_handicap_line_risk");
@@ -256,10 +258,24 @@ export function applyMlbCorrelationGuard(opportunities: MlbUnifiedOpportunity[])
 
   const updated: MlbUnifiedOpportunity[] = [];
   for (const group of grouped.values()) {
-    const eligible = group
-      .filter((item) => item.priority_status === "ANALISAR")
+    const analisar = group.filter((item) => item.priority_status === "ANALISAR");
+    const eligible = analisar
+      .filter((item) => isEligibleForPrimary(item))
       .sort(compareOpportunityPriority);
-    const primary = eligible[0] ?? null;
+
+    // Rule: high_edge_without_pitchers deve ser preterido se houver outra oportunidade
+    // do mesmo jogo com linha principal e menor risco estrutural.
+    let primary = eligible[0] ?? null;
+    if (primary && isHighEdgeWithoutPitchers(primary)) {
+      const saferMain = eligible.find(
+        (item) =>
+          item.opportunity_id !== primary!.opportunity_id &&
+          item.is_main_line &&
+          !isHighEdgeWithoutPitchers(item) &&
+          item.risk_flags.length <= primary!.risk_flags.length,
+      );
+      if (saferMain) primary = saferMain;
+    }
 
     for (const opportunity of group) {
       if (!primary || opportunity.opportunity_id === primary.opportunity_id) {
@@ -284,9 +300,21 @@ export function applyMlbCorrelationGuard(opportunities: MlbUnifiedOpportunity[])
     }
   }
 
-  const rankedPrimary = updated
+  const primaryRanked = updated
     .filter((item) => item.is_primary_shortlist)
-    .sort(compareOpportunityPriority)
+    .sort(compareOpportunityPriority);
+
+  // Rule: fair_odd < 1.35 não pode ocupar top 3 da shortlist.
+  const top: MlbUnifiedOpportunity[] = [];
+  const deferred: MlbUnifiedOpportunity[] = [];
+  for (const item of primaryRanked) {
+    if (top.length < 3 && (item.fair_odd ?? Number.POSITIVE_INFINITY) < 1.35) {
+      deferred.push(item);
+    } else {
+      top.push(item);
+    }
+  }
+  const rankedPrimary = [...top, ...deferred]
     .slice(0, 10)
     .map((item, index) => ({ ...item, rank: index + 1 }));
   const primaryIds = new Map(rankedPrimary.map((item) => [item.opportunity_id, item]));
@@ -294,6 +322,22 @@ export function applyMlbCorrelationGuard(opportunities: MlbUnifiedOpportunity[])
   return updated
     .map((item) => primaryIds.get(item.opportunity_id) ?? { ...item, is_primary_shortlist: false, rank: null })
     .sort(compareOpportunityDisplay);
+}
+
+function isEligibleForPrimary(opportunity: MlbUnifiedOpportunity): boolean {
+  // Totals alternate com distância > 1.0 excluído da shortlist principal.
+  if (
+    opportunity.market_family === "totals" &&
+    opportunity.line_type === "alternate" &&
+    (opportunity.distance_from_main_line ?? 0) > 1.0
+  ) {
+    return false;
+  }
+  // Handicap alternate nunca é primary (salvo configuração manual — não suportada).
+  if (opportunity.market_family === "handicap" && opportunity.line_type === "alternate") {
+    return false;
+  }
+  return true;
 }
 
 export function buildMlbOpportunityShortlist(params: {
@@ -471,15 +515,21 @@ function calculateRiskPenalty(flags: string[]) {
     if (/ausente|EV <= 0|missing_data|unsupported_line/.test(flag)) return sum + 100;
     if (/odd < 1\.45|odd > 3\.00/.test(flag)) return sum + 25;
     if (/linha alternativa distante|distance_from_main/.test(flag)) return sum + 20;
+    if (/alternate_total_line_penalty/.test(flag)) return sum + 12;
     if (/market_overround/.test(flag)) return sum + 10;
     if (/probability_edge/.test(flag)) return sum + 15;
     if (/EV < 3%/.test(flag)) return sum + 15;
     if (/tail_warning/.test(flag)) return sum + 10;
+    if (/high_edge_without_pitchers/.test(flag)) return sum + 10;
     if (/fallback/.test(flag)) return sum + 5;
     if (/muitos alertas/.test(flag)) return sum + 15;
     if (/alertas condicionais/.test(flag)) return sum + 5;
     return sum;
   }, 0);
+}
+
+function isHighEdgeWithoutPitchers(opportunity: MlbUnifiedOpportunity) {
+  return opportunity.market_family === "moneyline" && (opportunity.ev ?? 0) >= 0.15;
 }
 
 function getOddQuality(odd: number | null) {
