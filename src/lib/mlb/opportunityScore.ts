@@ -1,9 +1,11 @@
 import type {
+  MlbCriticalValidationContext,
   MlbCriticalValidationPayload,
   MlbHandicapCandidateStatus,
   MlbHandicapProjectionStatus,
   MlbHandicapScreenerRow,
   MlbMoneylineScreenerRow,
+  MlbOpportunityAppliedPenalty,
   MlbOpportunityMarketFamily,
   MlbOpportunityPriorityStatus,
   MlbOpportunityScoreComponents,
@@ -13,6 +15,11 @@ import type {
   MlbTotalsScreenerRow,
   MlbUnifiedOpportunity,
 } from "@/types/mlbProjections";
+
+export const MLB_PRE_CRITICAL_MAX_SCORE = 92;
+export const MLB_PRE_CRITICAL_MAX_CONFIDENCE = 72;
+
+const TOP5_EXCLUDED_FLAGS = new Set(["alternate_total_line_risk", "alternate_handicap_line_risk"]);
 
 export const MLB_OPPORTUNITY_SCORE_WEIGHTS = {
   evQuality: 0.35,
