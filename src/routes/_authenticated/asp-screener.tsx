@@ -1096,7 +1096,13 @@ function AspScreenerPage() {
               </div>
 
               {parsedMatchupContext && <ParsedContextPanel context={parsedMatchupContext} />}
-              {criticalPayloads.length > 0 && <CriticalPayloadPanel payloads={criticalPayloads} onSendToValidator={sendCriticalPayloadToValidator} />}
+              {criticalPayloads.length > 0 && (
+                <CriticalPayloadPanel
+                  payloads={criticalPayloads}
+                  onSendToCriticalValidation={sendCriticalPayloadToCriticalValidation}
+                  onSendToValidator={sendCriticalPayloadToValidator}
+                />
+              )}
             </CardContent>
           </Card>
 
