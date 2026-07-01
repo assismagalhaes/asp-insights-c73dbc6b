@@ -17,12 +17,21 @@ import { cn } from "@/lib/utils";
 import { formatBR, formatHora } from "@/lib/date-br";
 import { analisarValidacao } from "@/lib/validacao-ia.functions";
 import { analisarValidacaoOnline } from "@/lib/validacao-ia-online.functions";
-import { useCreatePrognostico, useCreateValidacao, type PrognosticoInput } from "@/lib/db";
+import { useCreateValidacao } from "@/lib/db";
+import { supabase } from "@/integrations/supabase/client";
 import {
   clearCriticalValidationDraft,
   readCriticalValidationDraft,
   type MlbCriticalValidationDraft,
 } from "@/lib/mlb/screenerToCriticalValidationAdapter";
+
+const READINESS_LABELS: Record<string, string> = {
+  pronto_para_validator: "pronto_para_validacao_critica",
+  revisar_antes_do_validator: "revisar_antes_de_decidir",
+  contexto_incompleto: "contexto_incompleto",
+  nao_recomendado_para_validator: "nao_recomendado",
+};
+const displayReadiness = (s: string) => READINESS_LABELS[s] ?? s;
 
 interface IAResult {
   parecer: string;
