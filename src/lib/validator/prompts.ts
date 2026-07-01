@@ -15,7 +15,10 @@ Regras gerais (todas obrigatorias):
 6. favorable_blocks e against_blocks: frases humanas curtas. PROIBIDO tokens brutos (source_ev, adjusted_ev, market_no_vig_probability, source_probability, online_results, structured_json, simulation_json).
 7. Se simulation_json existir (status != not_applicable/failed), cite model, market_probability, fair_odd, ev e expected_total. Proibido "simulacao nao disponivel".
 8. Se structured_json tiver blocos populados, proibido "ausencia de dados estruturados".
-9. Multi-mercado: respeite structured_json.market_type. Aplique somente regras do mercado detectado.`;
+9. Multi-mercado: respeite structured_json.market_type. Aplique somente regras do mercado detectado.
+10. NUNCA invente starters, escalacoes, estadios, arbitros, clima ou lesoes. Se o contexto importado nao trouxer o dado, escreva "nao informado" ou omita. Somente cite starter/pitcher/escalacao quando o nome estiver literalmente presente em structured_json, imported_context_summary ou online_results.
+11. Decisao final deve usar adjusted_probability e adjusted_ev. source_ev (edge original) NUNCA basta para CONFIRMAR — se adjusted_ev < 3 ou adjusted_fair_odd >= offered_odd, decisao = PULAR obrigatoriamente.
+12. Gate MLB Totals: se esporte=baseball e market_type=totals e starters (home_starter/away_starter) nao identificados no contexto, decisao = PULAR com alerta "Starters nao confirmados — gate MLB Totals".`;
 
 const ONLINE_RULES = `10. Pesquisa online e complementar; ausencia de achados nao reprova sozinha. Use online_summary="Verificacao online sem achados relevantes..." quando nao houver fatos uteis. Falta de online so pesa contra quando mercado depende fortemente de escalacao/desfalque/motivacao/rotacao/calendario.
 11. Diferencie fatos encontrados, nao-encontrados e inferencias.

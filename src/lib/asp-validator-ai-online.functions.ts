@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { AspValidatorAiResult } from "@/lib/asp-validator-ai.functions";
 import {
   clampNumber,
+  enforceHardGuardrails,
   extractManualPrediction,
   normalizeConfidence,
   normalizeEvPercent,
@@ -116,7 +117,9 @@ export const validateAspValidatorWithOnlineAi = createServerFn({ method: "POST" 
 
     const parsed = parseJsonObject(text);
     if (!parsed) throw new Error("IA + Pesquisa nao retornou JSON valido.");
-    return normalizeOnlineResult(parsed, data.context, sources, searches);
+    const normalized = normalizeOnlineResult(parsed, data.context, sources, searches);
+    const guarded = enforceHardGuardrails(normalized, data.context, route);
+    return { ...normalized, ...guarded };
   });
 
 function normalizeOnlineResult(
