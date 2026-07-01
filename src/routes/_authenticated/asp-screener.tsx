@@ -459,8 +459,6 @@ function AspScreenerPage() {
       ? {
           home_team: primary.home_team,
           away_team: primary.away_team,
-          home_team_key: primary.home_team_key,
-          away_team_key: primary.away_team_key,
         }
       : undefined;
     const context = parseBaseballReferenceMatchupText(baseballReferenceText, expected);
