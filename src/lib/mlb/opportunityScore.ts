@@ -472,15 +472,21 @@ function calculateRiskPenalty(flags: string[]) {
     if (/ausente|EV <= 0|missing_data|unsupported_line/.test(flag)) return sum + 100;
     if (/odd < 1\.45|odd > 3\.00/.test(flag)) return sum + 25;
     if (/linha alternativa distante|distance_from_main/.test(flag)) return sum + 20;
+    if (/alternate_total_line_penalty/.test(flag)) return sum + 12;
     if (/market_overround/.test(flag)) return sum + 10;
     if (/probability_edge/.test(flag)) return sum + 15;
     if (/EV < 3%/.test(flag)) return sum + 15;
     if (/tail_warning/.test(flag)) return sum + 10;
+    if (/high_edge_without_pitchers/.test(flag)) return sum + 10;
     if (/fallback/.test(flag)) return sum + 5;
     if (/muitos alertas/.test(flag)) return sum + 15;
     if (/alertas condicionais/.test(flag)) return sum + 5;
     return sum;
   }, 0);
+}
+
+function isHighEdgeWithoutPitchers(opportunity: MlbUnifiedOpportunity) {
+  return opportunity.market_family === "moneyline" && (opportunity.ev ?? 0) >= 0.15;
 }
 
 function getOddQuality(odd: number | null) {
