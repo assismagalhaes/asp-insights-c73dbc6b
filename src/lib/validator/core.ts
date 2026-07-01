@@ -124,3 +124,78 @@ export function sanitizeBlocks(items: string[]): string[] {
   }
   return cleaned;
 }
+
+// Detect starters (home/away pitcher names) inside consolidated context.
+export function hasIdentifiedMlbStarters(context: Record<string, unknown>): boolean {
+  const paths: string[][] = [
+    ["baseball_reference_context", "starting_pitchers", "home", "name"],
+    ["baseball_reference_context", "starting_pitchers", "away", "name"],
+    ["structured_json", "home_starter"],
+    ["structured_json", "away_starter"],
+    ["prediction", "home_starter"],
+    ["prediction", "away_starter"],
+  ];
+  const names: string[] = [];
+  for (const path of paths) {
+    let cur: unknown = context;
+    for (const key of path) {
+      if (!cur || typeof cur !== "object") { cur = undefined; break; }
+      cur = (cur as Record<string, unknown>)[key];
+    }
+    if (typeof cur === "string" && cur.trim().length > 2) names.push(cur.trim());
+  }
+  const summary = String((context as { imported_context_summary?: unknown }).imported_context_summary ?? "");
+  if (/\[STARTERS\][\s\S]*n[aã]o identificado/i.test(summary)) return names.length >= 2;
+  return names.length >= 2;
+}
+
+export interface HardGuardrailInput {
+  decision: "CONFIRMAR" | "PULAR";
+  adjusted_ev: number | null;
+  adjusted_fair_odd: number | null;
+  offered_odd: number | null;
+  alerts: string[];
+  final_analysis: string;
+}
+
+// Enforce items 11 (EV/fair-odd guardrail) and 12 (MLB Totals starter gate).
+// Returns adjusted decision + alerts + final_analysis. Never widens CONFIRMAR.
+export function enforceHardGuardrails<T extends HardGuardrailInput>(
+  result: T,
+  context: Record<string, unknown>,
+  route: { sport: string; market: string },
+): T {
+  const alerts = [...result.alerts];
+  let decision = result.decision;
+  let final = result.final_analysis;
+
+  // Item 12 — MLB Totals starter gate
+  if (route.sport === "baseball" && route.market === "totals" && !hasIdentifiedMlbStarters(context)) {
+    if (decision === "CONFIRMAR") {
+      decision = "PULAR";
+      final = `${final ? final + " " : ""}Decisao rebaixada para PULAR: starters nao confirmados (gate MLB Totals).`.trim();
+    }
+    if (!alerts.some((a) => /starters/i.test(a) && /gate/i.test(a))) {
+      alerts.push("Starters nao confirmados — gate MLB Totals (PULAR obrigatorio ate confirmacao).");
+    }
+  }
+
+  // Item 11 — adjusted_ev >= 3 e adjusted_fair_odd < offered_odd
+  if (decision === "CONFIRMAR") {
+    const ev = result.adjusted_ev;
+    const fair = result.adjusted_fair_odd;
+    const offered = result.offered_odd;
+    const evFail = ev === null || !Number.isFinite(ev) || ev < 3;
+    const fairFail = fair !== null && offered !== null && Number.isFinite(fair) && Number.isFinite(offered) && fair >= offered;
+    if (evFail || fairFail) {
+      decision = "PULAR";
+      const reason = evFail
+        ? `EV ajustado ${ev === null ? "indefinido" : ev.toFixed(2) + "%"} abaixo do minimo de 3%`
+        : `odd justa ajustada ${fair} >= odd ofertada ${offered}`;
+      alerts.push(`Guardrail acionado: ${reason}. Decisao forcada para PULAR.`);
+      final = `${final ? final + " " : ""}Guardrail de banca: ${reason}; decisao ajustada para PULAR.`.trim();
+    }
+  }
+
+  return { ...result, decision, alerts, final_analysis: final };
+}
