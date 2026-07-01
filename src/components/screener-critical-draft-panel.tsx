@@ -17,12 +17,21 @@ import { cn } from "@/lib/utils";
 import { formatBR, formatHora } from "@/lib/date-br";
 import { analisarValidacao } from "@/lib/validacao-ia.functions";
 import { analisarValidacaoOnline } from "@/lib/validacao-ia-online.functions";
-import { useCreatePrognostico, useCreateValidacao, type PrognosticoInput } from "@/lib/db";
+import { useCreateValidacao } from "@/lib/db";
+import { supabase } from "@/integrations/supabase/client";
 import {
   clearCriticalValidationDraft,
   readCriticalValidationDraft,
   type MlbCriticalValidationDraft,
 } from "@/lib/mlb/screenerToCriticalValidationAdapter";
+
+const READINESS_LABELS: Record<string, string> = {
+  pronto_para_validator: "pronto_para_validacao_critica",
+  revisar_antes_do_validator: "revisar_antes_de_decidir",
+  contexto_incompleto: "contexto_incompleto",
+  nao_recomendado_para_validator: "nao_recomendado",
+};
+const displayReadiness = (s: string) => READINESS_LABELS[s] ?? s;
 
 interface IAResult {
   parecer: string;
@@ -34,7 +43,7 @@ interface IAResult {
   buscas_realizadas?: string[];
 }
 
-const STAKES = ["0.5", "1.0", "1.5"];
+const STAKES = ["0", "0.5", "1.0", "1.5"];
 
 function fmtPct(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "-";
@@ -62,7 +71,6 @@ export function ScreenerCriticalDraftPanel({ onApplied }: { onApplied?: () => vo
 
   const callIA = useServerFn(analisarValidacao);
   const callIAOnline = useServerFn(analisarValidacaoOnline);
-  const createProg = useCreatePrognostico();
   const createVal = useCreateValidacao();
 
   useEffect(() => {
@@ -120,11 +128,13 @@ export function ScreenerCriticalDraftPanel({ onApplied }: { onApplied?: () => vo
       const raw = modo === "online" ? await callIAOnline(payload) : await callIA(payload);
       const r: IAResult = { ...(raw as Omit<IAResult, "modo">), modo };
       setIa(r);
-      if (r.stake_sugerida && STAKES.includes(r.stake_sugerida.toFixed(1))) {
+      if (r.decisao_sugerida === "PULAR") {
+        setStake("0");
+      } else if (r.stake_sugerida && STAKES.includes(r.stake_sugerida.toFixed(1))) {
         setStake(r.stake_sugerida.toFixed(1));
       }
       const decisao = r.decisao_sugerida === "CONFIRMA" ? "CONFIRMAR" : "PULAR";
-      const resumo = `${decisao}${r.stake_sugerida ? ` - ${r.stake_sugerida}u` : ""}`;
+      const resumo = `${decisao}${r.decisao_sugerida === "PULAR" ? " - 0u" : r.stake_sugerida ? ` - ${r.stake_sugerida}u` : ""}`;
       setParecer((p) => p || resumo);
       toast.success(modo === "online" ? "Análise online concluída" : "Análise local gerada");
     } catch (e) {
@@ -140,8 +150,17 @@ export function ScreenerCriticalDraftPanel({ onApplied }: { onApplied?: () => vo
     const oddOfertada = input.odd ?? 0;
     const oddAjustada = input.adjusted_odd ?? null;
     const oddValor = input.fair_odd ?? oddOfertada;
-    const stakeNum = statusValidacao === "CONFIRMA" ? Number(stake) || 1 : 1;
-    const body: PrognosticoInput = {
+    const stakeNum = statusValidacao === "CONFIRMA" ? Number(stake) || 1 : 0;
+    // IMPORTANTE: enviar apenas colunas que EXISTEM em `prognosticos`.
+    // Não incluir arquivo_contexto / contexto_modelo / origem_modelo /
+    // job_id_coleta — não estão no schema atual e causam erro
+    // "Could not find the '<coluna>' column of 'prognosticos' in the schema cache".
+    const contextoFinal = contexto || input.imported_context_summary;
+    const observacoesFinal = [
+      "Origem: ASP Screener MLB",
+      `Draft ID: ${draftState.draft_id}`,
+    ].join(" · ");
+    const body = {
       data: input.event_date ?? new Date().toISOString().slice(0, 10),
       hora: input.event_time,
       esporte: input.sport,
@@ -160,15 +179,17 @@ export function ScreenerCriticalDraftPanel({ onApplied }: { onApplied?: () => vo
       edge_ajustado: edgePct,
       stake: stakeNum,
       status_validacao: statusValidacao,
-      observacoes: null,
-      dados_tecnicos: contexto || input.imported_context_summary,
-      contexto_modelo: null,
-      arquivo_contexto: null,
-      origem_modelo: "ASP Screener MLB",
-      job_id_coleta: draftState.draft_id,
+      status_publicacao: "NAO_PUBLICADO",
+      observacoes: observacoesFinal,
+      dados_tecnicos: contextoFinal,
     };
-    const created = await createProg.mutateAsync(body);
-    return (created as { id: string }).id;
+    const { data, error } = await supabase
+      .from("prognosticos")
+      .insert(body as never)
+      .select("id")
+      .single();
+    if (error) throw error;
+    return (data as { id: string }).id;
   };
 
   const decidir = async (decisao: "CONFIRMA" | "PULAR") => {
@@ -179,7 +200,7 @@ export function ScreenerCriticalDraftPanel({ onApplied }: { onApplied?: () => vo
     setBusy(decisao === "CONFIRMA" ? "confirmar" : "pular");
     try {
       const prognosticoId = await criarPrognosticoAPartirDoDraft(decisao);
-      const stakeNum = decisao === "CONFIRMA" ? Number(stake) || 1 : 1;
+      const stakeNum = decisao === "CONFIRMA" ? Number(stake) || 1 : 0;
       await createVal.mutateAsync({
         prognostico_id: prognosticoId,
         decisao,
@@ -253,7 +274,7 @@ export function ScreenerCriticalDraftPanel({ onApplied }: { onApplied?: () => vo
               Revisar antes de decidir
             </Badge>
           )}
-          <Badge variant="outline">{input.readiness_status}</Badge>
+          <Badge variant="outline">{displayReadiness(input.readiness_status)}</Badge>
           <Button
             size="sm"
             variant="ghost"

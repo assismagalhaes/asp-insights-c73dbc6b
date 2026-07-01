@@ -104,6 +104,17 @@ function buildDraftId(payload: MlbPreparedCriticalValidationPayload): string {
 }
 
 function buildImportedContextSummary(payload: MlbPreparedCriticalValidationPayload): string {
+  const homeStarter = payload.baseball_reference_context?.starting_pitchers?.home;
+  const awayStarter = payload.baseball_reference_context?.starting_pitchers?.away;
+  const formatStarterLine = (s: typeof homeStarter): string => {
+    if (!s || !s.name) return "não identificado";
+    const parts = [s.name];
+    if (s.throwing_hand) parts.push(s.throwing_hand);
+    if (s.era != null) parts.push(`ERA ${s.era}`);
+    if (s.k_per_9 != null) parts.push(`K/9 ${s.k_per_9}`);
+    if (s.hr_per_9 != null) parts.push(`HR/9 ${s.hr_per_9}`);
+    return parts.join(" · ");
+  };
   const lines: string[] = [
     "Importado do ASP Screener MLB para análise crítica manual.",
     `Jogo: ${payload.game.matchup}`,
@@ -124,6 +135,13 @@ function buildImportedContextSummary(payload: MlbPreparedCriticalValidationPaylo
     `Readiness: ${payload.validation_preparation.readiness_status}`,
     `Próximo passo recomendado: ${payload.validation_preparation.recommended_next_step}`,
   ];
+  lines.push(
+    "",
+    "[STARTERS]",
+    `Mandante (${payload.game.home_team}): ${formatStarterLine(homeStarter)}`,
+    `Visitante (${payload.game.away_team}): ${formatStarterLine(awayStarter)}`,
+    "",
+  );
   const sections: [string, string[]][] = [
     ["Fatores de suporte", payload.context_alignment.supporting_factors],
     ["Fatores de conflito", payload.context_alignment.conflicting_factors],

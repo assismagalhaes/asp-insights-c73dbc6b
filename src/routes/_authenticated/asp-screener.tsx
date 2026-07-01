@@ -1742,9 +1742,18 @@ function CriticalPayloadPanel({
           highDivergence;
         const handleSendCritical = () => {
           if (shouldConfirm && typeof window !== "undefined") {
-            const ok = window.confirm(
-              "Esta oportunidade possui conflito forte com o contexto detalhado. Enviar para Validação Crítica apenas para revisão manual?",
-            );
+            const isConflict = payload.context_alignment.alignment_status === "conflicts_with_screener";
+            let msg: string;
+            if (isConflict && highDivergence) {
+              msg = "Esta oportunidade possui conflito forte e divergência alta contra o mercado no-vig. Enviar para Validação Crítica apenas para revisão manual?";
+            } else if (isConflict) {
+              msg = "Esta oportunidade possui conflito forte com o contexto detalhado. Enviar para Validação Crítica apenas para revisão manual?";
+            } else if (highDivergence) {
+              msg = "Esta oportunidade possui divergência alta contra o mercado no-vig. Enviar para Validação Crítica apenas para revisão manual?";
+            } else {
+              msg = "Esta oportunidade exige revisão manual antes de decidir. Enviar para Validação Crítica?";
+            }
+            const ok = window.confirm(msg);
             if (!ok) return;
           }
           void onSendToCriticalValidation(payload);
