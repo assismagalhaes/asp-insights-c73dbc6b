@@ -128,11 +128,13 @@ export function ScreenerCriticalDraftPanel({ onApplied }: { onApplied?: () => vo
       const raw = modo === "online" ? await callIAOnline(payload) : await callIA(payload);
       const r: IAResult = { ...(raw as Omit<IAResult, "modo">), modo };
       setIa(r);
-      if (r.stake_sugerida && STAKES.includes(r.stake_sugerida.toFixed(1))) {
+      if (r.decisao_sugerida === "PULAR") {
+        setStake("0");
+      } else if (r.stake_sugerida && STAKES.includes(r.stake_sugerida.toFixed(1))) {
         setStake(r.stake_sugerida.toFixed(1));
       }
       const decisao = r.decisao_sugerida === "CONFIRMA" ? "CONFIRMAR" : "PULAR";
-      const resumo = `${decisao}${r.stake_sugerida ? ` - ${r.stake_sugerida}u` : ""}`;
+      const resumo = `${decisao}${r.decisao_sugerida === "PULAR" ? " - 0u" : r.stake_sugerida ? ` - ${r.stake_sugerida}u` : ""}`;
       setParecer((p) => p || resumo);
       toast.success(modo === "online" ? "Análise online concluída" : "Análise local gerada");
     } catch (e) {
