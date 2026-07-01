@@ -646,11 +646,24 @@ function getMoneylineRecommendedSide(row: MlbMoneylineScreenerRow): "home" | "aw
 function compareOpportunityPriority(a: MlbUnifiedOpportunity, b: MlbUnifiedOpportunity) {
   return (
     b.opportunity_score - a.opportunity_score ||
-    getLineQuality(b) - getLineQuality(a) ||
     b.confidence_score - a.confidence_score ||
-    (b.ev ?? 0) - (a.ev ?? 0) ||
+    Number(b.is_main_line) - Number(a.is_main_line) ||
+    a.risk_flags.length - b.risk_flags.length ||
+    Number(isOddInPreferredBand(b.offered_odd)) - Number(isOddInPreferredBand(a.offered_odd)) ||
+    getAdjustedEv(b) - getAdjustedEv(a) ||
+    getLineQuality(b) - getLineQuality(a) ||
     getStructuralRiskRank(a) - getStructuralRiskRank(b)
   );
+}
+
+function isOddInPreferredBand(odd: number | null) {
+  return odd != null && odd >= 1.70 && odd <= 2.10;
+}
+
+function getAdjustedEv(opportunity: MlbUnifiedOpportunity) {
+  const ev = opportunity.ev ?? 0;
+  const scoreFactor = clamp(opportunity.opportunity_score / 100, 0, 1);
+  return ev * scoreFactor;
 }
 
 function compareOpportunityDisplay(a: MlbUnifiedOpportunity, b: MlbUnifiedOpportunity) {
