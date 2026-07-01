@@ -18,9 +18,8 @@ export function normalizeProbabilityPercent(value: number | null | undefined): n
 export function calculateEvPercent(probabilityPercent: number | null, offeredOdd: number | null): number | null {
   if (probabilityPercent === null || offeredOdd === null) return null;
   if (!Number.isFinite(probabilityPercent) || !Number.isFinite(offeredOdd) || offeredOdd <= 0) return null;
-  return round((probabilityPercent / 100) * offeredOdd - 1) * 100 === 0
-    ? 0
-    : round(((probabilityPercent / 100) * offeredOdd - 1) * 100);
+  const evPercent = ((probabilityPercent / 100) * offeredOdd - 1) * 100;
+  return round(evPercent);
 }
 
 export function formatEvPercent(value: number | null | undefined, digits = 2): string {
