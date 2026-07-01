@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { AspValidatorAiResult } from "@/lib/asp-validator-ai.functions";
 import {
   clampNumber,
+  enforceHardGuardrails,
   extractManualPrediction,
   normalizeConfidence,
   normalizeEvPercent,
