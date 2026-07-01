@@ -238,6 +238,11 @@ export function applyMlbOpportunityRiskPenalties(opportunity: MlbUnifiedOpportun
   const relevantAlerts = countRelevantAlerts(opportunity.alerts);
   if (relevantAlerts >= 6) flags.push("muitos alertas criticos");
   else if (relevantAlerts >= 3) flags.push("alertas condicionais relevantes");
+  if (opportunity.market_family === "moneyline" && (opportunity.ev ?? 0) >= 0.15) flags.push("high_edge_without_pitchers");
+  if (opportunity.alerts.some((alert) => /alternate_total_line_risk/i.test(alert))) flags.push("alternate_total_line_risk");
+  if (opportunity.alerts.some((alert) => /low_fair_odd_tail_risk/i.test(alert))) flags.push("low_fair_odd_tail_risk");
+  if (opportunity.alerts.some((alert) => /alternate_handicap_line_risk/i.test(alert))) flags.push("alternate_handicap_line_risk");
+  if (opportunity.alerts.some((alert) => /runline_margin_risk/i.test(alert))) flags.push("runline_margin_risk");
   return [...new Set(flags)];
 }
 
