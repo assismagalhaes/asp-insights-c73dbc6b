@@ -161,7 +161,7 @@ function buildStarterBlock(label: string, s: StarterLike): string[] {
 }
 
 function buildTechnicalProjectionBlock(payload: MlbPreparedCriticalValidationPayload): string[] {
-  const src = payload.source_projection_payload as Record<string, unknown> | null;
+  const src = payload.source_projection_payload as unknown as Record<string, unknown> | null;
   if (!src) return ["- Projeção técnica: dados não disponíveis"];
   const num = (k: string, digits = 2): string => {
     const v = src[k];
