@@ -26,11 +26,6 @@ export function calculateMlbContextAlignment(
   const neutral: string[] = [];
   const notes: string[] = [];
   const flags: string[] = [];
-  const selectedIsHome = opportunity.selection_team === opportunity.home_team || opportunity.side === "home";
-  const selectedTeam = selectedIsHome ? parsedContext.teams.home : parsedContext.teams.away;
-  const opponentTeam = selectedIsHome ? parsedContext.teams.away : parsedContext.teams.home;
-  const selectedStarter = selectedIsHome ? parsedContext.starting_pitchers.home : parsedContext.starting_pitchers.away;
-  const opponentStarter = selectedIsHome ? parsedContext.starting_pitchers.away : parsedContext.starting_pitchers.home;
 
   if (!parsedContext.teams.home.team_name || !parsedContext.teams.away.team_name) {
     flags.push("insufficient_baseball_reference_context");
@@ -45,53 +40,173 @@ export function calculateMlbContextAlignment(
     };
   }
 
-  if (selectedTeam.record?.win_pct != null && opponentTeam.record?.win_pct != null) {
-    if (selectedTeam.record.win_pct > opponentTeam.record.win_pct) supporting.push("Time selecionado tem recorde geral superior.");
-    else conflicting.push("Time selecionado nao tem vantagem de recorde geral.");
-  }
-  if (selectedTeam.last10?.win_pct != null && opponentTeam.last10?.win_pct != null) {
-    if (selectedTeam.last10.win_pct >= opponentTeam.last10.win_pct) supporting.push("Forma recente last10 sustenta a oportunidade.");
-    else {
-      conflicting.push("Forma recente last10 favorece o adversario.");
-      flags.push("recent_form_conflict");
+  const homeStarter = parsedContext.starting_pitchers.home;
+  const awayStarter = parsedContext.starting_pitchers.away;
+  const homeTeam = parsedContext.teams.home;
+  const awayTeam = parsedContext.teams.away;
+
+  // Totals: linguagem por tese Over/Under, sem "time selecionado"
+  if (opportunity.market_family === "totals") {
+    const side = (opportunity.side ?? opportunity.pick_label ?? "").toString();
+    const isOver = /over/i.test(side);
+    const isUnder = /under/i.test(side);
+    const label = isOver ? "Over" : isUnder ? "Under" : "Total";
+
+    notes.push(`Analise pela tese do ${label}: perfil de runs (starters, ataques, bullpen, parque, H2H).`);
+
+    const starters = [
+      { name: homeStarter.name ?? "mandante", s: homeStarter },
+      { name: awayStarter.name ?? "visitante", s: awayStarter },
+    ];
+    for (const { name, s } of starters) {
+      const era = s.era;
+      const last7 = s.last_7_era;
+      const hr9 = s.hr_per_9;
+      const bb9 = s.bb_per_9;
+      if (era != null) {
+        if (era >= 4.5) {
+          if (isOver) supporting.push(`Starter ${name} com ERA alta (${era.toFixed(2)}) favorece Over.`);
+          if (isUnder) conflicting.push(`Starter ${name} com ERA alta (${era.toFixed(2)}) conflita com tese do Under.`);
+        } else if (era <= 3.3) {
+          if (isUnder) supporting.push(`Starter ${name} forte (ERA ${era.toFixed(2)}) favorece Under.`);
+          if (isOver) conflicting.push(`Starter ${name} forte (ERA ${era.toFixed(2)}) conflita com tese do Over.`);
+        }
+      }
+      if (last7 != null) {
+        if (last7 >= 5) {
+          if (isOver) supporting.push(`Last 7 GS ruim para ${name} (ERA ${last7.toFixed(2)}) reforca Over.`);
+          if (isUnder) conflicting.push(`Last 7 GS ruim para ${name} (ERA ${last7.toFixed(2)}) enfraquece Under.`);
+        } else if (last7 <= 3.2) {
+          if (isUnder) supporting.push(`Last 7 GS bom para ${name} (ERA ${last7.toFixed(2)}) reforca Under.`);
+          if (isOver) conflicting.push(`Last 7 GS bom para ${name} (ERA ${last7.toFixed(2)}) enfraquece Over.`);
+        }
+      }
+      if (hr9 != null) {
+        if (hr9 >= 1.3) {
+          if (isOver) supporting.push(`HR/9 alto para ${name} (${hr9.toFixed(2)}) favorece Over.`);
+          if (isUnder) conflicting.push(`HR/9 alto para ${name} (${hr9.toFixed(2)}) conflita com Under.`);
+        } else if (hr9 <= 0.85) {
+          if (isUnder) supporting.push(`HR/9 baixo para ${name} (${hr9.toFixed(2)}) favorece Under.`);
+          if (isOver) conflicting.push(`HR/9 baixo para ${name} (${hr9.toFixed(2)}) enfraquece Over.`);
+        }
+      }
+      if (bb9 != null && bb9 >= 3.8) {
+        if (isOver) supporting.push(`BB/9 alto para ${name} (${bb9.toFixed(2)}) favorece Over.`);
+        if (isUnder) conflicting.push(`BB/9 alto para ${name} (${bb9.toFixed(2)}) conflita com Under.`);
+      }
+    }
+
+    // Ataques: usar record recente como proxy simples
+    const teamsOffense = [
+      { label: homeTeam.team_name ?? "mandante", pct: homeTeam.last10?.win_pct },
+      { label: awayTeam.team_name ?? "visitante", pct: awayTeam.last10?.win_pct },
+    ];
+    for (const t of teamsOffense) {
+      if (t.pct == null) continue;
+      if (t.pct >= 0.6) {
+        if (isOver) supporting.push(`Ataque de ${t.label} em boa fase (last10 ${(t.pct * 100).toFixed(0)}%) favorece Over.`);
+        if (isUnder) conflicting.push(`Ataque de ${t.label} em boa fase (last10 ${(t.pct * 100).toFixed(0)}%) conflita com Under.`);
+      } else if (t.pct <= 0.35) {
+        if (isUnder) supporting.push(`Ataque de ${t.label} frio (last10 ${(t.pct * 100).toFixed(0)}%) favorece Under.`);
+        if (isOver) conflicting.push(`Ataque de ${t.label} frio (last10 ${(t.pct * 100).toFixed(0)}%) enfraquece Over.`);
+      }
+    }
+
+    // H2H recente
+    const h2h = parsedContext.head_to_head.last_10_games ?? [];
+    const totals = h2h
+      .map((g) => (g.home_score != null && g.away_score != null ? g.home_score + g.away_score : null))
+      .filter((v): v is number => v != null);
+    if (totals.length > 0 && opportunity.line != null) {
+      const avg = totals.reduce((a, b) => a + b, 0) / totals.length;
+      if (avg >= opportunity.line + 1) {
+        if (isOver) supporting.push(`H2H recente com totais altos (media ${avg.toFixed(1)}) favorece Over.`);
+        if (isUnder) {
+          conflicting.push(`H2H recente com totais altos (media ${avg.toFixed(1)}) conflita com Under.`);
+          flags.push("h2h_total_conflict");
+        }
+      } else if (avg <= opportunity.line - 1) {
+        if (isUnder) supporting.push(`H2H recente com totais baixos (media ${avg.toFixed(1)}) favorece Under.`);
+        if (isOver) {
+          conflicting.push(`H2H recente com totais baixos (media ${avg.toFixed(1)}) conflita com Over.`);
+          flags.push("h2h_total_conflict");
+        }
+      } else {
+        neutral.push(`H2H recente com totais medios (${avg.toFixed(1)}) proximo da linha ${opportunity.line}.`);
+      }
+    }
+
+    if (!homeStarter.name || !awayStarter.name) flags.push("starter_data_missing");
+    if (homeStarter.innings_pitched_decimal != null && homeStarter.innings_pitched_decimal < 40) flags.push("small_sample_pitcher");
+    if (awayStarter.innings_pitched_decimal != null && awayStarter.innings_pitched_decimal < 40) flags.push("small_sample_pitcher");
+
+    // Divergencia com mercado no-vig: risk_flag, nao veto
+    if (
+      opportunity.model_prob != null &&
+      opportunity.market_prob_no_vig != null &&
+      Math.abs(opportunity.model_prob - opportunity.market_prob_no_vig) >= 0.08
+    ) {
+      flags.push("market_divergence");
+      notes.push("Mercado no-vig diverge da projecao ASP: usar como ancora prudencial, nao veto.");
+    }
+  } else {
+    // Moneyline / Handicap: mantem logica por lado selecionado
+    const selectedIsHome = opportunity.selection_team === opportunity.home_team || opportunity.side === "home";
+    const selectedTeam = selectedIsHome ? homeTeam : awayTeam;
+    const opponentTeam = selectedIsHome ? awayTeam : homeTeam;
+    const selectedStarter = selectedIsHome ? homeStarter : awayStarter;
+    const opponentStarter = selectedIsHome ? awayStarter : homeStarter;
+
+    if (selectedTeam.record?.win_pct != null && opponentTeam.record?.win_pct != null) {
+      if (selectedTeam.record.win_pct > opponentTeam.record.win_pct) supporting.push("Time selecionado tem recorde geral superior.");
+      else conflicting.push("Time selecionado nao tem vantagem de recorde geral.");
+    }
+    if (selectedTeam.last10?.win_pct != null && opponentTeam.last10?.win_pct != null) {
+      if (selectedTeam.last10.win_pct >= opponentTeam.last10.win_pct) supporting.push("Forma recente last10 sustenta a oportunidade.");
+      else {
+        conflicting.push("Forma recente last10 favorece o adversario.");
+        flags.push("recent_form_conflict");
+      }
+    }
+    if (opponentStarter.starter_quality_score != null && selectedStarter.starter_quality_score != null) {
+      const starterGap = selectedStarter.starter_quality_score - opponentStarter.starter_quality_score;
+      if (starterGap >= 8) supporting.push("Starter matchup favorece o lado selecionado.");
+      else if (starterGap <= -8) {
+        conflicting.push("Starter matchup favorece o adversario e reduz confianca.");
+        flags.push("starter_matchup_conflict");
+      } else neutral.push("Starter matchup parece equilibrado pelo score simples.");
+    } else {
+      flags.push("starter_data_missing");
+      neutral.push("Dados de starter incompletos.");
+    }
+    if (selectedStarter.innings_pitched_decimal != null && selectedStarter.innings_pitched_decimal < 40) flags.push("small_sample_pitcher");
+    if (opponentStarter.innings_pitched_decimal != null && opponentStarter.innings_pitched_decimal < 40) flags.push("small_sample_pitcher");
+
+    if (opportunity.market_family === "moneyline") {
+      notes.push("Moneyline: revisar se a vantagem geral sobrevive ao matchup de starters.");
+    }
+    if (opportunity.market_family === "handicap") {
+      notes.push("Handicap: avaliar se a margem projetada sustenta a linha escolhida.");
+      if ((opportunity.line ?? 0) < 0 && selectedTeam.one_run_record) {
+        neutral.push("Revisar risco de jogo de 1 corrida antes de validar handicap negativo.");
+        flags.push("one_run_game_risk");
+      }
+      flags.push("runline_margin_risk");
+    }
+
+    if (
+      opportunity.model_prob != null &&
+      opportunity.market_prob_no_vig != null &&
+      Math.abs(opportunity.model_prob - opportunity.market_prob_no_vig) >= 0.08
+    ) {
+      flags.push("market_divergence");
+      notes.push("Mercado no-vig diverge da projecao ASP: ancora prudencial, nao veto.");
     }
   }
-  if (opponentStarter.starter_quality_score != null && selectedStarter.starter_quality_score != null) {
-    const starterGap = selectedStarter.starter_quality_score - opponentStarter.starter_quality_score;
-    if (starterGap >= 8) supporting.push("Starter matchup favorece o lado selecionado.");
-    else if (starterGap <= -8) {
-      conflicting.push("Starter matchup favorece o adversario e reduz confianca.");
-      flags.push("starter_matchup_conflict");
-    } else neutral.push("Starter matchup parece equilibrado pelo score simples.");
-  } else {
-    flags.push("starter_data_missing");
-    neutral.push("Dados de starter incompletos.");
-  }
-  if (selectedStarter.innings_pitched_decimal != null && selectedStarter.innings_pitched_decimal < 40) flags.push("small_sample_pitcher");
-  if (opponentStarter.innings_pitched_decimal != null && opponentStarter.innings_pitched_decimal < 40) flags.push("small_sample_pitcher");
+
   if ((opportunity.probability_edge ?? 0) < 0.03) flags.push("market_edge_too_small");
   if (opportunity.correlation_status === "correlated_alternative") flags.push("correlated_opportunity");
   if (!opportunity.is_main_line) flags.push("alternative_line_risk");
-
-  if (opportunity.market_family === "moneyline") {
-    notes.push("Moneyline: revisar se a vantagem geral sobrevive ao matchup de starters.");
-  }
-  if (opportunity.market_family === "totals") {
-    notes.push("Totals: confrontar total projetado com ERA, HR/9 e forma recente dos starters.");
-    const lowHrRisk = [selectedStarter.hr_per_9, opponentStarter.hr_per_9].every((value) => value != null && value < 0.8);
-    if (/Over/i.test(opportunity.side ?? "") && lowHrRisk) {
-      conflicting.push("Ambos starters mostram baixo HR/9 no contexto extraido.");
-      flags.push("total_projection_conflict");
-    }
-  }
-  if (opportunity.market_family === "handicap") {
-    notes.push("Handicap: avaliar se a margem projetada sustenta a linha escolhida.");
-    if ((opportunity.line ?? 0) < 0 && selectedTeam.one_run_record) {
-      neutral.push("Revisar risco de jogo de 1 corrida antes de validar handicap negativo.");
-      flags.push("one_run_game_risk");
-    }
-    flags.push("runline_margin_risk");
-  }
 
   const alignmentScore = clamp(55 + supporting.length * 9 - conflicting.length * 12 - flags.length * 3, 0, 100);
   const status = getAlignmentStatus(alignmentScore, supporting.length, conflicting.length);
@@ -233,6 +348,7 @@ function getAlignmentStatus(score: number, supports: number, conflicts: number):
   if (supports === 0 && conflicts === 0) return "insufficient_context";
   if (score >= 68 && supports > conflicts) return "supports_screener";
   if (score <= 42 && conflicts > supports) return "conflicts_with_screener";
+  if (conflicts > supports && score < 60) return "mixed_to_conflicting";
   return "mixed";
 }
 
