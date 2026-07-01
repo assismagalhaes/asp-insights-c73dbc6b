@@ -20,6 +20,7 @@ const EMPTY_VALIDATION: MlbValidatorHandoffValidationResult = {
 };
 
 export function mapMlbCriticalPayloadToValidatorInput(payload: MlbPreparedCriticalValidationPayload): MlbValidatorHandoffPrefill {
+  const prep = payload.validation_preparation;
   return {
     sport: "Baseball",
     league: "MLB",
@@ -30,6 +31,7 @@ export function mapMlbCriticalPayloadToValidatorInput(payload: MlbPreparedCritic
     away_team: payload.game.away_team,
     matchup: payload.game.matchup,
     market: payload.opportunity.market,
+    market_family: (payload.source_projection_payload as { market_family?: string } | null)?.market_family ?? null,
     pick: payload.opportunity.pick,
     line: payload.opportunity.line,
     odd: payload.opportunity.odd,
@@ -40,7 +42,17 @@ export function mapMlbCriticalPayloadToValidatorInput(payload: MlbPreparedCritic
     ev: payload.opportunity.ev,
     opportunity_score: payload.opportunity.opportunity_score,
     confidence_score: payload.opportunity.confidence_score,
-    readiness_status: payload.validation_preparation.readiness_status,
+    raw_opportunity_score: prep.raw_opportunity_score,
+    raw_confidence_score: prep.raw_confidence_score,
+    critical_adjusted_score: prep.critical_adjusted_score,
+    critical_adjusted_confidence: prep.critical_adjusted_confidence,
+    critical_adjusted_status: prep.critical_adjusted_status,
+    post_context_risk_flags: prep.post_context_risk_flags,
+    validation_readiness_score: prep.validation_readiness_score,
+    readiness_status: prep.readiness_status,
+    alignment_status: payload.context_alignment.alignment_status,
+    alignment_score: payload.context_alignment.alignment_score,
+    source_projection_payload: payload.source_projection_payload,
   };
 }
 

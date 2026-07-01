@@ -1698,13 +1698,46 @@ function CriticalPayloadPanel({
       <div className="text-sm font-semibold">Confronto Screener x Contexto Detalhado</div>
       {payloads.map((payload) => {
         const handoffValidation = validateMlbValidatorHandoffPayload(buildMlbValidatorHandoffPayload(payload));
+        const prep = payload.validation_preparation;
+        const alignmentScore = payload.context_alignment.alignment_score;
+        const marketDivergencePP =
+          payload.opportunity.model_probability != null && payload.opportunity.market_probability_no_vig != null
+            ? Math.abs(payload.opportunity.model_probability - payload.opportunity.market_probability_no_vig) * 100
+            : 0;
+        const isStrongConflict = prep.critical_adjusted_status === "strong_conflict";
+        const isReviewBefore = prep.critical_adjusted_status === "review_before_validator";
+        const highDivergence = marketDivergencePP >= 15;
+        const shouldConfirm =
+          payload.context_alignment.alignment_status === "conflicts_with_screener" ||
+          alignmentScore <= 35 ||
+          highDivergence;
+        const handleSend = () => {
+          if (shouldConfirm && typeof window !== "undefined") {
+            const ok = window.confirm(
+              "Esta oportunidade possui conflito forte com o contexto detalhado. Enviar ao Validator apenas para revisão crítica?",
+            );
+            if (!ok) return;
+          }
+          void onSendToValidator(payload);
+        };
         return (
           <div key={`${payload.game.game_id}-${payload.opportunity.market}-${payload.opportunity.pick}`} className="rounded-md border bg-background/50 p-3 text-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="font-medium">{payload.game.matchup} | {payload.opportunity.market} | {payload.opportunity.pick}</div>
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline">{payload.validation_preparation.readiness_status}</Badge>
-                <Button size="sm" onClick={() => void onSendToValidator(payload)} disabled={!handoffValidation.canSend}>
+                {isStrongConflict && (
+                  <Badge variant="destructive">Conflito forte com o Screener</Badge>
+                )}
+                {isReviewBefore && !isStrongConflict && (
+                  <Badge variant="outline" className="border-warning/60 text-warning">Revisar antes do Validator</Badge>
+                )}
+                {highDivergence && (
+                  <Badge variant="outline" className="border-warning/60 text-warning">
+                    Divergência alta contra mercado no-vig ({marketDivergencePP.toFixed(1)} p.p.)
+                  </Badge>
+                )}
+                <Badge variant="outline">{prep.readiness_status}</Badge>
+                <Button size="sm" onClick={handleSend} disabled={!handoffValidation.canSend}>
                   <Send className="mr-2 h-4 w-4" />
                   Enviar esta para ASP Validator
                 </Button>
@@ -1722,9 +1755,15 @@ function CriticalPayloadPanel({
             )}
           <div className="mt-2 grid gap-2 md:grid-cols-4">
             <Info label="Alignment" value={payload.context_alignment.alignment_status} />
-            <Info label="Alignment score" value={payload.context_alignment.alignment_score} />
-            <Info label="Readiness" value={payload.validation_preparation.validation_readiness_score} />
+            <Info label="Alignment score" value={alignmentScore} />
+            <Info label="Readiness" value={prep.validation_readiness_score} />
             <Info label="Flags" value={payload.context_alignment.critical_flags.length} />
+          </div>
+          <div className="mt-2 grid gap-2 md:grid-cols-4">
+            <Info label="Opportunity Score (bruto)" value={prep.raw_opportunity_score} />
+            <Info label="Confidence (bruto)" value={prep.raw_confidence_score} />
+            <Info label="Score pós-contexto" value={prep.critical_adjusted_score} />
+            <Info label="Confiança pós-contexto" value={prep.critical_adjusted_confidence} />
           </div>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             <div>

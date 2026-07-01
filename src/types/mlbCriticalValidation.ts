@@ -183,6 +183,15 @@ export interface MlbValidationPreparation {
   readiness_status: MlbValidationReadinessStatus;
   critical_questions: string[];
   recommended_next_step: string;
+  // Score bruto do Screener (nunca sobrescrever). Preservado para auditoria.
+  raw_opportunity_score: number;
+  raw_confidence_score: number;
+  // Scores pós-contexto, com caps aplicados por alignment/divergence/flags.
+  critical_adjusted_score: number;
+  critical_adjusted_confidence: number;
+  // Sinalização visual sugerida para a UI (badges).
+  critical_adjusted_status: "strong_conflict" | "review_before_validator" | "aligned";
+  post_context_risk_flags: string[];
 }
 
 export interface MlbPreparedCriticalValidationPayload {

@@ -2820,22 +2820,51 @@ function ImportedMlbScreenerBanner({
           </div>
         </div>
 
-        {prefill && (
-          <div className="grid gap-2 md:grid-cols-4">
-            <Info label="Handoff ID" value={payload?.handoff_id ?? "-"} />
-            <Info label="Auditoria" value={audit?.status ?? "-"} />
-            <Info label="Enviado em" value={audit?.sent_at ? formatDateTime(audit.sent_at) : "-"} />
-            <Info label="Aplicado em" value={audit?.applied_at ? formatDateTime(audit.applied_at) : "-"} />
-            <Info label="Jogo" value={prefill.matchup} />
-            <Info label="Mercado" value={prefill.market} />
-            <Info label="Pick" value={prefill.pick ?? "-"} />
-            <Info label="Odd" value={formatOdd(prefill.odd)} />
-            <Info label="EV ASP" value={formatDecimalEv(prefill.ev)} />
-            <Info label="Opportunity" value={String(prefill.opportunity_score)} />
-            <Info label="Confidence" value={String(prefill.confidence_score)} />
-            <Info label="Readiness" value={prefill.readiness_status} />
-          </div>
-        )}
+        {prefill && (() => {
+          const proj = (prefill as unknown as { source_projection_payload?: Record<string, unknown> | null }).source_projection_payload;
+          const hasProjection = !!proj && (
+            (proj as { home_expected_runs?: number | null }).home_expected_runs != null ||
+            (proj as { away_expected_runs?: number | null }).away_expected_runs != null ||
+            (proj as { projected_total_runs?: number | null }).projected_total_runs != null
+          );
+          const raw = (prefill as unknown as { raw_opportunity_score?: number; raw_confidence_score?: number; critical_adjusted_score?: number; critical_adjusted_confidence?: number; critical_adjusted_status?: string; alignment_status?: string; alignment_score?: number; validation_readiness_score?: number }) ?? {};
+          const strongConflict = raw.critical_adjusted_status === "strong_conflict";
+          return (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                {strongConflict && (
+                  <Badge variant="destructive">Conflito forte com o Screener</Badge>
+                )}
+                {raw.critical_adjusted_status === "review_before_validator" && !strongConflict && (
+                  <Badge variant="outline" className="border-warning/60 text-warning">Revisar antes do Validator</Badge>
+                )}
+                <Badge variant="outline">Usou source projection: {hasProjection ? "Sim" : "Não"}</Badge>
+              </div>
+              <div className="grid gap-2 md:grid-cols-4">
+                <Info label="Handoff ID" value={payload?.handoff_id ?? "-"} />
+                <Info label="Auditoria" value={audit?.status ?? "-"} />
+                <Info label="Enviado em" value={audit?.sent_at ? formatDateTime(audit.sent_at) : "-"} />
+                <Info label="Aplicado em" value={audit?.applied_at ? formatDateTime(audit.applied_at) : "-"} />
+                <Info label="Jogo" value={prefill.matchup} />
+                <Info label="Mercado" value={prefill.market} />
+                <Info label="Pick" value={prefill.pick ?? "-"} />
+                <Info label="Odd" value={formatOdd(prefill.odd)} />
+                <Info label="EV ASP" value={formatDecimalEv(prefill.ev)} />
+                <Info label="Opportunity (bruto)" value={String(raw.raw_opportunity_score ?? prefill.opportunity_score)} />
+                <Info label="Confidence (bruto)" value={String(raw.raw_confidence_score ?? prefill.confidence_score)} />
+                <Info label="Score pós-contexto" value={String(raw.critical_adjusted_score ?? "-")} />
+                <Info label="Confiança pós-contexto" value={String(raw.critical_adjusted_confidence ?? "-")} />
+                <Info label="Alignment" value={`${raw.alignment_status ?? "-"} (${raw.alignment_score ?? "-"})`} />
+                <Info label="Readiness" value={`${raw.validation_readiness_score ?? "-"} · ${prefill.readiness_status}`} />
+              </div>
+              {hasProjection && (
+                <p className="text-xs text-muted-foreground">
+                  Simulação simplificada disponível a partir do payload do Screener.
+                </p>
+              )}
+            </>
+          );
+        })()}
 
         {warnings.map((warning) => (
           <div key={warning} className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">

@@ -16,6 +16,7 @@ import {
   round,
   sanitizeBlocks,
 } from "@/lib/validator/core";
+import { assertEvConsistency, calculateEvPercent } from "@/lib/validator/ev-math";
 import { buildSystemPrompt } from "@/lib/validator/prompts";
 import { routeValidator } from "@/lib/validator/sport-router";
 
@@ -61,7 +62,9 @@ export const validateAspValidatorWithOnlineAi = createServerFn({ method: "POST" 
     const slim = slimAspValidatorContext(data.context);
     const route = routeValidator(data.context);
     const systemPrompt = buildSystemPrompt("online", route);
-    const prompt = `Contexto consolidado (esporte=${route.sport}, mercado=${route.market}; ordem: manual > structured_json > simulation_json > parecer IA anterior > pesquisa online). Use web_search/web_scrape de forma objetiva. Retorne JSON valido.\n\n${JSON.stringify(slim)}`;
+    const queryHint = buildResearchQueryHint(data.context);
+    const prompt = `Contexto consolidado (esporte=${route.sport}, mercado=${route.marketDetected}; ordem: manual > structured_json > simulation_json > parecer IA anterior > pesquisa online). Use web_search/web_scrape de forma objetiva. Priorize fontes oficiais (MLB, ESPN, Baseball Savant, Baseball-Reference) e evite fontes sociais (Reddit, X, Instagram) como achado principal. Query sugerida: "${queryHint}". Retorne JSON valido.\n\n${JSON.stringify(slim)}`;
+
 
     const { text } = await generateText({
       model: gateway("google/gemini-3-flash-preview"),
@@ -129,9 +132,10 @@ function normalizeOnlineResult(
     50;
   const offeredOdd = readNumber(value.offered_odd) ?? manual.offered_odd;
   const adjustedFairOdd = readNumber(value.adjusted_fair_odd) ?? (adjustedProbability > 0 ? round(100 / adjustedProbability) : 2);
+  const suggestedEv = normalizeEvPercent(readNumber(value.adjusted_ev));
   const adjustedEv =
-    normalizeEvPercent(readNumber(value.adjusted_ev)) ??
-    (offeredOdd ? round((offeredOdd * (adjustedProbability / 100) - 1) * 100) : null);
+    assertEvConsistency(suggestedEv, adjustedProbability, offeredOdd ?? null, "asp-validator-ai-online") ??
+    calculateEvPercent(adjustedProbability, offeredOdd ?? null);
   const onlineSummary =
     readString(value.online_summary) ||
     "Verificacao online sem achados relevantes. Nao ha noticia ou contexto externo suficiente para alterar a analise.";
@@ -177,7 +181,7 @@ function buildAnalysisContext(context: Record<string, unknown>, sources: Array<{
   const route = routeValidator(context);
   return [
     "ASP Validator - IA + Pesquisa",
-    `Esporte detectado: ${route.sport} | Mercado detectado: ${route.market}`,
+    `Esporte detectado: ${route.sport} | Mercado detectado: ${route.marketDetected}`,
     `Usou OCR real: ${usage.used_ocr ? "sim" : "nao"}`,
     `Usou texto colado: ${usage.used_pasted_text ? "sim" : "nao"}`,
     `Usou JSON estruturado: ${usage.used_structured_json ? "sim" : "nao"}`,
@@ -186,4 +190,34 @@ function buildAnalysisContext(context: Record<string, unknown>, sources: Array<{
     `Fontes consultadas: ${sources.length}`,
     "Regras: pesquisa online e complementar; ausencia de achados nao reprova sozinha; em duvida relevante, PULAR; proibido somar medias brutas (ex.: 11.8 + 12.6).",
   ].join("\n");
+}
+
+function buildResearchQueryHint(context: Record<string, unknown>): string {
+  const get = (path: string[]): string => {
+    let cur: unknown = context;
+    for (const p of path) {
+      if (!cur || typeof cur !== "object") return "";
+      cur = (cur as Record<string, unknown>)[p];
+    }
+    return typeof cur === "string" ? cur.trim() : "";
+  };
+  const home = get(["fixture", "home_team"]) || get(["home_team"]);
+  const away = get(["fixture", "away_team"]) || get(["away_team"]);
+  const date = get(["fixture", "date"]) || get(["match_date"]);
+  const venue = get(["fixture", "venue"]) || get(["structured_json", "venue"]);
+  const market = get(["prediction", "market"]) || get(["market"]);
+  const pick = get(["prediction", "pick"]) || get(["pick"]);
+  const homeStarter =
+    get(["structured_json", "home_starter"]) ||
+    get(["source_projection_payload", "home_starter_name"]) ||
+    get(["source_projection_payload", "home_projected_pitcher"]);
+  const awayStarter =
+    get(["structured_json", "away_starter"]) ||
+    get(["source_projection_payload", "away_starter_name"]) ||
+    get(["source_projection_payload", "away_projected_pitcher"]);
+  return [home, away, date, venue, homeStarter, awayStarter, market, pick, "preview"]
+    .filter((piece) => piece && piece.length > 0)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
 }

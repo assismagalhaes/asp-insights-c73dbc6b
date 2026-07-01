@@ -16,6 +16,7 @@ import {
   round,
   sanitizeBlocks,
 } from "@/lib/validator/core";
+import { assertEvConsistency, calculateEvPercent } from "@/lib/validator/ev-math";
 import { buildSystemPrompt } from "@/lib/validator/prompts";
 import { routeValidator } from "@/lib/validator/sport-router";
 
@@ -80,9 +81,12 @@ function normalizeAiResult(value: Record<string, unknown>, context: Record<strin
     50;
   const adjustedFairOdd = readNumber(value.adjusted_fair_odd) ?? (adjustedProbability > 0 ? round(100 / adjustedProbability) : 2);
   const offeredOdd = readNumber(value.offered_odd) ?? manual.offered_odd;
+  // Sempre recalcular o EV ajustado a partir de probabilidade x odd oferecida.
+  // A IA pode divergir por escala; guardrail em ev-math avisa em dev se |Δ| > 0.25 p.p.
+  const suggestedEv = normalizeEvPercent(readNumber(value.adjusted_ev));
   const adjustedEv =
-    normalizeEvPercent(readNumber(value.adjusted_ev)) ??
-    (offeredOdd && adjustedProbability ? round((offeredOdd * (adjustedProbability / 100) - 1) * 100) : null);
+    assertEvConsistency(suggestedEv, adjustedProbability, offeredOdd ?? null, "asp-validator-ai") ??
+    calculateEvPercent(adjustedProbability, offeredOdd ?? null);
   return {
     decision: value.decision === "CONFIRMAR" ? "CONFIRMAR" : "PULAR",
     confidence: normalizeConfidence(value.confidence),
@@ -118,7 +122,7 @@ function buildFallbackResult(context: Record<string, unknown>, alert: string): A
     source_ev: manual.source_ev,
     adjusted_probability: probability,
     adjusted_fair_odd: probability > 0 ? round(100 / probability) : 2,
-    adjusted_ev: manual.offered_odd ? round((manual.offered_odd * (probability / 100) - 1) * 100) : null,
+    adjusted_ev: calculateEvPercent(probability, manual.offered_odd ?? null),
     simulation_summary: "Fallback seguro aplicado; simulacao nao foi suficiente para decisao automatica.",
     favorable_blocks: [],
     against_blocks: ["Validacao automatica inconclusiva."],
@@ -133,7 +137,7 @@ function buildAnalysisContext(context: Record<string, unknown>, aiParsed: boolea
   const route = routeValidator(context);
   return [
     "ASP Validator - Validacao IA consolidada",
-    `Esporte detectado: ${route.sport} | Mercado detectado: ${route.market}`,
+    `Esporte detectado: ${route.sport} | Mercado detectado: ${route.marketDetected}`,
     `Resposta IA interpretada: ${aiParsed ? "sim" : "nao"}`,
     `Usou OCR: ${usage.used_ocr ? "sim" : "nao"}`,
     `Usou JSON estruturado: ${usage.used_structured_json ? "sim" : "nao"}`,

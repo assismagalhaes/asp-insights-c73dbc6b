@@ -32,6 +32,7 @@ export interface MlbValidatorHandoffPrefill {
   away_team: string;
   matchup: string;
   market: string;
+  market_family: string | null;
   pick: string | null;
   line: number | null;
   odd: number | null;
@@ -40,9 +41,21 @@ export interface MlbValidatorHandoffPrefill {
   probability_edge: number | null;
   fair_odd: number | null;
   ev: number | null;
+  // Score bruto do Screener (nunca sobrescrito).
   opportunity_score: number;
   confidence_score: number;
+  raw_opportunity_score: number;
+  raw_confidence_score: number;
+  // Score pós-contexto (com caps aplicados por alignment/divergence/flags).
+  critical_adjusted_score: number;
+  critical_adjusted_confidence: number;
+  critical_adjusted_status: "strong_conflict" | "review_before_validator" | "aligned";
+  post_context_risk_flags: string[];
+  validation_readiness_score: number;
   readiness_status: MlbValidationReadinessStatus;
+  alignment_status: string;
+  alignment_score: number;
+  source_projection_payload: MlbPreparedCriticalValidationPayload["source_projection_payload"];
 }
 
 export interface MlbValidatorHandoffPayload {
