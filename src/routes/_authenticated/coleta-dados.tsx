@@ -33,6 +33,7 @@ import {
   createScrapingJob,
   getScrapingJobCsv,
   getScrapingJobNormalized,
+  getScrapingJobRaw,
   getScrapingJobStatus,
 } from "@/lib/scraper-api.functions";
 
@@ -148,12 +149,7 @@ function ColetaDadosPage() {
   const importarNormalizedDaVm = async (coleta: ColetaOdds) => {
     if (!coleta.job_id) throw new Error("Coleta sem job_id para consultar na VM.");
     setRemoteStatus("Buscando dados normalizados...");
-    const result = await getScrapingJobNormalized({ data: { job_id: coleta.job_id } });
-    const raw = result.normalized_json;
-    const normalizedData = normalizeVmNormalizedPayload(raw, { esporte: coleta.esporte });
-    if (!normalizedData.total_odds) {
-      throw new Error("Retorno /normalized da VM nao trouxe odds para importar.");
-    }
+    const { raw, normalizedData } = await carregarOddsDaVm(coleta.job_id, coleta.esporte, setRemoteStatus);
 
     setRemoteStatus("Salvando odds no banco...");
     const imported = await completeRemoteCollection(coleta.id, raw, normalizedData);
@@ -246,9 +242,7 @@ function ColetaDadosPage() {
     if (!coleta.job_id) return;
     setRemoteBusy(`normalized:${coleta.id}`);
     try {
-      const result = await getScrapingJobNormalized({ data: { job_id: coleta.job_id } });
-      const raw = result.normalized_json;
-      const normalizedData = normalizeVmNormalizedPayload(raw, { esporte: coleta.esporte });
+      const { raw, normalizedData } = await carregarOddsDaVm(coleta.job_id, coleta.esporte, setRemoteStatus);
       if (!normalizedData.total_odds) {
         throw new Error("JSON retornado pela VM não gerou odds normalizadas.");
       }
@@ -666,6 +660,66 @@ async function pollVmJob(
 
 function sleep(ms: number) {
   return new Promise((resolve) => globalThis.setTimeout(resolve, ms));
+}
+
+async function carregarOddsDaVm(
+  jobId: string,
+  esporte: string | null,
+  onStatus?: (status: string) => void,
+) {
+  const normalizedResult = await getScrapingJobNormalized({ data: { job_id: jobId } });
+  const normalizedRaw = normalizedResult.normalized_json;
+  const normalizedData = normalizeVmNormalizedPayload(normalizedRaw, { esporte });
+  if (normalizedData.total_odds) {
+    return { raw: normalizedRaw, normalizedData };
+  }
+
+  onStatus?.("Normalizado veio vazio; tentando importar a partir do JSON bruto da VM...");
+  const rawResult = await getScrapingJobRaw({ data: { job_id: jobId } });
+  const raw = rawResult.raw_json;
+  const rawNormalizedData = normalizeVmNormalizedPayload(raw, { esporte });
+  if (rawNormalizedData.total_odds) {
+    return { raw, normalizedData: rawNormalizedData };
+  }
+
+  const normalizedKeys = payloadKeys(normalizedRaw);
+  const rawKeys = payloadKeys(raw);
+  const normalizedSummary = payloadSummary(normalizedRaw);
+  const rawSummary = payloadSummary(raw);
+  const messages = [payloadMessage(normalizedRaw), payloadMessage(raw)].filter(Boolean);
+  const reason = messages.length ? ` Mensagem da VM: ${[...new Set(messages)].join(" | ")}.` : "";
+  throw new Error(
+    `A VM concluiu o job, mas a coleta veio vazia: nenhuma odd foi retornada em /normalized nem em /raw.${reason} ` +
+      `/normalized: ${normalizedSummary} (keys: ${normalizedKeys}); /raw: ${rawSummary} (keys: ${rawKeys}).`,
+  );
+}
+
+function payloadKeys(payload: unknown) {
+  if (Array.isArray(payload)) return `array(${payload.length})`;
+  if (isObj(payload)) return Object.keys(payload).slice(0, 20).join(", ") || "(objeto vazio)";
+  return typeof payload;
+}
+
+function payloadMessage(payload: unknown): string | null {
+  if (!isObj(payload)) return null;
+  const value = payload.mensagem ?? payload.message ?? payload.erro ?? payload.error ?? payload.detail;
+  if (typeof value === "string" && value.trim()) return value.trim();
+  return null;
+}
+
+function payloadSummary(payload: unknown): string {
+  if (Array.isArray(payload)) return `array=${payload.length}`;
+  if (!isObj(payload)) return typeof payload;
+
+  const parts: string[] = [];
+  if ("status" in payload) parts.push(`status=${String(payload.status)}`);
+  if ("total_linhas" in payload) parts.push(`total_linhas=${String(payload.total_linhas)}`);
+  if (Array.isArray(payload.linhas)) parts.push(`linhas=${payload.linhas.length}`);
+  if (Array.isArray(payload.jogos)) parts.push(`jogos=${payload.jogos.length}`);
+  if (isObj(payload._default)) parts.push(`_default=${Object.keys(payload._default).length}`);
+  if (Array.isArray(payload.games)) parts.push(`games=${payload.games.length}`);
+  if (Array.isArray(payload.rows)) parts.push(`rows=${payload.rows.length}`);
+  return parts.length ? parts.join(", ") : "sem contadores conhecidos";
 }
 
 function isRunningStatus(status: string | null | undefined) {
