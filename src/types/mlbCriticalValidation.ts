@@ -87,7 +87,7 @@ export interface MlbParsedRecentGame {
 
 export interface MlbBaseballReferenceMatchupContext {
   source: "baseball_reference_matchup_text";
-  parser_version: "1.0.0";
+  parser_version: "1.0.0" | "1.1.0";
   raw_text: string;
   parsed_at: string;
   teams: {
