@@ -594,6 +594,7 @@ function getTotalRecommendation(input: {
 function classifyTotalCandidate(input: {
   recommendedEv: number | null;
   recommendedOdd: number | null;
+  recommendedFairOdd: number | null;
   recommendedProbGap: number;
   runGap: number;
   distanceFromMainLine: number | null;
@@ -601,15 +602,19 @@ function classifyTotalCandidate(input: {
 }): MlbProjectionCandidateStatus {
   const ev = input.recommendedEv ?? Number.NEGATIVE_INFINITY;
   const odd = input.recommendedOdd ?? 0;
+  const fairOdd = input.recommendedFairOdd ?? 0;
   const distance = input.distanceFromMainLine ?? 0;
   const { thresholds } = input.config;
+  if (distance > thresholds.maxMonitorDistanceFromMainLine) return "pular";
   const canAnalyzeAlternate = distance <= thresholds.maxAnalyzeDistanceFromMainLine;
-  const canAnalyzeOdd = odd >= thresholds.minOdd && odd <= thresholds.maxOdd;
+  const canAnalyzeOdd = odd >= thresholds.minAnalyzeOdd && odd <= thresholds.maxAnalyzeOdd;
+  const canAnalyzeFairOdd = fairOdd >= thresholds.minAnalyzeFairOdd;
   if (
     ev >= thresholds.analyzeEv &&
     input.recommendedProbGap >= thresholds.analyzeProbGap &&
     input.runGap >= thresholds.analyzeRunGap &&
     canAnalyzeOdd &&
+    canAnalyzeFairOdd &&
     canAnalyzeAlternate
   ) {
     return "analisar";
