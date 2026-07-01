@@ -78,30 +78,70 @@ function pick(row: Row, ...keys: string[]): unknown {
   return "";
 }
 
+function pickNested(row: Row, ...paths: string[]): unknown {
+  for (const path of paths) {
+    const parts = path.split(".");
+    let current: unknown = row;
+    for (const part of parts) {
+      if (!current || typeof current !== "object" || Array.isArray(current)) {
+        current = undefined;
+        break;
+      }
+      current = (current as Row)[part];
+    }
+    if (current !== undefined && current !== null && current !== "") return current;
+  }
+  return "";
+}
+
+function compactTechnicalContext(row: Row): string {
+  const source = pickNested(row, "dados_tecnicos", "technical_data", "stats", "model", "raw_ref", "metadata");
+  if (!source) return "";
+  return typeof source === "string" ? source : JSON.stringify(source);
+}
+
 function normalizeRow(row: Row): Row {
   const out: Row = {};
   // cópia direta quando existir
   for (const k of TARGET_KEYS) out[k] = k in row ? row[k] : "";
 
   // aliases comuns vindos da VM /normalized
-  if (!out.data) out.data = pick(row, "data_jogo", "date", "match_date", "dt");
-  if (!out.hora) out.hora = pick(row, "horario", "hora_jogo", "time", "kickoff", "match_time");
+  if (!out.data) out.data = pick(row, "data_jogo", "date", "match_date", "dt", "game_date", "start_date");
+  if (!out.hora) out.hora = pick(row, "horario", "hora_jogo", "time", "kickoff", "match_time", "start_time", "hour");
   if (!out.esporte) out.esporte = pick(row, "sport", "esporte_nome");
-  if (!out.liga) out.liga = pick(row, "league", "campeonato", "torneio", "competition");
-  if (!out.mandante) out.mandante = pick(row, "home", "home_team", "time_casa", "mandante_nome");
-  if (!out.visitante) out.visitante = pick(row, "away", "away_team", "time_fora", "visitante_nome");
+  if (!out.liga) out.liga = pick(row, "league", "campeonato", "torneio", "competition", "competition_name");
+  if (!out.mandante) out.mandante = pick(row, "home", "home_team", "time_casa", "mandante_nome", "casa", "team_home");
+  if (!out.visitante) out.visitante = pick(row, "away", "away_team", "time_fora", "visitante_nome", "fora", "team_away");
   if (!out.jogo && (out.mandante || out.visitante)) {
     out.jogo = `${String(out.mandante ?? "")} x ${String(out.visitante ?? "")}`.trim();
   }
-  if (!out.jogo) out.jogo = pick(row, "match", "partida", "evento", "event");
-  if (!out.mercado) out.mercado = pick(row, "market", "market_name", "mercado_nome", "tipo_mercado");
-  if (!out.pick) out.pick = pick(row, "selection", "selecao", "aposta", "pick_nome", "outcome", "runner");
-  if (!out.linha) out.linha = pick(row, "line", "handicap", "total", "linha_valor");
-  if (!out.odd_ofertada) out.odd_ofertada = pick(row, "odd", "odd_ofertada_valor", "price", "cotacao", "quota", "odds");
-  if (!out.odd_valor) out.odd_valor = pick(row, "fair_odd", "odd_justa", "true_odd", "valor_justo");
-  if (!out.probabilidade_final) out.probabilidade_final = pick(row, "prob", "probability", "prob_final", "probabilidade");
-  if (!out.edge) out.edge = pick(row, "ev", "value", "valor_esperado", "edge_pct");
-  if (!out.observacoes) out.observacoes = pick(row, "obs", "notes", "observacao", "bookmaker", "casa");
+  if (!out.jogo) out.jogo = pick(row, "match", "partida", "evento", "event", "game", "fixture");
+  if (!out.mercado) out.mercado = pick(row, "market", "market_name", "mercado_nome", "tipo_mercado", "market_type", "bet_type");
+  if (!out.pick) out.pick = pick(row, "selection", "selecao", "aposta", "pick_nome", "outcome", "runner", "side", "option");
+  if (!out.linha) out.linha = pick(row, "line", "handicap", "total", "linha_valor", "point", "points", "spread");
+  if (!out.odd_ofertada) {
+    out.odd_ofertada = pickNested(
+      row,
+      "odd",
+      "odd_ofertada_valor",
+      "price",
+      "cotacao",
+      "quota",
+      "odds",
+      "decimal",
+      "decimal_odd",
+      "bookmaker_odd",
+      "offered_odd",
+      "odds.decimal",
+      "odds.price",
+      "bookmaker.price",
+    );
+  }
+  if (!out.odd_valor) out.odd_valor = pick(row, "fair_odd", "odd_justa", "true_odd", "valor_justo", "fair", "fair_price");
+  if (!out.probabilidade_final) out.probabilidade_final = pick(row, "prob", "probability", "prob_final", "probabilidade", "probabilidade_final_pct", "prob_pct");
+  if (!out.edge) out.edge = pick(row, "ev", "value", "valor_esperado", "edge_pct", "edge_percent", "ev_pct");
+  if (!out.dados_tecnicos) out.dados_tecnicos = compactTechnicalContext(row);
+  if (!out.observacoes) out.observacoes = pick(row, "obs", "notes", "observacao", "bookmaker", "casa", "book", "casa_aposta");
   return out;
 }
 
@@ -206,6 +246,8 @@ export function ScraperApiDialog({ onRowsReady }: Props) {
         );
         return;
       }
+      onRowsReady([...TARGET_KEYS, "dados_tecnicos"], rows);
+      toast.success(`${rows.length} odds recebidas da VM e enviadas para a pré-visualização.`);
       setOpen(false);
     } catch (e) {
       toast.error((e as Error).message || "Falha ao consultar a API");
