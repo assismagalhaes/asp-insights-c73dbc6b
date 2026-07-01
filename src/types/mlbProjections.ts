@@ -147,6 +147,8 @@ export interface MlbTotalsThresholds {
   minOdd: number;
   maxOdd: number;
   maxAnalyzeDistanceFromMainLine: number;
+  maxMonitorDistanceFromMainLine: number;
+  minAnalyzeFairOdd: number;
   maxAnalyzeOdd: number;
   minAnalyzeOdd: number;
 }
