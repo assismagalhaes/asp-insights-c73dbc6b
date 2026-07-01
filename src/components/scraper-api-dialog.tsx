@@ -41,7 +41,7 @@ function extractRows(payload: unknown): Row[] {
   if (Array.isArray(payload)) return payload as Row[];
   if (typeof payload === "object") {
     const obj = payload as Record<string, unknown>;
-    for (const k of ["odds", "rows", "data", "result", "results", "jogos", "items", "normalized_json", "raw_json"]) {
+    for (const k of ["linhas", "odds", "rows", "data", "result", "results", "jogos", "items", "normalized_json", "raw_json"]) {
       const v = obj[k];
       if (Array.isArray(v)) return v as Row[];
       if (v && typeof v === "object") {
