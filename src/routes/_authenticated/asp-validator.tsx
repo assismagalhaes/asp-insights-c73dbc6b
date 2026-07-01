@@ -2037,7 +2037,7 @@ function StructuredOcrPanel({ record, uploads }: { record: ValidatorRecord; uplo
         </div>
       ) : null}
 
-      {hasJsonContent(structured) ? <ExtractedImageDataPanel structured={structured as StructuredValidatorJson} /> : null}
+      {hasJsonContent(structured) ? <ExtractedImageDataPanel structured={structured as StructuredValidatorJson} sport={record.sport} /> : null}
 
       {hasJsonContent(structured) ? (
         <div className="rounded-md border border-border bg-background/50 p-3">
@@ -2053,10 +2053,15 @@ function StructuredOcrPanel({ record, uploads }: { record: ValidatorRecord; uplo
   );
 }
 
-function ExtractedImageDataPanel({ structured }: { structured: StructuredValidatorJson }) {
+function ExtractedImageDataPanel({ structured, sport }: { structured: StructuredValidatorJson; sport?: string | null }) {
   const market = structured.market ?? structured.prediction;
   const corners = structured.corners;
   const preMatchAverage = structured.pre_match_odds?.length ? average(structured.pre_match_odds.map((item) => item.odd)) : null;
+  const sportNorm = (sport ?? "").trim().toLowerCase();
+  // Corners/race/escanteios blocks are football-only. For Baseball / Basketball / etc.
+  // suppress the entire corners tree to avoid misleading "0" tiles.
+  const isFootball = sportNorm === "" || sportNorm.startsWith("futebol") || sportNorm.startsWith("football") || sportNorm.startsWith("soccer");
+  const showCorners = isFootball && Boolean(corners && (corners.home || corners.away));
   return (
     <details className="rounded-md border border-border bg-background/50 p-3" open>
       <summary className="cursor-pointer text-sm font-semibold">Dados extraidos por recorte</summary>
@@ -2072,8 +2077,13 @@ function ExtractedImageDataPanel({ structured }: { structured: StructuredValidat
         <Info label="Qualidade" value={`${Math.round((structured.data_quality_score ?? 0) * 100)}%`} />
         <Info label="Campos extraidos" value={String(structured.structured_fields_count ?? 0)} />
       </div>
-      <NormalizedCornerLinesPanel home={corners?.home?.normalized_market_lines ?? []} away={corners?.away?.normalized_market_lines ?? []} />
+      {showCorners ? (
+        <NormalizedCornerLinesPanel home={corners?.home?.normalized_market_lines ?? []} away={corners?.away?.normalized_market_lines ?? []} />
+      ) : null}
+
+      {showCorners ? (<>
       <div className="mt-3 grid gap-3 md:grid-cols-2">
+
         <div className="rounded-md border border-border p-3">
           <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Geral - {structured.match?.home_team || "Mandante"}</div>
           <div className="grid gap-2 md:grid-cols-2">
@@ -2147,7 +2157,9 @@ function ExtractedImageDataPanel({ structured }: { structured: StructuredValidat
           </div>
         </div>
       </div>
+      </>) : null}
       <div className="mt-3 grid gap-3 md:grid-cols-2">
+
         <div className="rounded-md border border-border p-3">
           <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Odds pre-jogo</div>
           <div className="grid gap-2 md:grid-cols-2">

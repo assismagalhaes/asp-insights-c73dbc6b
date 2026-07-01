@@ -31,7 +31,7 @@ Regras (todas obrigatorias):
 1. Decisao: somente CONFIRMAR ou PULAR. Em duvida relevante, PULAR. Foco em protecao de banca.
 2. Previsao externa nao confirma sozinha; campos manuais > structured_json > simulacao.
 3. Guardrail: CONFIRMAR somente se adjusted_ev >= 3 (em percentual; 3 = 3%, nunca 0.03) e adjusted_fair_odd < offered_odd. Caso contrario PULAR. adjusted_ev e source_ev SEMPRE em percentual (ex.: 5 = 5%, -2 = -2%). NUNCA enviar fracao decimal (0.05).
-4. Mercado no-vig e ANCORA prudencial, NAO veto automatico. Se probabilidade ASP divergir muito do no-vig (>=8 p.p.), registre risk_flag "market_divergence" nos alerts. Nao forcar PULAR apenas por divergencia. PULAR automatico somente se (a) adjusted_ev < 3% E (b) houver conflito contextual relevante OU critical_flags fortes OU ausencia de suporte tecnico suficiente.
+4. Mercado no-vig e ANCORA prudencial, NAO veto automatico. Se divergencia ASP vs no-vig >= 12 p.p., registre risk_flag "market_divergence" em alerts; se >= 18 p.p., reduza a confianca em um nivel. Nao forcar PULAR apenas por divergencia. PULAR automatico somente se (a) adjusted_ev < 3% E (b) houver conflito contextual relevante OU critical_flags fortes OU ausencia de suporte tecnico suficiente.
 5. Redacao de EV negativo: NUNCA escrever "odd ofertada ACIMA da odd justa". Correto: "A probabilidade ajustada de X% implica odd justa Y. Como a odd ofertada e Z, ela esta ABAIXO da odd justa, resultando em EV ajustado negativo."
 6. favorable_blocks e against_blocks devem usar frases humanas curtas. PROIBIDO usar tokens/campos brutos como source_ev, adjusted_ev, market_no_vig_probability, source_probability, online_results. Ex.: "EV original positivo no Screener", "Probabilidade ASP acima da linha de mercado", "Mercado no-vig contradiz a projecao", "EV ajustado negativo".
 7. Se simulation_json existir (status != not_applicable/failed), cite obrigatoriamente model, market_probability, fair_odd, ev e expected_total. Proibido escrever "simulacao nao disponivel".
@@ -105,8 +105,9 @@ function normalizeAiResult(value: Record<string, unknown>, context: Record<strin
     adjusted_fair_odd: round(adjustedFairOdd),
     adjusted_ev: adjustedEv,
     simulation_summary: readString(value.simulation_summary) || (hasSimulationData(context) ? "Simulacao disponivel mas nao resumida pela IA." : "Simulacao nao disponivel ou nao conclusiva."),
-    favorable_blocks: readStringArray(value.favorable_blocks),
-    against_blocks: readStringArray(value.against_blocks),
+    favorable_blocks: sanitizeBlocks(readStringArray(value.favorable_blocks)),
+    against_blocks: sanitizeBlocks(readStringArray(value.against_blocks)),
+
     alerts: readStringArray(value.alerts),
     final_analysis: readString(value.final_analysis) || "A IA nao forneceu parecer detalhado. Por seguranca, revisar manualmente.",
     analysis_context: buildAnalysisContext(context, true),
@@ -180,6 +181,41 @@ function readString(value: unknown): string {
 function readStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
 }
+
+// Post-hoc guard: remove blocks that are just raw tokens (e.g. "source_ev: 3.2",
+// "market_no_vig_probability = 0.48"). Rewrites common token names into
+// human phrasing when the AI slips despite the system prompt.
+const RAW_TOKEN_PATTERN = /\b(source_ev|adjusted_ev|source_probability|adjusted_probability|market_no_vig_probability|market_no_vig|no_vig_probability|online_results|structured_json|simulation_json|fair_odd_original|probability_original|ev_original)\b/gi;
+
+function sanitizeBlocks(items: string[]): string[] {
+  const cleaned: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of items) {
+    let text = String(raw).trim();
+    if (!text) continue;
+    // Skip lines that are essentially just a token = value dump.
+    const looksLikeTokenDump = /^[\s\-*]*[a-z_]+\s*[:=]\s*[-+\d.%]+\s*$/i.test(text);
+    if (looksLikeTokenDump && RAW_TOKEN_PATTERN.test(text)) continue;
+    // Rewrite lingering token names inside a longer sentence.
+    text = text
+      .replace(/market_no_vig_probability/gi, "probabilidade no-vig do mercado")
+      .replace(/no_vig_probability/gi, "probabilidade no-vig do mercado")
+      .replace(/market_no_vig/gi, "mercado no-vig")
+      .replace(/source_probability/gi, "probabilidade da fonte")
+      .replace(/adjusted_probability/gi, "probabilidade ajustada")
+      .replace(/source_ev/gi, "EV da fonte")
+      .replace(/adjusted_ev/gi, "EV ajustado")
+      .replace(/online_results/gi, "pesquisa online")
+      .replace(/structured_json/gi, "dados estruturados")
+      .replace(/simulation_json/gi, "simulacao");
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    cleaned.push(text);
+  }
+  return cleaned;
+}
+
 
 function clampNumber(value: number | null, min: number, max: number): number | null {
   return value === null ? null : Math.max(min, Math.min(max, value));

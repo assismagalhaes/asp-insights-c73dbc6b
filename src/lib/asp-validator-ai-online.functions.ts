@@ -31,7 +31,7 @@ Regras (obrigatorias):
 1. Decisao: somente CONFIRMAR ou PULAR. Em duvida relevante, PULAR. Proteja a banca.
 2. Previsao externa nao confirma sozinha; manual > structured_json > simulacao > online.
 3. Guardrail: CONFIRMAR somente se adjusted_ev >= 3 (em percentual; 3 = 3%, nunca 0.03) e adjusted_fair_odd < offered_odd. Caso contrario PULAR. adjusted_ev e source_ev SEMPRE em percentual (ex.: 5 = 5%, -2 = -2%). NUNCA enviar fracao decimal (0.05).
-4. Mercado no-vig e ANCORA prudencial, NAO veto automatico. Divergencia forte (>=8 p.p.) vira risk_flag "market_divergence" em alerts. PULAR automatico somente se (a) adjusted_ev < 3% E (b) conflito contextual relevante OU critical_flags fortes OU ausencia de suporte tecnico suficiente.
+4. Mercado no-vig e ANCORA prudencial, NAO veto automatico. Divergencia ASP vs no-vig >= 12 p.p. vira risk_flag "market_divergence" em alerts; >= 18 p.p. reduz a confianca em um nivel. PULAR automatico somente se (a) adjusted_ev < 3% E (b) conflito contextual relevante OU critical_flags fortes OU ausencia de suporte tecnico suficiente.
 5. Redacao de EV negativo: NUNCA escrever "odd ofertada ACIMA da odd justa". Correto: "A probabilidade ajustada de X% implica odd justa Y. Como a odd ofertada e Z, ela esta ABAIXO da odd justa, resultando em EV ajustado negativo."
 6. favorable_blocks e against_blocks devem usar frases humanas. PROIBIDO usar tokens brutos (source_ev, adjusted_ev, market_no_vig_probability, source_probability, online_results). Ex.: "EV original positivo no Screener", "Probabilidade ASP acima da linha de mercado", "Mercado no-vig contradiz a projecao", "EV ajustado negativo", "Pesquisa online reforca cenario contrario".
 7. Pesquisa online e complementar; ausencia de achados nao reprova sozinha. Use online_summary="Verificacao online sem achados relevantes..." quando nao houver fatos uteis. Falta de online so pesa contra quando mercado depende fortemente de escalacao/desfalque/motivacao/rotacao/calendario.
@@ -152,8 +152,9 @@ function normalizeOnlineResult(
     adjusted_ev: adjustedEv,
     online_summary: onlineSummary,
     simulation_summary: readString(value.simulation_summary) || "Simulacao nao disponivel ou nao conclusiva.",
-    favorable_blocks: readStringArray(value.favorable_blocks),
-    against_blocks: readStringArray(value.against_blocks),
+    favorable_blocks: sanitizeBlocks(readStringArray(value.favorable_blocks)),
+    against_blocks: sanitizeBlocks(readStringArray(value.against_blocks)),
+
     alerts,
     final_analysis: readString(value.final_analysis) || "IA + Pesquisa nao forneceu parecer detalhado.",
     analysis_context: buildAnalysisContext(context, sources, searches),
@@ -235,6 +236,37 @@ function readString(value: unknown): string {
 function readStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
 }
+
+// See asp-validator-ai.functions.ts for the same guard rationale.
+const RAW_TOKEN_PATTERN = /\b(source_ev|adjusted_ev|source_probability|adjusted_probability|market_no_vig_probability|market_no_vig|no_vig_probability|online_results|structured_json|simulation_json|fair_odd_original|probability_original|ev_original)\b/gi;
+
+function sanitizeBlocks(items: string[]): string[] {
+  const cleaned: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of items) {
+    let text = String(raw).trim();
+    if (!text) continue;
+    const looksLikeTokenDump = /^[\s\-*]*[a-z_]+\s*[:=]\s*[-+\d.%]+\s*$/i.test(text);
+    if (looksLikeTokenDump && RAW_TOKEN_PATTERN.test(text)) continue;
+    text = text
+      .replace(/market_no_vig_probability/gi, "probabilidade no-vig do mercado")
+      .replace(/no_vig_probability/gi, "probabilidade no-vig do mercado")
+      .replace(/market_no_vig/gi, "mercado no-vig")
+      .replace(/source_probability/gi, "probabilidade da fonte")
+      .replace(/adjusted_probability/gi, "probabilidade ajustada")
+      .replace(/source_ev/gi, "EV da fonte")
+      .replace(/adjusted_ev/gi, "EV ajustado")
+      .replace(/online_results/gi, "pesquisa online")
+      .replace(/structured_json/gi, "dados estruturados")
+      .replace(/simulation_json/gi, "simulacao");
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    cleaned.push(text);
+  }
+  return cleaned;
+}
+
 
 function clampNumber(value: number | null, min: number, max: number): number | null {
   return value === null ? null : Math.max(min, Math.min(max, value));
