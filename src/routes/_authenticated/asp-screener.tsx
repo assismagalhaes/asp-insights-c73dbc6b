@@ -1784,8 +1784,7 @@ function CriticalPayloadPanel({
                 </Button>
               </div>
             </div>
-              </div>
-            </div>
+
             {handoffValidation.warnings.length > 0 && (
               <div className="mt-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
                 {formatAlertMessage(handoffValidation.warnings[0])}
