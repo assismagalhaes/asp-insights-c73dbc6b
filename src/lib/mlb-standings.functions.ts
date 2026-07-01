@@ -24,7 +24,7 @@ const SnapshotInputObjectSchema = z.object({
 
 const SnapshotInputSchema = SnapshotInputObjectSchema
   .transform((data) => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayBR();
     return {
       snapshotDate: data.snapshotDate ?? today,
       season: data.season ?? Number(today.slice(0, 4)),
