@@ -218,6 +218,7 @@ export function calculateMlbOpportunityConfidence(opportunity: MlbUnifiedOpportu
   if (hasFallbackAverage(opportunity)) score -= 10;
   if (countRelevantAlerts(opportunity.alerts) >= 4) score -= 10;
   if (hasTailWarning(opportunity)) score -= 15;
+  if (isHighEdgeWithoutPitchers(opportunity)) score -= 15;
   return round(clamp(score, 0, 78), 1);
 }
 
