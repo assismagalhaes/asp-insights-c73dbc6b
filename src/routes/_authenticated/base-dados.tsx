@@ -472,6 +472,19 @@ function BaseDadosPage() {
 
   return (
     <div className="space-y-6">
+      {scraperUnavailable && (
+        <div className="flex items-start gap-3 rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+          <div className="space-y-1">
+            <p className="font-semibold">Scraper API indisponível</p>
+            <p className="text-destructive/90">
+              Não foi possível contatar o servidor da VM que fornece os dados desta tela (erro Cloudflare 1016 / DNS).
+              A origem está offline ou o registro DNS foi removido. O código do ASP Insights está íntegro — assim que o
+              host voltar, esta tela funcionará normalmente sem alterações.
+            </p>
+          </div>
+        </div>
+      )}
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
           <Database className="h-6 w-6 text-primary" />
