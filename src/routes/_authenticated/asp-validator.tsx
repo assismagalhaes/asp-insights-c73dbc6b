@@ -5812,16 +5812,16 @@ function percentToInput(value: number | null): string {
 
 function formatDate(value: string | null): string {
   if (!value) return "-";
-  const parsed = new Date(`${value}T00:00:00`);
+  const parsed = new Date(`${value}T00:00:00-03:00`);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleDateString("pt-BR");
+  return parsed.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
 }
 
 function formatDateTime(value: string | null): string {
   if (!value) return "-";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString("pt-BR");
+  return parsed.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
 }
 
 function formatFileSize(bytes: number): string {
