@@ -150,8 +150,17 @@ export function ScreenerCriticalDraftPanel({ onApplied }: { onApplied?: () => vo
     const oddOfertada = input.odd ?? 0;
     const oddAjustada = input.adjusted_odd ?? null;
     const oddValor = input.fair_odd ?? oddOfertada;
-    const stakeNum = statusValidacao === "CONFIRMA" ? Number(stake) || 1 : 1;
-    const body: PrognosticoInput = {
+    const stakeNum = statusValidacao === "CONFIRMA" ? Number(stake) || 1 : 0;
+    // IMPORTANTE: enviar apenas colunas que EXISTEM em `prognosticos`.
+    // Não incluir arquivo_contexto / contexto_modelo / origem_modelo /
+    // job_id_coleta — não estão no schema atual e causam erro
+    // "Could not find the '<coluna>' column of 'prognosticos' in the schema cache".
+    const contextoFinal = contexto || input.imported_context_summary;
+    const observacoesFinal = [
+      "Origem: ASP Screener MLB",
+      `Draft ID: ${draftState.draft_id}`,
+    ].join(" · ");
+    const body = {
       data: input.event_date ?? new Date().toISOString().slice(0, 10),
       hora: input.event_time,
       esporte: input.sport,
@@ -170,15 +179,17 @@ export function ScreenerCriticalDraftPanel({ onApplied }: { onApplied?: () => vo
       edge_ajustado: edgePct,
       stake: stakeNum,
       status_validacao: statusValidacao,
-      observacoes: null,
-      dados_tecnicos: contexto || input.imported_context_summary,
-      contexto_modelo: null,
-      arquivo_contexto: null,
-      origem_modelo: "ASP Screener MLB",
-      job_id_coleta: draftState.draft_id,
+      status_publicacao: "NAO_PUBLICADO",
+      observacoes: observacoesFinal,
+      dados_tecnicos: contextoFinal,
     };
-    const created = await createProg.mutateAsync(body);
-    return (created as { id: string }).id;
+    const { data, error } = await supabase
+      .from("prognosticos")
+      .insert(body as never)
+      .select("id")
+      .single();
+    if (error) throw error;
+    return (data as { id: string }).id;
   };
 
   const decidir = async (decisao: "CONFIRMA" | "PULAR") => {
