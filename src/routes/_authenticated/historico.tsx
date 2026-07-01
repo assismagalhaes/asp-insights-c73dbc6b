@@ -14,7 +14,7 @@ import {
 import { LeagueFilter } from "@/components/league-filter";
 import { PeriodFilter } from "@/components/period-filter";
 import { rangeFromPeriodo, dateInRange, lucroUnidadesAnalitico, stakeAnalitica, type PeriodoFiltro } from "@/lib/metrics";
-import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
+import { formatBR, formatHora, shouldShowLinha, todayBR } from "@/lib/date-br";
 import { DadosTecnicosViewer } from "@/components/dados-tecnicos-viewer";
 
 export const Route = createFileRoute("/_authenticated/historico")({
