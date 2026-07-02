@@ -8,12 +8,14 @@ const JobParamsSchema = z
     sport: z.string().min(1).optional(),
     leagues: z.array(z.string().min(1)).optional().default([]),
     liga: z.string().optional(),
+    mercados: z.array(z.string().min(1)).optional().default([]),
     data_inicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     data_fim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   })
   .transform((data) => ({
     esporte: data.esporte ?? data.sport,
     leagues: data.leagues ?? [],
+    mercados: data.mercados ?? [],
     data_inicio: data.data_inicio,
     data_fim: data.data_fim,
   }))

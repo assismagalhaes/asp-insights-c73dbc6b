@@ -20,6 +20,11 @@ sys.path.append("/home/ubuntu/jupyter")
 from scraper_flashscore import executar_scraper_real
 
 try:
+    from api.scraping_params import normalize_scraping_params
+except ModuleNotFoundError:
+    from scraping_params import normalize_scraping_params
+
+try:
     from scrapers.flashscore_url import extract_flashscore_match_id, normalize_flashscore_url
 except Exception:
     extract_flashscore_match_id = None
@@ -48,7 +53,46 @@ class ScrapingParams(BaseModel):
     data_fim: str
     liga: str | None = None
     leagues: list[str] | None = None
-    mercados: list[str] = []
+    mercados: list[str] | None = None
+
+
+def _raw_games(raw_data: Any) -> list[Any]:
+    if isinstance(raw_data, dict):
+        jogos = raw_data.get("jogos")
+        games = raw_data.get("games")
+        if isinstance(jogos, list) and jogos:
+            return jogos
+        if isinstance(games, list) and games:
+            return games
+        if isinstance(raw_data.get("_default"), dict):
+            return [item for item in raw_data["_default"].values() if isinstance(item, dict)]
+        if isinstance(jogos, list):
+            return jogos
+        if isinstance(games, list):
+            return games
+        for key in ("data", "result", "results", "items"):
+            if isinstance(raw_data.get(key), list):
+                return raw_data[key]
+    if isinstance(raw_data, list):
+        return raw_data
+    return []
+
+
+def _collection_warning(params: dict[str, Any], total_jogos: int, total_odds: int) -> str | None:
+    reasons = []
+    if not params.get("mercados"):
+        reasons.append("nenhum mercado efetivo informado")
+    if total_jogos == 0:
+        reasons.append("nenhum jogo encontrado")
+    if total_odds == 0:
+        reasons.append("nenhuma odd normalizada")
+    if not reasons:
+        return None
+    return "Coleta concluida com alerta: " + "; ".join(reasons) + "."
+
+
+def _job_log(**values: Any) -> str:
+    return " | ".join(f"{key}={value}" for key, value in values.items())
 
 
 def verificar_token(authorization: str | None):
@@ -196,8 +240,9 @@ def normalizar_raw_data(job_id: str, raw_data: dict) -> dict:
     # ======================================================
     # FORMATO ANTIGO / FAKE
     # ======================================================
-    if "jogos" in raw_data:
-        for jogo in raw_data.get("jogos", []):
+    jogos_legado = raw_data.get("jogos") if isinstance(raw_data.get("jogos"), list) else []
+    if jogos_legado:
+        for jogo in jogos_legado:
             mercados = jogo.get("mercados", [])
 
             for mercado in mercados:
@@ -543,9 +588,19 @@ def executar_coleta_fake(job_id: str, params: dict):
     job["finalizado_em"] = datetime.now().isoformat()
     save_job(job)
 def executar_coleta_real(job_id: str, params: dict):
+    params = normalize_scraping_params(params)
     job = load_job(job_id)
     job["status"] = "RODANDO"
     job["iniciado_em"] = datetime.now().isoformat()
+    job["params"] = params
+    job["logs"] = [
+        _job_log(
+            evento="inicio_coleta_real",
+            esporte=params.get("esporte"),
+            leagues=params.get("leagues"),
+            mercados_efetivos=params.get("mercados"),
+        )
+    ]
     save_job(job)
 
     try:
@@ -556,14 +611,45 @@ def executar_coleta_real(job_id: str, params: dict):
             mercados=params.get("mercados", []),
             leagues=params.get("leagues"),
         )
+        raw_path = None
+        if isinstance(resultado, dict):
+            raw_path = resultado.get("raw_path") or resultado.get("db_path")
+        if raw_path and Path(raw_path).exists():
+            raw_data = load_raw_json(Path(raw_path), job_id)
+        else:
+            raw_data = resultado if isinstance(resultado, dict) else {"data": resultado}
+            raw_path = str(raw_file(job_id))
+            save_json(raw_file(job_id), raw_data)
+
+        normalized_data = normalizar_raw_data(job_id, raw_data)
+        normalized_path = normalized_file(job_id)
+        save_json(normalized_path, normalized_data)
+
+        total_jogos = len(_raw_games(raw_data))
+        total_odds = int(normalized_data.get("total_linhas") or len(normalized_data.get("linhas") or []))
+        warning = _collection_warning(params, total_jogos, total_odds)
 
         job = load_job(job_id)
         job["status"] = "CONCLUIDA"
-        job["total_jogos"] = None
-        job["total_odds"] = None
-        job["raw_path"] = resultado.get("db_path")
-        job["normalized_path"] = resultado.get("db_path")
+        job["total_jogos"] = total_jogos
+        job["total_odds"] = total_odds
+        job["raw_path"] = raw_path
+        job["normalized_path"] = str(normalized_path)
         job["resultado_scraper"] = resultado
+        job["warning"] = warning
+        job["mensagem"] = warning or "Coleta real concluida com jogos e odds normalizadas."
+        job["logs"] = (job.get("logs") or []) + [
+            _job_log(
+                evento="fim_coleta_real",
+                esporte=params.get("esporte"),
+                leagues=params.get("leagues"),
+                mercados_efetivos=params.get("mercados"),
+                raw_path=raw_path,
+                normalized_path=str(normalized_path),
+                total_jogos=total_jogos,
+                total_odds=total_odds,
+            )
+        ]
         job["finalizado_em"] = datetime.now().isoformat()
         save_job(job)
 
@@ -633,15 +719,24 @@ def criar_job(
     verificar_token(authorization)
 
     job_id = str(uuid4())
+    params_dict = normalize_scraping_params(params.model_dump())
 
     job = {
         "job_id": job_id,
         "status": "PENDENTE",
-        "params": params.model_dump(),
+        "params": params_dict,
         "total_jogos": 0,
         "total_odds": 0,
         "erro": None,
-        "created_at": datetime.now().isoformat()
+        "created_at": datetime.now().isoformat(),
+        "logs": [
+            _job_log(
+                evento="job_criado",
+                esporte=params_dict.get("esporte"),
+                leagues=params_dict.get("leagues"),
+                mercados_efetivos=params_dict.get("mercados"),
+            )
+        ],
     }
 
     save_job(job)
@@ -649,7 +744,7 @@ def criar_job(
     background_tasks.add_task(
         executar_coleta_real,
         job_id,
-        params.model_dump()
+        params_dict
     )
 
     return {
@@ -702,6 +797,16 @@ def consultar_normalized(
     verificar_token(authorization)
 
     job = load_job(job_id)
+    normalized_path = job.get("normalized_path")
+    if normalized_path:
+        normalized_file_path = Path(normalized_path)
+        if normalized_file_path.exists():
+            normalized_data = load_json(normalized_file_path)
+            return {
+                **normalized_data,
+                "status": job.get("status")
+            }
+
     raw_path = job.get("raw_path")
 
     if not raw_path:
