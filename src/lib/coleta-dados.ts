@@ -59,6 +59,8 @@ export interface OddsJogo extends NormalizedOdd {
   created_at: string;
 }
 
+export type VmPayloadRow = Record<string, unknown>;
+
 const coletaDb = supabase as unknown as {
   from: (table: string) => any;
 };
@@ -209,6 +211,40 @@ function getGames(raw: unknown): Array<Record<string, unknown>> {
   return Object.values(raw).filter(isRecord);
 }
 
+function extractRowsByPriority(payload: unknown, keys: string[], depth = 0): VmPayloadRow[] {
+  payload = parseMaybeJson(payload);
+  if (depth > 6 || payload == null) return [];
+  if (Array.isArray(payload)) return payload.filter(isRecord);
+  if (!isRecord(payload)) return [];
+
+  for (const key of keys) {
+    const value = payload[key];
+    if (Array.isArray(value)) {
+      const rows = value.filter(isRecord);
+      if (rows.length || key === "linhas" || key === "jogos") return rows;
+      continue;
+    }
+    if (key === "_default" && isRecord(value)) {
+      const rows = Object.values(value).filter(isRecord);
+      if (rows.length) return rows;
+    }
+    if (isRecord(value)) {
+      const nested = extractRowsByPriority(value, keys, depth + 1);
+      if (nested.length) return nested;
+    }
+  }
+
+  return [];
+}
+
+export function extractNormalizedRows(payload: unknown): VmPayloadRow[] {
+  return extractRowsByPriority(payload, ["linhas", "rows", "odds", "data", "items", "results", "normalized_json"]);
+}
+
+export function extractRawGames(payload: unknown): VmPayloadRow[] {
+  return extractRowsByPriority(payload, ["jogos", "games", "_default", "data", "result", "raw_json"]);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value != null && typeof value === "object" && !Array.isArray(value);
 }
@@ -280,6 +316,27 @@ function normalizeMarketRows(game: Record<string, unknown>, esporteHint?: string
   const odds = isRecord(game.odds) ? game.odds : {};
   const rows: NormalizedOdd[] = [];
 
+  if (Array.isArray(game.mercados) && !Object.keys(odds).length) {
+    for (const item of game.mercados.filter(isRecord)) {
+      const odd = toNumber(item.odd ?? item.price ?? item.odds);
+      if (!odd) continue;
+      rows.push({
+        ...base,
+        mercado: requiredText(item.mercado ?? item.market, "Mercado"),
+        pick: requiredText(item.pick ?? item.selecao ?? item.selection, "Pick"),
+        linha: toText(item.linha ?? item.line),
+        odd,
+        bookmaker: toText(item.bookmaker ?? item.book ?? item.casa_aposta),
+        raw_ref: {
+          game_id: gameId,
+          market: item.mercado ?? item.market,
+          row: item,
+        },
+      });
+    }
+    return rows;
+  }
+
   for (const [marketName, periods] of Object.entries(odds)) {
     if (!isRecord(periods)) continue;
     for (const [period, table] of Object.entries(periods)) {
@@ -346,15 +403,7 @@ export function normalizeVmNormalizedPayload(payload: unknown, opts?: { esporte?
         ? (root.normalized_json as Record<string, unknown>)
         : root;
 
-  const flatCandidate: unknown[] =
-    (Array.isArray(nested.linhas) && (nested.linhas as unknown[])) ||
-    (Array.isArray(nested.rows) && (nested.rows as unknown[])) ||
-    (Array.isArray(nested.odds) && (nested.odds as unknown[])) ||
-    (Array.isArray(nested.items) && (nested.items as unknown[])) ||
-    (Array.isArray(nested.results) && (nested.results as unknown[])) ||
-    (Array.isArray(nested.normalized_json) && (nested.normalized_json as unknown[])) ||
-    (Array.isArray(payload) && (payload as unknown[])) ||
-    [];
+  const flatCandidate = extractNormalizedRows(nested);
 
   // Só trata como "linhas planas" quando os itens parecem registros de odd.
   const flat = flatCandidate
@@ -371,7 +420,10 @@ export function normalizeVmNormalizedPayload(payload: unknown, opts?: { esporte?
 
   // Fallback: payload com estrutura de jogos (odds: { market: { period: [[headers],[row]] } })
   if (!rows.length) {
-    const gameRows = collectRecords(payload, isGameRecord).flatMap((game) => normalizeMarketRows(game, opts?.esporte));
+    const rawGames = extractRawGames(payload);
+    const gameRows = (rawGames.length ? rawGames : collectRecords(payload, isGameRecord)).flatMap((game) =>
+      normalizeMarketRows(game, opts?.esporte),
+    );
     if (gameRows.length) {
       if (typeof console !== "undefined") {
         console.log("[normalizeVmNormalizedPayload] jogos encontrados por varredura:", gameRows.length, "linhas");
