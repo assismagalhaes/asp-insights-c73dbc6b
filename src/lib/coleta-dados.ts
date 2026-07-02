@@ -70,6 +70,82 @@ function toNumber(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+const flashscoreIdPattern = /^[A-Za-z0-9]{6,12}$/;
+const flashscoreTeamSlugPattern = /^[a-z0-9-]+-[A-Za-z0-9]{6,12}$/i;
+const flashscoreSportParts = new Set([
+  "american-football",
+  "baseball",
+  "basketball",
+  "football",
+  "hockey",
+  "soccer",
+  "tennis",
+  "volleyball",
+]);
+
+function parseFlashscoreUrl(value: unknown): URL | null {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  try {
+    return new URL(text);
+  } catch {
+    try {
+      return new URL(text.startsWith("/") ? text : `/${text}`, "https://www.flashscore.com");
+    } catch {
+      return null;
+    }
+  }
+}
+
+export function extractLegacyFlashscoreMatchIdFromPath(pathname: string): string | null {
+  const parts = pathname.split("/").filter(Boolean);
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i] !== "match") continue;
+    let candidate = parts[i + 1] ?? "";
+    if (flashscoreSportParts.has(candidate.toLowerCase())) candidate = parts[i + 2] ?? "";
+    if (flashscoreIdPattern.test(candidate) && !flashscoreTeamSlugPattern.test(candidate)) return candidate;
+  }
+  for (let i = parts.length - 1; i >= 0; i--) {
+    if (parts[i] === "odds") break;
+    if (flashscoreIdPattern.test(parts[i]) && !flashscoreTeamSlugPattern.test(parts[i])) return parts[i];
+  }
+  return null;
+}
+
+export function extractFlashscoreMatchId(url: unknown): string | null {
+  const parsed = parseFlashscoreUrl(url);
+  if (!parsed) return null;
+  const mid = parsed.searchParams.get("mid")?.trim();
+  if (mid) return mid;
+  return extractLegacyFlashscoreMatchIdFromPath(parsed.pathname);
+}
+
+export function normalizeFlashscoreUrl(url: unknown): string | null {
+  const parsed = parseFlashscoreUrl(url);
+  if (!parsed) return null;
+  const mid = extractFlashscoreMatchId(parsed.toString());
+  const normalized = new URL(parsed.toString());
+  normalized.hash = "";
+  normalized.search = "";
+  if (mid) normalized.searchParams.set("mid", mid);
+  return normalized.toString();
+}
+
+export function flashscoreMarketUrl(url: unknown, market: string): string | null {
+  const parsed = parseFlashscoreUrl(url);
+  if (!parsed) return null;
+  const parts = parsed.pathname.split("/").filter(Boolean);
+  const oddsIdx = parts.indexOf("odds");
+  if (oddsIdx < 0) return normalizeFlashscoreUrl(parsed.toString());
+  parts[oddsIdx + 1] = market.replace(/^\/+|\/+$/g, "");
+  parsed.pathname = `/${parts.join("/")}/`;
+  parsed.hash = "";
+  parsed.search = "";
+  const mid = extractFlashscoreMatchId(url);
+  if (mid) parsed.searchParams.set("mid", mid);
+  return parsed.toString();
+}
+
 function parseDate(value: unknown): string | null {
   if (!value) return null;
   const s = String(value).trim();
@@ -145,6 +221,7 @@ function baseGame(game: Record<string, unknown>, esporteHint?: string | null) {
   const hora = parseTime(game.hour ?? game.hora ?? game.time);
   const fonte = String(game.link ?? game.fonte ?? "");
   const capturado = parseCapturedAt(game.att ?? game.capturado_em);
+  const normalizedFonte = normalizeFlashscoreUrl(fonte) ?? fonte;
   return {
     data,
     hora,
@@ -153,7 +230,7 @@ function baseGame(game: Record<string, unknown>, esporteHint?: string | null) {
     jogo: String(game.jogo ?? `${mandante} vs ${visitante}`),
     mandante,
     visitante,
-    fonte: fonte || null,
+    fonte: normalizedFonte || null,
     capturado_em: capturado,
   };
 }
@@ -180,6 +257,9 @@ function marketPick(market: string, header: string, base: { mandante: string; vi
 
 function normalizeMarketRows(game: Record<string, unknown>, esporteHint?: string | null): NormalizedOdd[] {
   const base = baseGame(game, esporteHint);
+  const gameId =
+    extractFlashscoreMatchId(game.link ?? game.url ?? game.fonte) ??
+    toText(game.id ?? game.match_id ?? game.game_id ?? game.fixture_id);
   const odds = isRecord(game.odds) ? game.odds : {};
   const rows: NormalizedOdd[] = [];
 
@@ -209,7 +289,7 @@ function normalizeMarketRows(game: Record<string, unknown>, esporteHint?: string
             linha: linha || null,
             odd,
             bookmaker: bookmaker || null,
-            raw_ref: { game_id: game.id, market: marketName, period, header, row: item },
+            raw_ref: { game_id: gameId, market: marketName, period, header, row: item },
           });
         }
       }
@@ -259,7 +339,11 @@ export function normalizeVmNormalizedPayload(payload: unknown, opts?: { esporte?
   const mercados = [...new Set(rows.map((row) => row.mercado).filter(Boolean))].sort();
   const ligas = [...new Set(rows.map((row) => row.liga).filter(Boolean))];
   const esportes = [...new Set(rows.map((row) => row.esporte).filter(Boolean))];
-  const jogos = new Set(rows.map((row) => `${row.data ?? ""}|${row.jogo}`).filter(Boolean));
+  const jogos = new Set(
+    rows
+      .map((row) => (row.raw_ref?.game_id ? String(row.raw_ref.game_id) : `${row.data ?? ""}|${row.jogo}`))
+      .filter(Boolean),
+  );
 
   return {
     esporte: esportes.length === 1 ? esportes[0] : opts?.esporte ?? null,
@@ -276,6 +360,12 @@ export function normalizeVmNormalizedPayload(payload: unknown, opts?: { esporte?
 function normalizeVmRow(row: Record<string, unknown>, esporteHint?: string | null): NormalizedOdd {
   const mandante = requiredText(row.mandante ?? row.home ?? row.casa, "");
   const visitante = requiredText(row.visitante ?? row.away ?? row.fora, "");
+  const rawRef = isRecord(row.raw_ref) ? row.raw_ref : { vm_row: row };
+  const gameId =
+    extractFlashscoreMatchId(row.fonte ?? row.source ?? row.link ?? row.url) ??
+    toText(row.game_id ?? row.match_id ?? row.fixture_id ?? rawRef.game_id);
+  const fonte = toText(row.fonte ?? row.source ?? row.link ?? row.url);
+  if (gameId && !rawRef.game_id) rawRef.game_id = gameId;
   return {
     data: parseDate(row.data ?? row.date),
     hora: parseTime(row.hora ?? row.hour ?? row.time),
@@ -289,9 +379,9 @@ function normalizeVmRow(row: Record<string, unknown>, esporteHint?: string | nul
     linha: toText(row.linha ?? row.line),
     odd: toNumber(row.odd ?? row.price ?? row.odds) ?? 0,
     bookmaker: toText(row.bookmaker ?? row.book ?? row.casa_aposta),
-    fonte: toText(row.fonte ?? row.source),
+    fonte: normalizeFlashscoreUrl(fonte) ?? fonte,
     capturado_em: toText(row.capturado_em ?? row.captured_at) ?? parseCapturedAt(row.att),
-    raw_ref: isRecord(row.raw_ref) ? row.raw_ref : { vm_row: row },
+    raw_ref: rawRef,
   };
 }
 

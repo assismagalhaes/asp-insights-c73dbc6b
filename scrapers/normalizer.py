@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from scrapers.flashscore_url import extract_flashscore_match_id, normalize_flashscore_url
+
 
 def _to_float(value: Any) -> float | None:
     if value in (None, ""):
@@ -46,6 +48,12 @@ def _games(raw: Any) -> list[dict[str, Any]]:
         if isinstance(raw.get(key), list):
             return [x for x in raw[key] if isinstance(x, dict)]
     return [x for x in raw.values() if isinstance(x, dict)]
+
+
+def _game_id(game: dict[str, Any]) -> str | None:
+    explicit = game.get("id") or game.get("match_id") or game.get("game_id") or game.get("fixture_id")
+    link = game.get("link") or game.get("url") or game.get("fonte")
+    return extract_flashscore_match_id(str(link or "")) or (str(explicit).strip() if explicit else None)
 
 
 def _sport(input_value: Any, game: dict[str, Any]) -> str | None:
@@ -214,6 +222,8 @@ def normalize(raw: Any, esporte_hint: str | None = None) -> dict[str, Any]:
     for game in games:
         home = str(game.get("home") or game.get("mandante") or game.get("casa") or "")
         away = str(game.get("away") or game.get("visitante") or game.get("fora") or "")
+        link = str(game.get("link") or game.get("url") or game.get("fonte") or "")
+        canonical_game_id = _game_id(game)
         base = {
             "data": _date(game.get("date") or game.get("data")),
             "hora": _time(game.get("hour") or game.get("hora") or game.get("time")),
@@ -222,7 +232,7 @@ def normalize(raw: Any, esporte_hint: str | None = None) -> dict[str, Any]:
             "jogo": str(game.get("jogo") or f"{home} vs {away}"),
             "mandante": home,
             "visitante": away,
-            "fonte": game.get("link") or game.get("fonte"),
+            "fonte": normalize_flashscore_url(link) if link else game.get("fonte"),
         }
         odds = game.get("odds")
         if not isinstance(odds, dict):
@@ -257,7 +267,12 @@ def normalize(raw: Any, esporte_hint: str | None = None) -> dict[str, Any]:
                                 "odd": odd,
                                 "bookmaker": bookmaker,
                                 "capturado_em": None,
-                                "raw_ref": {"game_id": game.get("id"), "market": market_name, "period": period, "header": header},
+                                "raw_ref": {
+                                    "game_id": canonical_game_id,
+                                    "market": market_name,
+                                    "period": period,
+                                    "header": header,
+                                },
                             }
                         )
 
