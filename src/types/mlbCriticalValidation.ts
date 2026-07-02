@@ -85,9 +85,45 @@ export interface MlbParsedRecentGame {
   standings_after: string | null;
 }
 
+export interface MlbSeasonSeriesCompletedGame {
+  date: string | null;
+  away_team: string | null;
+  home_team: string | null;
+  away_score: number | null;
+  home_score: number | null;
+  winner_team: string | null;
+  loser_team: string | null;
+  is_completed: true;
+  raw_line: string;
+}
+
+export interface MlbSeasonSeriesUpcomingGame {
+  date: string | null;
+  away_team: string | null;
+  home_team: string | null;
+  time: string | null;
+  is_completed: false;
+  raw_line: string;
+}
+
+export interface MlbHeadToHeadGame {
+  date: string | null;
+  away_team: string | null;
+  home_team: string | null;
+  away_score: number | null;
+  home_score: number | null;
+  winner: string | null;
+  loser: string | null;
+  extra_innings: boolean;
+  winning_pitcher: string | null;
+  losing_pitcher: string | null;
+  save_pitcher: string | null;
+  raw_line: string;
+}
+
 export interface MlbBaseballReferenceMatchupContext {
   source: "baseball_reference_matchup_text";
-  parser_version: "1.0.0";
+  parser_version: "1.0.0" | "1.1.0" | "1.2.0";
   raw_text: string;
   parsed_at: string;
   teams: {
@@ -103,11 +139,13 @@ export interface MlbBaseballReferenceMatchupContext {
     home_last_10: MlbParsedRecentGame[];
   };
   season_series: {
-    games: string[];
+    completed_games: MlbSeasonSeriesCompletedGame[];
+    upcoming_games: MlbSeasonSeriesUpcomingGame[];
+    yearly_summary: Record<string, string>;
     summary: string | null;
   };
   head_to_head: {
-    games: string[];
+    last_10_games: MlbHeadToHeadGame[];
     summary: string | null;
   };
   data_quality: {
@@ -118,7 +156,12 @@ export interface MlbBaseballReferenceMatchupContext {
   };
 }
 
-export type MlbContextAlignmentStatus = "supports_screener" | "conflicts_with_screener" | "mixed" | "insufficient_context";
+export type MlbContextAlignmentStatus =
+  | "supports_screener"
+  | "conflicts_with_screener"
+  | "mixed"
+  | "mixed_to_conflicting"
+  | "insufficient_context";
 export type MlbValidationReadinessStatus =
   | "pronto_para_validator"
   | "revisar_antes_do_validator"
@@ -140,6 +183,15 @@ export interface MlbValidationPreparation {
   readiness_status: MlbValidationReadinessStatus;
   critical_questions: string[];
   recommended_next_step: string;
+  // Score bruto do Screener (nunca sobrescrever). Preservado para auditoria.
+  raw_opportunity_score: number;
+  raw_confidence_score: number;
+  // Scores pós-contexto, com caps aplicados por alignment/divergence/flags.
+  critical_adjusted_score: number;
+  critical_adjusted_confidence: number;
+  // Sinalização visual sugerida para a UI (badges).
+  critical_adjusted_status: "strong_conflict" | "review_before_validator" | "aligned";
+  post_context_risk_flags: string[];
 }
 
 export interface MlbPreparedCriticalValidationPayload {

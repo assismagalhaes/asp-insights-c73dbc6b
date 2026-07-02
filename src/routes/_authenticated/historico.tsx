@@ -14,7 +14,7 @@ import {
 import { LeagueFilter } from "@/components/league-filter";
 import { PeriodFilter } from "@/components/period-filter";
 import { rangeFromPeriodo, dateInRange, lucroUnidadesAnalitico, stakeAnalitica, type PeriodoFiltro } from "@/lib/metrics";
-import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
+import { formatBR, formatHora, shouldShowLinha, todayBR } from "@/lib/date-br";
 import { DadosTecnicosViewer } from "@/components/dados-tecnicos-viewer";
 
 export const Route = createFileRoute("/_authenticated/historico")({
@@ -54,7 +54,7 @@ function Historico() {
   const wins = rows.filter((r) => r.resultado === "GREEN").length;
   const losses = rows.filter((r) => r.resultado === "RED").length;
   const lucro = rows.reduce((s, p) => s + lucroUnidadesAnalitico(p), 0);
-  const exportFilename = `asp_insights_resultados_${new Date().toISOString().slice(0, 10)}.csv`;
+  const exportFilename = `asp_insights_resultados_${todayBR()}.csv`;
 
   return (
     <div className="space-y-6">

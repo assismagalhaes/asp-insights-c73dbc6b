@@ -147,6 +147,8 @@ export interface MlbTotalsThresholds {
   minOdd: number;
   maxOdd: number;
   maxAnalyzeDistanceFromMainLine: number;
+  maxMonitorDistanceFromMainLine: number;
+  minAnalyzeFairOdd: number;
   maxAnalyzeOdd: number;
   minAnalyzeOdd: number;
 }
@@ -259,6 +261,12 @@ export interface MlbHandicapThresholds {
   maxAnalyzeOdd: number;
   minAnalyzeOdd: number;
   tailMassWarning: number;
+  runlineMinusMargin: number;
+  runlineMinusEv: number;
+  runlineMinusProbGap: number;
+  runlinePlusEv: number;
+  runlinePlusProbGap: number;
+  maxAnalyzeAbsLine: number;
 }
 
 export interface MlbHandicapProjectionConfig {
@@ -365,6 +373,11 @@ export interface MlbOpportunityScoreWeights {
   baseStatusCoherence: number;
 }
 
+export interface MlbOpportunityAppliedPenalty {
+  flag: string;
+  delta: number;
+}
+
 export interface MlbOpportunityScoreComponents {
   ev_quality_score: number;
   probability_edge_score: number;
@@ -373,6 +386,14 @@ export interface MlbOpportunityScoreComponents {
   data_quality_score: number;
   base_status_coherence_score: number;
   risk_penalty: number;
+  raw_score: number;
+  final_score: number;
+  applied_penalties: MlbOpportunityAppliedPenalty[];
+}
+
+export interface MlbCriticalValidationContext {
+  readiness_status: "pronto_para_validator" | "revisar_antes_do_validator" | "contexto_incompleto" | "nao_recomendado_para_validator";
+  alignment_status: "supports_screener" | "mixed" | "mixed_to_conflicting" | "conflicts_with_screener" | "insufficient_context";
 }
 
 export interface MlbUnifiedOpportunity {

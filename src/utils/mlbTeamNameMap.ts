@@ -152,6 +152,7 @@ const EXTRA_ALIASES: Record<string, MlbTeamKey> = {
   saint_louis: "st_louis_cardinals",
   cardinals: "st_louis_cardinals",
   stl: "st_louis_cardinals",
+  stl_cardinals: "st_louis_cardinals",
   tb_rays: "tampa_bay_rays",
   tampa: "tampa_bay_rays",
   rays: "tampa_bay_rays",
@@ -188,7 +189,7 @@ export function normalizeMlbTeamText(input: string) {
     .replace(/\b(s\.?\s*f\.?|sf)\b/gi, "sf")
     .replace(/\b(s\.?\s*d\.?|sd)\b/gi, "sd")
     .replace(/\b(t\.?\s*b\.?|tb)\b/gi, "tb")
-    .replace(/\bst[.]?\b/gi, "st")
+    .replace(/\b(st\.?|saint)\b\s*/gi, "st ")
     .replace(/['`]/g, "")
     .replace(/[^a-zA-Z0-9]+/g, " ")
     .trim()

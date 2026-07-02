@@ -212,6 +212,7 @@ function BaseDadosPage() {
   const [seasonLeague, setSeasonLeague] = useState("MLB");
   const [seasonOriginYear, setSeasonOriginYear] = useState("");
   const [seasonTargetYear, setSeasonTargetYear] = useState("");
+  const [scraperUnavailable, setScraperUnavailable] = useState(false);
 
   const leagues = sport ? LEAGUES_BY_SPORT[sport] : [];
   const isBaseballMlb = sport === "baseball" && league === "MLB";
@@ -251,6 +252,7 @@ function BaseDadosPage() {
     getYears({ data: { esporte: apiSport, liga: apiLeague } })
       .then(async (payload) => {
         if (cancelled) return;
+        setScraperUnavailable(false);
         const parsed = parseYears(payload);
         const resolved = isBasketball ? await hydrateYearCounts(parsed, apiSport, apiLeague) : parsed;
         if (cancelled) return;
@@ -261,7 +263,15 @@ function BaseDadosPage() {
         setYear(defaultYear ? String(defaultYear) : "");
         if (!parsed.length) toast.warning(`A VM respondeu, mas nao retornou anos de base ${league}.`);
       })
-      .catch((e) => toast.error(formatError(e)))
+      .catch((e) => {
+        const msg = formatError(e);
+        if (isScraperUnavailableError(msg)) {
+          setScraperUnavailable(true);
+        } else {
+          toast.error(msg);
+        }
+      })
+
       .finally(() => {
         if (!cancelled) setBusy(null);
       });
@@ -462,6 +472,19 @@ function BaseDadosPage() {
 
   return (
     <div className="space-y-6">
+      {scraperUnavailable && (
+        <div className="flex items-start gap-3 rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+          <div className="space-y-1">
+            <p className="font-semibold">Scraper API indisponível</p>
+            <p className="text-destructive/90">
+              Não foi possível contatar o servidor da VM que fornece os dados desta tela (erro Cloudflare 1016 / DNS).
+              A origem está offline ou o registro DNS foi removido. O código do ASP Insights está íntegro — assim que o
+              host voltar, esta tela funcionará normalmente sem alterações.
+            </p>
+          </div>
+        </div>
+      )}
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
           <Database className="h-6 w-6 text-primary" />
@@ -1120,3 +1143,10 @@ function isValidationSuccess(validation: ValidationResult) {
 function formatError(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
+
+function isScraperUnavailableError(message: string) {
+  return /1016|failed to fetch|resolve host|ENOTFOUND|ECONNREFUSED|network|timeout|Timeout|origin dns/i.test(
+    message,
+  );
+}
+

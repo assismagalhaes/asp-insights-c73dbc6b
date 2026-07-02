@@ -14,6 +14,416 @@ export type Database = {
   }
   public: {
     Tables: {
+      asp_screener_mlb_daily_snapshots: {
+        Row: {
+          analyze_count: number | null
+          created_at: string
+          execution_summary: Json
+          filters_payload: Json
+          games_count: number | null
+          handicap_rows_count: number | null
+          id: string
+          metadata: Json
+          missing_data_count: number | null
+          moneyline_rows_count: number | null
+          monitor_count: number | null
+          odds_rows_count: number | null
+          run_id: string
+          season: number | null
+          shortlist_primary_count: number | null
+          skip_count: number | null
+          snapshot_date: string
+          source_league: string
+          source_module: string
+          source_sport: string
+          standings_snapshot_date: string | null
+          standings_source: string | null
+          status: string
+          totals_rows_count: number | null
+          unified_opportunities_count: number | null
+          unsupported_line_count: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          analyze_count?: number | null
+          created_at?: string
+          execution_summary?: Json
+          filters_payload?: Json
+          games_count?: number | null
+          handicap_rows_count?: number | null
+          id?: string
+          metadata?: Json
+          missing_data_count?: number | null
+          moneyline_rows_count?: number | null
+          monitor_count?: number | null
+          odds_rows_count?: number | null
+          run_id: string
+          season?: number | null
+          shortlist_primary_count?: number | null
+          skip_count?: number | null
+          snapshot_date: string
+          source_league?: string
+          source_module?: string
+          source_sport?: string
+          standings_snapshot_date?: string | null
+          standings_source?: string | null
+          status?: string
+          totals_rows_count?: number | null
+          unified_opportunities_count?: number | null
+          unsupported_line_count?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          analyze_count?: number | null
+          created_at?: string
+          execution_summary?: Json
+          filters_payload?: Json
+          games_count?: number | null
+          handicap_rows_count?: number | null
+          id?: string
+          metadata?: Json
+          missing_data_count?: number | null
+          moneyline_rows_count?: number | null
+          monitor_count?: number | null
+          odds_rows_count?: number | null
+          run_id?: string
+          season?: number | null
+          shortlist_primary_count?: number | null
+          skip_count?: number | null
+          snapshot_date?: string
+          source_league?: string
+          source_module?: string
+          source_sport?: string
+          standings_snapshot_date?: string | null
+          standings_source?: string | null
+          status?: string
+          totals_rows_count?: number | null
+          unified_opportunities_count?: number | null
+          unsupported_line_count?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      asp_screener_mlb_opportunity_snapshots: {
+        Row: {
+          alerts: Json
+          away_team: string | null
+          base_candidate_status: string | null
+          bookmaker: string | null
+          confidence_score: number | null
+          correlated_with: string | null
+          correlation_group_id: string | null
+          correlation_status: string | null
+          created_at: string
+          daily_snapshot_id: string
+          distance_from_main_line: number | null
+          ev: number | null
+          event_date: string | null
+          event_time: string | null
+          fair_odd: number | null
+          game_id: string | null
+          handoff_id: string | null
+          home_team: string | null
+          id: string
+          is_main_line: boolean | null
+          is_primary_shortlist: boolean | null
+          line: string | null
+          line_type: string | null
+          market_family: string | null
+          market_label: string | null
+          market_prob_no_vig: number | null
+          matchup: string | null
+          metadata: Json
+          model_prob: number | null
+          offered_odd: number | null
+          opportunity_id: string
+          opportunity_payload: Json
+          opportunity_score: number | null
+          pick_label: string | null
+          priority_status: string | null
+          probability_edge: number | null
+          projection_status: string | null
+          rank: number | null
+          reasons: Json
+          risk_flags: Json
+          run_id: string
+          selection_team: string | null
+          sent_to_validator: boolean
+          side: string | null
+          source_projection_payload: Json
+          updated_at: string
+          user_id: string
+          validator_decision: string | null
+          validator_record_id: string | null
+        }
+        Insert: {
+          alerts?: Json
+          away_team?: string | null
+          base_candidate_status?: string | null
+          bookmaker?: string | null
+          confidence_score?: number | null
+          correlated_with?: string | null
+          correlation_group_id?: string | null
+          correlation_status?: string | null
+          created_at?: string
+          daily_snapshot_id: string
+          distance_from_main_line?: number | null
+          ev?: number | null
+          event_date?: string | null
+          event_time?: string | null
+          fair_odd?: number | null
+          game_id?: string | null
+          handoff_id?: string | null
+          home_team?: string | null
+          id?: string
+          is_main_line?: boolean | null
+          is_primary_shortlist?: boolean | null
+          line?: string | null
+          line_type?: string | null
+          market_family?: string | null
+          market_label?: string | null
+          market_prob_no_vig?: number | null
+          matchup?: string | null
+          metadata?: Json
+          model_prob?: number | null
+          offered_odd?: number | null
+          opportunity_id: string
+          opportunity_payload?: Json
+          opportunity_score?: number | null
+          pick_label?: string | null
+          priority_status?: string | null
+          probability_edge?: number | null
+          projection_status?: string | null
+          rank?: number | null
+          reasons?: Json
+          risk_flags?: Json
+          run_id: string
+          selection_team?: string | null
+          sent_to_validator?: boolean
+          side?: string | null
+          source_projection_payload?: Json
+          updated_at?: string
+          user_id?: string
+          validator_decision?: string | null
+          validator_record_id?: string | null
+        }
+        Update: {
+          alerts?: Json
+          away_team?: string | null
+          base_candidate_status?: string | null
+          bookmaker?: string | null
+          confidence_score?: number | null
+          correlated_with?: string | null
+          correlation_group_id?: string | null
+          correlation_status?: string | null
+          created_at?: string
+          daily_snapshot_id?: string
+          distance_from_main_line?: number | null
+          ev?: number | null
+          event_date?: string | null
+          event_time?: string | null
+          fair_odd?: number | null
+          game_id?: string | null
+          handoff_id?: string | null
+          home_team?: string | null
+          id?: string
+          is_main_line?: boolean | null
+          is_primary_shortlist?: boolean | null
+          line?: string | null
+          line_type?: string | null
+          market_family?: string | null
+          market_label?: string | null
+          market_prob_no_vig?: number | null
+          matchup?: string | null
+          metadata?: Json
+          model_prob?: number | null
+          offered_odd?: number | null
+          opportunity_id?: string
+          opportunity_payload?: Json
+          opportunity_score?: number | null
+          pick_label?: string | null
+          priority_status?: string | null
+          probability_edge?: number | null
+          projection_status?: string | null
+          rank?: number | null
+          reasons?: Json
+          risk_flags?: Json
+          run_id?: string
+          selection_team?: string | null
+          sent_to_validator?: boolean
+          side?: string | null
+          source_projection_payload?: Json
+          updated_at?: string
+          user_id?: string
+          validator_decision?: string | null
+          validator_record_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asp_screener_mlb_opportunity_snapshots_daily_snapshot_id_fkey"
+            columns: ["daily_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "asp_screener_mlb_daily_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asp_screener_validator_handoffs: {
+        Row: {
+          alignment_score: number | null
+          alignment_status: string | null
+          applied_at: string | null
+          away_team: string | null
+          bookmaker: string | null
+          confidence_score: number | null
+          created_at: string
+          critical_payload: Json
+          discarded_at: string | null
+          ev: number | null
+          event_date: string | null
+          event_time: string | null
+          expires_at: string | null
+          fair_odd: number | null
+          game_id: string | null
+          handoff_id: string
+          handoff_payload: Json
+          handoff_version: string | null
+          home_team: string | null
+          id: string
+          line: string | null
+          market: string | null
+          market_probability_no_vig: number | null
+          matchup: string | null
+          metadata: Json
+          model_probability: number | null
+          odd: number | null
+          opportunity_payload: Json
+          opportunity_score: number | null
+          pick: string | null
+          priority_status: string | null
+          readiness_status: string | null
+          sent_at: string | null
+          source_league: string
+          source_module: string
+          source_sport: string
+          source_stage: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          validation_completed_at: string | null
+          validation_started_at: string | null
+          validator_adjusted_probability: number | null
+          validator_context_payload: Json
+          validator_decision: string | null
+          validator_final_ev: number | null
+          validator_reason: string | null
+          validator_record_id: string | null
+        }
+        Insert: {
+          alignment_score?: number | null
+          alignment_status?: string | null
+          applied_at?: string | null
+          away_team?: string | null
+          bookmaker?: string | null
+          confidence_score?: number | null
+          created_at?: string
+          critical_payload?: Json
+          discarded_at?: string | null
+          ev?: number | null
+          event_date?: string | null
+          event_time?: string | null
+          expires_at?: string | null
+          fair_odd?: number | null
+          game_id?: string | null
+          handoff_id: string
+          handoff_payload?: Json
+          handoff_version?: string | null
+          home_team?: string | null
+          id?: string
+          line?: string | null
+          market?: string | null
+          market_probability_no_vig?: number | null
+          matchup?: string | null
+          metadata?: Json
+          model_probability?: number | null
+          odd?: number | null
+          opportunity_payload?: Json
+          opportunity_score?: number | null
+          pick?: string | null
+          priority_status?: string | null
+          readiness_status?: string | null
+          sent_at?: string | null
+          source_league?: string
+          source_module?: string
+          source_sport?: string
+          source_stage?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          validation_completed_at?: string | null
+          validation_started_at?: string | null
+          validator_adjusted_probability?: number | null
+          validator_context_payload?: Json
+          validator_decision?: string | null
+          validator_final_ev?: number | null
+          validator_reason?: string | null
+          validator_record_id?: string | null
+        }
+        Update: {
+          alignment_score?: number | null
+          alignment_status?: string | null
+          applied_at?: string | null
+          away_team?: string | null
+          bookmaker?: string | null
+          confidence_score?: number | null
+          created_at?: string
+          critical_payload?: Json
+          discarded_at?: string | null
+          ev?: number | null
+          event_date?: string | null
+          event_time?: string | null
+          expires_at?: string | null
+          fair_odd?: number | null
+          game_id?: string | null
+          handoff_id?: string
+          handoff_payload?: Json
+          handoff_version?: string | null
+          home_team?: string | null
+          id?: string
+          line?: string | null
+          market?: string | null
+          market_probability_no_vig?: number | null
+          matchup?: string | null
+          metadata?: Json
+          model_probability?: number | null
+          odd?: number | null
+          opportunity_payload?: Json
+          opportunity_score?: number | null
+          pick?: string | null
+          priority_status?: string | null
+          readiness_status?: string | null
+          sent_at?: string | null
+          source_league?: string
+          source_module?: string
+          source_sport?: string
+          source_stage?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          validation_completed_at?: string | null
+          validation_started_at?: string | null
+          validator_adjusted_probability?: number | null
+          validator_context_payload?: Json
+          validator_decision?: string | null
+          validator_final_ev?: number | null
+          validator_reason?: string | null
+          validator_record_id?: string | null
+        }
+        Relationships: []
+      }
       asp_validator_registros: {
         Row: {
           adjusted_ev: number | null
@@ -421,6 +831,234 @@ export type Database = {
           id?: string
           nome?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      mlb_league_average_snapshots: {
+        Row: {
+          created_at: string
+          home_record_average: string | null
+          id: string
+          last10_average: string | null
+          raw: Json
+          road_record_average: string | null
+          runs_allowed_per_game_average: number | null
+          runs_per_game_average: number | null
+          season: number
+          snapshot_date: string
+          source: string
+          source_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          home_record_average?: string | null
+          id?: string
+          last10_average?: string | null
+          raw?: Json
+          road_record_average?: string | null
+          runs_allowed_per_game_average?: number | null
+          runs_per_game_average?: number | null
+          season: number
+          snapshot_date: string
+          source: string
+          source_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          home_record_average?: string | null
+          id?: string
+          last10_average?: string | null
+          raw?: Json
+          road_record_average?: string | null
+          runs_allowed_per_game_average?: number | null
+          runs_per_game_average?: number | null
+          season?: number
+          snapshot_date?: string
+          source?: string
+          source_url?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      mlb_team_standings_snapshots: {
+        Row: {
+          created_at: string
+          extra_innings_losses: number | null
+          extra_innings_wins: number | null
+          home_losses: number | null
+          home_win_pct: number | null
+          home_wins: number | null
+          id: string
+          interleague_losses: number | null
+          interleague_wins: number | null
+          last10_losses: number | null
+          last10_wins: number | null
+          last20_losses: number | null
+          last20_wins: number | null
+          last30_losses: number | null
+          last30_wins: number | null
+          losses: number | null
+          luck: number | null
+          one_run_losses: number | null
+          one_run_wins: number | null
+          pyth_losses: number | null
+          pyth_win_pct: number | null
+          pyth_wins: number | null
+          rank: number | null
+          raw: Json
+          road_losses: number | null
+          road_win_pct: number | null
+          road_wins: number | null
+          run_diff_per_game: number | null
+          runs_allowed_per_game: number | null
+          runs_per_game: number | null
+          season: number
+          snapshot_date: string
+          sos: number | null
+          source: string
+          source_url: string | null
+          srs: number | null
+          streak_count: number | null
+          streak_result: string | null
+          team_key: string
+          team_name: string
+          updated_at: string
+          v_cent_losses: number | null
+          v_cent_wins: number | null
+          v_east_losses: number | null
+          v_east_wins: number | null
+          v_west_losses: number | null
+          v_west_wins: number | null
+          vs_500_minus_losses: number | null
+          vs_500_minus_wins: number | null
+          vs_500_plus_losses: number | null
+          vs_500_plus_wins: number | null
+          vs_lhp_losses: number | null
+          vs_lhp_wins: number | null
+          vs_rhp_losses: number | null
+          vs_rhp_wins: number | null
+          win_pct: number | null
+          wins: number | null
+        }
+        Insert: {
+          created_at?: string
+          extra_innings_losses?: number | null
+          extra_innings_wins?: number | null
+          home_losses?: number | null
+          home_win_pct?: number | null
+          home_wins?: number | null
+          id?: string
+          interleague_losses?: number | null
+          interleague_wins?: number | null
+          last10_losses?: number | null
+          last10_wins?: number | null
+          last20_losses?: number | null
+          last20_wins?: number | null
+          last30_losses?: number | null
+          last30_wins?: number | null
+          losses?: number | null
+          luck?: number | null
+          one_run_losses?: number | null
+          one_run_wins?: number | null
+          pyth_losses?: number | null
+          pyth_win_pct?: number | null
+          pyth_wins?: number | null
+          rank?: number | null
+          raw?: Json
+          road_losses?: number | null
+          road_win_pct?: number | null
+          road_wins?: number | null
+          run_diff_per_game?: number | null
+          runs_allowed_per_game?: number | null
+          runs_per_game?: number | null
+          season: number
+          snapshot_date: string
+          sos?: number | null
+          source: string
+          source_url?: string | null
+          srs?: number | null
+          streak_count?: number | null
+          streak_result?: string | null
+          team_key: string
+          team_name: string
+          updated_at?: string
+          v_cent_losses?: number | null
+          v_cent_wins?: number | null
+          v_east_losses?: number | null
+          v_east_wins?: number | null
+          v_west_losses?: number | null
+          v_west_wins?: number | null
+          vs_500_minus_losses?: number | null
+          vs_500_minus_wins?: number | null
+          vs_500_plus_losses?: number | null
+          vs_500_plus_wins?: number | null
+          vs_lhp_losses?: number | null
+          vs_lhp_wins?: number | null
+          vs_rhp_losses?: number | null
+          vs_rhp_wins?: number | null
+          win_pct?: number | null
+          wins?: number | null
+        }
+        Update: {
+          created_at?: string
+          extra_innings_losses?: number | null
+          extra_innings_wins?: number | null
+          home_losses?: number | null
+          home_win_pct?: number | null
+          home_wins?: number | null
+          id?: string
+          interleague_losses?: number | null
+          interleague_wins?: number | null
+          last10_losses?: number | null
+          last10_wins?: number | null
+          last20_losses?: number | null
+          last20_wins?: number | null
+          last30_losses?: number | null
+          last30_wins?: number | null
+          losses?: number | null
+          luck?: number | null
+          one_run_losses?: number | null
+          one_run_wins?: number | null
+          pyth_losses?: number | null
+          pyth_win_pct?: number | null
+          pyth_wins?: number | null
+          rank?: number | null
+          raw?: Json
+          road_losses?: number | null
+          road_win_pct?: number | null
+          road_wins?: number | null
+          run_diff_per_game?: number | null
+          runs_allowed_per_game?: number | null
+          runs_per_game?: number | null
+          season?: number
+          snapshot_date?: string
+          sos?: number | null
+          source?: string
+          source_url?: string | null
+          srs?: number | null
+          streak_count?: number | null
+          streak_result?: string | null
+          team_key?: string
+          team_name?: string
+          updated_at?: string
+          v_cent_losses?: number | null
+          v_cent_wins?: number | null
+          v_east_losses?: number | null
+          v_east_wins?: number | null
+          v_west_losses?: number | null
+          v_west_wins?: number | null
+          vs_500_minus_losses?: number | null
+          vs_500_minus_wins?: number | null
+          vs_500_plus_losses?: number | null
+          vs_500_plus_wins?: number | null
+          vs_lhp_losses?: number | null
+          vs_lhp_wins?: number | null
+          vs_rhp_losses?: number | null
+          vs_rhp_wins?: number | null
+          win_pct?: number | null
+          wins?: number | null
         }
         Relationships: []
       }

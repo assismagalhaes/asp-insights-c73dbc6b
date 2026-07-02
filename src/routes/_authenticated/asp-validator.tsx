@@ -24,6 +24,7 @@ import {
   validateAspValidatorUpload,
 } from "@/lib/asp-validator-upload-guard";
 import { useConfiguracao } from "@/lib/db";
+import { todayBR } from "@/lib/date-br";
 import {
   buildMlbValidatorImportedContextText,
   clearMlbValidatorHandoffDraft,
@@ -393,24 +394,28 @@ function AspValidatorPage() {
   const applyImportedHandoffToForm = (handoff: MlbValidatorHandoffPayload, silent = false) => {
     const prefill = handoff.validator_prefill;
     const importedContext = buildMlbValidatorImportedContextText(handoff);
-    setForm((prev) => ({
-      ...prev,
-      sport: prefill.sport,
-      source_platform: prefill.source_platform,
-      league: prefill.league,
-      match_date: prefill.event_date ?? prev.match_date,
-      home_team: prefill.home_team,
-      away_team: prefill.away_team,
-      market: prefill.market,
-      pick: prefill.pick ?? prev.pick,
-      line: prefill.line == null ? prev.line : String(prefill.line),
-      offered_odd: numberToInput(prefill.odd),
-      source_probability: percentToInput(prefill.model_probability),
-      source_ev: percentToInput(prefill.ev),
-      user_context: prev.user_context.trim()
-        ? `${importedContext}\n\nContexto adicional manual:\n${prev.user_context}`
-        : importedContext,
-    }));
+    setForm((prev) => {
+      const manualOnly = extractManualOnlyContext(prev.user_context);
+      const nextContext = manualOnly
+        ? `${importedContext}\n\nContexto adicional manual:\n${manualOnly}`
+        : importedContext;
+      return {
+        ...prev,
+        sport: prefill.sport,
+        source_platform: prefill.source_platform,
+        league: prefill.league,
+        match_date: prefill.event_date ?? prev.match_date,
+        home_team: prefill.home_team,
+        away_team: prefill.away_team,
+        market: prefill.market,
+        pick: prefill.pick ?? prev.pick,
+        line: prefill.line == null ? prev.line : String(prefill.line),
+        offered_odd: numberToInput(prefill.odd),
+        source_probability: percentToInput(prefill.model_probability),
+        source_ev: percentToInput(prefill.ev),
+        user_context: nextContext,
+      };
+    });
     if (!silent) {
       toast.success("Dados importados aplicados ao formulario. Revise antes de validar.");
     }
@@ -1194,7 +1199,7 @@ function AspValidatorPage() {
     try {
       const payload = {
         result_status: status,
-        result_settled_at: resultForm.result_settled_at || new Date().toISOString().slice(0, 10),
+        result_settled_at: resultForm.result_settled_at || todayBR(),
         final_score: resultForm.final_score || null,
         result_notes: resultForm.result_notes || null,
         stake_units: selectedRecord.decision === "PULAR" ? 1 : stake,
@@ -2032,7 +2037,7 @@ function StructuredOcrPanel({ record, uploads }: { record: ValidatorRecord; uplo
         </div>
       ) : null}
 
-      {hasJsonContent(structured) ? <ExtractedImageDataPanel structured={structured as StructuredValidatorJson} /> : null}
+      {hasJsonContent(structured) ? <ExtractedImageDataPanel structured={structured as StructuredValidatorJson} sport={record.sport} /> : null}
 
       {hasJsonContent(structured) ? (
         <div className="rounded-md border border-border bg-background/50 p-3">
@@ -2048,10 +2053,15 @@ function StructuredOcrPanel({ record, uploads }: { record: ValidatorRecord; uplo
   );
 }
 
-function ExtractedImageDataPanel({ structured }: { structured: StructuredValidatorJson }) {
+function ExtractedImageDataPanel({ structured, sport }: { structured: StructuredValidatorJson; sport?: string | null }) {
   const market = structured.market ?? structured.prediction;
   const corners = structured.corners;
   const preMatchAverage = structured.pre_match_odds?.length ? average(structured.pre_match_odds.map((item) => item.odd)) : null;
+  const sportNorm = (sport ?? "").trim().toLowerCase();
+  // Corners/race/escanteios blocks are football-only. For Baseball / Basketball / etc.
+  // suppress the entire corners tree to avoid misleading "0" tiles.
+  const isFootball = sportNorm === "" || sportNorm.startsWith("futebol") || sportNorm.startsWith("football") || sportNorm.startsWith("soccer");
+  const showCorners = isFootball && Boolean(corners && (corners.home || corners.away));
   return (
     <details className="rounded-md border border-border bg-background/50 p-3" open>
       <summary className="cursor-pointer text-sm font-semibold">Dados extraidos por recorte</summary>
@@ -2067,8 +2077,13 @@ function ExtractedImageDataPanel({ structured }: { structured: StructuredValidat
         <Info label="Qualidade" value={`${Math.round((structured.data_quality_score ?? 0) * 100)}%`} />
         <Info label="Campos extraidos" value={String(structured.structured_fields_count ?? 0)} />
       </div>
-      <NormalizedCornerLinesPanel home={corners?.home?.normalized_market_lines ?? []} away={corners?.away?.normalized_market_lines ?? []} />
+      {showCorners ? (
+        <NormalizedCornerLinesPanel home={corners?.home?.normalized_market_lines ?? []} away={corners?.away?.normalized_market_lines ?? []} />
+      ) : null}
+
+      {showCorners ? (<>
       <div className="mt-3 grid gap-3 md:grid-cols-2">
+
         <div className="rounded-md border border-border p-3">
           <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Geral - {structured.match?.home_team || "Mandante"}</div>
           <div className="grid gap-2 md:grid-cols-2">
@@ -2142,7 +2157,9 @@ function ExtractedImageDataPanel({ structured }: { structured: StructuredValidat
           </div>
         </div>
       </div>
+      </>) : null}
       <div className="mt-3 grid gap-3 md:grid-cols-2">
+
         <div className="rounded-md border border-border p-3">
           <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Odds pre-jogo</div>
           <div className="grid gap-2 md:grid-cols-2">
@@ -2803,22 +2820,51 @@ function ImportedMlbScreenerBanner({
           </div>
         </div>
 
-        {prefill && (
-          <div className="grid gap-2 md:grid-cols-4">
-            <Info label="Handoff ID" value={payload?.handoff_id ?? "-"} />
-            <Info label="Auditoria" value={audit?.status ?? "-"} />
-            <Info label="Enviado em" value={audit?.sent_at ? formatDateTime(audit.sent_at) : "-"} />
-            <Info label="Aplicado em" value={audit?.applied_at ? formatDateTime(audit.applied_at) : "-"} />
-            <Info label="Jogo" value={prefill.matchup} />
-            <Info label="Mercado" value={prefill.market} />
-            <Info label="Pick" value={prefill.pick ?? "-"} />
-            <Info label="Odd" value={formatOdd(prefill.odd)} />
-            <Info label="EV ASP" value={formatDecimalEv(prefill.ev)} />
-            <Info label="Opportunity" value={String(prefill.opportunity_score)} />
-            <Info label="Confidence" value={String(prefill.confidence_score)} />
-            <Info label="Readiness" value={prefill.readiness_status} />
-          </div>
-        )}
+        {prefill && (() => {
+          const proj = (prefill as unknown as { source_projection_payload?: Record<string, unknown> | null }).source_projection_payload;
+          const hasProjection = !!proj && (
+            (proj as { home_expected_runs?: number | null }).home_expected_runs != null ||
+            (proj as { away_expected_runs?: number | null }).away_expected_runs != null ||
+            (proj as { projected_total_runs?: number | null }).projected_total_runs != null
+          );
+          const raw = (prefill as unknown as { raw_opportunity_score?: number; raw_confidence_score?: number; critical_adjusted_score?: number; critical_adjusted_confidence?: number; critical_adjusted_status?: string; alignment_status?: string; alignment_score?: number; validation_readiness_score?: number }) ?? {};
+          const strongConflict = raw.critical_adjusted_status === "strong_conflict";
+          return (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                {strongConflict && (
+                  <Badge variant="destructive">Conflito forte com o Screener</Badge>
+                )}
+                {raw.critical_adjusted_status === "review_before_validator" && !strongConflict && (
+                  <Badge variant="outline" className="border-warning/60 text-warning">Revisar antes do Validator</Badge>
+                )}
+                <Badge variant="outline">Usou source projection: {hasProjection ? "Sim" : "Não"}</Badge>
+              </div>
+              <div className="grid gap-2 md:grid-cols-4">
+                <Info label="Handoff ID" value={payload?.handoff_id ?? "-"} />
+                <Info label="Auditoria" value={audit?.status ?? "-"} />
+                <Info label="Enviado em" value={audit?.sent_at ? formatDateTime(audit.sent_at) : "-"} />
+                <Info label="Aplicado em" value={audit?.applied_at ? formatDateTime(audit.applied_at) : "-"} />
+                <Info label="Jogo" value={prefill.matchup} />
+                <Info label="Mercado" value={prefill.market} />
+                <Info label="Pick" value={prefill.pick ?? "-"} />
+                <Info label="Odd" value={formatOdd(prefill.odd)} />
+                <Info label="EV ASP" value={formatDecimalEv(prefill.ev)} />
+                <Info label="Opportunity (bruto)" value={String(raw.raw_opportunity_score ?? prefill.opportunity_score)} />
+                <Info label="Confidence (bruto)" value={String(raw.raw_confidence_score ?? prefill.confidence_score)} />
+                <Info label="Score pós-contexto" value={String(raw.critical_adjusted_score ?? "-")} />
+                <Info label="Confiança pós-contexto" value={String(raw.critical_adjusted_confidence ?? "-")} />
+                <Info label="Alignment" value={`${raw.alignment_status ?? "-"} (${raw.alignment_score ?? "-"})`} />
+                <Info label="Readiness" value={`${raw.validation_readiness_score ?? "-"} · ${prefill.readiness_status}`} />
+              </div>
+              {hasProjection && (
+                <p className="text-xs text-muted-foreground">
+                  Simulação simplificada disponível a partir do payload do Screener.
+                </p>
+              )}
+            </>
+          );
+        })()}
 
         {warnings.map((warning) => (
           <div key={warning} className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
@@ -5605,7 +5651,7 @@ function recordToResultForm(record: ValidatorRecord, defaultUnitValue: number): 
     clv: numberToInput(record.clv),
     final_score: record.final_score ?? "",
     result_notes: record.result_notes ?? "",
-    result_settled_at: record.result_settled_at ?? new Date().toISOString().slice(0, 10),
+    result_settled_at: record.result_settled_at ?? todayBR(),
   };
 }
 
@@ -5655,9 +5701,11 @@ function filterDashboardRecords(records: ValidatorRecord[], filters: ValidatorDa
 }
 
 function getDashboardMinDate(period: ValidatorDashboardFilters["period"]): string | null {
-  const now = new Date();
-  const date = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   if (period === "all") return null;
+  // Trabalha em fuso BR: usa componentes da data BR para construir a data local coerente.
+  const todayStr = todayBR();
+  const [y, m, d] = todayStr.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
   if (period === "7d") date.setDate(date.getDate() - 6);
   if (period === "30d") date.setDate(date.getDate() - 29);
   if (period === "month") date.setDate(1);
@@ -5665,7 +5713,10 @@ function getDashboardMinDate(period: ValidatorDashboardFilters["period"]): strin
     date.setMonth(0);
     date.setDate(1);
   }
-  return date.toISOString().slice(0, 10);
+  const yy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
 }
 
 function calculateValidatorDashboardStats(records: ValidatorRecord[]): DashboardStats {
@@ -5810,18 +5861,35 @@ function percentToInput(value: number | null): string {
   return value === null || value === undefined || !Number.isFinite(value) ? "" : String(round(value * 100, 2));
 }
 
+// Remove previous imported-screener block(s) from a user_context value.
+// Keeps only the free-form manual portion, avoiding "Importado do ASP Screener..." duplication.
+function extractManualOnlyContext(value: string | null | undefined): string {
+  if (!value) return "";
+  const text = String(value);
+  const importedMarker = "Importado do ASP Screener MLB";
+  const manualMarker = "Contexto adicional manual:";
+  if (!text.includes(importedMarker)) return text.trim();
+  // If a manual section exists after the imported block, keep only that section content.
+  const manualIdx = text.lastIndexOf(manualMarker);
+  if (manualIdx >= 0) {
+    return text.slice(manualIdx + manualMarker.length).trim();
+  }
+  // Only imported context, no manual addition -> nothing to preserve.
+  return "";
+}
+
 function formatDate(value: string | null): string {
   if (!value) return "-";
-  const parsed = new Date(`${value}T00:00:00`);
+  const parsed = new Date(`${value}T00:00:00-03:00`);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleDateString("pt-BR");
+  return parsed.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
 }
 
 function formatDateTime(value: string | null): string {
   if (!value) return "-";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString("pt-BR");
+  return parsed.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
 }
 
 function formatFileSize(bytes: number): string {

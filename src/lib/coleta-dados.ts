@@ -183,9 +183,26 @@ function inferSportFromSource(source?: unknown): string | null {
   return null;
 }
 
+function parseMaybeJson(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const text = value.trim();
+  if (!text || (!text.startsWith("{") && !text.startsWith("["))) return value;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return value;
+  }
+}
+
 function getGames(raw: unknown): Array<Record<string, unknown>> {
+  raw = parseMaybeJson(raw);
   if (Array.isArray(raw)) return raw.filter(isRecord);
   if (!isRecord(raw)) return [];
+  const nested = raw.data ?? raw.result ?? raw.raw_json ?? raw.normalized_json;
+  if (nested && nested !== raw) {
+    const nestedGames = getGames(nested);
+    if (nestedGames.length) return nestedGames;
+  }
   if (isRecord(raw._default)) return Object.values(raw._default).filter(isRecord);
   if (Array.isArray(raw.games)) return raw.games.filter(isRecord);
   if (Array.isArray(raw.jogos)) return raw.jogos.filter(isRecord);
@@ -319,22 +336,78 @@ export function normalizeOddsJson(raw: unknown, opts?: { esporte?: string | null
 }
 
 export function normalizeVmNormalizedPayload(payload: unknown, opts?: { esporte?: string | null }): NormalizedCollection {
+  payload = parseMaybeJson(payload);
   const root = isRecord(payload) ? payload : {};
-  const nested = isRecord(root.data) ? root.data : isRecord(root.result) ? root.result : root;
-  const linhas = Array.isArray(nested.linhas)
-    ? nested.linhas
-    : Array.isArray(nested.rows)
-      ? nested.rows
-      : Array.isArray(nested.normalized_json)
-        ? nested.normalized_json
-        : Array.isArray(payload)
-          ? payload
-          : [];
+  const nested = isRecord(root.data)
+    ? root.data
+    : isRecord(root.result)
+      ? root.result
+      : isRecord(root.normalized_json)
+        ? (root.normalized_json as Record<string, unknown>)
+        : root;
 
-  const rows = linhas
+  const flatCandidate: unknown[] =
+    (Array.isArray(nested.linhas) && (nested.linhas as unknown[])) ||
+    (Array.isArray(nested.rows) && (nested.rows as unknown[])) ||
+    (Array.isArray(nested.odds) && (nested.odds as unknown[])) ||
+    (Array.isArray(nested.items) && (nested.items as unknown[])) ||
+    (Array.isArray(nested.results) && (nested.results as unknown[])) ||
+    (Array.isArray(nested.normalized_json) && (nested.normalized_json as unknown[])) ||
+    (Array.isArray(payload) && (payload as unknown[])) ||
+    [];
+
+  // Só trata como "linhas planas" quando os itens parecem registros de odd.
+  const flat = flatCandidate
     .filter(isRecord)
+    .filter(
+      (r) =>
+        "odd" in r || "price" in r || "odds" in r || "mercado" in r || "market" in r || "pick" in r || "selection" in r,
+    );
+
+  const recursiveFlat = collectRecords(nested, isFlatOddRecord);
+  const rows: NormalizedOdd[] = (recursiveFlat.length ? recursiveFlat : flat)
     .map((row) => normalizeVmRow(row, opts?.esporte))
     .filter((row) => row.odd > 0);
+
+  // Fallback: payload com estrutura de jogos (odds: { market: { period: [[headers],[row]] } })
+  if (!rows.length) {
+    const gameRows = collectRecords(payload, isGameRecord).flatMap((game) => normalizeMarketRows(game, opts?.esporte));
+    if (gameRows.length) {
+      if (typeof console !== "undefined") {
+        console.log("[normalizeVmNormalizedPayload] jogos encontrados por varredura:", gameRows.length, "linhas");
+      }
+      return buildCollection(gameRows, opts?.esporte);
+    }
+
+    try {
+      const gameShaped = normalizeOddsJson(payload, opts);
+      if (gameShaped.rows.length) {
+        if (typeof console !== "undefined") {
+          console.log(
+            "[normalizeVmNormalizedPayload] fallback games-shape utilizado:",
+            gameShaped.rows.length,
+            "linhas",
+          );
+        }
+        return gameShaped;
+      }
+    } catch (err) {
+      if (typeof console !== "undefined") {
+        console.warn("[normalizeVmNormalizedPayload] fallback games-shape falhou:", err);
+      }
+    }
+  }
+
+  if (!rows.length && typeof console !== "undefined") {
+    const topKeys = isRecord(payload) ? Object.keys(payload).join(", ") : typeof payload;
+    console.warn(
+      "[normalizeVmNormalizedPayload] nenhuma linha extraída. chaves de topo:",
+      topKeys,
+      "payload:",
+      payload,
+    );
+  }
+
   const dates = rows.map((row) => row.data).filter(Boolean).sort() as string[];
   const mercados = [...new Set(rows.map((row) => row.mercado).filter(Boolean))].sort();
   const ligas = [...new Set(rows.map((row) => row.liga).filter(Boolean))];
@@ -357,30 +430,105 @@ export function normalizeVmNormalizedPayload(payload: unknown, opts?: { esporte?
   };
 }
 
+function buildCollection(rows: NormalizedOdd[], esporteHint?: string | null): NormalizedCollection {
+  const dates = rows.map((row) => row.data).filter(Boolean).sort() as string[];
+  const mercados = [...new Set(rows.map((row) => row.mercado).filter(Boolean))].sort();
+  const ligas = [...new Set(rows.map((row) => row.liga).filter(Boolean))];
+  const esportes = [...new Set(rows.map((row) => row.esporte).filter(Boolean))];
+  const jogos = new Set(
+    rows
+      .map((row) => (row.raw_ref?.game_id ? String(row.raw_ref.game_id) : `${row.data ?? ""}|${row.jogo}`))
+      .filter(Boolean),
+  );
+
+  return {
+    esporte: esportes.length === 1 ? esportes[0] : esporteHint ?? null,
+    liga: ligas.length === 1 ? ligas[0] : null,
+    data_inicio: dates[0] ?? null,
+    data_fim: dates[dates.length - 1] ?? null,
+    mercados,
+    total_jogos: jogos.size,
+    total_odds: rows.length,
+    rows,
+  };
+}
+
+function collectRecords(
+  value: unknown,
+  predicate: (record: Record<string, unknown>) => boolean,
+  depth = 0,
+  seen = new WeakSet<object>(),
+): Record<string, unknown>[] {
+  value = parseMaybeJson(value);
+  if (depth > 8 || value == null || typeof value !== "object") return [];
+  if (seen.has(value)) return [];
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    const direct = value.filter(isRecord).filter(predicate);
+    if (direct.length) return direct;
+    return value.flatMap((item) => collectRecords(item, predicate, depth + 1, seen));
+  }
+
+  if (!isRecord(value)) return [];
+  const direct = predicate(value) ? [value] : [];
+  const nested = Object.values(value).flatMap((item) => collectRecords(item, predicate, depth + 1, seen));
+  return [...direct, ...nested];
+}
+
+function hasAnyKey(record: Record<string, unknown>, keys: string[]) {
+  return keys.some((key) => key in record);
+}
+
+function isFlatOddRecord(record: Record<string, unknown>) {
+  const hasOdd = hasAnyKey(record, ["odd", "odds", "price", "cotacao", "cota", "decimal", "odd_decimal", "valor"]);
+  const hasMarketOrPick = hasAnyKey(record, [
+    "mercado",
+    "market",
+    "market_name",
+    "marketName",
+    "pick",
+    "selecao",
+    "selection",
+    "selection_name",
+    "outcome",
+  ]);
+  return hasOdd && hasMarketOrPick;
+}
+
+function isGameRecord(record: Record<string, unknown>) {
+  return (
+    isRecord(record.odds) &&
+    (hasAnyKey(record, ["home", "mandante", "casa", "home_team", "time_casa"]) ||
+      hasAnyKey(record, ["away", "visitante", "fora", "away_team", "time_fora"]) ||
+      hasAnyKey(record, ["jogo", "game", "match"]))
+  );
+}
+
 function normalizeVmRow(row: Record<string, unknown>, esporteHint?: string | null): NormalizedOdd {
-  const mandante = requiredText(row.mandante ?? row.home ?? row.casa, "");
-  const visitante = requiredText(row.visitante ?? row.away ?? row.fora, "");
+  const mandante = requiredText(row.mandante ?? row.home ?? row.casa ?? row.home_team ?? row.time_casa, "");
+  const visitante = requiredText(row.visitante ?? row.away ?? row.fora ?? row.away_team ?? row.time_fora, "");
   const rawRef = isRecord(row.raw_ref) ? row.raw_ref : { vm_row: row };
   const gameId =
-    extractFlashscoreMatchId(row.fonte ?? row.source ?? row.link ?? row.url) ??
+    extractFlashscoreMatchId(row.fonte ?? row.source ?? row.url ?? row.link) ??
     toText(row.game_id ?? row.match_id ?? row.fixture_id ?? rawRef.game_id);
-  const fonte = toText(row.fonte ?? row.source ?? row.link ?? row.url);
+  const fonte = toText(row.fonte ?? row.source ?? row.url ?? row.link);
   if (gameId && !rawRef.game_id) rawRef.game_id = gameId;
   return {
-    data: parseDate(row.data ?? row.date),
-    hora: parseTime(row.hora ?? row.hour ?? row.time),
+    data: parseDate(row.data ?? row.date ?? row.match_date ?? row.event_date),
+    hora: parseTime(row.hora ?? row.hour ?? row.time ?? row.match_time),
     esporte: normalizeSport(toText(row.esporte ?? row.sport) ?? esporteHint ?? null, row),
     liga: toText(row.liga ?? row.league),
-    jogo: requiredText(row.jogo ?? row.game, mandante && visitante ? `${mandante} vs ${visitante}` : "Jogo sem nome"),
+    jogo: requiredText(row.jogo ?? row.game ?? row.match, mandante && visitante ? `${mandante} vs ${visitante}` : "Jogo sem nome"),
     mandante,
     visitante,
-    mercado: requiredText(row.mercado ?? row.market, "Mercado"),
-    pick: requiredText(row.pick ?? row.selecao ?? row.selection, "Pick"),
-    linha: toText(row.linha ?? row.line),
-    odd: toNumber(row.odd ?? row.price ?? row.odds) ?? 0,
-    bookmaker: toText(row.bookmaker ?? row.book ?? row.casa_aposta),
+    mercado: requiredText(row.mercado ?? row.market ?? row.market_name ?? row.marketName, "Mercado"),
+    pick: requiredText(row.pick ?? row.selecao ?? row.selection ?? row.selection_name ?? row.outcome, "Pick"),
+    linha: toText(row.linha ?? row.line ?? row.handicap ?? row.total),
+    odd: toNumber(row.odd ?? row.price ?? row.odds ?? row.cotacao ?? row.cota ?? row.decimal ?? row.odd_decimal ?? row.valor) ?? 0,
+    bookmaker: toText(row.bookmaker ?? row.book ?? row.casa_aposta ?? row.bookmaker_name),
     fonte: normalizeFlashscoreUrl(fonte) ?? fonte,
-    capturado_em: toText(row.capturado_em ?? row.captured_at) ?? parseCapturedAt(row.att),
+    capturado_em: toText(row.capturado_em ?? row.captured_at ?? row.updated_at) ?? parseCapturedAt(row.att),
     raw_ref: rawRef,
   };
 }

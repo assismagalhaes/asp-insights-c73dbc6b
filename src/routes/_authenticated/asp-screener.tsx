@@ -45,6 +45,11 @@ import {
   storeMlbValidatorHandoffDraft,
   validateMlbValidatorHandoffPayload,
 } from "@/lib/mlb/projections";
+import {
+  buildMlbCriticalValidationDraft,
+  storeCriticalValidationDraft,
+  validateCriticalValidationDraft,
+} from "@/lib/mlb/screenerToCriticalValidationAdapter";
 import type {
   MlbHandicapCandidateStatus,
   MlbHandicapFilter,
@@ -454,10 +459,19 @@ function AspScreenerPage() {
       toast.error("Cole o texto do Baseball-Reference antes de processar.");
       return;
     }
-    const context = parseBaseballReferenceMatchupText(baseballReferenceText);
+    const primary = selectedOpportunities[0];
+    const expected = primary
+      ? {
+          home_team: primary.home_team,
+          away_team: primary.away_team,
+        }
+      : undefined;
+    const context = parseBaseballReferenceMatchupText(baseballReferenceText, expected);
     setParsedMatchupContext(context);
     setCriticalPayloads([]);
-    if (context.data_quality.missing_fields.length) {
+    if (context.data_quality.warnings.some((w) => typeof w === "string" && w.includes("nao conferem"))) {
+      toast.warning("Times do Baseball-Reference nao conferem com a oportunidade selecionada.");
+    } else if (context.data_quality.missing_fields.length) {
       toast.warning("Contexto processado com campos ausentes.");
     } else {
       toast.success("Contexto Baseball-Reference processado.");
@@ -626,8 +640,24 @@ function AspScreenerPage() {
         console.warn("Handoff enviado, mas snapshot sombra nao foi vinculado.", error);
       });
     }
-    toast.success("Rascunho enviado para ASP Validator. Revise antes de validar.");
+    toast.success("Rascunho enviado para ASP Validator (teste). Revise antes de validar.");
     void navigate({ to: "/asp-validator" });
+  }
+
+  async function sendCriticalPayloadToCriticalValidation(payload: MlbPreparedCriticalValidationPayload) {
+    const draft = buildMlbCriticalValidationDraft(payload);
+    const validation = validateCriticalValidationDraft(draft);
+    if (!validation.valid) {
+      toast.error(validation.errors[0] ?? "Rascunho não está pronto para envio à Validação Crítica.");
+      return;
+    }
+    const storageResult = storeCriticalValidationDraft(draft);
+    if (!storageResult.valid) {
+      toast.error(storageResult.errors[0] ?? "Não foi possível salvar o rascunho para a Validação Crítica.");
+      return;
+    }
+    toast.success("Rascunho enviado para Validação Crítica. Nenhum prognóstico foi criado ainda.");
+    void navigate({ to: "/validacao" });
   }
 
   return (
@@ -712,8 +742,8 @@ function AspScreenerPage() {
                     Alertas
                   </div>
                   <ul className="list-inside list-disc space-y-1">
-                    {lastError && <li>{lastError}</li>}
-                    {alerts.map((alert, index) => <li key={`${alert}-${index}`}>{alert}</li>)}
+                    {lastError && <li>{formatAlertMessage(lastError)}</li>}
+                    {alerts.map((alert, index) => <li key={`alert-${index}`}>{formatAlertMessage(alert)}</li>)}
                   </ul>
                 </div>
               )}
@@ -918,6 +948,9 @@ function AspScreenerPage() {
               <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
                 Opportunity Score e uma triagem preliminar. Ainda nao considera starters, lineups, bullpens, clima, park factor ou validacao critica. Nao representa prognostico final.
               </div>
+              <div className="rounded-md border border-primary/40 bg-primary/10 p-3 text-sm text-primary">
+                Screener endurecido: linhas alternativas distantes e odds baixas sao limitadas a MONITORAR/PULAR.
+              </div>
               <div className="rounded-md border bg-background/50 p-3 text-sm text-muted-foreground">
                 A shortlist e uma triagem. O limite final de no maximo 3 prognosticos sera aplicado apos validacao critica.
               </div>
@@ -1063,7 +1096,13 @@ function AspScreenerPage() {
               </div>
 
               {parsedMatchupContext && <ParsedContextPanel context={parsedMatchupContext} />}
-              {criticalPayloads.length > 0 && <CriticalPayloadPanel payloads={criticalPayloads} onSendToValidator={sendCriticalPayloadToValidator} />}
+              {criticalPayloads.length > 0 && (
+                <CriticalPayloadPanel
+                  payloads={criticalPayloads}
+                  onSendToCriticalValidation={sendCriticalPayloadToCriticalValidation}
+                  onSendToValidator={sendCriticalPayloadToValidator}
+                />
+              )}
             </CardContent>
           </Card>
 
@@ -1270,7 +1309,7 @@ function MoneylineProjectionTable({ rows }: { rows: MlbMoneylineScreenerRow[] })
               </td>
               <td className="min-w-72 px-3 py-2 text-xs text-muted-foreground">
                 <div className="space-y-1">
-                  {row.alerts.slice(0, 4).map((alert, index) => <div key={`${row.game_id}-alert-${index}`}>{alert}</div>)}
+                  {row.alerts.slice(0, 4).map((alert, index) => <div key={`${row.game_id}-alert-${index}`}>{formatAlertMessage(alert)}</div>)}
                   {row.reasons.length > 0 && (
                     <div className="pt-1 text-foreground">{row.reasons.slice(0, 2).join(" | ")}</div>
                   )}
@@ -1369,7 +1408,7 @@ function TotalsProjectionTable({ rows }: { rows: MlbTotalsScreenerRow[] }) {
                 <div className="space-y-1">
                   <div>Media liga: {formatNumber2(row.league_avg_runs_per_team)} ({leagueAverageSourceLabel(row.league_average_source)})</div>
                   {row.push_prob ? <div>Push: {formatProbability(row.push_prob)}</div> : null}
-                  {row.alerts.slice(0, 5).map((alert, index) => <div key={`${row.row_id}-alert-${index}`}>{alert}</div>)}
+                  {row.alerts.slice(0, 5).map((alert, index) => <div key={`${row.row_id}-alert-${index}`}>{formatAlertMessage(alert)}</div>)}
                   {row.reasons.length > 0 && (
                     <div className="pt-1 text-foreground">{row.reasons.slice(0, 2).join(" | ")}</div>
                   )}
@@ -1478,7 +1517,7 @@ function HandicapProjectionTable({ rows }: { rows: MlbHandicapScreenerRow[] }) {
                     Max runs: {row.components.margin_distribution_summary.distribution_max_runs ?? "-"} |
                     Massa: {formatProbability(row.components.margin_distribution_summary.distribution_mass_before_normalization)}
                   </div>
-                  {row.alerts.slice(0, 6).map((alert, index) => <div key={`${row.row_id}-alert-${index}`}>{alert}</div>)}
+                  {row.alerts.slice(0, 6).map((alert, index) => <div key={`${row.row_id}-alert-${index}`}>{formatAlertMessage(alert)}</div>)}
                   {row.reasons.length > 0 && (
                     <div className="pt-1 text-foreground">{row.reasons.slice(0, 2).join(" | ")}</div>
                   )}
@@ -1599,6 +1638,7 @@ function OpportunityTable({
                     <div>{row.score_explanation}</div>
                     <div className="text-foreground">{row.reasons.slice(0, 5).join(" | ") || "-"}</div>
                     <div>Componentes: EV {formatScore(row.score_components.ev_quality_score)}, Edge {formatScore(row.score_components.probability_edge_score)}, Linha {formatScore(row.score_components.market_line_quality_score)}, Dados {formatScore(row.score_components.data_quality_score)}, Penalidade {formatScore(row.score_components.risk_penalty)}</div>
+                    <div>Score bruto {formatScore(row.score_components.raw_score)} | Score final {formatScore(row.score_components.final_score)}{row.score_components.applied_penalties.length > 0 ? ` | Penalidades aplicadas: ${row.score_components.applied_penalties.map((p) => `${p.flag} ${p.delta}`).join(", ")}` : ""}</div>
                     {row.risk_flags.length > 0 && <div>Penalidades: {row.risk_flags.join(" | ")}</div>}
                     <Button size="sm" variant="outline" onClick={() => copyPayload(row)}>
                       <ClipboardCopy className="mr-2 h-3 w-3" />
@@ -1612,7 +1652,7 @@ function OpportunityTable({
               </td>
               <td className="min-w-80 px-3 py-2 text-xs text-muted-foreground">
                 <div className="space-y-1">
-                  {row.alerts.slice(0, 5).map((alert, index) => <div key={`${row.opportunity_id}-alert-${index}`}>{alert}</div>)}
+                  {row.alerts.slice(0, 5).map((alert, index) => <div key={`${row.opportunity_id}-alert-${index}`}>{formatAlertMessage(alert)}</div>)}
                   {row.risk_flags.length > 0 && <div className="text-warning">{row.risk_flags.slice(0, 3).join(" | ")}</div>}
                 </div>
               </td>
@@ -1653,13 +1693,19 @@ function ParsedContextPanel({ context }: { context: MlbBaseballReferenceMatchupC
         <div className="mt-2 space-y-1 text-sm text-muted-foreground">
           <div>Campos: {context.data_quality.parsed_fields_count}</div>
           <div>Confianca: {formatScore(context.data_quality.confidence)}</div>
-          <div>Season series: {context.season_series.games.length}</div>
-          <div>H2H: {context.head_to_head.games.length}</div>
+          <div>
+            Season series: {context.season_series.completed_games.length} concluído{context.season_series.completed_games.length === 1 ? "" : "s"} /{" "}
+            {context.season_series.upcoming_games.length} futuro{context.season_series.upcoming_games.length === 1 ? "" : "s"}
+            {Object.keys(context.season_series.yearly_summary).length > 0
+              ? ` · resumo: ${Object.keys(context.season_series.yearly_summary).length} linhas`
+              : ""}
+          </div>
+          <div>H2H (últimos jogos): {context.head_to_head.last_10_games.length}</div>
           {context.data_quality.missing_fields.length > 0 && (
             <div className="text-warning">Ausentes: {context.data_quality.missing_fields.join(", ")}</div>
           )}
           {context.data_quality.warnings.slice(0, 3).map((warning, index) => (
-            <div key={`${warning}-${index}`} className="text-warning">{warning}</div>
+            <div key={`warning-${index}`} className="text-warning">{formatAlertMessage(warning)}</div>
           ))}
         </div>
       </div>
@@ -1669,43 +1715,106 @@ function ParsedContextPanel({ context }: { context: MlbBaseballReferenceMatchupC
 
 function CriticalPayloadPanel({
   payloads,
+  onSendToCriticalValidation,
   onSendToValidator,
 }: {
   payloads: MlbPreparedCriticalValidationPayload[];
+  onSendToCriticalValidation: (payload: MlbPreparedCriticalValidationPayload) => void | Promise<void>;
   onSendToValidator: (payload: MlbPreparedCriticalValidationPayload) => void | Promise<void>;
 }) {
   return (
     <div className="space-y-3">
-      <div className="text-sm font-semibold">Confronto Screener x Contexto Detalhado</div>
+      <div className="text-sm font-semibold">Pacote para Validação Crítica</div>
       {payloads.map((payload) => {
         const handoffValidation = validateMlbValidatorHandoffPayload(buildMlbValidatorHandoffPayload(payload));
+        const prep = payload.validation_preparation;
+        const alignmentScore = payload.context_alignment.alignment_score;
+        const marketDivergencePP =
+          payload.opportunity.model_probability != null && payload.opportunity.market_probability_no_vig != null
+            ? Math.abs(payload.opportunity.model_probability - payload.opportunity.market_probability_no_vig) * 100
+            : 0;
+        const isStrongConflict = prep.critical_adjusted_status === "strong_conflict";
+        const isReviewBefore = prep.critical_adjusted_status === "review_before_validator";
+        const highDivergence = marketDivergencePP >= 15;
+        const shouldConfirm =
+          payload.context_alignment.alignment_status === "conflicts_with_screener" ||
+          alignmentScore <= 35 ||
+          highDivergence;
+        const handleSendCritical = () => {
+          if (shouldConfirm && typeof window !== "undefined") {
+            const isConflict = payload.context_alignment.alignment_status === "conflicts_with_screener";
+            let msg: string;
+            if (isConflict && highDivergence) {
+              msg = "Esta oportunidade possui conflito forte e divergência alta contra o mercado no-vig. Enviar para Validação Crítica apenas para revisão manual?";
+            } else if (isConflict) {
+              msg = "Esta oportunidade possui conflito forte com o contexto detalhado. Enviar para Validação Crítica apenas para revisão manual?";
+            } else if (highDivergence) {
+              msg = "Esta oportunidade possui divergência alta contra o mercado no-vig. Enviar para Validação Crítica apenas para revisão manual?";
+            } else {
+              msg = "Esta oportunidade exige revisão manual antes de decidir. Enviar para Validação Crítica?";
+            }
+            const ok = window.confirm(msg);
+            if (!ok) return;
+          }
+          void onSendToCriticalValidation(payload);
+        };
+        const handleSendValidator = () => {
+          void onSendToValidator(payload);
+        };
         return (
           <div key={`${payload.game.game_id}-${payload.opportunity.market}-${payload.opportunity.pick}`} className="rounded-md border bg-background/50 p-3 text-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="font-medium">{payload.game.matchup} | {payload.opportunity.market} | {payload.opportunity.pick}</div>
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline">{payload.validation_preparation.readiness_status}</Badge>
-                <Button size="sm" onClick={() => void onSendToValidator(payload)} disabled={!handoffValidation.canSend}>
+                {isStrongConflict && (
+                  <Badge variant="destructive">Conflito forte com o Screener</Badge>
+                )}
+                {isReviewBefore && !isStrongConflict && (
+                  <Badge variant="outline" className="border-warning/60 text-warning">Revisar antes de enviar</Badge>
+                )}
+                {highDivergence && (
+                  <Badge variant="outline" className="border-warning/60 text-warning">
+                    Divergência alta contra mercado no-vig ({marketDivergencePP.toFixed(1)} p.p.)
+                  </Badge>
+                )}
+                <Badge variant="outline">{prep.readiness_status}</Badge>
+                <Button size="sm" onClick={handleSendCritical}>
                   <Send className="mr-2 h-4 w-4" />
-                  Enviar esta para ASP Validator
+                  Enviar para Validação Crítica
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleSendValidator}
+                  disabled={!handoffValidation.canSend}
+                  title="Fluxo em teste. O destino principal agora é a Validação Crítica."
+                >
+                  ASP Validator (teste)
                 </Button>
               </div>
             </div>
+
             {handoffValidation.warnings.length > 0 && (
               <div className="mt-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
-                {handoffValidation.warnings[0]}
+                {formatAlertMessage(handoffValidation.warnings[0])}
               </div>
             )}
             {handoffValidation.errors.length > 0 && (
               <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                {handoffValidation.errors[0]}
+                {formatAlertMessage(handoffValidation.errors[0])}
               </div>
             )}
           <div className="mt-2 grid gap-2 md:grid-cols-4">
             <Info label="Alignment" value={payload.context_alignment.alignment_status} />
-            <Info label="Alignment score" value={payload.context_alignment.alignment_score} />
-            <Info label="Readiness" value={payload.validation_preparation.validation_readiness_score} />
+            <Info label="Alignment score" value={alignmentScore} />
+            <Info label="Readiness" value={prep.validation_readiness_score} />
             <Info label="Flags" value={payload.context_alignment.critical_flags.length} />
+          </div>
+          <div className="mt-2 grid gap-2 md:grid-cols-4">
+            <Info label="Opportunity Score (bruto)" value={prep.raw_opportunity_score} />
+            <Info label="Confidence (bruto)" value={prep.raw_confidence_score} />
+            <Info label="Score pós-contexto" value={prep.critical_adjusted_score} />
+            <Info label="Confiança pós-contexto" value={prep.critical_adjusted_confidence} />
           </div>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             <div>
@@ -3102,7 +3211,12 @@ function normalizeText(value: string | null | undefined) {
 }
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 }
 
 function sourceLabel(source: string | null | undefined) {
@@ -3115,6 +3229,7 @@ function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "short",
     timeStyle: "short",
+    timeZone: "America/Sao_Paulo",
   }).format(new Date(value));
 }
 
@@ -3389,5 +3504,28 @@ function statusBadgeVariant(status: MlbProjectionCandidateStatus | MlbHandicapCa
 }
 
 function formatError(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
+  return formatAlertMessage(error);
+}
+
+function formatAlertMessage(alert: unknown): string {
+  if (alert == null) return "Alerta desconhecido";
+  if (typeof alert === "string") return alert;
+  if (typeof alert === "number" || typeof alert === "boolean") return String(alert);
+  if (alert instanceof Error) return alert.message || "Erro desconhecido";
+  if (typeof alert === "object") {
+    const obj = alert as Record<string, unknown>;
+    if (typeof obj.message === "string" && obj.message) return obj.message;
+    if (typeof obj.error === "string" && obj.error) return obj.error;
+    if (typeof obj.details === "string" && obj.details) return obj.details;
+    if (typeof obj.description === "string" && obj.description) return obj.description;
+    if (typeof obj.statusText === "string" && obj.statusText) return obj.statusText;
+    try {
+      const json = JSON.stringify(obj);
+      if (json && json !== "{}") return json;
+    } catch {
+      /* fallthrough */
+    }
+    return "Alerta nao estruturado";
+  }
+  return String(alert);
 }

@@ -439,6 +439,10 @@ function canonicalHeader(header: string): string | null {
     "wl%": "win_pct",
     win_loss_perc: "win_pct",
     winlossperc: "win_pct",
+    win_pct: "win_pct",
+    winpct: "win_pct",
+    "win%": "win_pct",
+
     strk: "streak",
     streak: "streak",
     r: "runs",
@@ -579,11 +583,14 @@ function parseStreak(input: string): { result: "W" | "L" | null; count: number |
 }
 
 function parsePercentage(input: unknown): number | null {
-  const text = textValue(input);
+  let text = textValue(input).replace(",", ".").replace("%", "").trim();
   if (!text) return null;
-  const value = Number(text.startsWith(".") ? `0${text}` : text);
+  if (text.startsWith(".")) text = `0${text}`;
+  if (text.startsWith("-.")) text = `-0${text.slice(1)}`;
+  const value = Number(text);
   return Number.isFinite(value) ? value : null;
 }
+
 
 function parseDecimal(input: unknown): number | null {
   const value = Number(textValue(input).replace(",", "."));
@@ -636,10 +643,15 @@ function getAttr(attrs: string, name: string) {
 }
 
 function defaultParseOptions() {
-  const now = new Date();
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
   return {
-    snapshotDate: now.toISOString().slice(0, 10),
-    season: now.getUTCFullYear(),
+    snapshotDate: today,
+    season: Number(today.slice(0, 4)),
     source: "baseball_reference" as MlbStandingsSource,
   };
 }

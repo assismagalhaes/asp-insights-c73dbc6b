@@ -8,6 +8,7 @@ import {
   parseMlbStandingsCsv,
   parseMlbStandingsHtml,
 } from "@/lib/mlb/standings";
+import { todayBR } from "@/lib/date-br";
 import {
   fetchMlbOddsRowsForDate,
   readMlbStandingsSnapshot,
@@ -23,7 +24,7 @@ const SnapshotInputObjectSchema = z.object({
 
 const SnapshotInputSchema = SnapshotInputObjectSchema
   .transform((data) => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayBR();
     return {
       snapshotDate: data.snapshotDate ?? today,
       season: data.season ?? Number(today.slice(0, 4)),
@@ -34,7 +35,7 @@ const SnapshotInputSchema = SnapshotInputObjectSchema
 const CsvInputSchema = SnapshotInputObjectSchema.extend({
   csv: z.string().min(20, "Cole o CSV da tabela MLB Detailed Standings."),
 }).transform((data) => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayBR();
   return {
     snapshotDate: data.snapshotDate ?? today,
     season: data.season ?? Number(today.slice(0, 4)),

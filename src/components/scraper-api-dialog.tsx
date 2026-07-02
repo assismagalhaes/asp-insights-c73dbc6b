@@ -36,16 +36,33 @@ const TARGET_KEYS = [
 type Row = Record<string, unknown>;
 
 /** Extrai um array de jogos/odds de qualquer formato razoável que a API devolver. */
-function extractRows(payload: unknown): Row[] {
-  if (!payload) return [];
-  if (Array.isArray(payload)) return payload as Row[];
+function extractRows(payload: unknown, depth = 0): Row[] {
+  if (!payload || depth > 6) return [];
+  if (Array.isArray(payload)) {
+    // só considera array como "linhas" se os itens forem objetos
+    if (payload.length === 0) return [];
+    if (typeof payload[0] === "object" && payload[0] !== null) return payload as Row[];
+    return [];
+  }
   if (typeof payload === "object") {
     const obj = payload as Record<string, unknown>;
-    for (const k of ["odds", "rows", "data", "result", "results", "jogos", "items", "normalized_json", "raw_json"]) {
+    // 1) chaves prioritárias
+    for (const k of [
+      "linhas", "odds", "rows", "data", "result", "results",
+      "jogos", "items", "normalized", "normalized_json", "raw_json",
+      "payload", "records", "entries",
+    ]) {
       const v = obj[k];
-      if (Array.isArray(v)) return v as Row[];
+      if (Array.isArray(v) && v.length && typeof v[0] === "object") return v as Row[];
+    }
+    // 2) varredura: pega o primeiro array de objetos encontrado
+    for (const v of Object.values(obj)) {
+      if (Array.isArray(v) && v.length && typeof v[0] === "object") return v as Row[];
+    }
+    // 3) recursão em objetos aninhados
+    for (const v of Object.values(obj)) {
       if (v && typeof v === "object") {
-        const nested = extractRows(v);
+        const nested = extractRows(v, depth + 1);
         if (nested.length) return nested;
       }
     }
@@ -53,19 +70,78 @@ function extractRows(payload: unknown): Row[] {
   return [];
 }
 
+function pick(row: Row, ...keys: string[]): unknown {
+  for (const k of keys) {
+    const v = row[k];
+    if (v !== undefined && v !== null && v !== "") return v;
+  }
+  return "";
+}
+
+function pickNested(row: Row, ...paths: string[]): unknown {
+  for (const path of paths) {
+    const parts = path.split(".");
+    let current: unknown = row;
+    for (const part of parts) {
+      if (!current || typeof current !== "object" || Array.isArray(current)) {
+        current = undefined;
+        break;
+      }
+      current = (current as Row)[part];
+    }
+    if (current !== undefined && current !== null && current !== "") return current;
+  }
+  return "";
+}
+
+function compactTechnicalContext(row: Row): string {
+  const source = pickNested(row, "dados_tecnicos", "technical_data", "stats", "model", "raw_ref", "metadata");
+  if (!source) return "";
+  return typeof source === "string" ? source : JSON.stringify(source);
+}
+
 function normalizeRow(row: Row): Row {
   const out: Row = {};
-  for (const k of TARGET_KEYS) {
-    if (k in row) out[k] = row[k];
-    else out[k] = "";
-  }
-  if (!out.mandante && row.home) out.mandante = row.home;
-  if (!out.visitante && row.away) out.visitante = row.away;
+  // cópia direta quando existir
+  for (const k of TARGET_KEYS) out[k] = k in row ? row[k] : "";
+
+  // aliases comuns vindos da VM /normalized
+  if (!out.data) out.data = pick(row, "data_jogo", "date", "match_date", "dt", "game_date", "start_date");
+  if (!out.hora) out.hora = pick(row, "horario", "hora_jogo", "time", "kickoff", "match_time", "start_time", "hour");
+  if (!out.esporte) out.esporte = pick(row, "sport", "esporte_nome");
+  if (!out.liga) out.liga = pick(row, "league", "campeonato", "torneio", "competition", "competition_name");
+  if (!out.mandante) out.mandante = pick(row, "home", "home_team", "time_casa", "mandante_nome", "casa", "team_home");
+  if (!out.visitante) out.visitante = pick(row, "away", "away_team", "time_fora", "visitante_nome", "fora", "team_away");
   if (!out.jogo && (out.mandante || out.visitante)) {
     out.jogo = `${String(out.mandante ?? "")} x ${String(out.visitante ?? "")}`.trim();
   }
-  if (!out.odd_ofertada && row.odd) out.odd_ofertada = row.odd;
-  if (!out.odd_valor && row.fair_odd) out.odd_valor = row.fair_odd;
+  if (!out.jogo) out.jogo = pick(row, "match", "partida", "evento", "event", "game", "fixture");
+  if (!out.mercado) out.mercado = pick(row, "market", "market_name", "mercado_nome", "tipo_mercado", "market_type", "bet_type");
+  if (!out.pick) out.pick = pick(row, "selection", "selecao", "aposta", "pick_nome", "outcome", "runner", "side", "option");
+  if (!out.linha) out.linha = pick(row, "line", "handicap", "total", "linha_valor", "point", "points", "spread");
+  if (!out.odd_ofertada) {
+    out.odd_ofertada = pickNested(
+      row,
+      "odd",
+      "odd_ofertada_valor",
+      "price",
+      "cotacao",
+      "quota",
+      "odds",
+      "decimal",
+      "decimal_odd",
+      "bookmaker_odd",
+      "offered_odd",
+      "odds.decimal",
+      "odds.price",
+      "bookmaker.price",
+    );
+  }
+  if (!out.odd_valor) out.odd_valor = pick(row, "fair_odd", "odd_justa", "true_odd", "valor_justo", "fair", "fair_price");
+  if (!out.probabilidade_final) out.probabilidade_final = pick(row, "prob", "probability", "prob_final", "probabilidade", "probabilidade_final_pct", "prob_pct");
+  if (!out.edge) out.edge = pick(row, "ev", "value", "valor_esperado", "edge_pct", "edge_percent", "ev_pct");
+  if (!out.dados_tecnicos) out.dados_tecnicos = compactTechnicalContext(row);
+  if (!out.observacoes) out.observacoes = pick(row, "obs", "notes", "observacao", "bookmaker", "casa", "book", "casa_aposta");
   return out;
 }
 
@@ -151,13 +227,27 @@ export function ScraperApiDialog({ onRowsReady }: Props) {
       const norm = await callApi(`/scraping/jobs/${jobId}/normalized`, "GET");
       if (!norm.ok) throw new Error(`Falha ao buscar normalizado (HTTP ${norm.status})`);
 
-      const rows = extractRows(norm.data).map(normalizeRow);
+      const rawRows = extractRows(norm.data);
+      const rows = rawRows.map(normalizeRow);
+      // diagnóstico: sempre logar shape para depurar respostas /normalized
+      // eslint-disable-next-line no-console
+      console.log("[scraper /normalized] payload:", norm.data);
+      // eslint-disable-next-line no-console
+      console.log("[scraper /normalized] rawRows:", rawRows.length, "sample:", rawRows[0]);
       if (!rows.length) {
-        toast.error("O job concluiu mas não retornou linhas para esses filtros.");
+        const topKeys =
+          norm.data && typeof norm.data === "object" && !Array.isArray(norm.data)
+            ? Object.keys(norm.data as Record<string, unknown>).join(", ")
+            : Array.isArray(norm.data)
+              ? "array"
+              : typeof norm.data;
+        toast.error(
+          `O job concluiu mas /normalized não trouxe linhas. Chaves recebidas: ${topKeys}. Veja o console para o payload completo.`,
+        );
         return;
       }
-      onRowsReady([...TARGET_KEYS], rows);
-      toast.success(`${rows.length} linha(s) trazida(s) da API`);
+      onRowsReady([...TARGET_KEYS, "dados_tecnicos"], rows);
+      toast.success(`${rows.length} odds recebidas da VM e enviadas para a pré-visualização.`);
       setOpen(false);
     } catch (e) {
       toast.error((e as Error).message || "Falha ao consultar a API");

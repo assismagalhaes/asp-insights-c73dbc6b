@@ -13,16 +13,22 @@ import { matchMlbTeamName } from "@/utils/mlbTeamNameMap";
 import { calculateMlbProjectedTotal, getLeagueAverageContext } from "@/lib/mlb/totalsProjection";
 
 export const MLB_HANDICAP_THRESHOLDS = {
-  analyzeEv: 0.05,
+  analyzeEv: 0.06,
   analyzeProbGap: 0.05,
   monitorEv: 0.02,
   monitorProbGap: 0.03,
   minOdd: 1.55,
-  maxOdd: 2.80,
+  maxOdd: 3.00,
   maxAnalyzeDistanceFromMainLine: 1.0,
   maxAnalyzeOdd: 3.00,
-  minAnalyzeOdd: 1.50,
+  minAnalyzeOdd: 1.55,
   tailMassWarning: 0.995,
+  runlineMinusMargin: 0.75,
+  runlineMinusEv: 0.08,
+  runlineMinusProbGap: 0.06,
+  runlinePlusEv: 0.06,
+  runlinePlusProbGap: 0.05,
+  maxAnalyzeAbsLine: 1.5,
 } satisfies MlbHandicapProjectionConfig["thresholds"];
 
 export const MLB_HANDICAP_PROJECTION_CONFIG: MlbHandicapProjectionConfig = {
@@ -319,7 +325,10 @@ export function calculateMlbHandicapProjection(params: {
   const candidateStatus = classifyHandicapCandidate({
     recommendedEv: recommendation.recommended_ev,
     recommendedOdd: recommendation.recommended_odd,
+    recommendedLine: recommendation.recommended_line,
+    recommendedSide: recommendation.recommended_side,
     recommendedProbGap: probGap,
+    projectedMargin,
     distanceFromMain,
     distributionTailWarning: marginDistribution.tail_warning,
     config,
@@ -329,6 +338,9 @@ export function calculateMlbHandicapProjection(params: {
     candidateStatus,
     distanceFromMain,
     recommendedOdd: recommendation.recommended_odd,
+    recommendedLine: recommendation.recommended_line,
+    recommendedSide: recommendation.recommended_side,
+    projectedMargin,
     distributionTailWarning: marginDistribution.tail_warning,
     leagueAverage: params.leagueAverage,
     homePushProb: homeCover.push_prob,
@@ -533,21 +545,65 @@ function getMissingHandicapFields(game: EnrichedMlbGame, lineGroup: HandicapLine
 function classifyHandicapCandidate(input: {
   recommendedEv: number | null;
   recommendedOdd: number | null;
+  recommendedLine: number | null;
+  recommendedSide: MlbHandicapSide | null;
   recommendedProbGap: number;
+  projectedMargin: number;
   distanceFromMain: number | null;
   distributionTailWarning: boolean;
   config: MlbHandicapProjectionConfig;
 }): MlbHandicapCandidateStatus {
   const ev = input.recommendedEv ?? Number.NEGATIVE_INFINITY;
   const odd = input.recommendedOdd ?? 0;
+  const line = input.recommendedLine ?? 0;
+  const absLine = Math.abs(line);
   const distance = input.distanceFromMain ?? 0;
   const { thresholds } = input.config;
+  // Alternate handicap far from main line cannot ANALISAR
+  if (distance > thresholds.maxAnalyzeDistanceFromMainLine) {
+    if (ev >= thresholds.monitorEv || input.recommendedProbGap >= thresholds.monitorProbGap) return "monitorar";
+    return "pular";
+  }
+  // Cap: alt lines |line| >= 2.5 (i.e. +/-2.5, +/-3.5, +/-4.5) can only be MONITORAR at best
+  if (absLine >= 2.5) {
+    if (ev >= thresholds.monitorEv || input.recommendedProbGap >= thresholds.monitorProbGap) return "monitorar";
+    return "pular";
+  }
+  // Odd bounds
+  if (odd < thresholds.minAnalyzeOdd || odd > thresholds.maxAnalyzeOdd) {
+    if (ev >= thresholds.monitorEv || input.recommendedProbGap >= thresholds.monitorProbGap) return "monitorar";
+    return "pular";
+  }
+  // Runline -1.5 hardening
+  if (line <= -1.5) {
+    const marginForSide = input.recommendedSide === "home" ? input.projectedMargin : -input.projectedMargin;
+    if (
+      ev >= thresholds.runlineMinusEv &&
+      input.recommendedProbGap >= thresholds.runlineMinusProbGap &&
+      marginForSide >= thresholds.runlineMinusMargin &&
+      !input.distributionTailWarning
+    ) {
+      return "analisar";
+    }
+    if (ev >= thresholds.monitorEv || input.recommendedProbGap >= thresholds.monitorProbGap) return "monitorar";
+    return "pular";
+  }
+  // Runline +1.5 hardening
+  if (line >= 1.5) {
+    if (
+      ev >= thresholds.runlinePlusEv &&
+      input.recommendedProbGap >= thresholds.runlinePlusProbGap &&
+      !input.distributionTailWarning
+    ) {
+      return "analisar";
+    }
+    if (ev >= thresholds.monitorEv || input.recommendedProbGap >= thresholds.monitorProbGap) return "monitorar";
+    return "pular";
+  }
+  // Generic 0/+-0.5/+-1 lines: use base thresholds
   if (
     ev >= thresholds.analyzeEv &&
     input.recommendedProbGap >= thresholds.analyzeProbGap &&
-    odd >= thresholds.minOdd &&
-    odd <= thresholds.maxOdd &&
-    distance <= thresholds.maxAnalyzeDistanceFromMainLine &&
     !input.distributionTailWarning
   ) {
     return "analisar";
@@ -555,7 +611,7 @@ function classifyHandicapCandidate(input: {
   if (
     ev >= thresholds.monitorEv ||
     input.recommendedProbGap >= thresholds.monitorProbGap ||
-    (distance <= thresholds.maxAnalyzeDistanceFromMainLine && ev > 0)
+    ev > 0
   ) {
     return "monitorar";
   }
@@ -642,14 +698,28 @@ function buildHandicapAlerts(input: {
   candidateStatus: MlbHandicapCandidateStatus;
   distanceFromMain: number | null;
   recommendedOdd: number | null;
+  recommendedLine: number | null;
+  recommendedSide: MlbHandicapSide | null;
+  projectedMargin: number;
   distributionTailWarning: boolean;
   leagueAverage: MlbLeagueAverageContext;
   homePushProb: number;
   awayPushProb: number;
 }) {
   const alerts = [...input.row.alerts];
+  const line = input.recommendedLine ?? 0;
+  const absLine = Math.abs(line);
   if (input.distanceFromMain != null && input.distanceFromMain > MLB_HANDICAP_THRESHOLDS.maxAnalyzeDistanceFromMainLine) {
-    alerts.push("Linha alternativa distante da linha principal; risco de falso edge.");
+    alerts.push("alternate_handicap_line_risk: linha alternativa distante da principal.");
+  }
+  if (absLine >= 2.5) {
+    alerts.push("alternate_handicap_line_risk: linha |>=2.5| limitada a MONITORAR.");
+  }
+  if (line <= -1.5) {
+    const marginForSide = input.recommendedSide === "home" ? input.projectedMargin : -input.projectedMargin;
+    if (marginForSide < MLB_HANDICAP_THRESHOLDS.runlineMinusMargin) {
+      alerts.push("runline_margin_risk: margem ASP < 0.75 run para -1.5.");
+    }
   }
   if (input.recommendedOdd != null && input.recommendedOdd < MLB_HANDICAP_THRESHOLDS.minAnalyzeOdd) {
     alerts.push("Odd baixa demais para screener preliminar.");

@@ -1,103 +1,114 @@
-// Parser e formatador de datas brasileiras (DD/MM/YYYY)
-// Nunca usa Date.parse para evitar interpretação americana.
+// Helpers de data no fuso America/Sao_Paulo (UTC-3)
+// Uso em módulos client + server (não importa react-query nem supabase).
 
-function valid(y: number, m: number, d: number): boolean {
-  if (m < 1 || m > 12 || d < 1 || d > 31) return false;
-  const probe = new Date(Date.UTC(y, m - 1, d));
-  return probe.getUTCMonth() === m - 1 && probe.getUTCDate() === d;
+export function todayBR(date: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }
 
-const pad = (n: number) => String(n).padStart(2, "0");
-const iso = (y: number, m: number, d: number) => `${y}-${pad(m)}-${pad(d)}`;
-
-// Converte serial Excel → {y,m,d} respeitando o bug de 1900 leap year.
-function excelSerialToYMD(serial: number): { y: number; m: number; d: number } | null {
-  if (!Number.isFinite(serial)) return null;
-  // Excel epoch é 1899-12-30 em JS (compensa o bug do 29/02/1900 inexistente).
-  const ms = Math.round(serial * 86400 * 1000) + Date.UTC(1899, 11, 30);
-  const dt = new Date(ms);
-  return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
+export function nowBRParts(date: Date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    hour: get("hour"),
+    minute: get("minute"),
+    second: get("second"),
+  };
 }
 
-/**
- * Parse data em formatos:
- * - DD/MM/YYYY ou D/M/YYYY
- * - DD-MM-YYYY ou D-M-YYYY
- * - YYYY-MM-DD (ISO)
- * - Serial Excel (number)
- * Retorna sempre YYYY-MM-DD ou null.
- */
-export function parseBrazilianDate(input: unknown): string | null {
-  if (input == null || input === "") return null;
+// yyyyMMddHHmmss no fuso BR
+export function nowBRCompact(date: Date = new Date()): string {
+  const p = nowBRParts(date);
+  return `${p.year}${p.month}${p.day}${p.hour}${p.minute}${p.second}`;
+}
 
-  // Serial Excel
-  if (typeof input === "number") {
-    if (input < 60) return null; // antes de 1900-03-01 não confiável
-    const d = excelSerialToYMD(input);
-    if (!d || !valid(d.y, d.m, d.d)) return null;
-    return iso(d.y, d.m, d.d);
+// Converte "YYYY-MM-DD" (ou ISO string) para "dd/MM/yyyy" no fuso America/Sao_Paulo.
+// Aceita null/undefined/empty -> "".
+export function formatBR(value: string | Date | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "";
+  // Se string curta "YYYY-MM-DD", trate como data local BR (evita shift UTC).
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [y, m, d] = value.split("-");
+    return `${d}/${m}/${y}`;
   }
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return typeof value === "string" ? value : "";
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
 
-
-  if (input instanceof Date) {
-    const y = input.getUTCFullYear();
-    const m = input.getUTCMonth() + 1;
-    const d = input.getUTCDate();
-    return valid(y, m, d) ? iso(y, m, d) : null;
+// Aceita "dd/MM/yyyy" (ou "dd-MM-yyyy") e devolve "YYYY-MM-DD". Retorna null se inválido.
+export function parseBrazilianDate(text: unknown): string | null {
+  if (!text) return null;
+  const trimmed = String(text).trim();
+  const m = trimmed.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+  if (!m) {
+    // fallback: talvez já esteja ISO
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    return null;
   }
+  let [, dd, mm, yyyy] = m;
+  if (yyyy.length === 2) yyyy = `20${yyyy}`;
+  const d = Number(dd);
+  const mo = Number(mm);
+  const y = Number(yyyy);
+  if (!Number.isFinite(d) || !Number.isFinite(mo) || !Number.isFinite(y)) return null;
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  return `${String(y).padStart(4, "0")}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
 
-  const s = String(input).trim();
-  if (!s) return null;
-
-  // ISO YYYY-MM-DD
-  const isoMatch = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (isoMatch) {
-    const y = +isoMatch[1], m = +isoMatch[2], d = +isoMatch[3];
-    return valid(y, m, d) ? iso(y, m, d) : null;
+// Formata hora "HH:mm[:ss]" -> "HH:mm". Aceita ISO ou Date e devolve HH:mm no fuso BR.
+export function formatHora(value: string | Date | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "";
+  if (typeof value === "string") {
+    const m = value.match(/^(\d{1,2}):(\d{2})/);
+    if (m) return `${m[1].padStart(2, "0")}:${m[2]}`;
+    const asDate = new Date(value);
+    if (!Number.isNaN(asDate.getTime())) {
+      return new Intl.DateTimeFormat("pt-BR", {
+        timeZone: "America/Sao_Paulo",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).format(asDate);
+    }
+    return value;
   }
-
-  // DD/MM/YYYY ou DD-MM-YYYY (sempre interpretado como brasileiro)
-  const br = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
-  if (br) {
-    const d = +br[1], m = +br[2];
-    let y = +br[3];
-    if (y < 100) y += 2000;
-    return valid(y, m, d) ? iso(y, m, d) : null;
-  }
-
-  return null;
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(value);
 }
 
-/** Formata YYYY-MM-DD para DD/MM/YYYY. */
-export function formatBR(isoDate: string | null | undefined): string {
-  if (!isoDate) return "";
-  const m = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : isoDate;
-}
-
-/** Formata HH:MM:SS para HH:MM. */
-export function formatHora(h: string | null | undefined): string {
-  if (!h) return "";
-  return h.slice(0, 5);
-}
-
-/** Formata data + hora "DD/MM/YYYY HH:mm" (ou só data se hora ausente). */
-export function formatDataHora(iso: string | null | undefined, hora?: string | null): string {
-  const d = formatBR(iso ?? "");
-  const h = formatHora(hora ?? null);
-  if (d && h) return `${d} ${h}`;
-  return d || h || "";
-}
-
-/**
- * Detecta se a linha já está embutida no texto do pick para evitar duplicar
- * (ex.: pick="Over 2.5 Gols", linha="2.5" → não exibir linha separada).
- */
+// A "linha" só deve aparecer quando não estiver embutida no texto do pick.
 export function shouldShowLinha(pick: string | null | undefined, linha: string | null | undefined): boolean {
-  if (!linha) return false;
-  const l = String(linha).trim();
-  if (!l || l === "-") return false;
-  const p = String(pick ?? "").toLowerCase();
-  if (!p) return true;
-  return !p.includes(l.toLowerCase());
+  if (linha === null || linha === undefined) return false;
+  const linhaStr = String(linha).trim();
+  if (!linhaStr) return false;
+  if (!pick) return true;
+  const pickNorm = String(pick).toLowerCase().replace(/\s+/g, " ");
+  const linhaNorm = linhaStr.toLowerCase();
+  return !pickNorm.includes(linhaNorm);
 }
