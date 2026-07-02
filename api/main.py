@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from pathlib import Path
 from uuid import uuid4
 from datetime import datetime
+import inspect
 import json
 import time
 import os
@@ -21,8 +22,10 @@ from scraper_flashscore import executar_scraper_real
 
 try:
     from api.scraping_params import normalize_scraping_params
+    from api.scraping_debug import ScraperDebugContext, is_debug_enabled, log_raw_debug
 except ModuleNotFoundError:
     from scraping_params import normalize_scraping_params
+    from scraping_debug import ScraperDebugContext, is_debug_enabled, log_raw_debug
 
 try:
     from scrapers.flashscore_url import extract_flashscore_match_id, normalize_flashscore_url
@@ -38,12 +41,14 @@ RAW_DIR = BASE_DIR / "outputs" / "raw"
 NORMALIZED_DIR = BASE_DIR / "outputs" / "normalized"
 EXPORTS_DIR = BASE_DIR / "outputs" / "exports"
 MODEL_INPUTS_DIR = BASE_DIR / "model_inputs"
+DEBUG_DIR = BASE_DIR / "debug"
 
 JOBS_DIR.mkdir(parents=True, exist_ok=True)
 RAW_DIR.mkdir(parents=True, exist_ok=True)
 NORMALIZED_DIR.mkdir(parents=True, exist_ok=True)
 EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
 MODEL_INPUTS_DIR.mkdir(parents=True, exist_ok=True)
+DEBUG_DIR.mkdir(parents=True, exist_ok=True)
 
 API_KEY = os.getenv("SCRAPER_API_KEY", "asp-teste-123")
 
@@ -54,6 +59,7 @@ class ScrapingParams(BaseModel):
     liga: str | None = None
     leagues: list[str] | None = None
     mercados: list[str] | None = None
+    debug: bool | None = None
 
 
 def _raw_games(raw_data: Any) -> list[Any]:
@@ -91,8 +97,60 @@ def _collection_warning(params: dict[str, Any], total_jogos: int, total_odds: in
     return "Coleta concluida com alerta: " + "; ".join(reasons) + "."
 
 
-def _job_log(**values: Any) -> str:
-    return " | ".join(f"{key}={value}" for key, value in values.items())
+def _job_log(**values: Any) -> dict[str, Any]:
+    return {
+        "ts": datetime.now().isoformat(),
+        **values,
+    }
+
+
+def _filter_supported_kwargs(func: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
+    try:
+        signature = inspect.signature(func)
+    except (TypeError, ValueError):
+        return kwargs
+    if any(param.kind == inspect.Parameter.VAR_KEYWORD for param in signature.parameters.values()):
+        return kwargs
+    return {key: value for key, value in kwargs.items() if key in signature.parameters}
+
+
+def _call_scraper_real(params: dict[str, Any], job_id: str, debug_ctx: ScraperDebugContext | None):
+    kwargs = {
+        "esporte": params["esporte"],
+        "data_inicio": params["data_inicio"],
+        "data_fim": params["data_fim"],
+        "mercados": params.get("mercados", []),
+        "leagues": params.get("leagues"),
+    }
+    if debug_ctx and debug_ctx.enabled:
+        kwargs.update(
+            {
+                "debug": True,
+                "debug_dir": str(debug_ctx.job_dir),
+                "debug_job_id": job_id,
+                "job_id": job_id,
+            }
+        )
+
+    old_env = {
+        "FLASHSCORE_DEBUG": os.environ.get("FLASHSCORE_DEBUG"),
+        "SCRAPER_DEBUG": os.environ.get("SCRAPER_DEBUG"),
+        "SCRAPER_DEBUG_DIR": os.environ.get("SCRAPER_DEBUG_DIR"),
+        "SCRAPER_JOB_ID": os.environ.get("SCRAPER_JOB_ID"),
+    }
+    if debug_ctx and debug_ctx.enabled:
+        os.environ["FLASHSCORE_DEBUG"] = "1"
+        os.environ["SCRAPER_DEBUG"] = "1"
+        os.environ["SCRAPER_DEBUG_DIR"] = str(debug_ctx.job_dir)
+        os.environ["SCRAPER_JOB_ID"] = job_id
+    try:
+        return executar_scraper_real(**_filter_supported_kwargs(executar_scraper_real, kwargs))
+    finally:
+        for key, value in old_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 def verificar_token(authorization: str | None):
@@ -589,28 +647,37 @@ def executar_coleta_fake(job_id: str, params: dict):
     save_job(job)
 def executar_coleta_real(job_id: str, params: dict):
     params = normalize_scraping_params(params)
+    debug_ctx = ScraperDebugContext(job_id, DEBUG_DIR, enabled=is_debug_enabled(params))
     job = load_job(job_id)
     job["status"] = "RODANDO"
     job["iniciado_em"] = datetime.now().isoformat()
     job["params"] = params
+    if debug_ctx.enabled:
+        job["debug_dir"] = str(debug_ctx.job_dir)
     job["logs"] = [
         _job_log(
             evento="inicio_coleta_real",
             esporte=params.get("esporte"),
             leagues=params.get("leagues"),
             mercados_efetivos=params.get("mercados"),
+            debug=debug_ctx.enabled,
+            debug_dir=str(debug_ctx.job_dir) if debug_ctx.enabled else None,
         )
     ]
     save_job(job)
 
     try:
-        resultado = executar_scraper_real(
-            esporte=params["esporte"],
-            data_inicio=params["data_inicio"],
-            data_fim=params["data_fim"],
-            mercados=params.get("mercados", []),
-            leagues=params.get("leagues"),
+        debug_ctx.log(
+            "fixtures_open_requested",
+            urls=params.get("leagues") or [],
+            seletores_utilizados=["external_scraper"],
+            mercados_efetivos=params.get("mercados", []),
         )
+        scraper_started = time.perf_counter()
+        resultado = _call_scraper_real(params, job_id, debug_ctx)
+        debug_ctx.log("scraper_finished", tempo_ms=int((time.perf_counter() - scraper_started) * 1000))
+
+        raw_started = time.perf_counter()
         raw_path = None
         if isinstance(resultado, dict):
             raw_path = resultado.get("raw_path") or resultado.get("db_path")
@@ -620,24 +687,51 @@ def executar_coleta_real(job_id: str, params: dict):
             raw_data = resultado if isinstance(resultado, dict) else {"data": resultado}
             raw_path = str(raw_file(job_id))
             save_json(raw_file(job_id), raw_data)
+        debug_ctx.log("raw_loaded", raw_path=raw_path, tempo_ms=int((time.perf_counter() - raw_started) * 1000))
 
+        normalization_started = time.perf_counter()
         normalized_data = normalizar_raw_data(job_id, raw_data)
         normalized_path = normalized_file(job_id)
         save_json(normalized_path, normalized_data)
+        debug_ctx.log(
+            "normalization_finished",
+            normalized_path=str(normalized_path),
+            total_linhas=normalized_data.get("total_linhas"),
+            tempo_ms=int((time.perf_counter() - normalization_started) * 1000),
+        )
 
         total_jogos = len(_raw_games(raw_data))
         total_odds = int(normalized_data.get("total_linhas") or len(normalized_data.get("linhas") or []))
         warning = _collection_warning(params, total_jogos, total_odds)
+        if debug_ctx.enabled:
+            debug_ctx.save_json("resultado_scraper", resultado)
+            debug_ctx.save_json("raw_payload", raw_data)
+            debug_ctx.save_json("normalized_payload", normalized_data)
+            metrics = log_raw_debug(
+                debug_ctx,
+                raw_data,
+                normalized_data,
+                extract_match_id=extract_flashscore_match_id,
+            )
+        else:
+            metrics = {}
 
         job = load_job(job_id)
-        job["status"] = "CONCLUIDA"
+        job["status"] = "WARNING" if warning else "CONCLUIDA"
         job["total_jogos"] = total_jogos
         job["total_odds"] = total_odds
         job["raw_path"] = raw_path
         job["normalized_path"] = str(normalized_path)
         job["resultado_scraper"] = resultado
         job["warning"] = warning
-        job["mensagem"] = warning or "Coleta real concluida com jogos e odds normalizadas."
+        job["mensagem"] = (
+            "Nenhum jogo ou odd foi extraido. Consulte pasta debug."
+            if warning and debug_ctx.enabled
+            else warning or "Coleta real concluida com jogos e odds normalizadas."
+        )
+        if debug_ctx.enabled:
+            job["debug_dir"] = str(debug_ctx.job_dir)
+            job["debug_metrics"] = metrics
         job["logs"] = (job.get("logs") or []) + [
             _job_log(
                 evento="fim_coleta_real",
@@ -648,6 +742,11 @@ def executar_coleta_real(job_id: str, params: dict):
                 normalized_path=str(normalized_path),
                 total_jogos=total_jogos,
                 total_odds=total_odds,
+                status=job["status"],
+                warning=warning,
+                debug=debug_ctx.enabled,
+                debug_dir=str(debug_ctx.job_dir) if debug_ctx.enabled else None,
+                debug_metrics=metrics,
             )
         ]
         job["finalizado_em"] = datetime.now().isoformat()
@@ -655,9 +754,12 @@ def executar_coleta_real(job_id: str, params: dict):
 
 
     except Exception as e:
+        debug_ctx.log("scraper_exception", erro=str(e))
         job = load_job(job_id)
         job["status"] = "ERRO"
         job["erro"] = str(e)
+        if debug_ctx.enabled:
+            job["debug_dir"] = str(debug_ctx.job_dir)
         job["finalizado_em"] = datetime.now().isoformat()
         save_job(job)
 
@@ -720,6 +822,8 @@ def criar_job(
 
     job_id = str(uuid4())
     params_dict = normalize_scraping_params(params.model_dump())
+    debug_enabled = is_debug_enabled(params_dict)
+    debug_dir = DEBUG_DIR / f"job_{job_id}"
 
     job = {
         "job_id": job_id,
@@ -729,12 +833,16 @@ def criar_job(
         "total_odds": 0,
         "erro": None,
         "created_at": datetime.now().isoformat(),
+        "debug": debug_enabled,
+        "debug_dir": str(debug_dir) if debug_enabled else None,
         "logs": [
             _job_log(
                 evento="job_criado",
                 esporte=params_dict.get("esporte"),
                 leagues=params_dict.get("leagues"),
                 mercados_efetivos=params_dict.get("mercados"),
+                debug=debug_enabled,
+                debug_dir=str(debug_dir) if debug_enabled else None,
             )
         ],
     }

@@ -58,6 +58,20 @@ def _command(script: str, params: dict[str, Any], output_path: Path) -> list[str
     return command
 
 
+def _debug_env(job_id: str, params: dict[str, Any]) -> dict[str, str]:
+    enabled = bool(params.get("debug")) or str(os.getenv("SCRAPER_DEBUG") or "").lower() in {"1", "true", "yes", "on"}
+    if not enabled:
+        return dict(os.environ)
+    env = dict(os.environ)
+    debug_dir = str(params.get("debug_dir") or RAW_DIR.parent / "debug" / f"job_{job_id}")
+    env["SCRAPER_DEBUG"] = "1"
+    env["FLASHSCORE_DEBUG"] = "1"
+    env["SCRAPER_DEBUG_DIR"] = debug_dir
+    env["SCRAPER_JOB_ID"] = job_id
+    Path(debug_dir).mkdir(parents=True, exist_ok=True)
+    return env
+
+
 def run_scraper(job_id: str, params: dict[str, Any]) -> Any:
     script = _script_for_sport(str(params.get("esporte") or ""))
     output_path = RAW_DIR / f"{job_id}.json"
@@ -70,6 +84,7 @@ def run_scraper(job_id: str, params: dict[str, Any]) -> Any:
         text=True,
         timeout=int(os.getenv("SCRAPER_TIMEOUT_SECONDS", "1800")),
         check=False,
+        env=_debug_env(job_id, params),
     )
 
     if proc.stdout.strip():
