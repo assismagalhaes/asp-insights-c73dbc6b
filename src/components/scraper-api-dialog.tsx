@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase-public";
+import { extractNormalizedRows } from "@/lib/coleta-dados";
 import { toast } from "sonner";
 
 const TARGET_KEYS = [
@@ -37,6 +38,10 @@ type Row = Record<string, unknown>;
 
 /** Extrai um array de jogos/odds de qualquer formato razoável que a API devolver. */
 function extractRows(payload: unknown, depth = 0): Row[] {
+  if (depth === 0) {
+    const rows = extractNormalizedRows(payload);
+    if (rows.length) return rows;
+  }
   if (!payload || depth > 6) return [];
   if (Array.isArray(payload)) {
     // só considera array como "linhas" se os itens forem objetos

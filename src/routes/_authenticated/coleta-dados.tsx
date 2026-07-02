@@ -18,6 +18,8 @@ import {
   downloadText,
   completeRemoteCollection,
   createRemoteCollection,
+  extractNormalizedRows,
+  extractRawGames,
   fetchCollections,
   fetchOddsRows,
   normalizeVmNormalizedPayload,
@@ -669,6 +671,9 @@ async function carregarOddsDaVm(
 ) {
   const normalizedResult = await getScrapingJobNormalized({ data: { job_id: jobId } });
   const normalizedRaw = normalizedResult.normalized_json;
+  console.log("Normalized payload:", normalizedRaw);
+  const normalizedRows = extractNormalizedRows(normalizedRaw);
+  assertTotalLinhasMatches("/normalized", normalizedRaw, normalizedRows);
   const normalizedData = normalizeVmNormalizedPayload(normalizedRaw, { esporte });
   if (normalizedData.total_odds) {
     return { raw: normalizedRaw, normalizedData };
@@ -677,6 +682,8 @@ async function carregarOddsDaVm(
   onStatus?.("Normalizado veio vazio; tentando importar a partir do JSON bruto da VM...");
   const rawResult = await getScrapingJobRaw({ data: { job_id: jobId } });
   const raw = rawResult.raw_json;
+  console.log("Raw payload:", raw);
+  const rawGames = extractRawGames(raw);
   const rawNormalizedData = normalizeVmNormalizedPayload(raw, { esporte });
   if (rawNormalizedData.total_odds) {
     return { raw, normalizedData: rawNormalizedData };
@@ -684,9 +691,36 @@ async function carregarOddsDaVm(
 
   const normalizedKeys = payloadKeys(normalizedRaw);
   const rawKeys = payloadKeys(raw);
+  const declaredTotal = payloadNumber(normalizedRaw, "total_linhas");
+  if ((declaredTotal ?? 0) > 0 && normalizedRows.length) {
+    throw new Error(
+      `Payload recebido da VM em /normalized contem ${normalizedRows.length} linhas (total_linhas=${declaredTotal}), mas nenhuma odd importavel foi gerada. Verifique aliases de odd/mercado/pick no normalizador. Chaves disponiveis: normalized: ${normalizedKeys}; raw: ${rawKeys}.`,
+    );
+  }
   throw new Error(
-    `Retorno da VM nao trouxe odds importaveis. /normalized keys: ${normalizedKeys}; /raw keys: ${rawKeys}.`,
+    `Payload recebido da VM, porem nenhum formato reconhecido foi encontrado.\n\nChaves disponiveis:\nnormalized: ${normalizedKeys}\nraw: ${rawKeys}\n\nTotais detectados: normalized.linhas=${normalizedRows.length}; raw.jogos=${rawGames.length}.`,
   );
+}
+
+function assertTotalLinhasMatches(label: string, payload: unknown, rows: unknown[]) {
+  const totalLinhas = payloadNumber(payload, "total_linhas");
+  if (totalLinhas == null || !rows.length) return;
+  if (rows.length !== totalLinhas) {
+    throw new Error(
+      `${label} retornou total_linhas=${totalLinhas}, mas a lista reconhecida tem ${rows.length} linhas. Persistencia interrompida para evitar importacao parcial.`,
+    );
+  }
+}
+
+function payloadNumber(payload: unknown, key: string): number | null {
+  if (!isObj(payload)) return null;
+  const value = payload[key];
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
 }
 
 function payloadKeys(payload: unknown) {
