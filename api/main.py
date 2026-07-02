@@ -19,6 +19,12 @@ sys.path.append("/home/ubuntu/jupyter")
 
 from scraper_flashscore import executar_scraper_real
 
+try:
+    from scrapers.flashscore_url import extract_flashscore_match_id, normalize_flashscore_url
+except Exception:
+    extract_flashscore_match_id = None
+    normalize_flashscore_url = None
+
 app = FastAPI(title="ASP Insights Scraper API")
 
 BASE_DIR = Path.home() / "asp-scraper-api"
@@ -151,7 +157,8 @@ def normalizar_raw_data(job_id: str, raw_data: dict) -> dict:
         linha="",
         odd=None,
         bookmaker="",
-        fonte=""
+        fonte="",
+        raw_ref=None,
     ):
         normalized_rows.append({
             "data": data,
@@ -167,7 +174,8 @@ def normalizar_raw_data(job_id: str, raw_data: dict) -> dict:
             "linha": linha,
             "odd": odd,
             "bookmaker": bookmaker,
-            "fonte": fonte or bookmaker or "FlashScore"
+            "fonte": fonte or bookmaker or "FlashScore",
+            "raw_ref": raw_ref or {},
         })
 
     def is_number(value):
@@ -229,6 +237,12 @@ def normalizar_raw_data(job_id: str, raw_data: dict) -> dict:
         visitante = jogo.get("away", "")
         jogo_nome = f"{mandante} vs {visitante}".strip()
         link = jogo.get("link", "")
+        game_id = (
+            extract_flashscore_match_id(link)
+            if extract_flashscore_match_id
+            else (jogo.get("id") or jogo.get("match_id") or jogo.get("game_id") or jogo.get("fixture_id"))
+        )
+        fonte_jogo = normalize_flashscore_url(link) if normalize_flashscore_url and link else "FlashScore"
 
         esporte = ""
         if "/football/" in link or "/match/football/" in link:
@@ -286,7 +300,8 @@ def normalizar_raw_data(job_id: str, raw_data: dict) -> dict:
                                     linha="",
                                     odd=to_float(row[idx]),
                                     bookmaker=bookmaker,
-                                    fonte="FlashScore"
+                                    fonte=fonte_jogo,
+                                    raw_ref={"game_id": game_id, "market": mercado_nome, "period": sub_nome}
                                 )
 
                     # ------------------------------
@@ -309,7 +324,8 @@ def normalizar_raw_data(job_id: str, raw_data: dict) -> dict:
                                     linha="",
                                     odd=to_float(row[idx]),
                                     bookmaker=bookmaker,
-                                    fonte="FlashScore"
+                                    fonte=fonte_jogo,
+                                    raw_ref={"game_id": game_id, "market": mercado_nome, "period": sub_nome}
                                 )
 
                     # ------------------------------
@@ -334,7 +350,8 @@ def normalizar_raw_data(job_id: str, raw_data: dict) -> dict:
                                 linha=str(linha),
                                 odd=to_float(row[2]),
                                 bookmaker=bookmaker,
-                                fonte="FlashScore"
+                                fonte=fonte_jogo,
+                                raw_ref={"game_id": game_id, "market": mercado_nome, "period": sub_nome}
                             )
 
                         if len(row) > 3 and is_number(row[3]):
@@ -351,7 +368,8 @@ def normalizar_raw_data(job_id: str, raw_data: dict) -> dict:
                                 linha=str(linha),
                                 odd=to_float(row[3]),
                                 bookmaker=bookmaker,
-                                fonte="FlashScore"
+                                fonte=fonte_jogo,
+                                raw_ref={"game_id": game_id, "market": mercado_nome, "period": sub_nome}
                             )
 
                     # ------------------------------
@@ -373,7 +391,8 @@ def normalizar_raw_data(job_id: str, raw_data: dict) -> dict:
                                 linha="",
                                 odd=to_float(row[1]),
                                 bookmaker=bookmaker,
-                                fonte="FlashScore"
+                                fonte=fonte_jogo,
+                                raw_ref={"game_id": game_id, "market": mercado_nome, "period": sub_nome}
                             )
 
                         if len(row) > 2 and is_number(row[2]):
@@ -390,7 +409,8 @@ def normalizar_raw_data(job_id: str, raw_data: dict) -> dict:
                                 linha="",
                                 odd=to_float(row[2]),
                                 bookmaker=bookmaker,
-                                fonte="FlashScore"
+                                fonte=fonte_jogo,
+                                raw_ref={"game_id": game_id, "market": mercado_nome, "period": sub_nome}
                             )
 
                     # ------------------------------
@@ -414,7 +434,8 @@ def normalizar_raw_data(job_id: str, raw_data: dict) -> dict:
                                     linha="",
                                     odd=to_float(row[idx]),
                                     bookmaker=bookmaker,
-                                    fonte="FlashScore"
+                                    fonte=fonte_jogo,
+                                    raw_ref={"game_id": game_id, "market": mercado_nome, "period": sub_nome}
                                 )
 
                     # ------------------------------
@@ -439,7 +460,8 @@ def normalizar_raw_data(job_id: str, raw_data: dict) -> dict:
                                 linha=str(linha),
                                 odd=to_float(row[2]),
                                 bookmaker=bookmaker,
-                                fonte="FlashScore"
+                                fonte=fonte_jogo,
+                                raw_ref={"game_id": game_id, "market": mercado_nome, "period": sub_nome}
                             )
 
                         if len(row) > 3 and is_number(row[3]):
@@ -456,7 +478,8 @@ def normalizar_raw_data(job_id: str, raw_data: dict) -> dict:
                                 linha=str(linha),
                                 odd=to_float(row[3]),
                                 bookmaker=bookmaker,
-                                fonte="FlashScore"
+                                fonte=fonte_jogo,
+                                raw_ref={"game_id": game_id, "market": mercado_nome, "period": sub_nome}
                             )
 
     return {
