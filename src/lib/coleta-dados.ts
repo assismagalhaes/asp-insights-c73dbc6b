@@ -72,6 +72,22 @@ function toNumber(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function isHalfPointLine(value: unknown): boolean {
+  const n = toNumber(value);
+  if (n == null) return false;
+  return Math.abs((Math.abs(n) % 1) - 0.5) < 1e-9;
+}
+
+function requiresBaseballHalfPointLine(row: Pick<NormalizedOdd, "esporte" | "mercado">): boolean {
+  const sport = String(row.esporte ?? "").toLowerCase();
+  const market = String(row.mercado ?? "").toLowerCase();
+  return /baseball|mlb/.test(sport) && (/over\/under|asian handicap|handicap asi[aá]tico/.test(market));
+}
+
+function keepAllowedMarketLine(row: NormalizedOdd): boolean {
+  return !requiresBaseballHalfPointLine(row) || isHalfPointLine(row.linha);
+}
+
 const flashscoreIdPattern = /^[A-Za-z0-9]{6,12}$/;
 const flashscoreTeamSlugPattern = /^[a-z0-9-]+-[A-Za-z0-9]{6,12}$/i;
 const flashscoreSportParts = new Set([
@@ -320,7 +336,7 @@ function normalizeMarketRows(game: Record<string, unknown>, esporteHint?: string
     for (const item of game.mercados.filter(isRecord)) {
       const odd = toNumber(item.odd ?? item.price ?? item.odds);
       if (!odd) continue;
-      rows.push({
+      const row = {
         ...base,
         mercado: requiredText(item.mercado ?? item.market, "Mercado"),
         pick: requiredText(item.pick ?? item.selecao ?? item.selection, "Pick"),
@@ -332,7 +348,8 @@ function normalizeMarketRows(game: Record<string, unknown>, esporteHint?: string
           market: item.mercado ?? item.market,
           row: item,
         },
-      });
+      };
+      if (keepAllowedMarketLine(row)) rows.push(row);
     }
     return rows;
   }
@@ -356,7 +373,7 @@ function normalizeMarketRows(game: Record<string, unknown>, esporteHint?: string
           const header = headers[i];
           const pick = marketPick(marketName, header, base);
           const linha = /asian handicap/i.test(marketName) && header === "2" ? invertLine(line) : line;
-          rows.push({
+          const row = {
             ...base,
             mercado: marketName,
             pick,
@@ -364,7 +381,8 @@ function normalizeMarketRows(game: Record<string, unknown>, esporteHint?: string
             odd,
             bookmaker: bookmaker || null,
             raw_ref: { game_id: gameId, market: marketName, period, header, row: item },
-          });
+          };
+          if (keepAllowedMarketLine(row)) rows.push(row);
         }
       }
     }
@@ -416,7 +434,8 @@ export function normalizeVmNormalizedPayload(payload: unknown, opts?: { esporte?
   const recursiveFlat = collectRecords(nested, isFlatOddRecord);
   const rows: NormalizedOdd[] = (recursiveFlat.length ? recursiveFlat : flat)
     .map((row) => normalizeVmRow(row, opts?.esporte))
-    .filter((row) => row.odd > 0);
+    .filter((row) => row.odd > 0)
+    .filter(keepAllowedMarketLine);
 
   // Fallback: payload com estrutura de jogos (odds: { market: { period: [[headers],[row]] } })
   if (!rows.length) {
