@@ -324,6 +324,34 @@ class BaseballRunnerV11Tests(unittest.TestCase):
         self.assertEqual(picks[0]["modelo_versao"], "MLB_V1_1")
         self.assertIn("modelo_versao=MLB_V1_1", picks[0]["observacoes"])
 
+    def test_moneyline_uses_median_odd_for_market_probability_and_best_odd_for_ev(self) -> None:
+        picks: list[dict[str, object]] = []
+        game = self._game()
+        game["moneyline"] = {
+            "home": {"offered": 2.00, "consensus": 1.70, "bookmaker": "BestBook"},
+            "away": {"offered": 2.30, "consensus": 2.20, "bookmaker": "OtherBook"},
+        }
+        expected_no_vig = runner.no_vig_probability(1.70, 2.20)
+
+        runner.add_moneyline_pick(
+            picks,
+            game,
+            stats("NYY", [7, 8, 9], win_rate=0.65),
+            stats("BOS", [4, 5, 6], win_rate=0.40),
+            "home",
+            0.65,
+            "contexto",
+        )
+
+        self.assertEqual(len(picks), 1)
+        self.assertEqual(picks[0]["odd_ofertada"], 2.00)
+        self.assertEqual(picks[0]["odd_melhor"], 2.00)
+        self.assertEqual(picks[0]["odd_mediana"], 1.70)
+        self.assertEqual(picks[0]["odd_mercado_base"], 1.70)
+        self.assertEqual(picks[0]["bookmaker_melhor"], "BestBook")
+        self.assertIn(f"prob_no_vig={expected_no_vig:.4f}", str(picks[0]["observacoes"]))
+        self.assertIn("odd_mercado_base=1.700", str(picks[0]["observacoes"]))
+
     @staticmethod
     def _game() -> dict[str, object]:
         return {
