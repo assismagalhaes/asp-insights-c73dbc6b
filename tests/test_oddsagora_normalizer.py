@@ -134,6 +134,41 @@ class OddsAgoraNormalizerTests(unittest.TestCase):
         self.assertIn("Chicago Sky W", {row["pick"].split(" -")[0].split(" +")[0] for row in rows})
         self.assertNotIn("Chicago Sky F", {row["pick"].split(" -")[0].split(" +")[0] for row in rows})
 
+    def test_normalize_wnba_handicap_inverts_away_line_from_oddsagora_pair(self) -> None:
+        raw = {
+            "job_id": "job-wnba-ah",
+            "source": "OddsAgora",
+            "sport": "Basketball",
+            "league": "WNBA",
+            "games": [
+                {
+                    "game_id": "nTkWK5dd",
+                    "date": "2026-07-03",
+                    "time": "20:00",
+                    "home_team": "Chicago Sky F",
+                    "away_team": "New York Liberty F",
+                    "markets": {
+                        "ah": [
+                            {"bookmaker": "Book A", "line": -4.5, "home_odd": 1.91, "away_odd": 1.91},
+                            {"bookmaker": "Book B", "line": 4.5, "home_odd": 2.30, "away_odd": 1.62},
+                        ],
+                    },
+                }
+            ],
+        }
+
+        rows = normalize_oddsagora_raw(raw)["linhas"]
+        handicaps = [row for row in rows if row["market"] == "Asian Handicap"]
+        by_book_side = {(row["bookmaker"], row["side"]): row for row in handicaps}
+
+        self.assertEqual(by_book_side[("Book A", "home")]["pick"], "Chicago Sky W -4.5")
+        self.assertEqual(by_book_side[("Book A", "home")]["linha"], "-4.5")
+        self.assertEqual(by_book_side[("Book A", "away")]["pick"], "New York Liberty W 4.5")
+        self.assertEqual(by_book_side[("Book A", "away")]["linha"], "4.5")
+        self.assertEqual(by_book_side[("Book B", "home")]["pick"], "Chicago Sky W 4.5")
+        self.assertEqual(by_book_side[("Book B", "away")]["pick"], "New York Liberty W -4.5")
+        self.assertEqual({abs(row["line"]) for row in handicaps}, {4.5})
+
     def test_normalize_football_1x2_includes_draw(self) -> None:
         raw = {
             "job_id": "job-2",
