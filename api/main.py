@@ -17,15 +17,22 @@ from typing import Any, List, Optional
 from fastapi import HTTPException, Query
 from pydantic import BaseModel
 sys.path.append("/home/ubuntu/jupyter")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(PROJECT_ROOT))
 
 from scraper_flashscore import executar_scraper_real
 
 try:
     from api.scraping_params import normalize_scraping_params
     from api.scraping_debug import ScraperDebugContext, is_debug_enabled, log_raw_debug
+    from scrapers.oddsagora_normalizer import normalize_oddsagora_raw
+    from scrapers.oddsagora_scraper import executar_scraper_oddsagora
 except ModuleNotFoundError:
     from scraping_params import normalize_scraping_params
     from scraping_debug import ScraperDebugContext, is_debug_enabled, log_raw_debug
+    from oddsagora_normalizer import normalize_oddsagora_raw
+    from oddsagora_scraper import executar_scraper_oddsagora
 
 try:
     from scrapers.flashscore_url import extract_flashscore_match_id, normalize_flashscore_url
@@ -60,6 +67,7 @@ class ScrapingParams(BaseModel):
     leagues: list[str] | None = None
     mercados: list[str] | None = None
     debug: bool | None = None
+    source: str | None = None
 
 
 def _raw_games(raw_data: Any) -> list[Any]:
@@ -144,6 +152,8 @@ def _call_scraper_real(params: dict[str, Any], job_id: str, debug_ctx: ScraperDe
         os.environ["SCRAPER_DEBUG_DIR"] = str(debug_ctx.job_dir)
         os.environ["SCRAPER_JOB_ID"] = job_id
     try:
+        if str(params.get("source") or "").lower() == "oddsagora":
+            return executar_scraper_oddsagora(**_filter_supported_kwargs(executar_scraper_oddsagora, kwargs))
         return executar_scraper_real(**_filter_supported_kwargs(executar_scraper_real, kwargs))
     finally:
         for key, value in old_env.items():
@@ -222,6 +232,9 @@ def load_job(job_id: str) -> dict:
 
 
 def normalizar_raw_data(job_id: str, raw_data: dict) -> dict:
+    if isinstance(raw_data, dict) and str(raw_data.get("source") or "").lower() == "oddsagora":
+        return normalize_oddsagora_raw(raw_data, job_id)
+
     normalized_rows = []
 
     def format_country_league(country: str | None, league: str | None) -> str:
@@ -294,6 +307,12 @@ def normalizar_raw_data(job_id: str, raw_data: dict) -> dict:
             return float(str(value).replace(",", "."))
         except Exception:
             return None
+
+    def is_half_point_line(value):
+        number = to_float(value)
+        if number is None:
+            return False
+        return abs((abs(number) % 1) - 0.5) < 1e-9
 
     # ======================================================
     # FORMATO ANTIGO / FAKE
@@ -438,6 +457,8 @@ def normalizar_raw_data(job_id: str, raw_data: dict) -> dict:
                     # ------------------------------
                     elif mercado_nome == "Over/Under":
                         linha = row[1] if len(row) > 1 else ""
+                        if esporte == "Baseball" and not is_half_point_line(linha):
+                            continue
 
                         if len(row) > 2 and is_number(row[2]):
                             adicionar_linha(
@@ -548,6 +569,8 @@ def normalizar_raw_data(job_id: str, raw_data: dict) -> dict:
                     # ------------------------------
                     elif mercado_nome == "Asian handicap":
                         linha = row[1] if len(row) > 1 else ""
+                        if esporte == "Baseball" and not is_half_point_line(linha):
+                            continue
 
                         if len(row) > 2 and is_number(row[2]):
                             adicionar_linha(

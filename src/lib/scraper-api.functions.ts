@@ -6,6 +6,7 @@ const JobParamsSchema = z
   .object({
     esporte: z.string().min(1).optional(),
     sport: z.string().min(1).optional(),
+    source: z.enum(["OddsAgora", "FlashScore", "oddsagora", "flashscore"]).optional(),
     leagues: z.array(z.string().min(1)).optional().default([]),
     liga: z.string().optional(),
     mercados: z.array(z.string().min(1)).optional().default([]),
@@ -14,6 +15,7 @@ const JobParamsSchema = z
   })
   .transform((data) => ({
     esporte: data.esporte ?? data.sport,
+    source: data.source,
     leagues: data.leagues ?? [],
     mercados: data.mercados ?? [],
     data_inicio: data.data_inicio,
