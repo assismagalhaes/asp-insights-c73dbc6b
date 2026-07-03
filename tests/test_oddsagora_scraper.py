@@ -1,8 +1,16 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
-from scrapers.oddsagora_scraper import _extract_match_event_template, _match_event_url, parse_league_html, parse_market_html, parse_match_event_payload
+from scrapers.oddsagora_scraper import (
+    _extract_market_pages,
+    _extract_match_event_template,
+    _match_event_url,
+    parse_league_html,
+    parse_market_html,
+    parse_match_event_payload,
+)
 
 
 class OddsAgoraScraperParserTests(unittest.TestCase):
@@ -252,6 +260,34 @@ class OddsAgoraScraperParserTests(unittest.TestCase):
 
         self.assertIn("/match-event/9-1-p6RseziI-9-2-yj650.dat", football_url)
         self.assertIn("/match-event/9-1-llTZ1jhI-9-5-yj650.dat", hockey_url)
+
+    def test_extract_market_pages_skips_html_fallback_after_empty_match_event(self) -> None:
+        match_html = r'''
+        <script>
+        data='{"requestPreMatch":{"url":"\/match-event\/9-1-p6RseziI-1-2-yj650.dat?_="}}'
+        </script>
+        '''
+        games = [
+            {
+                "game_id": "p6RseziI",
+                "match_url": "https://www.oddsagora.com.br/football/h2h/a/b/#p6RseziI:1X2;2",
+                "market_urls": {
+                    "bts": "https://www.oddsagora.com.br/football/h2h/a/b/#p6RseziI:bts;2",
+                },
+                "markets": {},
+            }
+        ]
+        logs: list[dict[str, object]] = []
+
+        with (
+            patch("scrapers.oddsagora_scraper._fetch_html", return_value=(match_html, games[0]["match_url"])) as fetch_html,
+            patch("scrapers.oddsagora_scraper._fetch_oddsagora_json", return_value={"d": {"oddsdata": {"back": {}}}}),
+        ):
+            rows_count = _extract_market_pages(games, logs, None, {})
+
+        self.assertEqual(rows_count, 0)
+        self.assertEqual(fetch_html.call_count, 1)
+        self.assertTrue(any(log["event"] == "market_html_fallback_skipped" for log in logs))
 
     def test_parse_match_event_payload_supports_bts_and_double_chance(self) -> None:
         bts_payload = {

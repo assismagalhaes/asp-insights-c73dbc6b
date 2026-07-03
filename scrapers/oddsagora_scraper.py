@@ -6,6 +6,7 @@ import gzip
 import hashlib
 import json
 import logging
+import os
 import re
 import time
 import urllib.request
@@ -285,6 +286,18 @@ def _log(logs: list[dict[str, Any]], event: str, **values: Any) -> None:
     logger.info("oddsagora.%s %s", event, json.dumps(values, ensure_ascii=False, default=str))
 
 
+def _http_timeout_seconds() -> float:
+    try:
+        value = float(os.getenv("ODDSAGORA_HTTP_TIMEOUT_SECONDS", "12"))
+    except (TypeError, ValueError):
+        value = 12.0
+    return max(3.0, value)
+
+
+def _html_fallback_enabled() -> bool:
+    return str(os.getenv("ODDSAGORA_HTML_FALLBACK", "")).strip().casefold() in {"1", "true", "yes", "on"}
+
+
 def _fetch_text(url: str, extra_headers: dict[str, str] | None = None) -> tuple[str, str]:
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ASP Insights OddsAgora scraper",
@@ -296,7 +309,7 @@ def _fetch_text(url: str, extra_headers: dict[str, str] | None = None) -> tuple[
         url,
         headers=headers,
     )
-    with urllib.request.urlopen(request, timeout=30) as response:
+    with urllib.request.urlopen(request, timeout=_http_timeout_seconds()) as response:
         text = response.read().decode("utf-8", errors="replace")
         return text, response.geturl()
 
@@ -1039,7 +1052,10 @@ def _extract_market_pages(
                 continue
             started = time.perf_counter()
             endpoint_url = _match_event_url(template, game_id, str(market), match_url) if template else None
+            attempted_endpoint = False
+            endpoint_failed = False
             if endpoint_url:
+                attempted_endpoint = True
                 try:
                     payload = _fetch_oddsagora_json(endpoint_url, match_url)
                     _save_debug_file(debug_path, f"json/{game_id}_{market}.json", json.dumps(payload, ensure_ascii=False, indent=2))
@@ -1061,7 +1077,19 @@ def _extract_market_pages(
                     if rows:
                         continue
                 except Exception as exc:
+                    endpoint_failed = True
                     _log(logs, "market_event_fetch_failed", game_id=game_id, market=market, endpoint_url=endpoint_url, error=str(exc))
+            if attempted_endpoint and not _html_fallback_enabled():
+                _log(
+                    logs,
+                    "market_html_fallback_skipped",
+                    game_id=game_id,
+                    market=market,
+                    endpoint_url=endpoint_url,
+                    reason="match_event_failed" if endpoint_failed else "empty_match_event",
+                    tempo_ms=int((time.perf_counter() - started) * 1000),
+                )
+                continue
             try:
                 html, final_url = _fetch_html(str(url))
             except Exception as exc:
@@ -1115,7 +1143,16 @@ def executar_scraper_oddsagora(
     if debug_path:
         debug_path.mkdir(parents=True, exist_ok=True)
 
-    _log(logs, "scraper_started", job_id=job_id, esporte=esporte, leagues=league_urls, mercados_efetivos=effective_markets)
+    _log(
+        logs,
+        "scraper_started",
+        job_id=job_id,
+        esporte=esporte,
+        leagues=league_urls,
+        mercados_efetivos=effective_markets,
+        http_timeout_seconds=_http_timeout_seconds(),
+        html_fallback_enabled=_html_fallback_enabled(),
+    )
     blocked_reason = None
     for league_url in league_urls:
         started = time.perf_counter()
