@@ -263,7 +263,9 @@ def long_csv_to_wide(csv_path: Path, league: str, module: Any) -> pd.DataFrame:
         mercado = normalize_text(r.get('mercado'))
         pick = clean(r.get('pick'))
         linha = to_float(r.get('linha'))
-        odd = to_float(r.get('odd'))
+        odd = row_offered_odd(r)
+        market_odd = row_market_odd(r) or odd
+        bookmaker = clean(r.get('bookmaker_melhor')) or clean(r.get('bookmaker'))
         if odd is None or odd <= 1:
             continue
 
@@ -273,17 +275,17 @@ def long_csv_to_wide(csv_path: Path, league: str, module: Any) -> pd.DataFrame:
 
         if any(token in mercado for token in ('moneyline', 'homeaway', 'vencedor', 'winner')):
             if home_norm and (home_norm in pick_norm or pick_norm in home_norm):
-                set_best(game, 'odds_HomeAway_FT_including_OT_1', odd)
+                set_odd_columns(game, 'odds_HomeAway_FT_including_OT_1', odd, market_odd, bookmaker)
             elif away_norm and (away_norm in pick_norm or pick_norm in away_norm):
-                set_best(game, 'odds_HomeAway_FT_including_OT_2', odd)
+                set_odd_columns(game, 'odds_HomeAway_FT_including_OT_2', odd, market_odd, bookmaker)
             continue
 
         if any(token in mercado for token in ('overunder', 'over/under', 'total')) and linha is not None:
             line_key = format_line_key(linha)
             if 'over' in pick_norm:
-                set_best(game, f'odds_OverUnder_FT_including_OT_{line_key}_Over', odd)
+                set_odd_columns(game, f'odds_OverUnder_FT_including_OT_{line_key}_Over', odd, market_odd, bookmaker)
             elif 'under' in pick_norm:
-                set_best(game, f'odds_OverUnder_FT_including_OT_{line_key}_Under', odd)
+                set_odd_columns(game, f'odds_OverUnder_FT_including_OT_{line_key}_Under', odd, market_odd, bookmaker)
             continue
 
         if 'handicap' in mercado and linha is not None:
@@ -294,6 +296,8 @@ def long_csv_to_wide(csv_path: Path, league: str, module: Any) -> pd.DataFrame:
                     {'game': game, 'home_line': None, 'away_line': None, 'home_odd': None, 'away_odd': None},
                 )
                 pair['home_odd'] = max_odd(pair.get('home_odd'), odd)
+                pair['home_market_odd'] = market_odd
+                pair['home_bookmaker_melhor'] = bookmaker
                 pair['home_line'] = float(linha)
             elif away_norm and (away_norm in pick_norm or pick_norm in away_norm):
                 pair_key = (key, -float(linha))
@@ -302,6 +306,8 @@ def long_csv_to_wide(csv_path: Path, league: str, module: Any) -> pd.DataFrame:
                     {'game': game, 'home_line': None, 'away_line': None, 'home_odd': None, 'away_odd': None},
                 )
                 pair['away_odd'] = max_odd(pair.get('away_odd'), odd)
+                pair['away_market_odd'] = market_odd
+                pair['away_bookmaker_melhor'] = bookmaker
                 pair['away_line'] = float(linha)
 
     for idx, pair in enumerate(handicap_pairs.values(), start=1):
@@ -314,8 +320,14 @@ def long_csv_to_wide(csv_path: Path, league: str, module: Any) -> pd.DataFrame:
         away_line = float(pair['away_line'])
         game[f'odds_Asian_handicap_FT_including_OT_Linha{idx}_HANDICAP'] = home_line
         game[f'odds_Asian_handicap_FT_including_OT_Linha{idx}_1'] = pair['home_odd']
+        game[f'odds_Asian_handicap_FT_including_OT_Linha{idx}_1_MEDIANA'] = pair.get('home_market_odd') or pair['home_odd']
+        if pair.get('home_bookmaker_melhor'):
+            game[f'odds_Asian_handicap_FT_including_OT_Linha{idx}_1_BOOKMAKER_MELHOR'] = pair['home_bookmaker_melhor']
         game[f'odds_Asian_handicap_FT_including_OT_Linha{idx}_Opp_HANDICAP'] = away_line
         game[f'odds_Asian_handicap_FT_including_OT_Linha{idx}_Opp_Odd'] = pair['away_odd']
+        game[f'odds_Asian_handicap_FT_including_OT_Linha{idx}_Opp_Odd_MEDIANA'] = pair.get('away_market_odd') or pair['away_odd']
+        if pair.get('away_bookmaker_melhor'):
+            game[f'odds_Asian_handicap_FT_including_OT_Linha{idx}_Opp_Odd_BOOKMAKER_MELHOR'] = pair['away_bookmaker_melhor']
 
     rows = list(grouped.values())
     wide = pd.DataFrame(rows)
@@ -503,14 +515,22 @@ def build_wnba_moneyline_candidate_rows(module: Any, row: pd.Series, res: dict) 
         'observacoes': obs,
     }
     rows: list[dict[str, Any]] = []
-    for team, odd_key in ((teams[home], 'odd_ml_c'), (teams[away], 'odd_ml_f')):
+    for team, odd_key, base_col in (
+        (teams[home], 'odd_ml_c', 'odds_HomeAway_FT_including_OT_1'),
+        (teams[away], 'odd_ml_f', 'odds_HomeAway_FT_including_OT_2'),
+    ):
         odd = to_float(res.get(odd_key))
         if odd is None:
             continue
+        market_odd = market_odd_from_wide(row, base_col, odd)
         rows.append({
             **common,
             'pick': team,
             'odd_ofertada': round(odd, 2),
+            'odd_mediana': round(market_odd, 3) if market_odd is not None else None,
+            'odd_mercado_base': round(market_odd, 3) if market_odd is not None else None,
+            'odd_melhor': round(odd, 2),
+            'bookmaker_melhor': bookmaker_from_wide(row, base_col),
             'odd_valor': 0.0,
             'probabilidade_final': 0.0,
             'edge': 0.0,
@@ -543,16 +563,25 @@ def build_wnba_total_candidate_rows(module: Any, row: pd.Series, res: dict) -> l
     for line, values in (res.get('ou') or {}).items():
         for side in ('Over', 'Under'):
             side_key = side.lower()
+            line_float = to_float(line)
+            if line_float is None:
+                continue
+            base_col = f'odds_OverUnder_FT_including_OT_{format_line_key(line_float)}_{side}'
             odd = to_float(values.get(f'odd_off_{side_key}'))
             odd_value = to_float(values.get(f'odd_val_{side_key}'))
             probability = to_float(values.get(f'prob_{side_key}'))
             if odd is None or odd_value is None or probability is None:
                 continue
+            market_odd = market_odd_from_wide(row, base_col, odd)
             rows.append({
                 **common,
                 'pick': f'{side} {line}',
                 'linha': line,
                 'odd_ofertada': round(odd, 2),
+                'odd_mediana': round(market_odd, 3) if market_odd is not None else None,
+                'odd_mercado_base': round(market_odd, 3) if market_odd is not None else None,
+                'odd_melhor': round(odd, 2),
+                'bookmaker_melhor': bookmaker_from_wide(row, base_col),
                 'odd_valor': round(odd_value, 2),
                 'probabilidade_final': round(probability, 2),
                 'edge': round((odd / odd_value - 1.0) * 100.0, 2) if odd_value else 0.0,
@@ -589,11 +618,18 @@ def build_wnba_handicap_candidate_rows(module: Any, row: pd.Series, res: dict) -
             continue
         side_norm = normalize_text(side)
         team = teams[home] if side_norm in {'home', 'casa'} else teams[away]
+        market_pair = wnba_handicap_market_pair(row, 'home' if side_norm in {'home', 'casa'} else 'away', line_float)
+        market_odd = market_pair[0] if market_pair else odd
+        bookmaker = market_pair[2] if market_pair else ''
         rows.append({
             **common,
             'pick': f'{team} {line_float:+.1f}',
             'linha': line_float,
             'odd_ofertada': round(odd, 2),
+            'odd_mediana': round(market_odd, 3) if market_odd is not None else None,
+            'odd_mercado_base': round(market_odd, 3) if market_odd is not None else None,
+            'odd_melhor': round(odd, 2),
+            'bookmaker_melhor': bookmaker,
             'odd_valor': 0.0,
             'probabilidade_final': 0.0,
             'edge': 0.0,
@@ -678,8 +714,8 @@ def recalculate_wnba_moneyline_pick(module: Any, row: pd.Series, res: dict, item
     pick_side = identify_wnba_pick_side(item, home, away)
     if pick_side not in {'home', 'away'}:
         return None
-    home_odd = to_float(res.get('odd_ml_c'))
-    away_odd = to_float(res.get('odd_ml_f'))
+    home_odd = market_odd_from_wide(row, 'odds_HomeAway_FT_including_OT_1', res.get('odd_ml_c'))
+    away_odd = market_odd_from_wide(row, 'odds_HomeAway_FT_including_OT_2', res.get('odd_ml_f'))
     if home_odd is None or away_odd is None:
         return None
     vig = no_vig_pair(home_odd, away_odd)
@@ -699,16 +735,26 @@ def recalculate_wnba_moneyline_pick(module: Any, row: pd.Series, res: dict, item
     prob = max(0.0, min(0.99, prob))
     odd_valor = 1.0 / prob if prob else 0.0
     edge = odd * prob - 1.0
+    selected_base_col = 'odds_HomeAway_FT_including_OT_1' if pick_side == 'home' else 'odds_HomeAway_FT_including_OT_2'
+    market_odd = home_odd if pick_side == 'home' else away_odd
     item['probabilidade_final'] = round(prob * 100.0, 2)
     item['probabilidade'] = round(prob * 100.0, 2)
     item['odd_valor'] = round(odd_valor, 2)
     item['edge'] = round(edge * 100.0, 2)
+    item['odd_mediana'] = round(market_odd, 3)
+    item['odd_mercado_base'] = round(market_odd, 3)
+    item['odd_melhor'] = round(odd, 2)
+    item['bookmaker_melhor'] = bookmaker_from_wide(row, selected_base_col) or item.get('bookmaker_melhor')
     debug = {
         'mercado': 'Moneyline',
         'side': pick_side,
         'prob_hist': round(hist['taxa_com_shrinkage'] * 100.0, 2),
         'prob_sim': round(sim_prob * 100.0, 2),
         'prob_no_vig': round(vig_prob * 100.0, 2),
+        'odd_mediana': round(market_odd, 3),
+        'odd_mercado_base': round(market_odd, 3),
+        'odd_melhor': round(odd, 2),
+        'bookmaker_melhor': item.get('bookmaker_melhor'),
         'pesos_probabilidade': weights,
         'vitorias_reais': hist['wins'],
         'derrotas_reais': hist['losses'],
@@ -731,7 +777,8 @@ def recalculate_wnba_handicap_pick(module: Any, row: pd.Series, res: dict, item:
     pick_side = identify_wnba_pick_side(item, home, away)
     if pick_side not in {'home', 'away'}:
         return None
-    no_vig = wnba_handicap_no_vig_probability(res, pick_side, line)
+    market_pair = wnba_handicap_market_pair(row, pick_side, line)
+    no_vig = wnba_handicap_no_vig_probability(res, pick_side, line, row=row)
     if no_vig is None:
         return None
 
@@ -747,10 +794,15 @@ def recalculate_wnba_handicap_pick(module: Any, row: pd.Series, res: dict, item:
     prob = max(0.0, min(0.99, prob))
     odd_valor = 1.0 / prob if prob else 0.0
     edge = odd * prob - 1.0
+    market_odd = market_pair[0] if market_pair else odd
     item['probabilidade_final'] = round(prob * 100.0, 2)
     item['probabilidade'] = round(prob * 100.0, 2)
     item['odd_valor'] = round(odd_valor, 2)
     item['edge'] = round(edge * 100.0, 2)
+    item['odd_mediana'] = round(market_odd, 3)
+    item['odd_mercado_base'] = round(market_odd, 3)
+    item['odd_melhor'] = round(odd, 2)
+    item['bookmaker_melhor'] = (market_pair[2] if market_pair else '') or item.get('bookmaker_melhor')
     debug = {
         'mercado': 'Handicap',
         'side': pick_side,
@@ -758,6 +810,10 @@ def recalculate_wnba_handicap_pick(module: Any, row: pd.Series, res: dict, item:
         'prob_hist': round(hist['taxa_com_shrinkage'] * 100.0, 2),
         'prob_sim': round(sim_prob * 100.0, 2),
         'prob_no_vig': round(no_vig * 100.0, 2),
+        'odd_mediana': round(market_odd, 3),
+        'odd_mercado_base': round(market_odd, 3),
+        'odd_melhor': round(odd, 2),
+        'bookmaker_melhor': item.get('bookmaker_melhor'),
         'pesos_probabilidade': weights,
         'coberturas_reais': hist['wins'],
         'falhas_reais': hist['losses'],
@@ -782,8 +838,11 @@ def recalculate_wnba_total_pick(module: Any, row: pd.Series, res: dict, item: di
     if not side:
         return None
     market_info = (res.get('ou') or {}).get(line) or (res.get('ou') or {}).get(float(line)) or {}
-    over_odd = to_float(market_info.get('odd_off_over'))
-    under_odd = to_float(market_info.get('odd_off_under'))
+    line_key = format_line_key(line)
+    over_col = f'odds_OverUnder_FT_including_OT_{line_key}_Over'
+    under_col = f'odds_OverUnder_FT_including_OT_{line_key}_Under'
+    over_odd = market_odd_from_wide(row, over_col, market_info.get('odd_off_over'))
+    under_odd = market_odd_from_wide(row, under_col, market_info.get('odd_off_under'))
     if over_odd is None or under_odd is None:
         return None
     vig = no_vig_pair(over_odd, under_odd)
@@ -805,9 +864,15 @@ def recalculate_wnba_total_pick(module: Any, row: pd.Series, res: dict, item: di
     prob = max(0.0, min(99.0, prob))
     odd_valor = 100.0 / prob if prob else 0.0
     edge = (odd / odd_valor - 1.0) * 100.0 if odd_valor else 0.0
+    selected_col = over_col if side == 'over' else under_col
+    market_odd = over_odd if side == 'over' else under_odd
     item['probabilidade_final'] = round(prob, 2)
     item['odd_valor'] = round(odd_valor, 2)
     item['edge'] = round(edge, 2)
+    item['odd_mediana'] = round(market_odd, 3)
+    item['odd_mercado_base'] = round(market_odd, 3)
+    item['odd_melhor'] = round(odd, 2)
+    item['bookmaker_melhor'] = bookmaker_from_wide(row, selected_col) or item.get('bookmaker_melhor')
     debug = {
         'mercado': 'Total de Pontos',
         'linha_avaliada': line,
@@ -815,6 +880,10 @@ def recalculate_wnba_total_pick(module: Any, row: pd.Series, res: dict, item: di
         'prob_hist': round(hist['taxa_com_shrinkage'] * 100.0, 2),
         'prob_sim': round(sim_prob, 2),
         'prob_no_vig': round(vig_prob, 2),
+        'odd_mediana': round(market_odd, 3),
+        'odd_mercado_base': round(market_odd, 3),
+        'odd_melhor': round(odd, 2),
+        'bookmaker_melhor': item.get('bookmaker_melhor'),
         'total_modelo_pre_mercado': round(simulation['model_total_expected'], 2),
         'total_ancora_mercado': round(simulation['market_anchor_line'], 2),
         'total_calibrado': round(simulation['calibrated_total_expected'], 2),
@@ -847,7 +916,7 @@ def wnba_simulated_total_probability(
     lines: list[float] | None = None,
 ) -> dict[str, Any]:
     expectation = wnba_calculate_expected_points(module, home, away, lines=lines)
-    market_anchor = wnba_market_total_anchor(res, fallback=line)
+    market_anchor = wnba_market_total_anchor(res, fallback=line, row=row)
     model_total = expectation['home_expected'] + expectation['away_expected']
     calibrated_total = (
         (1.0 - WNBA_TOTAL_MARKET_ANCHOR_WEIGHT) * model_total +
@@ -937,7 +1006,7 @@ def require_float_metric(metrics: dict[str, Any], key: str, label: str) -> float
     return value
 
 
-def wnba_market_total_anchor(res: dict, fallback: float) -> float:
+def wnba_market_total_anchor(res: dict, fallback: float, row: Any = None) -> float:
     best_line = fallback
     best_distance = float('inf')
     for raw_line, values in (res.get('ou') or {}).items():
@@ -946,8 +1015,17 @@ def wnba_market_total_anchor(res: dict, fallback: float) -> float:
             line = to_float(values.get('linha'))
         if line is None:
             continue
-        over_odd = to_float((values or {}).get('odd_off_over') if isinstance(values, dict) else None)
-        under_odd = to_float((values or {}).get('odd_off_under') if isinstance(values, dict) else None)
+        line_key = format_line_key(line)
+        over_odd = market_odd_from_wide(
+            row,
+            f'odds_OverUnder_FT_including_OT_{line_key}_Over',
+            (values or {}).get('odd_off_over') if isinstance(values, dict) else None,
+        )
+        under_odd = market_odd_from_wide(
+            row,
+            f'odds_OverUnder_FT_including_OT_{line_key}_Under',
+            (values or {}).get('odd_off_under') if isinstance(values, dict) else None,
+        )
         if over_odd is None or under_odd is None:
             continue
         vig = no_vig_pair(over_odd, under_odd)
@@ -1021,7 +1099,7 @@ def wnba_simulate_matchup(
     lines: list[float] | None = None,
 ) -> dict[str, Any]:
     expectation = wnba_calculate_expected_points(module, home, away, lines=lines)
-    market_anchor = wnba_market_total_anchor(res, fallback=expectation['home_expected'] + expectation['away_expected'])
+    market_anchor = wnba_market_total_anchor(res, fallback=expectation['home_expected'] + expectation['away_expected'], row=row)
     model_total = expectation['home_expected'] + expectation['away_expected']
     calibrated_total = (
         (1.0 - WNBA_TOTAL_MARKET_ANCHOR_WEIGHT) * model_total +
@@ -1298,7 +1376,12 @@ def wnba_row_is_win(row: Any) -> bool | None:
     return team_points > opp_points
 
 
-def wnba_handicap_no_vig_probability(res: dict, pick_side: str, line: float) -> float | None:
+def wnba_handicap_no_vig_probability(res: dict, pick_side: str, line: float, row: Any = None) -> float | None:
+    market_pair = wnba_handicap_market_pair(row, pick_side, line)
+    if market_pair is not None:
+        vig = no_vig_pair(market_pair[0], market_pair[1])
+        return vig[0] if vig is not None else None
+
     home_odd = None
     away_odd = None
     for (side, handicap), values in (res.get('hc') or {}).items():
@@ -1602,6 +1685,10 @@ def normalize_rows(rows: list[dict[str, Any]], league: str) -> list[dict[str, An
             'linha': None if row.get('linha') in (None, '') else str(row.get('linha')),
             'odd': odd,
             'odd_ofertada': odd,
+            'odd_mediana': to_float(row.get('odd_mediana')),
+            'odd_mercado_base': to_float(row.get('odd_mercado_base') or row.get('odd_mediana')),
+            'odd_melhor': to_float(row.get('odd_melhor')) or odd,
+            'bookmaker_melhor': str(row.get('bookmaker_melhor') or '') or None,
             'odd_valor': to_float(row.get('odd_valor')) or 0,
             'probabilidade': prob,
             'probabilidade_final': prob,
@@ -1619,7 +1706,7 @@ def normalize_rows(rows: list[dict[str, Any]], league: str) -> list[dict[str, An
 
 def write_output_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    cols = ['data','hora','esporte','liga','jogo','mandante','visitante','mercado','pick','linha','odd','odd_ofertada','odd_valor','probabilidade','probabilidade_final','edge','stake','observacoes','dados_tecnicos','contexto_adicional','parecer_validacao']
+    cols = ['data','hora','esporte','liga','jogo','mandante','visitante','mercado','pick','linha','odd','odd_ofertada','odd_mediana','odd_mercado_base','odd_melhor','bookmaker_melhor','odd_valor','probabilidade','probabilidade_final','edge','stake','observacoes','dados_tecnicos','contexto_adicional','parecer_validacao']
     with path.open('w', encoding='utf-8-sig', newline='') as fh:
         writer = csv.DictWriter(fh, fieldnames=cols, extrasaction='ignore')
         writer.writeheader()
@@ -1650,6 +1737,64 @@ def set_best(row: dict[str, Any], key: str, odd: float) -> None:
     current = to_float(row.get(key))
     if current is None or odd > current:
         row[key] = odd
+
+
+def row_offered_odd(row: Any) -> float | None:
+    return to_float(get_row_value(row, ('odd_melhor',))) or to_float(get_row_value(row, ('odd', 'odd_ofertada')))
+
+
+def row_market_odd(row: Any) -> float | None:
+    return (
+        to_float(get_row_value(row, ('odd_mediana',))) or
+        to_float(get_row_value(row, ('odd_media',))) or
+        to_float(get_row_value(row, ('odd', 'odd_ofertada')))
+    )
+
+
+def set_odd_columns(row: dict[str, Any], base_col: str, offered_odd: float, market_odd: float | None = None, bookmaker: str = '') -> None:
+    current = to_float(row.get(base_col))
+    if current is None or offered_odd > current:
+        row[base_col] = offered_odd
+        if bookmaker:
+            row[f'{base_col}_BOOKMAKER_MELHOR'] = bookmaker
+    if market_odd is not None and market_odd > 1:
+        row[f'{base_col}_MEDIANA'] = market_odd
+
+
+def market_odd_from_wide(row: Any, base_col: str, fallback: Any = None) -> float | None:
+    value = get_row_value(row, (f'{base_col}_MEDIANA',))
+    market = to_float(value)
+    if market is not None and market > 1:
+        return market
+    return to_float(fallback if fallback is not None else get_row_value(row, (base_col,)))
+
+
+def bookmaker_from_wide(row: Any, base_col: str) -> str:
+    return clean(get_row_value(row, (f'{base_col}_BOOKMAKER_MELHOR',)))
+
+
+def wnba_handicap_market_pair(row: Any, pick_side: str, line: float) -> tuple[float, float, str] | None:
+    if row is None:
+        return None
+    for idx in range(1, 40):
+        home_line_col = f'odds_Asian_handicap_FT_including_OT_Linha{idx}_HANDICAP'
+        home_odd_col = f'odds_Asian_handicap_FT_including_OT_Linha{idx}_1'
+        away_line_col = f'odds_Asian_handicap_FT_including_OT_Linha{idx}_Opp_HANDICAP'
+        away_odd_col = f'odds_Asian_handicap_FT_including_OT_Linha{idx}_Opp_Odd'
+
+        home_line = to_float(get_row_value(row, (home_line_col,)))
+        away_line = to_float(get_row_value(row, (away_line_col,)))
+        if home_line is None or away_line is None:
+            continue
+        home_odd = market_odd_from_wide(row, home_odd_col)
+        away_odd = market_odd_from_wide(row, away_odd_col)
+        if home_odd is None or away_odd is None:
+            continue
+        if pick_side == 'home' and math.isclose(home_line, line, abs_tol=1e-9):
+            return home_odd, away_odd, bookmaker_from_wide(row, home_odd_col)
+        if pick_side == 'away' and math.isclose(away_line, line, abs_tol=1e-9):
+            return away_odd, home_odd, bookmaker_from_wide(row, away_odd_col)
+    return None
 
 
 def max_odd(current: Any, odd: float) -> float:

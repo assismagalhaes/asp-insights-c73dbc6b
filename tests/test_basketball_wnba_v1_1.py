@@ -156,6 +156,39 @@ class BasketballWnbaV11Tests(unittest.TestCase):
         self.assertIn("shrunk", debug["componentes_historicos"]["home"])
         self.assertIsInstance(adjusted["probabilidade_final"], float)
 
+    def test_total_points_uses_median_odd_for_no_vig_and_best_odd_for_ev(self) -> None:
+        rows = [
+            {"pontos_time": 90, "pontos_adversario": 90},
+            {"pontos_time": 80, "pontos_adversario": 80},
+        ]
+        module = FakeWnbaModule(rows)
+        row = pd.Series({
+            "date": "2026-06-27",
+            "time": "20:00",
+            "odds_OverUnder_FT_including_OT_176_5_Over": 2.00,
+            "odds_OverUnder_FT_including_OT_176_5_Under": 2.10,
+            "odds_OverUnder_FT_including_OT_176_5_Over_MEDIANA": 1.70,
+            "odds_OverUnder_FT_including_OT_176_5_Under_MEDIANA": 2.20,
+            "odds_OverUnder_FT_including_OT_176_5_Over_BOOKMAKER_MELHOR": "BestBook",
+        })
+        res = {"ou": {176.5: {"odd_off_over": 2.00, "odd_off_under": 2.10}}}
+        item = {
+            "mercado": "Over/Under Pontos",
+            "pick": "Over 176.5",
+            "linha": 176.5,
+            "odd_ofertada": 2.00,
+        }
+
+        adjusted, debug = runner.recalculate_wnba_total_pick(module, row, res, item, "TOR", "PHO", lines=[176.5])
+        expected_no_vig, _ = runner.no_vig_pair(1.70, 2.20)
+
+        self.assertEqual(adjusted["odd_ofertada"], 2.00)
+        self.assertEqual(adjusted["odd_melhor"], 2.00)
+        self.assertEqual(adjusted["odd_mediana"], 1.70)
+        self.assertEqual(adjusted["odd_mercado_base"], 1.70)
+        self.assertEqual(adjusted["bookmaker_melhor"], "BestBook")
+        self.assertAlmostEqual(debug["prob_no_vig"], round(expected_no_vig * 100.0, 2))
+
     def test_wnba_total_candidates_include_over_and_under_before_v1_2_filter(self) -> None:
         row = pd.Series({"home_sigla": "TOR", "away_sigla": "PHO", "date": "2026-06-27", "time": "20:00"})
         res = {
@@ -263,6 +296,53 @@ class BasketballWnbaV11Tests(unittest.TestCase):
         self.assertEqual(pairs[-7.5], (1.98, 7.5, 1.80))
         self.assertEqual(pairs[7.5], (1.29, -7.5, 3.25))
 
+    def test_long_csv_to_wide_preserves_median_best_and_bookmaker_columns(self) -> None:
+        rows = [
+            {
+                "data": "27.06.2026",
+                "hora": "21:00",
+                "esporte": "Basketball",
+                "liga": "WNBA",
+                "jogo": "Toronto Tempo W vs Phoenix Mercury W",
+                "mandante": "Toronto Tempo W",
+                "visitante": "Phoenix Mercury W",
+                "mercado": "Moneyline",
+                "pick": "Toronto Tempo W",
+                "linha": "",
+                "odd": 1.90,
+                "odd_melhor": 2.00,
+                "odd_mediana": 1.82,
+                "bookmaker": "book-a",
+                "bookmaker_melhor": "book-best",
+            },
+            {
+                "data": "27.06.2026",
+                "hora": "21:00",
+                "esporte": "Basketball",
+                "liga": "WNBA",
+                "jogo": "Toronto Tempo W vs Phoenix Mercury W",
+                "mandante": "Toronto Tempo W",
+                "visitante": "Phoenix Mercury W",
+                "mercado": "Moneyline",
+                "pick": "Phoenix Mercury W",
+                "linha": "",
+                "odd": 1.95,
+                "odd_melhor": 2.05,
+                "odd_mediana": 1.88,
+                "bookmaker": "book-a",
+                "bookmaker_melhor": "book-away",
+            },
+        ]
+        with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False, newline="", encoding="utf-8") as fh:
+            pd.DataFrame(rows).to_csv(fh.name, index=False)
+            wide = runner.long_csv_to_wide(Path(fh.name), "WNBA", FakeWnbaModule())
+
+        self.assertEqual(float(wide.iloc[0]["odds_HomeAway_FT_including_OT_1"]), 2.00)
+        self.assertEqual(float(wide.iloc[0]["odds_HomeAway_FT_including_OT_1_MEDIANA"]), 1.82)
+        self.assertEqual(wide.iloc[0]["odds_HomeAway_FT_including_OT_1_BOOKMAKER_MELHOR"], "book-best")
+        self.assertEqual(float(wide.iloc[0]["odds_HomeAway_FT_including_OT_2"]), 2.05)
+        self.assertEqual(float(wide.iloc[0]["odds_HomeAway_FT_including_OT_2_MEDIANA"]), 1.88)
+
     def test_moneyline_uses_real_wins_simulation_and_no_vig(self) -> None:
         rows = [
             {"pontos_time": 90, "pontos_adversario": 80, "resultado": "W"},
@@ -286,6 +366,40 @@ class BasketballWnbaV11Tests(unittest.TestCase):
         self.assertIn("vitorias_sim_home", debug)
         self.assertIn("prob_no_vig", debug)
         self.assertIsInstance(adjusted["probabilidade_final"], float)
+
+    def test_moneyline_uses_median_odd_for_no_vig_and_best_odd_for_ev(self) -> None:
+        rows = [
+            {"pontos_time": 90, "pontos_adversario": 80, "resultado": "W"},
+            {"pontos_time": 88, "pontos_adversario": 82, "resultado": "W"},
+        ]
+        module = FakeWnbaModule(rows)
+        row = pd.Series({
+            "date": "2026-06-27",
+            "time": "20:00",
+            "odds_HomeAway_FT_including_OT_1": 2.00,
+            "odds_HomeAway_FT_including_OT_2": 2.10,
+            "odds_HomeAway_FT_including_OT_1_MEDIANA": 1.80,
+            "odds_HomeAway_FT_including_OT_2_MEDIANA": 2.05,
+            "odds_HomeAway_FT_including_OT_1_BOOKMAKER_MELHOR": "BestBook",
+        })
+        res = {"odd_ml_c": 2.00, "odd_ml_f": 2.10, "ou": {170.5: {"odd_off_over": 1.91, "odd_off_under": 1.91}}}
+        item = {
+            "mercado": "Moneyline",
+            "pick": "Toronto Tempo W",
+            "mandante": "Toronto Tempo W",
+            "visitante": "Phoenix Mercury W",
+            "odd_ofertada": 2.00,
+        }
+
+        adjusted, debug = runner.recalculate_wnba_moneyline_pick(module, row, res, item, "TOR", "PHO", lines=[170.5])
+        expected_no_vig, _ = runner.no_vig_pair(1.80, 2.05)
+
+        self.assertEqual(adjusted["odd_ofertada"], 2.00)
+        self.assertEqual(adjusted["odd_melhor"], 2.00)
+        self.assertEqual(adjusted["odd_mediana"], 1.80)
+        self.assertEqual(adjusted["odd_mercado_base"], 1.80)
+        self.assertEqual(adjusted["bookmaker_melhor"], "BestBook")
+        self.assertAlmostEqual(debug["prob_no_vig"], round(expected_no_vig * 100.0, 2))
 
     def test_handicap_uses_real_cover_simulated_cover_and_no_vig(self) -> None:
         rows = [
@@ -354,12 +468,16 @@ class BasketballWnbaV11Tests(unittest.TestCase):
             "pick": "Toronto Tempo W",
             "linha": "",
             "odd_ofertada": 1.8,
+            "odd_mediana": 1.75,
+            "odd_mercado_base": 1.75,
+            "odd_melhor": 1.8,
+            "bookmaker_melhor": "BestBook",
             "odd_valor": 1.7,
             "probabilidade_final": 58.0,
             "edge": 5.88,
         }
         normalized = runner.normalize_rows([row], "WNBA")[0]
-        for key in ("data", "hora", "liga", "esporte", "jogo", "mandante", "visitante", "mercado", "pick", "linha", "probabilidade", "odd_valor", "odd_ofertada", "edge", "stake", "observacoes"):
+        for key in ("data", "hora", "liga", "esporte", "jogo", "mandante", "visitante", "mercado", "pick", "linha", "probabilidade", "odd_valor", "odd_ofertada", "odd_mediana", "odd_mercado_base", "odd_melhor", "bookmaker_melhor", "edge", "stake", "observacoes"):
             self.assertIn(key, normalized)
         self.assertIn(runner.BASKETBALL_WNBA_MODEL_VERSION, normalized["observacoes"])
 
