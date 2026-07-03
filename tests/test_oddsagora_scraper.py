@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from scrapers.oddsagora_scraper import parse_league_html, parse_market_html
+from scrapers.oddsagora_scraper import _extract_match_event_template, parse_league_html, parse_market_html, parse_match_event_payload
 
 
 class OddsAgoraScraperParserTests(unittest.TestCase):
@@ -90,6 +90,47 @@ class OddsAgoraScraperParserTests(unittest.TestCase):
         self.assertEqual({row["line"] for row in rows}, {1.5})
         self.assertEqual(rows[0]["home_odd"], 1.43)
         self.assertEqual(rows[0]["away_odd"], 2.70)
+
+    def test_extract_match_event_template_from_event_html(self) -> None:
+        html = r'''
+        <script>
+        data='{"requestPreMatch":{"url":"\/match-event\/9-6-SlHmU8og-3-1-yj650.dat?_="}}'
+        </script>
+        '''
+
+        template = _extract_match_event_template(html, "SlHmU8og")
+
+        self.assertEqual(template["version_id"], "9")
+        self.assertEqual(template["sport_id"], "6")
+        self.assertEqual(template["scope_id"], "1")
+        self.assertEqual(template["xhashf"], "yj650")
+
+    def test_parse_match_event_payload_uses_provider_names(self) -> None:
+        payload = {
+            "s": 1,
+            "d": {
+                "bt": 2,
+                "sc": 1,
+                "oddsdata": {
+                    "back": {
+                        "E-2-1-0-7.5-0": {
+                            "handicapValue": "7.50",
+                            "odds": {"16": [1.91, 1.95]},
+                            "movement": {"16": ["up", "down"]},
+                            "act": {"16": True},
+                        },
+                    },
+                },
+            },
+        }
+
+        rows = parse_match_event_payload(payload, "over-under", {"16": "bet365"})
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["bookmaker"], "bet365")
+        self.assertEqual(rows[0]["line"], 7.5)
+        self.assertEqual(rows[0]["odd_over"], 1.91)
+        self.assertEqual(rows[0]["odd_under"], 1.95)
 
 
 if __name__ == "__main__":
