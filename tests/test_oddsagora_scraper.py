@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from scrapers.oddsagora_scraper import _extract_match_event_template, parse_league_html, parse_market_html, parse_match_event_payload
+from scrapers.oddsagora_scraper import _extract_match_event_template, _match_event_url, parse_league_html, parse_market_html, parse_match_event_payload
 
 
 class OddsAgoraScraperParserTests(unittest.TestCase):
@@ -233,6 +233,42 @@ class OddsAgoraScraperParserTests(unittest.TestCase):
         self.assertEqual(rows[0]["home_odd"], 2.1)
         self.assertEqual(rows[0]["draw_odd"], 3.2)
         self.assertEqual(rows[0]["away_odd"], 3.6)
+
+    def test_match_event_url_uses_sport_market_scope(self) -> None:
+        template = {"version_id": "9", "sport_id": "1", "scope_id": "1", "xhashf": "yj650"}
+
+        football_url = _match_event_url(
+            template,
+            "p6RseziI",
+            "bts",
+            "https://www.oddsagora.com.br/football/h2h/a/b/#p6RseziI:1X2;2",
+        )
+        hockey_url = _match_event_url(
+            template,
+            "llTZ1jhI",
+            "bts",
+            "https://www.oddsagora.com.br/hockey/h2h/a/b/#llTZ1jhI:home-away;1",
+        )
+
+        self.assertIn("/match-event/9-1-p6RseziI-9-2-yj650.dat", football_url)
+        self.assertIn("/match-event/9-1-llTZ1jhI-9-5-yj650.dat", hockey_url)
+
+    def test_parse_match_event_payload_supports_bts_and_double_chance(self) -> None:
+        bts_payload = {
+            "d": {"oddsdata": {"back": {"E-bts": {"odds": {"16": [1.8, 1.95]}, "act": {"16": True}}}}},
+        }
+        double_payload = {
+            "d": {"oddsdata": {"back": {"E-double": {"odds": {"16": [1.25, 1.45, 1.32]}, "act": {"16": True}}}}},
+        }
+
+        bts_rows = parse_match_event_payload(bts_payload, "bts", {"16": "bet365"})
+        double_rows = parse_match_event_payload(double_payload, "double", {"16": "bet365"})
+
+        self.assertEqual(bts_rows[0]["yes_odd"], 1.8)
+        self.assertEqual(bts_rows[0]["no_odd"], 1.95)
+        self.assertEqual(double_rows[0]["home_draw_odd"], 1.25)
+        self.assertEqual(double_rows[0]["away_draw_odd"], 1.45)
+        self.assertEqual(double_rows[0]["home_away_odd"], 1.32)
 
 
 if __name__ == "__main__":

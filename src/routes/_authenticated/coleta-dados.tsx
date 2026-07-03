@@ -735,7 +735,8 @@ type LeagueOption = { label: string; value: string };
 const ALL_LEAGUES_VALUE = "Todos";
 const ODDSAGORA_MLB_URL = "https://www.oddsagora.com.br/baseball/usa/mlb/";
 const DEFAULT_ODDSAGORA_MARKETS = ["home-away", "over-under", "ah"];
-const DEFAULT_ODDSAGORA_FOOTBALL_MARKETS = ["1x2", "over-under", "ah"];
+const DEFAULT_ODDSAGORA_FOOTBALL_MARKETS = ["1x2", "over-under", "ah", "bts", "double"];
+const DEFAULT_ODDSAGORA_HOCKEY_MARKETS = ["1x2", "home-away", "over-under", "ah", "bts"];
 
 const LEAGUES_BY_SPORT: Record<string, LeagueOption[]> = {
   Basketball: [
@@ -813,7 +814,9 @@ function defaultLeagueValues(esporte: string) {
 }
 
 function defaultMarketsForSport(esporte: string) {
-  return esporte === "Futebol" ? DEFAULT_ODDSAGORA_FOOTBALL_MARKETS : DEFAULT_ODDSAGORA_MARKETS;
+  if (esporte === "Futebol") return DEFAULT_ODDSAGORA_FOOTBALL_MARKETS;
+  if (esporte === "Hockey") return DEFAULT_ODDSAGORA_HOCKEY_MARKETS;
+  return DEFAULT_ODDSAGORA_MARKETS;
 }
 
 function toggleLeague(current: string[], value: string, checked: boolean) {

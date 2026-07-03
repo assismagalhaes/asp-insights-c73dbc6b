@@ -100,6 +100,40 @@ class OddsAgoraNormalizerTests(unittest.TestCase):
         self.assertEqual(draw_rows[0]["casas_count"], 2)
         self.assertIn("probabilidade_implicita_media", draw_rows[0])
 
+    def test_normalize_bts_and_double_chance(self) -> None:
+        raw = {
+            "job_id": "job-3",
+            "source": "OddsAgora",
+            "sport": "Football",
+            "league": "Ireland - Divisao Premier",
+            "games": [
+                {
+                    "game_id": "p6RseziI",
+                    "date": "2026-07-03",
+                    "time": "15:45",
+                    "home_team": "Galway United",
+                    "away_team": "St Patricks",
+                    "markets": {
+                        "bts": [
+                            {"bookmaker": "Bet365", "yes_odd": 1.8, "no_odd": 1.95},
+                            {"bookmaker": "Superbet.br", "yes_odd": 1.82, "no_odd": 1.9},
+                        ],
+                        "double": [
+                            {"bookmaker": "Bet365", "home_draw_odd": 1.25, "away_draw_odd": 1.45, "home_away_odd": 1.32},
+                        ],
+                    },
+                }
+            ],
+        }
+
+        rows = normalize_oddsagora_raw(raw)["linhas"]
+        bts_rows = [row for row in rows if row["market"] == "Ambos Marcam"]
+        double_rows = [row for row in rows if row["market"] == "Dupla Chance"]
+
+        self.assertEqual({row["pick"] for row in bts_rows}, {"Sim", "Não"})
+        self.assertEqual({row["pick"] for row in double_rows}, {"1X", "X2", "12"})
+        self.assertTrue(all("odd_media" in row for row in bts_rows + double_rows))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -13,6 +13,10 @@ MARKET_NAMES = {
     "ah": "Asian Handicap",
     "asian-handicap": "Asian Handicap",
     "handicap": "Asian Handicap",
+    "bts": "Ambos Marcam",
+    "both-teams-score": "Ambos Marcam",
+    "double": "Dupla Chance",
+    "double-chance": "Dupla Chance",
 }
 
 
@@ -209,6 +213,65 @@ def _append_handicap(rows: list[dict[str, Any]], raw: dict[str, Any], game: dict
             )
 
 
+def _append_bts(rows: list[dict[str, Any]], raw: dict[str, Any], game: dict[str, Any]) -> None:
+    base = _base_row(raw, game)
+    for item in _market_payload(game, "bts", "both-teams-score"):
+        bookmaker = str(item.get("bookmaker") or item.get("book") or "")
+        for side, pick, odd_value in (
+            ("yes", "Sim", item.get("yes_odd") or item.get("yes") or item.get("Sim")),
+            ("no", "Não", item.get("no_odd") or item.get("no") or item.get("Nao") or item.get("Não")),
+        ):
+            odd = _odd(odd_value)
+            if odd is None:
+                continue
+            rows.append(
+                {
+                    **base,
+                    "market": MARKET_NAMES["bts"],
+                    "mercado": MARKET_NAMES["bts"],
+                    "side": side,
+                    "pick": pick,
+                    "line": None,
+                    "linha": None,
+                    "odd": odd,
+                    "bookmaker": bookmaker,
+                    "payout": item.get("payout"),
+                    "movement": item.get("movement"),
+                    "raw_ref": {**base["raw_ref"], "market": "bts", "row": item},
+                }
+            )
+
+
+def _append_double_chance(rows: list[dict[str, Any]], raw: dict[str, Any], game: dict[str, Any]) -> None:
+    base = _base_row(raw, game)
+    for item in _market_payload(game, "double", "double-chance"):
+        bookmaker = str(item.get("bookmaker") or item.get("book") or "")
+        for side, pick, odd_value in (
+            ("home_draw", "1X", item.get("home_draw_odd") or item.get("1X") or item.get("1x")),
+            ("away_draw", "X2", item.get("away_draw_odd") or item.get("X2") or item.get("x2")),
+            ("home_away", "12", item.get("home_away_odd") or item.get("12")),
+        ):
+            odd = _odd(odd_value)
+            if odd is None:
+                continue
+            rows.append(
+                {
+                    **base,
+                    "market": MARKET_NAMES["double"],
+                    "mercado": MARKET_NAMES["double"],
+                    "side": side,
+                    "pick": pick,
+                    "line": None,
+                    "linha": None,
+                    "odd": odd,
+                    "bookmaker": bookmaker,
+                    "payout": item.get("payout"),
+                    "movement": item.get("movement"),
+                    "raw_ref": {**base["raw_ref"], "market": "double", "row": item},
+                }
+            )
+
+
 def _pair_key(row: dict[str, Any]) -> tuple[Any, ...]:
     line = row.get("line")
     if row.get("market") == MARKET_NAMES["ah"] and line is not None:
@@ -293,6 +356,8 @@ def normalize_oddsagora_raw(raw: dict[str, Any], job_id: str | None = None) -> d
         _append_moneyline(rows, raw, game)
         _append_totals(rows, raw, game)
         _append_handicap(rows, raw, game)
+        _append_bts(rows, raw, game)
+        _append_double_chance(rows, raw, game)
 
     _attach_consensus(rows)
     _attach_aggregates(rows)
