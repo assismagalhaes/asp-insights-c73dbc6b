@@ -6,6 +6,7 @@ from typing import Any
 
 
 MARKET_NAMES = {
+    "1x2": "1X2",
     "home-away": "Home/Away",
     "moneyline": "Home/Away",
     "over-under": "Over/Under",
@@ -74,10 +75,10 @@ def _base_row(raw: dict[str, Any], game: dict[str, Any]) -> dict[str, Any]:
     return {
         "source": "OddsAgora",
         "fonte": "OddsAgora",
-        "sport": str(raw.get("sport") or raw.get("esporte") or "Baseball"),
-        "esporte": str(raw.get("sport") or raw.get("esporte") or "Baseball"),
-        "league": str(raw.get("league") or raw.get("liga") or "MLB"),
-        "liga": str(raw.get("league") or raw.get("liga") or "MLB"),
+        "sport": str(_game_value(game, "sport", "esporte", default=raw.get("sport") or raw.get("esporte") or "Baseball")),
+        "esporte": str(_game_value(game, "sport", "esporte", default=raw.get("sport") or raw.get("esporte") or "Baseball")),
+        "league": str(_game_value(game, "league", "liga", default=raw.get("league") or raw.get("liga") or "MLB")),
+        "liga": str(_game_value(game, "league", "liga", default=raw.get("league") or raw.get("liga") or "MLB")),
         "game_id": game_id,
         "date": _game_value(game, "date", "data", default=""),
         "data": _game_value(game, "date", "data", default=""),
@@ -110,20 +111,24 @@ def _market_payload(game: dict[str, Any], *keys: str) -> list[dict[str, Any]]:
 
 def _append_moneyline(rows: list[dict[str, Any]], raw: dict[str, Any], game: dict[str, Any]) -> None:
     base = _base_row(raw, game)
-    for item in _market_payload(game, "home-away", "moneyline"):
+    for item in _market_payload(game, "1x2", "home-away", "moneyline"):
         bookmaker = str(item.get("bookmaker") or item.get("book") or "")
-        for side, pick, odd_value in (
+        market_key = "1x2" if item.get("draw_odd") or item.get("X") else "home-away"
+        options = [
             ("home", base["home_team"], item.get("home_odd") or item.get("odd_home") or item.get("1")),
-            ("away", base["away_team"], item.get("away_odd") or item.get("odd_away") or item.get("2")),
-        ):
+        ]
+        if market_key == "1x2":
+            options.append(("draw", "Empate", item.get("draw_odd") or item.get("odd_draw") or item.get("X")))
+        options.append(("away", base["away_team"], item.get("away_odd") or item.get("odd_away") or item.get("2")))
+        for side, pick, odd_value in options:
             odd = _odd(odd_value)
             if odd is None:
                 continue
             rows.append(
                 {
                     **base,
-                    "market": MARKET_NAMES["home-away"],
-                    "mercado": MARKET_NAMES["home-away"],
+                    "market": MARKET_NAMES[market_key],
+                    "mercado": MARKET_NAMES[market_key],
                     "side": side,
                     "pick": pick,
                     "line": None,
@@ -132,7 +137,7 @@ def _append_moneyline(rows: list[dict[str, Any]], raw: dict[str, Any], game: dic
                     "bookmaker": bookmaker,
                     "payout": item.get("payout"),
                     "movement": item.get("movement"),
-                    "raw_ref": {**base["raw_ref"], "market": "home-away", "row": item},
+                    "raw_ref": {**base["raw_ref"], "market": market_key, "row": item},
                 }
             )
 
@@ -220,10 +225,10 @@ def _attach_consensus(rows: list[dict[str, Any]]) -> None:
 
     for key, group in by_pair.items():
         sides = {str(row.get("side")): row for row in group}
-        if len(sides) != 2:
+        if len(sides) < 2:
             continue
         odds = {side: float(row["odd"]) for side, row in sides.items() if row.get("odd")}
-        if len(odds) != 2:
+        if len(odds) < 2:
             continue
         raw_probs = {side: 1 / odd for side, odd in odds.items()}
         total = sum(raw_probs.values())

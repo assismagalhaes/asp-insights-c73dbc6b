@@ -22,8 +22,58 @@ except ModuleNotFoundError:
     from oddsagora_url import ODDSAGORA_BASE_URL, ODDSAGORA_MLB_URL, build_oddsagora_market_url, extract_oddsagora_game_id
 
 
-DEFAULT_BASEBALL_MARKETS = ["home-away", "over-under", "ah"]
+DEFAULT_ODDSAGORA_MARKETS = ["home-away", "over-under", "ah"]
+DEFAULT_ODDSAGORA_FOOTBALL_MARKETS = ["1x2", "over-under", "ah"]
+DEFAULT_ODDSAGORA_LEAGUES = {
+    "football": [
+        "https://www.oddsagora.com.br/football/germany/2-bundesliga",
+        "https://www.oddsagora.com.br/football/germany/bundesliga",
+        "https://www.oddsagora.com.br/football/austria/bundesliga",
+        "https://www.oddsagora.com.br/football/brazil/brasileirao-betano",
+        "https://www.oddsagora.com.br/football/china/superliga",
+        "https://www.oddsagora.com.br/football/denmark/superliga",
+        "https://www.oddsagora.com.br/football/england/campeonato-ingles",
+        "https://www.oddsagora.com.br/football/england/2-divisao",
+        "https://www.oddsagora.com.br/football/finland/veikkausliiga",
+        "https://www.oddsagora.com.br/football/france/ligue-1",
+        "https://www.oddsagora.com.br/football/france/ligue-2",
+        "https://www.oddsagora.com.br/football/ireland/divisao-premier",
+        "https://www.oddsagora.com.br/football/italy/serie-a",
+        "https://www.oddsagora.com.br/football/italy/serie-b",
+        "https://www.oddsagora.com.br/football/mexico/liga-mx",
+        "https://www.oddsagora.com.br/football/netherlands/eredivisie",
+        "https://www.oddsagora.com.br/football/norway/serie-de-elite/",
+        "https://www.oddsagora.com.br/football/poland/ekstraklasa",
+        "https://www.oddsagora.com.br/football/portugal/liga-portugal",
+        "https://www.oddsagora.com.br/football/romania/superliga/",
+        "https://www.oddsagora.com.br/football/scotland/primeira-liga/",
+        "https://www.oddsagora.com.br/football/spain/laliga/",
+        "https://www.oddsagora.com.br/football/spain/laliga2/",
+        "https://www.oddsagora.com.br/football/sweden/allsvenskan",
+        "https://www.oddsagora.com.br/football/switzerland/superliga/",
+        "https://www.oddsagora.com.br/football/turkey/super-lig/",
+        "https://www.oddsagora.com.br/football/usa/mls/",
+    ],
+    "basketball": [
+        "https://www.oddsagora.com.br/basketball/usa/wnba/",
+        "https://www.oddsagora.com.br/basketball/usa/nba/",
+    ],
+    "baseball": [ODDSAGORA_MLB_URL],
+    "hockey": ["https://www.oddsagora.com.br/hockey/usa/nhl/"],
+    "american-football": [
+        "https://www.oddsagora.com.br/american-football/usa/nfl/",
+        "https://www.oddsagora.com.br/american-football/usa/ncaa/",
+    ],
+}
+SPORT_LABELS = {
+    "football": "Football",
+    "basketball": "Basketball",
+    "baseball": "Baseball",
+    "hockey": "Hockey",
+    "american-football": "American Football",
+}
 ODDSAGORA_BET_TYPE_BY_MARKET = {
+    "1x2": 1,
     "home-away": 3,
     "moneyline": 3,
     "over-under": 2,
@@ -53,9 +103,54 @@ ODDSAGORA_LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 logger = logging.getLogger(__name__)
 
 
+def _sport_key(esporte: Any) -> str:
+    text = str(esporte or "").strip().lower().replace("_", "-")
+    if text in {"futebol", "soccer"}:
+        return "football"
+    if text in {"american football", "american-football", "nfl", "ncaa"}:
+        return "american-football"
+    if text in {"basket", "basketball", "nba", "wnba"}:
+        return "basketball"
+    if text in {"baseball", "mlb"} or "baseball" in text:
+        return "baseball"
+    if text in {"hockey", "nhl"}:
+        return "hockey"
+    return text
+
+
+def _sport_key_from_url(url: str) -> str:
+    match = re.search(r"oddsagora\.com\.br/([^/]+)/", str(url or ""), flags=re.IGNORECASE)
+    return match.group(1).lower() if match else ""
+
+
+def _sport_label(esporte: Any, league_url: str = "") -> str:
+    key = _sport_key_from_url(league_url) or _sport_key(esporte)
+    return SPORT_LABELS.get(key, str(esporte or "").strip() or key.title())
+
+
+def _league_label_from_url(url: str) -> str:
+    parts = [part for part in re.sub(r"https?://[^/]+/?", "", str(url or "")).split("/") if part]
+    if len(parts) < 3:
+        return parts[-1].upper() if parts else ""
+    country = parts[1].replace("-", " ").title()
+    league = parts[2].replace("-", " ").title()
+    return f"{country} - {league}"
+
+
+def _h2h_marker(sport_key: str) -> str:
+    return f"/{sport_key}/h2h/" if sport_key else "/h2h/"
+
+
+def _default_markets_for_sport(sport_key: str) -> list[str]:
+    if sport_key == "football":
+        return list(DEFAULT_ODDSAGORA_FOOTBALL_MARKETS)
+    return list(DEFAULT_ODDSAGORA_MARKETS)
+
+
 class LeagueLinkParser(HTMLParser):
-    def __init__(self):
+    def __init__(self, sport_key: str = ""):
         super().__init__()
+        self.sport_key = sport_key
         self.links: list[dict[str, str]] = []
         self._href: str | None = None
         self._text: list[str] = []
@@ -64,7 +159,7 @@ class LeagueLinkParser(HTMLParser):
         if tag != "a":
             return
         href = dict(attrs).get("href")
-        if href and "/baseball/h2h/" in href:
+        if href and _h2h_marker(self.sport_key) in href:
             self._href = href
             self._text = []
 
@@ -313,9 +408,9 @@ def _parse_title(title: str, fallback_year: int) -> tuple[str, str, str]:
     return home.strip(), away.strip(), parsed_date
 
 
-def _game_from_link(link: dict[str, str], markets: list[str], fallback_year: int) -> dict[str, Any] | None:
+def _game_from_link(link: dict[str, str], markets: list[str], fallback_year: int, sport_key: str, sport_label: str, league_label: str) -> dict[str, Any] | None:
     href = link.get("href") or ""
-    if "/baseball/h2h/" not in href:
+    if _h2h_marker(sport_key) not in href:
         return None
     match_url = _absolute_url(href)
     home, away, parsed_date = _parse_title(link.get("title") or "", fallback_year)
@@ -327,14 +422,14 @@ def _game_from_link(link: dict[str, str], markets: list[str], fallback_year: int
         "home_team": home,
         "away_team": away,
         "match_url": match_url,
-        "league": "MLB",
-        "sport": "Baseball",
+        "league": league_label,
+        "sport": sport_label,
         "market_urls": {market: build_oddsagora_market_url(match_url, market) for market in markets},
         "markets": _market_dicts(markets),
     }
 
 
-def _game_from_row(row: dict[str, Any], current_date: str, markets: list[str]) -> dict[str, Any] | None:
+def _game_from_row(row: dict[str, Any], current_date: str, markets: list[str], sport_key: str, sport_label: str, league_label: str) -> dict[str, Any] | None:
     cells = [_clean_text(cell) for cell in row.get("cells", []) if _clean_text(cell)]
     time_pos = _time_index(cells)
     if time_pos is None:
@@ -344,7 +439,7 @@ def _game_from_row(row: dict[str, Any], current_date: str, markets: list[str]) -
         return None
     home = team_cells[0]
     away = team_cells[1]
-    h2h_links = [href for href in row.get("hrefs", []) if "/baseball/h2h/" in href]
+    h2h_links = [href for href in row.get("hrefs", []) if _h2h_marker(sport_key) in href]
     match_url = _absolute_url(h2h_links[0]) if h2h_links else ""
     game_id = extract_oddsagora_game_id(match_url) or (match_url.rstrip("/").rsplit("/", 1)[-1] if match_url else f"{home}-{away}-{current_date}")
     game_markets = _market_dicts(markets)
@@ -353,10 +448,13 @@ def _game_from_row(row: dict[str, Any], current_date: str, markets: list[str]) -
     odds = [odd for odd in odds if odd is not None]
     if len(odds) >= 2 and "home-away" in game_markets:
         game_markets["home-away"].append({"bookmaker": "OddsAgora", "home_odd": odds[0], "away_odd": odds[1], "source": "league_table"})
-    elif len(_numbers(trailing)) >= 2 and "home-away" in game_markets:
-        values = [value for value in _numbers(trailing) if value > 1]
-        if len(values) >= 2:
-            game_markets["home-away"].append({"bookmaker": "OddsAgora", "home_odd": values[0], "away_odd": values[1], "source": "league_table"})
+    if len(odds) >= 3 and "1x2" in game_markets:
+        game_markets["1x2"].append({"bookmaker": "OddsAgora", "home_odd": odds[0], "draw_odd": odds[1], "away_odd": odds[2], "source": "league_table"})
+    values = [value for value in _numbers(trailing) if value > 1]
+    if not game_markets.get("home-away") and len(values) >= 2 and "home-away" in game_markets:
+        game_markets["home-away"].append({"bookmaker": "OddsAgora", "home_odd": values[0], "away_odd": values[1], "source": "league_table"})
+    if not game_markets.get("1x2") and len(values) >= 3 and "1x2" in game_markets:
+        game_markets["1x2"].append({"bookmaker": "OddsAgora", "home_odd": values[0], "draw_odd": values[1], "away_odd": values[2], "source": "league_table"})
     return {
         "game_id": game_id,
         "date": current_date,
@@ -364,8 +462,8 @@ def _game_from_row(row: dict[str, Any], current_date: str, markets: list[str]) -
         "home_team": home,
         "away_team": away,
         "match_url": match_url,
-        "league": "MLB",
-        "sport": "Baseball",
+        "league": league_label,
+        "sport": sport_label,
         "market_urls": {market: build_oddsagora_market_url(match_url, market) for market in markets} if match_url else {},
         "markets": game_markets,
     }
@@ -412,10 +510,10 @@ def _local_start_date_time(value: Any) -> tuple[str, str]:
     return local.date().isoformat(), local.strftime("%H:%M")
 
 
-def _game_from_json_ld_event(event: dict[str, Any], markets: list[str]) -> dict[str, Any] | None:
+def _game_from_json_ld_event(event: dict[str, Any], markets: list[str], sport_key: str, sport_label: str, league_label: str) -> dict[str, Any] | None:
     url = _clean_text(event.get("url") or "")
     start_date = event.get("startDate")
-    if "/baseball/h2h/" not in url or not start_date:
+    if _h2h_marker(sport_key) not in url or not start_date:
         return None
     match_url = _absolute_url(url).rstrip("/")
     game_id = extract_oddsagora_game_id(match_url)
@@ -433,14 +531,14 @@ def _game_from_json_ld_event(event: dict[str, Any], markets: list[str]) -> dict[
         "home_team": home,
         "away_team": away,
         "match_url": match_url,
-        "league": "MLB",
-        "sport": "Baseball",
+        "league": league_label,
+        "sport": sport_label,
         "market_urls": {market: build_oddsagora_market_url(match_url, market) for market in markets},
         "markets": _market_dicts(markets),
     }
 
 
-def _games_from_json_ld(html: str, markets: list[str], data_inicio: str, data_fim: str, logs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _games_from_json_ld(html: str, markets: list[str], data_inicio: str, data_fim: str, logs: list[dict[str, Any]], sport_key: str, sport_label: str, league_label: str) -> list[dict[str, Any]]:
     games_by_key: dict[str, dict[str, Any]] = {}
     scripts = re.findall(r"<script\b[^>]*type=[\"']application/ld\+json[\"'][^>]*>(.*?)</script>", html, flags=re.IGNORECASE | re.DOTALL)
     candidates = 0
@@ -454,7 +552,7 @@ def _games_from_json_ld(html: str, markets: list[str], data_inicio: str, data_fi
             _log(logs, "league_json_ld_decode_failed", error=str(exc))
             continue
         for event in _iter_json_objects(payload):
-            game = _game_from_json_ld_event(event, markets)
+            game = _game_from_json_ld_event(event, markets, sport_key, sport_label, league_label)
             if not game:
                 continue
             candidates += 1
@@ -484,16 +582,19 @@ def parse_league_html(
     logs: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     logs = logs if logs is not None else []
+    sport_key = _sport_key_from_url(league_url) or "baseball"
+    sport_label = _sport_label("", league_url)
+    league_label = _league_label_from_url(league_url)
     fallback_year = _fallback_year(data_inicio, data_fim)
     table_parser = _parse_html(html)
-    link_parser = LeagueLinkParser()
+    link_parser = LeagueLinkParser(sport_key)
     link_parser.feed(html)
     games_by_key: dict[str, dict[str, Any]] = {}
     current_date = ""
 
     _log(logs, "league_parse_started", league_url=league_url, rows=len(table_parser.rows), h2h_links=len(link_parser.links))
 
-    structured_games = _games_from_json_ld(html, markets, data_inicio, data_fim, logs)
+    structured_games = _games_from_json_ld(html, markets, data_inicio, data_fim, logs, sport_key, sport_label, league_label)
     for game in structured_games:
         games_by_key[_game_key(game)] = game
 
@@ -505,7 +606,7 @@ def parse_league_html(
             current_date = parsed_label_date
             _log(logs, "league_date_label", label=joined, parsed_date=current_date)
             continue
-        game = _game_from_row(row, current_date, markets)
+        game = _game_from_row(row, current_date, markets, sport_key, sport_label, league_label)
         if not game:
             continue
         if not _date_in_range(str(game.get("date") or ""), data_inicio, data_fim):
@@ -517,7 +618,7 @@ def parse_league_html(
         if structured_games:
             _log(logs, "league_link_skipped_json_ld_authoritative", title=link.get("title"), href=link.get("href"))
             continue
-        game = _game_from_link(link, markets, fallback_year)
+        game = _game_from_link(link, markets, fallback_year, sport_key, sport_label, league_label)
         if not game:
             continue
         if not _date_in_range(str(game.get("date") or ""), data_inicio, data_fim):
@@ -546,7 +647,7 @@ def _row_is_header(cells: list[str]) -> bool:
     )
 
 
-def _parse_moneyline_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _parse_moneyline_rows(rows: list[dict[str, Any]], include_draw: bool = False) -> list[dict[str, Any]]:
     parsed: list[dict[str, Any]] = []
     for row in rows:
         cells = [_clean_text(cell) for cell in row.get("cells", []) if _clean_text(cell)]
@@ -555,7 +656,9 @@ def _parse_moneyline_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         bookmaker = _bookmaker_name(cells[0])
         odds = [_first_odd(cell) for cell in cells[1:]]
         odds = [odd for odd in odds if odd is not None]
-        if bookmaker and len(odds) >= 2:
+        if bookmaker and include_draw and len(odds) >= 3:
+            parsed.append({"bookmaker": bookmaker, "home_odd": odds[0], "draw_odd": odds[1], "away_odd": odds[2], "payout": _payout(" ".join(cells))})
+        elif bookmaker and len(odds) >= 2:
             parsed.append({"bookmaker": bookmaker, "home_odd": odds[0], "away_odd": odds[1], "payout": _payout(" ".join(cells))})
     return parsed
 
@@ -611,6 +714,8 @@ def parse_market_html(html: str, market: str) -> list[dict[str, Any]]:
     key = str(market or "").casefold()
     if key in ("home-away", "moneyline"):
         return _parse_moneyline_rows(rows)
+    if key == "1x2":
+        return _parse_moneyline_rows(rows, include_draw=True)
     if key == "over-under":
         return _parse_totals_rows(rows)
     if key in ("ah", "asian-handicap", "handicap"):
@@ -693,7 +798,11 @@ def _extract_match_event_template(html: str, game_id: str) -> dict[str, Any] | N
 
 
 def _match_event_url(template: dict[str, Any], game_id: str, market: str) -> str | None:
-    bet_type = ODDSAGORA_BET_TYPE_BY_MARKET.get(str(market or "").casefold())
+    market_key = str(market or "").casefold()
+    if market_key in ("1x2", "home-away", "moneyline") and template.get("default_bet_type"):
+        bet_type = template.get("default_bet_type")
+    else:
+        bet_type = ODDSAGORA_BET_TYPE_BY_MARKET.get(market_key)
     if not bet_type:
         return None
     version_id = template.get("version_id") or 9
@@ -772,7 +881,21 @@ def parse_match_event_payload(payload: dict[str, Any], market: str, provider_nam
                 "payout": _payout_from_odds(odds),
                 "source": "match_event",
             }
-            if market_key in ("home-away", "moneyline"):
+            if market_key == "1x2" and len(odds) >= 3:
+                parsed.append(
+                    {
+                        **base,
+                        "home_odd": odds[0],
+                        "draw_odd": odds[1],
+                        "away_odd": odds[2],
+                        "movement": {
+                            "home": _movement_value(item.get("movement"), provider_key, 0),
+                            "draw": _movement_value(item.get("movement"), provider_key, 1),
+                            "away": _movement_value(item.get("movement"), provider_key, 2),
+                        },
+                    }
+                )
+            elif market_key in ("home-away", "moneyline"):
                 parsed.append(
                     {
                         **base,
@@ -924,8 +1047,10 @@ def executar_scraper_oddsagora(
     **_: Any,
 ) -> dict[str, Any]:
     logs: list[dict[str, Any]] = []
-    effective_markets = [m for m in (mercados or DEFAULT_BASEBALL_MARKETS) if m] or DEFAULT_BASEBALL_MARKETS
-    league_urls = leagues or [ODDSAGORA_MLB_URL]
+    requested_sport_key = _sport_key(esporte)
+    default_markets = _default_markets_for_sport(requested_sport_key)
+    effective_markets = [m for m in (mercados or default_markets) if m] or default_markets
+    league_urls = leagues or DEFAULT_ODDSAGORA_LEAGUES.get(requested_sport_key, [ODDSAGORA_MLB_URL])
     games: list[dict[str, Any]] = []
     debug_path = Path(debug_dir) if debug and debug_dir else None
     if debug_path:
@@ -1004,7 +1129,7 @@ def executar_scraper_oddsagora(
         "job_id": job_id,
         "source": "OddsAgora",
         "sport": esporte,
-        "league": "MLB" if any("/mlb" in url for url in league_urls) else "",
+        "league": ", ".join(_league_label_from_url(url) for url in league_urls if _league_label_from_url(url)),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "status": status,
         "mensagem": mensagem,

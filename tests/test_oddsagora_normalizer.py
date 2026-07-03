@@ -64,6 +64,42 @@ class OddsAgoraNormalizerTests(unittest.TestCase):
         self.assertEqual(home_moneyline[0]["bookmaker_melhor"], "Bet365")
         self.assertIn("probabilidade_implicita_media", home_moneyline[0])
 
+    def test_normalize_football_1x2_includes_draw(self) -> None:
+        raw = {
+            "job_id": "job-2",
+            "source": "OddsAgora",
+            "sport": "Football",
+            "league": "Brazil - Brasileirao Betano",
+            "games": [
+                {
+                    "game_id": "AbCd1234",
+                    "date": "2026-07-03",
+                    "time": "16:00",
+                    "home_team": "Flamengo",
+                    "away_team": "Palmeiras",
+                    "sport": "Football",
+                    "league": "Brazil - Brasileirao Betano",
+                    "markets": {
+                        "1x2": [
+                            {"bookmaker": "Bet365", "home_odd": 2.1, "draw_odd": 3.2, "away_odd": 3.6},
+                            {"bookmaker": "Superbet.br", "home_odd": 2.05, "draw_odd": 3.3, "away_odd": 3.7},
+                        ],
+                    },
+                }
+            ],
+        }
+
+        rows = normalize_oddsagora_raw(raw)["linhas"]
+        draw_rows = [row for row in rows if row["market"] == "1X2" and row["side"] == "draw"]
+
+        self.assertEqual(len(rows), 6)
+        self.assertEqual(len(draw_rows), 2)
+        self.assertEqual(draw_rows[0]["pick"], "Empate")
+        self.assertEqual(draw_rows[0]["esporte"], "Football")
+        self.assertEqual(draw_rows[0]["liga"], "Brazil - Brasileirao Betano")
+        self.assertEqual(draw_rows[0]["casas_count"], 2)
+        self.assertIn("probabilidade_implicita_media", draw_rows[0])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,6 +6,7 @@ ODDSAGORA_BASE_URL = "https://www.oddsagora.com.br"
 ODDSAGORA_MLB_URL = f"{ODDSAGORA_BASE_URL}/baseball/usa/mlb/"
 
 MARKET_HASH = {
+    "1x2": "1x2;1",
     "home-away": "home-away;1",
     "moneyline": "home-away;1",
     "over-under": "over-under;1",
