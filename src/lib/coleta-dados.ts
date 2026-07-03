@@ -74,6 +74,8 @@ export interface OddsJogo extends NormalizedOdd {
 
 export type VmPayloadRow = Record<string, unknown>;
 
+export const NORMALIZED_PREVIEW_STORAGE_KEY = "asp:last-normalized-odds-preview";
+
 const coletaDb = supabase as unknown as {
   from: (table: string) => any;
 };
@@ -738,6 +740,24 @@ function compactNormalizedRow(row: NormalizedOdd): NormalizedOdd {
     ...row,
     raw_ref: compactRawRef(row.raw_ref),
   };
+}
+
+export function serializeNormalizedPreview(normalized: NormalizedCollection): string {
+  return JSON.stringify({
+    version: 1,
+    saved_at: new Date().toISOString(),
+    normalized: {
+      ...normalized,
+      rows: normalized.rows.map(compactNormalizedRow),
+    },
+  });
+}
+
+export function parseStoredNormalizedPreview(payload: unknown): NormalizedCollection | null {
+  const parsed = parseMaybeJson(payload);
+  const root = isRecord(parsed) && "normalized" in parsed ? parsed.normalized : parsed;
+  const normalized = normalizeVmNormalizedPayload(root);
+  return normalized.total_odds ? normalized : null;
 }
 
 function compactNormalizedForStorage(normalized: NormalizedCollection, rows: NormalizedOdd[]) {
