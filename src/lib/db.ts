@@ -417,15 +417,18 @@ function extractOddsContext(row: Record<string, unknown>) {
 
   const marketBase = parseNumberFromText(text, [
     /\bodd_mercado_base\s*=\s*([0-9]+(?:[.,][0-9]+)?)/i,
-    /\bodd\s+mercado\s+base\s+([0-9]+(?:[.,][0-9]+)?)/i,
+    /\bodd\s+mercado\s+base\s*:?\s*([0-9]+(?:[.,][0-9]+)?)/i,
+    /\bodd_pick_base\s*=\s*([0-9]+(?:[.,][0-9]+)?)/i,
+    /\bodd\s+pick\s+base\s*:?\s*([0-9]+(?:[.,][0-9]+)?)/i,
   ]);
   const median = parseNumberFromText(text, [
     /\bodd_mediana\s*=\s*([0-9]+(?:[.,][0-9]+)?)/i,
-    /\bodd\s+mediana\s+([0-9]+(?:[.,][0-9]+)?)/i,
+    /\bodd\s+mediana\s*:?\s*([0-9]+(?:[.,][0-9]+)?)/i,
   ]);
   const best = parseNumberFromText(text, [
     /\bodd_melhor\s*=\s*([0-9]+(?:[.,][0-9]+)?)/i,
-    /\bodd\s+melhor\s+([0-9]+(?:[.,][0-9]+)?)/i,
+    /\bodd\s+melhor\s*:?\s*([0-9]+(?:[.,][0-9]+)?)/i,
+    /\bodd_pick_ofertada\s*=\s*([0-9]+(?:[.,][0-9]+)?)/i,
   ]);
   const bookmaker =
     text.match(/\bbookmaker_melhor\s*=\s*([^;,\n]+)/i)?.[1]?.trim() ||
