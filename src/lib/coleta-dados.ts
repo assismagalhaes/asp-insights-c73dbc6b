@@ -77,6 +77,7 @@ export type VmPayloadRow = Record<string, unknown>;
 const coletaDb = supabase as unknown as {
   from: (table: string) => any;
 };
+const ODDS_INSERT_BATCH_SIZE = 250;
 
 function toNumber(value: unknown): number | null {
   if (value == null || value === "") return null;
@@ -706,8 +707,66 @@ function toOddsJogoInsert(row: NormalizedOdd, coletaId: string) {
     bookmaker: row.bookmaker,
     fonte: row.fonte,
     capturado_em: row.capturado_em,
-    raw_ref: row.raw_ref,
+    raw_ref: compactRawRef(row.raw_ref),
   };
+}
+
+function compactRawRef(rawRef: Record<string, unknown> | null | undefined): Record<string, unknown> {
+  if (!rawRef) return {};
+  return {
+    game_id: rawRef.game_id ?? null,
+    source_url: rawRef.source_url ?? rawRef.url ?? rawRef.link ?? null,
+    market: rawRef.market ?? null,
+  };
+}
+
+function compactNormalizedRow(row: NormalizedOdd): NormalizedOdd {
+  return {
+    ...row,
+    raw_ref: compactRawRef(row.raw_ref),
+  };
+}
+
+function compactRawForStorage(raw: unknown): unknown {
+  if (!isRecord(raw)) return raw;
+  const source = String(raw.source ?? raw.fonte ?? "").toLowerCase();
+  const games = Array.isArray(raw.games) ?raw.games : Array.isArray(raw.jogos) ?raw.jogos : null;
+  if (source !== "oddsagora" || !games) return raw;
+  const compactGames = games.filter(isRecord).map((game) => {
+    const markets = isRecord(game.markets) ?game.markets : {};
+    const markets_summary = Object.fromEntries(
+      Object.entries(markets).map(([market, rows]) => [market, Array.isArray(rows) ?rows.length : 0]),
+    );
+    return {
+      game_id: game.game_id ?? game.id ?? null,
+      date: game.date ?? game.data ?? null,
+      time: game.time ?? game.hora ?? null,
+      home_team: game.home_team ?? game.home ?? game.mandante ?? null,
+      away_team: game.away_team ?? game.away ?? game.visitante ?? null,
+      match_url: game.match_url ?? game.url ?? game.link ?? null,
+      markets_summary,
+    };
+  });
+  return {
+    job_id: raw.job_id ?? null,
+    source: raw.source ?? "OddsAgora",
+    sport: raw.sport ?? raw.esporte ?? null,
+    league: raw.league ?? raw.liga ?? null,
+    created_at: raw.created_at ?? null,
+    status: raw.status ?? null,
+    mensagem: raw.mensagem ?? null,
+    summary: raw.summary ?? null,
+    games_count: compactGames.length,
+    games: compactGames,
+  };
+}
+
+async function insertOddsRowsInBatches(rows: NormalizedOdd[], coletaId: string) {
+  for (let index = 0; index < rows.length; index += ODDS_INSERT_BATCH_SIZE) {
+    const batch = rows.slice(index, index + ODDS_INSERT_BATCH_SIZE).map((row) => toOddsJogoInsert(row, coletaId));
+    const { error } = await coletaDb.from("odds_jogos").insert(batch);
+    if (error) throw error;
+  }
 }
 
 export function downloadText(filename: string, content: string, type = "text/csv;charset=utf-8") {
@@ -722,6 +781,7 @@ export function downloadText(filename: string, content: string, type = "text/csv
 
 export async function saveCollection(raw: unknown, normalized: NormalizedCollection, parametros: Record<string, unknown>) {
   const deduped = dedupeRows(normalized.rows);
+  const compactRows = deduped.rows.map(compactNormalizedRow);
   const { data: coleta, error } = await coletaDb
     .from("coletas_odds")
     .insert({
@@ -732,8 +792,8 @@ export async function saveCollection(raw: unknown, normalized: NormalizedCollect
       data_fim: normalized.data_fim,
       mercados: normalized.mercados,
       parametros,
-      raw_json: raw,
-      normalized_json: deduped.rows,
+      raw_json: compactRawForStorage(raw),
+      normalized_json: compactRows,
       total_jogos: normalized.total_jogos,
       total_odds: deduped.rows.length,
       erro: null,
@@ -743,9 +803,7 @@ export async function saveCollection(raw: unknown, normalized: NormalizedCollect
   if (error) throw error;
 
   if (deduped.rows.length) {
-    const payload = deduped.rows.map((row) => toOddsJogoInsert(row, coleta.id));
-    const { error: rowsError } = await coletaDb.from("odds_jogos").insert(payload);
-    if (rowsError) throw rowsError;
+    await insertOddsRowsInBatches(deduped.rows, coleta.id);
   }
 
   return coleta as ColetaOdds;
@@ -806,6 +864,7 @@ export async function completeRemoteCollection(
   status = "CONCLUIDA",
 ): Promise<ImportResult> {
   const deduped = dedupeRows(normalized.rows);
+  const compactRows = deduped.rows.map(compactNormalizedRow);
   const { error } = await coletaDb
     .from("coletas_odds")
     .update({
@@ -815,8 +874,8 @@ export async function completeRemoteCollection(
       data_inicio: normalized.data_inicio,
       data_fim: normalized.data_fim,
       mercados: normalized.mercados,
-      raw_json: raw,
-      normalized_json: deduped.rows,
+      raw_json: compactRawForStorage(raw),
+      normalized_json: compactRows,
       total_jogos: normalized.total_jogos,
       total_odds: deduped.rows.length,
       erro: null,
@@ -829,9 +888,7 @@ export async function completeRemoteCollection(
   if (deleteError) throw deleteError;
 
   if (deduped.rows.length) {
-    const payload = deduped.rows.map((row) => toOddsJogoInsert(row, coletaId));
-    const { error: rowsError } = await coletaDb.from("odds_jogos").insert(payload);
-    if (rowsError) throw rowsError;
+    await insertOddsRowsInBatches(deduped.rows, coletaId);
   }
 
   return { inserted: deduped.rows.length, duplicated: deduped.duplicated };
