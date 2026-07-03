@@ -23,7 +23,8 @@ except ModuleNotFoundError:
 
 
 DEFAULT_ODDSAGORA_MARKETS = ["home-away", "over-under", "ah"]
-DEFAULT_ODDSAGORA_FOOTBALL_MARKETS = ["1x2", "over-under", "ah"]
+DEFAULT_ODDSAGORA_FOOTBALL_MARKETS = ["1x2", "over-under", "ah", "bts", "double"]
+DEFAULT_ODDSAGORA_HOCKEY_MARKETS = ["1x2", "home-away", "over-under", "ah", "bts"]
 DEFAULT_ODDSAGORA_LEAGUES = {
     "football": [
         "https://www.oddsagora.com.br/football/germany/2-bundesliga",
@@ -80,6 +81,30 @@ ODDSAGORA_BET_TYPE_BY_MARKET = {
     "ah": 5,
     "asian-handicap": 5,
     "handicap": 5,
+    "bts": 9,
+    "both-teams-score": 9,
+    "double": 4,
+    "double-chance": 4,
+}
+ODDSAGORA_SCOPE_BY_SPORT_MARKET = {
+    "football": {
+        "1x2": 2,
+        "home-away": 2,
+        "moneyline": 2,
+        "over-under": 2,
+        "ah": 2,
+        "asian-handicap": 2,
+        "handicap": 2,
+        "bts": 2,
+        "both-teams-score": 2,
+        "double": 2,
+        "double-chance": 2,
+    },
+    "hockey": {
+        "1x2": 2,
+        "bts": 5,
+        "both-teams-score": 5,
+    },
 }
 ODDSAGORA_ENCRYPTION_KEY = "J*8sQ!p$7aD_fR2yW@gHn*3bVp#sAdLd_k"
 ODDSAGORA_ENCRYPTION_SALT = b"5b9a8f2c3e6d1a4b7c8e9d0f1a2b3c4d"
@@ -144,7 +169,18 @@ def _h2h_marker(sport_key: str) -> str:
 def _default_markets_for_sport(sport_key: str) -> list[str]:
     if sport_key == "football":
         return list(DEFAULT_ODDSAGORA_FOOTBALL_MARKETS)
+    if sport_key == "hockey":
+        return list(DEFAULT_ODDSAGORA_HOCKEY_MARKETS)
     return list(DEFAULT_ODDSAGORA_MARKETS)
+
+
+def _scope_id_for_market(template: dict[str, Any], market: str, match_url: str = "") -> int | str:
+    sport_key = _sport_key_from_url(match_url)
+    market_key = str(market or "").casefold()
+    scoped = ODDSAGORA_SCOPE_BY_SPORT_MARKET.get(sport_key, {}).get(market_key)
+    if scoped is not None:
+        return scoped
+    return template.get("scope_id") or 1
 
 
 class LeagueLinkParser(HTMLParser):
@@ -797,17 +833,14 @@ def _extract_match_event_template(html: str, game_id: str) -> dict[str, Any] | N
     }
 
 
-def _match_event_url(template: dict[str, Any], game_id: str, market: str) -> str | None:
+def _match_event_url(template: dict[str, Any], game_id: str, market: str, match_url: str = "") -> str | None:
     market_key = str(market or "").casefold()
-    if market_key in ("1x2", "home-away", "moneyline") and template.get("default_bet_type"):
-        bet_type = template.get("default_bet_type")
-    else:
-        bet_type = ODDSAGORA_BET_TYPE_BY_MARKET.get(market_key)
+    bet_type = ODDSAGORA_BET_TYPE_BY_MARKET.get(market_key)
     if not bet_type:
         return None
     version_id = template.get("version_id") or 9
     sport_id = template.get("sport_id") or 6
-    scope_id = template.get("scope_id") or 1
+    scope_id = _scope_id_for_market(template, market, match_url)
     xhashf = template.get("xhashf") or "yj650"
     return f"{ODDSAGORA_BASE_URL}/match-event/{version_id}-{sport_id}-{game_id}-{bet_type}-{scope_id}-{xhashf}.dat?_={int(time.time())}"
 
@@ -895,6 +928,32 @@ def parse_match_event_payload(payload: dict[str, Any], market: str, provider_nam
                         },
                     }
                 )
+            elif market_key in ("bts", "both-teams-score"):
+                parsed.append(
+                    {
+                        **base,
+                        "yes_odd": odds[0],
+                        "no_odd": odds[1],
+                        "movement": {
+                            "yes": _movement_value(item.get("movement"), provider_key, 0),
+                            "no": _movement_value(item.get("movement"), provider_key, 1),
+                        },
+                    }
+                )
+            elif market_key in ("double", "double-chance") and len(odds) >= 3:
+                parsed.append(
+                    {
+                        **base,
+                        "home_draw_odd": odds[0],
+                        "away_draw_odd": odds[1],
+                        "home_away_odd": odds[2],
+                        "movement": {
+                            "home_draw": _movement_value(item.get("movement"), provider_key, 0),
+                            "away_draw": _movement_value(item.get("movement"), provider_key, 1),
+                            "home_away": _movement_value(item.get("movement"), provider_key, 2),
+                        },
+                    }
+                )
             elif market_key in ("home-away", "moneyline"):
                 parsed.append(
                     {
@@ -979,7 +1038,7 @@ def _extract_market_pages(
             if not url:
                 continue
             started = time.perf_counter()
-            endpoint_url = _match_event_url(template, game_id, str(market)) if template else None
+            endpoint_url = _match_event_url(template, game_id, str(market), match_url) if template else None
             if endpoint_url:
                 try:
                     payload = _fetch_oddsagora_json(endpoint_url, match_url)

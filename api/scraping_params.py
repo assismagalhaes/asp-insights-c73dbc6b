@@ -10,7 +10,8 @@ DEFAULT_FLASHSCORE_BASEBALL_MARKETS = [
     "asian-handicap/ft-including-ot",
 ]
 DEFAULT_ODDSAGORA_MARKETS = ["home-away", "over-under", "ah"]
-DEFAULT_ODDSAGORA_FOOTBALL_MARKETS = ["1x2", "over-under", "ah"]
+DEFAULT_ODDSAGORA_FOOTBALL_MARKETS = ["1x2", "over-under", "ah", "bts", "double"]
+DEFAULT_ODDSAGORA_HOCKEY_MARKETS = ["1x2", "home-away", "over-under", "ah", "bts"]
 DEFAULT_ODDSAGORA_BASEBALL_MARKETS = DEFAULT_ODDSAGORA_MARKETS
 ODDSAGORA_MLB_URL = "https://www.oddsagora.com.br/baseball/usa/mlb/"
 ODDSAGORA_LEAGUES_BY_SPORT = {
@@ -79,6 +80,8 @@ def _sport_key(esporte: Any) -> str:
 def _oddsagora_default_markets(sport_key: str) -> list[str]:
     if sport_key == "football":
         return list(DEFAULT_ODDSAGORA_FOOTBALL_MARKETS)
+    if sport_key == "hockey":
+        return list(DEFAULT_ODDSAGORA_HOCKEY_MARKETS)
     return list(DEFAULT_ODDSAGORA_MARKETS)
 
 
