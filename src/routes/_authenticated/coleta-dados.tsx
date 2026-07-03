@@ -169,9 +169,13 @@ function ColetaDadosPage() {
     setErro(null);
     let coletaCriada: ColetaOdds | null = null;
     try {
+      const isBaseball = remoteParams.esporte === "Baseball";
+      const selectedLeagues = selectedLeagueValues(remoteParams.esporte, remoteParams.leagues);
       const scraperPayload = {
         esporte: scraperSportName(remoteParams.esporte),
-        leagues: selectedLeagueValues(remoteParams.esporte, remoteParams.leagues),
+        source: isBaseball ? "OddsAgora" : undefined,
+        leagues: isBaseball && selectedLeagues.length === 0 ? [ODDSAGORA_MLB_URL] : selectedLeagues,
+        mercados: isBaseball ? DEFAULT_ODDSAGORA_BASEBALL_MARKETS : [],
         data_inicio: remoteParams.data_inicio,
         data_fim: remoteParams.data_fim,
       };
@@ -186,7 +190,7 @@ function ColetaDadosPage() {
         liga: selectedLeagueLabels(remoteParams.esporte, remoteParams.leagues).join(", ") || "Todos",
         data_inicio: scraperPayload.data_inicio,
         data_fim: scraperPayload.data_fim,
-        mercados: [],
+        mercados: scraperPayload.mercados,
         job_id: result.job_id,
       });
       coletaCriada = coleta;
@@ -692,13 +696,17 @@ async function carregarOddsDaVm(
   const normalizedKeys = payloadKeys(normalizedRaw);
   const rawKeys = payloadKeys(raw);
   const declaredTotal = payloadNumber(normalizedRaw, "total_linhas");
+  const legacyFlashScoreHint =
+    isObj(raw) && "_default" in raw && !("source" in raw)
+      ? "\n\nDiagnostico: o raw veio com _default e sem source=OddsAgora. Isso indica que a VM ainda executou o fluxo legado/FlashScore, ou ainda nao recebeu/deployou a versao do scraper OddsAgora."
+      : "";
   if ((declaredTotal ?? 0) > 0 && normalizedRows.length) {
     throw new Error(
-      `Payload recebido da VM em /normalized contem ${normalizedRows.length} linhas (total_linhas=${declaredTotal}), mas nenhuma odd importavel foi gerada. Verifique aliases de odd/mercado/pick no normalizador. Chaves disponiveis: normalized: ${normalizedKeys}; raw: ${rawKeys}.`,
+      `Payload recebido da VM em /normalized contem ${normalizedRows.length} linhas (total_linhas=${declaredTotal}), mas nenhuma odd importavel foi gerada. Verifique aliases de odd/mercado/pick no normalizador. Chaves disponiveis: normalized: ${normalizedKeys}; raw: ${rawKeys}.${legacyFlashScoreHint}`,
     );
   }
   throw new Error(
-    `Payload recebido da VM, porem nenhum formato reconhecido foi encontrado.\n\nChaves disponiveis:\nnormalized: ${normalizedKeys}\nraw: ${rawKeys}\n\nTotais detectados: normalized.linhas=${normalizedRows.length}; raw.jogos=${rawGames.length}.`,
+    `Payload recebido da VM, porem nenhum formato reconhecido foi encontrado.\n\nChaves disponiveis:\nnormalized: ${normalizedKeys}\nraw: ${rawKeys}\n\nTotais detectados: normalized.linhas=${normalizedRows.length}; raw.jogos=${rawGames.length}.${legacyFlashScoreHint}`,
   );
 }
 
@@ -802,6 +810,8 @@ function unique(values: Array<string | null | undefined>) {
 type LeagueOption = { label: string; value: string };
 
 const ALL_LEAGUES_VALUE = "Todos";
+const ODDSAGORA_MLB_URL = "https://www.oddsagora.com.br/baseball/usa/mlb/";
+const DEFAULT_ODDSAGORA_BASEBALL_MARKETS = ["home-away", "over-under", "ah"];
 
 const LEAGUES_BY_SPORT: Record<string, LeagueOption[]> = {
   Basketball: [
@@ -811,7 +821,7 @@ const LEAGUES_BY_SPORT: Record<string, LeagueOption[]> = {
   ],
   Baseball: [
     { label: "Todos", value: ALL_LEAGUES_VALUE },
-    { label: "MLB", value: "https://www.flashscore.com/baseball/usa/mlb/fixtures/" },
+    { label: "MLB", value: ODDSAGORA_MLB_URL },
   ],
   Hockey: [
     { label: "Todos", value: ALL_LEAGUES_VALUE },
