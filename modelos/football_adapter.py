@@ -149,6 +149,27 @@ def is_quarter_line(valor):
     return quarter and not half_or_integer
 
 
+def odd_ofertada(item):
+    return normalizar_float(item.get("odd_melhor")) or normalizar_float(item.get("odd"))
+
+
+def odd_consenso(item):
+    return normalizar_float(item.get("odd_mediana")) or normalizar_float(item.get("odd_media")) or normalizar_float(item.get("odd"))
+
+
+def set_odd_columns(row, base_col: str, item) -> None:
+    offered = odd_ofertada(item)
+    consensus = odd_consenso(item) or offered
+    if offered is None:
+        return
+    row[base_col] = offered
+    if consensus is not None:
+        row[f"{base_col}_MEDIANA"] = consensus
+    bookmaker = limpar_texto(item.get("bookmaker_melhor")) or limpar_texto(item.get("bookmaker"))
+    if bookmaker:
+        row[f"{base_col}_BOOKMAKER_MELHOR"] = bookmaker
+
+
 def adicionar_handicaps_asiaticos(row, handicap_items, jogo):
     handicap_index = 1
     used = set()
@@ -178,8 +199,14 @@ def adicionar_handicaps_asiaticos(row, handicap_items, jogo):
 
         row[f"odds_Asian_handicap_Full_Time_Linha{handicap_index}_HANDICAP"] = home_line
         row[f"odds_Asian_handicap_Full_Time_Linha{handicap_index}_1"] = home_item["odd"]
+        row[f"odds_Asian_handicap_Full_Time_Linha{handicap_index}_1_MEDIANA"] = home_item["odd_mediana"]
+        if home_item.get("bookmaker_melhor"):
+            row[f"odds_Asian_handicap_Full_Time_Linha{handicap_index}_1_BOOKMAKER_MELHOR"] = home_item["bookmaker_melhor"]
         row[f"odds_Asian_handicap_Full_Time_Linha{handicap_index}_Opp_HANDICAP"] = away_line
         row[f"odds_Asian_handicap_Full_Time_Linha{handicap_index}_Opp_Odd"] = away_item["odd"]
+        row[f"odds_Asian_handicap_Full_Time_Linha{handicap_index}_Opp_Odd_MEDIANA"] = away_item["odd_mediana"]
+        if away_item.get("bookmaker_melhor"):
+            row[f"odds_Asian_handicap_Full_Time_Linha{handicap_index}_Opp_Odd_BOOKMAKER_MELHOR"] = away_item["bookmaker_melhor"]
 
         used.add(idx)
         used.add(match_idx)
@@ -217,6 +244,12 @@ def converter_csv_longo_para_wide(caminho_entrada, caminho_saida):
         raise ValueError(f"CSV da coleta sem colunas obrigatorias: {faltando}")
 
     df["odd"] = df["odd"].apply(normalizar_float)
+    if "odd_melhor" in df.columns:
+        df["odd_melhor"] = df["odd_melhor"].apply(normalizar_float)
+    if "odd_mediana" in df.columns:
+        df["odd_mediana"] = df["odd_mediana"].apply(normalizar_float)
+    if "odd_media" in df.columns:
+        df["odd_media"] = df["odd_media"].apply(normalizar_float)
     df = df.dropna(subset=["odd"]).copy()
 
     linhas_saida = []
@@ -243,7 +276,8 @@ def converter_csv_longo_para_wide(caminho_entrada, caminho_saida):
             mercado = limpar_texto(item["mercado"]).lower()
             pick = limpar_texto(item["pick"])
             linha = item["linha"]
-            odd = normalizar_float(item["odd"])
+            odd = odd_ofertada(item)
+            median_odd = odd_consenso(item) or odd
 
             if odd is None:
                 continue
@@ -252,29 +286,29 @@ def converter_csv_longo_para_wide(caminho_entrada, caminho_saida):
                 lado = identificar_pick_1x2(pick, mandante, visitante)
 
                 if lado == "1":
-                    row["odds_1X2_Full_Time_1"] = odd
+                    set_odd_columns(row, "odds_1X2_Full_Time_1", item)
                 elif lado == "X":
-                    row["odds_1X2_Full_Time_X"] = odd
+                    set_odd_columns(row, "odds_1X2_Full_Time_X", item)
                 elif lado == "2":
-                    row["odds_1X2_Full_Time_2"] = odd
+                    set_odd_columns(row, "odds_1X2_Full_Time_2", item)
 
             elif "dupla" in mercado or "double" in mercado:
                 p = pick.upper().replace(" ", "")
 
                 if "1X" in p:
-                    row["odds_Double_chance_Full_Time_1X"] = odd
+                    set_odd_columns(row, "odds_Double_chance_Full_Time_1X", item)
                 elif "12" in p:
-                    row["odds_Double_chance_Full_Time_12"] = odd
+                    set_odd_columns(row, "odds_Double_chance_Full_Time_12", item)
                 elif "X2" in p:
-                    row["odds_Double_chance_Full_Time_X2"] = odd
+                    set_odd_columns(row, "odds_Double_chance_Full_Time_X2", item)
 
             elif "ambas" in mercado or "btts" in mercado or "both" in mercado:
                 p = pick.lower()
 
                 if "sim" in p or "yes" in p:
-                    row["odds_Both_teams_to_score_Full_Time_YES"] = odd
+                    set_odd_columns(row, "odds_Both_teams_to_score_Full_Time_YES", item)
                 elif "nao" in p or "não" in p or "no" in p:
-                    row["odds_Both_teams_to_score_Full_Time_NO"] = odd
+                    set_odd_columns(row, "odds_Both_teams_to_score_Full_Time_NO", item)
 
             elif "over" in pick.lower() or "under" in pick.lower() or "total" in mercado or "gols" in mercado:
                 key = linha_para_key_ou(linha)
@@ -283,9 +317,9 @@ def converter_csv_longo_para_wide(caminho_entrada, caminho_saida):
                     p = pick.lower()
 
                     if "over" in p:
-                        row[f"odds_OverUnder_Full_Time_{key}_Over"] = odd
+                        set_odd_columns(row, f"odds_OverUnder_Full_Time_{key}_Over", item)
                     elif "under" in p:
-                        row[f"odds_OverUnder_Full_Time_{key}_Under"] = odd
+                        set_odd_columns(row, f"odds_OverUnder_Full_Time_{key}_Under", item)
 
             elif "handicap" in mercado:
                 if "europe" in mercado or "europeu" in mercado or "3 vias" in mercado:
@@ -314,6 +348,8 @@ def converter_csv_longo_para_wide(caminho_entrada, caminho_saida):
                     "side": lado,
                     "line": linha_num,
                     "odd": odd,
+                    "odd_mediana": median_odd,
+                    "bookmaker_melhor": limpar_texto(item.get("bookmaker_melhor")) or limpar_texto(item.get("bookmaker")),
                     "pick": pick,
                 })
 
