@@ -8,6 +8,7 @@ import type {
   MlbTeamRatingInput,
   MlbTeamSimpleRating,
 } from "@/types/mlbProjections";
+import { getBestBookmaker, getMarketBaseOdd, getOfferedOdd } from "@/lib/mlb/marketOdds";
 import { matchMlbTeamName } from "@/utils/mlbTeamNameMap";
 
 export const MLB_SIMPLE_RATING_WEIGHTS = {
@@ -96,9 +97,11 @@ export function calculateMlbMoneylineProjection(input: MlbMoneylineProjectionInp
     };
   }
 
-  const homeOdd = moneyline.homeOdd?.odd as number;
-  const awayOdd = moneyline.awayOdd?.odd as number;
-  const market = calculateNoVigMoneylineMarket(homeOdd, awayOdd);
+  const homeOdd = getOfferedOdd(moneyline.homeOdd) as number;
+  const awayOdd = getOfferedOdd(moneyline.awayOdd) as number;
+  const homeMarketBaseOdd = getMarketBaseOdd(moneyline.homeOdd) as number;
+  const awayMarketBaseOdd = getMarketBaseOdd(moneyline.awayOdd) as number;
+  const market = calculateNoVigMoneylineMarket(homeMarketBaseOdd, awayMarketBaseOdd);
   const homeRating = calculateMlbTeamSimpleRating({ standings: game.home_standings as MlbTeamStanding, venue: "home", config });
   const awayRating = calculateMlbTeamSimpleRating({ standings: game.away_standings as MlbTeamStanding, venue: "away", config });
   const ratingDiff = homeRating.team_simple_rating - awayRating.team_simple_rating + config.homeFieldAdvantage;
@@ -152,6 +155,16 @@ export function calculateMlbMoneylineProjection(input: MlbMoneylineProjectionInp
     away_ev: round(awayEv, 4),
     recommended_side: recommendation.recommended_side,
     recommended_odd: recommendation.recommended_odd,
+    recommended_odd_mediana: recommendation.side === "home"
+      ? homeMarketBaseOdd
+      : recommendation.side === "away"
+        ? awayMarketBaseOdd
+        : null,
+    recommended_bookmaker_melhor: recommendation.side === "home"
+      ? getBestBookmaker(moneyline.homeOdd)
+      : recommendation.side === "away"
+        ? getBestBookmaker(moneyline.awayOdd)
+        : null,
     recommended_model_prob: recommendation.recommended_model_prob,
     recommended_fair_odd: recommendation.recommended_fair_odd,
     recommended_ev: recommendation.recommended_ev,
@@ -235,9 +248,13 @@ function baseProjectionRow(
     home_team_key: game.home_team_key,
     away_team_key: game.away_team_key,
     home_pick: moneyline.homeOdd?.pick ?? game.home_team,
-    home_odd: moneyline.homeOdd?.odd ?? null,
+    home_odd: getOfferedOdd(moneyline.homeOdd),
+    home_odd_mediana: getMarketBaseOdd(moneyline.homeOdd),
+    home_bookmaker_melhor: getBestBookmaker(moneyline.homeOdd),
     away_pick: moneyline.awayOdd?.pick ?? game.away_team,
-    away_odd: moneyline.awayOdd?.odd ?? null,
+    away_odd: getOfferedOdd(moneyline.awayOdd),
+    away_odd_mediana: getMarketBaseOdd(moneyline.awayOdd),
+    away_bookmaker_melhor: getBestBookmaker(moneyline.awayOdd),
     home_market_implied_prob_raw: null,
     away_market_implied_prob_raw: null,
     home_market_implied_prob_no_vig: null,
@@ -254,6 +271,8 @@ function baseProjectionRow(
     away_ev: null,
     recommended_side: null,
     recommended_odd: null,
+    recommended_odd_mediana: null,
+    recommended_bookmaker_melhor: null,
     recommended_model_prob: null,
     recommended_fair_odd: null,
     recommended_ev: null,
@@ -315,10 +334,16 @@ function getMissingProjectionFields(
   if (!game.away_standings) missing.push("away_standings");
   if (!game.home_team_key) missing.push("home_team_key");
   if (!game.away_team_key) missing.push("away_team_key");
-  if (!moneyline.homeOdd?.odd) missing.push("Moneyline mandante");
-  if (!moneyline.awayOdd?.odd) missing.push("Moneyline visitante");
-  if (moneyline.homeOdd?.odd != null && Number(moneyline.homeOdd.odd) <= 1) missing.push("odd mandante valida");
-  if (moneyline.awayOdd?.odd != null && Number(moneyline.awayOdd.odd) <= 1) missing.push("odd visitante valida");
+  const homeOdd = getOfferedOdd(moneyline.homeOdd);
+  const awayOdd = getOfferedOdd(moneyline.awayOdd);
+  const homeMarketBaseOdd = getMarketBaseOdd(moneyline.homeOdd);
+  const awayMarketBaseOdd = getMarketBaseOdd(moneyline.awayOdd);
+  if (!homeOdd) missing.push("Moneyline mandante");
+  if (!awayOdd) missing.push("Moneyline visitante");
+  if (homeOdd != null && homeOdd <= 1) missing.push("odd mandante valida");
+  if (awayOdd != null && awayOdd <= 1) missing.push("odd visitante valida");
+  if (!homeMarketBaseOdd) missing.push("odd mediana/base mandante");
+  if (!awayMarketBaseOdd) missing.push("odd mediana/base visitante");
   return missing;
 }
 

@@ -283,7 +283,19 @@ export function enrichMlbGamesWithStandings(
       market: row.mercado,
       pick: row.pick,
       line: row.linha,
-      odd: Number.isFinite(Number(row.odd)) ? Number(row.odd) : null,
+      odd: toNumberOrNull(row.odd),
+      odd_media: toNumberOrNull(row.odd_media),
+      odd_mediana: toNumberOrNull(row.odd_mediana),
+      odd_minima: toNumberOrNull(row.odd_minima),
+      odd_maxima: toNumberOrNull(row.odd_maxima),
+      odd_melhor: toNumberOrNull(row.odd_melhor),
+      bookmaker_melhor: row.bookmaker_melhor ?? null,
+      casas_count: toNumberOrNull(row.casas_count),
+      odds_disponiveis: toNumberOrNull(row.odds_disponiveis),
+      probabilidade_implicita_media: toNumberOrNull(row.probabilidade_implicita_media),
+      probabilidade_implicita_mediana: toNumberOrNull(row.probabilidade_implicita_mediana),
+      margem_mercado_media: toNumberOrNull(row.margem_mercado_media),
+      margem_mercado_mediana: toNumberOrNull(row.margem_mercado_mediana),
       bookmaker: row.bookmaker,
       source: row.fonte,
     });
@@ -314,6 +326,11 @@ export function getMlbStandingsSnapshot(
     league_average: opts.leagueAverage ?? null,
     validation: validateMlbStandings(teams, opts.oddsRows),
   };
+}
+
+function toNumberOrNull(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function normalizeRows(

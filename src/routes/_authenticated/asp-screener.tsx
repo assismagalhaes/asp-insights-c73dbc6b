@@ -1576,7 +1576,9 @@ function OpportunityTable({
               "Mercado",
               "Pick",
               "Linha",
-              "Odd",
+              "Odd Ofertada",
+              "Odd Mediana",
+              "Bookmaker",
               "Prob. Mercado No-Vig",
               "Prob. ASP",
               "Edge Prob.",
@@ -1617,6 +1619,8 @@ function OpportunityTable({
               <td className="min-w-56 px-3 py-2 font-medium">{row.pick_label ?? "-"}</td>
               <td className="px-3 py-2 font-mono">{row.line == null ? "-" : row.market_family === "handicap" ? formatHandicapLine(row.line) : formatNumber2(row.line)}</td>
               <td className="px-3 py-2 font-mono">{formatOdd(row.offered_odd)}</td>
+              <td className="px-3 py-2 font-mono">{formatOdd(row.median_odd)}</td>
+              <td className="whitespace-nowrap px-3 py-2 text-xs">{row.bookmaker_melhor ?? "-"}</td>
               <td className="px-3 py-2 font-mono">{formatProbability(row.market_prob_no_vig)}</td>
               <td className="px-3 py-2 font-mono">{formatProbability(row.model_prob)}</td>
               <td className={edgeClass(row.probability_edge)}>{formatProbabilitySigned(row.probability_edge)}</td>
@@ -3098,6 +3102,9 @@ function exportOpportunitySnapshotsCsv(rows: MlbOpportunitySnapshotRecord[]) {
     "pick_label",
     "line",
     "offered_odd",
+    "median_odd",
+    "market_base_odd",
+    "bookmaker_melhor",
     "model_prob",
     "market_prob_no_vig",
     "probability_edge",
@@ -3122,6 +3129,9 @@ function exportOpportunitySnapshotsCsv(rows: MlbOpportunitySnapshotRecord[]) {
     row.pick_label,
     row.line,
     row.offered_odd,
+    getSnapshotPayloadNumber(row, "median_odd"),
+    getSnapshotPayloadNumber(row, "market_base_odd"),
+    getSnapshotPayloadString(row, "bookmaker_melhor"),
     row.model_prob,
     row.market_prob_no_vig,
     row.probability_edge,
@@ -3145,6 +3155,16 @@ function getRiskFlags(row: MlbScreenerHandoffAuditRecord) {
 
 function getAlerts(row: MlbScreenerHandoffAuditRecord) {
   return safeStringArray(row.opportunity_payload?.alerts);
+}
+
+function getSnapshotPayloadNumber(row: MlbOpportunitySnapshotRecord, key: string) {
+  const value = row.opportunity_payload?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function getSnapshotPayloadString(row: MlbOpportunitySnapshotRecord, key: string) {
+  const value = row.opportunity_payload?.[key];
+  return typeof value === "string" && value ? value : null;
 }
 
 function getProbabilityEdge(row: MlbScreenerHandoffAuditRecord) {

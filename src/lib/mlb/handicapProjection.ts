@@ -9,6 +9,7 @@ import type {
   MlbLeagueAverageContext,
   MlbRunDistribution,
 } from "@/types/mlbProjections";
+import { getBestBookmaker, getMarketBaseOdd, getOfferedOdd } from "@/lib/mlb/marketOdds";
 import { matchMlbTeamName } from "@/utils/mlbTeamNameMap";
 import { calculateMlbProjectedTotal, getLeagueAverageContext } from "@/lib/mlb/totalsProjection";
 
@@ -194,7 +195,9 @@ export function normalizeHandicapMarketRows(game: EnrichedMlbGame): HandicapLine
 }
 
 export function identifyMainHandicapLine(game: EnrichedMlbGame, groups: HandicapLineGroup[]) {
-  const pairedGroups = groups.filter((group) => group.homeOdd?.odd && group.awayOdd?.odd && Number.isFinite(group.canonicalHomeLine));
+  const pairedGroups = groups.filter((group) =>
+    getMarketBaseOdd(group.homeOdd) && getMarketBaseOdd(group.awayOdd) && Number.isFinite(group.canonicalHomeLine),
+  );
   if (!pairedGroups.length) return null;
 
   const favorite = identifyMoneylineFavorite(game);
@@ -206,7 +209,10 @@ export function identifyMainHandicapLine(game: EnrichedMlbGame, groups: Handicap
 
   const balanced = pairedGroups
     .map((group) => {
-      const market = calculateHandicapMarketNoVig(Number(group.homeOdd?.odd), Number(group.awayOdd?.odd));
+      const market = calculateHandicapMarketNoVig(
+        getMarketBaseOdd(group.homeOdd) as number,
+        getMarketBaseOdd(group.awayOdd) as number,
+      );
       return {
         line: group.canonicalHomeLine,
         distanceToBalancedMarket: Math.abs(market.home_market_implied_prob_no_vig - 0.5),
@@ -242,11 +248,13 @@ export function calculateMlbHandicapProjection(params: {
     };
   }
 
-  const homeOdd = Number(params.lineGroup.homeOdd?.odd);
-  const awayOdd = Number(params.lineGroup.awayOdd?.odd);
+  const homeOdd = getOfferedOdd(params.lineGroup.homeOdd) as number;
+  const awayOdd = getOfferedOdd(params.lineGroup.awayOdd) as number;
+  const homeMarketBaseOdd = getMarketBaseOdd(params.lineGroup.homeOdd) as number;
+  const awayMarketBaseOdd = getMarketBaseOdd(params.lineGroup.awayOdd) as number;
   const homeLine = Number(params.lineGroup.homeLine);
   const awayLine = Number(params.lineGroup.awayLine);
-  const market = calculateHandicapMarketNoVig(homeOdd, awayOdd);
+  const market = calculateHandicapMarketNoVig(homeMarketBaseOdd, awayMarketBaseOdd);
   const projected = calculateMlbProjectedTotal({
     game: params.game,
     leagueAverage: params.leagueAverage,
@@ -370,6 +378,16 @@ export function calculateMlbHandicapProjection(params: {
     recommended_pick: recommendation.recommended_pick,
     recommended_line: recommendation.recommended_line,
     recommended_odd: recommendation.recommended_odd,
+    recommended_odd_mediana: recommendation.recommended_side === "home"
+      ? homeMarketBaseOdd
+      : recommendation.recommended_side === "away"
+        ? awayMarketBaseOdd
+        : null,
+    recommended_bookmaker_melhor: recommendation.recommended_side === "home"
+      ? getBestBookmaker(params.lineGroup.homeOdd)
+      : recommendation.recommended_side === "away"
+        ? getBestBookmaker(params.lineGroup.awayOdd)
+        : null,
     recommended_model_prob: recommendation.recommended_model_prob,
     recommended_push_prob: recommendation.recommended_push_prob,
     recommended_fair_odd: recommendation.recommended_fair_odd,
@@ -449,10 +467,14 @@ function baseHandicapRow(
     distance_from_main_handicap_line: distanceFromMain,
     home_pick: params.lineGroup.homeOdd?.pick ?? params.game.home_team,
     home_handicap_line: params.lineGroup.homeLine,
-    home_handicap_odd: params.lineGroup.homeOdd?.odd ?? null,
+    home_handicap_odd: getOfferedOdd(params.lineGroup.homeOdd),
+    home_handicap_odd_mediana: getMarketBaseOdd(params.lineGroup.homeOdd),
+    home_bookmaker_melhor: getBestBookmaker(params.lineGroup.homeOdd),
     away_pick: params.lineGroup.awayOdd?.pick ?? params.game.away_team,
     away_handicap_line: params.lineGroup.awayLine,
-    away_handicap_odd: params.lineGroup.awayOdd?.odd ?? null,
+    away_handicap_odd: getOfferedOdd(params.lineGroup.awayOdd),
+    away_handicap_odd_mediana: getMarketBaseOdd(params.lineGroup.awayOdd),
+    away_bookmaker_melhor: getBestBookmaker(params.lineGroup.awayOdd),
     home_expected_runs: null,
     away_expected_runs: null,
     projected_total_runs: null,
@@ -478,6 +500,8 @@ function baseHandicapRow(
     recommended_pick: null,
     recommended_line: null,
     recommended_odd: null,
+    recommended_odd_mediana: null,
+    recommended_bookmaker_melhor: null,
     recommended_model_prob: null,
     recommended_push_prob: null,
     recommended_fair_odd: null,
@@ -535,10 +559,16 @@ function getMissingHandicapFields(game: EnrichedMlbGame, lineGroup: HandicapLine
   if (!Number.isFinite(lineGroup.canonicalHomeLine)) missing.push("line valida");
   if (lineGroup.homeLine == null || !Number.isFinite(lineGroup.homeLine)) missing.push("home_handicap_line");
   if (lineGroup.awayLine == null || !Number.isFinite(lineGroup.awayLine)) missing.push("away_handicap_line");
-  if (!lineGroup.homeOdd?.odd) missing.push("missing_home_handicap_odd");
-  if (!lineGroup.awayOdd?.odd) missing.push("missing_away_handicap_odd");
-  if (lineGroup.homeOdd?.odd != null && Number(lineGroup.homeOdd.odd) <= 1) missing.push("home_handicap_odd valida");
-  if (lineGroup.awayOdd?.odd != null && Number(lineGroup.awayOdd.odd) <= 1) missing.push("away_handicap_odd valida");
+  const homeOdd = getOfferedOdd(lineGroup.homeOdd);
+  const awayOdd = getOfferedOdd(lineGroup.awayOdd);
+  const homeMarketBaseOdd = getMarketBaseOdd(lineGroup.homeOdd);
+  const awayMarketBaseOdd = getMarketBaseOdd(lineGroup.awayOdd);
+  if (!homeOdd) missing.push("missing_home_handicap_odd");
+  if (!awayOdd) missing.push("missing_away_handicap_odd");
+  if (homeOdd != null && homeOdd <= 1) missing.push("home_handicap_odd valida");
+  if (awayOdd != null && awayOdd <= 1) missing.push("away_handicap_odd valida");
+  if (!homeMarketBaseOdd) missing.push("odd mediana/base handicap mandante");
+  if (!awayMarketBaseOdd) missing.push("odd mediana/base handicap visitante");
   return missing;
 }
 
@@ -754,9 +784,11 @@ function identifyMoneylineFavorite(game: EnrichedMlbGame): MlbHandicapSide | nul
   const moneylineMarkets = game.markets.filter((market) => /moneyline|match winner|winner|vencedor/i.test(String(market.market ?? "")));
   const homeOdd = pickBestOdd(moneylineMarkets.filter((market) => getPickSide(market.pick, game) === "home"));
   const awayOdd = pickBestOdd(moneylineMarkets.filter((market) => getPickSide(market.pick, game) === "away"));
-  if (!homeOdd?.odd || !awayOdd?.odd) return null;
-  if (Number(homeOdd.odd) === Number(awayOdd.odd)) return null;
-  return Number(homeOdd.odd) < Number(awayOdd.odd) ? "home" : "away";
+  const homeMarketBaseOdd = getMarketBaseOdd(homeOdd);
+  const awayMarketBaseOdd = getMarketBaseOdd(awayOdd);
+  if (!homeMarketBaseOdd || !awayMarketBaseOdd) return null;
+  if (homeMarketBaseOdd === awayMarketBaseOdd) return null;
+  return homeMarketBaseOdd < awayMarketBaseOdd ? "home" : "away";
 }
 
 function isHandicapMarket(market: string | null) {
