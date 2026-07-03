@@ -420,6 +420,45 @@ def _find_asian_handicap_pair(wide_row, line: float, side: str):
     return None
 
 
+def _market_odd(wide_row, base_col: str):
+    median_col = f"{base_col}_MEDIANA"
+    value = _to_float(wide_row.get(median_col))
+    if value is not None and value > 1.0:
+        return value
+    return _to_float(wide_row.get(base_col))
+
+
+def _bookmaker_melhor(wide_row, base_col: str) -> str:
+    value = wide_row.get(f"{base_col}_BOOKMAKER_MELHOR")
+    if pd.isna(value):
+        return ""
+    return str(value or "").strip()
+
+
+def _find_asian_handicap_market_pair(wide_row, line: float, side: str):
+    for idx in range(1, 20):
+        home_line_col = f"odds_Asian_handicap_Full_Time_Linha{idx}_HANDICAP"
+        home_odd_col = f"odds_Asian_handicap_Full_Time_Linha{idx}_1"
+        away_line_col = f"odds_Asian_handicap_Full_Time_Linha{idx}_Opp_HANDICAP"
+        away_odd_col = f"odds_Asian_handicap_Full_Time_Linha{idx}_Opp_Odd"
+
+        home_line = _to_float(wide_row.get(home_line_col))
+        away_line = _to_float(wide_row.get(away_line_col))
+        home_odd = _market_odd(wide_row, home_odd_col)
+        away_odd = _market_odd(wide_row, away_odd_col)
+
+        if home_line is None or away_line is None or home_odd is None or away_odd is None:
+            continue
+        if abs(home_line + away_line) > 1e-9:
+            continue
+        if side == "home" and abs(home_line - line) < 1e-9:
+            return home_odd, away_odd, _bookmaker_melhor(wide_row, home_odd_col)
+        if side == "away" and abs(away_line - line) < 1e-9:
+            return away_odd, home_odd, _bookmaker_melhor(wide_row, away_odd_col)
+
+    return None
+
+
 def _append_reason(parts: list[str], label: str, value) -> None:
     if value is not None and value != "":
         parts.append(f"{label}={value}")
@@ -484,6 +523,10 @@ def _build_v1_1_note(debug: dict) -> str:
         "prob_final",
         "odd_justa",
         "odd_ofertada",
+        "odd_mediana",
+        "odd_mercado_base",
+        "odd_melhor",
+        "bookmaker_melhor",
         "edge",
         "edge_formula",
         "min_edge_required",
@@ -556,6 +599,8 @@ def _base_stat_audit_debug(market_type: str) -> dict:
 def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | None]:
     market_type = _classify_market(row)
     offered_odd = _to_float(row.get("odd_ofertada"))
+    market_odd_base = None
+    bookmaker_melhor = ""
     original_prob_pct = _to_float(row.get("probabilidade_final"))
     original_prob = (original_prob_pct / 100.0) if original_prob_pct is not None else None
     warnings = []
@@ -589,23 +634,45 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
     if discard_reason is None:
         try:
             if market_type == "1x2":
+                odds_by_side = {
+                    "home": ("odds_1X2_Full_Time_1", _market_odd(wide_row, "odds_1X2_Full_Time_1")),
+                    "draw": ("odds_1X2_Full_Time_X", _market_odd(wide_row, "odds_1X2_Full_Time_X")),
+                    "away": ("odds_1X2_Full_Time_2", _market_odd(wide_row, "odds_1X2_Full_Time_2")),
+                }
                 p_home, p_draw, p_away = no_vig_probability_three(
-                    wide_row.get("odds_1X2_Full_Time_1"),
-                    wide_row.get("odds_1X2_Full_Time_X"),
-                    wide_row.get("odds_1X2_Full_Time_2"),
+                    odds_by_side["home"][1],
+                    odds_by_side["draw"][1],
+                    odds_by_side["away"][1],
                 )
                 side = _pick_side_1x2(row)
                 prob_no_vig = {"home": p_home, "draw": p_draw, "away": p_away}.get(side)
+                if side in odds_by_side:
+                    base_col, market_odd_base = odds_by_side[side]
+                    bookmaker_melhor = _bookmaker_melhor(wide_row, base_col)
                 if prob_no_vig is None:
                     discard_reason = "INVALID_PICK_1X2"
 
             elif market_type == "double_chance":
+                odds_1x2_by_side = {
+                    "home": _market_odd(wide_row, "odds_1X2_Full_Time_1"),
+                    "draw": _market_odd(wide_row, "odds_1X2_Full_Time_X"),
+                    "away": _market_odd(wide_row, "odds_1X2_Full_Time_2"),
+                }
                 p_home, p_draw, p_away = no_vig_probability_three(
-                    wide_row.get("odds_1X2_Full_Time_1"),
-                    wide_row.get("odds_1X2_Full_Time_X"),
-                    wide_row.get("odds_1X2_Full_Time_2"),
+                    odds_1x2_by_side["home"],
+                    odds_1x2_by_side["draw"],
+                    odds_1x2_by_side["away"],
                 )
                 side = _pick_side_double_chance(row)
+                dc_cols = {
+                    "1X": "odds_Double_chance_Full_Time_1X",
+                    "12": "odds_Double_chance_Full_Time_12",
+                    "X2": "odds_Double_chance_Full_Time_X2",
+                }
+                base_col = dc_cols.get(side)
+                if base_col:
+                    market_odd_base = _market_odd(wide_row, base_col)
+                    bookmaker_melhor = _bookmaker_melhor(wide_row, base_col)
                 prob_no_vig = {"1X": p_home + p_draw, "12": p_home + p_away, "X2": p_draw + p_away}.get(side)
                 if prob_no_vig is None:
                     discard_reason = "INVALID_PICK_DOUBLE_CHANCE"
@@ -616,21 +683,35 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
                     discard_reason = "UNSUPPORTED_TOTAL_LINE"
                 else:
                     key = _line_key(line)
-                    over_odd = wide_row.get(f"odds_OverUnder_Full_Time_{key}_Over")
-                    under_odd = wide_row.get(f"odds_OverUnder_Full_Time_{key}_Under")
+                    over_col = f"odds_OverUnder_Full_Time_{key}_Over"
+                    under_col = f"odds_OverUnder_Full_Time_{key}_Under"
+                    over_odd = _market_odd(wide_row, over_col)
+                    under_odd = _market_odd(wide_row, under_col)
                     p_over, p_under = no_vig_probability_pair(over_odd, under_odd)
                     side = _pick_side_total(row)
+                    selected_col = {"over": over_col, "under": under_col}.get(side)
+                    market_odd_base = {"over": over_odd, "under": under_odd}.get(side)
+                    if selected_col:
+                        bookmaker_melhor = _bookmaker_melhor(wide_row, selected_col)
                     prob_no_vig = {"over": p_over, "under": p_under}.get(side)
                     if prob_no_vig is None:
                         discard_reason = "INVALID_PICK_TOTALS"
                     warnings.append("NEUTRAL_FALLBACK_NO_HISTORY")
 
             elif market_type == "btts":
+                yes_col = "odds_Both_teams_to_score_Full_Time_YES"
+                no_col = "odds_Both_teams_to_score_Full_Time_NO"
+                yes_odd = _market_odd(wide_row, yes_col)
+                no_odd = _market_odd(wide_row, no_col)
                 p_yes, p_no = no_vig_probability_pair(
-                    wide_row.get("odds_Both_teams_to_score_Full_Time_YES"),
-                    wide_row.get("odds_Both_teams_to_score_Full_Time_NO"),
+                    yes_odd,
+                    no_odd,
                 )
                 side = _pick_side_btts(row)
+                selected_col = {"yes": yes_col, "no": no_col}.get(side)
+                market_odd_base = {"yes": yes_odd, "no": no_odd}.get(side)
+                if selected_col:
+                    bookmaker_melhor = _bookmaker_melhor(wide_row, selected_col)
                 prob_no_vig = {"yes": p_yes, "no": p_no}.get(side)
                 if prob_no_vig is None:
                     discard_reason = "INVALID_PICK_BTTS"
@@ -655,11 +736,12 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
                     elif not _is_half_handicap_line(line):
                         discard_reason = "HANDICAP_LINE_UNSUPPORTED_FOOTBALL_V1_1"
                     else:
-                        pair = _find_asian_handicap_pair(wide_row, line, side)
+                        pair = _find_asian_handicap_market_pair(wide_row, line, side)
                         if pair is None:
                             discard_reason = "HANDICAP_NO_PAIRED_ODDS"
                         else:
-                            selected_odd, opposite_odd = pair
+                            selected_odd, opposite_odd, bookmaker_melhor = pair
+                            market_odd_base = selected_odd
                             prob_no_vig, _ = no_vig_probability_pair(selected_odd, opposite_odd)
                             warnings.append("HANDICAP_ASIAN_HALF_LINE_ONLY")
                             warnings.append("NEUTRAL_FALLBACK_NO_HISTORY")
@@ -667,6 +749,10 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
             discard_reason = "NO_MARKET_BASELINE"
 
     debug["prob_no_vig"] = None if prob_no_vig is None else round(prob_no_vig, 4)
+    debug["odd_mediana"] = None if market_odd_base is None else round(market_odd_base, 4)
+    debug["odd_mercado_base"] = debug["odd_mediana"]
+    debug["odd_melhor"] = offered_odd
+    debug["bookmaker_melhor"] = bookmaker_melhor
 
     if discard_reason is None:
         prob_final = _blend_conservative(original_prob, prob_no_vig, prob_hist)
@@ -706,6 +792,10 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
                 selected = row.to_dict()
                 selected["probabilidade_final"] = round(prob_final_pct, 2)
                 selected["odd_valor"] = round(fair_odd, 2)
+                selected["odd_mediana"] = round(market_odd_base, 3) if market_odd_base is not None else offered_odd
+                selected["odd_mercado_base"] = selected["odd_mediana"]
+                selected["odd_melhor"] = offered_odd
+                selected["bookmaker_melhor"] = bookmaker_melhor
                 selected["edge"] = round(edge_decimal * 100.0, 2)
                 note = _build_v1_1_note({**debug, "warnings": ",".join(warnings)})
                 selected["observacoes"] = "; ".join([str(selected.get("observacoes") or "").strip(), note]).strip("; ")
@@ -1022,6 +1112,10 @@ def executar_modelo_real(caminho_csv_longo, caminho_saida):
         "pick",
         "linha",
         "odd_ofertada",
+        "odd_mediana",
+        "odd_mercado_base",
+        "odd_melhor",
+        "bookmaker_melhor",
         "odd_valor",
         "probabilidade_final",
         "edge",

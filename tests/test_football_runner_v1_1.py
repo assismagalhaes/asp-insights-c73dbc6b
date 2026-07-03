@@ -164,6 +164,35 @@ RPI Third FC
         self.assertIn("NEUTRAL_FALLBACK_NO_HISTORY", selected["observacoes"])
         self.assertLess(float(selected["probabilidade_final"]), 70.0)
 
+    def test_total_uses_median_odd_for_market_probability_and_best_odd_for_ev(self):
+        row = output_row(
+            mercado="Total de Gols",
+            pick="Over 2.5 gols",
+            linha=2.5,
+            odd_ofertada=2.00,
+            probabilidade_final=65.0,
+        )
+        wide = wide_row(
+            odds_OverUnder_Full_Time_2_5_Over=2.00,
+            odds_OverUnder_Full_Time_2_5_Under=2.10,
+            odds_OverUnder_Full_Time_2_5_Over_MEDIANA=1.70,
+            odds_OverUnder_Full_Time_2_5_Under_MEDIANA=2.20,
+            odds_OverUnder_Full_Time_2_5_Over_BOOKMAKER_MELHOR="BestBook",
+        )
+
+        selected, discarded = runner._evaluate_row_v1_1(row, wide)
+        expected_prob, _ = runner.no_vig_probability_pair(1.70, 2.20)
+
+        self.assertIsNone(discarded)
+        self.assertIsNotNone(selected)
+        self.assertEqual(selected["odd_ofertada"], 2.00)
+        self.assertEqual(selected["odd_melhor"], 2.00)
+        self.assertEqual(selected["odd_mediana"], 1.70)
+        self.assertEqual(selected["odd_mercado_base"], 1.70)
+        self.assertEqual(selected["bookmaker_melhor"], "BestBook")
+        self.assertIn(f"prob_no_vig={expected_prob:.4f}", selected["observacoes"])
+        self.assertIn("odd_mercado_base=1.7", selected["observacoes"])
+
     def test_total_quarter_line_is_rejected(self):
         row = output_row(mercado="Total de Gols", pick="Over 2.25 gols", linha=2.25)
         selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
@@ -359,6 +388,38 @@ RPI Third FC
         self.assertEqual(wide.iloc[0]["country"], "China")
         self.assertEqual(wide.iloc[0]["league"], "Super League")
 
+    def test_adapter_preserves_median_and_best_odds_columns(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_path = Path(tmp) / "coleta.csv"
+            wide_path = Path(tmp) / "wide.csv"
+            pd.DataFrame([
+                {
+                    "data": "27.06.2026",
+                    "hora": "08:00",
+                    "esporte": "Football",
+                    "liga": "Brazil - Serie A",
+                    "country": "Brazil",
+                    "jogo": "Home FC vs Away FC",
+                    "mandante": "Home FC",
+                    "visitante": "Away FC",
+                    "mercado": "1X2",
+                    "pick": "Home FC",
+                    "linha": "",
+                    "odd": 2.00,
+                    "odd_melhor": 2.10,
+                    "odd_mediana": 1.95,
+                    "bookmaker": "book-a",
+                    "bookmaker_melhor": "book-best",
+                    "fonte": "OddsAgora",
+                },
+            ]).to_csv(csv_path, index=False)
+
+            wide = football_adapter.converter_csv_longo_para_wide(csv_path, wide_path)
+
+        self.assertEqual(float(wide.iloc[0]["odds_1X2_Full_Time_1"]), 2.10)
+        self.assertEqual(float(wide.iloc[0]["odds_1X2_Full_Time_1_MEDIANA"]), 1.95)
+        self.assertEqual(wide.iloc[0]["odds_1X2_Full_Time_1_BOOKMAKER_MELHOR"], "book-best")
+
     def test_output_keeps_app_columns_and_no_stake_is_added(self):
         selected_df, discarded_df = runner.aplicar_controles_football_v1_1(
             pd.DataFrame([output_row().to_dict()]),
@@ -377,6 +438,10 @@ RPI Third FC
             "pick",
             "linha",
             "odd_ofertada",
+            "odd_mediana",
+            "odd_mercado_base",
+            "odd_melhor",
+            "bookmaker_melhor",
             "odd_valor",
             "probabilidade_final",
             "edge",
