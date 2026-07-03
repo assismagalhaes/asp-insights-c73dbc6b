@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import gzip
+import hashlib
 import json
 import logging
 import re
 import time
 import urllib.request
 from datetime import date, datetime, timezone
+from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
@@ -18,6 +22,16 @@ except ModuleNotFoundError:
 
 
 DEFAULT_BASEBALL_MARKETS = ["home-away", "over-under", "ah"]
+ODDSAGORA_BET_TYPE_BY_MARKET = {
+    "home-away": 3,
+    "moneyline": 3,
+    "over-under": 2,
+    "ah": 5,
+    "asian-handicap": 5,
+    "handicap": 5,
+}
+ODDSAGORA_ENCRYPTION_KEY = "J*8sQ!p$7aD_fR2yW@gHn*3bVp#sAdLd_k"
+ODDSAGORA_ENCRYPTION_SALT = b"5b9a8f2c3e6d1a4b7c8e9d0f1a2b3c4d"
 BLOCKED_HTML_TERMS = ("cloudflare", "captcha", "access denied", "bloqueado", "verify you are human")
 MONTHS_PT = {
     "jan": 1,
@@ -138,17 +152,24 @@ def _log(logs: list[dict[str, Any]], event: str, **values: Any) -> None:
     logger.info("oddsagora.%s %s", event, json.dumps(values, ensure_ascii=False, default=str))
 
 
-def _fetch_html(url: str) -> tuple[str, str]:
+def _fetch_text(url: str, extra_headers: dict[str, str] | None = None) -> tuple[str, str]:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ASP Insights OddsAgora scraper",
+        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+    }
+    if extra_headers:
+        headers.update(extra_headers)
     request = urllib.request.Request(
         url,
-        headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ASP Insights OddsAgora scraper",
-            "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-        },
+        headers=headers,
     )
     with urllib.request.urlopen(request, timeout=30) as response:
-        html = response.read().decode("utf-8", errors="replace")
-        return html, response.geturl()
+        text = response.read().decode("utf-8", errors="replace")
+        return text, response.geturl()
+
+
+def _fetch_html(url: str) -> tuple[str, str]:
+    return _fetch_text(url)
 
 
 def _absolute_url(href: str) -> str:
@@ -230,6 +251,15 @@ def _numbers(text: str) -> list[float]:
         except ValueError:
             continue
     return values
+
+
+def _to_float(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(str(value).strip().replace(",", "."))
+    except ValueError:
+        return None
 
 
 def _first_odd(text: str) -> float | None:
@@ -476,6 +506,194 @@ def parse_market_html(html: str, market: str) -> list[dict[str, Any]]:
     return []
 
 
+def _decode_oddsagora_payload(value: str) -> dict[str, Any]:
+    try:
+        from cryptography.hazmat.primitives import padding
+        from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    except ModuleNotFoundError as exc:
+        raise RuntimeError("Dependencia cryptography ausente para decodificar payload OddsAgora.") from exc
+
+    decoded = base64.b64decode(value.strip()).decode("ascii")
+    cipher_b64, iv_hex = decoded.split(":", 1)
+    ciphertext = base64.b64decode(cipher_b64)
+    iv = bytes.fromhex(iv_hex)
+    key = hashlib.pbkdf2_hmac("sha256", ODDSAGORA_ENCRYPTION_KEY.encode(), ODDSAGORA_ENCRYPTION_SALT, 1000, dklen=32)
+    decryptor = Cipher(algorithms.AES(key), modes.CBC(iv)).decryptor()
+    padded = decryptor.update(ciphertext) + decryptor.finalize()
+    unpadder = padding.PKCS7(128).unpadder()
+    raw = unpadder.update(padded) + unpadder.finalize()
+    if raw[:2] == b"\x1f\x8b":
+        raw = gzip.decompress(raw)
+    return json.loads(raw.decode("utf-8"))
+
+
+def _fetch_oddsagora_json(url: str, referer: str | None = None) -> dict[str, Any]:
+    headers = {
+        "Accept": "application/json,text/plain,*/*",
+        "X-Requested-With": "XMLHttpRequest",
+    }
+    if referer:
+        headers["Referer"] = referer
+    text, _ = _fetch_text(url, headers)
+    stripped = text.strip()
+    if stripped.startswith("{"):
+        return json.loads(stripped)
+    return _decode_oddsagora_payload(stripped)
+
+
+def _fetch_provider_names(logs: list[dict[str, Any]], referer: str | None = None) -> dict[str, str]:
+    url = f"{ODDSAGORA_BASE_URL}/ajax-providers-bonus-data/0/?logged=false"
+    started = time.perf_counter()
+    try:
+        payload = _fetch_oddsagora_json(url, referer)
+    except Exception as exc:
+        _log(logs, "provider_names_fetch_failed", url=url, error=str(exc))
+        return {}
+    data = payload.get("d") if isinstance(payload, dict) else {}
+    names = data.get("providersNames") if isinstance(data, dict) else {}
+    if not isinstance(names, dict):
+        names = {}
+    _log(logs, "provider_names_loaded", url=url, count=len(names), tempo_ms=int((time.perf_counter() - started) * 1000))
+    return {str(key): str(value) for key, value in names.items()}
+
+
+def _extract_match_event_template(html: str, game_id: str) -> dict[str, Any] | None:
+    readable = unescape(html).replace("\\/", "/")
+    pattern = rf"/match-event/(\d+)-(\d+)-{re.escape(game_id)}-(\d+)-(\d+)-([A-Za-z0-9]+)\.dat\?_="
+    match = re.search(pattern, readable)
+    if not match:
+        return None
+    version_id, sport_id, default_bet_type, scope_id, xhashf = match.groups()
+    return {
+        "version_id": version_id,
+        "sport_id": sport_id,
+        "default_bet_type": default_bet_type,
+        "scope_id": scope_id,
+        "xhashf": xhashf,
+    }
+
+
+def _match_event_url(template: dict[str, Any], game_id: str, market: str) -> str | None:
+    bet_type = ODDSAGORA_BET_TYPE_BY_MARKET.get(str(market or "").casefold())
+    if not bet_type:
+        return None
+    version_id = template.get("version_id") or 9
+    sport_id = template.get("sport_id") or 6
+    scope_id = template.get("scope_id") or 1
+    xhashf = template.get("xhashf") or "yj650"
+    return f"{ODDSAGORA_BASE_URL}/match-event/{version_id}-{sport_id}-{game_id}-{bet_type}-{scope_id}-{xhashf}.dat?_={int(time.time())}"
+
+
+def _ordered_odds_values(value: Any) -> list[float]:
+    raw_values: list[Any]
+    if isinstance(value, dict):
+        raw_values = [value[key] for key in sorted(value, key=lambda item: int(item) if str(item).lstrip("-").isdigit() else str(item))]
+    elif isinstance(value, (list, tuple)):
+        raw_values = list(value)
+    else:
+        raw_values = []
+    odds: list[float] = []
+    for raw in raw_values:
+        odd = _first_odd(str(raw))
+        if odd is not None:
+            odds.append(odd)
+    return odds
+
+
+def _movement_value(movements: Any, provider_id: str, index: int) -> Any:
+    if not isinstance(movements, dict):
+        return None
+    value = movements.get(provider_id)
+    if isinstance(value, dict):
+        return value.get(str(index))
+    if isinstance(value, (list, tuple)) and index < len(value):
+        return value[index]
+    return None
+
+
+def _active_provider(active: Any, provider_id: str) -> bool:
+    if not isinstance(active, dict) or provider_id not in active:
+        return True
+    return bool(active.get(provider_id))
+
+
+def _payout_from_odds(odds: list[float]) -> float | None:
+    if len(odds) < 2 or any(odd <= 1 for odd in odds[:2]):
+        return None
+    return round((1 / sum(1 / odd for odd in odds[:2])) * 100, 1)
+
+
+def parse_match_event_payload(payload: dict[str, Any], market: str, provider_names: dict[str, str] | None = None) -> list[dict[str, Any]]:
+    data = payload.get("d") if isinstance(payload, dict) else {}
+    oddsdata = data.get("oddsdata") if isinstance(data, dict) else {}
+    back = oddsdata.get("back") if isinstance(oddsdata, dict) else {}
+    if not isinstance(back, dict):
+        return []
+
+    provider_names = provider_names or {}
+    parsed: list[dict[str, Any]] = []
+    market_key = str(market or "").casefold()
+    for item in back.values():
+        if not isinstance(item, dict):
+            continue
+        line = _to_float(item.get("handicapValue"))
+        odds_by_provider = item.get("odds")
+        if not isinstance(odds_by_provider, dict):
+            continue
+        for provider_id, raw_odds in odds_by_provider.items():
+            provider_key = str(provider_id)
+            if not _active_provider(item.get("act"), provider_key):
+                continue
+            odds = _ordered_odds_values(raw_odds)
+            if len(odds) < 2:
+                continue
+            base = {
+                "bookmaker": provider_names.get(provider_key) or f"provider_{provider_key}",
+                "bookmaker_id": provider_key,
+                "payout": _payout_from_odds(odds),
+                "source": "match_event",
+            }
+            if market_key in ("home-away", "moneyline"):
+                parsed.append(
+                    {
+                        **base,
+                        "home_odd": odds[0],
+                        "away_odd": odds[1],
+                        "movement": {
+                            "home": _movement_value(item.get("movement"), provider_key, 0),
+                            "away": _movement_value(item.get("movement"), provider_key, 1),
+                        },
+                    }
+                )
+            elif market_key == "over-under" and line is not None:
+                parsed.append(
+                    {
+                        **base,
+                        "line": line,
+                        "odd_over": odds[0],
+                        "odd_under": odds[1],
+                        "movement": {
+                            "over": _movement_value(item.get("movement"), provider_key, 0),
+                            "under": _movement_value(item.get("movement"), provider_key, 1),
+                        },
+                    }
+                )
+            elif market_key in ("ah", "asian-handicap", "handicap") and line is not None:
+                parsed.append(
+                    {
+                        **base,
+                        "line": line,
+                        "home_odd": odds[0],
+                        "away_odd": odds[1],
+                        "movement": {
+                            "home": _movement_value(item.get("movement"), provider_key, 0),
+                            "away": _movement_value(item.get("movement"), provider_key, 1),
+                        },
+                    }
+                )
+    return parsed
+
+
 def _save_debug_file(debug_path: Path | None, relative: str, content: str) -> None:
     if not debug_path:
         return
@@ -484,15 +702,65 @@ def _save_debug_file(debug_path: Path | None, relative: str, content: str) -> No
     path.write_text(content, encoding="utf-8")
 
 
-def _extract_market_pages(games: list[dict[str, Any]], logs: list[dict[str, Any]], debug_path: Path | None) -> int:
+def _extract_market_pages(
+    games: list[dict[str, Any]],
+    logs: list[dict[str, Any]],
+    debug_path: Path | None,
+    provider_names: dict[str, str] | None = None,
+) -> int:
     odds_count = 0
     for game in games:
         game_id = str(game.get("game_id") or "unknown")
         market_urls = game.get("market_urls") if isinstance(game.get("market_urls"), dict) else {}
+        match_url = str(game.get("match_url") or "")
+        match_html = ""
+        template: dict[str, Any] | None = None
+        if match_url:
+            started = time.perf_counter()
+            try:
+                match_html, final_match_url = _fetch_html(match_url)
+                _save_debug_file(debug_path, f"html/{game_id}_match.html", match_html)
+                template = _extract_match_event_template(match_html, game_id)
+                _log(
+                    logs,
+                    "match_page_opened",
+                    game_id=game_id,
+                    url=match_url,
+                    final_url=final_match_url,
+                    html_bytes=len(match_html.encode("utf-8")),
+                    endpoint_template=template,
+                    tempo_ms=int((time.perf_counter() - started) * 1000),
+                )
+            except Exception as exc:
+                _log(logs, "match_page_fetch_failed", game_id=game_id, url=match_url, error=str(exc))
         for market, url in market_urls.items():
             if not url:
                 continue
             started = time.perf_counter()
+            endpoint_url = _match_event_url(template, game_id, str(market)) if template else None
+            if endpoint_url:
+                try:
+                    payload = _fetch_oddsagora_json(endpoint_url, match_url)
+                    _save_debug_file(debug_path, f"json/{game_id}_{market}.json", json.dumps(payload, ensure_ascii=False, indent=2))
+                    rows = parse_match_event_payload(payload, str(market), provider_names)
+                    if rows:
+                        markets = game.setdefault("markets", {})
+                        existing = markets.get(market) if isinstance(markets.get(market), list) else []
+                        markets[market] = existing + rows
+                        odds_count += len(rows)
+                    _log(
+                        logs,
+                        "market_event_parse_finished",
+                        game_id=game_id,
+                        market=market,
+                        endpoint_url=endpoint_url,
+                        rows_count=len(rows),
+                        tempo_ms=int((time.perf_counter() - started) * 1000),
+                    )
+                    if rows:
+                        continue
+                except Exception as exc:
+                    _log(logs, "market_event_fetch_failed", game_id=game_id, market=market, endpoint_url=endpoint_url, error=str(exc))
             try:
                 html, final_url = _fetch_html(str(url))
             except Exception as exc:
@@ -589,7 +857,8 @@ def executar_scraper_oddsagora(
         unique_games.append(game)
     games = unique_games
 
-    page_odds_count = _extract_market_pages(games, logs, debug_path) if games else 0
+    provider_names = _fetch_provider_names(logs, games[0].get("match_url") if games else None) if games else {}
+    page_odds_count = _extract_market_pages(games, logs, debug_path, provider_names) if games else 0
     raw_odds_count = sum(len(rows) for game in games for rows in (game.get("markets") or {}).values() if isinstance(rows, list))
     status = "ok"
     mensagem = "Coleta OddsAgora concluida."
