@@ -578,6 +578,7 @@ async function pollVmJob(
     await updateCollectionStatus(coletaId, status, erro);
 
     if (status === "CONCLUIDA") return status;
+    if (status === "WARNING") return status;
     if (status === "ERRO") {
       throw new Error(erro || "Job da VM retornou ERRO.");
     }
