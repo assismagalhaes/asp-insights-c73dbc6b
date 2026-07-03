@@ -72,6 +72,14 @@ export interface OddsJogo extends NormalizedOdd {
   created_at: string;
 }
 
+export type FetchOddsRowsParams = {
+  date?: string | null;
+  esporte?: string | null;
+  liga?: string | null;
+  limit?: number;
+  includeCollectionFallback?: boolean;
+};
+
 export type VmPayloadRow = Record<string, unknown>;
 
 export const NORMALIZED_PREVIEW_STORAGE_KEY = "asp:last-normalized-odds-preview";
@@ -986,7 +994,7 @@ export async function fetchCollections(): Promise<ColetaOdds[]> {
   return (data ?? []) as ColetaOdds[];
 }
 
-export async function fetchOddsRows(params: { date?: string | null; limit?: number } = {}): Promise<OddsJogo[]> {
+export async function fetchOddsRows(params: FetchOddsRowsParams = {}): Promise<OddsJogo[]> {
   let query = coletaDb
     .from("odds_jogos")
     .select("*")
@@ -998,5 +1006,128 @@ export async function fetchOddsRows(params: { date?: string | null; limit?: numb
 
   const { data, error } = await query.limit(params.limit ?? 5000);
   if (error) throw error;
-  return (data ?? []) as OddsJogo[];
+  const rows = filterOddsRowsForParams((data ?? []) as OddsJogo[], params);
+
+  if (!params.includeCollectionFallback || rows.length || !params.date) {
+    return rows;
+  }
+
+  const fallbackRows = await fetchOddsRowsFromCollectionPayloads(params);
+  return filterOddsRowsForParams(fallbackRows, params);
+}
+
+async function fetchOddsRowsFromCollectionPayloads(params: FetchOddsRowsParams): Promise<OddsJogo[]> {
+  const { data, error } = await coletaDb
+    .from("coletas_odds")
+    .select("id,status,esporte,liga,data_inicio,data_fim,raw_json,normalized_json,created_at,updated_at")
+    .order("created_at", { ascending: false })
+    .limit(params.limit ? Math.min(params.limit, 50) : 25);
+  if (error) throw error;
+
+  const rows: OddsJogo[] = [];
+  for (const coleta of (data ?? []) as Array<Partial<ColetaOdds>>) {
+    if (!collectionCanContainRows(coleta, params)) continue;
+    const payloads = [coleta.raw_json, coleta.normalized_json];
+    for (const payload of payloads) {
+      const normalized = normalizeVmNormalizedPayload(payload, { esporte: coleta.esporte ?? params.esporte ?? null });
+      const payloadRows = filterOddsRowsForParams(
+        normalized.rows.map((row, index) => ({
+          ...row,
+          id: `${coleta.id ?? "coleta"}:${rows.length + index}`,
+          coleta_id: coleta.id ?? null,
+          created_at: coleta.created_at ?? coleta.updated_at ?? new Date(0).toISOString(),
+        })),
+        params,
+      );
+      if (payloadRows.length) {
+        rows.push(...payloadRows);
+        break;
+      }
+    }
+  }
+
+  return dedupeOddsJogoRows(rows).slice(0, params.limit ?? rows.length);
+}
+
+function collectionCanContainRows(coleta: Partial<ColetaOdds>, params: FetchOddsRowsParams): boolean {
+  const status = normalizeComparableText(coleta.status);
+  if (/erro|cancel/.test(status)) return false;
+  if (params.date && !dateWithinRange(params.date, coleta.data_inicio, coleta.data_fim)) return false;
+  if (params.esporte && coleta.esporte && !sportMatches(coleta.esporte, params.esporte)) return false;
+  if (params.liga && coleta.liga && !leagueMatches(coleta.liga, params.liga)) return false;
+  return true;
+}
+
+function filterOddsRowsForParams(rows: OddsJogo[], params: FetchOddsRowsParams): OddsJogo[] {
+  return rows.filter((row) => {
+    if (params.date && !sameDate(row.data, params.date)) return false;
+    if (params.esporte && !sportMatches(row.esporte, params.esporte)) return false;
+    if (params.liga && !leagueMatches(row.liga, params.liga)) return false;
+    return true;
+  });
+}
+
+function dedupeOddsJogoRows(rows: OddsJogo[]): OddsJogo[] {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const key = [
+      row.data ?? "",
+      row.hora ?? "",
+      row.esporte ?? "",
+      row.liga ?? "",
+      row.jogo,
+      row.mercado,
+      row.pick,
+      row.linha ?? "",
+      row.bookmaker ?? "",
+      row.odd,
+    ].join("|").toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function sameDate(value: unknown, expected: string): boolean {
+  return parseDate(value) === parseDate(expected);
+}
+
+function dateWithinRange(date: string, start: string | null | undefined, end: string | null | undefined): boolean {
+  const target = parseDate(date);
+  const startDate = parseDate(start);
+  const endDate = parseDate(end);
+  if (!target) return true;
+  if (startDate && target < startDate) return false;
+  if (endDate && target > endDate) return false;
+  return true;
+}
+
+function sportMatches(value: string | null | undefined, expected: string): boolean {
+  const current = normalizeComparableText(value);
+  const target = normalizeComparableText(expected);
+  if (!current) return true;
+  if (/baseball|beisebol|mlb/.test(target)) return /baseball|beisebol|mlb/.test(current);
+  if (/basketball|basquete|nba|wnba/.test(target)) return /basketball|basquete|nba|wnba/.test(current);
+  if (/hockey|hoquei|nhl/.test(target)) return /hockey|hoquei|nhl/.test(current);
+  if (/american football|futebol americano|nfl|ncaa/.test(target)) {
+    return /american football|futebol americano|nfl|ncaa/.test(current);
+  }
+  if (/football|futebol|soccer/.test(target)) return /football|futebol|soccer/.test(current);
+  return current === target || current.includes(target) || target.includes(current);
+}
+
+function leagueMatches(value: string | null | undefined, expected: string): boolean {
+  const current = normalizeComparableText(value);
+  const target = normalizeComparableText(expected);
+  if (!current) return true;
+  if (/mlb|major league baseball/.test(target)) return /mlb|major league baseball/.test(current);
+  return current === target || current.includes(target) || target.includes(current);
+}
+
+function normalizeComparableText(value: string | null | undefined): string {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 }
