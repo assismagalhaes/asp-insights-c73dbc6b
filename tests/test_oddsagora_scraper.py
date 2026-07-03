@@ -341,6 +341,20 @@ class OddsAgoraScraperParserTests(unittest.TestCase):
         self.assertEqual(fetch_html.call_count, 1)
         self.assertTrue(any(log["event"] == "market_html_fallback_skipped" for log in logs))
 
+    def test_extract_market_pages_uses_parallel_workers_for_multiple_games(self) -> None:
+        games = [{"game_id": f"game{index}", "market_urls": {}, "markets": {}} for index in range(3)]
+        logs: list[dict[str, object]] = []
+
+        with (
+            patch("scrapers.oddsagora_scraper._market_workers", return_value=3),
+            patch("scrapers.oddsagora_scraper._extract_single_game_market_pages", return_value=2) as extract_one,
+        ):
+            rows_count = _extract_market_pages(games, logs, None, {})
+
+        self.assertEqual(rows_count, 6)
+        self.assertEqual(extract_one.call_count, 3)
+        self.assertTrue(any(log["event"] == "market_pages_parallel_started" for log in logs))
+
     def test_parse_match_event_payload_supports_bts_and_double_chance(self) -> None:
         bts_payload = {
             "d": {"oddsdata": {"back": {"E-bts": {"odds": {"16": [1.8, 1.95]}, "act": {"16": True}}}}},

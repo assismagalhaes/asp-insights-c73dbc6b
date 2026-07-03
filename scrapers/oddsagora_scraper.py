@@ -10,6 +10,7 @@ import os
 import re
 import time
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timezone
 from html import unescape
 from html.parser import HTMLParser
@@ -288,14 +289,22 @@ def _log(logs: list[dict[str, Any]], event: str, **values: Any) -> None:
 
 def _http_timeout_seconds() -> float:
     try:
-        value = float(os.getenv("ODDSAGORA_HTTP_TIMEOUT_SECONDS", "12"))
+        value = float(os.getenv("ODDSAGORA_HTTP_TIMEOUT_SECONDS", "5"))
     except (TypeError, ValueError):
-        value = 12.0
+        value = 5.0
     return max(3.0, value)
 
 
 def _html_fallback_enabled() -> bool:
     return str(os.getenv("ODDSAGORA_HTML_FALLBACK", "")).strip().casefold() in {"1", "true", "yes", "on"}
+
+
+def _market_workers() -> int:
+    try:
+        value = int(os.getenv("ODDSAGORA_MARKET_WORKERS", "8"))
+    except (TypeError, ValueError):
+        value = 8
+    return max(1, min(16, value))
 
 
 def _fetch_text(url: str, extra_headers: dict[str, str] | None = None) -> tuple[str, str]:
@@ -1039,107 +1048,129 @@ def _save_debug_file(debug_path: Path | None, relative: str, content: str) -> No
     path.write_text(content, encoding="utf-8")
 
 
+def _extract_single_game_market_pages(
+    game: dict[str, Any],
+    logs: list[dict[str, Any]],
+    debug_path: Path | None,
+    provider_names: dict[str, str] | None = None,
+) -> int:
+    odds_count = 0
+    game_id = str(game.get("game_id") or "unknown")
+    market_urls = game.get("market_urls") if isinstance(game.get("market_urls"), dict) else {}
+    match_url = str(game.get("match_url") or "")
+    match_html = ""
+    template: dict[str, Any] | None = None
+    if match_url:
+        started = time.perf_counter()
+        try:
+            match_html, final_match_url = _fetch_html(match_url)
+            _save_debug_file(debug_path, f"html/{game_id}_match.html", match_html)
+            template = _extract_match_event_template(match_html, game_id)
+            _log(
+                logs,
+                "match_page_opened",
+                game_id=game_id,
+                url=match_url,
+                final_url=final_match_url,
+                html_bytes=len(match_html.encode("utf-8")),
+                endpoint_template=template,
+                tempo_ms=int((time.perf_counter() - started) * 1000),
+            )
+        except Exception as exc:
+            _log(logs, "match_page_fetch_failed", game_id=game_id, url=match_url, error=str(exc))
+    for market, url in market_urls.items():
+        if not url:
+            continue
+        started = time.perf_counter()
+        endpoint_url = _match_event_url(template, game_id, str(market), match_url) if template else None
+        attempted_endpoint = False
+        endpoint_failed = False
+        if endpoint_url:
+            attempted_endpoint = True
+            try:
+                payload = _fetch_oddsagora_json(endpoint_url, match_url)
+                _save_debug_file(debug_path, f"json/{game_id}_{market}.json", json.dumps(payload, ensure_ascii=False, indent=2))
+                rows = parse_match_event_payload(payload, str(market), provider_names)
+                if rows:
+                    markets = game.setdefault("markets", {})
+                    existing = markets.get(market) if isinstance(markets.get(market), list) else []
+                    markets[market] = existing + rows
+                    odds_count += len(rows)
+                _log(
+                    logs,
+                    "market_event_parse_finished",
+                    game_id=game_id,
+                    market=market,
+                    endpoint_url=endpoint_url,
+                    rows_count=len(rows),
+                    tempo_ms=int((time.perf_counter() - started) * 1000),
+                )
+                if rows:
+                    continue
+            except Exception as exc:
+                endpoint_failed = True
+                _log(logs, "market_event_fetch_failed", game_id=game_id, market=market, endpoint_url=endpoint_url, error=str(exc))
+        if attempted_endpoint and not _html_fallback_enabled():
+            _log(
+                logs,
+                "market_html_fallback_skipped",
+                game_id=game_id,
+                market=market,
+                endpoint_url=endpoint_url,
+                reason="match_event_failed" if endpoint_failed else "empty_match_event",
+                tempo_ms=int((time.perf_counter() - started) * 1000),
+            )
+            continue
+        try:
+            html, final_url = _fetch_html(str(url))
+        except Exception as exc:
+            _log(logs, "market_fetch_failed", game_id=game_id, market=market, url=url, error=str(exc))
+            continue
+        _save_debug_file(debug_path, f"html/{game_id}_{market}.html", html)
+        blocked = _html_blocked_reason(html)
+        if blocked:
+            _log(logs, "market_blocked_html", game_id=game_id, market=market, blocked_reason=blocked, final_url=final_url)
+            continue
+        rows = parse_market_html(html, str(market))
+        if rows:
+            markets = game.setdefault("markets", {})
+            existing = markets.get(market) if isinstance(markets.get(market), list) else []
+            markets[market] = existing + rows
+            odds_count += len(rows)
+        _log(
+            logs,
+            "market_parse_finished",
+            game_id=game_id,
+            market=market,
+            url=url,
+            final_url=final_url,
+            html_bytes=len(html.encode("utf-8")),
+            rows_count=len(rows),
+            tempo_ms=int((time.perf_counter() - started) * 1000),
+        )
+    return odds_count
+
+
 def _extract_market_pages(
     games: list[dict[str, Any]],
     logs: list[dict[str, Any]],
     debug_path: Path | None,
     provider_names: dict[str, str] | None = None,
 ) -> int:
+    workers = _market_workers()
+    if workers <= 1 or len(games) <= 1:
+        return sum(_extract_single_game_market_pages(game, logs, debug_path, provider_names) for game in games)
+
     odds_count = 0
-    for game in games:
-        game_id = str(game.get("game_id") or "unknown")
-        market_urls = game.get("market_urls") if isinstance(game.get("market_urls"), dict) else {}
-        match_url = str(game.get("match_url") or "")
-        match_html = ""
-        template: dict[str, Any] | None = None
-        if match_url:
-            started = time.perf_counter()
+    _log(logs, "market_pages_parallel_started", games_count=len(games), workers=workers)
+    with ThreadPoolExecutor(max_workers=min(workers, len(games))) as executor:
+        futures = [executor.submit(_extract_single_game_market_pages, game, logs, debug_path, provider_names) for game in games]
+        for future in as_completed(futures):
             try:
-                match_html, final_match_url = _fetch_html(match_url)
-                _save_debug_file(debug_path, f"html/{game_id}_match.html", match_html)
-                template = _extract_match_event_template(match_html, game_id)
-                _log(
-                    logs,
-                    "match_page_opened",
-                    game_id=game_id,
-                    url=match_url,
-                    final_url=final_match_url,
-                    html_bytes=len(match_html.encode("utf-8")),
-                    endpoint_template=template,
-                    tempo_ms=int((time.perf_counter() - started) * 1000),
-                )
+                odds_count += int(future.result() or 0)
             except Exception as exc:
-                _log(logs, "match_page_fetch_failed", game_id=game_id, url=match_url, error=str(exc))
-        for market, url in market_urls.items():
-            if not url:
-                continue
-            started = time.perf_counter()
-            endpoint_url = _match_event_url(template, game_id, str(market), match_url) if template else None
-            attempted_endpoint = False
-            endpoint_failed = False
-            if endpoint_url:
-                attempted_endpoint = True
-                try:
-                    payload = _fetch_oddsagora_json(endpoint_url, match_url)
-                    _save_debug_file(debug_path, f"json/{game_id}_{market}.json", json.dumps(payload, ensure_ascii=False, indent=2))
-                    rows = parse_match_event_payload(payload, str(market), provider_names)
-                    if rows:
-                        markets = game.setdefault("markets", {})
-                        existing = markets.get(market) if isinstance(markets.get(market), list) else []
-                        markets[market] = existing + rows
-                        odds_count += len(rows)
-                    _log(
-                        logs,
-                        "market_event_parse_finished",
-                        game_id=game_id,
-                        market=market,
-                        endpoint_url=endpoint_url,
-                        rows_count=len(rows),
-                        tempo_ms=int((time.perf_counter() - started) * 1000),
-                    )
-                    if rows:
-                        continue
-                except Exception as exc:
-                    endpoint_failed = True
-                    _log(logs, "market_event_fetch_failed", game_id=game_id, market=market, endpoint_url=endpoint_url, error=str(exc))
-            if attempted_endpoint and not _html_fallback_enabled():
-                _log(
-                    logs,
-                    "market_html_fallback_skipped",
-                    game_id=game_id,
-                    market=market,
-                    endpoint_url=endpoint_url,
-                    reason="match_event_failed" if endpoint_failed else "empty_match_event",
-                    tempo_ms=int((time.perf_counter() - started) * 1000),
-                )
-                continue
-            try:
-                html, final_url = _fetch_html(str(url))
-            except Exception as exc:
-                _log(logs, "market_fetch_failed", game_id=game_id, market=market, url=url, error=str(exc))
-                continue
-            _save_debug_file(debug_path, f"html/{game_id}_{market}.html", html)
-            blocked = _html_blocked_reason(html)
-            if blocked:
-                _log(logs, "market_blocked_html", game_id=game_id, market=market, blocked_reason=blocked, final_url=final_url)
-                continue
-            rows = parse_market_html(html, str(market))
-            if rows:
-                markets = game.setdefault("markets", {})
-                existing = markets.get(market) if isinstance(markets.get(market), list) else []
-                markets[market] = existing + rows
-                odds_count += len(rows)
-            _log(
-                logs,
-                "market_parse_finished",
-                game_id=game_id,
-                market=market,
-                url=url,
-                final_url=final_url,
-                html_bytes=len(html.encode("utf-8")),
-                rows_count=len(rows),
-                tempo_ms=int((time.perf_counter() - started) * 1000),
-            )
+                _log(logs, "market_pages_worker_failed", error=str(exc))
+    _log(logs, "market_pages_parallel_finished", games_count=len(games), workers=workers, rows_count=odds_count)
     return odds_count
 
 
@@ -1175,6 +1206,7 @@ def executar_scraper_oddsagora(
         mercados_efetivos=effective_markets,
         http_timeout_seconds=_http_timeout_seconds(),
         html_fallback_enabled=_html_fallback_enabled(),
+        market_workers=_market_workers(),
     )
     blocked_reason = None
     for league_url in league_urls:
