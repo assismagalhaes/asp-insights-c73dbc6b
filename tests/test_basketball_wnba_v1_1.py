@@ -296,6 +296,40 @@ class BasketballWnbaV11Tests(unittest.TestCase):
         self.assertEqual(pairs[-7.5], (1.98, 7.5, 1.80))
         self.assertEqual(pairs[7.5], (1.29, -7.5, 3.25))
 
+    def test_wnba_handicap_market_pair_uses_away_signed_line_and_median_odds(self) -> None:
+        row = pd.Series({
+            "odds_Asian_handicap_FT_including_OT_Linha1_HANDICAP": -4.5,
+            "odds_Asian_handicap_FT_including_OT_Linha1_1": 1.98,
+            "odds_Asian_handicap_FT_including_OT_Linha1_1_MEDIANA": 1.88,
+            "odds_Asian_handicap_FT_including_OT_Linha1_1_BOOKMAKER_MELHOR": "Book Home",
+            "odds_Asian_handicap_FT_including_OT_Linha1_Opp_HANDICAP": 4.5,
+            "odds_Asian_handicap_FT_including_OT_Linha1_Opp_Odd": 1.80,
+            "odds_Asian_handicap_FT_including_OT_Linha1_Opp_Odd_MEDIANA": 1.74,
+            "odds_Asian_handicap_FT_including_OT_Linha1_Opp_Odd_BOOKMAKER_MELHOR": "Book Away",
+        })
+
+        away_pair = runner.wnba_handicap_market_pair(row, "away", 4.5)
+        home_pair = runner.wnba_handicap_market_pair(row, "home", -4.5)
+
+        self.assertEqual(away_pair, (1.74, 1.88, "Book Away"))
+        self.assertEqual(home_pair, (1.88, 1.74, "Book Home"))
+        self.assertIsNone(runner.wnba_handicap_market_pair(row, "away", -4.5))
+
+    def test_wnba_simulation_respects_away_handicap_sign(self) -> None:
+        module = FakeWnbaModule([
+            {"pontos_time": 82, "pontos_adversario": 78},
+            {"pontos_time": 80, "pontos_adversario": 79},
+            {"pontos_time": 77, "pontos_adversario": 81},
+            {"pontos_time": 84, "pontos_adversario": 76},
+        ])
+        row = pd.Series({"date": "2026-07-03", "time": "20:00"})
+        res = {"ou": {160.5: {"odd_off_over": 1.91, "odd_off_under": 1.91}}}
+
+        plus = runner.wnba_simulate_matchup(module, row, res, "TOR", "PHO", handicap_line=4.5, handicap_side="away", lines=[160.5])
+        minus = runner.wnba_simulate_matchup(module, row, res, "TOR", "PHO", handicap_line=-4.5, handicap_side="away", lines=[160.5])
+
+        self.assertGreater(plus["handicap_cover_probability"], minus["handicap_cover_probability"])
+
     def test_long_csv_to_wide_preserves_median_best_and_bookmaker_columns(self) -> None:
         rows = [
             {
