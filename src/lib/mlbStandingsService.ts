@@ -15,13 +15,12 @@ function table(db: LooseSupabase, name: string) {
 
 export async function fetchMlbOddsRowsForDate(db: LooseSupabase, snapshotDate: string): Promise<MlbOddsRow[]> {
   const { data, error } = await table(db, "odds_jogos")
-    .select("data,hora,mandante,visitante,mercado,pick,linha,odd,bookmaker,fonte,esporte,liga")
+    .select("data,hora,mandante,visitante,mercado,pick,linha,odd,odd_media,odd_mediana,odd_minima,odd_maxima,odd_melhor,bookmaker_melhor,casas_count,odds_disponiveis,probabilidade_implicita_media,probabilidade_implicita_mediana,margem_mercado_media,margem_mercado_mediana,bookmaker,fonte,esporte,liga")
     .eq("data", snapshotDate)
-    .eq("esporte", "Baseball")
-    .limit(5000);
+    .limit(20000);
   if (error) throw error;
   return (data ?? [])
-    .filter((row: Record<string, unknown>) => !row.liga || /mlb/i.test(String(row.liga)))
+    .filter((row: Record<string, unknown>) => isBaseballSport(nullableText(row.esporte)) && isMlbLeague(nullableText(row.liga)))
     .map((row: Record<string, unknown>) => ({
       data: nullableText(row.data),
       hora: nullableText(row.hora),
@@ -31,6 +30,18 @@ export async function fetchMlbOddsRowsForDate(db: LooseSupabase, snapshotDate: s
       pick: nullableText(row.pick) ?? "",
       linha: nullableText(row.linha),
       odd: Number(row.odd ?? 0),
+      odd_media: nullableNumber(row.odd_media),
+      odd_mediana: nullableNumber(row.odd_mediana),
+      odd_minima: nullableNumber(row.odd_minima),
+      odd_maxima: nullableNumber(row.odd_maxima),
+      odd_melhor: nullableNumber(row.odd_melhor),
+      bookmaker_melhor: nullableText(row.bookmaker_melhor),
+      casas_count: nullableNumber(row.casas_count),
+      odds_disponiveis: nullableNumber(row.odds_disponiveis),
+      probabilidade_implicita_media: nullableNumber(row.probabilidade_implicita_media),
+      probabilidade_implicita_mediana: nullableNumber(row.probabilidade_implicita_mediana),
+      margem_mercado_media: nullableNumber(row.margem_mercado_media),
+      margem_mercado_mediana: nullableNumber(row.margem_mercado_mediana),
       bookmaker: nullableText(row.bookmaker),
       fonte: nullableText(row.fonte),
     }));
@@ -126,4 +137,28 @@ function stripDbDates(row: MlbTeamStanding & { updated_at?: string; created_at?:
 function nullableText(value: unknown): string | null {
   if (value == null || value === "") return null;
   return String(value);
+}
+
+function nullableNumber(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeText(value: string | null | undefined) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function isBaseballSport(value: string | null | undefined) {
+  const normalized = normalizeText(value);
+  return /baseball|beisebol|mlb/.test(normalized);
+}
+
+function isMlbLeague(value: string | null | undefined) {
+  const normalized = normalizeText(value);
+  return !normalized || /mlb|major league baseball/.test(normalized);
 }
