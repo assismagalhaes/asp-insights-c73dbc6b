@@ -147,7 +147,14 @@ function AspScreenerPage() {
   });
   const { data: oddsRows = [] } = useQuery({
     queryKey: ["odds-jogos-mlb-screener", snapshotDate],
-    queryFn: () => fetchOddsRows({ date: snapshotDate, limit: 20000 }),
+    queryFn: () =>
+      fetchOddsRows({
+        date: snapshotDate,
+        esporte: "Baseball",
+        liga: "MLB",
+        limit: 20000,
+        includeCollectionFallback: true,
+      }),
   });
 
   useEffect(() => {
@@ -191,7 +198,7 @@ function AspScreenerPage() {
   const mlbDbOddsRows = useMemo(
     () =>
       oddsRows.filter((row) => {
-        if (row.data !== snapshotDate) return false;
+        if (!isSameDate(row.data, snapshotDate)) return false;
         if (!isBaseballSport(row.esporte)) return false;
         return isMlbLeague(row.liga);
       }),
@@ -200,7 +207,7 @@ function AspScreenerPage() {
   const mlbPreviewOddsRows = useMemo(
     () =>
       previewOddsRows.filter((row) => {
-        if (row.data !== snapshotDate) return false;
+        if (!isSameDate(row.data, snapshotDate)) return false;
         if (!isBaseballSport(row.esporte)) return false;
         return isMlbLeague(row.liga);
       }),
@@ -210,11 +217,14 @@ function AspScreenerPage() {
     () => (mlbDbOddsRows.length ? mlbDbOddsRows : mlbPreviewOddsRows),
     [mlbDbOddsRows, mlbPreviewOddsRows],
   );
-  const mlbOddsSourceLabel = mlbDbOddsRows.length
-    ? "Banco odds_jogos"
-    : mlbPreviewOddsRows.length
-      ? "Preview normalizado"
-      : "-";
+  const usingSavedCollectionRows = mlbDbOddsRows.some((row) => row.raw_ref?.screener_source === "coletas_odds_payload");
+  const mlbOddsSourceLabel = usingSavedCollectionRows
+    ? "Coleta salva"
+    : mlbDbOddsRows.length
+      ? "Banco odds_jogos"
+      : mlbPreviewOddsRows.length
+        ? "Preview normalizado"
+        : "-";
   const alerts = useMemo(() => {
     if (!snapshot) return [];
     return [...snapshot.validation.errors, ...snapshot.validation.warnings];
@@ -3276,6 +3286,19 @@ function isBaseballSport(value: string | null | undefined) {
 function isMlbLeague(value: string | null | undefined) {
   const normalized = normalizeText(value);
   return !normalized || /mlb|major league baseball/.test(normalized);
+}
+
+function normalizeDateValue(value: string | null | undefined) {
+  const text = String(value ?? "").trim();
+  const br = text.match(/^(\d{2})[/.](\d{2})[/.](\d{4})$/);
+  if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  return text;
+}
+
+function isSameDate(value: string | null | undefined, expected: string) {
+  return normalizeDateValue(value) === normalizeDateValue(expected);
 }
 
 function todayIso() {
