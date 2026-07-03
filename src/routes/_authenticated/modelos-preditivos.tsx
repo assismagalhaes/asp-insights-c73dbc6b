@@ -44,6 +44,10 @@ interface ModeloPrognostico {
   linha?: string | null;
   odd?: number | null;
   odd_ofertada: number;
+  odd_mediana?: number | null;
+  odd_mercado_base?: number | null;
+  odd_melhor?: number | null;
+  bookmaker_melhor?: string | null;
   odd_valor: number;
   probabilidade?: number | null;
   probabilidade_final: number;
@@ -191,7 +195,15 @@ function ModelosPreditivosPage() {
     try {
       const payload = prognosticos.map((p) => stripUnsupportedPrognosticoColumns(toPrognosticoInsert(p, resultado)));
       const { error } = await supabase.from("prognosticos").insert(payload as never);
-      if (error) throw error;
+      if (error) {
+        if (isMissingOddsContextColumnError(error)) {
+          const fallbackPayload = payload.map(stripOddsContextColumns);
+          const { error: fallbackError } = await supabase.from("prognosticos").insert(fallbackPayload as never);
+          if (fallbackError) throw fallbackError;
+        } else {
+          throw error;
+        }
+      }
       await qc.invalidateQueries({ queryKey: ["prognosticos"] });
       toast.success(`${payload.length} prognóstico(s) enviados para Prognósticos`);
     } catch (e) {
@@ -495,6 +507,10 @@ function mapModeloPrognostico(row: Record<string, unknown>): ModeloPrognostico {
     linha: row.linha == null || row.linha === "" ?null : String(row.linha),
     odd: toNumber(row.odd),
     odd_ofertada: toNumber(row.odd_ofertada) ?? toNumber(row.odd) ?? 0,
+    odd_mediana: toNumber(row.odd_mediana ?? row.odd_median),
+    odd_mercado_base: toNumber(row.odd_mercado_base ?? row.odd_mediana ?? row.odd_median),
+    odd_melhor: toNumber(row.odd_melhor ?? row.odd_best),
+    bookmaker_melhor: row.bookmaker_melhor || row.bookmaker_best ? String(row.bookmaker_melhor ?? row.bookmaker_best) : null,
     odd_valor: toNumber(row.odd_valor) ?? 0,
     probabilidade: toNumber(row.probabilidade),
     probabilidade_final: toNumber(row.probabilidade_final) ?? toNumber(row.probabilidade) ?? 0,
@@ -539,6 +555,10 @@ function toPrognosticoInsert(p: ModeloPrognostico, resultado: ModeloResultado | 
     pick: p.pick,
     linha: p.linha,
     odd_ofertada: p.odd_ofertada,
+    odd_mediana: p.odd_mediana ?? p.odd_mercado_base ?? null,
+    odd_mercado_base: p.odd_mercado_base ?? p.odd_mediana ?? null,
+    odd_melhor: p.odd_melhor ?? p.odd_ofertada ?? null,
+    bookmaker_melhor: p.bookmaker_melhor ?? null,
     odd_valor: p.odd_valor,
     probabilidade_final: p.probabilidade_final,
     edge: p.edge,
@@ -561,6 +581,22 @@ function stripUnsupportedPrognosticoColumns(row: Record<string, unknown>) {
     ...safeRow
   } = row;
   return safeRow;
+}
+
+function stripOddsContextColumns(row: Record<string, unknown>) {
+  const {
+    odd_mediana: _oddMediana,
+    odd_mercado_base: _oddMercadoBase,
+    odd_melhor: _oddMelhor,
+    bookmaker_melhor: _bookmakerMelhor,
+    ...safeRow
+  } = row;
+  return safeRow;
+}
+
+function isMissingOddsContextColumnError(error: unknown) {
+  const message = String((error as { message?: unknown })?.message ?? error ?? "");
+  return /odd_mediana|odd_mercado_base|odd_melhor|bookmaker_melhor/i.test(message);
 }
 
 function inferTeams(p: ModeloPrognostico) {

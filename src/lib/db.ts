@@ -388,23 +388,74 @@ export interface Configuracao {
 }
 
 const num = (v: unknown) => (v == null ?0 : Number(v));
-const numOrNull = (v: unknown) => (v == null ?null : Number(v));
-const mapPrognostico = (r: Record<string, unknown>): Prognostico => ({
-  ...(r as unknown as Prognostico),
-  mercado: normalizeMercadoPadrao(String(r.mercado ?? ""), String(r.esporte ?? "")),
-  odd_ofertada: num(r.odd_ofertada),
-  odd_ajustada: numOrNull(r.odd_ajustada),
-  odd_mediana: numOrNull(r.odd_mediana),
-  odd_mercado_base: numOrNull(r.odd_mercado_base),
-  odd_melhor: numOrNull(r.odd_melhor),
-  bookmaker_melhor: r.bookmaker_melhor == null ? null : String(r.bookmaker_melhor),
-  odd_valor: num(r.odd_valor),
-  probabilidade_final: num(r.probabilidade_final),
-  edge: num(r.edge),
-  edge_ajustado: numOrNull(r.edge_ajustado),
-  stake: num(r.stake),
-  lucro_prejuizo: r.lucro_prejuizo == null ?null : Number(r.lucro_prejuizo),
-});
+const numOrNull = (v: unknown) => {
+  if (v == null || v === "") return null;
+  const n = Number(String(v).replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+};
+const textOrNull = (v: unknown) => {
+  const text = v == null ? "" : String(v).trim();
+  return text || null;
+};
+
+function parseNumberFromText(text: string, patterns: RegExp[]): number | null {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match?.[1]) continue;
+    const n = Number(match[1].replace(",", "."));
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+function extractOddsContext(row: Record<string, unknown>) {
+  const text = [
+    row.dados_tecnicos,
+    row.contexto_modelo,
+    row.observacoes,
+  ].map((value) => String(value ?? "")).join("\n");
+
+  const marketBase = parseNumberFromText(text, [
+    /\bodd_mercado_base\s*=\s*([0-9]+(?:[.,][0-9]+)?)/i,
+    /\bodd\s+mercado\s+base\s+([0-9]+(?:[.,][0-9]+)?)/i,
+  ]);
+  const median = parseNumberFromText(text, [
+    /\bodd_mediana\s*=\s*([0-9]+(?:[.,][0-9]+)?)/i,
+    /\bodd\s+mediana\s+([0-9]+(?:[.,][0-9]+)?)/i,
+  ]);
+  const best = parseNumberFromText(text, [
+    /\bodd_melhor\s*=\s*([0-9]+(?:[.,][0-9]+)?)/i,
+    /\bodd\s+melhor\s+([0-9]+(?:[.,][0-9]+)?)/i,
+  ]);
+  const bookmaker =
+    text.match(/\bbookmaker_melhor\s*=\s*([^;,\n]+)/i)?.[1]?.trim() ||
+    text.match(/\bbookmaker\s+melhor\s+([^;,\n]+)/i)?.[1]?.trim() ||
+    null;
+
+  return { marketBase, median, best, bookmaker };
+}
+
+const mapPrognostico = (r: Record<string, unknown>): Prognostico => {
+  const oddsContext = extractOddsContext(r);
+  const oddMercadoBase = numOrNull(r.odd_mercado_base) ?? oddsContext.marketBase ?? oddsContext.median;
+  const oddMediana = numOrNull(r.odd_mediana) ?? oddsContext.median ?? oddMercadoBase;
+  return {
+    ...(r as unknown as Prognostico),
+    mercado: normalizeMercadoPadrao(String(r.mercado ?? ""), String(r.esporte ?? "")),
+    odd_ofertada: num(r.odd_ofertada),
+    odd_ajustada: numOrNull(r.odd_ajustada),
+    odd_mediana: oddMediana,
+    odd_mercado_base: oddMercadoBase,
+    odd_melhor: numOrNull(r.odd_melhor) ?? oddsContext.best,
+    bookmaker_melhor: textOrNull(r.bookmaker_melhor) ?? oddsContext.bookmaker,
+    odd_valor: num(r.odd_valor),
+    probabilidade_final: num(r.probabilidade_final),
+    edge: num(r.edge),
+    edge_ajustado: numOrNull(r.edge_ajustado),
+    stake: num(r.stake),
+    lucro_prejuizo: r.lucro_prejuizo == null ?null : Number(r.lucro_prejuizo),
+  };
+};
 
 // ===== Prognósticos =====
 export function usePrognosticos() {
