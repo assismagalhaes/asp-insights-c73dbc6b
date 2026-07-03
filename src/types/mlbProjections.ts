@@ -68,8 +68,12 @@ export interface MlbMoneylineScreenerRow {
   away_team_key: string | null;
   home_pick: string | null;
   home_odd: number | null;
+  home_odd_mediana: number | null;
+  home_bookmaker_melhor: string | null;
   away_pick: string | null;
   away_odd: number | null;
+  away_odd_mediana: number | null;
+  away_bookmaker_melhor: string | null;
   home_market_implied_prob_raw: number | null;
   away_market_implied_prob_raw: number | null;
   home_market_implied_prob_no_vig: number | null;
@@ -86,6 +90,8 @@ export interface MlbMoneylineScreenerRow {
   away_ev: number | null;
   recommended_side: string | null;
   recommended_odd: number | null;
+  recommended_odd_mediana: number | null;
+  recommended_bookmaker_melhor: string | null;
   recommended_model_prob: number | null;
   recommended_fair_odd: number | null;
   recommended_ev: number | null;
@@ -214,7 +220,11 @@ export interface MlbTotalsScreenerRow {
   main_total_line: number | null;
   distance_from_main_line: number | null;
   over_odd: number | null;
+  over_odd_mediana: number | null;
+  over_bookmaker_melhor: string | null;
   under_odd: number | null;
+  under_odd_mediana: number | null;
+  under_bookmaker_melhor: string | null;
   over_market_implied_prob_raw: number | null;
   under_market_implied_prob_raw: number | null;
   over_market_implied_prob_no_vig: number | null;
@@ -235,6 +245,8 @@ export interface MlbTotalsScreenerRow {
   under_ev: number | null;
   recommended_side: "Over" | "Under" | null;
   recommended_odd: number | null;
+  recommended_odd_mediana: number | null;
+  recommended_bookmaker_melhor: string | null;
   recommended_model_prob: number | null;
   recommended_fair_odd: number | null;
   recommended_ev: number | null;
@@ -315,9 +327,13 @@ export interface MlbHandicapScreenerRow {
   home_pick: string | null;
   home_handicap_line: number | null;
   home_handicap_odd: number | null;
+  home_handicap_odd_mediana: number | null;
+  home_bookmaker_melhor: string | null;
   away_pick: string | null;
   away_handicap_line: number | null;
   away_handicap_odd: number | null;
+  away_handicap_odd_mediana: number | null;
+  away_bookmaker_melhor: string | null;
   home_expected_runs: number | null;
   away_expected_runs: number | null;
   projected_total_runs: number | null;
@@ -343,6 +359,8 @@ export interface MlbHandicapScreenerRow {
   recommended_pick: string | null;
   recommended_line: number | null;
   recommended_odd: number | null;
+  recommended_odd_mediana: number | null;
+  recommended_bookmaker_melhor: string | null;
   recommended_model_prob: number | null;
   recommended_push_prob: number | null;
   recommended_fair_odd: number | null;
@@ -414,6 +432,9 @@ export interface MlbUnifiedOpportunity {
   is_main_line: boolean;
   distance_from_main_line: number | null;
   offered_odd: number | null;
+  median_odd: number | null;
+  market_base_odd: number | null;
+  bookmaker_melhor: string | null;
   market_prob_no_vig: number | null;
   model_prob: number | null;
   probability_edge: number | null;

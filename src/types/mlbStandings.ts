@@ -101,6 +101,18 @@ export interface MlbMarketOdd {
   pick: string | null;
   line: string | null;
   odd: number | null;
+  odd_media: number | null;
+  odd_mediana: number | null;
+  odd_minima: number | null;
+  odd_maxima: number | null;
+  odd_melhor: number | null;
+  bookmaker_melhor: string | null;
+  casas_count: number | null;
+  odds_disponiveis: number | null;
+  probabilidade_implicita_media: number | null;
+  probabilidade_implicita_mediana: number | null;
+  margem_mercado_media: number | null;
+  margem_mercado_mediana: number | null;
   bookmaker: string | null;
   source: string | null;
 }
@@ -122,5 +134,26 @@ export interface EnrichedMlbGame {
 
 export type MlbOddsRow = Pick<
   NormalizedOdd,
-  "data" | "hora" | "mandante" | "visitante" | "mercado" | "pick" | "linha" | "odd" | "bookmaker" | "fonte"
+  | "data"
+  | "hora"
+  | "mandante"
+  | "visitante"
+  | "mercado"
+  | "pick"
+  | "linha"
+  | "odd"
+  | "odd_media"
+  | "odd_mediana"
+  | "odd_minima"
+  | "odd_maxima"
+  | "odd_melhor"
+  | "bookmaker_melhor"
+  | "casas_count"
+  | "odds_disponiveis"
+  | "probabilidade_implicita_media"
+  | "probabilidade_implicita_mediana"
+  | "margem_mercado_media"
+  | "margem_mercado_mediana"
+  | "bookmaker"
+  | "fonte"
 >;

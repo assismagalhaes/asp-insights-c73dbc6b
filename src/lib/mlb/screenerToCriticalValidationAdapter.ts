@@ -24,6 +24,9 @@ export interface MlbCriticalValidationDraftInput {
   pick: string | null;
   line: number | null;
   odd: number | null;
+  median_odd: number | null;
+  market_base_odd: number | null;
+  bookmaker_melhor: string | null;
   adjusted_odd: number | null;
   fair_odd: number | null;
   model_probability: number | null;
@@ -216,6 +219,8 @@ function buildImportedContextSummary(payload: MlbPreparedCriticalValidationPaylo
   out.push(`Pick: ${payload.opportunity.pick ?? "-"}`);
   out.push(`Linha: ${payload.opportunity.line ?? "-"}`);
   out.push(`Odd ofertada: ${payload.opportunity.odd ?? "-"}`);
+  out.push(`Odd mediana/base mercado: ${payload.opportunity.market_base_odd ?? payload.opportunity.median_odd ?? "-"}`);
+  out.push(`Bookmaker melhor: ${payload.opportunity.bookmaker_melhor ?? "-"}`);
   out.push("");
 
   out.push("[PROJEÇÃO DO SCREENER]");
@@ -326,6 +331,9 @@ export function mapMlbOpportunityToCriticalValidationInput(
     pick: opp.pick,
     line: opp.line,
     odd: opp.odd,
+    median_odd: opp.median_odd,
+    market_base_odd: opp.market_base_odd,
+    bookmaker_melhor: opp.bookmaker_melhor,
     adjusted_odd: null,
     fair_odd: opp.fair_odd,
     model_probability: opp.model_probability,

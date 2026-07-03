@@ -153,7 +153,7 @@ function buildAuditInsertPayload(handoff: MlbValidatorHandoffPayload, status: Ml
     pick: prefill.pick,
     line: prefill.line == null ? null : String(prefill.line),
     odd: prefill.odd,
-    bookmaker: null,
+    bookmaker: critical.opportunity.bookmaker_melhor,
     model_probability: prefill.model_probability,
     market_probability_no_vig: prefill.market_probability_no_vig,
     fair_odd: prefill.fair_odd,

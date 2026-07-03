@@ -1,4 +1,5 @@
 import type { EnrichedMlbGame, MlbLeagueAverageSnapshot, MlbMarketOdd, MlbTeamStanding } from "@/types/mlbStandings";
+import { getBestBookmaker, getMarketBaseOdd, getOfferedOdd } from "@/lib/mlb/marketOdds";
 import type {
   MlbExpectedRunsComponents,
   MlbLeagueAverageContext,
@@ -159,9 +160,12 @@ export function calculateTotalMarketNoVig(overOdd: number, underOdd: number): Ml
 
 export function identifyMainTotalLine(groups: TotalLineGroup[]) {
   const candidates = groups
-    .filter((group) => group.overOdd?.odd && group.underOdd?.odd)
+    .filter((group) => getMarketBaseOdd(group.overOdd) && getMarketBaseOdd(group.underOdd))
     .map((group) => {
-      const market = calculateTotalMarketNoVig(Number(group.overOdd?.odd), Number(group.underOdd?.odd));
+      const market = calculateTotalMarketNoVig(
+        getMarketBaseOdd(group.overOdd) as number,
+        getMarketBaseOdd(group.underOdd) as number,
+      );
       return {
         line: group.line,
         distanceToBalancedMarket: Math.abs(market.over_market_implied_prob_no_vig - 0.5),
@@ -192,9 +196,11 @@ export function calculateMlbTotalsProjection(params: {
     };
   }
 
-  const overOdd = Number(params.lineGroup.overOdd?.odd);
-  const underOdd = Number(params.lineGroup.underOdd?.odd);
-  const market = calculateTotalMarketNoVig(overOdd, underOdd);
+  const overOdd = getOfferedOdd(params.lineGroup.overOdd) as number;
+  const underOdd = getOfferedOdd(params.lineGroup.underOdd) as number;
+  const overMarketBaseOdd = getMarketBaseOdd(params.lineGroup.overOdd) as number;
+  const underMarketBaseOdd = getMarketBaseOdd(params.lineGroup.underOdd) as number;
+  const market = calculateTotalMarketNoVig(overMarketBaseOdd, underMarketBaseOdd);
   const projected = calculateMlbProjectedTotal({
     game: params.game,
     leagueAverage: params.leagueAverage,
@@ -288,6 +294,16 @@ export function calculateMlbTotalsProjection(params: {
     under_ev: round(underEv, 4),
     recommended_side: recommendation.recommended_side,
     recommended_odd: recommendation.recommended_odd,
+    recommended_odd_mediana: recommendation.recommended_side === "Over"
+      ? overMarketBaseOdd
+      : recommendation.recommended_side === "Under"
+        ? underMarketBaseOdd
+        : null,
+    recommended_bookmaker_melhor: recommendation.recommended_side === "Over"
+      ? getBestBookmaker(params.lineGroup.overOdd)
+      : recommendation.recommended_side === "Under"
+        ? getBestBookmaker(params.lineGroup.underOdd)
+        : null,
     recommended_model_prob: recommendation.recommended_model_prob,
     recommended_fair_odd: recommendation.recommended_fair_odd,
     recommended_ev: recommendation.recommended_ev,
@@ -406,8 +422,12 @@ function baseTotalsRow(
     is_main_total_line: isMain,
     main_total_line: params.mainTotalLine,
     distance_from_main_line: distanceFromMainLine,
-    over_odd: params.lineGroup.overOdd?.odd ?? null,
-    under_odd: params.lineGroup.underOdd?.odd ?? null,
+    over_odd: getOfferedOdd(params.lineGroup.overOdd),
+    over_odd_mediana: getMarketBaseOdd(params.lineGroup.overOdd),
+    over_bookmaker_melhor: getBestBookmaker(params.lineGroup.overOdd),
+    under_odd: getOfferedOdd(params.lineGroup.underOdd),
+    under_odd_mediana: getMarketBaseOdd(params.lineGroup.underOdd),
+    under_bookmaker_melhor: getBestBookmaker(params.lineGroup.underOdd),
     over_market_implied_prob_raw: null,
     under_market_implied_prob_raw: null,
     over_market_implied_prob_no_vig: null,
@@ -428,6 +448,8 @@ function baseTotalsRow(
     under_ev: null,
     recommended_side: null,
     recommended_odd: null,
+    recommended_odd_mediana: null,
+    recommended_bookmaker_melhor: null,
     recommended_model_prob: null,
     recommended_fair_odd: null,
     recommended_ev: null,
@@ -462,7 +484,11 @@ function missingGameTotalsRow(game: EnrichedMlbGame, leagueAverage: MlbLeagueAve
     main_total_line: null,
     distance_from_main_line: null,
     over_odd: null,
+    over_odd_mediana: null,
+    over_bookmaker_melhor: null,
     under_odd: null,
+    under_odd_mediana: null,
+    under_bookmaker_melhor: null,
     over_market_implied_prob_raw: null,
     under_market_implied_prob_raw: null,
     over_market_implied_prob_no_vig: null,
@@ -483,6 +509,8 @@ function missingGameTotalsRow(game: EnrichedMlbGame, leagueAverage: MlbLeagueAve
     under_ev: null,
     recommended_side: null,
     recommended_odd: null,
+    recommended_odd_mediana: null,
+    recommended_bookmaker_melhor: null,
     recommended_model_prob: null,
     recommended_fair_odd: null,
     recommended_ev: null,
@@ -508,10 +536,16 @@ function getMissingTotalFields(game: EnrichedMlbGame, lineGroup: TotalLineGroup)
   if (!game.home_standings) missing.push("home_standings");
   if (!game.away_standings) missing.push("away_standings");
   if (!Number.isFinite(lineGroup.line)) missing.push("line valida");
-  if (!lineGroup.overOdd?.odd) missing.push("odd Over");
-  if (!lineGroup.underOdd?.odd) missing.push("odd Under");
-  if (lineGroup.overOdd?.odd != null && Number(lineGroup.overOdd.odd) <= 1) missing.push("odd Over valida");
-  if (lineGroup.underOdd?.odd != null && Number(lineGroup.underOdd.odd) <= 1) missing.push("odd Under valida");
+  const overOdd = getOfferedOdd(lineGroup.overOdd);
+  const underOdd = getOfferedOdd(lineGroup.underOdd);
+  const overMarketBaseOdd = getMarketBaseOdd(lineGroup.overOdd);
+  const underMarketBaseOdd = getMarketBaseOdd(lineGroup.underOdd);
+  if (!overOdd) missing.push("odd Over");
+  if (!underOdd) missing.push("odd Under");
+  if (overOdd != null && overOdd <= 1) missing.push("odd Over valida");
+  if (underOdd != null && underOdd <= 1) missing.push("odd Under valida");
+  if (!overMarketBaseOdd) missing.push("odd mediana/base Over");
+  if (!underMarketBaseOdd) missing.push("odd mediana/base Under");
   return missing;
 }
 

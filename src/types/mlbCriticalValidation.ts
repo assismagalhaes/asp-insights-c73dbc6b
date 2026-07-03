@@ -213,6 +213,9 @@ export interface MlbPreparedCriticalValidationPayload {
     pick: string | null;
     line: number | null;
     odd: number | null;
+    median_odd: number | null;
+    market_base_odd: number | null;
+    bookmaker_melhor: string | null;
     model_probability: number | null;
     market_probability_no_vig: number | null;
     probability_edge: number | null;
