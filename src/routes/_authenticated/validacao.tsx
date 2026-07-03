@@ -138,6 +138,18 @@ function getValidationGroupKey(prognostico: Prognostico): string {
   return `${getEventKey(prognostico)}|${getMarketFamilyKey(prognostico)}`;
 }
 
+function formatOptionalOdd(value: number | null | undefined): string {
+  return value != null && Number.isFinite(Number(value)) ? Number(value).toFixed(2) : "-";
+}
+
+function getOddMercadoBase(prognostico: Prognostico): number | null {
+  return prognostico.odd_mercado_base ?? prognostico.odd_mediana ?? null;
+}
+
+function getBookmakerMelhor(prognostico: Prognostico): string {
+  return prognostico.bookmaker_melhor?.trim() || "-";
+}
+
 function groupPendentes(prognosticos: Prognostico[]): ValidationGroup[] {
   const map = new Map<string, ValidationGroup>();
 
@@ -373,6 +385,10 @@ function Validacao() {
         linha: option.linha,
         odd_original: option.odd_ofertada,
         odd_ajustada: getOddAjustadaNum(option),
+        odd_mediana: option.odd_mediana ?? null,
+        odd_mercado_base: getOddMercadoBase(option),
+        odd_melhor: option.odd_melhor ?? null,
+        bookmaker_melhor: option.bookmaker_melhor ?? null,
         odd_valor: option.odd_valor,
         probabilidade: option.probabilidade_final,
         edge_original: option.edge,
@@ -386,6 +402,10 @@ function Validacao() {
           linha: other.linha,
           odd_original: other.odd_ofertada,
           odd_ajustada: getOddAjustadaNum(other),
+          odd_mediana: other.odd_mediana ?? null,
+          odd_mercado_base: getOddMercadoBase(other),
+          odd_melhor: other.odd_melhor ?? null,
+          bookmaker_melhor: other.bookmaker_melhor ?? null,
           probabilidade_final: other.probabilidade_final,
           edge_original: other.edge,
           edge_ajustado: getEdgeAjustado(other),
@@ -402,6 +422,10 @@ function Validacao() {
           linha: p.linha,
           odd_original: p.odd_ofertada,
           odd_ajustada: oddAj,
+          odd_mediana: p.odd_mediana ?? null,
+          odd_mercado_base: getOddMercadoBase(p),
+          odd_melhor: p.odd_melhor ?? null,
+          bookmaker_melhor: p.bookmaker_melhor ?? null,
           odd_valor: p.odd_valor,
           probabilidade_final: p.probabilidade_final,
           edge_original: p.edge,
@@ -727,9 +751,10 @@ function Validacao() {
                               </span>
                             )}
                           </div>
-                          <div className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-5">
-                            <span>Odd: <strong className="font-mono">{opcao.odd_ofertada.toFixed(2)}</strong></span>
+                          <div className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-6">
+                            <span>Odd ofertada: <strong className="font-mono">{opcao.odd_ofertada.toFixed(2)}</strong></span>
                             <span>Odd aj.: <strong className="font-mono">{(opcaoOdd ?? opcao.odd_ofertada).toFixed(2)}</strong></span>
+                            <span>Odd mediana: <strong className="font-mono">{formatOptionalOdd(opcao.odd_mediana)}</strong></span>
                             <span>Odd valor: <strong className="font-mono">{opcao.odd_valor.toFixed(2)}</strong></span>
                             <span>Prob.: <strong className="font-mono">{opcao.probabilidade_final.toFixed(2)}%</strong></span>
                             <span>Edge aj.: <strong className="font-mono">{opcaoEdge != null ?`${opcaoEdge.toFixed(2)}%` : "-"}</strong></span>
@@ -754,8 +779,8 @@ function Validacao() {
                   <KV label="Pick" value={p.pick} />
                   {mostrarLinha && <KV label="Linha" value={p.linha ?? "-"} />}
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-                  <Metric label="Odd original" value={p.odd_ofertada.toFixed(2)} />
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-8">
+                  <Metric label="Odd ofertada" value={p.odd_ofertada.toFixed(2)} />
                   <div>
                     <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Odd ajustada</Label>
                     <Input
@@ -767,6 +792,9 @@ function Validacao() {
                       className="mt-1 h-[51px] rounded-md border-border bg-background/50 font-mono text-base font-bold"
                     />
                   </div>
+                  <Metric label="Odd mediana" value={formatOptionalOdd(p.odd_mediana)} />
+                  <Metric label="Odd mercado base" value={formatOptionalOdd(getOddMercadoBase(p))} />
+                  <Metric label="Bookmaker melhor" value={getBookmakerMelhor(p)} />
                   <Metric label="Odd valor" value={p.odd_valor.toFixed(2)} />
                   <Metric label="Probabilidade" value={`${p.probabilidade_final.toFixed(2)}%`} tone={p.probabilidade_final > 60 ?"good" : p.probabilidade_final < 55 ?"warn" : undefined} />
                   <Metric label="Edge original" value={`${p.edge.toFixed(2)}%`} tone={p.edge < 0 ?"bad" : "good"} />

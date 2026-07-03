@@ -26,6 +26,10 @@ export interface Prognostico {
   linha: string | null;
   odd_ofertada: number;
   odd_ajustada: number | null;
+  odd_mediana?: number | null;
+  odd_mercado_base?: number | null;
+  odd_melhor?: number | null;
+  bookmaker_melhor?: string | null;
   odd_valor: number;
   probabilidade_final: number;
   edge: number;
@@ -390,6 +394,10 @@ const mapPrognostico = (r: Record<string, unknown>): Prognostico => ({
   mercado: normalizeMercadoPadrao(String(r.mercado ?? ""), String(r.esporte ?? "")),
   odd_ofertada: num(r.odd_ofertada),
   odd_ajustada: numOrNull(r.odd_ajustada),
+  odd_mediana: numOrNull(r.odd_mediana),
+  odd_mercado_base: numOrNull(r.odd_mercado_base),
+  odd_melhor: numOrNull(r.odd_melhor),
+  bookmaker_melhor: r.bookmaker_melhor == null ? null : String(r.bookmaker_melhor),
   odd_valor: num(r.odd_valor),
   probabilidade_final: num(r.probabilidade_final),
   edge: num(r.edge),
