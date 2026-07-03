@@ -77,7 +77,7 @@ export type VmPayloadRow = Record<string, unknown>;
 const coletaDb = supabase as unknown as {
   from: (table: string) => any;
 };
-const ODDS_INSERT_BATCH_SIZE = 250;
+const ODDS_INSERT_BATCH_SIZE = 50;
 
 function toNumber(value: unknown): number | null {
   if (value == null || value === "") return null;
@@ -740,6 +740,53 @@ function compactNormalizedRow(row: NormalizedOdd): NormalizedOdd {
   };
 }
 
+function compactNormalizedForStorage(normalized: NormalizedCollection, rows: NormalizedOdd[]) {
+  const markets = Array.from(new Set(rows.map((row) => row.mercado).filter(Boolean)));
+  const games = new Map<string, { jogo: string; mandante: string; visitante: string; data: string | null; hora: string | null; mercados: Set<string> }>();
+  for (const row of rows) {
+    const key = [row.data ?? "", row.hora ?? "", row.jogo, row.mandante, row.visitante].join("|");
+    const current =
+      games.get(key) ?? {
+        jogo: row.jogo,
+        mandante: row.mandante,
+        visitante: row.visitante,
+        data: row.data,
+        hora: row.hora,
+        mercados: new Set<string>(),
+      };
+    if (row.mercado) current.mercados.add(row.mercado);
+    games.set(key, current);
+  }
+  return {
+    esporte: normalized.esporte,
+    liga: normalized.liga,
+    data_inicio: normalized.data_inicio,
+    data_fim: normalized.data_fim,
+    mercados: normalized.mercados,
+    total_jogos: normalized.total_jogos,
+    total_odds: rows.length,
+    mercados_encontrados: markets,
+    jogos: Array.from(games.values()).map((game) => ({
+      ...game,
+      mercados: Array.from(game.mercados),
+    })),
+    aggregate_fields: [
+      "odd_media",
+      "odd_mediana",
+      "odd_minima",
+      "odd_maxima",
+      "odd_melhor",
+      "bookmaker_melhor",
+      "casas_count",
+      "odds_disponiveis",
+      "probabilidade_implicita_media",
+      "probabilidade_implicita_mediana",
+      "margem_mercado_media",
+      "margem_mercado_mediana",
+    ],
+  };
+}
+
 function compactRawForStorage(raw: unknown): unknown {
   if (!isRecord(raw)) return raw;
   const source = String(raw.source ?? raw.fonte ?? "").toLowerCase();
@@ -795,6 +842,7 @@ export function downloadText(filename: string, content: string, type = "text/csv
 export async function saveCollection(raw: unknown, normalized: NormalizedCollection, parametros: Record<string, unknown>) {
   const deduped = dedupeRows(normalized.rows);
   const compactRows = deduped.rows.map(compactNormalizedRow);
+  const normalizedSnapshot = compactNormalizedForStorage(normalized, compactRows);
   const { data: coleta, error } = await coletaDb
     .from("coletas_odds")
     .insert({
@@ -806,7 +854,7 @@ export async function saveCollection(raw: unknown, normalized: NormalizedCollect
       mercados: normalized.mercados,
       parametros,
       raw_json: compactRawForStorage(raw),
-      normalized_json: compactRows,
+      normalized_json: normalizedSnapshot,
       total_jogos: normalized.total_jogos,
       total_odds: deduped.rows.length,
       erro: null,
@@ -878,6 +926,7 @@ export async function completeRemoteCollection(
 ): Promise<ImportResult> {
   const deduped = dedupeRows(normalized.rows);
   const compactRows = deduped.rows.map(compactNormalizedRow);
+  const normalizedSnapshot = compactNormalizedForStorage(normalized, compactRows);
   const { error } = await coletaDb
     .from("coletas_odds")
     .update({
@@ -888,7 +937,7 @@ export async function completeRemoteCollection(
       data_fim: normalized.data_fim,
       mercados: normalized.mercados,
       raw_json: compactRawForStorage(raw),
-      normalized_json: compactRows,
+      normalized_json: normalizedSnapshot,
       total_jogos: normalized.total_jogos,
       total_odds: deduped.rows.length,
       erro: null,
