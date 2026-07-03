@@ -1065,7 +1065,9 @@ export type Database = {
       odds_jogos: {
         Row: {
           bookmaker: string | null
+          bookmaker_melhor: string | null
           capturado_em: string | null
+          casas_count: number | null
           coleta_id: string | null
           created_at: string
           data: string | null
@@ -1077,6 +1079,8 @@ export type Database = {
           liga: string | null
           linha: string | null
           mandante: string | null
+          margem_mercado_media: number | null
+          margem_mercado_mediana: number | null
           mercado: string | null
           odd: number | null
           odd_desvio_padrao: number | null
@@ -1091,16 +1095,12 @@ export type Database = {
           probabilidade_implicita_mediana: number | null
           raw_ref: Json | null
           visitante: string | null
-          bookmaker_melhor: string | null
-          casas_count: number | null
-          margem_mercado_media: number | null
-          margem_mercado_mediana: number | null
         }
         Insert: {
           bookmaker?: string | null
           bookmaker_melhor?: string | null
-          casas_count?: number | null
           capturado_em?: string | null
+          casas_count?: number | null
           coleta_id?: string | null
           created_at?: string
           data?: string | null
@@ -1132,8 +1132,8 @@ export type Database = {
         Update: {
           bookmaker?: string | null
           bookmaker_melhor?: string | null
-          casas_count?: number | null
           capturado_em?: string | null
+          casas_count?: number | null
           coleta_id?: string | null
           created_at?: string
           data?: string | null
