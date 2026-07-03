@@ -46,6 +46,33 @@ class OddsAgoraScraperParserTests(unittest.TestCase):
         self.assertEqual(games[0]["markets"]["home-away"][0]["home_odd"], 1.73)
         self.assertTrue(games[0]["market_urls"]["over-under"].endswith("#YReFE9Wa:over-under;1"))
 
+    def test_parse_baseball_league_normalizes_oakland_athletics_name(self) -> None:
+        html = """
+        <html><body>
+          <table>
+            <tr><th>Hoje, 03 Jul</th><th>1</th><th>2</th></tr>
+            <tr>
+              <td>22:40</td>
+              <td><a href="/baseball/h2h/oakland-athletics-x1/miami-marlins-y2/#abc12345:home-away;1">Oakland Athletics</a></td>
+              <td>Miami Marlins</td>
+              <td>1.80</td><td>2.11</td>
+            </tr>
+          </table>
+        </body></html>
+        """
+
+        games = parse_league_html(
+            "https://www.oddsagora.com.br/baseball/usa/mlb/",
+            html,
+            ["home-away", "over-under", "ah"],
+            data_inicio="2026-07-03",
+            data_fim="2026-07-03",
+        )
+
+        self.assertEqual(len(games), 1)
+        self.assertEqual(games[0]["home_team"], "Athletics")
+        self.assertEqual(games[0]["away_team"], "Miami Marlins")
+
     def test_parse_football_league_table_extracts_h2h_and_1x2_odds(self) -> None:
         html = """
         <html><head><title>Odds para Apostas em Serie A</title></head><body>

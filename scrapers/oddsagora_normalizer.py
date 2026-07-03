@@ -19,6 +19,10 @@ MARKET_NAMES = {
     "double-chance": "Dupla Chance",
 }
 
+BASEBALL_TEAM_NAME_ALIASES = {
+    "Oakland Athletics": "Athletics",
+}
+
 
 def to_float(value: Any) -> float | None:
     if value in (None, ""):
@@ -71,18 +75,44 @@ def _game_value(game: dict[str, Any], *keys: str, default: Any = "") -> Any:
     return default
 
 
+def _is_baseball_context(raw: dict[str, Any], game: dict[str, Any]) -> bool:
+    sport = str(_game_value(game, "sport", "esporte", default=raw.get("sport") or raw.get("esporte") or "")).lower()
+    league = str(_game_value(game, "league", "liga", default=raw.get("league") or raw.get("liga") or "")).lower()
+    return "baseball" in sport or "mlb" in league
+
+
+def _normalize_baseball_team_name(value: Any) -> str:
+    text = str(value or "").strip()
+    return BASEBALL_TEAM_NAME_ALIASES.get(text, text)
+
+
+def _normalize_baseball_text(value: Any) -> str:
+    text = str(value or "").strip()
+    for original, replacement in BASEBALL_TEAM_NAME_ALIASES.items():
+        text = text.replace(original, replacement)
+    return text
+
+
 def _base_row(raw: dict[str, Any], game: dict[str, Any]) -> dict[str, Any]:
     game_id = str(_game_value(game, "game_id", "id", default=""))
-    home = str(_game_value(game, "home_team", "home", "mandante", default=""))
-    away = str(_game_value(game, "away_team", "away", "visitante", default=""))
+    sport = str(_game_value(game, "sport", "esporte", default=raw.get("sport") or raw.get("esporte") or "Baseball"))
+    league = str(_game_value(game, "league", "liga", default=raw.get("league") or raw.get("liga") or "MLB"))
+    home = str(_game_value(game, "home_team", "home", "mandante", default="")).strip()
+    away = str(_game_value(game, "away_team", "away", "visitante", default="")).strip()
+    if _is_baseball_context(raw, game):
+        home = _normalize_baseball_team_name(home)
+        away = _normalize_baseball_team_name(away)
     source_url = str(_game_value(game, "match_url", "url", "link", default=""))
+    jogo = str(_game_value(game, "jogo", default=f"{home} vs {away}".strip()))
+    if _is_baseball_context(raw, game):
+        jogo = _normalize_baseball_text(jogo) or f"{home} vs {away}".strip()
     return {
         "source": "OddsAgora",
         "fonte": "OddsAgora",
-        "sport": str(_game_value(game, "sport", "esporte", default=raw.get("sport") or raw.get("esporte") or "Baseball")),
-        "esporte": str(_game_value(game, "sport", "esporte", default=raw.get("sport") or raw.get("esporte") or "Baseball")),
-        "league": str(_game_value(game, "league", "liga", default=raw.get("league") or raw.get("liga") or "MLB")),
-        "liga": str(_game_value(game, "league", "liga", default=raw.get("league") or raw.get("liga") or "MLB")),
+        "sport": sport,
+        "esporte": sport,
+        "league": league,
+        "liga": league,
         "game_id": game_id,
         "date": _game_value(game, "date", "data", default=""),
         "data": _game_value(game, "date", "data", default=""),
@@ -92,7 +122,7 @@ def _base_row(raw: dict[str, Any], game: dict[str, Any]) -> dict[str, Any]:
         "mandante": home,
         "away_team": away,
         "visitante": away,
-        "jogo": str(_game_value(game, "jogo", default=f"{home} vs {away}".strip())),
+        "jogo": jogo,
         "period": "FT incluindo PR",
         "capturado_em": raw.get("created_at") or datetime.now(timezone.utc).isoformat(),
         "raw_ref": {

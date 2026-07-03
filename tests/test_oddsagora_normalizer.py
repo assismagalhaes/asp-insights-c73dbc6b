@@ -64,6 +64,41 @@ class OddsAgoraNormalizerTests(unittest.TestCase):
         self.assertEqual(home_moneyline[0]["bookmaker_melhor"], "Bet365")
         self.assertIn("probabilidade_implicita_media", home_moneyline[0])
 
+    def test_normalize_baseball_oakland_athletics_to_athletics(self) -> None:
+        raw = {
+            "job_id": "job-ath",
+            "source": "OddsAgora",
+            "sport": "Baseball",
+            "league": "MLB",
+            "games": [
+                {
+                    "game_id": "abc12345",
+                    "date": "2026-07-03",
+                    "time": "22:40",
+                    "home_team": "Oakland Athletics ",
+                    "away_team": "Miami Marlins",
+                    "jogo": "Oakland Athletics vs Miami Marlins",
+                    "markets": {
+                        "home-away": [
+                            {"bookmaker": "Bet365", "home_odd": 1.80, "away_odd": 2.11},
+                        ],
+                        "ah": [
+                            {"bookmaker": "Bet365", "line": 1.5, "home_odd": 1.60, "away_odd": 2.40},
+                        ],
+                    },
+                }
+            ],
+        }
+
+        rows = normalize_oddsagora_raw(raw)["linhas"]
+        home_rows = [row for row in rows if row["side"] == "home"]
+
+        self.assertTrue(home_rows)
+        self.assertTrue(all(row["mandante"] == "Athletics" for row in rows))
+        self.assertTrue(all(row["home_team"] == "Athletics" for row in rows))
+        self.assertTrue(all("Oakland Athletics" not in row["jogo"] for row in rows))
+        self.assertIn("Athletics", {row["pick"].split(" +")[0].split(" -")[0] for row in home_rows})
+
     def test_normalize_football_1x2_includes_draw(self) -> None:
         raw = {
             "job_id": "job-2",
