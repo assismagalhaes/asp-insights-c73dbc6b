@@ -99,6 +99,41 @@ class OddsAgoraNormalizerTests(unittest.TestCase):
         self.assertTrue(all("Oakland Athletics" not in row["jogo"] for row in rows))
         self.assertIn("Athletics", {row["pick"].split(" +")[0].split(" -")[0] for row in home_rows})
 
+    def test_normalize_wnba_team_suffix_f_to_w(self) -> None:
+        raw = {
+            "job_id": "job-wnba",
+            "source": "OddsAgora",
+            "sport": "Basketball",
+            "league": "WNBA",
+            "games": [
+                {
+                    "game_id": "nTkWK5dd",
+                    "date": "2026-07-03",
+                    "time": "20:00",
+                    "home_team": "Chicago Sky F",
+                    "away_team": "New York Liberty F",
+                    "jogo": "Chicago Sky F vs New York Liberty F",
+                    "markets": {
+                        "home-away": [
+                            {"bookmaker": "Bet365", "home_odd": 1.80, "away_odd": 2.10},
+                        ],
+                        "ah": [
+                            {"bookmaker": "Bet365", "line": -4.5, "home_odd": 1.91, "away_odd": 1.91},
+                        ],
+                    },
+                }
+            ],
+        }
+
+        rows = normalize_oddsagora_raw(raw)["linhas"]
+
+        self.assertTrue(rows)
+        self.assertTrue(all(row["mandante"] == "Chicago Sky W" for row in rows))
+        self.assertTrue(all(row["visitante"] == "New York Liberty W" for row in rows))
+        self.assertTrue(all(row["jogo"] == "Chicago Sky W vs New York Liberty W" for row in rows))
+        self.assertIn("Chicago Sky W", {row["pick"].split(" -")[0].split(" +")[0] for row in rows})
+        self.assertNotIn("Chicago Sky F", {row["pick"].split(" -")[0].split(" +")[0] for row in rows})
+
     def test_normalize_football_1x2_includes_draw(self) -> None:
         raw = {
             "job_id": "job-2",

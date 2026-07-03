@@ -126,6 +126,33 @@ class OddsAgoraScraperParserTests(unittest.TestCase):
         self.assertEqual(games, [])
         self.assertTrue(any(log["event"] == "league_link_skipped_missing_date" for log in logs))
 
+    def test_parse_wnba_league_normalizes_team_suffix_f_to_w(self) -> None:
+        html = """
+        <html><body>
+          <table>
+            <tr><th>Hoje, 03 Jul</th><th>1</th><th>2</th></tr>
+            <tr>
+              <td>20:00</td>
+              <td><a href="/basketball/h2h/chicago-sky-AeUcuq4r/new-york-liberty-h4iAv3Jl/#nTkWK5dd:home-away;1">Chicago Sky F</a></td>
+              <td>New York Liberty F</td>
+              <td>1.80</td><td>2.10</td>
+            </tr>
+          </table>
+        </body></html>
+        """
+
+        games = parse_league_html(
+            "https://www.oddsagora.com.br/basketball/usa/wnba/",
+            html,
+            ["home-away", "over-under", "ah"],
+            data_inicio="2026-07-03",
+            data_fim="2026-07-03",
+        )
+
+        self.assertEqual(len(games), 1)
+        self.assertEqual(games[0]["home_team"], "Chicago Sky W")
+        self.assertEqual(games[0]["away_team"], "New York Liberty W")
+
     def test_parse_league_does_not_add_extra_links_when_table_has_games(self) -> None:
         html = """
         <html><body>

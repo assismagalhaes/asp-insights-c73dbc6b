@@ -81,9 +81,22 @@ def _is_baseball_context(raw: dict[str, Any], game: dict[str, Any]) -> bool:
     return "baseball" in sport or "mlb" in league
 
 
+def _is_wnba_context(raw: dict[str, Any], game: dict[str, Any]) -> bool:
+    sport = str(_game_value(game, "sport", "esporte", default=raw.get("sport") or raw.get("esporte") or "")).lower()
+    league = str(_game_value(game, "league", "liga", default=raw.get("league") or raw.get("liga") or "")).lower()
+    return "basketball" in sport and "wnba" in league
+
+
 def _normalize_baseball_team_name(value: Any) -> str:
     text = str(value or "").strip()
     return BASEBALL_TEAM_NAME_ALIASES.get(text, text)
+
+
+def _normalize_wnba_team_name(value: Any) -> str:
+    text = str(value or "").strip()
+    if text.endswith(" F"):
+        return f"{text[:-2]} W"
+    return text
 
 
 def _normalize_baseball_text(value: Any) -> str:
@@ -97,15 +110,22 @@ def _base_row(raw: dict[str, Any], game: dict[str, Any]) -> dict[str, Any]:
     game_id = str(_game_value(game, "game_id", "id", default=""))
     sport = str(_game_value(game, "sport", "esporte", default=raw.get("sport") or raw.get("esporte") or "Baseball"))
     league = str(_game_value(game, "league", "liga", default=raw.get("league") or raw.get("liga") or "MLB"))
-    home = str(_game_value(game, "home_team", "home", "mandante", default="")).strip()
-    away = str(_game_value(game, "away_team", "away", "visitante", default="")).strip()
+    raw_home = str(_game_value(game, "home_team", "home", "mandante", default="")).strip()
+    raw_away = str(_game_value(game, "away_team", "away", "visitante", default="")).strip()
+    home = raw_home
+    away = raw_away
     if _is_baseball_context(raw, game):
         home = _normalize_baseball_team_name(home)
         away = _normalize_baseball_team_name(away)
+    if _is_wnba_context(raw, game):
+        home = _normalize_wnba_team_name(home)
+        away = _normalize_wnba_team_name(away)
     source_url = str(_game_value(game, "match_url", "url", "link", default=""))
     jogo = str(_game_value(game, "jogo", default=f"{home} vs {away}".strip()))
     if _is_baseball_context(raw, game):
         jogo = _normalize_baseball_text(jogo) or f"{home} vs {away}".strip()
+    if _is_wnba_context(raw, game):
+        jogo = jogo.replace(raw_home, home).replace(raw_away, away) or f"{home} vs {away}".strip()
     return {
         "source": "OddsAgora",
         "fonte": "OddsAgora",
