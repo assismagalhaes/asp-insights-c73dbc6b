@@ -1219,10 +1219,6 @@ export type Database = {
           mercado: string
           observacoes: string | null
           odd_ajustada: number | null
-          odd_mediana: number | null
-          odd_melhor: number | null
-          odd_mercado_base: number | null
-          bookmaker_melhor: string | null
           odd_ofertada: number
           odd_valor: number
           pick: string
@@ -1256,10 +1252,6 @@ export type Database = {
           mercado: string
           observacoes?: string | null
           odd_ajustada?: number | null
-          odd_mediana?: number | null
-          odd_melhor?: number | null
-          odd_mercado_base?: number | null
-          bookmaker_melhor?: string | null
           odd_ofertada: number
           odd_valor: number
           pick: string
@@ -1293,10 +1285,6 @@ export type Database = {
           mercado?: string
           observacoes?: string | null
           odd_ajustada?: number | null
-          odd_mediana?: number | null
-          odd_melhor?: number | null
-          odd_mercado_base?: number | null
-          bookmaker_melhor?: string | null
           odd_ofertada?: number
           odd_valor?: number
           pick?: string
