@@ -85,6 +85,13 @@ def _format_line(value: float) -> str:
     return f"+{value:g}" if value > 0 else f"{value:g}"
 
 
+def _is_half_point_line(value: Any) -> bool:
+    number = _to_float(value)
+    if number is None:
+        return False
+    return abs((abs(number) % 1) - 0.5) < 1e-9
+
+
 def _norm(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "").strip().lower())
 
@@ -251,6 +258,9 @@ def normalize(raw: Any, esporte_hint: str | None = None) -> dict[str, Any]:
                         continue
                     bookmaker = str(item[bookmaker_index]) if bookmaker_index >= 0 and bookmaker_index < len(item) else None
                     line = str(item[line_index]) if line_index >= 0 and line_index < len(item) else None
+                    is_baseball_market = _norm(base.get("esporte")) == "baseball"
+                    if is_baseball_market and str(market_name).lower() in {"over/under", "asian handicap"} and not _is_half_point_line(line):
+                        continue
                     for idx, header in enumerate(headers):
                         if idx in (bookmaker_index, line_index) or idx >= len(item):
                             continue

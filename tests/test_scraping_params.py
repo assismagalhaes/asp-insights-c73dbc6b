@@ -2,11 +2,16 @@ from __future__ import annotations
 
 import unittest
 
-from api.scraping_params import DEFAULT_BASEBALL_MARKETS, normalize_scraping_params
+from api.scraping_params import (
+    DEFAULT_FLASHSCORE_BASEBALL_MARKETS,
+    DEFAULT_ODDSAGORA_BASEBALL_MARKETS,
+    ODDSAGORA_MLB_URL,
+    normalize_scraping_params,
+)
 
 
 class ScrapingParamsTests(unittest.TestCase):
-    def test_baseball_empty_markets_uses_default_flashscore_markets(self) -> None:
+    def test_baseball_empty_markets_uses_default_oddsagora_markets(self) -> None:
         params = normalize_scraping_params(
             {
                 "esporte": "Baseball",
@@ -15,9 +20,16 @@ class ScrapingParamsTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(params["mercados"], DEFAULT_BASEBALL_MARKETS)
+        self.assertEqual(params["source"], "OddsAgora")
+        self.assertEqual(params["mercados"], DEFAULT_ODDSAGORA_BASEBALL_MARKETS)
         self.assertTrue(params["mercados_padrao_aplicados"])
-        self.assertEqual(params["leagues"], ["https://www.flashscore.com/baseball/usa/mlb/fixtures/"])
+        self.assertEqual(params["leagues"], [ODDSAGORA_MLB_URL])
+
+    def test_baseball_flashscore_source_keeps_flashscore_defaults(self) -> None:
+        params = normalize_scraping_params({"esporte": "Baseball", "source": "FlashScore", "mercados": []})
+
+        self.assertEqual(params["source"], "FlashScore")
+        self.assertEqual(params["mercados"], DEFAULT_FLASHSCORE_BASEBALL_MARKETS)
 
     def test_non_empty_markets_are_preserved(self) -> None:
         params = normalize_scraping_params({"esporte": "Baseball", "mercados": ["home-away"]})
