@@ -11,6 +11,10 @@ const CorrelatedPickSchema = z.object({
   linha: z.string().nullable().optional(),
   odd_original: z.number(),
   odd_ajustada: z.number().nullable().optional(),
+  odd_mediana: z.number().nullable().optional(),
+  odd_mercado_base: z.number().nullable().optional(),
+  odd_melhor: z.number().nullable().optional(),
+  bookmaker_melhor: z.string().nullable().optional(),
   probabilidade_final: z.number(),
   edge_original: z.number(),
   edge_ajustado: z.number().nullable().optional(),
@@ -23,6 +27,10 @@ const GroupOptionSchema = z.object({
   linha: z.string().nullable().optional(),
   odd_original: z.number(),
   odd_ajustada: z.number().nullable().optional(),
+  odd_mediana: z.number().nullable().optional(),
+  odd_mercado_base: z.number().nullable().optional(),
+  odd_melhor: z.number().nullable().optional(),
+  bookmaker_melhor: z.string().nullable().optional(),
   odd_valor: z.number(),
   probabilidade: z.number(),
   edge_original: z.number(),
@@ -41,6 +49,10 @@ const InputSchema = z.object({
     linha: z.string().nullable().optional(),
     odd_original: z.number(),
     odd_ajustada: z.number().nullable().optional(),
+    odd_mediana: z.number().nullable().optional(),
+    odd_mercado_base: z.number().nullable().optional(),
+    odd_melhor: z.number().nullable().optional(),
+    bookmaker_melhor: z.string().nullable().optional(),
     odd_valor: z.number(),
     probabilidade_final: z.number(),
     edge_original: z.number(),
@@ -101,6 +113,10 @@ function getSportChecklist(esporte: string): string {
 - Situação do jogo: mando, gramado, viagem, necessidade de resultado, mata-mata, ida/volta, rotação por calendário.
 - Riscos: gol cedo, cartão vermelho, rotação, postura após sair na frente, desfalques relevantes, escalação alternativa.
 - Buscas sugeridas: provável escalação, desfalques, lesionados, suspensão, preview, team news, predicted lineup, injury news.`;
+}
+
+function formatNullableOdd(value: number | null | undefined): string {
+  return value != null && Number.isFinite(Number(value)) ? Number(value).toFixed(3) : "-";
 }
 
 const SYSTEM_PROMPT = `Papel:
@@ -285,7 +301,7 @@ export const analisarValidacaoOnline = createServerFn({ method: "POST" })
           .map((c, index) => {
             const odd = c.odd_ajustada ?? c.odd_original;
             const edge = c.edge_ajustado ?? c.edge_original;
-            return `${index + 1}. ID: ${c.prognostico_id} | Mercado: ${c.mercado ?? p.mercado} | Pick: ${c.pick} | Linha: ${c.linha ?? "-"} | Odd original: ${c.odd_original.toFixed(3)} | Odd usada: ${odd.toFixed(3)} | Odd valor: ${c.odd_valor.toFixed(3)} | Prob: ${c.probabilidade.toFixed(2)}% | Edge: ${edge.toFixed(2)}%`;
+            return `${index + 1}. ID: ${c.prognostico_id} | Mercado: ${c.mercado ?? p.mercado} | Pick: ${c.pick} | Linha: ${c.linha ?? "-"} | Odd ofertada: ${c.odd_original.toFixed(3)} | Odd usada: ${odd.toFixed(3)} | Odd mediana: ${formatNullableOdd(c.odd_mediana)} | Odd mercado base: ${formatNullableOdd(c.odd_mercado_base)} | Odd melhor: ${formatNullableOdd(c.odd_melhor)} | Bookmaker melhor: ${c.bookmaker_melhor ?? "-"} | Odd valor: ${c.odd_valor.toFixed(3)} | Prob: ${c.probabilidade.toFixed(2)}% | Edge: ${edge.toFixed(2)}%`;
           })
           .join("\n")
       : "(nenhuma lista explicita de opcoes do grupo foi informada)";
@@ -295,7 +311,7 @@ export const analisarValidacaoOnline = createServerFn({ method: "POST" })
           .map((c, index) => {
             const odd = c.odd_ajustada ?? c.odd_original;
             const edge = c.edge_ajustado ?? c.edge_original;
-            return `${index + 1}. Mercado: ${c.mercado} | Pick: ${c.pick} | Linha: ${c.linha ?? "-"} | Odd usada: ${odd.toFixed(3)} | Prob: ${c.probabilidade_final.toFixed(2)}% | Edge: ${edge.toFixed(2)}%`;
+            return `${index + 1}. Mercado: ${c.mercado} | Pick: ${c.pick} | Linha: ${c.linha ?? "-"} | Odd ofertada: ${c.odd_original.toFixed(3)} | Odd usada: ${odd.toFixed(3)} | Odd mediana: ${formatNullableOdd(c.odd_mediana)} | Odd mercado base: ${formatNullableOdd(c.odd_mercado_base)} | Odd melhor: ${formatNullableOdd(c.odd_melhor)} | Bookmaker melhor: ${c.bookmaker_melhor ?? "-"} | Prob: ${c.probabilidade_final.toFixed(2)}% | Edge: ${edge.toFixed(2)}%`;
           })
           .join("\n")
       : "(nenhuma outra pick pendente do mesmo jogo informada)";
@@ -309,9 +325,13 @@ Jogo: ${p.jogo}
 Mercado: ${p.mercado}
 Pick: ${p.pick}
 Linha: ${p.linha ?? "-"}
-Odd original: ${p.odd_original.toFixed(3)}
+Odd ofertada: ${p.odd_original.toFixed(3)}
 Odd ajustada: ${p.odd_ajustada != null ? p.odd_ajustada.toFixed(3) : "—"}
 Odd em uso: ${oddFinal.toFixed(3)}
+Odd mediana: ${formatNullableOdd(p.odd_mediana)}
+Odd mercado base: ${formatNullableOdd(p.odd_mercado_base)}
+Odd melhor: ${formatNullableOdd(p.odd_melhor)}
+Bookmaker melhor: ${p.bookmaker_melhor ?? "-"}
 Odd de valor (fair): ${p.odd_valor.toFixed(3)}
 Probabilidade final: ${p.probabilidade_final.toFixed(2)}%
 Edge: ${edgeFinal.toFixed(2)}%
