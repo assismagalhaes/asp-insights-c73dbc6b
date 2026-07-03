@@ -378,6 +378,10 @@ def _date_in_range(value: str, data_inicio: str, data_fim: str) -> bool:
     return True
 
 
+def _date_filter_requested(data_inicio: str, data_fim: str) -> bool:
+    return bool((data_inicio or "")[:10] or (data_fim or "")[:10])
+
+
 def _looks_like_date_label(text: str) -> bool:
     return bool(re.search(r"\b(Hoje|Amanha|Amanh[ãa]|Ontem|\d{1,2}\s+[A-Za-zÀ-ÿ]{3}|\d{1,2}/\d{1,2}/20\d{2})\b", text, re.IGNORECASE))
 
@@ -463,6 +467,8 @@ def _game_from_link(link: dict[str, str], markets: list[str], fallback_year: int
         return None
     match_url = _absolute_url(href)
     home, away, parsed_date = _parse_title(link.get("title") or "", fallback_year)
+    if not home or not away:
+        return None
     game_id = extract_oddsagora_game_id(match_url) or match_url.rstrip("/").rsplit("/", 1)[-1]
     return {
         "game_id": game_id,
@@ -658,17 +664,34 @@ def parse_league_html(
         game = _game_from_row(row, current_date, markets, sport_key, sport_label, league_label)
         if not game:
             continue
+        if _date_filter_requested(data_inicio, data_fim) and not game.get("date"):
+            _log(logs, "league_game_skipped_missing_date", game=game)
+            continue
         if not _date_in_range(str(game.get("date") or ""), data_inicio, data_fim):
             _log(logs, "league_game_skipped_out_of_range", game=game)
             continue
         games_by_key[_game_key(game)] = game
 
-    for link in link_parser.links:
+    if not structured_games and any(game.get("match_url") for game in games_by_key.values()):
+        _log(
+            logs,
+            "league_link_fallback_skipped_table_authoritative",
+            h2h_links=len(link_parser.links),
+            table_games_count=len(games_by_key),
+        )
+        link_candidates: list[dict[str, str]] = []
+    else:
+        link_candidates = link_parser.links
+
+    for link in link_candidates:
         if structured_games:
             _log(logs, "league_link_skipped_json_ld_authoritative", title=link.get("title"), href=link.get("href"))
             continue
         game = _game_from_link(link, markets, fallback_year, sport_key, sport_label, league_label)
         if not game:
+            continue
+        if _date_filter_requested(data_inicio, data_fim) and not game.get("date"):
+            _log(logs, "league_link_skipped_missing_date", title=link.get("title"), href=link.get("href"))
             continue
         if not _date_in_range(str(game.get("date") or ""), data_inicio, data_fim):
             _log(logs, "league_link_skipped_out_of_range", title=link.get("title"), href=link.get("href"))

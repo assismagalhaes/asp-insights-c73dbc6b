@@ -77,6 +77,58 @@ class OddsAgoraScraperParserTests(unittest.TestCase):
         self.assertEqual(games[0]["markets"]["1x2"][0]["draw_odd"], 3.20)
         self.assertEqual(games[0]["markets"]["1x2"][0]["away_odd"], 3.60)
 
+    def test_parse_league_skips_undated_h2h_links_when_date_filter_is_present(self) -> None:
+        html = """
+        <html><body>
+          <a href="/basketball/h2h/minnesota-lynx-AeUcuq4r/new-york-liberty-h4iAv3Jl/#nTkWK5dd:home-away;1">
+            Minnesota Lynx vs New York Liberty
+          </a>
+        </body></html>
+        """
+        logs: list[dict[str, object]] = []
+
+        games = parse_league_html(
+            "https://www.oddsagora.com.br/basketball/usa/wnba/",
+            html,
+            ["home-away", "over-under", "ah"],
+            data_inicio="2026-07-03",
+            data_fim="2026-07-03",
+            logs=logs,
+        )
+
+        self.assertEqual(games, [])
+        self.assertTrue(any(log["event"] == "league_link_skipped_missing_date" for log in logs))
+
+    def test_parse_league_does_not_add_extra_links_when_table_has_games(self) -> None:
+        html = """
+        <html><body>
+          <table>
+            <tr><th>Hoje, 03 Jul</th><th>1</th><th>2</th></tr>
+            <tr>
+              <td>19:45</td>
+              <td><a href="/basketball/h2h/minnesota-lynx-AeUcuq4r/new-york-liberty-h4iAv3Jl/#nTkWK5dd:home-away;1">Minnesota Lynx</a></td>
+              <td>New York Liberty</td>
+              <td>1.80</td><td>2.10</td>
+            </tr>
+          </table>
+          <a href="/basketball/h2h/old-team-abc123/other-team-def456/#zzzz1111:home-away;1">Old Team vs Other Team</a>
+        </body></html>
+        """
+        logs: list[dict[str, object]] = []
+
+        games = parse_league_html(
+            "https://www.oddsagora.com.br/basketball/usa/wnba/",
+            html,
+            ["home-away", "over-under", "ah"],
+            data_inicio="2026-07-03",
+            data_fim="2026-07-03",
+            logs=logs,
+        )
+
+        self.assertEqual(len(games), 1)
+        self.assertEqual(games[0]["game_id"], "nTkWK5dd")
+        self.assertTrue(any(log["event"] == "league_link_fallback_skipped_table_authoritative" for log in logs))
+
     def test_parse_league_json_ld_uses_sao_paulo_date_for_late_games(self) -> None:
         html = """
         <html><head>
