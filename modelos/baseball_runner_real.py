@@ -212,8 +212,8 @@ def add_odd_to_game(game: dict[str, Any], row: dict[str, Any]) -> None:
     mercado = normalize_key(row.get("mercado"))
     pick = clean(row.get("pick"))
     linha = parse_float(row.get("linha"))
-    odd = parse_float(row.get("odd"))
-    if not odd or odd <= 1:
+    quote = build_odds_quote(row)
+    if not quote:
         return
 
     home = game["home"]
@@ -223,20 +223,24 @@ def add_odd_to_game(game: dict[str, Any], row: dict[str, Any]) -> None:
 
     if any(token in mercado for token in ("moneyline", "homeaway", "vencedor")):
         if is_pick_team(pick, home):
-            set_best(game["moneyline"], "home", odd)
-            game["wide"]["odds_HomeAway_FT_including_OT_1"] = game["moneyline"]["home"]
+            set_best_quote(game["moneyline"], "home", quote)
+            game["wide"]["odds_HomeAway_FT_including_OT_1"] = quote_offered(game["moneyline"]["home"])
+            game["wide"]["odds_HomeAway_FT_including_OT_1_MEDIANA"] = quote_consensus(game["moneyline"]["home"])
         elif is_pick_team(pick, away):
-            set_best(game["moneyline"], "away", odd)
-            game["wide"]["odds_HomeAway_FT_including_OT_2"] = game["moneyline"]["away"]
+            set_best_quote(game["moneyline"], "away", quote)
+            game["wide"]["odds_HomeAway_FT_including_OT_2"] = quote_offered(game["moneyline"]["away"])
+            game["wide"]["odds_HomeAway_FT_including_OT_2_MEDIANA"] = quote_consensus(game["moneyline"]["away"])
         return
 
     if any(token in mercado for token in ("overunder", "totaldecorridas", "totalruns", "total")) and linha is not None:
         if "over" in pick_key:
-            set_best(game["totals"][line_key], "over", odd)
-            game["wide"][f"odds_OverUnder_FT_including_OT_{line_key}_Over"] = game["totals"][line_key]["over"]
+            set_best_quote(game["totals"][line_key], "over", quote)
+            game["wide"][f"odds_OverUnder_FT_including_OT_{line_key}_Over"] = quote_offered(game["totals"][line_key]["over"])
+            game["wide"][f"odds_OverUnder_FT_including_OT_{line_key}_Over_MEDIANA"] = quote_consensus(game["totals"][line_key]["over"])
         elif "under" in pick_key:
-            set_best(game["totals"][line_key], "under", odd)
-            game["wide"][f"odds_OverUnder_FT_including_OT_{line_key}_Under"] = game["totals"][line_key]["under"]
+            set_best_quote(game["totals"][line_key], "under", quote)
+            game["wide"][f"odds_OverUnder_FT_including_OT_{line_key}_Under"] = quote_offered(game["totals"][line_key]["under"])
+            game["wide"][f"odds_OverUnder_FT_including_OT_{line_key}_Under_MEDIANA"] = quote_consensus(game["totals"][line_key]["under"])
         return
 
     if any(token in mercado for token in ("handicap", "runline", "asian")) and linha is not None:
@@ -244,8 +248,54 @@ def add_odd_to_game(game: dict[str, Any], row: dict[str, Any]) -> None:
         if not side:
             return
         key = format_signed_line(linha)
-        set_best(game["handicaps"][key], side, odd)
+        set_best_quote(game["handicaps"][key], side, quote)
         game["handicaps"][key][f"{side}_line"] = linha
+
+
+def build_odds_quote(row: dict[str, Any]) -> dict[str, Any] | None:
+    offered = parse_float(row.get("odd_melhor")) or parse_float(row.get("odd"))
+    consensus = parse_float(row.get("odd_mediana")) or parse_float(row.get("odd_media")) or parse_float(row.get("odd"))
+    if not offered or offered <= 1:
+        return None
+    if not consensus or consensus <= 1:
+        consensus = offered
+    return {
+        "offered": offered,
+        "consensus": consensus,
+        "best": offered,
+        "bookmaker": clean(row.get("bookmaker_melhor")) or clean(row.get("bookmaker")),
+        "raw_odd": parse_float(row.get("odd")),
+        "median": parse_float(row.get("odd_mediana")),
+        "average": parse_float(row.get("odd_media")),
+    }
+
+
+def quote_offered(value: Any) -> float | None:
+    if isinstance(value, dict):
+        return parse_float(value.get("offered") or value.get("best") or value.get("odd"))
+    return parse_float(value)
+
+
+def quote_consensus(value: Any) -> float | None:
+    if isinstance(value, dict):
+        return parse_float(value.get("consensus") or value.get("median") or value.get("offered") or value.get("odd"))
+    return parse_float(value)
+
+
+def quote_bookmaker(value: Any) -> str:
+    if isinstance(value, dict):
+        return clean(value.get("bookmaker"))
+    return ""
+
+
+def set_best_quote(target: dict[str, Any], key: str, quote: dict[str, Any]) -> None:
+    current = target.get(key)
+    current_offered = quote_offered(current)
+    next_offered = quote_offered(quote)
+    if next_offered is None:
+        return
+    if current_offered is None or next_offered > current_offered:
+        target[key] = quote
 
 
 def set_best(target: dict[str, Any], key: str, odd: float) -> None:
@@ -465,6 +515,9 @@ def generate_game_picks(
             expected_away,
             game_context,
             handicap_audit_rows,
+            market_odd=candidate.get("market_odd"),
+            other_market_odd=candidate.get("other_market_odd"),
+            bookmaker_melhor=candidate.get("bookmaker_melhor"),
         )
 
     return picks
@@ -479,13 +532,17 @@ def add_moneyline_pick(
     sim_prob: float,
     game_context: str,
 ) -> None:
-    odd = game["moneyline"].get(side)
+    quote = game["moneyline"].get(side)
+    odd = quote_offered(quote)
     if not odd:
         return
-    other_odd = game["moneyline"].get("away" if side == "home" else "home")
+    other_quote = game["moneyline"].get("away" if side == "home" else "home")
+    other_odd = quote_offered(other_quote)
     if not other_odd:
         return
-    vig_prob = no_vig_probability(odd, other_odd)
+    market_odd = quote_consensus(quote) or odd
+    other_market_odd = quote_consensus(other_quote) or other_odd
+    vig_prob = no_vig_probability(market_odd, other_market_odd)
     hist_prob = home.win_rate if side == "home" else away.win_rate
     prob = weighted({"vit": hist_prob, "sim": sim_prob, "vig": vig_prob}, PROB_ML_WEIGHTS)
     team = game["home"] if side == "home" else game["away"]
@@ -503,6 +560,10 @@ def add_moneyline_pick(
             "prob_hist": hist_prob,
             "prob_sim": sim_prob,
             "prob_no_vig": vig_prob,
+            "odd_consenso": market_odd,
+            "odd_oposta_consenso": other_market_odd,
+            "odd_melhor": odd,
+            "bookmaker_melhor": quote_bookmaker(quote),
             "sample_size_hist": (home.games if side == "home" else away.games),
             "warnings": [],
         },
@@ -514,19 +575,25 @@ def add_total_pick(
     game: dict[str, Any],
     side: str,
     line: float,
-    odd: float | None,
+    odd: Any,
     sim_prob: float,
     hist_prob: float,
-    other_odd: float | None,
+    other_odd: Any,
     game_context: str,
     sample_size_hist: int,
     warnings: list[str],
 ) -> None:
+    quote = odd
+    other_quote = other_odd
+    odd = quote_offered(quote)
+    other_odd = quote_offered(other_quote)
     if not odd:
         return
     if not other_odd:
         return
-    vig_prob = no_vig_probability(odd, other_odd)
+    market_odd = quote_consensus(quote) or odd
+    other_market_odd = quote_consensus(other_quote) or other_odd
+    vig_prob = no_vig_probability(market_odd, other_market_odd)
     prob = weighted({"hist": hist_prob, "sim": sim_prob, "vig": vig_prob}, PROB_OU_WEIGHTS)
     append_if_ev(
         picks,
@@ -542,6 +609,10 @@ def add_total_pick(
             "prob_hist": hist_prob,
             "prob_sim": sim_prob,
             "prob_no_vig": vig_prob,
+            "odd_consenso": market_odd,
+            "odd_oposta_consenso": other_market_odd,
+            "odd_melhor": odd,
+            "bookmaker_melhor": quote_bookmaker(quote),
             "sample_size_hist": sample_size_hist,
             "warnings": warnings,
         },
@@ -589,17 +660,30 @@ def iter_handicap_candidates(game: dict[str, Any]) -> list[dict[str, Any]]:
     by_side_line: dict[tuple[str, float], dict[str, Any]] = {}
     for odds in game.get("handicaps", {}).values():
         for side in ("home", "away"):
-            odd = odds.get(side)
+            quote = odds.get(side)
+            odd = quote_offered(quote)
             line = odds.get(f"{side}_line")
             if odd is None or line is None:
                 continue
-            by_side_line[(side, float(line))] = {"side": side, "line": float(line), "odd": float(odd)}
+            by_side_line[(side, float(line))] = {
+                "side": side,
+                "line": float(line),
+                "odd": float(odd),
+                "market_odd": quote_consensus(quote) or float(odd),
+                "bookmaker_melhor": quote_bookmaker(quote),
+            }
 
     candidates: list[dict[str, Any]] = []
     for (side, line), item in sorted(by_side_line.items(), key=lambda pair: (pair[0][0], pair[0][1])):
         other_side = "away" if side == "home" else "home"
         other = by_side_line.get((other_side, -line))
-        candidates.append({**item, "other_odd": other.get("odd") if other else None})
+        candidates.append(
+            {
+                **item,
+                "other_odd": other.get("odd") if other else None,
+                "other_market_odd": other.get("market_odd") if other else None,
+            }
+        )
     return candidates
 
 
@@ -616,6 +700,9 @@ def add_handicap_pick(
     expected_away: float,
     game_context: str,
     handicap_audit_rows: list[dict[str, Any]] | None = None,
+    market_odd: float | None = None,
+    other_market_odd: float | None = None,
+    bookmaker_melhor: str = "",
 ) -> None:
     if not HANDICAP_ENABLED_MLB_V1_1:
         return
@@ -636,6 +723,9 @@ def add_handicap_pick(
         "pick": f"{team_name} {line_text}",
         "linha": line,
         "odd": odd,
+        "odd_mediana": market_odd,
+        "odd_melhor": odd,
+        "bookmaker_melhor": bookmaker_melhor,
         "expected_home": expected_home,
         "expected_away": expected_away,
         "expected_margin_home": expected_margin_home,
@@ -689,7 +779,9 @@ def add_handicap_pick(
     hist = historical_handicap_cover_rate(team_stats, line)
     hist_prob = float(hist["cover_rate_shrunk"])
     sim_prob = handicap_cover_probability_poisson(expected_home, expected_away, side, line)
-    vig_prob = no_vig_probability(odd, other_odd)
+    market_odd = market_odd or odd
+    other_market_odd = other_market_odd or other_odd
+    vig_prob = no_vig_probability(market_odd, other_market_odd)
     prob = weighted({"hist": hist_prob, "sim": sim_prob, "vig": vig_prob}, PROB_HC_WEIGHTS)
     odd_valor = 1 / prob if prob > 0 else 0.0
     edge = (odd * prob - 1) * 100
@@ -697,6 +789,10 @@ def add_handicap_pick(
         "prob_hist": hist_prob,
         "prob_sim": sim_prob,
         "prob_no_vig": vig_prob,
+        "odd_consenso": market_odd,
+        "odd_oposta_consenso": other_market_odd,
+        "odd_melhor": odd,
+        "bookmaker_melhor": bookmaker_melhor,
         "prob_final": prob,
         "odd_justa": odd_valor,
         "edge": edge,
@@ -736,6 +832,8 @@ def add_handicap_pick(
         home=home,
         away=away,
         other_odd=other_odd,
+        market_odd=market_odd,
+        other_market_odd=other_market_odd,
         warnings=warnings,
     )
     audit("", passed=True, extra=common_audit)
@@ -753,6 +851,10 @@ def add_handicap_pick(
             "prob_hist": hist_prob,
             "prob_sim": sim_prob,
             "prob_no_vig": vig_prob,
+            "odd_consenso": market_odd,
+            "odd_oposta_consenso": other_market_odd,
+            "odd_melhor": odd,
+            "bookmaker_melhor": bookmaker_melhor,
             "sample_size_hist": hist["sample_size_hist"],
             "warnings": warnings,
         },
@@ -801,16 +903,20 @@ def append_if_ev(
         return False
     diagnostics = diagnostics or {}
     warnings = diagnostics.get("warnings") or []
+    market_odd = parse_float(diagnostics.get("odd_consenso"))
+    best_odd = parse_float(diagnostics.get("odd_melhor")) or odd
+    bookmaker_melhor = clean(diagnostics.get("bookmaker_melhor"))
     debug_text = (
         f" modelo_versao={MODEL_VERSION}; prob_hist={float(diagnostics.get('prob_hist', 0.0)):.4f};"
         f" prob_sim={float(diagnostics.get('prob_sim', 0.0)):.4f};"
         f" prob_no_vig={float(diagnostics.get('prob_no_vig', 0.0)):.4f};"
+        f" odd_mercado_base={(market_odd or odd):.3f};"
         f" prob_final={prob:.4f}; sample_size_hist={int(diagnostics.get('sample_size_hist') or 0)};"
         f" warnings={','.join(str(item) for item in warnings) if warnings else 'nenhum'}."
     )
     observacoes = (
         f"Modelo Baseball MLB. {extra}. Odd ofertada {odd:.3f}; odd valor {odd_valor:.3f}; "
-        f"probabilidade final {prob * 100:.2f}%; edge {edge:.2f}%.{debug_text}"
+        f"odd mercado base {(market_odd or odd):.3f}; probabilidade final {prob * 100:.2f}%; edge {edge:.2f}%.{debug_text}"
     )
     picks.append(
         {
@@ -827,6 +933,10 @@ def append_if_ev(
             "modelo_versao": MODEL_VERSION,
             "odd": round(odd, 3),
             "odd_ofertada": round(odd, 3),
+            "odd_melhor": round(best_odd, 3),
+            "odd_mediana": round(market_odd, 3) if market_odd else round(odd, 3),
+            "odd_mercado_base": round(market_odd, 3) if market_odd else round(odd, 3),
+            "bookmaker_melhor": bookmaker_melhor,
             "odd_valor": round(odd_valor, 3),
             "probabilidade": round(prob * 100, 2),
             "probabilidade_final": round(prob * 100, 2),
@@ -996,6 +1106,8 @@ def build_handicap_technical_context(
     home: TeamStats,
     away: TeamStats,
     other_odd: float,
+    market_odd: float,
+    other_market_odd: float,
     warnings: list[str],
 ) -> str:
     expected_margin_home = expected_home - expected_away
@@ -1007,6 +1119,7 @@ def build_handicap_technical_context(
             f"Pick: {pick}",
             f"Linha: {format_signed_line(line)}",
             f"Odd ofertada: {odd:.3f}",
+            f"Odd mercado base: {market_odd:.3f}",
             f"Odd justa: {odd_valor:.3f}",
             f"Edge: {edge:.2f}%",
             f"Probabilidade final: {prob * 100:.2f}%",
@@ -1026,7 +1139,7 @@ def build_handicap_technical_context(
             f"Total expected: {expected_home + expected_away:.3f}",
             f"{game['home']} medias: marcadas={home.avg_for:.2f}; sofridas={home.avg_against:.2f}; diff={home.avg_for - home.avg_against:+.2f}",
             f"{game['away']} medias: marcadas={away.avg_for:.2f}; sofridas={away.avg_against:.2f}; diff={away.avg_for - away.avg_against:+.2f}",
-            f"No-vig pair: odd_pick={odd:.3f}; odd_oposta={other_odd:.3f}",
+            f"No-vig pair: odd_pick_base={market_odd:.3f}; odd_oposta_base={other_market_odd:.3f}; odd_pick_ofertada={odd:.3f}; odd_oposta_ofertada={other_odd:.3f}",
             f"Warnings: {', '.join(warnings) if warnings else 'nenhum'}",
             "mode: controlled_activation",
             f"model_version: {BASEBALL_MLB_HANDICAP_MODEL_VERSION}",
@@ -1184,6 +1297,10 @@ def write_output_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "linha",
         "modelo_versao",
         "odd_ofertada",
+        "odd_mediana",
+        "odd_mercado_base",
+        "odd_melhor",
+        "bookmaker_melhor",
         "odd_valor",
         "probabilidade_final",
         "edge",
@@ -1208,6 +1325,9 @@ def write_handicap_audit_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "pick",
         "linha",
         "odd",
+        "odd_mediana",
+        "odd_melhor",
+        "bookmaker_melhor",
         "prob_hist",
         "prob_sim",
         "prob_no_vig",
