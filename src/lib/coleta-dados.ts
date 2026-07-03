@@ -966,12 +966,17 @@ export async function fetchCollections(): Promise<ColetaOdds[]> {
   return (data ?? []) as ColetaOdds[];
 }
 
-export async function fetchOddsRows(): Promise<OddsJogo[]> {
-  const { data, error } = await coletaDb
+export async function fetchOddsRows(params: { date?: string | null; limit?: number } = {}): Promise<OddsJogo[]> {
+  let query = coletaDb
     .from("odds_jogos")
     .select("*")
-    .order("created_at", { ascending: false })
-    .limit(5000);
+    .order("created_at", { ascending: false });
+
+  if (params.date) {
+    query = query.eq("data", params.date);
+  }
+
+  const { data, error } = await query.limit(params.limit ?? 5000);
   if (error) throw error;
   return (data ?? []) as OddsJogo[];
 }

@@ -141,7 +141,7 @@ function AspScreenerPage() {
   });
   const { data: oddsRows = [] } = useQuery({
     queryKey: ["odds-jogos-mlb-screener", snapshotDate],
-    queryFn: fetchOddsRows,
+    queryFn: () => fetchOddsRows({ date: snapshotDate, limit: 20000 }),
   });
   const {
     data: handoffAuditRows = [],
@@ -173,8 +173,8 @@ function AspScreenerPage() {
     () =>
       oddsRows.filter((row) => {
         if (row.data !== snapshotDate) return false;
-        if (row.esporte !== "Baseball") return false;
-        return !row.liga || /mlb/i.test(row.liga);
+        if (!isBaseballSport(row.esporte)) return false;
+        return isMlbLeague(row.liga);
       }),
     [oddsRows, snapshotDate],
   );
@@ -3228,6 +3228,16 @@ function normalizeText(value: string | null | undefined) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+}
+
+function isBaseballSport(value: string | null | undefined) {
+  const normalized = normalizeText(value);
+  return /baseball|beisebol|mlb/.test(normalized);
+}
+
+function isMlbLeague(value: string | null | undefined) {
+  const normalized = normalizeText(value);
+  return !normalized || /mlb|major league baseball/.test(normalized);
 }
 
 function todayIso() {
