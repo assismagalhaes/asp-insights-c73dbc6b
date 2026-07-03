@@ -75,6 +75,10 @@ SPORT_LABELS = {
     "hockey": "Hockey",
     "american-football": "American Football",
 }
+
+BASEBALL_TEAM_NAME_ALIASES = {
+    "Oakland Athletics": "Athletics",
+}
 ODDSAGORA_BET_TYPE_BY_MARKET = {
     "1x2": 1,
     "home-away": 3,
@@ -470,12 +474,21 @@ def _parse_title(title: str, fallback_year: int) -> tuple[str, str, str]:
     return home.strip(), away.strip(), parsed_date
 
 
+def _normalize_team_name_for_sport(name: str, sport_key: str) -> str:
+    text = _clean_text(name)
+    if sport_key == "baseball":
+        return BASEBALL_TEAM_NAME_ALIASES.get(text, text)
+    return text
+
+
 def _game_from_link(link: dict[str, str], markets: list[str], fallback_year: int, sport_key: str, sport_label: str, league_label: str) -> dict[str, Any] | None:
     href = link.get("href") or ""
     if _h2h_marker(sport_key) not in href:
         return None
     match_url = _absolute_url(href)
     home, away, parsed_date = _parse_title(link.get("title") or "", fallback_year)
+    home = _normalize_team_name_for_sport(home, sport_key)
+    away = _normalize_team_name_for_sport(away, sport_key)
     if not home or not away:
         return None
     game_id = extract_oddsagora_game_id(match_url) or match_url.rstrip("/").rsplit("/", 1)[-1]
@@ -501,8 +514,8 @@ def _game_from_row(row: dict[str, Any], current_date: str, markets: list[str], s
     team_cells = [cell for cell in cells[time_pos + 1 :] if not _first_odd(cell) and "%" not in cell]
     if len(team_cells) < 2:
         return None
-    home = team_cells[0]
-    away = team_cells[1]
+    home = _normalize_team_name_for_sport(team_cells[0], sport_key)
+    away = _normalize_team_name_for_sport(team_cells[1], sport_key)
     h2h_links = [href for href in row.get("hrefs", []) if _h2h_marker(sport_key) in href]
     match_url = _absolute_url(h2h_links[0]) if h2h_links else ""
     game_id = extract_oddsagora_game_id(match_url) or (match_url.rstrip("/").rsplit("/", 1)[-1] if match_url else f"{home}-{away}-{current_date}")
@@ -587,6 +600,8 @@ def _game_from_json_ld_event(event: dict[str, Any], markets: list[str], sport_ke
     away = _team_name(event.get("awayTeam"))
     if not home or not away:
         home, away = _split_event_name(str(event.get("name") or ""))
+    home = _normalize_team_name_for_sport(home, sport_key)
+    away = _normalize_team_name_for_sport(away, sport_key)
     local_date, local_time = _local_start_date_time(start_date)
     return {
         "game_id": game_id,
