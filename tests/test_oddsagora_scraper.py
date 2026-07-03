@@ -38,6 +38,37 @@ class OddsAgoraScraperParserTests(unittest.TestCase):
         self.assertEqual(games[0]["markets"]["home-away"][0]["home_odd"], 1.73)
         self.assertTrue(games[0]["market_urls"]["over-under"].endswith("#YReFE9Wa:over-under;1"))
 
+    def test_parse_football_league_table_extracts_h2h_and_1x2_odds(self) -> None:
+        html = """
+        <html><head><title>Odds para Apostas em Serie A</title></head><body>
+          <table>
+            <tr><th>Hoje, 03 Jul</th><th>1</th><th>X</th><th>2</th></tr>
+            <tr>
+              <td>16:00</td>
+              <td><a href="/football/h2h/flamengo-rJ9abcde/palmeiras-xY8pqwer/#AbCd1234:1x2;1">Flamengo</a></td>
+              <td>Palmeiras</td>
+              <td>2.10</td><td>3.20</td><td>3.60</td>
+            </tr>
+          </table>
+        </body></html>
+        """
+
+        games = parse_league_html(
+            "https://www.oddsagora.com.br/football/brazil/brasileirao-betano",
+            html,
+            ["1x2", "over-under", "ah"],
+            data_inicio="2026-07-03",
+            data_fim="2026-07-03",
+        )
+
+        self.assertEqual(len(games), 1)
+        self.assertEqual(games[0]["sport"], "Football")
+        self.assertEqual(games[0]["league"], "Brazil - Brasileirao Betano")
+        self.assertEqual(games[0]["game_id"], "AbCd1234")
+        self.assertEqual(games[0]["markets"]["1x2"][0]["home_odd"], 2.10)
+        self.assertEqual(games[0]["markets"]["1x2"][0]["draw_odd"], 3.20)
+        self.assertEqual(games[0]["markets"]["1x2"][0]["away_odd"], 3.60)
+
     def test_parse_league_json_ld_uses_sao_paulo_date_for_late_games(self) -> None:
         html = """
         <html><head>
@@ -176,6 +207,32 @@ class OddsAgoraScraperParserTests(unittest.TestCase):
         self.assertEqual(rows[0]["line"], 7.5)
         self.assertEqual(rows[0]["odd_over"], 1.91)
         self.assertEqual(rows[0]["odd_under"], 1.95)
+
+    def test_parse_match_event_payload_supports_1x2(self) -> None:
+        payload = {
+            "s": 1,
+            "d": {
+                "bt": 1,
+                "sc": 1,
+                "oddsdata": {
+                    "back": {
+                        "E-1-1-0-0-0": {
+                            "odds": {"16": [2.1, 3.2, 3.6]},
+                            "movement": {"16": ["up", "down", "up"]},
+                            "act": {"16": True},
+                        },
+                    },
+                },
+            },
+        }
+
+        rows = parse_match_event_payload(payload, "1x2", {"16": "bet365"})
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["bookmaker"], "bet365")
+        self.assertEqual(rows[0]["home_odd"], 2.1)
+        self.assertEqual(rows[0]["draw_odd"], 3.2)
+        self.assertEqual(rows[0]["away_odd"], 3.6)
 
 
 if __name__ == "__main__":
