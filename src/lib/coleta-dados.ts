@@ -1033,6 +1033,10 @@ async function fetchOddsRowsFromCollectionPayloads(params: FetchOddsRowsParams):
       const payloadRows = filterOddsRowsForParams(
         normalized.rows.map((row, index) => ({
           ...row,
+          raw_ref: {
+            ...row.raw_ref,
+            screener_source: "coletas_odds_payload",
+          },
           id: `${coleta.id ?? "coleta"}:${rows.length + index}`,
           coleta_id: coleta.id ?? null,
           created_at: coleta.created_at ?? coleta.updated_at ?? new Date(0).toISOString(),
