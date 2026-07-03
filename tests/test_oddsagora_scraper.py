@@ -38,6 +38,36 @@ class OddsAgoraScraperParserTests(unittest.TestCase):
         self.assertEqual(games[0]["markets"]["home-away"][0]["home_odd"], 1.73)
         self.assertTrue(games[0]["market_urls"]["over-under"].endswith("#YReFE9Wa:over-under;1"))
 
+    def test_parse_league_json_ld_uses_sao_paulo_date_for_late_games(self) -> None:
+        html = """
+        <html><head>
+          <script type="application/ld+json">
+          {
+            "@context": "https://schema.org",
+            "@type": "SportsEvent",
+            "name": "Washington Nationals - Pittsburgh Pirates",
+            "startDate": "2026-07-04T00:45:00+02:00",
+            "url": "https://www.oddsagora.com.br/baseball/h2h/pittsburgh-pirates-tr9K2SqG/washington-nationals-CEO26qRp/#YReEF9Wa/"
+          }
+          </script>
+        </head><body></body></html>
+        """
+
+        games = parse_league_html(
+            "https://www.oddsagora.com.br/baseball/usa/mlb/",
+            html,
+            ["home-away", "over-under", "ah"],
+            data_inicio="2026-07-03",
+            data_fim="2026-07-03",
+        )
+
+        self.assertEqual(len(games), 1)
+        self.assertEqual(games[0]["game_id"], "YReEF9Wa")
+        self.assertEqual(games[0]["date"], "2026-07-03")
+        self.assertEqual(games[0]["time"], "19:45")
+        self.assertEqual(games[0]["home_team"], "Washington Nationals")
+        self.assertEqual(games[0]["away_team"], "Pittsburgh Pirates")
+
     def test_parse_home_away_market_table(self) -> None:
         html = """
         <table>
@@ -104,6 +134,21 @@ class OddsAgoraScraperParserTests(unittest.TestCase):
         self.assertEqual(template["sport_id"], "6")
         self.assertEqual(template["scope_id"], "1")
         self.assertEqual(template["xhashf"], "yj650")
+
+    def test_extract_match_event_template_reuses_page_hash_for_requested_game(self) -> None:
+        html = r'''
+        <script>
+        data='{"requestPreMatch":{"url":"\/match-event\/9-6-f3cCact2-3-1-yj806.dat?_="}}'
+        </script>
+        '''
+
+        template = _extract_match_event_template(html, "27mVBRVO")
+
+        self.assertEqual(template["version_id"], "9")
+        self.assertEqual(template["sport_id"], "6")
+        self.assertEqual(template["source_game_id"], "f3cCact2")
+        self.assertEqual(template["scope_id"], "1")
+        self.assertEqual(template["xhashf"], "yj806")
 
     def test_parse_match_event_payload_uses_provider_names(self) -> None:
         payload = {
