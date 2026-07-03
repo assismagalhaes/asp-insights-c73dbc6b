@@ -12,6 +12,19 @@ export interface NormalizedOdd {
   pick: string;
   linha: string | null;
   odd: number;
+  odd_media?: number | null;
+  odd_mediana?: number | null;
+  odd_minima?: number | null;
+  odd_maxima?: number | null;
+  odd_melhor?: number | null;
+  bookmaker_melhor?: string | null;
+  odd_desvio_padrao?: number | null;
+  casas_count?: number | null;
+  odds_disponiveis?: number | null;
+  probabilidade_implicita_media?: number | null;
+  probabilidade_implicita_mediana?: number | null;
+  margem_mercado_media?: number | null;
+  margem_mercado_mediana?: number | null;
   bookmaker: string | null;
   fonte: string | null;
   capturado_em: string | null;
@@ -597,6 +610,19 @@ function normalizeVmRow(row: Record<string, unknown>, esporteHint?: string | nul
     pick: requiredText(row.pick ?? row.selecao ?? row.selection ?? row.selection_name ?? row.outcome, "Pick"),
     linha: toText(row.linha ?? row.line ?? row.handicap ?? row.total),
     odd: toNumber(row.odd ?? row.price ?? row.odds ?? row.cotacao ?? row.cota ?? row.decimal ?? row.odd_decimal ?? row.valor) ?? 0,
+    odd_media: toNumber(row.odd_media ?? row.odd_avg),
+    odd_mediana: toNumber(row.odd_mediana ?? row.odd_median),
+    odd_minima: toNumber(row.odd_minima ?? row.odd_min),
+    odd_maxima: toNumber(row.odd_maxima ?? row.odd_max),
+    odd_melhor: toNumber(row.odd_melhor ?? row.odd_best),
+    bookmaker_melhor: toText(row.bookmaker_melhor ?? row.bookmaker_best),
+    odd_desvio_padrao: toNumber(row.odd_desvio_padrao ?? row.odd_std),
+    casas_count: toNumber(row.casas_count ?? row.bookmakers_count),
+    odds_disponiveis: toNumber(row.odds_disponiveis ?? row.odds_available),
+    probabilidade_implicita_media: toNumber(row.probabilidade_implicita_media ?? row.market_prob_consensus_avg),
+    probabilidade_implicita_mediana: toNumber(row.probabilidade_implicita_mediana ?? row.market_prob_consensus_median),
+    margem_mercado_media: toNumber(row.margem_mercado_media ?? row.market_overround_avg),
+    margem_mercado_mediana: toNumber(row.margem_mercado_mediana ?? row.market_overround_median),
     bookmaker: toText(row.bookmaker ?? row.book ?? row.casa_aposta ?? row.bookmaker_name),
     fonte: normalizeFlashscoreUrl(fonte) ?? fonte,
     capturado_em: toText(row.capturado_em ?? row.captured_at ?? row.updated_at) ?? parseCapturedAt(row.att),
@@ -630,9 +656,58 @@ function dedupeRows(rows: NormalizedOdd[]): { rows: NormalizedOdd[]; duplicated:
 }
 
 export function toCsv(rows: NormalizedOdd[]): string {
-  const headers = ["data", "hora", "esporte", "liga", "jogo", "mandante", "visitante", "mercado", "pick", "linha", "odd", "bookmaker", "fonte", "capturado_em"];
+  const headers = [
+    "data",
+    "hora",
+    "esporte",
+    "liga",
+    "jogo",
+    "mandante",
+    "visitante",
+    "mercado",
+    "pick",
+    "linha",
+    "odd",
+    "odd_media",
+    "odd_mediana",
+    "odd_minima",
+    "odd_maxima",
+    "odd_melhor",
+    "bookmaker_melhor",
+    "odd_desvio_padrao",
+    "casas_count",
+    "odds_disponiveis",
+    "probabilidade_implicita_media",
+    "probabilidade_implicita_mediana",
+    "margem_mercado_media",
+    "margem_mercado_mediana",
+    "bookmaker",
+    "fonte",
+    "capturado_em",
+  ];
   const escape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
   return [headers.join(","), ...rows.map((row) => headers.map((h) => escape(row[h as keyof NormalizedOdd])).join(","))].join("\n");
+}
+
+function toOddsJogoInsert(row: NormalizedOdd, coletaId: string) {
+  return {
+    coleta_id: coletaId,
+    data: row.data,
+    hora: row.hora,
+    esporte: row.esporte,
+    liga: row.liga,
+    jogo: row.jogo,
+    mandante: row.mandante,
+    visitante: row.visitante,
+    mercado: row.mercado,
+    pick: row.pick,
+    linha: row.linha,
+    odd: row.odd,
+    bookmaker: row.bookmaker,
+    fonte: row.fonte,
+    capturado_em: row.capturado_em,
+    raw_ref: row.raw_ref,
+  };
 }
 
 export function downloadText(filename: string, content: string, type = "text/csv;charset=utf-8") {
@@ -668,7 +743,7 @@ export async function saveCollection(raw: unknown, normalized: NormalizedCollect
   if (error) throw error;
 
   if (deduped.rows.length) {
-    const payload = deduped.rows.map((row) => ({ ...row, coleta_id: coleta.id }));
+    const payload = deduped.rows.map((row) => toOddsJogoInsert(row, coleta.id));
     const { error: rowsError } = await coletaDb.from("odds_jogos").insert(payload);
     if (rowsError) throw rowsError;
   }
@@ -754,7 +829,7 @@ export async function completeRemoteCollection(
   if (deleteError) throw deleteError;
 
   if (deduped.rows.length) {
-    const payload = deduped.rows.map((row) => ({ ...row, coleta_id: coletaId }));
+    const payload = deduped.rows.map((row) => toOddsJogoInsert(row, coletaId));
     const { error: rowsError } = await coletaDb.from("odds_jogos").insert(payload);
     if (rowsError) throw rowsError;
   }

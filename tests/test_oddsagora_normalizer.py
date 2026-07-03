@@ -54,6 +54,15 @@ class OddsAgoraNormalizerTests(unittest.TestCase):
         self.assertEqual({abs(row["line"]) for row in handicaps}, {1.5})
         self.assertTrue(all(row["odd_best"] >= row["odd"] for row in rows))
         self.assertTrue(all("market_prob_consensus_median" in row for row in rows))
+        home_moneyline = [row for row in rows if row["market"] == "Home/Away" and row["side"] == "home"]
+        self.assertEqual(len(home_moneyline), 2)
+        self.assertTrue(all(row["casas_count"] == 2 for row in home_moneyline))
+        self.assertTrue(all(row["odds_disponiveis"] == 2 for row in home_moneyline))
+        self.assertTrue(all(row["odd_media"] == row["odd_avg"] for row in home_moneyline))
+        self.assertAlmostEqual(home_moneyline[0]["odd_media"], 1.77)
+        self.assertEqual(home_moneyline[0]["odd_melhor"], 1.8)
+        self.assertEqual(home_moneyline[0]["bookmaker_melhor"], "Bet365")
+        self.assertIn("probabilidade_implicita_media", home_moneyline[0])
 
 
 if __name__ == "__main__":
