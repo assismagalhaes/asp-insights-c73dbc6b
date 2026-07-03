@@ -13,7 +13,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { fetchOddsRows } from "@/lib/coleta-dados";
+import {
+  fetchOddsRows,
+  NORMALIZED_PREVIEW_STORAGE_KEY,
+  parseStoredNormalizedPreview,
+  type NormalizedOdd,
+} from "@/lib/coleta-dados";
 import {
   getMlbStandingsSnapshotFn,
   processManualMlbStandingsCsv,
@@ -133,6 +138,7 @@ function AspScreenerPage() {
   const [snapshotDecisionFilter, setSnapshotDecisionFilter] = useState<"all" | "CONFIRMAR" | "PULAR" | "pending">("all");
   const [snapshotMinScore, setSnapshotMinScore] = useState("");
   const [snapshotMinEv, setSnapshotMinEv] = useState("");
+  const [previewOddsRows, setPreviewOddsRows] = useState<NormalizedOdd[]>([]);
 
   const queryKey = ["mlb-standings-snapshot", snapshotDate, season];
   const { data, isFetching } = useQuery({
@@ -143,6 +149,19 @@ function AspScreenerPage() {
     queryKey: ["odds-jogos-mlb-screener", snapshotDate],
     queryFn: () => fetchOddsRows({ date: snapshotDate, limit: 20000 }),
   });
+
+  useEffect(() => {
+    const readPreview = () => {
+      const raw =
+        window.sessionStorage.getItem(NORMALIZED_PREVIEW_STORAGE_KEY) ??
+        window.localStorage.getItem(NORMALIZED_PREVIEW_STORAGE_KEY);
+      const normalized = parseStoredNormalizedPreview(raw);
+      setPreviewOddsRows(normalized?.rows ?? []);
+    };
+    readPreview();
+    window.addEventListener("storage", readPreview);
+    return () => window.removeEventListener("storage", readPreview);
+  }, [snapshotDate]);
   const {
     data: handoffAuditRows = [],
     isFetching: loadingHandoffAudit,
@@ -169,7 +188,7 @@ function AspScreenerPage() {
   });
 
   const snapshot = data?.snapshot ?? null;
-  const mlbOddsRows = useMemo(
+  const mlbDbOddsRows = useMemo(
     () =>
       oddsRows.filter((row) => {
         if (row.data !== snapshotDate) return false;
@@ -178,6 +197,24 @@ function AspScreenerPage() {
       }),
     [oddsRows, snapshotDate],
   );
+  const mlbPreviewOddsRows = useMemo(
+    () =>
+      previewOddsRows.filter((row) => {
+        if (row.data !== snapshotDate) return false;
+        if (!isBaseballSport(row.esporte)) return false;
+        return isMlbLeague(row.liga);
+      }),
+    [previewOddsRows, snapshotDate],
+  );
+  const mlbOddsRows = useMemo(
+    () => (mlbDbOddsRows.length ? mlbDbOddsRows : mlbPreviewOddsRows),
+    [mlbDbOddsRows, mlbPreviewOddsRows],
+  );
+  const mlbOddsSourceLabel = mlbDbOddsRows.length
+    ? "Banco odds_jogos"
+    : mlbPreviewOddsRows.length
+      ? "Preview normalizado"
+      : "-";
   const alerts = useMemo(() => {
     if (!snapshot) return [];
     return [...snapshot.validation.errors, ...snapshot.validation.warnings];
@@ -810,6 +847,7 @@ function AspScreenerPage() {
                 <Info label="Monitorar" value={projectionStats.monitorar} />
                 <Info label="Pular" value={projectionStats.pular} />
                 <Info label="Odds MLB carregadas" value={mlbOddsRows.length} />
+                <Info label="Origem odds" value={mlbOddsSourceLabel} />
               </div>
 
               <div className="flex flex-wrap items-end gap-3">

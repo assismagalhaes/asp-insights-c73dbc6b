@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CloudDownload, Download, FileSpreadsheet, RefreshCw, Save, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -20,7 +20,9 @@ import {
   extractRawGames,
   fetchCollections,
   normalizeVmNormalizedPayload,
+  NORMALIZED_PREVIEW_STORAGE_KEY,
   normalizeOddsJson,
+  serializeNormalizedPreview,
   saveCollection,
   toCsv,
   updateCollectionStatus,
@@ -67,6 +69,22 @@ function ColetaDadosPage() {
     queryKey: ["coletas-odds"],
     queryFn: fetchCollections,
   });
+
+  useEffect(() => {
+    if (!normalized?.rows.length) return;
+    const payload = serializeNormalizedPreview(normalized);
+    try {
+      window.sessionStorage.setItem(NORMALIZED_PREVIEW_STORAGE_KEY, payload);
+    } catch (err) {
+      console.warn("[Coleta Odds] Nao foi possivel gravar preview normalizado em sessionStorage", err);
+    }
+    try {
+      window.localStorage.setItem(NORMALIZED_PREVIEW_STORAGE_KEY, payload);
+    } catch (err) {
+      console.warn("[Coleta Odds] Nao foi possivel gravar preview normalizado em localStorage", err);
+    }
+  }, [normalized]);
+
   const filteredCollections = useMemo(
     () =>
       coletas.filter((coleta) => {
