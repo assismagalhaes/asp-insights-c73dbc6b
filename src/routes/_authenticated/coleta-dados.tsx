@@ -293,6 +293,7 @@ function ColetaDadosPage() {
           <h1 className="text-2xl font-bold tracking-tight">Coleta de Dados</h1>
           <Badge variant="outline">Manual</Badge>
           <Badge variant="outline">VM</Badge>
+          <Badge variant="outline">OddsAgora</Badge>
         </div>
         <p className="text-sm text-muted-foreground">
           Upload manual de JSON dos scrapers Python para normalização, exportação e persistência de odds.
