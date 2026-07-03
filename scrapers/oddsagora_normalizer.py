@@ -243,6 +243,10 @@ def _attach_consensus(rows: list[dict[str, Any]]) -> None:
         row["market_prob_consensus_median"] = _median(probs)
         row["market_overround_avg"] = _avg(rounds)
         row["market_overround_median"] = _median(rounds)
+        row["probabilidade_implicita_media"] = row["market_prob_consensus_avg"]
+        row["probabilidade_implicita_mediana"] = row["market_prob_consensus_median"]
+        row["margem_mercado_media"] = row["market_overround_avg"]
+        row["margem_mercado_mediana"] = row["market_overround_median"]
 
 
 def _attach_aggregates(rows: list[dict[str, Any]]) -> None:
@@ -266,6 +270,15 @@ def _attach_aggregates(rows: list[dict[str, Any]]) -> None:
             row["odd_max"] = max(odds)
             row["odd_std"] = _std(odds)
             row["odds_available"] = len(odds)
+            row["casas_count"] = row["bookmakers_count"]
+            row["odd_melhor"] = row["odd_best"]
+            row["bookmaker_melhor"] = row["bookmaker_best"]
+            row["odd_media"] = row["odd_avg"]
+            row["odd_mediana"] = row["odd_median"]
+            row["odd_minima"] = row["odd_min"]
+            row["odd_maxima"] = row["odd_max"]
+            row["odd_desvio_padrao"] = row["odd_std"]
+            row["odds_disponiveis"] = row["odds_available"]
 
 
 def normalize_oddsagora_raw(raw: dict[str, Any], job_id: str | None = None) -> dict[str, Any]:
