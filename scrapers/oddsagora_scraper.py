@@ -14,6 +14,7 @@ from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 try:
     from scrapers.oddsagora_url import ODDSAGORA_BASE_URL, ODDSAGORA_MLB_URL, build_oddsagora_market_url, extract_oddsagora_game_id
@@ -47,6 +48,7 @@ MONTHS_PT = {
     "nov": 11,
     "dez": 12,
 }
+ODDSAGORA_LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 
 logger = logging.getLogger(__name__)
 
@@ -369,6 +371,109 @@ def _game_from_row(row: dict[str, Any], current_date: str, markets: list[str]) -
     }
 
 
+def _iter_json_objects(value: Any):
+    if isinstance(value, dict):
+        yield value
+        for child in value.values():
+            yield from _iter_json_objects(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _iter_json_objects(child)
+
+
+def _team_name(value: Any) -> str:
+    if isinstance(value, dict):
+        return _clean_text(value.get("name") or value.get("alternateName") or value.get("url") or "")
+    if isinstance(value, str):
+        return _clean_text(value)
+    return ""
+
+
+def _split_event_name(name: str) -> tuple[str, str]:
+    text = _clean_text(name)
+    for separator in (" - ", " vs "):
+        if separator in text:
+            home, away = text.split(separator, 1)
+            return home.strip(), away.strip()
+    return text, ""
+
+
+def _local_start_date_time(value: Any) -> tuple[str, str]:
+    text = _clean_text(value)
+    if not text:
+        return "", ""
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return "", ""
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    local = parsed.astimezone(ODDSAGORA_LOCAL_TZ)
+    return local.date().isoformat(), local.strftime("%H:%M")
+
+
+def _game_from_json_ld_event(event: dict[str, Any], markets: list[str]) -> dict[str, Any] | None:
+    url = _clean_text(event.get("url") or "")
+    start_date = event.get("startDate")
+    if "/baseball/h2h/" not in url or not start_date:
+        return None
+    match_url = _absolute_url(url).rstrip("/")
+    game_id = extract_oddsagora_game_id(match_url)
+    if not game_id:
+        return None
+    home = _team_name(event.get("homeTeam"))
+    away = _team_name(event.get("awayTeam"))
+    if not home or not away:
+        home, away = _split_event_name(str(event.get("name") or ""))
+    local_date, local_time = _local_start_date_time(start_date)
+    return {
+        "game_id": game_id,
+        "date": local_date,
+        "time": local_time,
+        "home_team": home,
+        "away_team": away,
+        "match_url": match_url,
+        "league": "MLB",
+        "sport": "Baseball",
+        "market_urls": {market: build_oddsagora_market_url(match_url, market) for market in markets},
+        "markets": _market_dicts(markets),
+    }
+
+
+def _games_from_json_ld(html: str, markets: list[str], data_inicio: str, data_fim: str, logs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    games_by_key: dict[str, dict[str, Any]] = {}
+    scripts = re.findall(r"<script\b[^>]*type=[\"']application/ld\+json[\"'][^>]*>(.*?)</script>", html, flags=re.IGNORECASE | re.DOTALL)
+    candidates = 0
+    for raw_script in scripts:
+        script = unescape(raw_script).strip()
+        if not script:
+            continue
+        try:
+            payload = json.loads(script)
+        except json.JSONDecodeError as exc:
+            _log(logs, "league_json_ld_decode_failed", error=str(exc))
+            continue
+        for event in _iter_json_objects(payload):
+            game = _game_from_json_ld_event(event, markets)
+            if not game:
+                continue
+            candidates += 1
+            if not _date_in_range(str(game.get("date") or ""), data_inicio, data_fim):
+                _log(
+                    logs,
+                    "league_json_ld_game_skipped_out_of_range",
+                    game_id=game.get("game_id"),
+                    date=game.get("date"),
+                    time=game.get("time"),
+                    name=event.get("name"),
+                )
+                continue
+            games_by_key[_game_key(game)] = game
+    games = list(games_by_key.values())
+    _log(logs, "league_json_ld_parse_finished", scripts=len(scripts), candidates=candidates, games_count=len(games))
+    return games
+
+
 def parse_league_html(
     league_url: str,
     html: str,
@@ -388,6 +493,10 @@ def parse_league_html(
 
     _log(logs, "league_parse_started", league_url=league_url, rows=len(table_parser.rows), h2h_links=len(link_parser.links))
 
+    structured_games = _games_from_json_ld(html, markets, data_inicio, data_fim, logs)
+    for game in structured_games:
+        games_by_key[_game_key(game)] = game
+
     for row in table_parser.rows:
         cells = [_clean_text(cell) for cell in row.get("cells", []) if _clean_text(cell)]
         joined = " ".join(cells)
@@ -405,6 +514,9 @@ def parse_league_html(
         games_by_key[_game_key(game)] = game
 
     for link in link_parser.links:
+        if structured_games:
+            _log(logs, "league_link_skipped_json_ld_authoritative", title=link.get("title"), href=link.get("href"))
+            continue
         game = _game_from_link(link, markets, fallback_year)
         if not game:
             continue
@@ -561,12 +673,19 @@ def _extract_match_event_template(html: str, game_id: str) -> dict[str, Any] | N
     readable = unescape(html).replace("\\/", "/")
     pattern = rf"/match-event/(\d+)-(\d+)-{re.escape(game_id)}-(\d+)-(\d+)-([A-Za-z0-9]+)\.dat\?_="
     match = re.search(pattern, readable)
+    source_game_id = game_id
     if not match:
-        return None
-    version_id, sport_id, default_bet_type, scope_id, xhashf = match.groups()
+        fallback_pattern = r"/match-event/(\d+)-(\d+)-([A-Za-z0-9]+)-(\d+)-(\d+)-([A-Za-z0-9]+)\.dat\?_="
+        fallback = re.search(fallback_pattern, readable)
+        if not fallback:
+            return None
+        version_id, sport_id, source_game_id, default_bet_type, scope_id, xhashf = fallback.groups()
+    else:
+        version_id, sport_id, default_bet_type, scope_id, xhashf = match.groups()
     return {
         "version_id": version_id,
         "sport_id": sport_id,
+        "source_game_id": source_game_id,
         "default_bet_type": default_bet_type,
         "scope_id": scope_id,
         "xhashf": xhashf,
