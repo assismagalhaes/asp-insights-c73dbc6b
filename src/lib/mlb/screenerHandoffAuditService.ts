@@ -26,6 +26,57 @@ const auditDb = supabase as unknown as {
   };
 };
 
+const HANDOFF_AUDIT_COLUMNS = [
+  "id",
+  "user_id",
+  "created_at",
+  "updated_at",
+  "handoff_id",
+  "handoff_version",
+  "source_module",
+  "source_sport",
+  "source_league",
+  "source_stage",
+  "status",
+  "sent_at",
+  "applied_at",
+  "discarded_at",
+  "expires_at",
+  "validation_started_at",
+  "validation_completed_at",
+  "game_id",
+  "event_date",
+  "event_time",
+  "home_team",
+  "away_team",
+  "matchup",
+  "market",
+  "pick",
+  "line",
+  "odd",
+  "bookmaker",
+  "model_probability",
+  "market_probability_no_vig",
+  "fair_odd",
+  "ev",
+  "opportunity_score",
+  "confidence_score",
+  "priority_status",
+  "readiness_status",
+  "alignment_status",
+  "alignment_score",
+  "validator_record_id",
+  "validator_decision",
+  "validator_adjusted_probability",
+  "validator_final_ev",
+  "validator_reason",
+  "opportunity_payload",
+  "critical_payload",
+  "handoff_payload",
+  "validator_context_payload",
+  "metadata",
+].join(",");
+
 type AuditQuery = {
   eq: (column: string, value: string) => AuditQuery;
   order: (column: string, options: { ascending: boolean }) => AuditQuery;
@@ -39,7 +90,7 @@ type AuditFilter = {
 
 export async function createScreenerValidatorHandoffAudit(handoff: MlbValidatorHandoffPayload): Promise<MlbScreenerHandoffAuditRecord> {
   const payload = buildAuditInsertPayload(handoff, "sent_to_validator");
-  const { data, error } = await auditDb.from("asp_screener_validator_handoffs").insert(payload).select("*").single();
+  const { data, error } = await auditDb.from("asp_screener_validator_handoffs").insert(payload).select(HANDOFF_AUDIT_COLUMNS).single();
   if (error) throw error;
   if (!data) throw new Error("Auditoria do handoff nao retornou registro criado.");
   return data;
@@ -114,7 +165,7 @@ export async function listScreenerValidatorHandoffs(filters: MlbScreenerHandoffA
   const limit = filters.limit ?? 500;
   const { data, error } = await auditDb
     .from("asp_screener_validator_handoffs")
-    .select("*")
+    .select(HANDOFF_AUDIT_COLUMNS)
     .eq("source_module", "asp_screener")
     .eq("source_sport", "baseball")
     .eq("source_league", "MLB")
@@ -125,7 +176,7 @@ export async function listScreenerValidatorHandoffs(filters: MlbScreenerHandoffA
 }
 
 export async function getScreenerValidatorHandoffById(id: string) {
-  const { data, error } = await auditDb.from("asp_screener_validator_handoffs").select("*").eq("id", id).single();
+  const { data, error } = await auditDb.from("asp_screener_validator_handoffs").select(HANDOFF_AUDIT_COLUMNS).eq("id", id).single();
   if (error) throw error;
   return data;
 }

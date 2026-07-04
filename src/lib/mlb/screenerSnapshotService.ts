@@ -28,6 +28,89 @@ const snapshotDb = supabase as unknown as {
   };
 };
 
+const DAILY_SNAPSHOT_COLUMNS = [
+  "id",
+  "user_id",
+  "created_at",
+  "updated_at",
+  "snapshot_date",
+  "run_id",
+  "season",
+  "source_module",
+  "source_sport",
+  "source_league",
+  "odds_rows_count",
+  "games_count",
+  "standings_snapshot_date",
+  "standings_source",
+  "moneyline_rows_count",
+  "totals_rows_count",
+  "handicap_rows_count",
+  "unified_opportunities_count",
+  "shortlist_primary_count",
+  "analyze_count",
+  "monitor_count",
+  "skip_count",
+  "missing_data_count",
+  "unsupported_line_count",
+  "status",
+  "execution_summary",
+  "filters_payload",
+  "metadata",
+].join(",");
+
+const OPPORTUNITY_SNAPSHOT_COLUMNS = [
+  "id",
+  "user_id",
+  "created_at",
+  "updated_at",
+  "daily_snapshot_id",
+  "run_id",
+  "opportunity_id",
+  "game_id",
+  "event_date",
+  "event_time",
+  "home_team",
+  "away_team",
+  "matchup",
+  "market_family",
+  "market_label",
+  "pick_label",
+  "selection_team",
+  "side",
+  "line",
+  "line_type",
+  "is_main_line",
+  "distance_from_main_line",
+  "offered_odd",
+  "bookmaker",
+  "market_prob_no_vig",
+  "model_prob",
+  "probability_edge",
+  "fair_odd",
+  "ev",
+  "opportunity_score",
+  "confidence_score",
+  "priority_status",
+  "base_candidate_status",
+  "projection_status",
+  "rank",
+  "is_primary_shortlist",
+  "correlation_group_id",
+  "correlation_status",
+  "correlated_with",
+  "sent_to_validator",
+  "handoff_id",
+  "validator_record_id",
+  "validator_decision",
+  "reasons",
+  "alerts",
+  "risk_flags",
+  "source_projection_payload",
+  "opportunity_payload",
+  "metadata",
+].join(",");
+
 type SnapshotQuery<T> = {
   eq: (column: string, value: string | boolean) => SnapshotQuery<T>;
   order: (column: string, options: { ascending: boolean }) => SnapshotQuery<T>;
@@ -71,7 +154,7 @@ export async function createMlbDailyScreenerSnapshot(input: MlbScreenerSnapshotR
     filters_payload: toJsonSafe(input.filtersPayload ?? {}),
     metadata: toJsonSafe(input.metadata ?? {}),
   };
-  const { data, error } = await snapshotDb.from("asp_screener_mlb_daily_snapshots").insert(payload).select("*").single();
+  const { data, error } = await snapshotDb.from("asp_screener_mlb_daily_snapshots").insert(payload).select(DAILY_SNAPSHOT_COLUMNS).single();
   if (error) throw error;
   if (!data) throw new Error("Snapshot diario nao retornou registro criado.");
   return data;
@@ -83,7 +166,7 @@ export async function saveMlbOpportunitySnapshots(
 ) {
   if (!opportunities.length) return [];
   const payloads = opportunities.map((opportunity) => buildOpportunitySnapshotPayload(daily, opportunity));
-  const { data, error } = await snapshotDb.from("asp_screener_mlb_opportunity_snapshots").insert(payloads).select("*");
+  const { data, error } = await snapshotDb.from("asp_screener_mlb_opportunity_snapshots").insert(payloads).select(OPPORTUNITY_SNAPSHOT_COLUMNS);
   if (error) throw error;
   return data ?? [];
 }
@@ -112,7 +195,7 @@ export async function saveMlbScreenerRunSnapshot(input: MlbScreenerSnapshotRunIn
 export async function listMlbDailyScreenerSnapshots(limit = 25) {
   const { data, error } = await snapshotDb
     .from("asp_screener_mlb_daily_snapshots")
-    .select("*")
+    .select(DAILY_SNAPSHOT_COLUMNS)
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
@@ -122,7 +205,7 @@ export async function listMlbDailyScreenerSnapshots(limit = 25) {
 export async function listMlbOpportunitySnapshots(filters: MlbSnapshotOpportunityFilters = {}) {
   let query = snapshotDb
     .from("asp_screener_mlb_opportunity_snapshots")
-    .select("*")
+    .select(OPPORTUNITY_SNAPSHOT_COLUMNS)
     .order("created_at", { ascending: false });
   if (filters.dailySnapshotId) query = query.eq("daily_snapshot_id", filters.dailySnapshotId);
   if (filters.runId) query = query.eq("run_id", filters.runId);
@@ -132,7 +215,7 @@ export async function listMlbOpportunitySnapshots(filters: MlbSnapshotOpportunit
 }
 
 export async function getMlbScreenerSnapshotByRunId(runId: string) {
-  const { data, error } = await snapshotDb.from("asp_screener_mlb_daily_snapshots").select("*").eq("run_id", runId).single();
+  const { data, error } = await snapshotDb.from("asp_screener_mlb_daily_snapshots").select(DAILY_SNAPSHOT_COLUMNS).eq("run_id", runId).single();
   if (error) throw error;
   return data;
 }

@@ -9,6 +9,8 @@ import { getMlbStandingsSnapshot, validateMlbStandings } from "@/lib/mlb/standin
 
 type LooseSupabase = Pick<SupabaseClient, "from">;
 
+const MLB_ODDS_ROWS_LIMIT = 5000;
+
 function table(db: LooseSupabase, name: string) {
   return (db as unknown as { from: (tableName: string) => any }).from(name);
 }
@@ -17,7 +19,7 @@ export async function fetchMlbOddsRowsForDate(db: LooseSupabase, snapshotDate: s
   const { data, error } = await table(db, "odds_jogos")
     .select("data,hora,mandante,visitante,mercado,pick,linha,odd,odd_media,odd_mediana,odd_minima,odd_maxima,odd_melhor,bookmaker_melhor,casas_count,odds_disponiveis,probabilidade_implicita_media,probabilidade_implicita_mediana,margem_mercado_media,margem_mercado_mediana,bookmaker,fonte,esporte,liga")
     .eq("data", snapshotDate)
-    .limit(20000);
+    .limit(MLB_ODDS_ROWS_LIMIT);
   if (error) throw error;
   return (data ?? [])
     .filter((row: Record<string, unknown>) => isBaseballSport(nullableText(row.esporte)) && isMlbLeague(nullableText(row.liga)))

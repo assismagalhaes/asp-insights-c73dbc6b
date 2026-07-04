@@ -618,7 +618,7 @@ async function carregarOddsDaVm(
 ) {
   const normalizedResult = await getScrapingJobNormalized({ data: { job_id: jobId } });
   const normalizedRaw = normalizedResult.normalized_json;
-  console.log("Normalized payload:", normalizedRaw);
+  if (import.meta.env.DEV) console.debug("Normalized payload:", normalizedRaw);
   const normalizedRows = extractNormalizedRows(normalizedRaw);
   assertTotalLinhasMatches("/normalized", normalizedRaw, normalizedRows);
   const normalizedData = normalizeVmNormalizedPayload(normalizedRaw, { esporte });
@@ -629,7 +629,7 @@ async function carregarOddsDaVm(
   onStatus?.("Normalizado veio vazio; tentando importar a partir do JSON bruto da VM...");
   const rawResult = await getScrapingJobRaw({ data: { job_id: jobId } });
   const raw = rawResult.raw_json;
-  console.log("Raw payload:", raw);
+  if (import.meta.env.DEV) console.debug("Raw payload:", raw);
   const rawGames = extractRawGames(raw);
   const rawNormalizedData = normalizeVmNormalizedPayload(raw, { esporte });
   if (rawNormalizedData.total_odds) {

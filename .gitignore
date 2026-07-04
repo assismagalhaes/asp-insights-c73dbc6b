@@ -11,10 +11,14 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+.codex_tmp/
+.pnpm-store/
 .output
 .vinxi
 .tanstack/**
 .nitro
+__pycache__/
+*.py[cod]
 *.local
 .env
 .env.*

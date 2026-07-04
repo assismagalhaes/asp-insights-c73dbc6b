@@ -88,6 +88,39 @@ const coletaDb = supabase as unknown as {
   from: (table: string) => any;
 };
 const ODDS_INSERT_BATCH_SIZE = 50;
+const ODDS_JOGOS_LIST_COLUMNS = [
+  "id",
+  "coleta_id",
+  "data",
+  "hora",
+  "esporte",
+  "liga",
+  "jogo",
+  "mandante",
+  "visitante",
+  "mercado",
+  "pick",
+  "linha",
+  "odd",
+  "odd_media",
+  "odd_mediana",
+  "odd_minima",
+  "odd_maxima",
+  "odd_melhor",
+  "bookmaker_melhor",
+  "odd_desvio_padrao",
+  "casas_count",
+  "odds_disponiveis",
+  "probabilidade_implicita_media",
+  "probabilidade_implicita_mediana",
+  "margem_mercado_media",
+  "margem_mercado_mediana",
+  "bookmaker",
+  "fonte",
+  "capturado_em",
+  "raw_ref",
+  "created_at",
+].join(",");
 
 function toNumber(value: unknown): number | null {
   if (value == null || value === "") return null;
@@ -468,8 +501,8 @@ export function normalizeVmNormalizedPayload(payload: unknown, opts?: { esporte?
       normalizeMarketRows(game, opts?.esporte),
     );
     if (gameRows.length) {
-      if (typeof console !== "undefined") {
-        console.log("[normalizeVmNormalizedPayload] jogos encontrados por varredura:", gameRows.length, "linhas");
+      if (import.meta.env.DEV) {
+        console.debug("[normalizeVmNormalizedPayload] jogos encontrados por varredura:", gameRows.length, "linhas");
       }
       return buildCollection(gameRows, opts?.esporte);
     }
@@ -477,8 +510,8 @@ export function normalizeVmNormalizedPayload(payload: unknown, opts?: { esporte?
     try {
       const gameShaped = normalizeOddsJson(payload, opts);
       if (gameShaped.rows.length) {
-        if (typeof console !== "undefined") {
-          console.log(
+        if (import.meta.env.DEV) {
+          console.debug(
             "[normalizeVmNormalizedPayload] fallback games-shape utilizado:",
             gameShaped.rows.length,
             "linhas",
@@ -1026,7 +1059,7 @@ export async function fetchCollections(): Promise<ColetaOdds[]> {
 export async function fetchOddsRows(params: FetchOddsRowsParams = {}): Promise<OddsJogo[]> {
   let query = coletaDb
     .from("odds_jogos")
-    .select("*")
+    .select(ODDS_JOGOS_LIST_COLUMNS)
     .order("created_at", { ascending: false });
 
   if (params.date) {

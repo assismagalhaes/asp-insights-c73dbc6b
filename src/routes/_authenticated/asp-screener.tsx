@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ChevronDown, ClipboardCopy, DatabaseZap, FileJson, RefreshCw, RotateCw, Send, Trophy, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -83,6 +83,9 @@ type SnapshotResponse = {
   fromCache: boolean;
 };
 
+const MLB_SCREENER_ODDS_LIMIT = 5000;
+const SNAPSHOT_OPPORTUNITY_PAGE_SIZE = 500;
+
 function AspScreenerPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -141,9 +144,10 @@ function AspScreenerPage() {
   const [snapshotDecisionFilter, setSnapshotDecisionFilter] = useState<"all" | "CONFIRMAR" | "PULAR" | "pending">("all");
   const [snapshotMinScore, setSnapshotMinScore] = useState("");
   const [snapshotMinEv, setSnapshotMinEv] = useState("");
+  const [snapshotOpportunityLimit, setSnapshotOpportunityLimit] = useState(SNAPSHOT_OPPORTUNITY_PAGE_SIZE);
   const [previewOddsRows, setPreviewOddsRows] = useState<NormalizedOdd[]>([]);
 
-  const queryKey = ["mlb-standings-snapshot", snapshotDate, season];
+  const queryKey = useMemo(() => ["mlb-standings-snapshot", snapshotDate, season] as const, [snapshotDate, season]);
   const { data, isFetching } = useQuery({
     queryKey,
     queryFn: () => getMlbStandingsSnapshotFn({ data: { snapshotDate, season } }) as Promise<SnapshotResponse>,
@@ -155,7 +159,7 @@ function AspScreenerPage() {
         date: snapshotDate,
         esporte: "Baseball",
         liga: "MLB",
-        limit: 20000,
+        limit: MLB_SCREENER_ODDS_LIMIT,
         includeCollectionFallback: true,
       }),
   });
@@ -193,9 +197,13 @@ function AspScreenerPage() {
     isFetching: loadingSnapshotOpportunities,
     refetch: refetchSnapshotOpportunities,
   } = useQuery({
-    queryKey: ["mlb-screener-opportunity-snapshots", selectedDailySnapshotId],
-    queryFn: () => selectedDailySnapshotId ? listMlbOpportunitySnapshots({ dailySnapshotId: selectedDailySnapshotId, limit: 1500 }) : Promise.resolve([]),
+    queryKey: ["mlb-screener-opportunity-snapshots", selectedDailySnapshotId, snapshotOpportunityLimit],
+    queryFn: () => selectedDailySnapshotId ? listMlbOpportunitySnapshots({ dailySnapshotId: selectedDailySnapshotId, limit: snapshotOpportunityLimit }) : Promise.resolve([]),
   });
+
+  useEffect(() => {
+    setSnapshotOpportunityLimit(SNAPSHOT_OPPORTUNITY_PAGE_SIZE);
+  }, [selectedDailySnapshotId]);
 
   const snapshot = data?.snapshot ?? null;
   const mlbDbOddsRows = useMemo(
@@ -384,7 +392,7 @@ function AspScreenerPage() {
     criticalPayloads,
   ]);
 
-  async function refresh(forceRefresh = false) {
+  const refresh = useCallback(async (forceRefresh = false) => {
     setBusy(forceRefresh ? "force" : "refresh");
     setLastError(null);
     try {
@@ -401,9 +409,9 @@ function AspScreenerPage() {
     } finally {
       setBusy(null);
     }
-  }
+  }, [qc, queryKey, season, snapshotDate]);
 
-  async function processCsv() {
+  const processCsv = useCallback(async () => {
     setBusy("csv");
     setLastError(null);
     try {
@@ -419,9 +427,9 @@ function AspScreenerPage() {
     } finally {
       setBusy(null);
     }
-  }
+  }, [csvText, qc, queryKey, season, snapshotDate]);
 
-  function generateMoneylineProjections() {
+  const generateMoneylineProjections = useCallback(() => {
     if (!snapshot?.teams.length) {
       toast.error("Carregue um snapshot MLB antes de gerar projecoes.");
       return;
@@ -431,9 +439,9 @@ function AspScreenerPage() {
     setProjectionRows(rows);
     setProjectionGeneratedAt(new Date().toISOString());
     toast.success(`${rows.length} jogos avaliados no Moneyline Screener.`);
-  }
+  }, [mlbOddsRows, snapshot]);
 
-  function generateTotalsProjections() {
+  const generateTotalsProjections = useCallback(() => {
     if (!snapshot?.teams.length) {
       toast.error("Carregue um snapshot MLB antes de gerar projecoes.");
       return;
@@ -447,9 +455,9 @@ function AspScreenerPage() {
     setTotalsRows(rows);
     setTotalsGeneratedAt(new Date().toISOString());
     toast.success(`${rows.length} linhas Over/Under avaliadas.`);
-  }
+  }, [mlbOddsRows, snapshot]);
 
-  function generateHandicapProjections() {
+  const generateHandicapProjections = useCallback(() => {
     if (!snapshot?.teams.length) {
       toast.error("Carregue um snapshot MLB antes de gerar projecoes.");
       return;
@@ -463,9 +471,9 @@ function AspScreenerPage() {
     setHandicapRows(rows);
     setHandicapGeneratedAt(new Date().toISOString());
     toast.success(`${rows.length} linhas Handicap avaliadas.`);
-  }
+  }, [mlbOddsRows, snapshot]);
 
-  function buildAllProjectionRows() {
+  const buildAllProjectionRows = useCallback(() => {
     if (!snapshot?.teams.length) {
       toast.error("Carregue um snapshot MLB antes de gerar projecoes.");
       return null;
@@ -484,9 +492,9 @@ function AspScreenerPage() {
         leagueAverageSnapshot: snapshot.league_average,
       }),
     };
-  }
+  }, [mlbOddsRows, snapshot]);
 
-  function generateOpportunityShortlist() {
+  const generateOpportunityShortlist = useCallback(() => {
     if (!projectionRows.length || !totalsRows.length || !handicapRows.length) {
       toast.error("Execute os screeners de Moneyline, Over/Under e Handicap antes de gerar a shortlist.");
       return;
@@ -499,9 +507,9 @@ function AspScreenerPage() {
     setOpportunityRows(result.opportunities);
     setOpportunityGeneratedAt(new Date().toISOString());
     toast.success(`${result.opportunities.length} oportunidades avaliadas no Opportunity Score.`);
-  }
+  }, [handicapRows, projectionRows, totalsRows]);
 
-  function generateAllScreenersAndShortlist() {
+  const generateAllScreenersAndShortlist = useCallback(() => {
     const rows = buildAllProjectionRows();
     if (!rows) return;
     const generatedAt = new Date().toISOString();
@@ -519,9 +527,9 @@ function AspScreenerPage() {
     setOpportunityRows(result.opportunities);
     setOpportunityGeneratedAt(generatedAt);
     toast.success("Screeners MLB atualizados e shortlist recalculada.");
-  }
+  }, [buildAllProjectionRows]);
 
-  function toggleOpportunitySelection(opportunity: MlbUnifiedOpportunity) {
+  const toggleOpportunitySelection = useCallback((opportunity: MlbUnifiedOpportunity) => {
     setSelectedOpportunityIds((current) => {
       if (current.includes(opportunity.opportunity_id)) return current.filter((id) => id !== opportunity.opportunity_id);
       if (current.length >= 5) {
@@ -536,14 +544,14 @@ function AspScreenerPage() {
       }
       return [...current, opportunity.opportunity_id];
     });
-  }
+  }, [opportunityRows]);
 
-  function prepareSingleOpportunity(opportunity: MlbUnifiedOpportunity) {
+  const prepareSingleOpportunity = useCallback((opportunity: MlbUnifiedOpportunity) => {
     setSelectedOpportunityIds([opportunity.opportunity_id]);
     toast.success("Oportunidade enviada para a Etapa 05.");
-  }
+  }, []);
 
-  function processBaseballReferenceContext() {
+  const processBaseballReferenceContext = useCallback(() => {
     if (!baseballReferenceText.trim()) {
       toast.error("Cole o texto do Baseball-Reference antes de processar.");
       return;
@@ -565,9 +573,9 @@ function AspScreenerPage() {
     } else {
       toast.success("Contexto Baseball-Reference processado.");
     }
-  }
+  }, [baseballReferenceText, selectedOpportunities]);
 
-  function generateCriticalPayloads() {
+  const generateCriticalPayloads = useCallback(() => {
     if (!selectedOpportunities.length) {
       toast.error("Selecione pelo menos uma oportunidade da shortlist.");
       return;
@@ -589,28 +597,28 @@ function AspScreenerPage() {
       .map((opportunity) => {
         const alignment = calculateMlbContextAlignment(opportunity, parsedMatchupContext);
         return buildMlbCriticalValidationPayload(opportunity, parsedMatchupContext, alignment);
-      });
+    });
     setCriticalPayloads(payloads);
     toast.success(`${payloads.length} payload(s) critico(s) gerado(s).`);
-  }
+  }, [parsedMatchupContext, selectedOpportunities]);
 
-  async function copyCriticalJson() {
+  const copyCriticalJson = useCallback(async () => {
     if (!criticalPayloads.length) {
       toast.error("Gere o payload critico antes de copiar.");
       return;
     }
     await copyText(JSON.stringify(criticalPayloads.length === 1 ? criticalPayloads[0] : criticalPayloads, null, 2), "JSON critico copiado.");
-  }
+  }, [criticalPayloads]);
 
-  async function copyValidatorPrompt() {
+  const copyValidatorPrompt = useCallback(async () => {
     if (!criticalPayloads.length) {
       toast.error("Gere o payload critico antes de copiar o prompt.");
       return;
     }
     await copyText(criticalPayloads.map(buildMlbValidatorPrompt).join("\n\n---\n\n"), "Prompt para Validator copiado.");
-  }
+  }, [criticalPayloads]);
 
-  async function saveCurrentScreenerSnapshot() {
+  const saveCurrentScreenerSnapshot = useCallback(async () => {
     if (!opportunityRows.length) {
       toast.error("Gere a shortlist unificada antes de salvar o snapshot do Screener.");
       return;
@@ -646,9 +654,24 @@ function AspScreenerPage() {
     } finally {
       setSnapshotBusy(false);
     }
-  }
+  }, [
+    handicapRows.length,
+    hideCorrelatedAlternatives,
+    minOpportunityEv,
+    minOpportunityScore,
+    mlbOddsRows.length,
+    opportunityFilter,
+    opportunityRows,
+    projectionRows.length,
+    refetchDailySnapshots,
+    refetchSnapshotOpportunities,
+    season,
+    snapshot,
+    snapshotDate,
+    totalsRows.length,
+  ]);
 
-  async function generateAllScreenersAndSaveSnapshot() {
+  const generateAllScreenersAndSaveSnapshot = useCallback(async () => {
     const rows = buildAllProjectionRows();
     if (!rows) return;
     const generatedAt = new Date().toISOString();
@@ -688,9 +711,9 @@ function AspScreenerPage() {
     } finally {
       setSnapshotBusy(false);
     }
-  }
+  }, [buildAllProjectionRows, mlbOddsRows.length, refetchDailySnapshots, refetchSnapshotOpportunities, season, snapshot, snapshotDate]);
 
-  async function sendCriticalPayloadToValidator(payload: MlbPreparedCriticalValidationPayload) {
+  const sendCriticalPayloadToValidator = useCallback(async (payload: MlbPreparedCriticalValidationPayload) => {
     const handoff = buildMlbValidatorHandoffPayload(payload);
     const validation = validateMlbValidatorHandoffPayload(handoff);
     if (!validation.valid) {
@@ -731,9 +754,9 @@ function AspScreenerPage() {
     }
     toast.success("Rascunho enviado para ASP Validator (teste). Revise antes de validar.");
     void navigate({ to: "/asp-validator" });
-  }
+  }, [navigate, opportunityRows, refetchHandoffAudit]);
 
-  async function sendCriticalPayloadToCriticalValidation(payload: MlbPreparedCriticalValidationPayload) {
+  const sendCriticalPayloadToCriticalValidation = useCallback(async (payload: MlbPreparedCriticalValidationPayload) => {
     const draft = buildMlbCriticalValidationDraft(payload);
     const validation = validateCriticalValidationDraft(draft);
     if (!validation.valid) {
@@ -747,7 +770,16 @@ function AspScreenerPage() {
     }
     toast.success(`Enviado para Validacao Critica como ASP Screener: ${String(prognostico.id ?? "").slice(0, 8)}`);
     void navigate({ to: "/validacao" });
-  }
+  }, [createPrognostico, navigate]);
+
+  const loadMoreSnapshotOpportunities = useCallback(() => {
+    setSnapshotOpportunityLimit((limit) => limit + SNAPSHOT_OPPORTUNITY_PAGE_SIZE);
+  }, []);
+
+  const refreshSnapshotPanels = useCallback(() => {
+    void refetchDailySnapshots();
+    void refetchSnapshotOpportunities();
+  }, [refetchDailySnapshots, refetchSnapshotOpportunities]);
 
   return (
     <div className="space-y-6">
@@ -1242,10 +1274,10 @@ function AspScreenerPage() {
             onDecisionChange={setSnapshotDecisionFilter}
             onMinScoreChange={setSnapshotMinScore}
             onMinEvChange={setSnapshotMinEv}
-            onRefresh={() => {
-              void refetchDailySnapshots();
-              void refetchSnapshotOpportunities();
-            }}
+            canLoadMoreOpportunities={selectedSnapshotOpportunities.length >= snapshotOpportunityLimit}
+            opportunityLimit={snapshotOpportunityLimit}
+            onLoadMoreOpportunities={loadMoreSnapshotOpportunities}
+            onRefresh={refreshSnapshotPanels}
           />
 
           <MlbCalibrationPanel
@@ -1647,14 +1679,14 @@ function OpportunityTable({
   onToggleSelection: (row: MlbUnifiedOpportunity) => void;
   onPrepare: (row: MlbUnifiedOpportunity) => void;
 }) {
-  async function copyPayload(row: MlbUnifiedOpportunity) {
+  const copyPayload = useCallback(async (row: MlbUnifiedOpportunity) => {
     const payload = buildMlbOpportunityValidationPayload(row);
     try {
       await copyText(JSON.stringify(payload, null, 2), "Payload copiado.");
     } catch (error) {
       toast.error(formatError(error));
     }
-  }
+  }, []);
 
   return (
     <div className="max-h-[700px] overflow-auto rounded-md border">
@@ -1731,23 +1763,7 @@ function OpportunityTable({
               </td>
               <td className="min-w-44 px-3 py-2 text-xs text-muted-foreground">{correlationLabel(row)}</td>
               <td className="min-w-72 px-3 py-2 text-xs text-muted-foreground">
-                <details>
-                  <summary className="cursor-pointer text-foreground">Detalhes</summary>
-                  <div className="mt-2 space-y-2">
-                    <div>{row.score_explanation}</div>
-                    <div className="text-foreground">{row.reasons.slice(0, 5).join(" | ") || "-"}</div>
-                    <div>Componentes: EV {formatScore(row.score_components.ev_quality_score)}, Edge {formatScore(row.score_components.probability_edge_score)}, Linha {formatScore(row.score_components.market_line_quality_score)}, Dados {formatScore(row.score_components.data_quality_score)}, Penalidade {formatScore(row.score_components.risk_penalty)}</div>
-                    <div>Score bruto {formatScore(row.score_components.raw_score)} | Score final {formatScore(row.score_components.final_score)}{row.score_components.applied_penalties.length > 0 ? ` | Penalidades aplicadas: ${row.score_components.applied_penalties.map((p) => `${p.flag} ${p.delta}`).join(", ")}` : ""}</div>
-                    {row.risk_flags.length > 0 && <div>Penalidades: {row.risk_flags.join(" | ")}</div>}
-                    <Button size="sm" variant="outline" onClick={() => copyPayload(row)}>
-                      <ClipboardCopy className="mr-2 h-3 w-3" />
-                      Copiar payload
-                    </Button>
-                    <pre className="max-h-56 overflow-auto rounded border bg-background p-2 text-[10px]">
-                      {JSON.stringify(buildMlbOpportunityValidationPayload(row), null, 2)}
-                    </pre>
-                  </div>
-                </details>
+                <OpportunityPayloadDetails row={row} onCopyPayload={copyPayload} />
               </td>
               <td className="min-w-80 px-3 py-2 text-xs text-muted-foreground">
                 <div className="space-y-1">
@@ -1769,6 +1785,42 @@ function OpportunityTable({
     </div>
   );
 }
+
+const OpportunityPayloadDetails = memo(function OpportunityPayloadDetails({
+  row,
+  onCopyPayload,
+}: {
+  row: MlbUnifiedOpportunity;
+  onCopyPayload: (row: MlbUnifiedOpportunity) => void | Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const payloadText = useMemo(
+    () => (open ? JSON.stringify(buildMlbOpportunityValidationPayload(row), null, 2) : ""),
+    [open, row],
+  );
+
+  return (
+    <details onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary className="cursor-pointer text-foreground">Detalhes</summary>
+      <div className="mt-2 space-y-2">
+        <div>{row.score_explanation}</div>
+        <div className="text-foreground">{row.reasons.slice(0, 5).join(" | ") || "-"}</div>
+        <div>Componentes: EV {formatScore(row.score_components.ev_quality_score)}, Edge {formatScore(row.score_components.probability_edge_score)}, Linha {formatScore(row.score_components.market_line_quality_score)}, Dados {formatScore(row.score_components.data_quality_score)}, Penalidade {formatScore(row.score_components.risk_penalty)}</div>
+        <div>Score bruto {formatScore(row.score_components.raw_score)} | Score final {formatScore(row.score_components.final_score)}{row.score_components.applied_penalties.length > 0 ? ` | Penalidades aplicadas: ${row.score_components.applied_penalties.map((p) => `${p.flag} ${p.delta}`).join(", ")}` : ""}</div>
+        {row.risk_flags.length > 0 && <div>Penalidades: {row.risk_flags.join(" | ")}</div>}
+        <Button size="sm" variant="outline" onClick={() => void onCopyPayload(row)}>
+          <ClipboardCopy className="mr-2 h-3 w-3" />
+          Copiar payload
+        </Button>
+        {open ? (
+          <pre className="max-h-56 overflow-auto rounded border bg-background p-2 text-[10px]">
+            {payloadText}
+          </pre>
+        ) : null}
+      </div>
+    </details>
+  );
+});
 
 function ParsedContextPanel({ context }: { context: MlbBaseballReferenceMatchupContext }) {
   return (
@@ -1931,18 +1983,43 @@ function CriticalPayloadPanel({
               </ul>
             </div>
           </div>
-          <details className="mt-3">
-            <summary className="cursor-pointer text-sm font-medium">Payload critico</summary>
-            <pre className="mt-2 max-h-80 overflow-auto rounded border bg-background p-2 text-[10px]">
-              {JSON.stringify(payload, null, 2)}
-            </pre>
-          </details>
+          <LazyJsonDetails
+            value={payload}
+            summary="Payload critico"
+            className="mt-3"
+            summaryClassName="cursor-pointer text-sm font-medium"
+            preClassName="mt-2 max-h-80 overflow-auto rounded border bg-background p-2 text-[10px]"
+          />
           </div>
         );
       })}
     </div>
   );
 }
+
+const LazyJsonDetails = memo(function LazyJsonDetails({
+  value,
+  summary,
+  className,
+  summaryClassName,
+  preClassName,
+}: {
+  value: unknown;
+  summary: ReactNode;
+  className?: string;
+  summaryClassName?: string;
+  preClassName?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const jsonText = useMemo(() => (open ? JSON.stringify(value, null, 2) : ""), [open, value]);
+
+  return (
+    <details className={className} onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary className={summaryClassName}>{summary}</summary>
+      {open ? <pre className={preClassName}>{jsonText}</pre> : null}
+    </details>
+  );
+});
 
 type HandoffAuditStats = ReturnType<typeof getHandoffAuditStats>;
 
@@ -2086,15 +2163,12 @@ function HandoffAuditPanel({
                   <td className="px-3 py-2">{row.validator_decision ?? "-"}</td>
                   <td className="px-3 py-2 font-mono text-xs">{row.validator_record_id ?? "-"}</td>
                   <td className="px-3 py-2">
-                    <details>
-                      <summary className="cursor-pointer text-xs text-muted-foreground">
-                        <FileJson className="mr-1 inline h-3 w-3" />
-                        ver
-                      </summary>
-                      <pre className="mt-2 max-h-72 overflow-auto rounded border bg-background p-2 text-[10px]">
-                        {JSON.stringify(row.handoff_payload || row.critical_payload, null, 2)}
-                      </pre>
-                    </details>
+                    <LazyJsonDetails
+                      value={row.handoff_payload || row.critical_payload}
+                      summary={<><FileJson className="mr-1 inline h-3 w-3" />ver</>}
+                      summaryClassName="cursor-pointer text-xs text-muted-foreground"
+                      preClassName="mt-2 max-h-72 overflow-auto rounded border bg-background p-2 text-[10px]"
+                    />
                   </td>
                 </tr>
               ))}
@@ -2134,6 +2208,9 @@ function MlbShadowSnapshotPanel({
   onDecisionChange,
   onMinScoreChange,
   onMinEvChange,
+  canLoadMoreOpportunities,
+  opportunityLimit,
+  onLoadMoreOpportunities,
   onRefresh,
 }: {
   dailySnapshots: MlbDailyScreenerSnapshotRecord[];
@@ -2156,6 +2233,9 @@ function MlbShadowSnapshotPanel({
   onDecisionChange: (value: "all" | "CONFIRMAR" | "PULAR" | "pending") => void;
   onMinScoreChange: (value: string) => void;
   onMinEvChange: (value: string) => void;
+  canLoadMoreOpportunities: boolean;
+  opportunityLimit: number;
+  onLoadMoreOpportunities: () => void;
   onRefresh: () => void;
 }) {
   const latest = dailySnapshots[0] ?? null;
@@ -2308,6 +2388,12 @@ function MlbShadowSnapshotPanel({
             )}
 
             <OpportunitySnapshotTable rows={opportunities} />
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span>Carregadas ate {opportunityLimit} oportunidades do snapshot selecionado.</span>
+              <Button variant="outline" size="sm" onClick={onLoadMoreOpportunities} disabled={loading || !canLoadMoreOpportunities}>
+                Carregar mais oportunidades
+              </Button>
+            </div>
           </div>
         )}
       </CardContent>
@@ -2734,12 +2820,13 @@ function CalibrationDetailTable({ rows }: { rows: MlbScreenerHandoffAuditRecord[
                         <ClipboardCopy className="mr-2 h-3 w-3" />
                         Payload
                       </Button>
-                      <details className="w-full">
-                        <summary className="cursor-pointer text-xs text-muted-foreground">Ver payload</summary>
-                        <pre className="mt-2 max-h-72 overflow-auto rounded border bg-background p-2 text-[10px]">
-                          {JSON.stringify(row.handoff_payload || row.critical_payload, null, 2)}
-                        </pre>
-                      </details>
+                      <LazyJsonDetails
+                        value={row.handoff_payload || row.critical_payload}
+                        summary="Ver payload"
+                        className="w-full"
+                        summaryClassName="cursor-pointer text-xs text-muted-foreground"
+                        preClassName="mt-2 max-h-72 overflow-auto rounded border bg-background p-2 text-[10px]"
+                      />
                       {row.validator_record_id && <Badge variant="secondary">Validator vinculado</Badge>}
                     </div>
                   </td>

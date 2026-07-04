@@ -489,7 +489,31 @@ export function useAspValidatorBankrollPrognosticos() {
     queryFn: async () => {
       const { data, error } = await (supabase as unknown as { from: (table: string) => any })
         .from("asp_validator_registros")
-        .select("*")
+        .select(
+          [
+            "id",
+            "created_at",
+            "sport",
+            "league",
+            "match_date",
+            "home_team",
+            "away_team",
+            "market",
+            "pick",
+            "line",
+            "offered_odd",
+            "adjusted_probability",
+            "adjusted_fair_odd",
+            "adjusted_ev",
+            "decision",
+            "result_status",
+            "result_settled_at",
+            "stake_units",
+            "profit_units",
+            "bankroll_applied",
+            "is_simulated_result",
+          ].join(","),
+        )
         .eq("decision", "CONFIRMAR")
         .eq("bankroll_applied", true)
         .eq("is_simulated_result", false)
@@ -641,6 +665,10 @@ export function useCreateValidacao() {
     mutationFn: async (input: ValidacaoInput) => {
       const { data, error } = await supabase.from("validacoes").insert(input).select().single();
       if (error) throw error;
+      // Stake em PULAR e apenas analitica: pode apoiar auditoria/simulacao,
+      // mas nunca deve entrar em bankroll real ou dashboards financeiros.
+      // Metricas oficiais devem continuar filtrando CONFIRMA/CONFIRMAR e,
+      // quando vierem do ASP Validator, bankroll_applied=true e is_simulated_result=false.
       const stakeEspelhada =
         input.decisao === "PULAR"
           ? Number(input.stake_confirmada ?? 1) || 1
