@@ -1,7 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
 import type { ClipboardEvent, DragEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, BrainCircuit, CheckCircle2, ClipboardCheck, ClipboardCopy, Cloud, Eye, FileJson, ImageUp, Loader2, Microscope, Plus, RefreshCw, Search, Trash2, XCircle } from "lucide-react";
+import {
+  Activity,
+  BrainCircuit,
+  CheckCircle2,
+  ClipboardCheck,
+  ClipboardCopy,
+  Cloud,
+  Eye,
+  FileJson,
+  ImageUp,
+  Loader2,
+  Microscope,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+  XCircle,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,14 +27,29 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ValidatorDashboardMetric as DashboardMetric, ValidatorGroupTable as GroupTable } from "@/components/asp-validator/ValidatorDashboardTable";
+import {
+  ValidatorDashboardMetric as DashboardMetric,
+  ValidatorGroupTable as GroupTable,
+} from "@/components/asp-validator/ValidatorDashboardTable";
 import { ValidatorInfo as Info } from "@/components/asp-validator/ValidatorInfo";
 import { ValidatorPlaceholder as Placeholder } from "@/components/asp-validator/ValidatorPlaceholder";
-import { ValidatorSelectField as SelectField, ValidatorTextField as TextField } from "@/components/asp-validator/ValidatorFields";
+import {
+  ValidatorSelectField as SelectField,
+  ValidatorTextField as TextField,
+} from "@/components/asp-validator/ValidatorFields";
 import { ValidatorSignalBlock as SignalBlock } from "@/components/asp-validator/ValidatorSignalBlock";
-import { validateAspValidatorWithAi, type AspValidatorAiResult } from "@/lib/asp-validator-ai.functions";
-import { validateAspValidatorWithOnlineAi, type AspValidatorOnlineAiResult } from "@/lib/asp-validator-ai-online.functions";
-import { runAspValidatorSimulation, type AspValidatorSimulationResult } from "@/lib/asp-validator-simulation";
+import {
+  validateAspValidatorWithAi,
+  type AspValidatorAiResult,
+} from "@/lib/asp-validator-ai.functions";
+import {
+  validateAspValidatorWithOnlineAi,
+  type AspValidatorOnlineAiResult,
+} from "@/lib/asp-validator-ai-online.functions";
+import {
+  runAspValidatorSimulation,
+  type AspValidatorSimulationResult,
+} from "@/lib/asp-validator-simulation";
 import { routeSimulation } from "@/lib/asp-validator-football-simulation";
 
 import { parsePastedPrognostico, type PastedParsedData } from "@/lib/asp-validator-paste-parser";
@@ -101,7 +133,11 @@ import {
   round,
   signed,
 } from "@/lib/asp-validator/formatters";
-import { calculateValidatorProfitUnits, recordToEditable, recordToResultForm } from "@/lib/asp-validator/record-mappers";
+import {
+  calculateValidatorProfitUnits,
+  recordToEditable,
+  recordToResultForm,
+} from "@/lib/asp-validator/record-mappers";
 import { buildStoragePath } from "@/lib/asp-validator/storage";
 
 export const Route = createFileRoute("/_authenticated/asp-validator")({
@@ -117,12 +153,17 @@ function AspValidatorPage() {
   const [result, setResult] = useState<ValidationResult | null>(null);
   const [saving, setSaving] = useState(false);
   const [records, setRecords] = useState<ValidatorRecord[]>([]);
-  const [uploadsByRecord, setUploadsByRecord] = useState<Record<string, ValidatorUploadRecord[]>>({});
+  const [uploadsByRecord, setUploadsByRecord] = useState<Record<string, ValidatorUploadRecord[]>>(
+    {},
+  );
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [dashboardFilters, setDashboardFilters] = useState<ValidatorDashboardFilters>(INITIAL_DASHBOARD_FILTERS);
+  const [dashboardFilters, setDashboardFilters] =
+    useState<ValidatorDashboardFilters>(INITIAL_DASHBOARD_FILTERS);
   const [selectedRecord, setSelectedRecord] = useState<ValidatorRecord | null>(null);
   const [editingRecord, setEditingRecord] = useState<EditableRecord | null>(null);
-  const [ocrAppliedFields, setOcrAppliedFields] = useState<Partial<Record<keyof EditableRecord, boolean>>>({});
+  const [ocrAppliedFields, setOcrAppliedFields] = useState<
+    Partial<Record<keyof EditableRecord, boolean>>
+  >({});
   const [resultForm, setResultForm] = useState<ResultForm | null>(null);
   const [editingUploadComments, setEditingUploadComments] = useState<Record<string, string>>({});
   const [ocrFilesByUpload, setOcrFilesByUpload] = useState<Record<string, File>>({});
@@ -141,12 +182,23 @@ function AspValidatorPage() {
     () =>
       pastedParsed?.validator_model && pastedParsed.validator_model !== "ASP Market Validator"
         ? pastedParsed.validator_model
-        : inferValidatorModel(form.market || pastedParsed?.market.name || "", form.pick || pastedParsed?.market.pick || ""),
+        : inferValidatorModel(
+            form.market || pastedParsed?.market.name || "",
+            form.pick || pastedParsed?.market.pick || "",
+          ),
     [form.market, form.pick, pastedParsed],
   );
 
   const hasManualCore = useMemo(
-    () => Boolean(form.sport && form.source_platform && form.home_team && form.away_team && form.market && form.pick),
+    () =>
+      Boolean(
+        form.sport &&
+        form.source_platform &&
+        form.home_team &&
+        form.away_team &&
+        form.market &&
+        form.pick,
+      ),
     [form],
   );
   // Permite validar tambem quando ha uploads (OCR podera preencher campos automaticamente)
@@ -265,7 +317,6 @@ function AspValidatorPage() {
     setPastedParsed(null);
   };
 
-
   const loadHistory = useCallback(async () => {
     setLoadingHistory(true);
     try {
@@ -292,7 +343,11 @@ function AspValidatorPage() {
       if (uploadError) throw uploadError;
       setUploadsByRecord(groupUploads(uploadRows ?? []));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Nao foi possivel carregar o historico do ASP Validator.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Nao foi possivel carregar o historico do ASP Validator.",
+      );
     } finally {
       setLoadingHistory(false);
     }
@@ -346,38 +401,59 @@ function AspValidatorPage() {
     toast.success("Validacao importada do ASP Screener MLB. Revise antes de validar.");
   }, []);
 
-  const addUploads = useCallback((files: FileList | null, uploadSource: ValidatorUploadDraft["upload_source"] = "manual") => {
-    if (!files?.length) return;
-    const validFiles = filterValidUploads(Array.from(files), (reason) => toast.error(reason));
-    if (!validFiles.length) return;
-    setUploads((prev) => {
-      const nextFiles = validFiles.map((file, index) => ({
-        local_id: `${file.name}-${file.size}-${file.lastModified}-${Date.now()}-${index}`,
-        file,
-        upload_category: UPLOAD_CATEGORIES[0],
-        user_comment: "",
-        upload_order: prev.length + index + 1,
-        upload_source: uploadSource,
-      }));
-      return [...prev, ...nextFiles];
-    });
-  }, []);
-  const updateUpload = useCallback((localId: string, patch: Partial<Pick<ValidatorUploadDraft, "upload_category" | "user_comment">>) => {
-    setUploads((prev) => prev.map((upload) => (upload.local_id === localId ? { ...upload, ...patch } : upload)));
-  }, []);
+  const addUploads = useCallback(
+    (files: FileList | null, uploadSource: ValidatorUploadDraft["upload_source"] = "manual") => {
+      if (!files?.length) return;
+      const validFiles = filterValidUploads(Array.from(files), (reason) => toast.error(reason));
+      if (!validFiles.length) return;
+      setUploads((prev) => {
+        const nextFiles = validFiles.map((file, index) => ({
+          local_id: `${file.name}-${file.size}-${file.lastModified}-${Date.now()}-${index}`,
+          file,
+          upload_category: UPLOAD_CATEGORIES[0],
+          user_comment: "",
+          upload_order: prev.length + index + 1,
+          upload_source: uploadSource,
+        }));
+        return [...prev, ...nextFiles];
+      });
+    },
+    [],
+  );
+  const updateUpload = useCallback(
+    (
+      localId: string,
+      patch: Partial<Pick<ValidatorUploadDraft, "upload_category" | "user_comment">>,
+    ) => {
+      setUploads((prev) =>
+        prev.map((upload) => (upload.local_id === localId ? { ...upload, ...patch } : upload)),
+      );
+    },
+    [],
+  );
   const removeUpload = useCallback((localId: string) => {
-    setUploads((prev) => prev.filter((upload) => upload.local_id !== localId).map((upload, index) => ({ ...upload, upload_order: index + 1 })));
+    setUploads((prev) =>
+      prev
+        .filter((upload) => upload.local_id !== localId)
+        .map((upload, index) => ({ ...upload, upload_order: index + 1 })),
+    );
   }, []);
 
   const validate = async () => {
     if (!canValidate) {
-      toast.error("Preencha esporte, origem, confronto, mercado e pick, cole dados do prognostico ou adicione uploads.");
+      toast.error(
+        "Preencha esporte, origem, confronto, mercado e pick, cole dados do prognostico ou adicione uploads.",
+      );
       return;
     }
     if (!hasManualCore && pastedParsed) {
-      toast.info("Validando com base no texto colado. Campos manuais ausentes serao inferidos a partir do JSON estruturado.");
+      toast.info(
+        "Validando com base no texto colado. Campos manuais ausentes serao inferidos a partir do JSON estruturado.",
+      );
     } else if (!hasManualCore && uploads.length > 0) {
-      toast.info("Validando com base nos uploads/OCR. Campos manuais ausentes serao inferidos quando possivel.");
+      toast.info(
+        "Validando com base nos uploads/OCR. Campos manuais ausentes serao inferidos quando possivel.",
+      );
     }
     if (importedHandoff) {
       void markHandoffValidationStarted(importedHandoff).catch((error) => {
@@ -387,7 +463,9 @@ function AspValidatorPage() {
     setSaving(true);
     let next: ValidationResult;
     try {
-      next = await validateWithAiFallback(buildFormValidationContext(form, uploads, validatorModel, pastedParsed));
+      next = await validateWithAiFallback(
+        buildFormValidationContext(form, uploads, validatorModel, pastedParsed),
+      );
     } catch (error) {
       setSaving(false);
       if (importedHandoff) {
@@ -405,9 +483,16 @@ function AspValidatorPage() {
       if (importedHandoff) {
         try {
           await linkHandoffToValidatorRecord(importedHandoff, savedRecordId, next);
-          await linkMlbOpportunitySnapshotToValidatorRecord(importedHandoff.handoff_id, savedRecordId, next.decision);
+          await linkMlbOpportunitySnapshotToValidatorRecord(
+            importedHandoff.handoff_id,
+            savedRecordId,
+            next.decision,
+          );
         } catch (error) {
-          console.warn("Validacao salva, mas falhou ao vincular auditoria/snapshot do handoff.", error);
+          console.warn(
+            "Validacao salva, mas falhou ao vincular auditoria/snapshot do handoff.",
+            error,
+          );
           toast.warning("Validacao salva, mas auditoria/snapshot do handoff nao foi vinculado.");
         }
       }
@@ -423,36 +508,48 @@ function AspValidatorPage() {
       }
       await loadHistory();
     } else if (importedHandoff) {
-      void markHandoffValidationFailed(importedHandoff, "Falha ao salvar registro final do ASP Validator.").catch((error) => {
+      void markHandoffValidationFailed(
+        importedHandoff,
+        "Falha ao salvar registro final do ASP Validator.",
+      ).catch((error) => {
         console.warn("Nao foi possivel marcar falha de persistencia do handoff.", error);
       });
     }
   };
 
-
-  const openRecord = useCallback((record: ValidatorRecord) => {
-    setSelectedRecord(record);
-    const baseEditable = recordToEditable(record);
-    // Auto-fill missing fields from structured_json / form_patch
-    const patch = buildEditablePatchFromStructured(record);
-    const merged: EditableRecord = { ...baseEditable };
-    const applied: Partial<Record<keyof EditableRecord, boolean>> = {};
-    for (const [key, value] of Object.entries(patch) as Array<[keyof EditableRecord, string | undefined]>) {
-      if (!value) continue;
-      const current = String(merged[key] ?? "").trim();
-      if (!current) {
-        merged[key] = value as never;
-        applied[key] = true;
+  const openRecord = useCallback(
+    (record: ValidatorRecord) => {
+      setSelectedRecord(record);
+      const baseEditable = recordToEditable(record);
+      // Auto-fill missing fields from structured_json / form_patch
+      const patch = buildEditablePatchFromStructured(record);
+      const merged: EditableRecord = { ...baseEditable };
+      const applied: Partial<Record<keyof EditableRecord, boolean>> = {};
+      for (const [key, value] of Object.entries(patch) as Array<
+        [keyof EditableRecord, string | undefined]
+      >) {
+        if (!value) continue;
+        const current = String(merged[key] ?? "").trim();
+        if (!current) {
+          merged[key] = value as never;
+          applied[key] = true;
+        }
       }
-    }
-    setEditingRecord(merged);
-    setOcrAppliedFields(applied);
-    setResultForm(recordToResultForm(record, cfg?.valor_unidade_padrao ?? 10));
-    setEditingUploadComments(
-      Object.fromEntries((uploadsByRecord[record.id] ?? []).map((upload) => [upload.id, upload.user_comment ?? ""])),
-    );
-    setOcrFilesByUpload({});
-  }, [cfg?.valor_unidade_padrao, uploadsByRecord]);
+      setEditingRecord(merged);
+      setOcrAppliedFields(applied);
+      setResultForm(recordToResultForm(record, cfg?.valor_unidade_padrao ?? 10));
+      setEditingUploadComments(
+        Object.fromEntries(
+          (uploadsByRecord[record.id] ?? []).map((upload) => [
+            upload.id,
+            upload.user_comment ?? "",
+          ]),
+        ),
+      );
+      setOcrFilesByUpload({});
+    },
+    [cfg?.valor_unidade_padrao, uploadsByRecord],
+  );
 
   const updateEdit = useCallback((field: keyof EditableRecord, value: string) => {
     setEditingRecord((prev) => (prev ? { ...prev, [field]: value } : prev));
@@ -462,7 +559,9 @@ function AspValidatorPage() {
   const applyOcrDataToEditingRecord = () => {
     if (!selectedRecord || !editingRecord) return;
     const patch = buildEditablePatchFromStructured(selectedRecord);
-    const entries = Object.entries(patch).filter((entry): entry is [keyof EditableRecord, string] => Boolean(entry[1]?.trim()));
+    const entries = Object.entries(patch).filter((entry): entry is [keyof EditableRecord, string] =>
+      Boolean(entry[1]?.trim()),
+    );
     if (!entries.length) {
       toast.message("Nenhum dado OCR estruturado disponivel para aplicar ao formulario.");
       return;
@@ -518,7 +617,10 @@ function AspValidatorPage() {
     try {
       const sourceProbability = normalizeProbability(parseNumber(editingRecord.source_probability));
       const offeredOdd = parseNumber(editingRecord.offered_odd);
-      const sourceEv = normalizeSourceEv(parseNumber(editingRecord.source_ev), editingRecord.source_platform);
+      const sourceEv = normalizeSourceEv(
+        parseNumber(editingRecord.source_ev),
+        editingRecord.source_platform,
+      );
       const sourceFairOdd = parseNumber(editingRecord.source_fair_odd);
       const validatorModel = inferValidatorModel(editingRecord.market, editingRecord.pick);
       const { error } = await validatorDb
@@ -536,7 +638,8 @@ function AspValidatorPage() {
           offered_odd: offeredOdd,
           source_probability: sourceProbability,
           source_ev: sourceEv,
-          source_fair_odd: sourceFairOdd ?? (sourceProbability ? round(1 / (sourceProbability / 100), 2) : null),
+          source_fair_odd:
+            sourceFairOdd ?? (sourceProbability ? round(1 / (sourceProbability / 100), 2) : null),
           validator_model: validatorModel,
           user_context: editingRecord.user_context || null,
           updated_at: new Date().toISOString(),
@@ -558,108 +661,143 @@ function AspValidatorPage() {
       await loadHistory();
       setSelectedRecord(null);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Nao foi possivel atualizar o registro.");
+      toast.error(
+        error instanceof Error ? error.message : "Nao foi possivel atualizar o registro.",
+      );
     } finally {
       setUpdatingRecord(false);
     }
   };
 
-  const deleteRecord = useCallback(async (record: ValidatorRecord) => {
-    if (record.result_status) {
-      toast.error("Registro com resultado nao pode ser excluido.");
-      return;
-    }
-    if (!window.confirm("Excluir este registro do ASP Validator?")) return;
-    try {
-      const { error } = await validatorDb.from("asp_validator_registros").delete().eq("id", record.id);
-      if (error) throw error;
-      toast.success("Registro excluido.");
-      await loadHistory();
-      if (selectedRecord?.id === record.id) setSelectedRecord(null);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Nao foi possivel excluir o registro.");
-    }
-  }, [loadHistory, selectedRecord?.id]);
+  const deleteRecord = useCallback(
+    async (record: ValidatorRecord) => {
+      if (record.result_status) {
+        toast.error("Registro com resultado nao pode ser excluido.");
+        return;
+      }
+      if (!window.confirm("Excluir este registro do ASP Validator?")) return;
+      try {
+        const { error } = await validatorDb
+          .from("asp_validator_registros")
+          .delete()
+          .eq("id", record.id);
+        if (error) throw error;
+        toast.success("Registro excluido.");
+        await loadHistory();
+        if (selectedRecord?.id === record.id) setSelectedRecord(null);
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "Nao foi possivel excluir o registro.",
+        );
+      }
+    },
+    [loadHistory, selectedRecord?.id],
+  );
 
   const attachOcrFile = useCallback((uploadId: string, file: File | null) => {
     if (!file) return;
     setOcrFilesByUpload((prev) => ({ ...prev, [uploadId]: file }));
   }, []);
 
-  const processUploadOcr = useCallback(async (upload: ValidatorUploadRecord): Promise<boolean> => {
-    if (!selectedRecord) return false;
+  const processUploadOcr = useCallback(
+    async (upload: ValidatorUploadRecord): Promise<boolean> => {
+      if (!selectedRecord) return false;
 
-    setProcessingOcr((prev) => ({ ...prev, [upload.id]: true }));
-    try {
-      const file = await getUploadFileForOcr(upload, ocrFilesByUpload[upload.id]);
-      await validatorDb.from("asp_validator_uploads").update({ ocr_status: "processing", ocr_error: null, updated_at: new Date().toISOString() }).eq("id", upload.id);
-      const contentBase64 = await fileToBase64(file);
-      const payload = await processAspValidatorOcr({
-        data: {
-          validator_id: selectedRecord.id,
-          upload_id: upload.id,
-          upload_category: upload.upload_category,
-          user_comment: editingUploadComments[upload.id] ?? upload.user_comment ?? "",
-          file: {
-            name: file.name,
-            type: file.type || "application/octet-stream",
-            content_base64: contentBase64,
+      setProcessingOcr((prev) => ({ ...prev, [upload.id]: true }));
+      try {
+        const file = await getUploadFileForOcr(upload, ocrFilesByUpload[upload.id]);
+        await validatorDb
+          .from("asp_validator_uploads")
+          .update({
+            ocr_status: "processing",
+            ocr_error: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", upload.id);
+        const contentBase64 = await fileToBase64(file);
+        const payload = await processAspValidatorOcr({
+          data: {
+            validator_id: selectedRecord.id,
+            upload_id: upload.id,
+            upload_category: upload.upload_category,
+            user_comment: editingUploadComments[upload.id] ?? upload.user_comment ?? "",
+            file: {
+              name: file.name,
+              type: file.type || "application/octet-stream",
+              content_base64: contentBase64,
+            },
           },
-        },
-      });
-      const ocrPayload = parseOcrPayload(payload);
-      const baseUploads = uploadsByRecord[selectedRecord.id] ?? [];
-      const nextUploads = updateUploadInList(baseUploads.length ? baseUploads : [upload], upload.id, ocrPayload);
-      await persistOcrResult(selectedRecord, baseUploads, upload, ocrPayload);
-      const structured = await persistStructuredOcr(selectedRecord, nextUploads);
-      const recordWithStructured = {
-        ...selectedRecord,
-        ocr_raw_text: buildCombinedOcrText(nextUploads),
-        structured_json: structured,
-        ocr_structured_data: structured,
-        ocr_data_quality_score: structured.data_quality_score,
-        ocr_structured_fields_count: structured.structured_fields_count,
-        structured_status: "completed",
-        structured_error: null,
-      };
-      const simulationUpdate = await persistSimulationResult(recordWithStructured);
-      setOcrFilesByUpload((prev) => {
-        const next = { ...prev };
-        delete next[upload.id];
-        return next;
-      });
-      toast[ocrPayload.ocr_status === "completed" ? "success" : "error"](
-        ocrPayload.ocr_status === "completed" ? "OCR concluido." : ocrPayload.ocr_error || "OCR falhou.",
-      );
-      await loadHistory();
-      setSelectedRecord((prev) =>
-        prev
-          ? {
-              ...prev,
-              ...recordWithStructured,
-              ...simulationUpdate,
-            }
-          : prev,
-      );
-      setUploadsByRecord((prev) => ({ ...prev, [selectedRecord.id]: applyStructuredUploads(nextUploads, structured) }));
-      return ocrPayload.ocr_status === "completed";
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Erro ao processar OCR.";
-      await validatorDb
-        .from("asp_validator_uploads")
-        .update({ ocr_status: "failed", ocr_error: message, updated_at: new Date().toISOString() })
-        .eq("id", upload.id);
-      toast.error(message);
-      return false;
-    } finally {
-      setProcessingOcr((prev) => ({ ...prev, [upload.id]: false }));
-    }
-  }, [editingUploadComments, loadHistory, ocrFilesByUpload, selectedRecord, uploadsByRecord]);
+        });
+        const ocrPayload = parseOcrPayload(payload);
+        const baseUploads = uploadsByRecord[selectedRecord.id] ?? [];
+        const nextUploads = updateUploadInList(
+          baseUploads.length ? baseUploads : [upload],
+          upload.id,
+          ocrPayload,
+        );
+        await persistOcrResult(selectedRecord, baseUploads, upload, ocrPayload);
+        const structured = await persistStructuredOcr(selectedRecord, nextUploads);
+        const recordWithStructured = {
+          ...selectedRecord,
+          ocr_raw_text: buildCombinedOcrText(nextUploads),
+          structured_json: structured,
+          ocr_structured_data: structured,
+          ocr_data_quality_score: structured.data_quality_score,
+          ocr_structured_fields_count: structured.structured_fields_count,
+          structured_status: "completed",
+          structured_error: null,
+        };
+        const simulationUpdate = await persistSimulationResult(recordWithStructured);
+        setOcrFilesByUpload((prev) => {
+          const next = { ...prev };
+          delete next[upload.id];
+          return next;
+        });
+        toast[ocrPayload.ocr_status === "completed" ? "success" : "error"](
+          ocrPayload.ocr_status === "completed"
+            ? "OCR concluido."
+            : ocrPayload.ocr_error || "OCR falhou.",
+        );
+        await loadHistory();
+        setSelectedRecord((prev) =>
+          prev
+            ? {
+                ...prev,
+                ...recordWithStructured,
+                ...simulationUpdate,
+              }
+            : prev,
+        );
+        setUploadsByRecord((prev) => ({
+          ...prev,
+          [selectedRecord.id]: applyStructuredUploads(nextUploads, structured),
+        }));
+        return ocrPayload.ocr_status === "completed";
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Erro ao processar OCR.";
+        await validatorDb
+          .from("asp_validator_uploads")
+          .update({
+            ocr_status: "failed",
+            ocr_error: message,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", upload.id);
+        toast.error(message);
+        return false;
+      } finally {
+        setProcessingOcr((prev) => ({ ...prev, [upload.id]: false }));
+      }
+    },
+    [editingUploadComments, loadHistory, ocrFilesByUpload, selectedRecord, uploadsByRecord],
+  );
 
   const processAllAvailableOcr = useCallback(async () => {
     if (!selectedRecord) return;
     const currentUploads = uploadsByRecord[selectedRecord.id] ?? [];
-    const available = currentUploads.filter((upload) => Boolean(ocrFilesByUpload[upload.id]) || Boolean(upload.file_path));
+    const available = currentUploads.filter(
+      (upload) => Boolean(ocrFilesByUpload[upload.id]) || Boolean(upload.file_path),
+    );
     if (!available.length) {
       toast.error("Nenhum arquivo salvo esta disponivel para OCR.");
       return;
@@ -674,7 +812,9 @@ function AspValidatorPage() {
         failed += 1;
       }
     }
-    toast.message(`OCR em lote finalizado: ${available.length} encontrado(s), ${processed} processado(s), ${failed} falha(s).`);
+    toast.message(
+      `OCR em lote finalizado: ${available.length} encontrado(s), ${processed} processado(s), ${failed} falha(s).`,
+    );
   }, [ocrFilesByUpload, processUploadOcr, selectedRecord, uploadsByRecord]);
 
   const structureSelectedRecordOcr = useCallback(async () => {
@@ -704,15 +844,27 @@ function AspValidatorPage() {
             }
           : prev,
       );
-      setUploadsByRecord((prev) => ({ ...prev, [selectedRecord.id]: applyStructuredUploads(prev[selectedRecord.id] ?? currentUploads, structured) }));
+      setUploadsByRecord((prev) => ({
+        ...prev,
+        [selectedRecord.id]: applyStructuredUploads(
+          prev[selectedRecord.id] ?? currentUploads,
+          structured,
+        ),
+      }));
       await loadHistory();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Nao foi possivel estruturar o OCR.";
       await validatorDb
         .from("asp_validator_registros")
-        .update({ structured_status: "failed", structured_error: message, updated_at: new Date().toISOString() })
+        .update({
+          structured_status: "failed",
+          structured_error: message,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", selectedRecord.id);
-      setSelectedRecord((prev) => (prev ? { ...prev, structured_status: "failed", structured_error: message } : prev));
+      setSelectedRecord((prev) =>
+        prev ? { ...prev, structured_status: "failed", structured_error: message } : prev,
+      );
       toast.error(message);
     } finally {
       setStructuringRecord(false);
@@ -734,7 +886,13 @@ function AspValidatorPage() {
             }
           : prev,
       );
-      toast[simulation.status === "completed" ? "success" : simulation.status === "failed" ? "error" : "message"](
+      toast[
+        simulation.status === "completed"
+          ? "success"
+          : simulation.status === "failed"
+            ? "error"
+            : "message"
+      ](
         simulation.status === "completed"
           ? "Simulacao concluida."
           : simulation.status === "low_confidence"
@@ -745,7 +903,9 @@ function AspValidatorPage() {
       );
       await loadHistory();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Nao foi possivel executar a simulacao.");
+      toast.error(
+        error instanceof Error ? error.message : "Nao foi possivel executar a simulacao.",
+      );
     } finally {
       setSimulatingRecord(false);
     }
@@ -770,7 +930,9 @@ function AspValidatorPage() {
     setValidatingAiRecord(true);
     try {
       const currentUploads = await ensureOcrForStoredUploads();
-      const next = await validateWithAiFallback(buildRecordValidationContext(selectedRecord, currentUploads));
+      const next = await validateWithAiFallback(
+        buildRecordValidationContext(selectedRecord, currentUploads),
+      );
       const { error } = await validatorDb
         .from("asp_validator_registros")
         .update({
@@ -842,9 +1004,12 @@ function AspValidatorPage() {
       };
       const raw = await validateAspValidatorWithOnlineAi({ data: { context } });
       // Reforco de protecao de banca tambem na IA + Pesquisa.
-      const insufficientEv = raw.adjusted_ev === null || raw.adjusted_ev === undefined || raw.adjusted_ev < 3;
+      const insufficientEv =
+        raw.adjusted_ev === null || raw.adjusted_ev === undefined || raw.adjusted_ev < 3;
       const fairAboveOffered =
-        raw.offered_odd !== null && raw.adjusted_fair_odd !== null && raw.adjusted_fair_odd >= raw.offered_odd;
+        raw.offered_odd !== null &&
+        raw.adjusted_fair_odd !== null &&
+        raw.adjusted_fair_odd >= raw.offered_odd;
       const adjustedAlerts = [...(raw.alerts ?? [])];
       let next = raw;
       let guardrailReason = "";
@@ -863,8 +1028,10 @@ function AspValidatorPage() {
         reason: guardrailReason
           ? guardrailReason
           : (() => {
-              const dp = Math.abs(((next.adjusted_probability ?? 0) - (before.adjusted_probability ?? 0)));
-              const de = Math.abs(((next.adjusted_ev ?? 0) - (before.adjusted_ev ?? 0)));
+              const dp = Math.abs(
+                (next.adjusted_probability ?? 0) - (before.adjusted_probability ?? 0),
+              );
+              const de = Math.abs((next.adjusted_ev ?? 0) - (before.adjusted_ev ?? 0));
               const sameDecision = before.decision === next.decision;
               const noMaterialChange = dp < 1 && de < 1;
               if (sameDecision && noMaterialChange) {
@@ -903,7 +1070,9 @@ function AspValidatorPage() {
         .eq("id", selectedRecord.id);
       if (error) throw error;
       setSelectedRecord((prev) =>
-        prev ? applyOnlineAiResult(prev, { ...next, online_context_json: onlineContextWithHistory }) : prev,
+        prev
+          ? applyOnlineAiResult(prev, { ...next, online_context_json: onlineContextWithHistory })
+          : prev,
       );
       toast.success("IA + Pesquisa concluida.");
       await loadHistory();
@@ -921,10 +1090,13 @@ function AspValidatorPage() {
     }
   }, [ensureOcrForStoredUploads, loadHistory, selectedRecord]);
 
-
   const saveRecordResult = async () => {
     if (!selectedRecord || !resultForm) return;
-    if (selectedRecord.result_status && !window.confirm("Este registro ja possui resultado. Deseja editar o resultado mesmo assim?")) return;
+    if (
+      selectedRecord.result_status &&
+      !window.confirm("Este registro ja possui resultado. Deseja editar o resultado mesmo assim?")
+    )
+      return;
     const status = resultForm.result_status.toUpperCase();
     if (status === "PENDENTE" || status === "") {
       // Limpa o resultado e devolve o registro ao estado "sem resultado registrado".
@@ -941,13 +1113,18 @@ function AspValidatorPage() {
           bankroll_applied: false,
           updated_at: new Date().toISOString(),
         };
-        const { error } = await validatorDb.from("asp_validator_registros").update(payload).eq("id", selectedRecord.id);
+        const { error } = await validatorDb
+          .from("asp_validator_registros")
+          .update(payload)
+          .eq("id", selectedRecord.id);
         if (error) throw error;
         setSelectedRecord((prev) => (prev ? { ...prev, ...payload } : prev));
         toast.success("Resultado removido. Registro voltou a 'Sem resultado registrado'.");
         await loadHistory();
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Nao foi possivel limpar o resultado.");
+        toast.error(
+          error instanceof Error ? error.message : "Nao foi possivel limpar o resultado.",
+        );
       }
       return;
     }
@@ -981,14 +1158,27 @@ function AspValidatorPage() {
         bankroll_applied: bankrollApplied,
         updated_at: new Date().toISOString(),
       };
-      const { error } = await validatorDb.from("asp_validator_registros").update(payload).eq("id", selectedRecord.id);
+      const { error } = await validatorDb
+        .from("asp_validator_registros")
+        .update(payload)
+        .eq("id", selectedRecord.id);
       if (error) throw error;
       setSelectedRecord((prev) => (prev ? { ...prev, ...payload } : prev));
-      setResultForm((prev) => (prev ? { ...prev, stake_units: String(payload.stake_units), unit_value_brl: String(unitValue) } : prev));
-      toast.success(bankrollApplied ? "Resultado registrado e incluído na banca oficial." : "Resultado simulado registrado sem impacto na banca.");
+      setResultForm((prev) =>
+        prev
+          ? { ...prev, stake_units: String(payload.stake_units), unit_value_brl: String(unitValue) }
+          : prev,
+      );
+      toast.success(
+        bankrollApplied
+          ? "Resultado registrado e incluído na banca oficial."
+          : "Resultado simulado registrado sem impacto na banca.",
+      );
       await loadHistory();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Nao foi possivel registrar o resultado.");
+      toast.error(
+        error instanceof Error ? error.message : "Nao foi possivel registrar o resultado.",
+      );
     }
   };
 
@@ -1000,7 +1190,8 @@ function AspValidatorPage() {
           ASP Validator
         </h1>
         <p className="text-sm text-muted-foreground">
-          Valide prognosticos externos ou manuais. A previsao original e apenas ponto de partida; a decisao final e CONFIRMAR ou PULAR.
+          Valide prognosticos externos ou manuais. A previsao original e apenas ponto de partida; a
+          decisao final e CONFIRMAR ou PULAR.
         </p>
       </div>
 
@@ -1028,22 +1219,83 @@ function AspValidatorPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
-              <SelectField label="Esporte" value={form.sport} options={SPORTS} onChange={(value) => update("sport", value)} />
-              <SelectField label="Plataforma de origem" value={form.source_platform} options={PLATFORMS} onChange={(value) => update("source_platform", value)} />
-              <TextField label="Liga" value={form.league} onChange={(value) => update("league", value)} placeholder="Ex.: MLB, WNBA, Premier League" />
-              <TextField label="Data do jogo" type="date" value={form.match_date} onChange={(value) => update("match_date", value)} />
-              <TextField label="Mandante" value={form.home_team} onChange={(value) => update("home_team", value)} />
-              <TextField label="Visitante" value={form.away_team} onChange={(value) => update("away_team", value)} />
-              <SelectField label="Mercado" value={form.market} options={MARKETS} onChange={(value) => update("market", value)} placeholder="Selecione" />
-              <TextField label="Pick" value={form.pick} onChange={(value) => update("pick", value)} placeholder="Ex.: Over 2.5, Time +1.5" />
-              <TextField label="Linha" value={form.line} onChange={(value) => update("line", value)} placeholder="Opcional" />
-              <TextField label="Odd" value={form.offered_odd} onChange={(value) => update("offered_odd", value)} placeholder="Ex.: 1.85" />
-              <TextField label="Probabilidade original (%)" value={form.source_probability} onChange={(value) => update("source_probability", value)} placeholder="Opcional" />
-              <TextField label="EV original (%)" value={form.source_ev} onChange={(value) => update("source_ev", value)} placeholder="Opcional" />
+              <SelectField
+                label="Esporte"
+                value={form.sport}
+                options={SPORTS}
+                onChange={(value) => update("sport", value)}
+              />
+              <SelectField
+                label="Plataforma de origem"
+                value={form.source_platform}
+                options={PLATFORMS}
+                onChange={(value) => update("source_platform", value)}
+              />
+              <TextField
+                label="Liga"
+                value={form.league}
+                onChange={(value) => update("league", value)}
+                placeholder="Ex.: MLB, WNBA, Premier League"
+              />
+              <TextField
+                label="Data do jogo"
+                type="date"
+                value={form.match_date}
+                onChange={(value) => update("match_date", value)}
+              />
+              <TextField
+                label="Mandante"
+                value={form.home_team}
+                onChange={(value) => update("home_team", value)}
+              />
+              <TextField
+                label="Visitante"
+                value={form.away_team}
+                onChange={(value) => update("away_team", value)}
+              />
+              <SelectField
+                label="Mercado"
+                value={form.market}
+                options={MARKETS}
+                onChange={(value) => update("market", value)}
+                placeholder="Selecione"
+              />
+              <TextField
+                label="Pick"
+                value={form.pick}
+                onChange={(value) => update("pick", value)}
+                placeholder="Ex.: Over 2.5, Time +1.5"
+              />
+              <TextField
+                label="Linha"
+                value={form.line}
+                onChange={(value) => update("line", value)}
+                placeholder="Opcional"
+              />
+              <TextField
+                label="Odd"
+                value={form.offered_odd}
+                onChange={(value) => update("offered_odd", value)}
+                placeholder="Ex.: 1.85"
+              />
+              <TextField
+                label="Probabilidade original (%)"
+                value={form.source_probability}
+                onChange={(value) => update("source_probability", value)}
+                placeholder="Opcional"
+              />
+              <TextField
+                label="EV original (%)"
+                value={form.source_ev}
+                onChange={(value) => update("source_ev", value)}
+                placeholder="Opcional"
+              />
             </div>
 
             <div className="rounded-md border border-border bg-muted/15 p-3">
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Modelo Validator</div>
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                Modelo Validator
+              </div>
               <div className="mt-1 font-semibold">{validatorModel}</div>
             </div>
 
@@ -1061,15 +1313,21 @@ function AspValidatorPage() {
                 Recurso secundario: uploads com OCR (opcional)
               </summary>
               <div className="mt-3">
-                <UploadsWithComments uploads={uploads} onAddFiles={addUploads} onUpdate={updateUpload} onRemove={removeUpload} />
+                <UploadsWithComments
+                  uploads={uploads}
+                  onAddFiles={addUploads}
+                  onUpdate={updateUpload}
+                  onRemove={removeUpload}
+                />
               </div>
             </details>
 
-
-
-
             <Button onClick={validate} disabled={!canValidate || saving} className="gap-2">
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <BrainCircuit className="h-4 w-4" />}
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <BrainCircuit className="h-4 w-4" />
+              )}
               Validar com IA
             </Button>
           </CardContent>
@@ -1086,7 +1344,11 @@ function AspValidatorPage() {
         </div>
       </div>
 
-      <AspValidatorDashboard records={records} filters={dashboardFilters} onChangeFilters={setDashboardFilters} />
+      <AspValidatorDashboard
+        records={records}
+        filters={dashboardFilters}
+        onChangeFilters={setDashboardFilters}
+      />
 
       <HistorySection
         records={records}
@@ -1099,7 +1361,7 @@ function AspValidatorPage() {
 
       <RecordDetailDialog
         record={selectedRecord}
-        uploads={selectedRecord ? uploadsByRecord[selectedRecord.id] ?? [] : []}
+        uploads={selectedRecord ? (uploadsByRecord[selectedRecord.id] ?? []) : []}
         editingRecord={editingRecord}
         resultForm={resultForm}
         uploadComments={editingUploadComments}
@@ -1111,7 +1373,9 @@ function AspValidatorPage() {
         ocrAppliedFields={ocrAppliedFields}
         onApplyOcrToForm={applyOcrDataToEditingRecord}
         onUpdateResult={updateResultForm}
-        onUpdateUploadComment={(uploadId, value) => setEditingUploadComments((prev) => ({ ...prev, [uploadId]: value }))}
+        onUpdateUploadComment={(uploadId, value) =>
+          setEditingUploadComments((prev) => ({ ...prev, [uploadId]: value }))
+        }
         ocrFilesByUpload={ocrFilesByUpload}
         processingOcr={processingOcr}
         structuringRecord={structuringRecord}
@@ -1145,11 +1409,26 @@ function AspValidatorDashboard({
   const options = useMemo(() => buildDashboardOptions(records), [records]);
   const filtered = useMemo(() => filterDashboardRecords(records, filters), [records, filters]);
   const stats = useMemo(() => calculateValidatorDashboardStats(filtered), [filtered]);
-  const byModel = useMemo(() => groupValidatorRecords(filtered, (record) => record.validator_model || "ASP Validator"), [filtered]);
-  const byMarket = useMemo(() => groupValidatorRecords(filtered, (record) => record.market || "-"), [filtered]);
-  const byPlatform = useMemo(() => groupValidatorRecords(filtered, (record) => record.source_platform || "-"), [filtered]);
-  const byLeague = useMemo(() => groupValidatorRecords(filtered, (record) => record.league || "-"), [filtered]);
-  const byDecision = useMemo(() => groupValidatorRecords(filtered, (record) => record.decision || "-"), [filtered]);
+  const byModel = useMemo(
+    () => groupValidatorRecords(filtered, (record) => record.validator_model || "ASP Validator"),
+    [filtered],
+  );
+  const byMarket = useMemo(
+    () => groupValidatorRecords(filtered, (record) => record.market || "-"),
+    [filtered],
+  );
+  const byPlatform = useMemo(
+    () => groupValidatorRecords(filtered, (record) => record.source_platform || "-"),
+    [filtered],
+  );
+  const byLeague = useMemo(
+    () => groupValidatorRecords(filtered, (record) => record.league || "-"),
+    [filtered],
+  );
+  const byDecision = useMemo(
+    () => groupValidatorRecords(filtered, (record) => record.decision || "-"),
+    [filtered],
+  );
 
   const setFilter = (field: keyof ValidatorDashboardFilters, value: string) => {
     onChangeFilters({ ...filters, [field]: value });
@@ -1165,30 +1444,104 @@ function AspValidatorDashboard({
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-3 md:grid-cols-4">
-          <SelectField label="Periodo" value={filters.period} options={["all", "7d", "30d", "month", "year"]} onChange={(value) => setFilter("period", value)} />
-          <SelectField label="Esporte" value={filters.sport} options={["all", ...options.sports]} onChange={(value) => setFilter("sport", value)} />
-          <SelectField label="Liga" value={filters.league} options={["all", ...options.leagues]} onChange={(value) => setFilter("league", value)} />
-          <SelectField label="Plataforma" value={filters.source_platform} options={["all", ...options.platforms]} onChange={(value) => setFilter("source_platform", value)} />
-          <SelectField label="Modelo Validator" value={filters.validator_model} options={["all", ...options.models]} onChange={(value) => setFilter("validator_model", value)} />
-          <SelectField label="Mercado" value={filters.market} options={["all", ...options.markets]} onChange={(value) => setFilter("market", value)} />
-          <SelectField label="Decisao" value={filters.decision} options={["all", "CONFIRMAR", "PULAR"]} onChange={(value) => setFilter("decision", value)} />
-          <SelectField label="Resultado" value={filters.result} options={["all", "GREEN", "RED", "PUSH", "VOID", "PENDENTE"]} onChange={(value) => setFilter("result", value)} />
+          <SelectField
+            label="Periodo"
+            value={filters.period}
+            options={["all", "7d", "30d", "month", "year"]}
+            onChange={(value) => setFilter("period", value)}
+          />
+          <SelectField
+            label="Esporte"
+            value={filters.sport}
+            options={["all", ...options.sports]}
+            onChange={(value) => setFilter("sport", value)}
+          />
+          <SelectField
+            label="Liga"
+            value={filters.league}
+            options={["all", ...options.leagues]}
+            onChange={(value) => setFilter("league", value)}
+          />
+          <SelectField
+            label="Plataforma"
+            value={filters.source_platform}
+            options={["all", ...options.platforms]}
+            onChange={(value) => setFilter("source_platform", value)}
+          />
+          <SelectField
+            label="Modelo Validator"
+            value={filters.validator_model}
+            options={["all", ...options.models]}
+            onChange={(value) => setFilter("validator_model", value)}
+          />
+          <SelectField
+            label="Mercado"
+            value={filters.market}
+            options={["all", ...options.markets]}
+            onChange={(value) => setFilter("market", value)}
+          />
+          <SelectField
+            label="Decisao"
+            value={filters.decision}
+            options={["all", "CONFIRMAR", "PULAR"]}
+            onChange={(value) => setFilter("decision", value)}
+          />
+          <SelectField
+            label="Resultado"
+            value={filters.result}
+            options={["all", "GREEN", "RED", "PUSH", "VOID", "PENDENTE"]}
+            onChange={(value) => setFilter("result", value)}
+          />
         </div>
 
         <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-6">
           <DashboardMetric label="Total validacoes" value={String(stats.total)} />
           <DashboardMetric label="Confirmadas" value={String(stats.confirmed)} />
           <DashboardMetric label="Puladas" value={String(stats.skipped)} />
-          <DashboardMetric label="Greens confirmados" value={String(stats.confirmedGreen)} tone="good" />
+          <DashboardMetric
+            label="Greens confirmados"
+            value={String(stats.confirmedGreen)}
+            tone="good"
+          />
           <DashboardMetric label="Reds confirmados" value={String(stats.confirmedRed)} tone="bad" />
-          <DashboardMetric label="Win rate confirmado" value={`${stats.confirmedWinRate.toFixed(1)}%`} />
-          <DashboardMetric label="ROI confirmado" value={`${signed(stats.confirmedRoi)}%`} tone={stats.confirmedRoi >= 0 ? "good" : "bad"} />
-          <DashboardMetric label="Yield confirmado" value={`${signed(stats.confirmedYield)}%`} tone={stats.confirmedYield >= 0 ? "good" : "bad"} />
-          <DashboardMetric label="Lucro confirmado (u)" value={`${signed(stats.confirmedProfitUnits)}u`} tone={stats.confirmedProfitUnits >= 0 ? "good" : "bad"} />
-          <DashboardMetric label="Lucro confirmado (R$)" value={`${stats.confirmedProfitBrl >= 0 ? "+" : "-"}R$ ${Math.abs(stats.confirmedProfitBrl).toFixed(2)}`} tone={stats.confirmedProfitBrl >= 0 ? "good" : "bad"} />
-          <DashboardMetric label="PULAR que seriam Green" value={String(stats.skippedGreen)} tone="bad" />
-          <DashboardMetric label="PULAR que seriam Red" value={String(stats.skippedRed)} tone="good" />
-          <DashboardMetric label="Assertividade PULAR" value={`${stats.skipAccuracy.toFixed(1)}%`} />
+          <DashboardMetric
+            label="Win rate confirmado"
+            value={`${stats.confirmedWinRate.toFixed(1)}%`}
+          />
+          <DashboardMetric
+            label="ROI confirmado"
+            value={`${signed(stats.confirmedRoi)}%`}
+            tone={stats.confirmedRoi >= 0 ? "good" : "bad"}
+          />
+          <DashboardMetric
+            label="Yield confirmado"
+            value={`${signed(stats.confirmedYield)}%`}
+            tone={stats.confirmedYield >= 0 ? "good" : "bad"}
+          />
+          <DashboardMetric
+            label="Lucro confirmado (u)"
+            value={`${signed(stats.confirmedProfitUnits)}u`}
+            tone={stats.confirmedProfitUnits >= 0 ? "good" : "bad"}
+          />
+          <DashboardMetric
+            label="Lucro confirmado (R$)"
+            value={`${stats.confirmedProfitBrl >= 0 ? "+" : "-"}R$ ${Math.abs(stats.confirmedProfitBrl).toFixed(2)}`}
+            tone={stats.confirmedProfitBrl >= 0 ? "good" : "bad"}
+          />
+          <DashboardMetric
+            label="PULAR que seriam Green"
+            value={String(stats.skippedGreen)}
+            tone="bad"
+          />
+          <DashboardMetric
+            label="PULAR que seriam Red"
+            value={String(stats.skippedRed)}
+            tone="good"
+          />
+          <DashboardMetric
+            label="Assertividade PULAR"
+            value={`${stats.skipAccuracy.toFixed(1)}%`}
+          />
         </div>
 
         <div className="grid gap-4 xl:grid-cols-2">
@@ -1225,7 +1578,13 @@ function HistorySection({
           <ClipboardCheck className="h-4 w-4" />
           Historico do ASP Validator
         </CardTitle>
-        <Button variant="outline" size="sm" onClick={() => void onRefresh()} disabled={loading} className="gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void onRefresh()}
+          disabled={loading}
+          className="gap-2"
+        >
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           Atualizar
         </Button>
@@ -1240,7 +1599,13 @@ function HistorySection({
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="outline">{record.sport}</Badge>
                       {record.league ? <Badge variant="secondary">{record.league}</Badge> : null}
-                      <Badge className={record.decision === "CONFIRMAR" ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"}>
+                      <Badge
+                        className={
+                          record.decision === "CONFIRMAR"
+                            ? "bg-emerald-500/15 text-emerald-300"
+                            : "bg-red-500/15 text-red-300"
+                        }
+                      >
                         {record.decision}
                       </Badge>
                       <Badge variant="outline">{record.confidence}</Badge>
@@ -1251,7 +1616,8 @@ function HistorySection({
                         {record.home_team} x {record.away_team}
                       </div>
                       <div className="mt-1 text-xs text-muted-foreground">
-                        {formatDate(record.match_date)} | {record.source_platform} | criado em {formatDateTime(record.created_at)}
+                        {formatDate(record.match_date)} | {record.source_platform} | criado em{" "}
+                        {formatDateTime(record.created_at)}
                       </div>
                     </div>
                     <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
@@ -1264,11 +1630,22 @@ function HistorySection({
                     </div>
                   </div>
                   <div className="flex shrink-0 gap-2">
-                    <Button variant="outline" size="sm" onClick={() => onOpen(record)} className="gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onOpen(record)}
+                      className="gap-2"
+                    >
                       <Eye className="h-4 w-4" />
                       Detalhe
                     </Button>
-                    <Button variant="destructive" size="sm" onClick={() => onDelete(record)} disabled={Boolean(record.result_status)} className="gap-2">
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => onDelete(record)}
+                      disabled={Boolean(record.result_status)}
+                      className="gap-2"
+                    >
                       <Trash2 className="h-4 w-4" />
                       Excluir
                     </Button>
@@ -1357,16 +1734,31 @@ function RecordDetailDialog({
         {record && editingRecord ? (
           <div className="space-y-5">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge className={record.decision === "CONFIRMAR" ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"}>
+              <Badge
+                className={
+                  record.decision === "CONFIRMAR"
+                    ? "bg-emerald-500/15 text-emerald-300"
+                    : "bg-red-500/15 text-red-300"
+                }
+              >
                 {record.decision}
               </Badge>
               <Badge variant="outline">Confianca: {record.confidence}</Badge>
               <Badge variant="secondary">{record.validator_model}</Badge>
-              {record.result_status ? <Badge variant="outline">Resultado: {record.result_status}</Badge> : <Badge variant="outline">Sem resultado registrado</Badge>}
+              {record.result_status ? (
+                <Badge variant="outline">Resultado: {record.result_status}</Badge>
+              ) : (
+                <Badge variant="outline">Sem resultado registrado</Badge>
+              )}
             </div>
 
             <div className="flex flex-wrap justify-end gap-2">
-              <Button variant="outline" onClick={onApplyOcrToForm} disabled={!canEdit} className="gap-2">
+              <Button
+                variant="outline"
+                onClick={onApplyOcrToForm}
+                disabled={!canEdit}
+                className="gap-2"
+              >
                 <FileJson className="h-4 w-4" />
                 Aplicar dados estruturados ao formulario
               </Button>
@@ -1389,14 +1781,64 @@ function RecordDetailDialog({
                 disabled={!canEdit}
                 hint={ocrAppliedFields.source_platform ? "preenchido via OCR" : undefined}
               />
-              <TextField label="Liga" value={editingRecord.league} onChange={(value) => onUpdateRecord("league", value)} disabled={!canEdit} hint={ocrAppliedFields.league ? "preenchido via OCR" : undefined} />
-              <TextField label="Data do jogo" type="date" value={editingRecord.match_date} onChange={(value) => onUpdateRecord("match_date", value)} disabled={!canEdit} hint={ocrAppliedFields.match_date ? "preenchido via OCR" : undefined} />
-              <TextField label="Mandante" value={editingRecord.home_team} onChange={(value) => onUpdateRecord("home_team", value)} disabled={!canEdit} hint={ocrAppliedFields.home_team ? "preenchido via OCR" : undefined} />
-              <TextField label="Visitante" value={editingRecord.away_team} onChange={(value) => onUpdateRecord("away_team", value)} disabled={!canEdit} hint={ocrAppliedFields.away_team ? "preenchido via OCR" : undefined} />
-              <SelectField label="Mercado" value={editingRecord.market} options={MARKETS} onChange={(value) => onUpdateRecord("market", value)} disabled={!canEdit} hint={ocrAppliedFields.market ? "preenchido via OCR" : undefined} />
-              <TextField label="Pick" value={editingRecord.pick} onChange={(value) => onUpdateRecord("pick", value)} disabled={!canEdit} hint={ocrAppliedFields.pick ? "preenchido via OCR" : undefined} />
-              <TextField label="Linha" value={editingRecord.line} onChange={(value) => onUpdateRecord("line", value)} disabled={!canEdit} hint={ocrAppliedFields.line ? "preenchido via OCR" : undefined} />
-              <TextField label="Odd" value={editingRecord.offered_odd} onChange={(value) => onUpdateRecord("offered_odd", value)} disabled={!canEdit} hint={ocrAppliedFields.offered_odd ? "preenchido via OCR" : undefined} />
+              <TextField
+                label="Liga"
+                value={editingRecord.league}
+                onChange={(value) => onUpdateRecord("league", value)}
+                disabled={!canEdit}
+                hint={ocrAppliedFields.league ? "preenchido via OCR" : undefined}
+              />
+              <TextField
+                label="Data do jogo"
+                type="date"
+                value={editingRecord.match_date}
+                onChange={(value) => onUpdateRecord("match_date", value)}
+                disabled={!canEdit}
+                hint={ocrAppliedFields.match_date ? "preenchido via OCR" : undefined}
+              />
+              <TextField
+                label="Mandante"
+                value={editingRecord.home_team}
+                onChange={(value) => onUpdateRecord("home_team", value)}
+                disabled={!canEdit}
+                hint={ocrAppliedFields.home_team ? "preenchido via OCR" : undefined}
+              />
+              <TextField
+                label="Visitante"
+                value={editingRecord.away_team}
+                onChange={(value) => onUpdateRecord("away_team", value)}
+                disabled={!canEdit}
+                hint={ocrAppliedFields.away_team ? "preenchido via OCR" : undefined}
+              />
+              <SelectField
+                label="Mercado"
+                value={editingRecord.market}
+                options={MARKETS}
+                onChange={(value) => onUpdateRecord("market", value)}
+                disabled={!canEdit}
+                hint={ocrAppliedFields.market ? "preenchido via OCR" : undefined}
+              />
+              <TextField
+                label="Pick"
+                value={editingRecord.pick}
+                onChange={(value) => onUpdateRecord("pick", value)}
+                disabled={!canEdit}
+                hint={ocrAppliedFields.pick ? "preenchido via OCR" : undefined}
+              />
+              <TextField
+                label="Linha"
+                value={editingRecord.line}
+                onChange={(value) => onUpdateRecord("line", value)}
+                disabled={!canEdit}
+                hint={ocrAppliedFields.line ? "preenchido via OCR" : undefined}
+              />
+              <TextField
+                label="Odd"
+                value={editingRecord.offered_odd}
+                onChange={(value) => onUpdateRecord("offered_odd", value)}
+                disabled={!canEdit}
+                hint={ocrAppliedFields.offered_odd ? "preenchido via OCR" : undefined}
+              />
               <TextField
                 label="Probabilidade original (%)"
                 value={editingRecord.source_probability}
@@ -1404,8 +1846,20 @@ function RecordDetailDialog({
                 disabled={!canEdit}
                 hint={ocrAppliedFields.source_probability ? "preenchido via OCR" : undefined}
               />
-              <TextField label="Odd justa original" value={editingRecord.source_fair_odd} onChange={(value) => onUpdateRecord("source_fair_odd", value)} disabled={!canEdit} hint={ocrAppliedFields.source_fair_odd ? "preenchido via OCR" : undefined} />
-              <TextField label="EV original (%)" value={editingRecord.source_ev} onChange={(value) => onUpdateRecord("source_ev", value)} disabled={!canEdit} hint={ocrAppliedFields.source_ev ? "preenchido via OCR" : undefined} />
+              <TextField
+                label="Odd justa original"
+                value={editingRecord.source_fair_odd}
+                onChange={(value) => onUpdateRecord("source_fair_odd", value)}
+                disabled={!canEdit}
+                hint={ocrAppliedFields.source_fair_odd ? "preenchido via OCR" : undefined}
+              />
+              <TextField
+                label="EV original (%)"
+                value={editingRecord.source_ev}
+                onChange={(value) => onUpdateRecord("source_ev", value)}
+                disabled={!canEdit}
+                hint={ocrAppliedFields.source_ev ? "preenchido via OCR" : undefined}
+              />
             </div>
 
             {editingRecord.user_context?.trim() ? (
@@ -1421,7 +1875,6 @@ function RecordDetailDialog({
                 />
               </details>
             ) : null}
-
 
             {!canEdit ? (
               <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
@@ -1455,12 +1908,22 @@ function RecordDetailDialog({
                     />
                   ) : null}
 
-                  <SignalBlock title="Blocos favoraveis" items={record.favorable_blocks ?? []} tone="good" />
-                  <SignalBlock title="Blocos contrarios" items={record.against_blocks ?? []} tone="bad" />
+                  <SignalBlock
+                    title="Blocos favoraveis"
+                    items={record.favorable_blocks ?? []}
+                    tone="good"
+                  />
+                  <SignalBlock
+                    title="Blocos contrarios"
+                    items={record.against_blocks ?? []}
+                    tone="bad"
+                  />
                   <SignalBlock title="Alertas" items={record.alerts ?? []} tone="warn" />
 
                   <div className="rounded-md border border-border bg-muted/20 p-3">
-                    <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Parecer final</p>
+                    <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">
+                      Parecer final
+                    </p>
                     <p className="text-sm leading-relaxed">{record.final_analysis}</p>
                   </div>
 
@@ -1484,36 +1947,88 @@ function RecordDetailDialog({
 
                   <OnlineContextPanel record={record} />
 
-                  <ResultRegistrationPanel record={record} form={resultForm} onUpdate={onUpdateResult} onSave={onSaveResult} />
+                  <ResultRegistrationPanel
+                    record={record}
+                    form={resultForm}
+                    onUpdate={onUpdateResult}
+                    onSave={onSaveResult}
+                  />
 
                   <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" onClick={() => void onValidateAi()} disabled={validatingAiRecord} className="gap-2">
-                      {validatingAiRecord ? <Loader2 className="h-4 w-4 animate-spin" /> : <BrainCircuit className="h-4 w-4" />}
+                    <Button
+                      variant="outline"
+                      onClick={() => void onValidateAi()}
+                      disabled={validatingAiRecord}
+                      className="gap-2"
+                    >
+                      {validatingAiRecord ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <BrainCircuit className="h-4 w-4" />
+                      )}
                       Validar com IA
                     </Button>
                     {!isPasted ? (
                       <>
-                        <Button variant="outline" onClick={() => void onProcessAllAvailableOcr()} className="gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => void onProcessAllAvailableOcr()}
+                          className="gap-2"
+                        >
                           <ImageUp className="h-4 w-4" />
                           Processar todos os OCRs disponiveis
                         </Button>
-                        <Button variant="outline" onClick={() => void onStructureOcr()} disabled={structuringRecord} className="gap-2">
-                          {structuringRecord ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileJson className="h-4 w-4" />}
-                          {record.structured_status === "completed" ? "Reestruturar OCR" : "Estruturar OCR"}
+                        <Button
+                          variant="outline"
+                          onClick={() => void onStructureOcr()}
+                          disabled={structuringRecord}
+                          className="gap-2"
+                        >
+                          {structuringRecord ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <FileJson className="h-4 w-4" />
+                          )}
+                          {record.structured_status === "completed"
+                            ? "Reestruturar OCR"
+                            : "Estruturar OCR"}
                         </Button>
                       </>
                     ) : (
-                      <Button variant="outline" onClick={onApplyOcrToForm} disabled={!canEdit} className="gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={onApplyOcrToForm}
+                        disabled={!canEdit}
+                        className="gap-2"
+                      >
                         <FileJson className="h-4 w-4" />
                         Reinterpretar texto colado
                       </Button>
                     )}
-                    <Button variant="outline" onClick={() => void onRunSimulation()} disabled={simulatingRecord} className="gap-2">
-                      {simulatingRecord ? <Loader2 className="h-4 w-4 animate-spin" /> : <Microscope className="h-4 w-4" />}
+                    <Button
+                      variant="outline"
+                      onClick={() => void onRunSimulation()}
+                      disabled={simulatingRecord}
+                      className="gap-2"
+                    >
+                      {simulatingRecord ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Microscope className="h-4 w-4" />
+                      )}
                       Executar simulacao
                     </Button>
-                    <Button variant="outline" onClick={() => void onValidateOnlineAi()} disabled={validatingOnlineRecord} className="gap-2">
-                      {validatingOnlineRecord ? <Loader2 className="h-4 w-4 animate-spin" /> : <Cloud className="h-4 w-4" />}
+                    <Button
+                      variant="outline"
+                      onClick={() => void onValidateOnlineAi()}
+                      disabled={validatingOnlineRecord}
+                      className="gap-2"
+                    >
+                      {validatingOnlineRecord ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Cloud className="h-4 w-4" />
+                      )}
                       Validar com IA + Pesquisa
                     </Button>
                   </div>
@@ -1521,14 +2036,22 @@ function RecordDetailDialog({
               );
             })()}
 
-
             <div className="flex flex-wrap justify-between gap-2 border-t border-border pt-4">
-              <Button variant="destructive" onClick={onDelete} disabled={!canEdit} className="gap-2">
+              <Button
+                variant="destructive"
+                onClick={onDelete}
+                disabled={!canEdit}
+                className="gap-2"
+              >
                 <Trash2 className="h-4 w-4" />
                 Excluir registro
               </Button>
               <Button onClick={() => void onSave()} disabled={!canEdit || saving} className="gap-2">
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
                 Salvar alteracoes
               </Button>
             </div>
@@ -1560,7 +2083,8 @@ function UploadsDetail({
 }) {
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
   const imageUploads = useMemo(
-    () => uploads.filter((upload) => upload.file_path && (upload.mime_type || "").startsWith("image/")),
+    () =>
+      uploads.filter((upload) => upload.file_path && (upload.mime_type || "").startsWith("image/")),
     [uploads],
   );
   const uploadStats = useMemo(
@@ -1586,7 +2110,11 @@ function UploadsDetail({
         }),
       );
       if (!active) return;
-      setPreviewUrls(Object.fromEntries(entries.filter((entry): entry is readonly [string, string] => Boolean(entry[1]))));
+      setPreviewUrls(
+        Object.fromEntries(
+          entries.filter((entry): entry is readonly [string, string] => Boolean(entry[1])),
+        ),
+      );
     };
     void loadPreviewUrls();
     return () => {
@@ -1598,9 +2126,14 @@ function UploadsDetail({
     <div className="space-y-3 rounded-md border border-border bg-muted/10 p-3">
       <div>
         <div className="text-sm font-semibold">Uploads vinculados</div>
-        <p className="mt-1 text-xs text-muted-foreground">Arquivos armazenados no Supabase Storage e vinculados ao registro para auditoria e reprocessamento.</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Arquivos armazenados no Supabase Storage e vinculados ao registro para auditoria e
+          reprocessamento.
+        </p>
         <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
-          <Badge variant="outline">Storage: {uploadStats.stored}/{uploads.length}</Badge>
+          <Badge variant="outline">
+            Storage: {uploadStats.stored}/{uploads.length}
+          </Badge>
           <Badge variant="outline">OCR completed: {uploadStats.ocrCompleted}</Badge>
           <Badge variant="outline">Falhas: {uploadStats.ocrFailed}</Badge>
         </div>
@@ -1611,21 +2144,50 @@ function UploadsDetail({
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <Badge variant="outline">#{upload.upload_order}</Badge>
               <Badge variant="secondary">{upload.upload_category}</Badge>
-              <Badge variant={upload.ocr_status === "completed" ? "default" : upload.ocr_status === "failed" ? "destructive" : "outline"}>
+              <Badge
+                variant={
+                  upload.ocr_status === "completed"
+                    ? "default"
+                    : upload.ocr_status === "failed"
+                      ? "destructive"
+                      : "outline"
+                }
+              >
                 OCR: {upload.ocr_status}
               </Badge>
-              <Badge variant={upload.structured_status === "completed" ? "default" : upload.structured_status === "failed" ? "destructive" : "outline"}>
-                JSON: {upload.structured_status === "completed" && upload.ocr_status !== "completed" ? "completed (manual/comentario)" : upload.structured_status || "pending"}
+              <Badge
+                variant={
+                  upload.structured_status === "completed"
+                    ? "default"
+                    : upload.structured_status === "failed"
+                      ? "destructive"
+                      : "outline"
+                }
+              >
+                JSON:{" "}
+                {upload.structured_status === "completed" && upload.ocr_status !== "completed"
+                  ? "completed (manual/comentario)"
+                  : upload.structured_status || "pending"}
               </Badge>
               <span className="text-sm font-semibold">{upload.file_name}</span>
               <span className="text-xs text-muted-foreground">
-                {formatFileSize(upload.file_size ?? 0)} | {upload.mime_type || "mime type desconhecido"} | origem {formatUploadSource(upload.upload_source)}
+                {formatFileSize(upload.file_size ?? 0)} |{" "}
+                {upload.mime_type || "mime type desconhecido"} | origem{" "}
+                {formatUploadSource(upload.upload_source)}
               </span>
-              {upload.file_path ? <Badge variant="outline">Storage OK</Badge> : <Badge variant="destructive">Sem arquivo salvo</Badge>}
+              {upload.file_path ? (
+                <Badge variant="outline">Storage OK</Badge>
+              ) : (
+                <Badge variant="destructive">Sem arquivo salvo</Badge>
+              )}
             </div>
             {previewUrls[upload.id] ? (
               <div className="mb-3 overflow-hidden rounded-md border border-border bg-muted/10">
-                <img src={previewUrls[upload.id]} alt={upload.file_name} className="max-h-72 w-full object-contain" />
+                <img
+                  src={previewUrls[upload.id]}
+                  alt={upload.file_name}
+                  className="max-h-72 w-full object-contain"
+                />
               </div>
             ) : null}
             <div className="space-y-2">
@@ -1659,7 +2221,9 @@ function UploadsDetail({
                     onAttachOcrFile(upload.id, file);
                   }}
                 />
-                <p className="mt-1 text-[11px] text-muted-foreground">{ASP_VALIDATOR_UPLOAD_HINT}</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  {ASP_VALIDATOR_UPLOAD_HINT}
+                </p>
                 <p className="text-xs text-muted-foreground">
                   {ocrFilesByUpload[upload.id]
                     ? `Arquivo pronto para OCR: ${ocrFilesByUpload[upload.id].name}`
@@ -1673,39 +2237,65 @@ function UploadsDetail({
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => void createUploadSignedUrl(upload).then((url) => url && window.open(url, "_blank"))}
+                    onClick={() =>
+                      void createUploadSignedUrl(upload).then(
+                        (url) => url && window.open(url, "_blank"),
+                      )
+                    }
                     className="gap-2"
                   >
                     <Eye className="h-4 w-4" />
                     Visualizar
                   </Button>
                 ) : null}
-                <Button onClick={() => void onProcessUploadOcr(upload)} disabled={processingOcr[upload.id]} className="gap-2">
-                  {processingOcr[upload.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageUp className="h-4 w-4" />}
+                <Button
+                  onClick={() => void onProcessUploadOcr(upload)}
+                  disabled={processingOcr[upload.id]}
+                  className="gap-2"
+                >
+                  {processingOcr[upload.id] ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ImageUp className="h-4 w-4" />
+                  )}
                   {upload.ocr_text ? "Reprocessar OCR" : "Processar OCR"}
                 </Button>
               </div>
             </div>
 
             {upload.ocr_error ? (
-              <div className="mt-3 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">{upload.ocr_error}</div>
+              <div className="mt-3 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+                {upload.ocr_error}
+              </div>
             ) : null}
             {upload.ocr_text ? (
               <div className="mt-3 rounded-md border border-border bg-muted/20 p-3">
-                <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Texto OCR extraido</p>
-                <pre className="max-h-56 whitespace-pre-wrap text-xs text-muted-foreground">{upload.ocr_text}</pre>
+                <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
+                  Texto OCR extraido
+                </p>
+                <pre className="max-h-56 whitespace-pre-wrap text-xs text-muted-foreground">
+                  {upload.ocr_text}
+                </pre>
               </div>
             ) : null}
           </div>
         ))
       ) : (
-        <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Nenhum upload vinculado a este registro.</div>
+        <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
+          Nenhum upload vinculado a este registro.
+        </div>
       )}
     </div>
   );
 }
 
-function PendingTechFields({ record, pasted = false }: { record: ValidatorRecord; pasted?: boolean }) {
+function PendingTechFields({
+  record,
+  pasted = false,
+}: {
+  record: ValidatorRecord;
+  pasted?: boolean;
+}) {
   const items = [
     {
       title: pasted ? "Texto colado" : "OCR",
@@ -1717,18 +2307,25 @@ function PendingTechFields({ record, pasted = false }: { record: ValidatorRecord
     },
     {
       title: "Simulacao probabilistica",
-      value: hasJsonContent(record.simulation_json) ? "Dados de simulacao registrados." : "Disponivel apos OCR estruturado ou dados manuais suficientes.",
+      value: hasJsonContent(record.simulation_json)
+        ? "Dados de simulacao registrados."
+        : "Disponivel apos OCR estruturado ou dados manuais suficientes.",
     },
     {
       title: "IA + Pesquisa",
-      value: hasJsonContent(record.online_context_json) ? "Contexto online registrado." : "Disponivel para validacao complementar quando necessario.",
+      value: hasJsonContent(record.online_context_json)
+        ? "Contexto online registrado."
+        : "Disponivel para validacao complementar quando necessario.",
     },
   ];
 
   return (
     <div className="grid gap-3 md:grid-cols-3">
       {items.map((item) => (
-        <div key={item.title} className="rounded-md border border-dashed border-border bg-muted/10 p-3">
+        <div
+          key={item.title}
+          className="rounded-md border border-dashed border-border bg-muted/10 p-3"
+        >
           <div className="text-sm font-semibold">{item.title}</div>
           <p className="mt-1 text-xs text-muted-foreground">{item.value}</p>
         </div>
@@ -1737,21 +2334,34 @@ function PendingTechFields({ record, pasted = false }: { record: ValidatorRecord
   );
 }
 
-function StructuredOcrPanel({ record, uploads }: { record: ValidatorRecord; uploads: ValidatorUploadRecord[] }) {
+function StructuredOcrPanel({
+  record,
+  uploads,
+}: {
+  record: ValidatorRecord;
+  uploads: ValidatorUploadRecord[];
+}) {
   const structured = record.structured_json;
   const quality = extractDataQuality(structured);
-  const uploadStructuredCount = uploads.filter((upload) => hasJsonContent(upload.structured_json)).length;
-  const dbQualityScore = typeof record.ocr_data_quality_score === "number" ? record.ocr_data_quality_score : null;
-  const dbFieldsCount = typeof record.ocr_structured_fields_count === "number" ? record.ocr_structured_fields_count : null;
+  const uploadStructuredCount = uploads.filter((upload) =>
+    hasJsonContent(upload.structured_json),
+  ).length;
+  const dbQualityScore =
+    typeof record.ocr_data_quality_score === "number" ? record.ocr_data_quality_score : null;
+  const dbFieldsCount =
+    typeof record.ocr_structured_fields_count === "number"
+      ? record.ocr_structured_fields_count
+      : null;
   const dbStructuredData = record.ocr_structured_data;
   const hasDbStructured = hasJsonContent(dbStructuredData);
-  const qualityTone = dbQualityScore === null
-    ? "text-muted-foreground"
-    : dbQualityScore >= 0.75
-      ? "text-emerald-400"
-      : dbQualityScore >= 0.5
-        ? "text-amber-400"
-        : "text-red-400";
+  const qualityTone =
+    dbQualityScore === null
+      ? "text-muted-foreground"
+      : dbQualityScore >= 0.75
+        ? "text-emerald-400"
+        : dbQualityScore >= 0.5
+          ? "text-amber-400"
+          : "text-red-400";
 
   return (
     <div className="space-y-3 rounded-md border border-border bg-muted/10 p-3">
@@ -1759,14 +2369,25 @@ function StructuredOcrPanel({ record, uploads }: { record: ValidatorRecord; uplo
         <div>
           <div className="text-sm font-semibold">OCR estruturado</div>
           <p className="mt-1 text-xs text-muted-foreground">
-            JSON preparado para as proximas fases de simulacao probabilistica, IA Local e IA + Pesquisa.
+            JSON preparado para as proximas fases de simulacao probabilistica, IA Local e IA +
+            Pesquisa.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={record.structured_status === "completed" ? "default" : record.structured_status === "failed" ? "destructive" : "outline"}>
+          <Badge
+            variant={
+              record.structured_status === "completed"
+                ? "default"
+                : record.structured_status === "failed"
+                  ? "destructive"
+                  : "outline"
+            }
+          >
             Estrutura: {record.structured_status || "pending"}
           </Badge>
-          <Badge variant="outline">Uploads estruturados: {uploadStructuredCount}/{uploads.length}</Badge>
+          <Badge variant="outline">
+            Uploads estruturados: {uploadStructuredCount}/{uploads.length}
+          </Badge>
           {dbQualityScore !== null ? (
             <Badge variant="outline" className={qualityTone}>
               Qualidade OCR: {(dbQualityScore * 100).toFixed(0)}%
@@ -1779,170 +2400,320 @@ function StructuredOcrPanel({ record, uploads }: { record: ValidatorRecord; uplo
       </div>
 
       {record.structured_error ? (
-        <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">{record.structured_error}</div>
+        <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+          {record.structured_error}
+        </div>
       ) : null}
 
       <div className="grid gap-3 md:grid-cols-3">
         <Info
           label="Qualidade OCR (score)"
-          value={dbQualityScore === null ? (quality ? String(quality.ocr_quality ?? "-") : "-") : `${(dbQualityScore * 100).toFixed(0)}%`}
+          value={
+            dbQualityScore === null
+              ? quality
+                ? String(quality.ocr_quality ?? "-")
+                : "-"
+              : `${(dbQualityScore * 100).toFixed(0)}%`
+          }
         />
         <Info
           label="Campos faltantes"
-          value={Array.isArray(quality?.missing_fields) ? String(quality?.missing_fields.length) : "0"}
+          value={
+            Array.isArray(quality?.missing_fields) ? String(quality?.missing_fields.length) : "0"
+          }
         />
-        <Info
-          label="Revisao manual"
-          value={quality?.needs_manual_review ? "Sim" : "Nao"}
-        />
+        <Info label="Revisao manual" value={quality?.needs_manual_review ? "Sim" : "Nao"} />
       </div>
 
-      {quality?.missing_fields && Array.isArray(quality.missing_fields) && quality.missing_fields.length ? (
-        <SignalBlock title="Campos faltantes" items={quality.missing_fields.map(String)} tone="warn" />
+      {quality?.missing_fields &&
+      Array.isArray(quality.missing_fields) &&
+      quality.missing_fields.length ? (
+        <SignalBlock
+          title="Campos faltantes"
+          items={quality.missing_fields.map(String)}
+          tone="warn"
+        />
       ) : null}
-      {hasJsonContent((structured as { field_sources?: Record<string, string> } | null)?.field_sources ?? null) ? (
+      {hasJsonContent(
+        (structured as { field_sources?: Record<string, string> } | null)?.field_sources ?? null,
+      ) ? (
         <SignalBlock
           title="Origem dos dados estruturados"
-          items={Object.entries(((structured as { field_sources?: Record<string, string> } | null)?.field_sources ?? {})).map(([key, value]) => `${key}: ${value}`)}
+          items={Object.entries(
+            (structured as { field_sources?: Record<string, string> } | null)?.field_sources ?? {},
+          ).map(([key, value]) => `${key}: ${value}`)}
           tone="good"
         />
       ) : null}
       {quality?.conflicts && Array.isArray(quality.conflicts) && quality.conflicts.length ? (
-        <SignalBlock title="Conflitos detectados" items={quality.conflicts.map(String)} tone="bad" />
+        <SignalBlock
+          title="Conflitos detectados"
+          items={quality.conflicts.map(String)}
+          tone="bad"
+        />
       ) : null}
 
       {hasDbStructured ? (
         <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3">
-          <p className="mb-2 text-xs uppercase tracking-wide text-emerald-300">Dados estruturados (OCR inteligente)</p>
-          <pre className="max-h-96 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">{JSON.stringify(dbStructuredData, null, 2)}</pre>
+          <p className="mb-2 text-xs uppercase tracking-wide text-emerald-300">
+            Dados estruturados (OCR inteligente)
+          </p>
+          <pre className="max-h-96 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">
+            {JSON.stringify(dbStructuredData, null, 2)}
+          </pre>
         </div>
       ) : null}
 
-      {hasJsonContent(structured) ? <ExtractedImageDataPanel structured={structured as StructuredValidatorJson} sport={record.sport} /> : null}
+      {hasJsonContent(structured) ? (
+        <ExtractedImageDataPanel
+          structured={structured as StructuredValidatorJson}
+          sport={record.sport}
+        />
+      ) : null}
 
       {hasJsonContent(structured) ? (
         <div className="rounded-md border border-border bg-background/50 p-3">
-          <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">JSON estruturado</p>
-          <pre className="max-h-96 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">{JSON.stringify(structured, null, 2)}</pre>
+          <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
+            JSON estruturado
+          </p>
+          <pre className="max-h-96 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">
+            {JSON.stringify(structured, null, 2)}
+          </pre>
         </div>
       ) : (
         <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
-          Nenhum JSON estruturado ainda. Use o botao Estruturar OCR apos processar ou reenviar arquivos.
+          Nenhum JSON estruturado ainda. Use o botao Estruturar OCR apos processar ou reenviar
+          arquivos.
         </div>
       )}
     </div>
   );
 }
 
-function ExtractedImageDataPanel({ structured, sport }: { structured: StructuredValidatorJson; sport?: string | null }) {
+function ExtractedImageDataPanel({
+  structured,
+  sport,
+}: {
+  structured: StructuredValidatorJson;
+  sport?: string | null;
+}) {
   const market = structured.market ?? structured.prediction;
   const corners = structured.corners;
-  const preMatchAverage = structured.pre_match_odds?.length ? average(structured.pre_match_odds.map((item) => item.odd)) : null;
+  const preMatchAverage = structured.pre_match_odds?.length
+    ? average(structured.pre_match_odds.map((item) => item.odd))
+    : null;
   const sportNorm = (sport ?? "").trim().toLowerCase();
   // Corners/race/escanteios blocks are football-only. For Baseball / Basketball / etc.
   // suppress the entire corners tree to avoid misleading "0" tiles.
-  const isFootball = sportNorm === "" || sportNorm.startsWith("futebol") || sportNorm.startsWith("football") || sportNorm.startsWith("soccer");
+  const isFootball =
+    sportNorm === "" ||
+    sportNorm.startsWith("futebol") ||
+    sportNorm.startsWith("football") ||
+    sportNorm.startsWith("soccer");
   const showCorners = isFootball && Boolean(corners && (corners.home || corners.away));
   return (
     <details className="rounded-md border border-border bg-background/50 p-3" open>
-      <summary className="cursor-pointer text-sm font-semibold">Dados extraidos por recorte</summary>
+      <summary className="cursor-pointer text-sm font-semibold">
+        Dados extraidos por recorte
+      </summary>
       <div className="mt-3 grid gap-3 md:grid-cols-4">
-        <Info label="Mercado identificado" value={market?.name || structured.prediction?.market || "-"} />
+        <Info
+          label="Mercado identificado"
+          value={market?.name || structured.prediction?.market || "-"}
+        />
         <Info label="Pick" value={market?.pick || structured.prediction?.pick || "-"} />
-        <Info label="Mercado normalizado" value={(market as { market_normalized?: string | null } | undefined)?.market_normalized || "-"} />
-        <Info label="Odd" value={formatOdd(Number(market?.offered_odd ?? structured.prediction?.offered_odd ?? 0) || null)} />
-        <Info label="Probabilidade" value={formatPercent(Number(market?.probability_original ?? structured.prediction?.source_probability ?? 0) || null)} />
-        <Info label="Odd justa" value={formatOdd(Number(market?.fair_odd_original ?? structured.prediction?.source_fair_odd ?? 0) || null)} />
-        <Info label="EV" value={formatPercent(Number(market?.ev_original ?? structured.prediction?.source_ev ?? 0) || null)} />
+        <Info
+          label="Mercado normalizado"
+          value={
+            (market as { market_normalized?: string | null } | undefined)?.market_normalized || "-"
+          }
+        />
+        <Info
+          label="Odd"
+          value={formatOdd(
+            Number(market?.offered_odd ?? structured.prediction?.offered_odd ?? 0) || null,
+          )}
+        />
+        <Info
+          label="Probabilidade"
+          value={formatPercent(
+            Number(
+              market?.probability_original ?? structured.prediction?.source_probability ?? 0,
+            ) || null,
+          )}
+        />
+        <Info
+          label="Odd justa"
+          value={formatOdd(
+            Number(market?.fair_odd_original ?? structured.prediction?.source_fair_odd ?? 0) ||
+              null,
+          )}
+        />
+        <Info
+          label="EV"
+          value={formatPercent(
+            Number(market?.ev_original ?? structured.prediction?.source_ev ?? 0) || null,
+          )}
+        />
         <Info label="Horario OCR" value={structured.match?.time || "-"} />
-        <Info label="Qualidade" value={`${Math.round((structured.data_quality_score ?? 0) * 100)}%`} />
+        <Info
+          label="Qualidade"
+          value={`${Math.round((structured.data_quality_score ?? 0) * 100)}%`}
+        />
         <Info label="Campos extraidos" value={String(structured.structured_fields_count ?? 0)} />
       </div>
       {showCorners ? (
-        <NormalizedCornerLinesPanel home={corners?.home?.normalized_market_lines ?? []} away={corners?.away?.normalized_market_lines ?? []} />
+        <NormalizedCornerLinesPanel
+          home={corners?.home?.normalized_market_lines ?? []}
+          away={corners?.away?.normalized_market_lines ?? []}
+        />
       ) : null}
 
-      {showCorners ? (<>
+      {showCorners ? (
+        <>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="rounded-md border border-border p-3">
+              <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                Geral - {structured.match?.home_team || "Mandante"}
+              </div>
+              <div className="grid gap-2 md:grid-cols-2">
+                <Info label="Corners marcados" value={formatNumber(corners?.home?.avg_for)} />
+                <Info label="Corners sofridos" value={formatNumber(corners?.home?.avg_against)} />
+                <Info label="Total medio" value={formatNumber(corners?.home?.avg_total)} />
+                <Info label="Total cantos" value={formatNumber(corners?.home?.total_corners)} />
+                <Info label="Marcados total" value={formatNumber(corners?.home?.total_for)} />
+                <Info label="Sofridos total" value={formatNumber(corners?.home?.total_against)} />
+              </div>
+              <LinePercentBadges
+                title="Mais escanteios"
+                values={corners?.home?.over_lines ?? {}}
+                prefix="+"
+              />
+              <LinePercentBadges
+                title="Menos escanteios"
+                values={corners?.home?.under_lines ?? {}}
+                prefix="-"
+              />
+            </div>
+            <div className="rounded-md border border-border p-3">
+              <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                Geral - {structured.match?.away_team || "Visitante"}
+              </div>
+              <div className="grid gap-2 md:grid-cols-2">
+                <Info label="Corners marcados" value={formatNumber(corners?.away?.avg_for)} />
+                <Info label="Corners sofridos" value={formatNumber(corners?.away?.avg_against)} />
+                <Info label="Total medio" value={formatNumber(corners?.away?.avg_total)} />
+                <Info label="Total cantos" value={formatNumber(corners?.away?.total_corners)} />
+                <Info label="Marcados total" value={formatNumber(corners?.away?.total_for)} />
+                <Info label="Sofridos total" value={formatNumber(corners?.away?.total_against)} />
+              </div>
+              <LinePercentBadges
+                title="Mais escanteios"
+                values={corners?.away?.over_lines ?? {}}
+                prefix="+"
+              />
+              <LinePercentBadges
+                title="Menos escanteios"
+                values={corners?.away?.under_lines ?? {}}
+                prefix="-"
+              />
+            </div>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="rounded-md border border-border p-3">
+              <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                Casa/Fora - {structured.match?.home_team || "Mandante"}
+              </div>
+              <div className="grid gap-2 md:grid-cols-3">
+                <Info label="Marcados" value={formatNumber(corners?.home?.home_away_avg_for)} />
+                <Info label="Sofridos" value={formatNumber(corners?.home?.home_away_avg_against)} />
+                <Info
+                  label="Total medio"
+                  value={formatNumber(corners?.home?.home_away_avg_total)}
+                />
+              </div>
+              <LinePercentBadges
+                title="Mais casa/fora"
+                values={corners?.home?.home_away_over_lines ?? {}}
+                prefix="+"
+              />
+              <LinePercentBadges
+                title="Menos casa/fora"
+                values={corners?.home?.home_away_under_lines ?? {}}
+                prefix="-"
+              />
+            </div>
+            <div className="rounded-md border border-border p-3">
+              <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                Casa/Fora - {structured.match?.away_team || "Visitante"}
+              </div>
+              <div className="grid gap-2 md:grid-cols-3">
+                <Info label="Marcados" value={formatNumber(corners?.away?.home_away_avg_for)} />
+                <Info label="Sofridos" value={formatNumber(corners?.away?.home_away_avg_against)} />
+                <Info
+                  label="Total medio"
+                  value={formatNumber(corners?.away?.home_away_avg_total)}
+                />
+              </div>
+              <LinePercentBadges
+                title="Mais casa/fora"
+                values={corners?.away?.home_away_over_lines ?? {}}
+                prefix="+"
+              />
+              <LinePercentBadges
+                title="Menos casa/fora"
+                values={corners?.away?.home_away_under_lines ?? {}}
+                prefix="-"
+              />
+            </div>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="rounded-md border border-border p-3">
+              <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                Race/primeiro - {structured.match?.home_team || "Mandante"}
+              </div>
+              <div className="grid gap-2 md:grid-cols-3">
+                <Info
+                  label="Primeiro escanteio"
+                  value={formatPercent(corners?.home?.first_corner_pct ?? null)}
+                />
+                <Info label="Race 3" value={formatPercent(corners?.home?.race_to_3_pct ?? null)} />
+                <Info label="Race 5" value={formatPercent(corners?.home?.race_to_5_pct ?? null)} />
+                <Info label="Race 7" value={formatPercent(corners?.home?.race_to_7_pct ?? null)} />
+                <Info label="Race 9" value={formatPercent(corners?.home?.race_to_9_pct ?? null)} />
+                <Info
+                  label="Mais escanteios 1x2"
+                  value={formatPercent(corners?.home?.most_corners_1x2_pct ?? null)}
+                />
+              </div>
+            </div>
+            <div className="rounded-md border border-border p-3">
+              <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                Race/primeiro - {structured.match?.away_team || "Visitante"}
+              </div>
+              <div className="grid gap-2 md:grid-cols-3">
+                <Info
+                  label="Primeiro escanteio"
+                  value={formatPercent(corners?.away?.first_corner_pct ?? null)}
+                />
+                <Info label="Race 3" value={formatPercent(corners?.away?.race_to_3_pct ?? null)} />
+                <Info label="Race 5" value={formatPercent(corners?.away?.race_to_5_pct ?? null)} />
+                <Info label="Race 7" value={formatPercent(corners?.away?.race_to_7_pct ?? null)} />
+                <Info label="Race 9" value={formatPercent(corners?.away?.race_to_9_pct ?? null)} />
+                <Info
+                  label="Mais escanteios 1x2"
+                  value={formatPercent(corners?.away?.most_corners_1x2_pct ?? null)}
+                />
+              </div>
+            </div>
+          </div>
+        </>
+      ) : null}
       <div className="mt-3 grid gap-3 md:grid-cols-2">
-
         <div className="rounded-md border border-border p-3">
-          <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Geral - {structured.match?.home_team || "Mandante"}</div>
-          <div className="grid gap-2 md:grid-cols-2">
-            <Info label="Corners marcados" value={formatNumber(corners?.home?.avg_for)} />
-            <Info label="Corners sofridos" value={formatNumber(corners?.home?.avg_against)} />
-            <Info label="Total medio" value={formatNumber(corners?.home?.avg_total)} />
-            <Info label="Total cantos" value={formatNumber(corners?.home?.total_corners)} />
-            <Info label="Marcados total" value={formatNumber(corners?.home?.total_for)} />
-            <Info label="Sofridos total" value={formatNumber(corners?.home?.total_against)} />
+          <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+            Odds pre-jogo
           </div>
-          <LinePercentBadges title="Mais escanteios" values={corners?.home?.over_lines ?? {}} prefix="+" />
-          <LinePercentBadges title="Menos escanteios" values={corners?.home?.under_lines ?? {}} prefix="-" />
-        </div>
-        <div className="rounded-md border border-border p-3">
-          <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Geral - {structured.match?.away_team || "Visitante"}</div>
-          <div className="grid gap-2 md:grid-cols-2">
-            <Info label="Corners marcados" value={formatNumber(corners?.away?.avg_for)} />
-            <Info label="Corners sofridos" value={formatNumber(corners?.away?.avg_against)} />
-            <Info label="Total medio" value={formatNumber(corners?.away?.avg_total)} />
-            <Info label="Total cantos" value={formatNumber(corners?.away?.total_corners)} />
-            <Info label="Marcados total" value={formatNumber(corners?.away?.total_for)} />
-            <Info label="Sofridos total" value={formatNumber(corners?.away?.total_against)} />
-          </div>
-          <LinePercentBadges title="Mais escanteios" values={corners?.away?.over_lines ?? {}} prefix="+" />
-          <LinePercentBadges title="Menos escanteios" values={corners?.away?.under_lines ?? {}} prefix="-" />
-        </div>
-      </div>
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
-        <div className="rounded-md border border-border p-3">
-          <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Casa/Fora - {structured.match?.home_team || "Mandante"}</div>
-          <div className="grid gap-2 md:grid-cols-3">
-            <Info label="Marcados" value={formatNumber(corners?.home?.home_away_avg_for)} />
-            <Info label="Sofridos" value={formatNumber(corners?.home?.home_away_avg_against)} />
-            <Info label="Total medio" value={formatNumber(corners?.home?.home_away_avg_total)} />
-          </div>
-          <LinePercentBadges title="Mais casa/fora" values={corners?.home?.home_away_over_lines ?? {}} prefix="+" />
-          <LinePercentBadges title="Menos casa/fora" values={corners?.home?.home_away_under_lines ?? {}} prefix="-" />
-        </div>
-        <div className="rounded-md border border-border p-3">
-          <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Casa/Fora - {structured.match?.away_team || "Visitante"}</div>
-          <div className="grid gap-2 md:grid-cols-3">
-            <Info label="Marcados" value={formatNumber(corners?.away?.home_away_avg_for)} />
-            <Info label="Sofridos" value={formatNumber(corners?.away?.home_away_avg_against)} />
-            <Info label="Total medio" value={formatNumber(corners?.away?.home_away_avg_total)} />
-          </div>
-          <LinePercentBadges title="Mais casa/fora" values={corners?.away?.home_away_over_lines ?? {}} prefix="+" />
-          <LinePercentBadges title="Menos casa/fora" values={corners?.away?.home_away_under_lines ?? {}} prefix="-" />
-        </div>
-      </div>
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
-        <div className="rounded-md border border-border p-3">
-          <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Race/primeiro - {structured.match?.home_team || "Mandante"}</div>
-          <div className="grid gap-2 md:grid-cols-3">
-            <Info label="Primeiro escanteio" value={formatPercent(corners?.home?.first_corner_pct ?? null)} />
-            <Info label="Race 3" value={formatPercent(corners?.home?.race_to_3_pct ?? null)} />
-            <Info label="Race 5" value={formatPercent(corners?.home?.race_to_5_pct ?? null)} />
-            <Info label="Race 7" value={formatPercent(corners?.home?.race_to_7_pct ?? null)} />
-            <Info label="Race 9" value={formatPercent(corners?.home?.race_to_9_pct ?? null)} />
-            <Info label="Mais escanteios 1x2" value={formatPercent(corners?.home?.most_corners_1x2_pct ?? null)} />
-          </div>
-        </div>
-        <div className="rounded-md border border-border p-3">
-          <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Race/primeiro - {structured.match?.away_team || "Visitante"}</div>
-          <div className="grid gap-2 md:grid-cols-3">
-            <Info label="Primeiro escanteio" value={formatPercent(corners?.away?.first_corner_pct ?? null)} />
-            <Info label="Race 3" value={formatPercent(corners?.away?.race_to_3_pct ?? null)} />
-            <Info label="Race 5" value={formatPercent(corners?.away?.race_to_5_pct ?? null)} />
-            <Info label="Race 7" value={formatPercent(corners?.away?.race_to_7_pct ?? null)} />
-            <Info label="Race 9" value={formatPercent(corners?.away?.race_to_9_pct ?? null)} />
-            <Info label="Mais escanteios 1x2" value={formatPercent(corners?.away?.most_corners_1x2_pct ?? null)} />
-          </div>
-        </div>
-      </div>
-      </>) : null}
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
-
-        <div className="rounded-md border border-border p-3">
-          <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Odds pre-jogo</div>
           <div className="grid gap-2 md:grid-cols-2">
             {(structured.pre_match_odds ?? []).map((item) => (
               <Info key={item.bookmaker} label={item.bookmaker} value={formatOdd(item.odd)} />
@@ -1951,24 +2722,57 @@ function ExtractedImageDataPanel({ structured, sport }: { structured: Structured
           </div>
         </div>
         <div className="rounded-md border border-border p-3">
-          <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Recomendacao PackBall</div>
+          <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+            Recomendacao PackBall
+          </div>
           <div className="grid gap-2 md:grid-cols-2">
             <Info label="Mercado" value={structured.packball_recommendation?.market || "-"} />
             <Info label="Pick" value={structured.packball_recommendation?.pick || "-"} />
-            <Info label="Odd ofertada" value={formatOdd(structured.packball_recommendation?.offered_odd ?? null)} />
-            <Info label="Chance" value={formatPercent(structured.packball_recommendation?.probability_original ?? null)} />
-            <Info label="Odd justa" value={formatOdd(structured.packball_recommendation?.fair_odd_original ?? null)} />
-            <Info label="EV" value={formatPercent(structured.packball_recommendation?.ev_original ?? null)} />
+            <Info
+              label="Odd ofertada"
+              value={formatOdd(structured.packball_recommendation?.offered_odd ?? null)}
+            />
+            <Info
+              label="Chance"
+              value={formatPercent(
+                structured.packball_recommendation?.probability_original ?? null,
+              )}
+            />
+            <Info
+              label="Odd justa"
+              value={formatOdd(structured.packball_recommendation?.fair_odd_original ?? null)}
+            />
+            <Info
+              label="EV"
+              value={formatPercent(structured.packball_recommendation?.ev_original ?? null)}
+            />
           </div>
         </div>
       </div>
-      {structured.missing_critical_fields?.length ? <SignalBlock title="Campos criticos ausentes" items={structured.missing_critical_fields} tone="warn" /> : null}
+      {structured.missing_critical_fields?.length ? (
+        <SignalBlock
+          title="Campos criticos ausentes"
+          items={structured.missing_critical_fields}
+          tone="warn"
+        />
+      ) : null}
     </details>
   );
 }
 
-function LinePercentBadges({ title, values, prefix }: { title: string; values: Record<string, number>; prefix: string }) {
-  const entries = useMemo(() => Object.entries(values).sort(([a], [b]) => Number(a) - Number(b)), [values]);
+function LinePercentBadges({
+  title,
+  values,
+  prefix,
+}: {
+  title: string;
+  values: Record<string, number>;
+  prefix: string;
+}) {
+  const entries = useMemo(
+    () => Object.entries(values).sort(([a], [b]) => Number(a) - Number(b)),
+    [values],
+  );
   if (!entries.length) return null;
   return (
     <div className="mt-3 rounded-md border border-border bg-muted/10 p-2">
@@ -1976,7 +2780,8 @@ function LinePercentBadges({ title, values, prefix }: { title: string; values: R
       <div className="flex flex-wrap gap-2">
         {entries.map(([line, pct]) => (
           <Badge key={`${prefix}${line}`} variant="outline">
-            {prefix}{line}: {formatPercent(pct)}
+            {prefix}
+            {line}: {formatPercent(pct)}
           </Badge>
         ))}
       </div>
@@ -1984,18 +2789,32 @@ function LinePercentBadges({ title, values, prefix }: { title: string; values: R
   );
 }
 
-function NormalizedCornerLinesPanel({ home, away }: { home: NormalizedCornerLine[]; away: NormalizedCornerLine[] }) {
+function NormalizedCornerLinesPanel({
+  home,
+  away,
+}: {
+  home: NormalizedCornerLine[];
+  away: NormalizedCornerLine[];
+}) {
   const all = useMemo(() => [...home, ...away], [away, home]);
   if (!all.length) return null;
   const renderGroup = (label: string, items: NormalizedCornerLine[]) => {
     if (!items.length) return null;
-    const sorted = [...items].sort((a, b) => a.line_value - b.line_value || a.side.localeCompare(b.side));
+    const sorted = [...items].sort(
+      (a, b) => a.line_value - b.line_value || a.side.localeCompare(b.side),
+    );
     return (
       <div className="rounded-md border border-border p-2">
-        <div className="mb-2 text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+        <div className="mb-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+          {label}
+        </div>
         <div className="flex flex-wrap gap-2">
           {sorted.map((item, idx) => (
-            <Badge key={`${label}-${idx}`} variant="outline" title={`${item.label} → ${item.market_normalized}`}>
+            <Badge
+              key={`${label}-${idx}`}
+              variant="outline"
+              title={`${item.label} → ${item.market_normalized}`}
+            >
               {item.label} → {item.market_normalized}: {formatPercent(item.value_pct)}
               {item.scope === "home_away" ? " (C/F)" : ""}
             </Badge>
@@ -2006,7 +2825,9 @@ function NormalizedCornerLinesPanel({ home, away }: { home: NormalizedCornerLine
   };
   return (
     <div className="mt-3 rounded-md border border-border bg-muted/10 p-3">
-      <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Mercados de cantos normalizados (+N → Over N.5)</div>
+      <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+        Mercados de cantos normalizados (+N → Over N.5)
+      </div>
       <div className="grid gap-2 md:grid-cols-2">
         {renderGroup("Mandante", home)}
         {renderGroup("Visitante", away)}
@@ -2015,39 +2836,71 @@ function NormalizedCornerLinesPanel({ home, away }: { home: NormalizedCornerLine
   );
 }
 
-function OcrDiagnosticsPanel({ record, uploads }: { record: ValidatorRecord; uploads: ValidatorUploadRecord[] }) {
+function OcrDiagnosticsPanel({
+  record,
+  uploads,
+}: {
+  record: ValidatorRecord;
+  uploads: ValidatorUploadRecord[];
+}) {
   const structured = record.ocr_structured_data ?? record.structured_json;
   const quality = extractDataQuality(structured);
   const missing = Array.isArray(quality?.missing_fields)
     ? quality.missing_fields.map(String)
-    : Array.isArray((structured as { missing_critical_fields?: unknown[] } | null)?.missing_critical_fields)
-      ? ((structured as { missing_critical_fields?: unknown[] }).missing_critical_fields ?? []).map(String)
+    : Array.isArray(
+          (structured as { missing_critical_fields?: unknown[] } | null)?.missing_critical_fields,
+        )
+      ? ((structured as { missing_critical_fields?: unknown[] }).missing_critical_fields ?? []).map(
+          String,
+        )
       : [];
   const fieldsCount = record.ocr_structured_fields_count ?? countStructuredFields(structured);
-  const sources = ((structured as { field_sources?: Record<string, string> } | null)?.field_sources ?? {}) as Record<string, string>;
-  const score = record.ocr_data_quality_score ?? (typeof (structured as { data_quality_score?: unknown } | null)?.data_quality_score === "number"
-    ? ((structured as { data_quality_score?: number }).data_quality_score ?? 0)
-    : null);
+  const sources = ((structured as { field_sources?: Record<string, string> } | null)
+    ?.field_sources ?? {}) as Record<string, string>;
+  const score =
+    record.ocr_data_quality_score ??
+    (typeof (structured as { data_quality_score?: unknown } | null)?.data_quality_score === "number"
+      ? ((structured as { data_quality_score?: number }).data_quality_score ?? 0)
+      : null);
   return (
     <div className="space-y-3 rounded-md border border-border bg-muted/10 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="text-sm font-semibold">Diagnostico OCR</div>
-          <p className="mt-1 text-xs text-muted-foreground">Rastreio do arquivo processado, texto bruto, extracao inteligente e simulacao.</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Rastreio do arquivo processado, texto bruto, extracao inteligente e simulacao.
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Badge variant={record.ocr_raw_text ? "default" : "outline"}>OCR: {record.ocr_raw_text ? "completed" : "pending"}</Badge>
-          <Badge variant={record.structured_status === "completed" ? "default" : record.structured_status === "failed" ? "destructive" : "outline"}>
+          <Badge variant={record.ocr_raw_text ? "default" : "outline"}>
+            OCR: {record.ocr_raw_text ? "completed" : "pending"}
+          </Badge>
+          <Badge
+            variant={
+              record.structured_status === "completed"
+                ? "default"
+                : record.structured_status === "failed"
+                  ? "destructive"
+                  : "outline"
+            }
+          >
             JSON: {record.structured_status || "pending"}
           </Badge>
-          <Badge variant="outline">Simulacao: {record.simulation_type || (hasJsonContent(record.simulation_json) ? "completed" : "pending")}</Badge>
+          <Badge variant="outline">
+            Simulacao:{" "}
+            {record.simulation_type ||
+              (hasJsonContent(record.simulation_json) ? "completed" : "pending")}
+          </Badge>
         </div>
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
         <Info label="Arquivos" value={`${uploads.length}`} />
         <Info label="Campos extraidos" value={String(fieldsCount || 0)} />
-        <Info label="Qualidade extracao" value={score === null ? "-" : `${(score * 100).toFixed(0)}%`} />
+        <Info
+          label="Qualidade extracao"
+          value={score === null ? "-" : `${(score * 100).toFixed(0)}%`}
+        />
         <Info label="Usou OCR real" value={sources.raw_ocr ? "Sim" : "Nao"} />
         <Info label="Usou comentarios" value={sources.upload_comment ? "Sim" : "Nao"} />
         <Info label="Usou dados manuais" value={sources.manual_form ? "Sim" : "Nao"} />
@@ -2056,20 +2909,48 @@ function OcrDiagnosticsPanel({ record, uploads }: { record: ValidatorRecord; upl
       {uploads.length ? (
         <div className="grid gap-2">
           {uploads.map((upload) => (
-            <div key={upload.id} className="rounded-md border border-border bg-background/40 p-3 text-xs">
+            <div
+              key={upload.id}
+              className="rounded-md border border-border bg-background/40 p-3 text-xs"
+            >
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">#{upload.upload_order}</Badge>
-                <Badge variant={upload.ocr_status === "completed" ? "default" : upload.ocr_status === "failed" ? "destructive" : "outline"}>
+                <Badge
+                  variant={
+                    upload.ocr_status === "completed"
+                      ? "default"
+                      : upload.ocr_status === "failed"
+                        ? "destructive"
+                        : "outline"
+                  }
+                >
                   OCR: {upload.ocr_status}
                 </Badge>
-                <Badge variant={upload.structured_status === "completed" ? "default" : upload.structured_status === "failed" ? "destructive" : "outline"}>
-                  JSON: {upload.structured_status === "completed" && upload.ocr_status !== "completed" ? "completed (manual/comentario)" : upload.structured_status || "pending"}
+                <Badge
+                  variant={
+                    upload.structured_status === "completed"
+                      ? "default"
+                      : upload.structured_status === "failed"
+                        ? "destructive"
+                        : "outline"
+                  }
+                >
+                  JSON:{" "}
+                  {upload.structured_status === "completed" && upload.ocr_status !== "completed"
+                    ? "completed (manual/comentario)"
+                    : upload.structured_status || "pending"}
                 </Badge>
                 <span className="font-semibold">{upload.file_name}</span>
-                <span className="text-muted-foreground">{formatFileSize(upload.file_size ?? 0)}</span>
-                <span className="text-muted-foreground">origem {formatUploadSource(upload.upload_source)}</span>
+                <span className="text-muted-foreground">
+                  {formatFileSize(upload.file_size ?? 0)}
+                </span>
+                <span className="text-muted-foreground">
+                  origem {formatUploadSource(upload.upload_source)}
+                </span>
               </div>
-              {upload.ocr_error ? <div className="mt-2 text-red-300">{upload.ocr_error}</div> : null}
+              {upload.ocr_error ? (
+                <div className="mt-2 text-red-300">{upload.ocr_error}</div>
+              ) : null}
               {upload.ocr_text ? (
                 <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap rounded border border-border bg-muted/20 p-2 text-muted-foreground">
                   {upload.ocr_text}
@@ -2080,12 +2961,18 @@ function OcrDiagnosticsPanel({ record, uploads }: { record: ValidatorRecord; upl
         </div>
       ) : null}
 
-      {missing.length ? <SignalBlock title="Campos criticos ausentes" items={missing} tone="warn" /> : null}
+      {missing.length ? (
+        <SignalBlock title="Campos criticos ausentes" items={missing} tone="warn" />
+      ) : null}
 
       {hasJsonContent(structured) ? (
         <div className="rounded-md border border-border bg-background/50 p-3">
-          <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Campos extraidos / JSON OCR</p>
-          <pre className="max-h-80 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">{JSON.stringify(structured, null, 2)}</pre>
+          <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
+            Campos extraidos / JSON OCR
+          </p>
+          <pre className="max-h-80 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">
+            {JSON.stringify(structured, null, 2)}
+          </pre>
         </div>
       ) : null}
     </div>
@@ -2101,34 +2988,62 @@ function SimulationPanel({ record }: { record: ValidatorRecord }) {
         <div>
           <div className="text-sm font-semibold">Simulacao probabilistica</div>
           <p className="mt-1 text-xs text-muted-foreground">
-            Sinal tecnico por matriz de placares Poisson. A simulacao nao confirma nem pula prognostico sozinha.
+            Sinal tecnico por matriz de placares Poisson. A simulacao nao confirma nem pula
+            prognostico sozinha.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {record.simulation_type ? <Badge variant="secondary">Tipo: {record.simulation_type}</Badge> : null}
-          <Badge variant={simulation?.status === "completed" ? "default" : simulation?.status === "failed" ? "destructive" : "outline"}>
+          {record.simulation_type ? (
+            <Badge variant="secondary">Tipo: {record.simulation_type}</Badge>
+          ) : null}
+          <Badge
+            variant={
+              simulation?.status === "completed"
+                ? "default"
+                : simulation?.status === "failed"
+                  ? "destructive"
+                  : "outline"
+            }
+          >
             {simulation?.status ?? "pending"}
           </Badge>
         </div>
       </div>
 
-
-
       {simulation ? (
         <>
           <div className="grid gap-3 md:grid-cols-3">
-            <Info label="Lambda mandante" value={simulation.lambda_home === null ? "-" : String(simulation.lambda_home)} />
-            <Info label="Lambda visitante" value={simulation.lambda_away === null ? "-" : String(simulation.lambda_away)} />
-            <Info label="Prob. simulada" value={formatDecimalProbability(simulation.market_probability)} />
+            <Info
+              label="Lambda mandante"
+              value={simulation.lambda_home === null ? "-" : String(simulation.lambda_home)}
+            />
+            <Info
+              label="Lambda visitante"
+              value={simulation.lambda_away === null ? "-" : String(simulation.lambda_away)}
+            />
+            <Info
+              label="Prob. simulada"
+              value={formatDecimalProbability(simulation.market_probability)}
+            />
             <Info label="Odd justa simulada" value={formatOdd(simulation.fair_odd)} />
             <Info label="EV simulado" value={formatDecimalEv(simulation.ev)} />
             <Info label="Modelo" value={simulation.model} />
-            <Info label="Tipo" value={record.simulation_type || (simulation.notes.some((note) => normalize(note).includes("simplificada")) ? "simplificada OCR" : "padrao")} />
+            <Info
+              label="Tipo"
+              value={
+                record.simulation_type ||
+                (simulation.notes.some((note) => normalize(note).includes("simplificada"))
+                  ? "simplificada OCR"
+                  : "padrao")
+              }
+            />
           </div>
 
           {simulation.most_likely_scores.length ? (
             <div className="rounded-md border border-border bg-background/50 p-3">
-              <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Placares mais provaveis</p>
+              <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
+                Placares mais provaveis
+              </p>
               <div className="flex flex-wrap gap-2">
                 {simulation.most_likely_scores.map((score) => (
                   <Badge key={score.score} variant="secondary">
@@ -2143,28 +3058,42 @@ function SimulationPanel({ record }: { record: ValidatorRecord }) {
           <SignalBlock title="Alertas da simulacao" items={simulation.warnings} tone="warn" />
 
           <div className="rounded-md border border-border bg-background/50 p-3">
-            <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">JSON da simulacao</p>
-            <pre className="max-h-80 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">{JSON.stringify(simulation, null, 2)}</pre>
+            <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
+              JSON da simulacao
+            </p>
+            <pre className="max-h-80 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">
+              {JSON.stringify(simulation, null, 2)}
+            </pre>
           </div>
         </>
       ) : (
         <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
-          Nenhuma simulacao executada ainda. Use o botao Executar simulacao depois de estruturar o OCR ou preencher os dados manuais.
+          Nenhuma simulacao executada ainda. Use o botao Executar simulacao depois de estruturar o
+          OCR ou preencher os dados manuais.
         </div>
       )}
     </div>
   );
 }
 
-function detectPastedRecord(record: ValidatorRecord, uploads: ValidatorUploadRecord[] = []): {
+function detectPastedRecord(
+  record: ValidatorRecord,
+  uploads: ValidatorUploadRecord[] = [],
+): {
   isPasted: boolean;
   hasRealOcr: boolean;
   pastedText: string;
 } {
   const rawOcr = record.ocr_raw_text?.trim() ?? "";
   const isPastedSummary = rawOcr.startsWith("[TEXTO COLADO INTERPRETADO]");
-  const structured = (record.structured_json ?? {}) as { input_source?: unknown; raw_pasted_text?: unknown };
-  const ocrStructured = (record.ocr_structured_data ?? {}) as { input_source?: unknown; raw_pasted_text?: unknown };
+  const structured = (record.structured_json ?? {}) as {
+    input_source?: unknown;
+    raw_pasted_text?: unknown;
+  };
+  const ocrStructured = (record.ocr_structured_data ?? {}) as {
+    input_source?: unknown;
+    raw_pasted_text?: unknown;
+  };
   const isPasted =
     isPastedSummary ||
     structured.input_source === "pasted_text" ||
@@ -2192,7 +3121,8 @@ function PastedDataPanel({ record }: { record: ValidatorRecord }) {
         : null;
   const fieldsCount =
     record.ocr_structured_fields_count ??
-    (typeof (structured as { structured_fields_count?: unknown }).structured_fields_count === "number"
+    (typeof (structured as { structured_fields_count?: unknown }).structured_fields_count ===
+    "number"
       ? ((structured as { structured_fields_count?: number }).structured_fields_count ?? 0)
       : 0);
   const qualityTone =
@@ -2250,11 +3180,18 @@ function PastedDiagnosticsPanel({ record }: { record: ValidatorRecord }) {
         </div>
         <div className="flex flex-wrap gap-2">
           <Badge variant="default">Texto colado interpretado</Badge>
-          <Badge variant="outline">Simulacao: {record.simulation_type || (hasJsonContent(record.simulation_json) ? "completed" : "pending")}</Badge>
+          <Badge variant="outline">
+            Simulacao:{" "}
+            {record.simulation_type ||
+              (hasJsonContent(record.simulation_json) ? "completed" : "pending")}
+          </Badge>
         </div>
       </div>
       <div className="grid gap-3 md:grid-cols-3">
-        <Info label="Qualidade da extracao" value={quality === null ? "-" : `${(quality * 100).toFixed(0)}%`} />
+        <Info
+          label="Qualidade da extracao"
+          value={quality === null ? "-" : `${(quality * 100).toFixed(0)}%`}
+        />
         <Info label="Campos extraidos" value={String(fields)} />
         <Info label="Fonte" value="Texto colado" />
       </div>
@@ -2263,16 +3200,22 @@ function PastedDiagnosticsPanel({ record }: { record: ValidatorRecord }) {
           <summary className="cursor-pointer select-none text-xs uppercase tracking-wide text-muted-foreground">
             Texto colado original
           </summary>
-          <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">{pastedText}</pre>
+          <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">
+            {pastedText}
+          </pre>
         </details>
       ) : null}
     </div>
   );
 }
 
-
-
-function AiAnalysisContextPanel({ record, uploads = [] }: { record: ValidatorRecord; uploads?: ValidatorUploadRecord[] }) {
+function AiAnalysisContextPanel({
+  record,
+  uploads = [],
+}: {
+  record: ValidatorRecord;
+  uploads?: ValidatorUploadRecord[];
+}) {
   const { isPasted, hasRealOcr, pastedText } = detectPastedRecord(record, uploads);
   const usedStructured = hasJsonContent(record.structured_json);
   const usedSimulation = hasJsonContent(record.simulation_json);
@@ -2281,7 +3224,8 @@ function AiAnalysisContextPanel({ record, uploads = [] }: { record: ValidatorRec
       <div>
         <div className="text-sm font-semibold">Dados usados na analise IA</div>
         <p className="mt-1 text-xs text-muted-foreground">
-          A validacao IA consolidada usa campos manuais como prioridade e OCR/texto colado/JSON/simulacao como apoio tecnico.
+          A validacao IA consolidada usa campos manuais como prioridade e OCR/texto
+          colado/JSON/simulacao como apoio tecnico.
         </p>
       </div>
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
@@ -2296,13 +3240,19 @@ function AiAnalysisContextPanel({ record, uploads = [] }: { record: ValidatorRec
           <summary className="cursor-pointer select-none text-xs uppercase tracking-wide text-muted-foreground">
             Texto colado original
           </summary>
-          <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">{pastedText}</pre>
+          <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">
+            {pastedText}
+          </pre>
         </details>
       ) : null}
       {record.analysis_context ? (
         <div className="rounded-md border border-border bg-background/50 p-3">
-          <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Contexto da IA</p>
-          <pre className="max-h-56 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">{record.analysis_context}</pre>
+          <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
+            Contexto da IA
+          </p>
+          <pre className="max-h-56 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">
+            {record.analysis_context}
+          </pre>
         </div>
       ) : null}
     </div>
@@ -2317,10 +3267,19 @@ function OnlineContextPanel({ record }: { record: ValidatorRecord }) {
         <div>
           <div className="text-sm font-semibold">IA + Pesquisa</div>
           <p className="mt-1 text-xs text-muted-foreground">
-            Verificacao online complementar. Ausencia de achados nao altera a analise automaticamente.
+            Verificacao online complementar. Ausencia de achados nao altera a analise
+            automaticamente.
           </p>
         </div>
-        <Badge variant={online?.status === "completed" ? "default" : online?.status === "failed" ? "destructive" : "outline"}>
+        <Badge
+          variant={
+            online?.status === "completed"
+              ? "default"
+              : online?.status === "failed"
+                ? "destructive"
+                : "outline"
+          }
+        >
           {online?.status ?? "pending"}
         </Badge>
       </div>
@@ -2329,38 +3288,84 @@ function OnlineContextPanel({ record }: { record: ValidatorRecord }) {
         <>
           {online.decision_history ? (
             <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3">
-              <p className="mb-2 text-xs uppercase tracking-wide text-emerald-300">Historico da decisao</p>
+              <p className="mb-2 text-xs uppercase tracking-wide text-emerald-300">
+                Historico da decisao
+              </p>
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="rounded border border-border bg-background/40 p-2 text-xs">
                   <div className="font-semibold text-muted-foreground">Antes da pesquisa</div>
-                  <div>Decisao: <span className="font-mono">{online.decision_history.before.decision ?? "-"}</span></div>
-                  <div>Probabilidade: <span className="font-mono">{formatPercent(online.decision_history.before.adjusted_probability)}</span></div>
-                  <div>EV ajustado: <span className="font-mono">{formatPercent(online.decision_history.before.adjusted_ev)}</span></div>
+                  <div>
+                    Decisao:{" "}
+                    <span className="font-mono">
+                      {online.decision_history.before.decision ?? "-"}
+                    </span>
+                  </div>
+                  <div>
+                    Probabilidade:{" "}
+                    <span className="font-mono">
+                      {formatPercent(online.decision_history.before.adjusted_probability)}
+                    </span>
+                  </div>
+                  <div>
+                    EV ajustado:{" "}
+                    <span className="font-mono">
+                      {formatPercent(online.decision_history.before.adjusted_ev)}
+                    </span>
+                  </div>
                 </div>
                 <div className="rounded border border-border bg-background/40 p-2 text-xs">
                   <div className="font-semibold text-muted-foreground">Apos a pesquisa</div>
-                  <div>Decisao: <span className="font-mono">{online.decision_history.after.decision ?? "-"}</span></div>
-                  <div>Probabilidade: <span className="font-mono">{formatPercent(online.decision_history.after.adjusted_probability)}</span></div>
-                  <div>EV ajustado: <span className="font-mono">{formatPercent(online.decision_history.after.adjusted_ev)}</span></div>
+                  <div>
+                    Decisao:{" "}
+                    <span className="font-mono">
+                      {online.decision_history.after.decision ?? "-"}
+                    </span>
+                  </div>
+                  <div>
+                    Probabilidade:{" "}
+                    <span className="font-mono">
+                      {formatPercent(online.decision_history.after.adjusted_probability)}
+                    </span>
+                  </div>
+                  <div>
+                    EV ajustado:{" "}
+                    <span className="font-mono">
+                      {formatPercent(online.decision_history.after.adjusted_ev)}
+                    </span>
+                  </div>
                 </div>
               </div>
               {online.decision_history.reason ? (
-                <p className="mt-2 text-xs text-muted-foreground">Motivo: {online.decision_history.reason}</p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Motivo: {online.decision_history.reason}
+                </p>
               ) : null}
             </div>
           ) : null}
           <div className="rounded-md border border-border bg-background/50 p-3">
-            <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Resumo online</p>
+            <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">
+              Resumo online
+            </p>
             <p className="text-sm leading-relaxed">{online.online_summary}</p>
           </div>
 
           <SignalBlock title="Achados relevantes" items={online.relevant_findings} tone="good" />
-          <SignalBlock title="Ausencia de achados" items={online.no_relevant_findings} tone="warn" />
+          <SignalBlock
+            title="Ausencia de achados"
+            items={online.no_relevant_findings}
+            tone="warn"
+          />
           <SignalBlock title="Alertas contextuais" items={online.contextual_alerts} tone="bad" />
-          {online.error ? <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">{online.error}</div> : null}
+          {online.error ? (
+            <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+              {online.error}
+            </div>
+          ) : null}
           {online.sources.length ? (
             <div className="rounded-md border border-border bg-background/50 p-3">
-              <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Fontes consultadas</p>
+              <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
+                Fontes consultadas
+              </p>
               <div className="space-y-1 text-xs text-muted-foreground">
                 {online.sources.map((source) => (
                   <div key={source.url} className="truncate">
@@ -2371,13 +3376,18 @@ function OnlineContextPanel({ record }: { record: ValidatorRecord }) {
             </div>
           ) : null}
           <div className="rounded-md border border-border bg-background/50 p-3">
-            <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">JSON online</p>
-            <pre className="max-h-80 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">{JSON.stringify(online, null, 2)}</pre>
+            <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
+              JSON online
+            </p>
+            <pre className="max-h-80 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">
+              {JSON.stringify(online, null, 2)}
+            </pre>
           </div>
         </>
       ) : (
         <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
-          IA + Pesquisa ainda nao executada. Execute depois da simulacao para manter o fluxo tecnico correto.
+          IA + Pesquisa ainda nao executada. Execute depois da simulacao para manter o fluxo tecnico
+          correto.
         </div>
       )}
     </div>
@@ -2400,7 +3410,11 @@ function ResultRegistrationPanel({
   const odd = parseNumber(form.final_odd) ?? record.offered_odd ?? 1;
   const stake = parseNumber(form.stake_units) ?? 1;
   const unitValue = parseNumber(form.unit_value_brl) ?? 0;
-  const profitUnits = calculateValidatorProfitUnits(status, record.decision === "PULAR" ? 1 : stake, odd);
+  const profitUnits = calculateValidatorProfitUnits(
+    status,
+    record.decision === "PULAR" ? 1 : stake,
+    odd,
+  );
   const profitBrl = round(profitUnits * unitValue, 2);
   const simulated = record.decision === "PULAR";
   return (
@@ -2409,40 +3423,80 @@ function ResultRegistrationPanel({
         <div>
           <div className="text-sm font-semibold">Registrar Resultado</div>
           <p className="mt-1 text-xs text-muted-foreground">
-            CONFIRMAR impacta banca oficial. PULAR fica como resultado simulado para avaliar a qualidade da recusa.
+            CONFIRMAR impacta banca oficial. PULAR fica como resultado simulado para avaliar a
+            qualidade da recusa.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Badge variant={simulated ? "outline" : "default"}>{simulated ? "Simulado - nao afeta banca" : "Banca oficial"}</Badge>
+          <Badge variant={simulated ? "outline" : "default"}>
+            {simulated ? "Simulado - nao afeta banca" : "Banca oficial"}
+          </Badge>
           {record.bankroll_applied ? <Badge variant="default">Aplicado na banca</Badge> : null}
         </div>
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
-        <SelectField label="Status" value={form.result_status || "PENDENTE"} options={["PENDENTE", "GREEN", "RED", "PUSH", "VOID"]} onChange={(value) => onUpdate("result_status", value)} />
-        <TextField label="Odd final usada" value={form.final_odd} onChange={(value) => onUpdate("final_odd", value)} />
+        <SelectField
+          label="Status"
+          value={form.result_status || "PENDENTE"}
+          options={["PENDENTE", "GREEN", "RED", "PUSH", "VOID"]}
+          onChange={(value) => onUpdate("result_status", value)}
+        />
+        <TextField
+          label="Odd final usada"
+          value={form.final_odd}
+          onChange={(value) => onUpdate("final_odd", value)}
+        />
         <TextField
           label="Stake (u)"
           value={simulated ? "1" : form.stake_units}
           onChange={(value) => onUpdate("stake_units", value)}
           disabled={simulated}
         />
-        <TextField label="Valor da unidade (R$)" value={form.unit_value_brl} onChange={(value) => onUpdate("unit_value_brl", value)} />
-        <TextField label="CLV" value={form.clv} onChange={(value) => onUpdate("clv", value)} placeholder="Opcional" />
-        <TextField label="Data de liquidacao" type="date" value={form.result_settled_at} onChange={(value) => onUpdate("result_settled_at", value)} />
+        <TextField
+          label="Valor da unidade (R$)"
+          value={form.unit_value_brl}
+          onChange={(value) => onUpdate("unit_value_brl", value)}
+        />
+        <TextField
+          label="CLV"
+          value={form.clv}
+          onChange={(value) => onUpdate("clv", value)}
+          placeholder="Opcional"
+        />
+        <TextField
+          label="Data de liquidacao"
+          type="date"
+          value={form.result_settled_at}
+          onChange={(value) => onUpdate("result_settled_at", value)}
+        />
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
-        <TextField label="Placar final / observacao curta" value={form.final_score} onChange={(value) => onUpdate("final_score", value)} />
+        <TextField
+          label="Placar final / observacao curta"
+          value={form.final_score}
+          onChange={(value) => onUpdate("final_score", value)}
+        />
         <div className="space-y-2">
           <Label>Observacao do resultado</Label>
-          <Textarea value={form.result_notes} onChange={(event) => onUpdate("result_notes", event.target.value)} className="min-h-20" />
+          <Textarea
+            value={form.result_notes}
+            onChange={(event) => onUpdate("result_notes", event.target.value)}
+            className="min-h-20"
+          />
         </div>
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
-        <Info label="Lucro (u)" value={`${profitUnits >= 0 ? "+" : ""}${profitUnits.toFixed(2)}u`} />
-        <Info label="Lucro (R$)" value={`${profitBrl >= 0 ? "+" : "-"}R$ ${Math.abs(profitBrl).toFixed(2)}`} />
+        <Info
+          label="Lucro (u)"
+          value={`${profitUnits >= 0 ? "+" : ""}${profitUnits.toFixed(2)}u`}
+        />
+        <Info
+          label="Lucro (R$)"
+          value={`${profitBrl >= 0 ? "+" : "-"}R$ ${Math.abs(profitBrl).toFixed(2)}`}
+        />
         <Info label="Modelo/Metodo" value={record.validator_model || "ASP Validator"} />
       </div>
 
@@ -2488,9 +3542,12 @@ function ImportedMlbScreenerBanner({
               <Badge variant="secondary">ASP Screener MLB</Badge>
               {prefill && <Badge variant="outline">{prefill.readiness_status}</Badge>}
             </div>
-            <h2 className="mt-2 text-base font-semibold">Validacao importada do ASP Screener MLB.</h2>
+            <h2 className="mt-2 text-base font-semibold">
+              Validacao importada do ASP Screener MLB.
+            </h2>
             <p className="text-sm text-muted-foreground">
-              Rascunho preparado para revisao no ASP Validator. A validacao nao foi executada automaticamente.
+              Rascunho preparado para revisao no ASP Validator. A validacao nao foi executada
+              automaticamente.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -2506,7 +3563,12 @@ function ImportedMlbScreenerBanner({
               <ClipboardCopy className="mr-2 h-4 w-4" />
               Copiar payload importado
             </Button>
-            <Button size="sm" variant="outline" onClick={onOpenAudit} disabled={!payload?.audit?.record_id}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onOpenAudit}
+              disabled={!payload?.audit?.record_id}
+            >
               <Search className="mr-2 h-4 w-4" />
               Ver auditoria do handoff
             </Button>
@@ -2517,59 +3579,107 @@ function ImportedMlbScreenerBanner({
           </div>
         </div>
 
-        {prefill && (() => {
-          const proj = (prefill as unknown as { source_projection_payload?: Record<string, unknown> | null }).source_projection_payload;
-          const hasProjection = !!proj && (
-            (proj as { home_expected_runs?: number | null }).home_expected_runs != null ||
-            (proj as { away_expected_runs?: number | null }).away_expected_runs != null ||
-            (proj as { projected_total_runs?: number | null }).projected_total_runs != null
-          );
-          const raw = (prefill as unknown as { raw_opportunity_score?: number; raw_confidence_score?: number; critical_adjusted_score?: number; critical_adjusted_confidence?: number; critical_adjusted_status?: string; alignment_status?: string; alignment_score?: number; validation_readiness_score?: number }) ?? {};
-          const strongConflict = raw.critical_adjusted_status === "strong_conflict";
-          return (
-            <>
-              <div className="flex flex-wrap items-center gap-2">
-                {strongConflict && (
-                  <Badge variant="destructive">Conflito forte com o Screener</Badge>
+        {prefill &&
+          (() => {
+            const proj = (
+              prefill as unknown as { source_projection_payload?: Record<string, unknown> | null }
+            ).source_projection_payload;
+            const hasProjection =
+              !!proj &&
+              ((proj as { home_expected_runs?: number | null }).home_expected_runs != null ||
+                (proj as { away_expected_runs?: number | null }).away_expected_runs != null ||
+                (proj as { projected_total_runs?: number | null }).projected_total_runs != null);
+            const raw =
+              (prefill as unknown as {
+                raw_opportunity_score?: number;
+                raw_confidence_score?: number;
+                critical_adjusted_score?: number;
+                critical_adjusted_confidence?: number;
+                critical_adjusted_status?: string;
+                alignment_status?: string;
+                alignment_score?: number;
+                validation_readiness_score?: number;
+              }) ?? {};
+            const strongConflict = raw.critical_adjusted_status === "strong_conflict";
+            return (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  {strongConflict && (
+                    <Badge variant="destructive">Conflito forte com o Screener</Badge>
+                  )}
+                  {raw.critical_adjusted_status === "review_before_validator" &&
+                    !strongConflict && (
+                      <Badge variant="outline" className="border-warning/60 text-warning">
+                        Revisar antes do Validator
+                      </Badge>
+                    )}
+                  <Badge variant="outline">
+                    Usou source projection: {hasProjection ? "Sim" : "Não"}
+                  </Badge>
+                </div>
+                <div className="grid gap-2 md:grid-cols-4">
+                  <Info label="Handoff ID" value={payload?.handoff_id ?? "-"} />
+                  <Info label="Auditoria" value={audit?.status ?? "-"} />
+                  <Info
+                    label="Enviado em"
+                    value={audit?.sent_at ? formatDateTime(audit.sent_at) : "-"}
+                  />
+                  <Info
+                    label="Aplicado em"
+                    value={audit?.applied_at ? formatDateTime(audit.applied_at) : "-"}
+                  />
+                  <Info label="Jogo" value={prefill.matchup} />
+                  <Info label="Mercado" value={prefill.market} />
+                  <Info label="Pick" value={prefill.pick ?? "-"} />
+                  <Info label="Odd" value={formatOdd(prefill.odd)} />
+                  <Info label="EV ASP" value={formatDecimalEv(prefill.ev)} />
+                  <Info
+                    label="Opportunity (bruto)"
+                    value={String(raw.raw_opportunity_score ?? prefill.opportunity_score)}
+                  />
+                  <Info
+                    label="Confidence (bruto)"
+                    value={String(raw.raw_confidence_score ?? prefill.confidence_score)}
+                  />
+                  <Info
+                    label="Score pós-contexto"
+                    value={String(raw.critical_adjusted_score ?? "-")}
+                  />
+                  <Info
+                    label="Confiança pós-contexto"
+                    value={String(raw.critical_adjusted_confidence ?? "-")}
+                  />
+                  <Info
+                    label="Alignment"
+                    value={`${raw.alignment_status ?? "-"} (${raw.alignment_score ?? "-"})`}
+                  />
+                  <Info
+                    label="Readiness"
+                    value={`${raw.validation_readiness_score ?? "-"} · ${prefill.readiness_status}`}
+                  />
+                </div>
+                {hasProjection && (
+                  <p className="text-xs text-muted-foreground">
+                    Simulação simplificada disponível a partir do payload do Screener.
+                  </p>
                 )}
-                {raw.critical_adjusted_status === "review_before_validator" && !strongConflict && (
-                  <Badge variant="outline" className="border-warning/60 text-warning">Revisar antes do Validator</Badge>
-                )}
-                <Badge variant="outline">Usou source projection: {hasProjection ? "Sim" : "Não"}</Badge>
-              </div>
-              <div className="grid gap-2 md:grid-cols-4">
-                <Info label="Handoff ID" value={payload?.handoff_id ?? "-"} />
-                <Info label="Auditoria" value={audit?.status ?? "-"} />
-                <Info label="Enviado em" value={audit?.sent_at ? formatDateTime(audit.sent_at) : "-"} />
-                <Info label="Aplicado em" value={audit?.applied_at ? formatDateTime(audit.applied_at) : "-"} />
-                <Info label="Jogo" value={prefill.matchup} />
-                <Info label="Mercado" value={prefill.market} />
-                <Info label="Pick" value={prefill.pick ?? "-"} />
-                <Info label="Odd" value={formatOdd(prefill.odd)} />
-                <Info label="EV ASP" value={formatDecimalEv(prefill.ev)} />
-                <Info label="Opportunity (bruto)" value={String(raw.raw_opportunity_score ?? prefill.opportunity_score)} />
-                <Info label="Confidence (bruto)" value={String(raw.raw_confidence_score ?? prefill.confidence_score)} />
-                <Info label="Score pós-contexto" value={String(raw.critical_adjusted_score ?? "-")} />
-                <Info label="Confiança pós-contexto" value={String(raw.critical_adjusted_confidence ?? "-")} />
-                <Info label="Alignment" value={`${raw.alignment_status ?? "-"} (${raw.alignment_score ?? "-"})`} />
-                <Info label="Readiness" value={`${raw.validation_readiness_score ?? "-"} · ${prefill.readiness_status}`} />
-              </div>
-              {hasProjection && (
-                <p className="text-xs text-muted-foreground">
-                  Simulação simplificada disponível a partir do payload do Screener.
-                </p>
-              )}
-            </>
-          );
-        })()}
+              </>
+            );
+          })()}
 
         {warnings.map((warning) => (
-          <div key={warning} className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+          <div
+            key={warning}
+            className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning"
+          >
             {warning}
           </div>
         ))}
         {errors.map((error) => (
-          <div key={error} className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          <div
+            key={error}
+            className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+          >
             {error}
           </div>
         ))}
@@ -2579,7 +3689,9 @@ function ImportedMlbScreenerBanner({
             <summary className="cursor-pointer select-none text-xs uppercase tracking-wide text-muted-foreground">
               Dados importados do ASP Screener
             </summary>
-            <div className="mt-3 whitespace-pre-wrap text-xs text-muted-foreground">{buildMlbValidatorImportedContextText(payload)}</div>
+            <div className="mt-3 whitespace-pre-wrap text-xs text-muted-foreground">
+              {buildMlbValidatorImportedContextText(payload)}
+            </div>
           </details>
         )}
 
@@ -2598,8 +3710,16 @@ function ResultPanel({ result }: { result: ValidationResult }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge className={isConfirm ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"}>
-          {isConfirm ? <CheckCircle2 className="mr-1 h-3 w-3" /> : <XCircle className="mr-1 h-3 w-3" />}
+        <Badge
+          className={
+            isConfirm ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"
+          }
+        >
+          {isConfirm ? (
+            <CheckCircle2 className="mr-1 h-3 w-3" />
+          ) : (
+            <XCircle className="mr-1 h-3 w-3" />
+          )}
           {result.decision}
         </Badge>
         <Badge variant="outline">Confianca: {result.confidence}</Badge>
@@ -2621,8 +3741,12 @@ function ResultPanel({ result }: { result: ValidationResult }) {
       <SignalBlock title="Alertas" items={result.alerts} tone="warn" />
 
       <div className="rounded-md border border-border bg-muted/20 p-3">
-        <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Resumo da simulacao</p>
-        <p className="text-sm leading-relaxed">{result.simulation_summary || "Simulacao nao disponivel."}</p>
+        <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">
+          Resumo da simulacao
+        </p>
+        <p className="text-sm leading-relaxed">
+          {result.simulation_summary || "Simulacao nao disponivel."}
+        </p>
       </div>
 
       <div className="rounded-md border border-border bg-muted/20 p-3">
@@ -2640,9 +3764,21 @@ function FuturePhases() {
         <CardTitle className="text-base">Proximas fases</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-3 sm:grid-cols-2">
-        <Placeholder icon={ClipboardCheck} title="OCR e JSON estruturado" text="OCR real ativo; estrutura inicial em JSON ja prepara as proximas fases." />
-        <Placeholder icon={Microscope} title="Simulacao probabilistica" text="Estrutura reservada para simulacoes por mercado." />
-        <Placeholder icon={Cloud} title="IA + Pesquisa" text="Pesquisa online/contexto externo ficara para proxima etapa." />
+        <Placeholder
+          icon={ClipboardCheck}
+          title="OCR e JSON estruturado"
+          text="OCR real ativo; estrutura inicial em JSON ja prepara as proximas fases."
+        />
+        <Placeholder
+          icon={Microscope}
+          title="Simulacao probabilistica"
+          text="Estrutura reservada para simulacoes por mercado."
+        />
+        <Placeholder
+          icon={Cloud}
+          title="IA + Pesquisa"
+          text="Pesquisa online/contexto externo ficara para proxima etapa."
+        />
       </CardContent>
     </Card>
   );
@@ -2655,8 +3791,14 @@ function UploadsWithComments({
   onRemove,
 }: {
   uploads: ValidatorUploadDraft[];
-  onAddFiles: (files: FileList | null, uploadSource?: ValidatorUploadDraft["upload_source"]) => void;
-  onUpdate: (localId: string, patch: Partial<Pick<ValidatorUploadDraft, "upload_category" | "user_comment">>) => void;
+  onAddFiles: (
+    files: FileList | null,
+    uploadSource?: ValidatorUploadDraft["upload_source"],
+  ) => void;
+  onUpdate: (
+    localId: string,
+    patch: Partial<Pick<ValidatorUploadDraft, "upload_category" | "user_comment">>,
+  ) => void;
   onRemove: (localId: string) => void;
 }) {
   const [isDragging, setIsDragging] = useState(false);
@@ -2677,8 +3819,16 @@ function UploadsWithComments({
     event.preventDefault();
     addFileArray(
       imageFiles.map((file, index) => {
-        const extension = file.type.includes("png") ? "png" : file.type.includes("jpeg") || file.type.includes("jpg") ? "jpg" : "png";
-        return new File([file], file.name || `screenshot-colado-${Date.now()}-${index + 1}.${extension}`, { type: file.type || "image/png" });
+        const extension = file.type.includes("png")
+          ? "png"
+          : file.type.includes("jpeg") || file.type.includes("jpg")
+            ? "jpg"
+            : "png";
+        return new File(
+          [file],
+          file.name || `screenshot-colado-${Date.now()}-${index + 1}.${extension}`,
+          { type: file.type || "image/png" },
+        );
       }),
       "clipboard",
     );
@@ -2709,7 +3859,8 @@ function UploadsWithComments({
         <div>
           <Label>Uploads com comentario</Label>
           <p className="mt-1 text-xs text-muted-foreground">
-            Clique, arraste arquivos ou cole prints com CTRL+V. Imagens coladas entram no mesmo fluxo de OCR.
+            Clique, arraste arquivos ou cole prints com CTRL+V. Imagens coladas entram no mesmo
+            fluxo de OCR.
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground/80">{ASP_VALIDATOR_UPLOAD_HINT}</p>
         </div>
@@ -2727,23 +3878,38 @@ function UploadsWithComments({
           </label>
         </Button>
       </div>
-      {pasteFeedback ? <div className="rounded-md border border-green-500/30 bg-green-500/10 p-2 text-xs text-green-200">{pasteFeedback}</div> : null}
+      {pasteFeedback ? (
+        <div className="rounded-md border border-green-500/30 bg-green-500/10 p-2 text-xs text-green-200">
+          {pasteFeedback}
+        </div>
+      ) : null}
       <div className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
-        Area ativa para drag and drop e CTRL+V. Use screenshots do Windows Snipping Tool ou imagens copiadas da area de transferencia.
+        Area ativa para drag and drop e CTRL+V. Use screenshots do Windows Snipping Tool ou imagens
+        copiadas da area de transferencia.
       </div>
 
       {uploads.length ? (
         <div className="space-y-3">
           {uploads.map((upload) => (
-            <div key={upload.local_id} className="rounded-md border border-border bg-background/50 p-3">
+            <div
+              key={upload.local_id}
+              className="rounded-md border border-border bg-background/50 p-3"
+            >
               <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold">{upload.file.name}</div>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    {formatFileSize(upload.file.size)} | {upload.file.type || "mime type desconhecido"} | origem {formatUploadSource(upload.upload_source)} | ordem {upload.upload_order}
+                    {formatFileSize(upload.file.size)} |{" "}
+                    {upload.file.type || "mime type desconhecido"} | origem{" "}
+                    {formatUploadSource(upload.upload_source)} | ordem {upload.upload_order}
                   </div>
                 </div>
-                <Button variant="destructive" size="sm" onClick={() => onRemove(upload.local_id)} className="gap-2">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => onRemove(upload.local_id)}
+                  className="gap-2"
+                >
                   <Trash2 className="h-4 w-4" />
                   Remover
                 </Button>
@@ -2759,7 +3925,9 @@ function UploadsWithComments({
                   <Label>Comentario do arquivo</Label>
                   <Textarea
                     value={upload.user_comment}
-                    onChange={(event) => onUpdate(upload.local_id, { user_comment: event.target.value })}
+                    onChange={(event) =>
+                      onUpdate(upload.local_id, { user_comment: event.target.value })
+                    }
                     placeholder="Descreva por que este arquivo importa para a validacao."
                     className="min-h-20"
                   />
@@ -2797,7 +3965,8 @@ function PastedTextSection({
       <div>
         <Label className="text-sm font-semibold">Colar dados do prognostico</Label>
         <p className="text-xs text-muted-foreground">
-          Cole aqui dados extraidos do PackBall, Gemini, ChatGPT, OCR externo ou anotacoes manuais. Pode vir em texto desordenado.
+          Cole aqui dados extraidos do PackBall, Gemini, ChatGPT, OCR externo ou anotacoes manuais.
+          Pode vir em texto desordenado.
         </p>
       </div>
       <Textarea
@@ -2811,11 +3980,24 @@ function PastedTextSection({
           <FileJson className="h-4 w-4" />
           Interpretar dados colados
         </Button>
-        <Button type="button" size="sm" variant="outline" onClick={onApply} disabled={!parsed} className="gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={onApply}
+          disabled={!parsed}
+          className="gap-2"
+        >
           <ClipboardCheck className="h-4 w-4" />
           Aplicar ao formulario
         </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={onClear} disabled={!value && !parsed}>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={onClear}
+          disabled={!value && !parsed}
+        >
           Limpar dados colados
         </Button>
       </div>
@@ -2827,36 +4009,88 @@ function PastedTextSection({
 function PastedDataPreview({ parsed }: { parsed: PastedParsedData }) {
   const home = parsed.match.home_team || "Mandante";
   const away = parsed.match.away_team || "Visitante";
-  const fmtNum = (v: number | null | undefined) => (v === null || v === undefined ? "-" : String(v));
+  const fmtNum = (v: number | null | undefined) =>
+    v === null || v === undefined ? "-" : String(v);
   const fmtPct = (v: number | null | undefined) => (v === null || v === undefined ? "-" : `${v}%`);
-  const fmtOdd = (v: number | null | undefined) => (v === null || v === undefined ? "-" : v.toFixed(2));
+  const fmtOdd = (v: number | null | undefined) =>
+    v === null || v === undefined ? "-" : v.toFixed(2);
   return (
     <div className="space-y-3 rounded-md border border-border bg-background/60 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-        <div className="font-semibold uppercase tracking-wide text-primary">Dados interpretados do texto colado</div>
+        <div className="font-semibold uppercase tracking-wide text-primary">
+          Dados interpretados do texto colado
+        </div>
         <div className="text-muted-foreground">
-          Qualidade {(parsed.data_quality_score * 100).toFixed(0)}% | {parsed.structured_fields_count} campos
+          Qualidade {(parsed.data_quality_score * 100).toFixed(0)}% |{" "}
+          {parsed.structured_fields_count} campos
         </div>
       </div>
       <div className="grid gap-2 text-xs md:grid-cols-2">
         <Info label="Confronto" value={`${home} x ${away}`} />
-        <Info label="Liga / Rodada" value={[parsed.match.competition, parsed.match.round ? `Rodada ${parsed.match.round}` : ""].filter(Boolean).join(" - ") || "-"} />
-        <Info label="Data / Hora" value={[parsed.match.date, parsed.match.time].filter(Boolean).join(" ") || "-"} />
-        <Info label="Mercado" value={parsed.market.normalized_market || parsed.market.name || "-"} />
-        <Info label="Pick / Linha" value={`${parsed.market.pick || "-"} / ${parsed.market.line ?? "-"}`} />
-        <Info label="Odd / Justa" value={`${fmtOdd(parsed.market.offered_odd)} / ${fmtOdd(parsed.market.fair_odd_original)}`} />
+        <Info
+          label="Liga / Rodada"
+          value={
+            [parsed.match.competition, parsed.match.round ? `Rodada ${parsed.match.round}` : ""]
+              .filter(Boolean)
+              .join(" - ") || "-"
+          }
+        />
+        <Info
+          label="Data / Hora"
+          value={[parsed.match.date, parsed.match.time].filter(Boolean).join(" ") || "-"}
+        />
+        <Info
+          label="Mercado"
+          value={parsed.market.normalized_market || parsed.market.name || "-"}
+        />
+        <Info
+          label="Pick / Linha"
+          value={`${parsed.market.pick || "-"} / ${parsed.market.line ?? "-"}`}
+        />
+        <Info
+          label="Odd / Justa"
+          value={`${fmtOdd(parsed.market.offered_odd)} / ${fmtOdd(parsed.market.fair_odd_original)}`}
+        />
         <Info label="Probabilidade" value={fmtPct(parsed.market.probability_original)} />
         <Info label="EV original" value={fmtPct(parsed.market.ev_original)} />
       </div>
       {parsed.market_type === "corners" || !parsed.market_type ? (
         <div className="grid gap-3 md:grid-cols-2">
-          <PastedCornerCard title={`${home} — geral`} side={parsed.corners.general.home} fmtNum={fmtNum} fmtPct={fmtPct} />
-          <PastedCornerCard title={`${away} — geral`} side={parsed.corners.general.away} fmtNum={fmtNum} fmtPct={fmtPct} />
-          <PastedCornerCard title={`${home} — casa`} side={parsed.corners.home_away.home} fmtNum={fmtNum} fmtPct={fmtPct} homeAway />
-          <PastedCornerCard title={`${away} — fora`} side={parsed.corners.home_away.away} fmtNum={fmtNum} fmtPct={fmtPct} homeAway />
+          <PastedCornerCard
+            title={`${home} — geral`}
+            side={parsed.corners.general.home}
+            fmtNum={fmtNum}
+            fmtPct={fmtPct}
+          />
+          <PastedCornerCard
+            title={`${away} — geral`}
+            side={parsed.corners.general.away}
+            fmtNum={fmtNum}
+            fmtPct={fmtPct}
+          />
+          <PastedCornerCard
+            title={`${home} — casa`}
+            side={parsed.corners.home_away.home}
+            fmtNum={fmtNum}
+            fmtPct={fmtPct}
+            homeAway
+          />
+          <PastedCornerCard
+            title={`${away} — fora`}
+            side={parsed.corners.home_away.away}
+            fmtNum={fmtNum}
+            fmtPct={fmtPct}
+            homeAway
+          />
         </div>
       ) : (
-        <PastedMarketCards parsed={parsed} home={home} away={away} fmtPct={fmtPct} fmtNum={fmtNum} />
+        <PastedMarketCards
+          parsed={parsed}
+          home={home}
+          away={away}
+          fmtPct={fmtPct}
+          fmtNum={fmtNum}
+        />
       )}
 
       {parsed.missing_critical_fields.length ? (
@@ -2882,9 +4116,11 @@ function PastedMarketCards({
   fmtNum: (v: number | null | undefined) => string;
 }) {
   const mt = parsed.market_type;
-  const showGoals = mt === "goals_total" || mt === "btts" || mt === "x1x2" || mt === "double_chance";
+  const showGoals =
+    mt === "goals_total" || mt === "btts" || mt === "x1x2" || mt === "double_chance";
   const showCards = mt === "cards";
-  const showGeneral = mt === "x1x2" || mt === "double_chance" || mt === "goals_total" || mt === "btts";
+  const showGeneral =
+    mt === "x1x2" || mt === "double_chance" || mt === "goals_total" || mt === "btts";
   return (
     <div className="space-y-3">
       <div className="text-xs text-muted-foreground">
@@ -2953,19 +4189,27 @@ function PastedMarketCards({
         <div className="grid gap-3 md:grid-cols-2 text-xs">
           <div className="rounded border border-border p-2">
             <div className="font-semibold">{home} — BTTS</div>
-            <div>Geral · Sim: {fmtPct(parsed.btts.home.yes_pct)} · Nao: {fmtPct(parsed.btts.home.no_pct)}</div>
+            <div>
+              Geral · Sim: {fmtPct(parsed.btts.home.yes_pct)} · Nao:{" "}
+              {fmtPct(parsed.btts.home.no_pct)}
+            </div>
             {parsed.btts_home_away ? (
               <div className="text-muted-foreground">
-                Casa · Sim: {fmtPct(parsed.btts_home_away.home.yes_pct)} · Nao: {fmtPct(parsed.btts_home_away.home.no_pct)}
+                Casa · Sim: {fmtPct(parsed.btts_home_away.home.yes_pct)} · Nao:{" "}
+                {fmtPct(parsed.btts_home_away.home.no_pct)}
               </div>
             ) : null}
           </div>
           <div className="rounded border border-border p-2">
             <div className="font-semibold">{away} — BTTS</div>
-            <div>Geral · Sim: {fmtPct(parsed.btts.away.yes_pct)} · Nao: {fmtPct(parsed.btts.away.no_pct)}</div>
+            <div>
+              Geral · Sim: {fmtPct(parsed.btts.away.yes_pct)} · Nao:{" "}
+              {fmtPct(parsed.btts.away.no_pct)}
+            </div>
             {parsed.btts_home_away ? (
               <div className="text-muted-foreground">
-                Fora · Sim: {fmtPct(parsed.btts_home_away.away.yes_pct)} · Nao: {fmtPct(parsed.btts_home_away.away.no_pct)}
+                Fora · Sim: {fmtPct(parsed.btts_home_away.away.yes_pct)} · Nao:{" "}
+                {fmtPct(parsed.btts_home_away.away.no_pct)}
               </div>
             ) : null}
           </div>
@@ -3002,18 +4246,25 @@ function GoalsSideCard({
   return (
     <div className="rounded border border-border p-2 text-xs space-y-1">
       <div className="font-semibold text-primary">{title}</div>
-      <div>Geral · marcados: {fmtNum(side.avg_for)} · sofridos: {fmtNum(side.avg_against)} · total: {fmtNum(side.avg_total)}</div>
-      <div>Geral · BTTS Sim: {fmtPct(side.btts_yes_pct)} · Nao: {fmtPct(side.btts_no_pct)}</div>
+      <div>
+        Geral · marcados: {fmtNum(side.avg_for)} · sofridos: {fmtNum(side.avg_against)} · total:{" "}
+        {fmtNum(side.avg_total)}
+      </div>
+      <div>
+        Geral · BTTS Sim: {fmtPct(side.btts_yes_pct)} · Nao: {fmtPct(side.btts_no_pct)}
+      </div>
       {overs.length ? (
         <div>Geral · Over: {overs.map(([k, v]) => `${k}: ${v}%`).join(" · ")}</div>
       ) : null}
       {hasHA && sideHA ? (
         <>
           <div className="text-muted-foreground">
-            {haLabel ?? "Casa/Fora"} · marcados: {fmtNum(sideHA.avg_for)} · sofridos: {fmtNum(sideHA.avg_against)} · total: {fmtNum(sideHA.avg_total)}
+            {haLabel ?? "Casa/Fora"} · marcados: {fmtNum(sideHA.avg_for)} · sofridos:{" "}
+            {fmtNum(sideHA.avg_against)} · total: {fmtNum(sideHA.avg_total)}
           </div>
           <div className="text-muted-foreground">
-            {haLabel ?? "Casa/Fora"} · BTTS Sim: {fmtPct(sideHA.btts_yes_pct)} · Nao: {fmtPct(sideHA.btts_no_pct)}
+            {haLabel ?? "Casa/Fora"} · BTTS Sim: {fmtPct(sideHA.btts_yes_pct)} · Nao:{" "}
+            {fmtPct(sideHA.btts_no_pct)}
           </div>
           {oversHA.length ? (
             <div className="text-muted-foreground">
@@ -3052,19 +4303,26 @@ function CardsSideCard({
   return (
     <div className="rounded border border-border p-2 text-xs space-y-1">
       <div className="font-semibold text-primary">{title}</div>
-      <div>Geral · total: {fmtNum(side.avg_total_cards)} · amarelos: {fmtNum(side.avg_yellow_total)} · vermelhos: {fmtNum(side.avg_red_total)}</div>
-      <div>Geral · aplicados: {fmtNum(side.avg_cards_for)} · sofridos: {fmtNum(side.avg_cards_against)}</div>
+      <div>
+        Geral · total: {fmtNum(side.avg_total_cards)} · amarelos: {fmtNum(side.avg_yellow_total)} ·
+        vermelhos: {fmtNum(side.avg_red_total)}
+      </div>
+      <div>
+        Geral · aplicados: {fmtNum(side.avg_cards_for)} · sofridos: {fmtNum(side.avg_cards_against)}
+      </div>
       {overs.length ? (
         <div>Geral · Over: {overs.map(([k, v]) => `${k}: ${fmtPct(v)}`).join(" · ")}</div>
       ) : null}
       {hasHA && sideHA ? (
         <>
           <div className="text-muted-foreground">
-            {haLabel ?? "Casa/Fora"} · total: {fmtNum(sideHA.avg_total_cards)} · aplicados: {fmtNum(sideHA.avg_cards_for)} · sofridos: {fmtNum(sideHA.avg_cards_against)}
+            {haLabel ?? "Casa/Fora"} · total: {fmtNum(sideHA.avg_total_cards)} · aplicados:{" "}
+            {fmtNum(sideHA.avg_cards_for)} · sofridos: {fmtNum(sideHA.avg_cards_against)}
           </div>
           {oversHA.length ? (
             <div className="text-muted-foreground">
-              {haLabel ?? "Casa/Fora"} · Over: {oversHA.map(([k, v]) => `${k}: ${fmtPct(v)}`).join(" · ")}
+              {haLabel ?? "Casa/Fora"} · Over:{" "}
+              {oversHA.map(([k, v]) => `${k}: ${fmtPct(v)}`).join(" · ")}
             </div>
           ) : null}
         </>
@@ -3096,17 +4354,20 @@ function GeneralSideCard({
   return (
     <div className="rounded border border-border p-2 text-xs space-y-1">
       <div className="font-semibold text-primary">{title}</div>
-      <div>Geral · V/E/D: {side.wins ?? "-"}/{side.draws ?? "-"}/{side.losses ?? "-"} · Eficiencia: {fmtPct(side.efficiency_pct)} · Posse: {fmtPct(side.avg_possession_pct)}</div>
+      <div>
+        Geral · V/E/D: {side.wins ?? "-"}/{side.draws ?? "-"}/{side.losses ?? "-"} · Eficiencia:{" "}
+        {fmtPct(side.efficiency_pct)} · Posse: {fmtPct(side.avg_possession_pct)}
+      </div>
       {hasHA && sideHA ? (
         <div className="text-muted-foreground">
-          {haLabel ?? "Casa/Fora"} · V/E/D: {sideHA.wins ?? "-"}/{sideHA.draws ?? "-"}/{sideHA.losses ?? "-"} · Eficiencia: {fmtPct(sideHA.efficiency_pct)} · Posse: {fmtPct(sideHA.avg_possession_pct)}
+          {haLabel ?? "Casa/Fora"} · V/E/D: {sideHA.wins ?? "-"}/{sideHA.draws ?? "-"}/
+          {sideHA.losses ?? "-"} · Eficiencia: {fmtPct(sideHA.efficiency_pct)} · Posse:{" "}
+          {fmtPct(sideHA.avg_possession_pct)}
         </div>
       ) : null}
     </div>
   );
 }
-
-
 
 function PastedCornerCard({
   title,
@@ -3121,9 +4382,9 @@ function PastedCornerCard({
   fmtNum: (v: number | null | undefined) => string;
   fmtPct: (v: number | null | undefined) => string;
 }) {
-  const avgFor = homeAway ? side.home_away_avg_for ?? side.avg_for : side.avg_for;
-  const avgAgainst = homeAway ? side.home_away_avg_against ?? side.avg_against : side.avg_against;
-  const avgTotal = homeAway ? side.home_away_avg_total ?? side.avg_total : side.avg_total;
+  const avgFor = homeAway ? (side.home_away_avg_for ?? side.avg_for) : side.avg_for;
+  const avgAgainst = homeAway ? (side.home_away_avg_against ?? side.avg_against) : side.avg_against;
+  const avgTotal = homeAway ? (side.home_away_avg_total ?? side.avg_total) : side.avg_total;
   const over = homeAway ? side.home_away_over_lines : side.over_lines;
   const under = homeAway ? side.home_away_under_lines : side.under_lines;
   const overEntries = Object.entries(over).sort(([a], [b]) => Number(a) - Number(b));
@@ -3168,8 +4429,6 @@ function PastedCornerCard({
   );
 }
 
-
-
 function EmptyResult() {
   return (
     <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
@@ -3189,18 +4448,25 @@ async function validateWithAiFallback(context: Record<string, unknown>): Promise
       decision: "PULAR",
       confidence: "Baixo",
       alerts: ["Falha ao interpretar resposta da IA", "Fallback seguro aplicado."],
-      final_analysis: "Por protecao de banca, a validacao foi marcada como PULAR ate nova analise manual.",
+      final_analysis:
+        "Por protecao de banca, a validacao foi marcada como PULAR ate nova analise manual.",
       analysis_context: buildLocalAnalysisContext(context, false),
     };
   }
 }
 
-function aiResultToValidationResult(result: AspValidatorAiResult, context: Record<string, unknown>): ValidationResult {
-  const prediction = (context.prediction && typeof context.prediction === "object" ? context.prediction : {}) as Record<string, unknown>;
-  const validatorModel = inferValidatorModel(
-    String(prediction.market || context.market || ""),
-    String(prediction.pick || context.pick || ""),
-  ) || String(context.validator_model || "ASP Market Validator");
+function aiResultToValidationResult(
+  result: AspValidatorAiResult,
+  context: Record<string, unknown>,
+): ValidationResult {
+  const prediction = (
+    context.prediction && typeof context.prediction === "object" ? context.prediction : {}
+  ) as Record<string, unknown>;
+  const validatorModel =
+    inferValidatorModel(
+      String(prediction.market || context.market || ""),
+      String(prediction.pick || context.pick || ""),
+    ) || String(context.validator_model || "ASP Market Validator");
 
   // Reforco de protecao de banca: CONFIRMAR exige margem minima positiva.
   let decision = result.decision;
@@ -3239,7 +4505,10 @@ function aiResultToValidationResult(result: AspValidatorAiResult, context: Recor
   };
 }
 
-function applyOnlineAiResult(record: ValidatorRecord, result: AspValidatorOnlineAiResult): ValidatorRecord {
+function applyOnlineAiResult(
+  record: ValidatorRecord,
+  result: AspValidatorOnlineAiResult,
+): ValidatorRecord {
   return {
     ...record,
     decision: result.decision,
@@ -3258,14 +4527,21 @@ function applyOnlineAiResult(record: ValidatorRecord, result: AspValidatorOnline
   };
 }
 
-function buildFailedOnlineContext(previous: Record<string, unknown> | null, error: string): Record<string, unknown> {
+function buildFailedOnlineContext(
+  previous: Record<string, unknown> | null,
+  error: string,
+): Record<string, unknown> {
   const existing = parseOnlineContext(previous);
   return {
     status: "failed",
-    online_summary: existing?.online_summary || "IA + Pesquisa falhou antes de concluir a verificacao online.",
+    online_summary:
+      existing?.online_summary || "IA + Pesquisa falhou antes de concluir a verificacao online.",
     relevant_findings: existing?.relevant_findings ?? [],
     no_relevant_findings: existing?.no_relevant_findings ?? [],
-    contextual_alerts: [...(existing?.contextual_alerts ?? []), "Falha na IA + Pesquisa. Analise anterior foi preservada."],
+    contextual_alerts: [
+      ...(existing?.contextual_alerts ?? []),
+      "Falha na IA + Pesquisa. Analise anterior foi preservada.",
+    ],
     sources: existing?.sources ?? [],
     searches: existing?.searches ?? [],
     error,
@@ -3278,12 +4554,18 @@ function buildFormValidationContext(
   validatorModel: string,
   pasted?: PastedParsedData | null,
 ): Record<string, unknown> {
-  const sourceProbability = normalizeProbability(parseNumber(form.source_probability)) ?? pasted?.market.probability_original ?? null;
+  const sourceProbability =
+    normalizeProbability(parseNumber(form.source_probability)) ??
+    pasted?.market.probability_original ??
+    null;
   const offeredOdd = parseNumber(form.offered_odd) ?? pasted?.market.offered_odd ?? null;
   const sourceEv = parseNumber(form.source_ev) ?? pasted?.market.ev_original ?? null;
   const structuredJson = pasted
     ? (() => {
-        const base = { ...pasted, input_source: "pasted_text" } as unknown as Record<string, unknown> & {
+        const base = { ...pasted, input_source: "pasted_text" } as unknown as Record<
+          string,
+          unknown
+        > & {
           market_type?: string | null;
           corners?: unknown;
           btts?: unknown;
@@ -3302,7 +4584,9 @@ function buildFormValidationContext(
         // apenas dado de apoio (mantidos sob supporting_data).
         if (base.market_type && base.market_type !== "btts") {
           (base as Record<string, unknown>).supporting_data = {
-            ...((base as Record<string, unknown>).supporting_data as Record<string, unknown> | undefined),
+            ...((base as Record<string, unknown>).supporting_data as
+              | Record<string, unknown>
+              | undefined),
             btts: base.btts ?? null,
             btts_home_away: base.btts_home_away ?? null,
           };
@@ -3357,7 +4641,9 @@ function buildFormValidationContext(
       offered_odd: offeredOdd,
       source_probability: sourceProbability,
       source_ev: sourceEv,
-      source_fair_odd: pasted?.market.fair_odd_original ?? (sourceProbability ? round(100 / sourceProbability, 2) : null),
+      source_fair_odd:
+        pasted?.market.fair_odd_original ??
+        (sourceProbability ? round(100 / sourceProbability, 2) : null),
     },
     user_context: form.user_context,
     pasted_text: pasted?.raw_pasted_text ?? null,
@@ -3384,9 +4670,10 @@ function buildFormValidationContext(
   };
 }
 
-
-
-function buildRecordValidationContext(record: ValidatorRecord, uploads: ValidatorUploadRecord[]): Record<string, unknown> {
+function buildRecordValidationContext(
+  record: ValidatorRecord,
+  uploads: ValidatorUploadRecord[],
+): Record<string, unknown> {
   return {
     source_platform: record.source_platform,
     sport: record.sport,
@@ -3431,17 +4718,27 @@ function buildRecordValidationContext(record: ValidatorRecord, uploads: Validato
         used_simulation: hasJsonContent(record.simulation_json),
         used_upload_comments: uploads.some((upload) => upload.user_comment?.trim()),
         used_online_search: hasJsonContent(record.online_context_json),
-        has_structured_ocr_data: Boolean((record.structured_json as { has_structured_ocr_data?: unknown } | null)?.has_structured_ocr_data) || Number(record.ocr_structured_fields_count ?? 0) > 0,
-        structured_fields_count: record.ocr_structured_fields_count ?? countStructuredFields(record.structured_json),
+        has_structured_ocr_data:
+          Boolean(
+            (record.structured_json as { has_structured_ocr_data?: unknown } | null)
+              ?.has_structured_ocr_data,
+          ) || Number(record.ocr_structured_fields_count ?? 0) > 0,
+        structured_fields_count:
+          record.ocr_structured_fields_count ?? countStructuredFields(record.structured_json),
       };
     })(),
-
   };
 }
 
 function contextToForm(context: Record<string, unknown>): ValidatorForm {
-  const fixture = context.fixture && typeof context.fixture === "object" ? (context.fixture as Record<string, unknown>) : {};
-  const prediction = context.prediction && typeof context.prediction === "object" ? (context.prediction as Record<string, unknown>) : {};
+  const fixture =
+    context.fixture && typeof context.fixture === "object"
+      ? (context.fixture as Record<string, unknown>)
+      : {};
+  const prediction =
+    context.prediction && typeof context.prediction === "object"
+      ? (context.prediction as Record<string, unknown>)
+      : {};
   return {
     sport: String(context.sport || "Futebol"),
     source_platform: String(context.source_platform || "Manual"),
@@ -3453,14 +4750,18 @@ function contextToForm(context: Record<string, unknown>): ValidatorForm {
     pick: String(prediction.pick || ""),
     line: prediction.line == null ? "" : String(prediction.line),
     offered_odd: prediction.offered_odd == null ? "" : String(prediction.offered_odd),
-    source_probability: prediction.source_probability == null ? "" : String(prediction.source_probability),
+    source_probability:
+      prediction.source_probability == null ? "" : String(prediction.source_probability),
     source_ev: prediction.source_ev == null ? "" : String(prediction.source_ev),
     user_context: String(context.user_context || ""),
   };
 }
 
 function buildLocalAnalysisContext(context: Record<string, unknown>, aiParsed: boolean): string {
-  const usage = context.data_usage && typeof context.data_usage === "object" ? (context.data_usage as Record<string, unknown>) : {};
+  const usage =
+    context.data_usage && typeof context.data_usage === "object"
+      ? (context.data_usage as Record<string, unknown>)
+      : {};
   return [
     "ASP Validator - Validacao IA consolidada",
     `Resposta IA interpretada: ${aiParsed ? "sim" : "nao"}`,
@@ -3489,12 +4790,16 @@ function buildValidatorDecision(form: ValidatorForm): ValidationResult {
   const alerts: string[] = [];
   let score = sourceProbability ?? 50;
 
-  favorableBlocks.push("A previsao externa foi tratada como ponto de partida, nao como confirmacao automatica.");
+  favorableBlocks.push(
+    "A previsao externa foi tratada como ponto de partida, nao como confirmacao automatica.",
+  );
   if (sourceProbability !== null) {
     favorableBlocks.push(`Probabilidade original informada: ${formatPercent(sourceProbability)}.`);
     if (sourceProbability >= 55) score += 4;
     if (sourceProbability < 50) {
-      againstBlocks.push("Probabilidade original abaixo de 50%; pede protecao de banca e justificativa tecnica mais forte.");
+      againstBlocks.push(
+        "Probabilidade original abaixo de 50%; pede protecao de banca e justificativa tecnica mais forte.",
+      );
       score -= 3;
     }
   } else {
@@ -3506,7 +4811,9 @@ function buildValidatorDecision(form: ValidatorForm): ValidationResult {
       favorableBlocks.push(`EV original positivo: ${formatPercent(sourceEv)}.`);
       score += Math.min(5, Math.max(1, sourceEv / 2));
     } else {
-      alerts.push(`EV original informado como ${formatPercent(sourceEv)}; sera tratado como sinal de cautela, nao bloqueio automatico.`);
+      alerts.push(
+        `EV original informado como ${formatPercent(sourceEv)}; sera tratado como sinal de cautela, nao bloqueio automatico.`,
+      );
       score -= 2;
     }
   } else {
@@ -3515,15 +4822,36 @@ function buildValidatorDecision(form: ValidatorForm): ValidationResult {
 
   if (offeredOdd !== null && offeredOdd > 1) {
     const implied = 100 / offeredOdd;
-    favorableBlocks.push(`Odd ofertada ${formatOdd(offeredOdd)} implica aproximadamente ${formatPercent(implied)} pelo mercado.`);
+    favorableBlocks.push(
+      `Odd ofertada ${formatOdd(offeredOdd)} implica aproximadamente ${formatPercent(implied)} pelo mercado.`,
+    );
     if (sourceProbability !== null && sourceProbability > implied) score += 3;
     if (sourceProbability !== null && sourceProbability + 3 < implied) score -= 3;
   } else {
     alerts.push("Odd ofertada ausente ou invalida; EV ajustado fica indisponivel.");
   }
 
-  const positiveTokens = ["valor", "edge", "desfalque", "linha baixa", "linha alta", "tendencia", "consistencia", "boa odd", "vantagem"];
-  const negativeTokens = ["risco", "incerto", "sem dados", "baixa amostra", "odd caiu", "linha esticada", "duvida", "lesao"];
+  const positiveTokens = [
+    "valor",
+    "edge",
+    "desfalque",
+    "linha baixa",
+    "linha alta",
+    "tendencia",
+    "consistencia",
+    "boa odd",
+    "vantagem",
+  ];
+  const negativeTokens = [
+    "risco",
+    "incerto",
+    "sem dados",
+    "baixa amostra",
+    "odd caiu",
+    "linha esticada",
+    "duvida",
+    "lesao",
+  ];
   const positiveHits = positiveTokens.filter((token) => context.includes(token));
   const negativeHits = negativeTokens.filter((token) => context.includes(token));
   if (positiveHits.length) {
@@ -3534,13 +4862,23 @@ function buildValidatorDecision(form: ValidatorForm): ValidationResult {
     againstBlocks.push(`Contexto possui pontos de cautela: ${negativeHits.join(", ")}.`);
     score -= Math.min(6, negativeHits.length * 1.5);
   }
-  if (!context.trim()) alerts.push("Contexto do usuario vazio; em duvida relevante, a recomendacao deve ser PULAR.");
+  if (!context.trim())
+    alerts.push("Contexto do usuario vazio; em duvida relevante, a recomendacao deve ser PULAR.");
 
   const adjustedProbability = round(Math.max(35, Math.min(72, score)), 2);
   const adjustedFairOdd = round(100 / adjustedProbability, 2);
-  const adjustedEv = offeredOdd && offeredOdd > 1 ? round((offeredOdd * (adjustedProbability / 100) - 1) * 100, 2) : null;
-  const decision: Decision = adjustedProbability >= 54 && (adjustedEv === null || adjustedEv >= -2) && negativeHits.length < 3 ? "CONFIRMAR" : "PULAR";
-  const confidence = adjustedProbability >= 62 ? "Alta" : adjustedProbability >= 55 ? "Moderada" : "Baixa";
+  const adjustedEv =
+    offeredOdd && offeredOdd > 1
+      ? round((offeredOdd * (adjustedProbability / 100) - 1) * 100, 2)
+      : null;
+  const decision: Decision =
+    adjustedProbability >= 54 &&
+    (adjustedEv === null || adjustedEv >= -2) &&
+    negativeHits.length < 3
+      ? "CONFIRMAR"
+      : "PULAR";
+  const confidence =
+    adjustedProbability >= 62 ? "Alta" : adjustedProbability >= 55 ? "Moderada" : "Baixa";
   const finalAnalysis =
     decision === "CONFIRMAR"
       ? "A validacao encontrou valor suficiente para confirmar com protecao de banca. A previsao externa nao confirmou sozinha; a decisao veio da combinacao entre odd, contexto, sinais tecnicos e risco."
@@ -3575,9 +4913,18 @@ function buildValidatorDecision(form: ValidatorForm): ValidationResult {
 
 function inferValidatorModel(market: string, pick: string): string {
   const text = normalize(`${market} ${pick}`);
-  if (text.includes("corner") || text.includes("escanteio") || text.includes("canto")) return "ASP Corner Validator";
-  if (text.includes("card") || text.includes("cartao") || text.includes("cartoes")) return "ASP Card Validator";
-  if (text.includes("ht") || text.includes("st") || text.includes("intervalo") || text.includes("1 tempo") || text.includes("2 tempo")) return "ASP HT/ST Validator";
+  if (text.includes("corner") || text.includes("escanteio") || text.includes("canto"))
+    return "ASP Corner Validator";
+  if (text.includes("card") || text.includes("cartao") || text.includes("cartoes"))
+    return "ASP Card Validator";
+  if (
+    text.includes("ht") ||
+    text.includes("st") ||
+    text.includes("intervalo") ||
+    text.includes("1 tempo") ||
+    text.includes("2 tempo")
+  )
+    return "ASP HT/ST Validator";
   if (
     text.includes("goal") ||
     text.includes("gol") ||
@@ -3698,7 +5045,6 @@ async function saveValidation(
       bankroll_applied: false,
     };
 
-
     const insertPayload = {
       ...payload,
       match_date: payload.match_date || null,
@@ -3706,14 +5052,20 @@ async function saveValidation(
       league: payload.league || null,
       user_context: payload.user_context || null,
     };
-    const { data, error } = await validatorDb.from("asp_validator_registros").insert(insertPayload).select("id").single();
+    const { data, error } = await validatorDb
+      .from("asp_validator_registros")
+      .insert(insertPayload)
+      .select("id")
+      .single();
     if (error) throw error;
     const uploadWarnings: string[] = [];
     if (uploads.length && data?.id) {
       const { data: userData, error: userError } = await supabase.auth.getUser();
       const userId = userData.user?.id;
       if (userError || !userId) {
-        uploadWarnings.push("Uploads nao foram salvos porque o usuario autenticado nao foi identificado.");
+        uploadWarnings.push(
+          "Uploads nao foram salvos porque o usuario autenticado nao foi identificado.",
+        );
       } else {
         const uploadPayloads = [];
         for (const upload of uploads) {
@@ -3764,14 +5116,23 @@ async function saveValidation(
             structured_error: null,
           });
         }
-        const { error: uploadError } = await validatorDb.from("asp_validator_uploads").insert(uploadPayloads);
-        if (uploadError) uploadWarnings.push(`Registro salvo, mas falhou ao vincular uploads: ${uploadError.message}`);
+        const { error: uploadError } = await validatorDb
+          .from("asp_validator_uploads")
+          .insert(uploadPayloads);
+        if (uploadError)
+          uploadWarnings.push(
+            `Registro salvo, mas falhou ao vincular uploads: ${uploadError.message}`,
+          );
       }
     }
     if (uploadWarnings.length) {
       toast.warning(`Validacao salva no historico. ${uploadWarnings[0]}`);
     } else {
-      toast.success(uploads.length ? "Validacao e arquivos salvos para OCR." : "Validacao salva no ASP Validator.");
+      toast.success(
+        uploads.length
+          ? "Validacao e arquivos salvos para OCR."
+          : "Validacao salva no ASP Validator.",
+      );
     }
     return data?.id ?? null;
   } catch (error) {
@@ -3797,10 +5158,16 @@ function uploadMetadata(upload: ValidatorUploadDraft) {
 }
 
 function buildStorageTechnicalMessage(error: unknown, filePath: string): string {
-  const rawMessage = error instanceof Error ? error.message : typeof error === "object" && error && "message" in error ? String((error as { message?: unknown }).message) : String(error || "erro desconhecido");
-  const bucketHint = rawMessage.toLowerCase().includes("bucket") || rawMessage.toLowerCase().includes("not found")
-    ? "Bucket possivelmente ausente. Aplique a migration que cria asp-validator-uploads e suas policies."
-    : "Falha de Storage ao salvar arquivo.";
+  const rawMessage =
+    error instanceof Error
+      ? error.message
+      : typeof error === "object" && error && "message" in error
+        ? String((error as { message?: unknown }).message)
+        : String(error || "erro desconhecido");
+  const bucketHint =
+    rawMessage.toLowerCase().includes("bucket") || rawMessage.toLowerCase().includes("not found")
+      ? "Bucket possivelmente ausente. Aplique a migration que cria asp-validator-uploads e suas policies."
+      : "Falha de Storage ao salvar arquivo.";
   return `${bucketHint} bucket=${ASP_VALIDATOR_UPLOAD_BUCKET} file_path=${filePath}. Detalhe: ${rawMessage}`;
 }
 
@@ -3980,12 +5347,19 @@ type OcrIntelligenceData = {
   notes: string[];
 };
 
-function buildStructuredOcrJson(record: ValidatorRecord, uploads: ValidatorUploadRecord[]): StructuredValidatorJson {
+function buildStructuredOcrJson(
+  record: ValidatorRecord,
+  uploads: ValidatorUploadRecord[],
+): StructuredValidatorJson {
   const manualLine = record.line || null;
   const manualOdd = record.offered_odd;
   const manualProbability = record.source_probability;
   const manualEv = record.source_ev;
-  const combinedText = [record.user_context, record.ocr_raw_text, ...uploads.map((upload) => `${upload.user_comment || ""}\n${upload.ocr_text || ""}`)]
+  const combinedText = [
+    record.user_context,
+    record.ocr_raw_text,
+    ...uploads.map((upload) => `${upload.user_comment || ""}\n${upload.ocr_text || ""}`),
+  ]
     .filter(Boolean)
     .join("\n\n");
   const inferred = extractPredictionSignals(combinedText);
@@ -4002,7 +5376,12 @@ function buildStructuredOcrJson(record: ValidatorRecord, uploads: ValidatorUploa
       detected_content_type: detectContentType(upload.upload_category, `${comment}\n${text}`),
       extracted_data: {
         ...extractPredictionSignals(`${comment}\n${text}`),
-        ocr_intelligence: buildOcrIntelligence(record, [upload], `${comment}\n${text}`, extractPredictionSignals(`${comment}\n${text}`)),
+        ocr_intelligence: buildOcrIntelligence(
+          record,
+          [upload],
+          `${comment}\n${text}`,
+          extractPredictionSignals(`${comment}\n${text}`),
+        ),
         games: extractGameLikeLines(text),
       },
     };
@@ -4012,9 +5391,15 @@ function buildStructuredOcrJson(record: ValidatorRecord, uploads: ValidatorUploa
   const missingFields = buildMissingFields(record, structuredUploads, intelligence);
   const conflicts = buildStructuredConflicts(record, inferred);
   const totalOcrChars = structuredUploads.reduce((sum, upload) => sum + upload.ocr_text.length, 0);
-  const completedUploads = uploads.filter((upload) => upload.ocr_status === "completed" && upload.ocr_text?.trim()).length;
+  const completedUploads = uploads.filter(
+    (upload) => upload.ocr_status === "completed" && upload.ocr_text?.trim(),
+  ).length;
   const ocrQuality: "low" | "medium" | "high" =
-    totalOcrChars > 1200 && completedUploads >= 2 ? "high" : totalOcrChars > 250 || completedUploads >= 1 ? "medium" : "low";
+    totalOcrChars > 1200 && completedUploads >= 2
+      ? "high"
+      : totalOcrChars > 250 || completedUploads >= 1
+        ? "medium"
+        : "low";
 
   return {
     extracted_from_ocr: intelligence.extracted_from_ocr,
@@ -4043,9 +5428,17 @@ function buildStructuredOcrJson(record: ValidatorRecord, uploads: ValidatorUploa
       pick: record.pick || intelligence.market.pick || "",
       line: manualLine ?? inferred.line ?? intelligence.market.line ?? null,
       offered_odd: manualOdd ?? inferred.offered_odd ?? intelligence.market.offered_odd ?? null,
-      source_probability: manualProbability ?? inferred.source_probability ?? intelligence.market.probability_original ?? null,
+      source_probability:
+        manualProbability ??
+        inferred.source_probability ??
+        intelligence.market.probability_original ??
+        null,
       source_ev: manualEv ?? inferred.source_ev ?? intelligence.market.ev_original ?? null,
-      source_fair_odd: record.source_fair_odd ?? inferred.source_fair_odd ?? intelligence.market.fair_odd_original ?? null,
+      source_fair_odd:
+        record.source_fair_odd ??
+        inferred.source_fair_odd ??
+        intelligence.market.fair_odd_original ??
+        null,
     },
     uploads: structuredUploads,
     recent_form: {
@@ -4067,7 +5460,8 @@ function buildStructuredOcrJson(record: ValidatorRecord, uploads: ValidatorUploa
       missing_critical_fields: intelligence.missing_critical_fields,
       critical_missing_fields: intelligence.missing_critical_fields,
       conflicts,
-      needs_manual_review: intelligence.data_quality_score < 0.55 || conflicts.length > 0 || ocrQuality === "low",
+      needs_manual_review:
+        intelligence.data_quality_score < 0.55 || conflicts.length > 0 || ocrQuality === "low",
     },
   };
 }
@@ -4080,11 +5474,25 @@ function extractPredictionSignals(text: string): {
   line?: string | null;
 } {
   const normalizedText = text.replace(/,/g, ".");
-  const odd = matchNumber(normalizedText, /\b(?:odd|odds|cotacao|cota[cç][aã]o)\s*(?:ofertada)?\s*[:=]?\s*(\d+(?:\.\d+)?)/i);
-  const probability = matchNumber(normalizedText, /\b(?:probabilidade|prob\.?|probability)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*%?/i);
-  const ev = matchNumber(normalizedText, /\b(?:ev|edge|valor esperado)\s*[:=]?\s*(-?\d+(?:\.\d+)?)\s*%?/i);
-  const fairOdd = matchNumber(normalizedText, /\b(?:odd justa|odd valor|fair odd)\s*[:=]?\s*(\d+(?:\.\d+)?)/i);
-  const lineMatch = normalizedText.match(/\b(?:linha|line|over|under|handicap)\s*[:=]?\s*([+-]?\d+(?:\.\d+)?)/i);
+  const odd = matchNumber(
+    normalizedText,
+    /\b(?:odd|odds|cotacao|cota[cç][aã]o)\s*(?:ofertada)?\s*[:=]?\s*(\d+(?:\.\d+)?)/i,
+  );
+  const probability = matchNumber(
+    normalizedText,
+    /\b(?:probabilidade|prob\.?|probability)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*%?/i,
+  );
+  const ev = matchNumber(
+    normalizedText,
+    /\b(?:ev|edge|valor esperado)\s*[:=]?\s*(-?\d+(?:\.\d+)?)\s*%?/i,
+  );
+  const fairOdd = matchNumber(
+    normalizedText,
+    /\b(?:odd justa|odd valor|fair odd)\s*[:=]?\s*(\d+(?:\.\d+)?)/i,
+  );
+  const lineMatch = normalizedText.match(
+    /\b(?:linha|line|over|under|handicap)\s*[:=]?\s*([+-]?\d+(?:\.\d+)?)/i,
+  );
   return {
     offered_odd: odd,
     source_probability: probability !== null ? normalizeProbability(probability) : null,
@@ -4111,7 +5519,11 @@ function buildOcrIntelligence(
     line: inferred.line ?? robustSignals.line,
   };
   const market = extractMarketFromOcr(record, normalizedText, mergedSignals, match);
-  const corners = extractCornerStats(normalizedText, match.home_team || record.home_team, match.away_team || record.away_team);
+  const corners = extractCornerStats(
+    normalizedText,
+    match.home_team || record.home_team,
+    match.away_team || record.away_team,
+  );
   const preMatchOdds = extractPreMatchOdds(normalizedText);
   const packballRecommendation = {
     market: market.name,
@@ -4131,13 +5543,40 @@ function buildOcrIntelligence(
     goals,
     extracted_numbers: extractPercentagesAndNumbers(combinedText),
   });
-  const missingCriticalFields = buildOcrCriticalMissingFields(match, market, corners, structuredFieldsCount);
-  const textVolume = uploads.reduce((sum, upload) => sum + (upload.ocr_text?.trim().length ?? 0), 0);
+  const missingCriticalFields = buildOcrCriticalMissingFields(
+    match,
+    market,
+    corners,
+    structuredFieldsCount,
+  );
+  const textVolume = uploads.reduce(
+    (sum, upload) => sum + (upload.ocr_text?.trim().length ?? 0),
+    0,
+  );
   const hasStructuredOcrData =
     structuredFieldsCount >= 4 ||
-    Boolean(market.offered_odd || market.probability_original || market.ev_original || market.fair_odd_original) ||
-    Boolean(corners.home.avg_for || corners.away.avg_for || corners.home.avg_against || corners.away.avg_against || corners.home.race_to_5_pct || corners.away.race_to_5_pct || Object.keys(corners.home.over_lines).length || Object.keys(corners.away.over_lines).length);
-  const dataQualityScore = calculateOcrDataQualityScore(structuredFieldsCount, missingCriticalFields.length, textVolume, hasStructuredOcrData);
+    Boolean(
+      market.offered_odd ||
+      market.probability_original ||
+      market.ev_original ||
+      market.fair_odd_original,
+    ) ||
+    Boolean(
+      corners.home.avg_for ||
+      corners.away.avg_for ||
+      corners.home.avg_against ||
+      corners.away.avg_against ||
+      corners.home.race_to_5_pct ||
+      corners.away.race_to_5_pct ||
+      Object.keys(corners.home.over_lines).length ||
+      Object.keys(corners.away.over_lines).length,
+    );
+  const dataQualityScore = calculateOcrDataQualityScore(
+    structuredFieldsCount,
+    missingCriticalFields.length,
+    textVolume,
+    hasStructuredOcrData,
+  );
 
   return {
     extracted_from_ocr: uploads.some((upload) => Boolean(upload.ocr_text?.trim())),
@@ -4156,23 +5595,33 @@ function buildOcrIntelligence(
       hasStructuredOcrData
         ? `OCR Intelligence identificou ${structuredFieldsCount} campo(s) estruturado(s).`
         : "OCR Intelligence nao encontrou campos quantitativos suficientes.",
-      dataQualityScore >= 0.75 ? "Qualidade dos dados OCR considerada alta para uso auxiliar." : "Dados OCR devem ser usados como apoio, com revisao manual.",
+      dataQualityScore >= 0.75
+        ? "Qualidade dos dados OCR considerada alta para uso auxiliar."
+        : "Dados OCR devem ser usados como apoio, com revisao manual.",
     ],
   };
 }
 
 function extractRobustPredictionSignals(text: string): ReturnType<typeof extractPredictionSignals> {
   const odd =
-    matchNumber(text, /\b(?:odd|odds|cotacao|cotacao)\s*(?:ofertada|oferecida|oferecidas)?\s*[:=]?\s*(\d+(?:\.\d+)?)/i) ??
-    matchNumber(text, /\(odds?\s*oferecid[ao]s?\)\s*=?\s*(\d+(?:\.\d+)?)/i);
+    matchNumber(
+      text,
+      /\b(?:odd|odds|cotacao|cotacao)\s*(?:ofertada|oferecida|oferecidas)?\s*[:=]?\s*(\d+(?:\.\d+)?)/i,
+    ) ?? matchNumber(text, /\(odds?\s*oferecid[ao]s?\)\s*=?\s*(\d+(?:\.\d+)?)/i);
   const probability =
-    matchNumber(text, /\b(?:probabilidade|prob\.?|probability|chance)\s*(?:\(\s*%\s*\))?\s*[:=]?\s*(\d+(?:\.\d+)?)\s*%?/i) ??
-    matchNumber(text, /\b(\d+(?:\.\d+)?)\s*%\b[^\n]{0,70}(?:chance|previs|recomend|best)/i);
+    matchNumber(
+      text,
+      /\b(?:probabilidade|prob\.?|probability|chance)\s*(?:\(\s*%\s*\))?\s*[:=]?\s*(\d+(?:\.\d+)?)\s*%?/i,
+    ) ?? matchNumber(text, /\b(\d+(?:\.\d+)?)\s*%\b[^\n]{0,70}(?:chance|previs|recomend|best)/i);
   const ev = matchNumber(text, /\b(?:ev|edge|valor esperado)\s*[:=]?\s*(-?\d+(?:\.\d+)?)\s*%?/i);
   const fairOdd =
-    matchNumber(text, /\b(?:odd justa|odd valor|fair odd|odds esperadas|odd esperada)\s*[:=]?\s*(\d+(?:\.\d+)?)/i) ??
-    matchNumber(text, /\bVE\s*(?:\([^)]*\))?\s*=?\s*(\d+(?:\.\d+)?)/i);
-  const lineMatch = text.match(/\b(?:linha|line|over|under|handicap|race to|corrida de escanteios)\s*[:=]?\s*([+-]?\d+(?:\.\d+)?)/i);
+    matchNumber(
+      text,
+      /\b(?:odd justa|odd valor|fair odd|odds esperadas|odd esperada)\s*[:=]?\s*(\d+(?:\.\d+)?)/i,
+    ) ?? matchNumber(text, /\bVE\s*(?:\([^)]*\))?\s*=?\s*(\d+(?:\.\d+)?)/i);
+  const lineMatch = text.match(
+    /\b(?:linha|line|over|under|handicap|race to|corrida de escanteios)\s*[:=]?\s*([+-]?\d+(?:\.\d+)?)/i,
+  );
   return {
     offered_odd: odd,
     source_probability: probability !== null ? normalizeProbability(probability) : null,
@@ -4184,7 +5633,9 @@ function extractRobustPredictionSignals(text: string): ReturnType<typeof extract
 
 function extractMatchFromOcr(record: ValidatorRecord, text: string): OcrIntelligenceData["match"] {
   const competitionMatch =
-    text.match(/(?:World|Mundo|Competicao|Competição|Liga)\s*[:\-]\s*([^\n\r]+?)(?:\s*-\s*Rodada\s*[:\-]?\s*([^\n\r]+))?(?:\n|$)/i) ??
+    text.match(
+      /(?:World|Mundo|Competicao|Competição|Liga)\s*[:\-]\s*([^\n\r]+?)(?:\s*-\s*Rodada\s*[:\-]?\s*([^\n\r]+))?(?:\n|$)/i,
+    ) ??
     text.match(/\b(Brazil\s*:\s*Serie\s*B)\s*-\s*(Rodada\s*\d+)/i) ??
     text.match(/\b([A-Z][A-Za-z\s]+(?:Cup|League|Liga|Division|Championship))[^\n\r]*/);
   const fixtureMatch = text.match(/([A-Za-zÀ-ÿ .'-]{2,40})\s+(?:vs|x)\s+([A-Za-zÀ-ÿ .'-]{2,40})/i);
@@ -4193,7 +5644,9 @@ function extractMatchFromOcr(record: ValidatorRecord, text: string): OcrIntellig
     sport: record.sport || inferSportFromText(text),
     competition: record.league || cleanOcrValue(competitionMatch?.[1] ?? ""),
     round: cleanOcrValue(competitionMatch?.[2] ?? ""),
-    date: record.match_date || cleanOcrValue(dateMatch ? `${dateMatch[1]}${dateMatch[2] ? ` ${dateMatch[2]}` : ""}` : ""),
+    date:
+      record.match_date ||
+      cleanOcrValue(dateMatch ? `${dateMatch[1]}${dateMatch[2] ? ` ${dateMatch[2]}` : ""}` : ""),
     time: cleanOcrValue(dateMatch?.[2] ?? ""),
     home_team: record.home_team || cleanOcrValue(fixtureMatch?.[1] ?? ""),
     away_team: record.away_team || cleanOcrValue(fixtureMatch?.[2] ?? ""),
@@ -4207,9 +5660,14 @@ function extractMarketFromOcr(
   match: OcrIntelligenceData["match"],
 ): OcrIntelligenceData["market"] {
   const normalized = normalize(text);
-  const raceMatch = text.match(/(?:fora|visitante|away|casa|mandante|home)?\s*(?:cobrar|chegar|marcar)?\s*(\d+)\s*(?:escanteios|cantos|corners?)\s*(?:primeiro|first)/i);
+  const raceMatch = text.match(
+    /(?:fora|visitante|away|casa|mandante|home)?\s*(?:cobrar|chegar|marcar)?\s*(\d+)\s*(?:escanteios|cantos|corners?)\s*(?:primeiro|first)/i,
+  );
   const raceLine = raceMatch?.[1] ?? text.match(/(\d+)\s*primeiro/i)?.[1] ?? null;
-  const isCornerRace = Boolean(raceLine) || normalized.includes("corrida de escanteios") || normalized.includes("race to");
+  const isCornerRace =
+    Boolean(raceLine) ||
+    normalized.includes("corrida de escanteios") ||
+    normalized.includes("race to");
   const totalCornerMatch =
     text.match(/\b(?:mais\s+de|over)\s*(\d+(?:\.\d+)?)\s*(?:escanteios|cantos|corners?)/i) ??
     text.match(/\b(?:menos\s+de|under)\s*(\d+(?:\.\d+)?)\s*(?:escanteios|cantos|corners?)/i);
@@ -4219,8 +5677,11 @@ function extractMarketFromOcr(
     inferSelectionTeam(record.pick, match, text) ||
     (/\bfora\b|\bvisitante\b|\baway\b/i.test(text) ? match.away_team : "") ||
     (/\bcasa\b|\bmandante\b|\bhome\b/i.test(text) ? match.home_team : "");
-  const manualMarketIsGeneric = !record.market || ["escanteios", "outro"].includes(normalize(record.market));
-  const detectedTotalName = totalCornerLine ? `${normalized.includes("under") || normalized.includes("menos de") ? "Menos de" : "Mais de"} ${totalCornerLine} escanteios` : "";
+  const manualMarketIsGeneric =
+    !record.market || ["escanteios", "outro"].includes(normalize(record.market));
+  const detectedTotalName = totalCornerLine
+    ? `${normalized.includes("under") || normalized.includes("menos de") ? "Menos de" : "Mais de"} ${totalCornerLine} escanteios`
+    : "";
   const marketName = manualMarketIsGeneric
     ? isCornerTotal
       ? detectedTotalName
@@ -4228,10 +5689,22 @@ function extractMarketFromOcr(
         ? `Race to ${raceLine ?? ""} Corners`.trim()
         : inferMarketNameFromText(text)
     : record.market;
-  const pick = record.pick || (isCornerTotal ? `${normalized.includes("under") || normalized.includes("menos de") ? "Under" : "Over"} ${totalCornerLine} escanteios` : isCornerRace ? `${selectionTeam || "Visitante"} cobrar ${raceLine ?? ""} escanteios primeiro`.trim() : "");
+  const pick =
+    record.pick ||
+    (isCornerTotal
+      ? `${normalized.includes("under") || normalized.includes("menos de") ? "Under" : "Over"} ${totalCornerLine} escanteios`
+      : isCornerRace
+        ? `${selectionTeam || "Visitante"} cobrar ${raceLine ?? ""} escanteios primeiro`.trim()
+        : "");
 
   const finalLine = record.line || inferred.line || totalCornerLine || raceLine || null;
-  const market_normalized = buildCornerMarketNormalized(marketName, pick, finalLine, isCornerTotal, normalized);
+  const market_normalized = buildCornerMarketNormalized(
+    marketName,
+    pick,
+    finalLine,
+    isCornerTotal,
+    normalized,
+  );
 
   return {
     name: marketName,
@@ -4252,7 +5725,9 @@ function extractMarketFromOcr(
  *   "-N" significa "Menos de N.5 escanteios" (ex.: -9 = Under 9.5)
  * Para linhas ja decimais (ex.: 9.5), preserva a linha original.
  */
-function normalizeCornerLineToken(token: string): { line_value: number; market_normalized: string; side: "over" | "under" } | null {
+function normalizeCornerLineToken(
+  token: string,
+): { line_value: number; market_normalized: string; side: "over" | "under" } | null {
   if (!token) return null;
   const trimmed = token.replace(/\s+/g, "").replace(",", ".");
   const match = trimmed.match(/^([+-]?)(\d+(?:\.\d+)?)$/);
@@ -4276,13 +5751,20 @@ function buildCornerMarketNormalized(
   normalizedText: string,
 ): string | null {
   const blob = `${marketName} ${pick}`.toLowerCase();
-  const isCornerContext = isCornerTotal || /escanteio|canto|corner/.test(blob) || /escanteio|canto|corner/.test(normalizedText);
+  const isCornerContext =
+    isCornerTotal ||
+    /escanteio|canto|corner/.test(blob) ||
+    /escanteio|canto|corner/.test(normalizedText);
   if (!isCornerContext) return null;
   const explicit = `${pick} ${marketName} ${line ?? ""}`.match(/([+-]?\d+(?:[.,]\d+)?)/);
-  const token = explicit?.[1] ?? (typeof line === "number" ? String(line) : line ?? "");
+  const token = explicit?.[1] ?? (typeof line === "number" ? String(line) : (line ?? ""));
   if (!token) return null;
   // If pick already says under/menos, force that side regardless of sign
-  const forced: "over" | "under" | null = /\b(under|menos)\b/i.test(`${pick} ${marketName}`) ? "under" : /\b(over|mais)\b/i.test(`${pick} ${marketName}`) ? "over" : null;
+  const forced: "over" | "under" | null = /\b(under|menos)\b/i.test(`${pick} ${marketName}`)
+    ? "under"
+    : /\b(over|mais)\b/i.test(`${pick} ${marketName}`)
+      ? "over"
+      : null;
   const parsed = normalizeCornerLineToken(String(token));
   if (!parsed) return null;
   if (forced && forced !== parsed.side) {
@@ -4292,11 +5774,25 @@ function buildCornerMarketNormalized(
   return parsed.market_normalized;
 }
 
-function extractCornerStats(text: string, homeTeam: string, awayTeam: string): OcrIntelligenceData["corners"] {
-  const avgFor = metricPairNumbers(text, /marcados/i, { requireDecimal: true }) ?? labelNumbers(text, /marcados/gi);
-  const avgAgainst = metricPairNumbers(text, /sofridos/i, { requireDecimal: true }) ?? labelNumbers(text, /sofridos/gi);
-  const avgTotal = labelNumbers(text, /marcados\s*\+\s*sofridos|total\s+escanteios|m[eé]dia\s+escanteios/gi);
-  const avgTotalPair = metricPairNumbers(text, /marcados\s*\+\s*sofridos|m[eÃ©]dia\s+escanteios/i, { requireDecimal: true }) ?? avgTotal;
+function extractCornerStats(
+  text: string,
+  homeTeam: string,
+  awayTeam: string,
+): OcrIntelligenceData["corners"] {
+  const avgFor =
+    metricPairNumbers(text, /marcados/i, { requireDecimal: true }) ??
+    labelNumbers(text, /marcados/gi);
+  const avgAgainst =
+    metricPairNumbers(text, /sofridos/i, { requireDecimal: true }) ??
+    labelNumbers(text, /sofridos/gi);
+  const avgTotal = labelNumbers(
+    text,
+    /marcados\s*\+\s*sofridos|total\s+escanteios|m[eé]dia\s+escanteios/gi,
+  );
+  const avgTotalPair =
+    metricPairNumbers(text, /marcados\s*\+\s*sofridos|m[eÃ©]dia\s+escanteios/i, {
+      requireDecimal: true,
+    }) ?? avgTotal;
   const first = twoSidedPercent(text, /primeiro\s+do\s+jogo/i);
   const race3 = twoSidedPercent(text, /3\s*primeiro/i);
   const race5 = twoSidedPercent(text, /5\s*primeiro/i);
@@ -4307,14 +5803,24 @@ function extractCornerStats(text: string, homeTeam: string, awayTeam: string): O
   const totalCorners = metricPairNumbers(text, /total\s+(?:cantos|corners|escanteios)/i);
   const totalFor = metricPairNumbers(text, /marcados\s+total|total\s+marcados/i);
   const totalAgainst = metricPairNumbers(text, /sofridos\s+total|total\s+sofridos/i);
-  const homeBlockStats = extractCornerSideStatsFromBlock(extractTeamTextBlock(text, homeTeam, awayTeam));
-  const awayBlockStats = extractCornerSideStatsFromBlock(extractTeamTextBlock(text, awayTeam, homeTeam));
+  const homeBlockStats = extractCornerSideStatsFromBlock(
+    extractTeamTextBlock(text, homeTeam, awayTeam),
+  );
+  const awayBlockStats = extractCornerSideStatsFromBlock(
+    extractTeamTextBlock(text, awayTeam, homeTeam),
+  );
   const homeAwaySplit = extractHomeAwayCornerSplit(text, homeTeam, awayTeam);
 
   return {
     home: {
-      avg_for: homeBlockStats.avg_for ?? numberAt(avgFor, 0) ?? numberNearTeam(text, homeTeam, /marcados/i),
-      avg_against: homeBlockStats.avg_against ?? numberAt(avgAgainst, 0) ?? numberNearTeam(text, homeTeam, /sofridos/i),
+      avg_for:
+        homeBlockStats.avg_for ??
+        numberAt(avgFor, 0) ??
+        numberNearTeam(text, homeTeam, /marcados/i),
+      avg_against:
+        homeBlockStats.avg_against ??
+        numberAt(avgAgainst, 0) ??
+        numberNearTeam(text, homeTeam, /sofridos/i),
       avg_total: homeBlockStats.avg_total ?? numberAt(avgTotalPair, 0),
       total_corners: homeBlockStats.total_corners ?? numberAt(totalCorners, 0),
       total_for: homeBlockStats.total_for ?? numberAt(totalFor, 0),
@@ -4340,8 +5846,14 @@ function extractCornerStats(text: string, homeTeam: string, awayTeam: string): O
       ),
     },
     away: {
-      avg_for: awayBlockStats.avg_for ?? numberAt(avgFor, 1) ?? numberNearTeam(text, awayTeam, /marcados/i),
-      avg_against: awayBlockStats.avg_against ?? numberAt(avgAgainst, 1) ?? numberNearTeam(text, awayTeam, /sofridos/i),
+      avg_for:
+        awayBlockStats.avg_for ??
+        numberAt(avgFor, 1) ??
+        numberNearTeam(text, awayTeam, /marcados/i),
+      avg_against:
+        awayBlockStats.avg_against ??
+        numberAt(avgAgainst, 1) ??
+        numberNearTeam(text, awayTeam, /sofridos/i),
       avg_total: awayBlockStats.avg_total ?? numberAt(avgTotalPair, 1),
       total_corners: awayBlockStats.total_corners ?? numberAt(totalCorners, 1),
       total_for: awayBlockStats.total_for ?? numberAt(totalFor, 1),
@@ -4376,8 +5888,16 @@ function buildNormalizedCornerLines(
   homeAwayUnder: Record<string, number>,
 ): NormalizedCornerLine[] {
   const out: NormalizedCornerLine[] = [];
-  const push = (token: string, value_pct: number, side: "over" | "under", scope: "general" | "home_away") => {
-    const signedToken = token.startsWith("+") || token.startsWith("-") ? token : `${side === "under" ? "-" : "+"}${token}`;
+  const push = (
+    token: string,
+    value_pct: number,
+    side: "over" | "under",
+    scope: "general" | "home_away",
+  ) => {
+    const signedToken =
+      token.startsWith("+") || token.startsWith("-")
+        ? token
+        : `${side === "under" ? "-" : "+"}${token}`;
     const parsed = normalizeCornerLineToken(signedToken);
     if (!parsed) return;
     out.push({
@@ -4396,11 +5916,16 @@ function buildNormalizedCornerLines(
   return out;
 }
 
-function metricPairNumbers(text: string, label: RegExp, options: { requireDecimal?: boolean } = {}): number[] | null {
+function metricPairNumbers(
+  text: string,
+  label: RegExp,
+  options: { requireDecimal?: boolean } = {},
+): number[] | null {
   for (const rawLine of text.replace(/,/g, ".").split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!label.test(line)) continue;
-    if (/total\s+escanteios/i.test(line) && !/m[eé]dia|marcados\s*\+\s*sofridos/i.test(line)) continue;
+    if (/total\s+escanteios/i.test(line) && !/m[eé]dia|marcados\s*\+\s*sofridos/i.test(line))
+      continue;
     const values = [...line.matchAll(/(\d+(?:\.\d+)?)/g)]
       .map((match) => match[1])
       .filter((value) => !options.requireDecimal || value.includes("."))
@@ -4410,7 +5935,9 @@ function metricPairNumbers(text: string, label: RegExp, options: { requireDecima
   }
 
   const compact = text.replace(/,/g, ".").replace(/\s+/g, " ");
-  const beforeAfter = compact.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s+${label.source}\\s+(\\d+(?:\\.\\d+)?)`, "i"));
+  const beforeAfter = compact.match(
+    new RegExp(`(\\d+(?:\\.\\d+)?)\\s+${label.source}\\s+(\\d+(?:\\.\\d+)?)`, "i"),
+  );
   if (beforeAfter) {
     const values = [beforeAfter[1], beforeAfter[2]]
       .filter((value) => !options.requireDecimal || value.includes("."))
@@ -4424,18 +5951,39 @@ function metricPairNumbers(text: string, label: RegExp, options: { requireDecima
 
 function extractGoalStats(text: string): Record<string, unknown> {
   const normalized = normalize(text);
-  if (!normalized.includes("gol") && !normalized.includes("goal") && !normalized.includes("btts")) return {};
-  const avgScoredPair = metricPairNumbers(text, /m[eé]dia\s+(?:de\s+)?gols?\s+marcados|marcados\s+(?:por\s+jogo)|scored/i);
-  const avgConcededPair = metricPairNumbers(text, /m[eé]dia\s+(?:de\s+)?gols?\s+sofridos|sofridos\s+(?:por\s+jogo)|conceded/i);
+  if (!normalized.includes("gol") && !normalized.includes("goal") && !normalized.includes("btts"))
+    return {};
+  const avgScoredPair = metricPairNumbers(
+    text,
+    /m[eé]dia\s+(?:de\s+)?gols?\s+marcados|marcados\s+(?:por\s+jogo)|scored/i,
+  );
+  const avgConcededPair = metricPairNumbers(
+    text,
+    /m[eé]dia\s+(?:de\s+)?gols?\s+sofridos|sofridos\s+(?:por\s+jogo)|conceded/i,
+  );
   const avgTotalPair = metricPairNumbers(text, /m[eé]dia\s+total\s+gols|total\s+m[eé]dio\s+gols/i);
-  const homeAvgHomeMatches = matchNumber(text, /casa[^0-9]{0,40}(?:marcados|scored)[^0-9]*(\d+(?:\.\d+)?)/i);
-  const homeAvgHomeConceded = matchNumber(text, /casa[^0-9]{0,40}(?:sofridos|conceded)[^0-9]*(\d+(?:\.\d+)?)/i);
-  const awayAvgAwayMatches = matchNumber(text, /(?:visitante|fora)[^0-9]{0,40}(?:marcados|scored)[^0-9]*(\d+(?:\.\d+)?)/i);
-  const awayAvgAwayConceded = matchNumber(text, /(?:visitante|fora)[^0-9]{0,40}(?:sofridos|conceded)[^0-9]*(\d+(?:\.\d+)?)/i);
+  const homeAvgHomeMatches = matchNumber(
+    text,
+    /casa[^0-9]{0,40}(?:marcados|scored)[^0-9]*(\d+(?:\.\d+)?)/i,
+  );
+  const homeAvgHomeConceded = matchNumber(
+    text,
+    /casa[^0-9]{0,40}(?:sofridos|conceded)[^0-9]*(\d+(?:\.\d+)?)/i,
+  );
+  const awayAvgAwayMatches = matchNumber(
+    text,
+    /(?:visitante|fora)[^0-9]{0,40}(?:marcados|scored)[^0-9]*(\d+(?:\.\d+)?)/i,
+  );
+  const awayAvgAwayConceded = matchNumber(
+    text,
+    /(?:visitante|fora)[^0-9]{0,40}(?:sofridos|conceded)[^0-9]*(\d+(?:\.\d+)?)/i,
+  );
   const expectedTotal =
     matchNumber(text, /exp\.\s*de\s*gols\s*\(modelo\)[^0-9]*(\d+(?:\.\d+)?)/i) ??
     matchNumber(text, /expectativa\s+de\s+gols[^0-9]*(\d+(?:\.\d+)?)/i);
-  const expectedSplit = text.replace(/,/g, ".").match(/for[cç]a\s+esperada\s+gols[^0-9]*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/i);
+  const expectedSplit = text
+    .replace(/,/g, ".")
+    .match(/for[cç]a\s+esperada\s+gols[^0-9]*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/i);
   const home = {
     avg_for: avgScoredPair?.[0] ?? null,
     avg_against: avgConcededPair?.[0] ?? null,
@@ -4465,19 +6013,31 @@ function extractGoalStats(text: string): Record<string, unknown> {
   };
 }
 
-function twoSidedPercent(text: string, label: RegExp): { home: number | null; away: number | null } {
+function twoSidedPercent(
+  text: string,
+  label: RegExp,
+): { home: number | null; away: number | null } {
   const line = text.split(/\r?\n/).find((item) => label.test(item));
   if (line) {
-    let values = [...line.matchAll(/(\d+(?:\.\d+)?)\s*%/g)].map((match) => Number(match[1])).filter(Number.isFinite);
+    let values = [...line.matchAll(/(\d+(?:\.\d+)?)\s*%/g)]
+      .map((match) => Number(match[1]))
+      .filter(Number.isFinite);
     if (values.length < 2) {
-      values = [...line.replace(/,/g, ".").matchAll(/(\d+(?:\.\d+)?)/g)].map((match) => Number(match[1])).filter(Number.isFinite);
+      values = [...line.replace(/,/g, ".").matchAll(/(\d+(?:\.\d+)?)/g)]
+        .map((match) => Number(match[1]))
+        .filter(Number.isFinite);
       const labelNumber = line.match(/\b(3|5|7|9)\s*primeiro\b/i)?.[1];
       if (labelNumber && values[0] === Number(labelNumber)) values = values.slice(1);
     }
     if (values.length >= 2) return { home: values[0], away: values[1] };
   }
   const compact = text.replace(/\s+/g, " ");
-  const match = compact.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*%?[^%]{0,80}${label.source}[^%]{0,80}(\\d+(?:\\.\\d+)?)\\s*%?`, "i"));
+  const match = compact.match(
+    new RegExp(
+      `(\\d+(?:\\.\\d+)?)\\s*%?[^%]{0,80}${label.source}[^%]{0,80}(\\d+(?:\\.\\d+)?)\\s*%?`,
+      "i",
+    ),
+  );
   return { home: match ? Number(match[1]) : null, away: match ? Number(match[2]) : null };
 }
 
@@ -4485,12 +6045,19 @@ function labelNumbers(text: string, label: RegExp): number[] {
   return text
     .split(/\r?\n/)
     .filter((line) => label.test(line))
-    .flatMap((line) => [...line.replace(/,/g, ".").matchAll(/(\d+(?:\.\d+)?)/g)].map((match) => Number(match[1])))
+    .flatMap((line) =>
+      [...line.replace(/,/g, ".").matchAll(/(\d+(?:\.\d+)?)/g)].map((match) => Number(match[1])),
+    )
     .filter((value) => Number.isFinite(value) && value <= 100)
     .slice(0, 8);
 }
 
-function extractCornerOverLines(text: string): { home: Record<string, number>; away: Record<string, number>; home_under: Record<string, number>; away_under: Record<string, number> } {
+function extractCornerOverLines(text: string): {
+  home: Record<string, number>;
+  away: Record<string, number>;
+  home_under: Record<string, number>;
+  away_under: Record<string, number>;
+} {
   const home: Record<string, number> = {};
   const away: Record<string, number> = {};
   const homeUnder: Record<string, number> = {};
@@ -4498,7 +6065,8 @@ function extractCornerOverLines(text: string): { home: Record<string, number>; a
   for (const line of text.replace(/,/g, ".").split(/\r?\n/)) {
     const lineMatch = line.match(/([+-]?\d+(?:\.\d+)?)/);
     const pctMatches = [...line.matchAll(/(\d+(?:\.\d+)?)\s*%/g)].map((match) => Number(match[1]));
-    if (!lineMatch || pctMatches.length < 1 || !/(over|under|mais\/menos|\+\d|-?\d)/i.test(line)) continue;
+    if (!lineMatch || pctMatches.length < 1 || !/(over|under|mais\/menos|\+\d|-?\d)/i.test(line))
+      continue;
     const key = lineMatch[1].replace(/^[+-]/, "");
     const isUnder = /under|menos|-\d/i.test(line);
     const targetHome = isUnder ? homeUnder : home;
@@ -4527,7 +6095,9 @@ function extractTeamTextBlock(text: string, team: string, otherTeam: string): st
   return block.join("\n");
 }
 
-function extractCornerSideStatsFromBlock(block: string): Pick<
+function extractCornerSideStatsFromBlock(
+  block: string,
+): Pick<
   CornerSideStats,
   | "avg_for"
   | "avg_against"
@@ -4547,7 +6117,10 @@ function extractCornerSideStatsFromBlock(block: string): Pick<
   return {
     avg_for: labeledNumber(block, /(?:corners?|cantos?|escanteios)?\s*marcados/i),
     avg_against: labeledNumber(block, /(?:corners?|cantos?|escanteios)?\s*sofridos/i),
-    avg_total: labeledNumber(block, /total\s+medio|total\s+medio|media\s+total|marcados\s*\+\s*sofridos/i),
+    avg_total: labeledNumber(
+      block,
+      /total\s+medio|total\s+medio|media\s+total|marcados\s*\+\s*sofridos/i,
+    ),
     total_corners: labeledNumber(block, /total\s+(?:cantos|corners|escanteios)/i),
     total_for: labeledNumber(block, /marcados\s+total|total\s+marcados/i),
     total_against: labeledNumber(block, /sofridos\s+total|total\s+sofridos/i),
@@ -4566,7 +6139,16 @@ function extractHomeAwayCornerSplit(
   text: string,
   homeTeam: string,
   awayTeam: string,
-): { home: Pick<CornerSideStats, "avg_for" | "avg_against" | "avg_total" | "over_lines" | "under_lines">; away: Pick<CornerSideStats, "avg_for" | "avg_against" | "avg_total" | "over_lines" | "under_lines"> } {
+): {
+  home: Pick<
+    CornerSideStats,
+    "avg_for" | "avg_against" | "avg_total" | "over_lines" | "under_lines"
+  >;
+  away: Pick<
+    CornerSideStats,
+    "avg_for" | "avg_against" | "avg_total" | "over_lines" | "under_lines"
+  >;
+} {
   const lower = normalize(text);
   const markerIndex = Math.max(lower.indexOf("casa/fora"), lower.indexOf("home/away"));
   if (markerIndex < 0) {
@@ -4585,7 +6167,9 @@ function extractHomeAwayCornerSplit(
 function labeledNumber(text: string, label: RegExp): number | null {
   const line = text.split(/\r?\n/).find((item) => label.test(item));
   if (!line) return null;
-  const values = [...line.replace(/,/g, ".").matchAll(/-?\d+(?:\.\d+)?/g)].map((match) => Number(match[0])).filter(Number.isFinite);
+  const values = [...line.replace(/,/g, ".").matchAll(/-?\d+(?:\.\d+)?/g)]
+    .map((match) => Number(match[0]))
+    .filter(Number.isFinite);
   return values.find((value) => value >= 0 && value <= 200) ?? null;
 }
 
@@ -4598,7 +6182,10 @@ function labeledPercent(text: string, label: RegExp): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
-function extractSingleSideLinePercents(text: string, side: "over" | "under"): Record<string, number> {
+function extractSingleSideLinePercents(
+  text: string,
+  side: "over" | "under",
+): Record<string, number> {
   const values: Record<string, number> = {};
   for (const line of text.replace(/,/g, ".").split(/\r?\n/)) {
     const isOver = /\+\s*\d|over|mais/i.test(line);
@@ -4616,7 +6203,9 @@ function extractPreMatchOdds(text: string): Array<{ bookmaker: string; odd: numb
   const bookmakers = ["Pinnacle", "1xbet", "Unibet"];
   return bookmakers
     .map((bookmaker) => {
-      const match = text.replace(/,/g, ".").match(new RegExp(`${bookmaker}\\s*[:=\\-]?\\s*(\\d+(?:\\.\\d+)?)`, "i"));
+      const match = text
+        .replace(/,/g, ".")
+        .match(new RegExp(`${bookmaker}\\s*[:=\\-]?\\s*(\\d+(?:\\.\\d+)?)`, "i"));
       const odd = match?.[1] ? Number(match[1]) : null;
       return odd && Number.isFinite(odd) ? { bookmaker, odd } : null;
     })
@@ -4631,7 +6220,9 @@ function numberAt(values: number[] | null, index: number): number | null {
 function numberNearTeam(text: string, team: string, label: RegExp): number | null {
   if (!team) return null;
   const teamKey = normalize(team);
-  const line = text.split(/\r?\n/).find((item) => normalize(item).includes(teamKey) && label.test(item));
+  const line = text
+    .split(/\r?\n/)
+    .find((item) => normalize(item).includes(teamKey) && label.test(item));
   if (!line) return null;
   return matchNumber(line.replace(/,/g, "."), /(\d+(?:\.\d+)?)/);
 }
@@ -4640,8 +6231,13 @@ function countStructuredFields(value: unknown): number {
   if (value === null || value === undefined || value === "") return 0;
   if (typeof value === "number") return Number.isFinite(value) ? 1 : 0;
   if (typeof value === "string") return value.trim() ? 1 : 0;
-  if (Array.isArray(value)) return value.reduce<number>((sum, item) => sum + countStructuredFields(item), 0);
-  if (typeof value === "object") return Object.values(value as Record<string, unknown>).reduce<number>((sum, item) => sum + countStructuredFields(item), 0);
+  if (Array.isArray(value))
+    return value.reduce<number>((sum, item) => sum + countStructuredFields(item), 0);
+  if (typeof value === "object")
+    return Object.values(value as Record<string, unknown>).reduce<number>(
+      (sum, item) => sum + countStructuredFields(item),
+      0,
+    );
   return 0;
 }
 
@@ -4658,10 +6254,23 @@ function buildOcrCriticalMissingFields(
   if (!market.pick) missing.push("pick");
   if (!market.offered_odd) missing.push("odd ofertada");
   if (!market.probability_original) missing.push("probabilidade original");
-  if (normalize(`${market.name} ${market.pick}`).includes("escanteio") || normalize(`${market.name} ${market.pick}`).includes("corner")) {
-    const isTotal = normalize(`${market.name} ${market.pick}`).includes("over") || normalize(`${market.name} ${market.pick}`).includes("under") || normalize(`${market.name} ${market.pick}`).includes("mais de") || normalize(`${market.name} ${market.pick}`).includes("menos de");
-    if (!isTotal && !corners.home.race_to_5_pct && !corners.away.race_to_5_pct) missing.push("race_to_5 corners");
-    if (isTotal && !Object.keys(corners.home.over_lines).length && !Object.keys(corners.away.over_lines).length) missing.push("percentuais over/under corners");
+  if (
+    normalize(`${market.name} ${market.pick}`).includes("escanteio") ||
+    normalize(`${market.name} ${market.pick}`).includes("corner")
+  ) {
+    const isTotal =
+      normalize(`${market.name} ${market.pick}`).includes("over") ||
+      normalize(`${market.name} ${market.pick}`).includes("under") ||
+      normalize(`${market.name} ${market.pick}`).includes("mais de") ||
+      normalize(`${market.name} ${market.pick}`).includes("menos de");
+    if (!isTotal && !corners.home.race_to_5_pct && !corners.away.race_to_5_pct)
+      missing.push("race_to_5 corners");
+    if (
+      isTotal &&
+      !Object.keys(corners.home.over_lines).length &&
+      !Object.keys(corners.away.over_lines).length
+    )
+      missing.push("percentuais over/under corners");
     if (!corners.home.avg_for) missing.push("corners marcados mandante");
     if (!corners.away.avg_for) missing.push("corners marcados visitante");
     if (!corners.home.avg_against) missing.push("corners sofridos mandante");
@@ -4671,17 +6280,31 @@ function buildOcrCriticalMissingFields(
   return missing;
 }
 
-function calculateOcrDataQualityScore(fieldCount: number, missingCount: number, textVolume: number, hasStructuredData: boolean): number {
+function calculateOcrDataQualityScore(
+  fieldCount: number,
+  missingCount: number,
+  textVolume: number,
+  hasStructuredData: boolean,
+): number {
   const fieldScore = Math.min(0.5, fieldCount * 0.022);
   const textScore = Math.min(0.2, textVolume / 5000);
   const structuredBonus = hasStructuredData ? 0.2 : 0;
   const penalty = Math.min(0.5, missingCount * 0.08);
-  return round(Math.max(0, Math.min(1, 0.1 + fieldScore + textScore + structuredBonus - penalty)), 2);
+  return round(
+    Math.max(0, Math.min(1, 0.1 + fieldScore + textScore + structuredBonus - penalty)),
+    2,
+  );
 }
 
 function inferSportFromText(text: string): string {
   const value = normalize(text);
-  if (value.includes("escanteio") || value.includes("corner") || value.includes("gol") || value.includes("world cup")) return "Futebol";
+  if (
+    value.includes("escanteio") ||
+    value.includes("corner") ||
+    value.includes("gol") ||
+    value.includes("world cup")
+  )
+    return "Futebol";
   return "";
 }
 
@@ -4693,7 +6316,11 @@ function inferMarketNameFromText(text: string): string {
   return "";
 }
 
-function inferSelectionTeam(pick: string, match: OcrIntelligenceData["match"], text: string): string {
+function inferSelectionTeam(
+  pick: string,
+  match: OcrIntelligenceData["match"],
+  text: string,
+): string {
   const pickKey = normalize(pick || text);
   if (match.home_team && pickKey.includes(normalize(match.home_team))) return match.home_team;
   if (match.away_team && pickKey.includes(normalize(match.away_team))) return match.away_team;
@@ -4726,26 +6353,49 @@ function matchNumber(text: string, pattern: RegExp): number | null {
 
 function detectContentType(category: string, text: string): string {
   const value = normalize(`${category} ${text}`);
-  if (value.includes("casa") || value.includes("fora") || value.includes("home") || value.includes("away")) return "home_away_split";
-  if (value.includes("ultimo") || value.includes("last") || value.includes("form")) return "recent_form";
-  if (value.includes("classificacao") || value.includes("rank") || value.includes("stand")) return "classification_context";
-  if (value.includes("corner") || value.includes("escanteio") || value.includes("cartao") || value.includes("card") || value.includes("gol") || value.includes("goal")) {
+  if (
+    value.includes("casa") ||
+    value.includes("fora") ||
+    value.includes("home") ||
+    value.includes("away")
+  )
+    return "home_away_split";
+  if (value.includes("ultimo") || value.includes("last") || value.includes("form"))
+    return "recent_form";
+  if (value.includes("classificacao") || value.includes("rank") || value.includes("stand"))
+    return "classification_context";
+  if (
+    value.includes("corner") ||
+    value.includes("escanteio") ||
+    value.includes("cartao") ||
+    value.includes("card") ||
+    value.includes("gol") ||
+    value.includes("goal")
+  ) {
     return "market_statistics";
   }
-  if (value.includes("odd") || value.includes("pick") || value.includes("prob")) return "main_prediction";
+  if (value.includes("odd") || value.includes("pick") || value.includes("prob"))
+    return "main_prediction";
   return "general_context";
 }
 
-function buildMarketSpecificData(record: ValidatorRecord, uploads: StructuredUpload[], combinedText: string): StructuredValidatorJson["market_specific_data"] {
+function buildMarketSpecificData(
+  record: ValidatorRecord,
+  uploads: StructuredUpload[],
+  combinedText: string,
+): StructuredValidatorJson["market_specific_data"] {
   const text = normalize(`${record.market} ${record.pick} ${combinedText}`);
   const base = {
     extracted_numbers: extractPercentagesAndNumbers(combinedText),
-    related_uploads: uploads.filter((upload) => upload.detected_content_type === "market_statistics").map((upload) => upload.upload_id),
+    related_uploads: uploads
+      .filter((upload) => upload.detected_content_type === "market_statistics")
+      .map((upload) => upload.upload_id),
   };
   return {
     goals: text.includes("gol") || text.includes("goal") || text.includes("btts") ? base : {},
     btts: text.includes("btts") || text.includes("ambas") ? base : {},
-    corners: text.includes("corner") || text.includes("escanteio") || text.includes("canto") ? base : {},
+    corners:
+      text.includes("corner") || text.includes("escanteio") || text.includes("canto") ? base : {},
     cards: text.includes("card") || text.includes("cartao") || text.includes("cartoes") ? base : {},
     handicap: text.includes("handicap") ? base : {},
     double_chance: text.includes("dupla chance") || text.includes("double chance") ? base : {},
@@ -4756,8 +6406,12 @@ function buildMarketSpecificData(record: ValidatorRecord, uploads: StructuredUpl
 function extractPercentagesAndNumbers(text: string): Record<string, string[]> {
   return {
     percentages: [...text.matchAll(/-?\d+(?:[,.]\d+)?\s*%/g)].slice(0, 30).map((match) => match[0]),
-    odds: [...text.replace(/,/g, ".").matchAll(/\b[1-9]\d?\.\d{2}\b/g)].slice(0, 30).map((match) => match[0]),
-    lines: [...text.replace(/,/g, ".").matchAll(/\b[+-]?\d+(?:\.\d+)?\b/g)].slice(0, 50).map((match) => match[0]),
+    odds: [...text.replace(/,/g, ".").matchAll(/\b[1-9]\d?\.\d{2}\b/g)]
+      .slice(0, 30)
+      .map((match) => match[0]),
+    lines: [...text.replace(/,/g, ".").matchAll(/\b[+-]?\d+(?:\.\d+)?\b/g)]
+      .slice(0, 50)
+      .map((match) => match[0]),
   };
 }
 
@@ -4765,92 +6419,165 @@ function extractGameLikeLines(text: string): string[] {
   return text
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => /\b(?:vs| x |@|home|away|casa|fora|w-|l-|win|loss|\d+\s*-\s*\d+)\b/i.test(line))
+    .filter((line) =>
+      /\b(?:vs| x |@|home|away|casa|fora|w-|l-|win|loss|\d+\s*-\s*\d+)\b/i.test(line),
+    )
     .slice(0, 20);
 }
 
 function extractGamesForTeam(text: string, team: string): string[] {
   if (!team) return [];
   const teamKey = normalize(team);
-  return extractGameLikeLines(text).filter((line) => normalize(line).includes(teamKey)).slice(0, 10);
+  return extractGameLikeLines(text)
+    .filter((line) => normalize(line).includes(teamKey))
+    .slice(0, 10);
 }
 
-function extractCategoryGames(uploads: StructuredUpload[], category: string, team: string): string[] {
+function extractCategoryGames(
+  uploads: StructuredUpload[],
+  category: string,
+  team: string,
+): string[] {
   return uploads
     .filter((upload) => normalize(upload.category).includes(normalize(category)))
     .flatMap((upload) => extractGamesForTeam(upload.ocr_text, team))
     .slice(0, 10);
 }
 
-function buildMissingFields(record: ValidatorRecord, uploads: StructuredUpload[], intelligence: OcrIntelligenceData): string[] {
+function buildMissingFields(
+  record: ValidatorRecord,
+  uploads: StructuredUpload[],
+  intelligence: OcrIntelligenceData,
+): string[] {
   const missing: string[] = [];
   if (!record.league && !intelligence.match.competition) missing.push("fixture.league");
   if (!record.match_date && !intelligence.match.date) missing.push("fixture.date");
-  if (record.offered_odd === null && !intelligence.market.offered_odd) missing.push("prediction.offered_odd");
-  if (record.source_probability === null && !intelligence.market.probability_original) missing.push("prediction.source_probability");
-  if (record.source_ev === null && intelligence.market.ev_original === null) missing.push("prediction.source_ev");
+  if (record.offered_odd === null && !intelligence.market.offered_odd)
+    missing.push("prediction.offered_odd");
+  if (record.source_probability === null && !intelligence.market.probability_original)
+    missing.push("prediction.source_probability");
+  if (record.source_ev === null && intelligence.market.ev_original === null)
+    missing.push("prediction.source_ev");
   if (!uploads.some((upload) => upload.ocr_text.trim())) missing.push("uploads.ocr_text");
   return missing;
 }
 
-function buildFieldSources(record: ValidatorRecord, uploads: StructuredUpload[], intelligence: OcrIntelligenceData): Record<string, string> {
+function buildFieldSources(
+  record: ValidatorRecord,
+  uploads: StructuredUpload[],
+  intelligence: OcrIntelligenceData,
+): Record<string, string> {
   const sources: Record<string, string> = {};
   const hasUploadComment = uploads.some((upload) => upload.comment.trim());
   const hasRawOcr = uploads.some((upload) => upload.ocr_text.trim());
-  if (record.league || record.match_date || record.home_team || record.away_team || record.market || record.pick || record.offered_odd !== null) {
+  if (
+    record.league ||
+    record.match_date ||
+    record.home_team ||
+    record.away_team ||
+    record.market ||
+    record.pick ||
+    record.offered_odd !== null
+  ) {
     sources.manual_form = "Campos principais informados pelo usuario";
   }
   if (record.user_context?.trim()) sources.user_context = "Contexto geral informado pelo usuario";
   if (hasUploadComment) sources.upload_comment = "Comentarios vinculados aos uploads";
   if (hasRawOcr) sources.raw_ocr = "Texto bruto extraido dos arquivos por OCR";
   if (intelligence.has_structured_ocr_data) {
-    sources.ocr_intelligence = intelligence.extracted_from_ocr ? "Parser aplicado ao OCR real" : "Parser aplicado a dados manuais/comentarios";
+    sources.ocr_intelligence = intelligence.extracted_from_ocr
+      ? "Parser aplicado ao OCR real"
+      : "Parser aplicado a dados manuais/comentarios";
   }
   return sources;
 }
 
-function buildStructuredConflicts(record: ValidatorRecord, inferred: ReturnType<typeof extractPredictionSignals>): string[] {
+function buildStructuredConflicts(
+  record: ValidatorRecord,
+  inferred: ReturnType<typeof extractPredictionSignals>,
+): string[] {
   const conflicts: string[] = [];
-  if (record.offered_odd && inferred.offered_odd && Math.abs(record.offered_odd - inferred.offered_odd) > 0.05) {
-    conflicts.push(`Odd manual (${formatOdd(record.offered_odd)}) difere da odd lida no OCR (${formatOdd(inferred.offered_odd)}).`);
+  if (
+    record.offered_odd &&
+    inferred.offered_odd &&
+    Math.abs(record.offered_odd - inferred.offered_odd) > 0.05
+  ) {
+    conflicts.push(
+      `Odd manual (${formatOdd(record.offered_odd)}) difere da odd lida no OCR (${formatOdd(inferred.offered_odd)}).`,
+    );
   }
-  if (record.source_probability && inferred.source_probability && Math.abs(record.source_probability - inferred.source_probability) > 3) {
-    conflicts.push(`Probabilidade manual (${formatPercent(record.source_probability)}) difere da probabilidade lida no OCR (${formatPercent(inferred.source_probability)}).`);
+  if (
+    record.source_probability &&
+    inferred.source_probability &&
+    Math.abs(record.source_probability - inferred.source_probability) > 3
+  ) {
+    conflicts.push(
+      `Probabilidade manual (${formatPercent(record.source_probability)}) difere da probabilidade lida no OCR (${formatPercent(inferred.source_probability)}).`,
+    );
   }
-  if (record.source_ev !== null && inferred.source_ev !== null && inferred.source_ev !== undefined && Math.abs(record.source_ev - inferred.source_ev) > 3) {
-    conflicts.push(`EV manual (${formatPercent(record.source_ev)}) difere do EV lido no OCR (${formatPercent(inferred.source_ev)}).`);
+  if (
+    record.source_ev !== null &&
+    inferred.source_ev !== null &&
+    inferred.source_ev !== undefined &&
+    Math.abs(record.source_ev - inferred.source_ev) > 3
+  ) {
+    conflicts.push(
+      `EV manual (${formatPercent(record.source_ev)}) difere do EV lido no OCR (${formatPercent(inferred.source_ev)}).`,
+    );
   }
   return conflicts;
 }
 
-function buildStructuredNotes(record: ValidatorRecord, uploads: StructuredUpload[], inferred: ReturnType<typeof extractPredictionSignals>): string[] {
+function buildStructuredNotes(
+  record: ValidatorRecord,
+  uploads: StructuredUpload[],
+  inferred: ReturnType<typeof extractPredictionSignals>,
+): string[] {
   const notes = [
     "Campos manuais possuem prioridade sobre comentarios e OCR.",
     "Parser inicial usa regex simples; revisar manualmente antes de usar em decisao automatizada.",
   ];
-  if (record.user_context) notes.push("Contexto manual do usuario incluido como guia interpretativo.");
-  if (uploads.some((upload) => upload.comment)) notes.push("Comentarios dos uploads foram considerados para categorizar o material.");
-  if (Object.values(inferred).some((value) => value !== null && value !== undefined)) notes.push("Sinais numericos foram extraidos automaticamente do OCR/comentarios.");
+  if (record.user_context)
+    notes.push("Contexto manual do usuario incluido como guia interpretativo.");
+  if (uploads.some((upload) => upload.comment))
+    notes.push("Comentarios dos uploads foram considerados para categorizar o material.");
+  if (Object.values(inferred).some((value) => value !== null && value !== undefined))
+    notes.push("Sinais numericos foram extraidos automaticamente do OCR/comentarios.");
   return notes;
 }
 
-function extractDataQuality(value: Record<string, unknown> | null): StructuredValidatorJson["data_quality"] | null {
+function extractDataQuality(
+  value: Record<string, unknown> | null,
+): StructuredValidatorJson["data_quality"] | null {
   const dataQuality = value?.data_quality;
   if (!dataQuality || typeof dataQuality !== "object") return null;
   return dataQuality as StructuredValidatorJson["data_quality"];
 }
 
-function parseSimulationResult(value: Record<string, unknown> | null): AspValidatorSimulationResult | null {
+function parseSimulationResult(
+  value: Record<string, unknown> | null,
+): AspValidatorSimulationResult | null {
   if (!value || !Object.keys(value).length) return null;
   const status = typeof value.status === "string" ? value.status : "";
   const model = typeof value.model === "string" ? value.model : "";
-  if (!["poisson_score_matrix", "corner_race_simplified", "corner_volume_matrix", "corner_total_over_simplified", "low_confidence_corner_race"].includes(model) || !["completed", "low_confidence", "not_applicable", "failed"].includes(status)) return null;
+  if (
+    ![
+      "poisson_score_matrix",
+      "corner_race_simplified",
+      "corner_volume_matrix",
+      "corner_total_over_simplified",
+      "low_confidence_corner_race",
+    ].includes(model) ||
+    !["completed", "low_confidence", "not_applicable", "failed"].includes(status)
+  )
+    return null;
   return {
     model: model as AspValidatorSimulationResult["model"],
     status: status as AspValidatorSimulationResult["status"],
     lambda_home: typeof value.lambda_home === "number" ? value.lambda_home : null,
     lambda_away: typeof value.lambda_away === "number" ? value.lambda_away : null,
-    market_probability: typeof value.market_probability === "number" ? value.market_probability : null,
+    market_probability:
+      typeof value.market_probability === "number" ? value.market_probability : null,
     fair_odd: typeof value.fair_odd === "number" ? value.fair_odd : null,
     ev: typeof value.ev === "number" ? value.ev : null,
     most_likely_scores: Array.isArray(value.most_likely_scores)
@@ -4861,15 +6588,26 @@ function parseSimulationResult(value: Record<string, unknown> | null): AspValida
           })
           .slice(0, 10)
       : [],
-    goal_distribution: value.goal_distribution && typeof value.goal_distribution === "object" ? (value.goal_distribution as Record<string, number>) : {},
+    goal_distribution:
+      value.goal_distribution && typeof value.goal_distribution === "object"
+        ? (value.goal_distribution as Record<string, number>)
+        : {},
     notes: Array.isArray(value.notes) ? value.notes.map(String) : [],
     warnings: Array.isArray(value.warnings) ? value.warnings.map(String) : [],
   };
 }
 
 type DecisionHistoryEntry = {
-  before: { decision: string | null; adjusted_probability: number | null; adjusted_ev: number | null };
-  after: { decision: string | null; adjusted_probability: number | null; adjusted_ev: number | null };
+  before: {
+    decision: string | null;
+    adjusted_probability: number | null;
+    adjusted_ev: number | null;
+  };
+  after: {
+    decision: string | null;
+    adjusted_probability: number | null;
+    adjusted_ev: number | null;
+  };
   reason: string;
 };
 
@@ -4887,35 +6625,62 @@ type OnlineContextView = {
 
 function parseOnlineContext(value: Record<string, unknown> | null): OnlineContextView | null {
   if (!value || !Object.keys(value).length) return null;
-  const status = value.status === "completed" ? "completed" : value.status === "failed" ? "failed" : null;
+  const status =
+    value.status === "completed" ? "completed" : value.status === "failed" ? "failed" : null;
   if (!status) return null;
-  const dh = value.decision_history && typeof value.decision_history === "object"
-    ? (value.decision_history as Record<string, unknown>)
-    : null;
-  const decisionHistory: DecisionHistoryEntry | null = dh && dh.before && dh.after
-    ? {
-        before: {
-          decision: (dh.before as Record<string, unknown>).decision == null ? null : String((dh.before as Record<string, unknown>).decision),
-          adjusted_probability: typeof (dh.before as Record<string, unknown>).adjusted_probability === "number" ? ((dh.before as Record<string, unknown>).adjusted_probability as number) : null,
-          adjusted_ev: typeof (dh.before as Record<string, unknown>).adjusted_ev === "number" ? ((dh.before as Record<string, unknown>).adjusted_ev as number) : null,
-        },
-        after: {
-          decision: (dh.after as Record<string, unknown>).decision == null ? null : String((dh.after as Record<string, unknown>).decision),
-          adjusted_probability: typeof (dh.after as Record<string, unknown>).adjusted_probability === "number" ? ((dh.after as Record<string, unknown>).adjusted_probability as number) : null,
-          adjusted_ev: typeof (dh.after as Record<string, unknown>).adjusted_ev === "number" ? ((dh.after as Record<string, unknown>).adjusted_ev as number) : null,
-        },
-        reason: typeof dh.reason === "string" ? dh.reason : "",
-      }
-    : null;
+  const dh =
+    value.decision_history && typeof value.decision_history === "object"
+      ? (value.decision_history as Record<string, unknown>)
+      : null;
+  const decisionHistory: DecisionHistoryEntry | null =
+    dh && dh.before && dh.after
+      ? {
+          before: {
+            decision:
+              (dh.before as Record<string, unknown>).decision == null
+                ? null
+                : String((dh.before as Record<string, unknown>).decision),
+            adjusted_probability:
+              typeof (dh.before as Record<string, unknown>).adjusted_probability === "number"
+                ? ((dh.before as Record<string, unknown>).adjusted_probability as number)
+                : null,
+            adjusted_ev:
+              typeof (dh.before as Record<string, unknown>).adjusted_ev === "number"
+                ? ((dh.before as Record<string, unknown>).adjusted_ev as number)
+                : null,
+          },
+          after: {
+            decision:
+              (dh.after as Record<string, unknown>).decision == null
+                ? null
+                : String((dh.after as Record<string, unknown>).decision),
+            adjusted_probability:
+              typeof (dh.after as Record<string, unknown>).adjusted_probability === "number"
+                ? ((dh.after as Record<string, unknown>).adjusted_probability as number)
+                : null,
+            adjusted_ev:
+              typeof (dh.after as Record<string, unknown>).adjusted_ev === "number"
+                ? ((dh.after as Record<string, unknown>).adjusted_ev as number)
+                : null,
+          },
+          reason: typeof dh.reason === "string" ? dh.reason : "",
+        }
+      : null;
   return {
     status,
     online_summary:
       typeof value.online_summary === "string"
         ? value.online_summary
         : "Verificacao online sem achados relevantes. Nao ha noticia ou contexto externo suficiente para alterar a analise.",
-    relevant_findings: Array.isArray(value.relevant_findings) ? value.relevant_findings.map(String) : [],
-    no_relevant_findings: Array.isArray(value.no_relevant_findings) ? value.no_relevant_findings.map(String) : [],
-    contextual_alerts: Array.isArray(value.contextual_alerts) ? value.contextual_alerts.map(String) : [],
+    relevant_findings: Array.isArray(value.relevant_findings)
+      ? value.relevant_findings.map(String)
+      : [],
+    no_relevant_findings: Array.isArray(value.no_relevant_findings)
+      ? value.no_relevant_findings.map(String)
+      : [],
+    contextual_alerts: Array.isArray(value.contextual_alerts)
+      ? value.contextual_alerts.map(String)
+      : [],
     sources: Array.isArray(value.sources)
       ? value.sources
           .map((source) => source as Record<string, unknown>)
@@ -4927,7 +6692,6 @@ function parseOnlineContext(value: Record<string, unknown> | null): OnlineContex
     decision_history: decisionHistory,
   };
 }
-
 
 type SimulationRecordUpdate = {
   simulation_json: AspValidatorSimulationResult;
@@ -4949,14 +6713,19 @@ async function persistSimulationResult(record: ValidatorRecord): Promise<Simulat
     user_context: record.user_context,
     structured_json: record.structured_json,
   });
-  const adjustedProbability = simulation.market_probability !== null ? round(simulation.market_probability * 100, 2) : record.adjusted_probability;
+  const adjustedProbability =
+    simulation.market_probability !== null
+      ? round(simulation.market_probability * 100, 2)
+      : record.adjusted_probability;
   const adjustedFairOdd = simulation.fair_odd ?? record.adjusted_fair_odd;
   const adjustedEv = simulation.ev !== null ? round(simulation.ev * 100, 2) : record.adjusted_ev;
-  const simulationType = simulation.model !== "poisson_score_matrix"
-    ? simulation.model
-    : simulation.status === "completed" && simulation.notes.some((note) => normalize(note).includes("simplificada"))
-      ? "simplified_ocr"
-      : simulation.status;
+  const simulationType =
+    simulation.model !== "poisson_score_matrix"
+      ? simulation.model
+      : simulation.status === "completed" &&
+          simulation.notes.some((note) => normalize(note).includes("simplificada"))
+        ? "simplified_ocr"
+        : simulation.status;
   const update = {
     simulation_json: simulation,
     simulation_type: simulationType,
@@ -4972,7 +6741,12 @@ async function persistSimulationResult(record: ValidatorRecord): Promise<Simulat
   return update;
 }
 
-async function persistOcrResult(record: ValidatorRecord, allUploads: ValidatorUploadRecord[], upload: ValidatorUploadRecord, result: OcrResultPayload) {
+async function persistOcrResult(
+  record: ValidatorRecord,
+  allUploads: ValidatorUploadRecord[],
+  upload: ValidatorUploadRecord,
+  result: OcrResultPayload,
+) {
   const { error } = await validatorDb
     .from("asp_validator_uploads")
     .update({
@@ -4993,10 +6767,17 @@ async function persistOcrResult(record: ValidatorRecord, allUploads: ValidatorUp
   if (recordError) throw recordError;
 }
 
-async function persistStructuredOcr(record: ValidatorRecord, uploads: ValidatorUploadRecord[]): Promise<StructuredValidatorJson> {
+async function persistStructuredOcr(
+  record: ValidatorRecord,
+  uploads: ValidatorUploadRecord[],
+): Promise<StructuredValidatorJson> {
   await validatorDb
     .from("asp_validator_registros")
-    .update({ structured_status: "processing", structured_error: null, updated_at: new Date().toISOString() })
+    .update({
+      structured_status: "processing",
+      structured_error: null,
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", record.id);
 
   const recordWithLatestOcr = { ...record, ocr_raw_text: buildCombinedOcrText(uploads) };
@@ -5005,7 +6786,8 @@ async function persistStructuredOcr(record: ValidatorRecord, uploads: ValidatorU
 
   for (const upload of uploadStructures) {
     const fieldsCount = countStructuredFields(upload.extracted_data);
-    const uploadIntelligence = (upload.extracted_data as { ocr_intelligence?: OcrIntelligenceData }).ocr_intelligence;
+    const uploadIntelligence = (upload.extracted_data as { ocr_intelligence?: OcrIntelligenceData })
+      .ocr_intelligence;
     const qualityScore = calculateOcrDataQualityScore(
       fieldsCount,
       uploadIntelligence?.missing_critical_fields.length ?? 0,
@@ -5045,12 +6827,17 @@ async function persistStructuredOcr(record: ValidatorRecord, uploads: ValidatorU
   return structured;
 }
 
-function applyStructuredUploads(uploads: ValidatorUploadRecord[], structured: StructuredValidatorJson): ValidatorUploadRecord[] {
+function applyStructuredUploads(
+  uploads: ValidatorUploadRecord[],
+  structured: StructuredValidatorJson,
+): ValidatorUploadRecord[] {
   return uploads.map((upload) => {
     const nextStructured = structured.uploads.find((item) => item.upload_id === upload.id);
     if (!nextStructured) return upload;
     const fieldsCount = countStructuredFields(nextStructured.extracted_data);
-    const uploadIntelligence = (nextStructured.extracted_data as { ocr_intelligence?: OcrIntelligenceData }).ocr_intelligence;
+    const uploadIntelligence = (
+      nextStructured.extracted_data as { ocr_intelligence?: OcrIntelligenceData }
+    ).ocr_intelligence;
     const qualityScore = calculateOcrDataQualityScore(
       fieldsCount,
       uploadIntelligence?.missing_critical_fields.length ?? 0,
@@ -5078,7 +6865,10 @@ async function getUploadFileForOcr(upload: ValidatorUploadRecord, localFile?: Fi
   }
   const bucket = upload.storage_bucket || ASP_VALIDATOR_UPLOAD_BUCKET;
   const { data, error } = await supabase.storage.from(bucket).download(upload.file_path);
-  if (error) throw new Error(`Falha ao baixar arquivo do Storage. bucket=${bucket} file_path=${upload.file_path}. ${error.message}`);
+  if (error)
+    throw new Error(
+      `Falha ao baixar arquivo do Storage. bucket=${bucket} file_path=${upload.file_path}. ${error.message}`,
+    );
   return new File([data], upload.file_name || "asp-validator-upload", {
     type: upload.mime_type || data.type || "application/octet-stream",
   });
@@ -5087,7 +6877,9 @@ async function getUploadFileForOcr(upload: ValidatorUploadRecord, localFile?: Fi
 async function createUploadSignedUrl(upload: ValidatorUploadRecord): Promise<string | null> {
   if (!upload.file_path) return null;
   const bucket = upload.storage_bucket || ASP_VALIDATOR_UPLOAD_BUCKET;
-  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(upload.file_path, 60 * 10);
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .createSignedUrl(upload.file_path, 60 * 10);
   if (error) throw error;
   return data.signedUrl;
 }
@@ -5100,15 +6892,22 @@ type OcrResultPayload = {
 
 function parseOcrPayload(payload: unknown): OcrResultPayload {
   const obj = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
-  const status = typeof obj.ocr_status === "string" ? obj.ocr_status : obj.ok ? "completed" : "failed";
+  const status =
+    typeof obj.ocr_status === "string" ? obj.ocr_status : obj.ok ? "completed" : "failed";
   return {
-    ocr_status: ["pending", "processing", "completed", "failed"].includes(status) ? (status as OcrResultPayload["ocr_status"]) : "failed",
+    ocr_status: ["pending", "processing", "completed", "failed"].includes(status)
+      ? (status as OcrResultPayload["ocr_status"])
+      : "failed",
     ocr_text: typeof obj.ocr_text === "string" ? obj.ocr_text : "",
     ocr_error: typeof obj.ocr_error === "string" ? obj.ocr_error : null,
   };
 }
 
-function updateUploadInList(uploads: ValidatorUploadRecord[], uploadId: string, result: OcrResultPayload): ValidatorUploadRecord[] {
+function updateUploadInList(
+  uploads: ValidatorUploadRecord[],
+  uploadId: string,
+  result: OcrResultPayload,
+): ValidatorUploadRecord[] {
   return uploads.map((upload) =>
     upload.id === uploadId
       ? {
@@ -5155,18 +6954,27 @@ function groupUploads(uploads: ValidatorUploadRecord[]): Record<string, Validato
   }, {});
 }
 
-function buildEditablePatchFromStructured(record: ValidatorRecord): Partial<Record<keyof EditableRecord, string>> {
-  const structured = (record.ocr_structured_data && hasJsonContent(record.ocr_structured_data) ? record.ocr_structured_data : record.structured_json) as
-    | StructuredValidatorJson
-    | null;
+function buildEditablePatchFromStructured(
+  record: ValidatorRecord,
+): Partial<Record<keyof EditableRecord, string>> {
+  const structured = (
+    record.ocr_structured_data && hasJsonContent(record.ocr_structured_data)
+      ? record.ocr_structured_data
+      : record.structured_json
+  ) as StructuredValidatorJson | null;
   if (!structured || !hasJsonContent(structured as unknown as Record<string, unknown>)) return {};
   const match = structured.match ?? {};
   const market = structured.market ?? {};
   const prediction = structured.prediction ?? {};
-  const league = [readStringValue(match.competition), readStringValue(match.round)].filter(Boolean).join(" - ");
+  const league = [readStringValue(match.competition), readStringValue(match.round)]
+    .filter(Boolean)
+    .join(" - ");
   const matchDate = parseOcrDateToInput(readStringValue(match.date || structured.fixture?.date));
-  const platform = readStringValue(structured.source_platform) || inferSourcePlatformFromStructured(structured);
-  const sourceProbability = readNumberLike(market.probability_original ?? prediction.source_probability);
+  const platform =
+    readStringValue(structured.source_platform) || inferSourcePlatformFromStructured(structured);
+  const sourceProbability = readNumberLike(
+    market.probability_original ?? prediction.source_probability,
+  );
   const sourceEv = readNumberLike(market.ev_original ?? prediction.source_ev);
   const sourceFairOdd = readNumberLike(market.fair_odd_original ?? prediction.source_fair_odd);
   const offeredOdd = readNumberLike(market.offered_odd ?? prediction.offered_odd);
@@ -5191,7 +6999,11 @@ function buildEditablePatchFromStructured(record: ValidatorRecord): Partial<Reco
 }
 
 function readStringValue(value: unknown): string {
-  return typeof value === "string" ? value.trim() : value === null || value === undefined ? "" : String(value).trim();
+  return typeof value === "string"
+    ? value.trim()
+    : value === null || value === undefined
+      ? ""
+      : String(value).trim();
 }
 
 function readNumberLike(value: unknown): number | null {
@@ -5210,7 +7022,9 @@ function parseOcrDateToInput(value: string): string {
 }
 
 function inferSourcePlatformFromStructured(structured: StructuredValidatorJson): string {
-  const text = normalize(`${structured.raw_ocr_text || ""} ${JSON.stringify(structured.packball_recommendation ?? {})}`);
+  const text = normalize(
+    `${structured.raw_ocr_text || ""} ${JSON.stringify(structured.packball_recommendation ?? {})}`,
+  );
   if (text.includes("packball")) return "PackBall";
   if (text.includes("flashscore")) return "Flashscore";
   return "";

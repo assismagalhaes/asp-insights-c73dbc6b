@@ -11,7 +11,8 @@ export const ASP_VALIDATOR_ALLOWED_MIME = [
   "application/pdf",
 ] as const;
 export const ASP_VALIDATOR_ALLOWED_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "pdf"] as const;
-export const ASP_VALIDATOR_ACCEPT_ATTR = ".png,.jpg,.jpeg,.webp,.pdf,image/png,image/jpeg,image/webp,application/pdf";
+export const ASP_VALIDATOR_ACCEPT_ATTR =
+  ".png,.jpg,.jpeg,.webp,.pdf,image/png,image/jpeg,image/webp,application/pdf";
 export const ASP_VALIDATOR_UPLOAD_HINT = "PNG, JPG, WEBP ou PDF - ate 50 MB";
 
 export type UploadGuardResult = { ok: true } | { ok: false; reason: string };
@@ -40,8 +41,15 @@ export function validateAspValidatorUpload(file: File): UploadGuardResult {
 
   // Fallback por extensao quando file.type vier vazio (comum em alguns browsers / paste).
   const ext = extensionOf(file.name);
-  if (!ASP_VALIDATOR_ALLOWED_EXTENSIONS.includes(ext as (typeof ASP_VALIDATOR_ALLOWED_EXTENSIONS)[number])) {
-    return { ok: false, reason: `Formato nao suportado (.${ext || "?"}). Use PNG, JPG, WEBP ou PDF.` };
+  if (
+    !ASP_VALIDATOR_ALLOWED_EXTENSIONS.includes(
+      ext as (typeof ASP_VALIDATOR_ALLOWED_EXTENSIONS)[number],
+    )
+  ) {
+    return {
+      ok: false,
+      reason: `Formato nao suportado (.${ext || "?"}). Use PNG, JPG, WEBP ou PDF.`,
+    };
   }
   return { ok: true };
 }

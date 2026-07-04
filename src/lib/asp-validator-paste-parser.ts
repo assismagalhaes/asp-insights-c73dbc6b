@@ -28,8 +28,6 @@ import {
   type BttsBlock,
 } from "./asp-validator-football-parsers";
 
-
-
 export type PasteCornerLines = Record<string, number>;
 
 export type PasteCornerSide = {
@@ -147,7 +145,6 @@ export type PastedParsedData = {
   btts_home_away: BttsBlock | null;
 };
 
-
 function emptySide(): PasteCornerSide {
   return {
     total_for: null,
@@ -174,7 +171,10 @@ function emptySide(): PasteCornerSide {
 }
 
 function normalize(s: string): string {
-  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 }
 
 /**
@@ -270,7 +270,10 @@ function brDateToIso(date: string): string {
   return m ? `${m[3]}-${m[2]}-${m[1]}` : "";
 }
 
-function normalizeCornerLine(label: string, side: "over" | "under"): { line_value: number; market_normalized: string } {
+function normalizeCornerLine(
+  label: string,
+  side: "over" | "under",
+): { line_value: number; market_normalized: string } {
   const num = Number(label.replace(/[^0-9.]/g, ""));
   const isInteger = !label.includes(".");
   const line_value = isInteger ? num + 0.5 : num;
@@ -357,7 +360,13 @@ function parseSideFromBlock(block: string): {
   return { marcados, sofridos, total, isAverage };
 }
 
-function fillSideFromText(side: PasteCornerSide, sectionText: string, team: string, otherTeam: string, scope: "general" | "home_away"): void {
+function fillSideFromText(
+  side: PasteCornerSide,
+  sectionText: string,
+  team: string,
+  otherTeam: string,
+  scope: "general" | "home_away",
+): void {
   // 1) blocos TIME: ... (totais inteiros vs medias decimais)
   for (const block of extractTeamBlocks(sectionText, team)) {
     const parsed = parseSideFromBlock(block);
@@ -402,11 +411,15 @@ function fillSideFromText(side: PasteCornerSide, sectionText: string, team: stri
   }
 
   // 3) Marcou primeiro / Mais escanteios 1x2: blocos com "- Atlético GO: 80%"
-  const firstSect = sectionText.match(/Marcou\s+o?\s*primeiro\s+escanteio:?([\s\S]*?)(?:Corrida|Mais\s+escanteios|---|\n\n|$)/i)?.[1] ?? "";
+  const firstSect =
+    sectionText.match(
+      /Marcou\s+o?\s*primeiro\s+escanteio:?([\s\S]*?)(?:Corrida|Mais\s+escanteios|---|\n\n|$)/i,
+    )?.[1] ?? "";
   const firstVal = extractTeamPercent(firstSect, team);
   if (firstVal !== null) side.first_corner_pct = side.first_corner_pct ?? firstVal;
 
-  const mostSect = sectionText.match(/Mais\s+escanteios\s+no\s+jogo[^\n]*([\s\S]*?)(?:---|Partida|$)/i)?.[1] ?? "";
+  const mostSect =
+    sectionText.match(/Mais\s+escanteios\s+no\s+jogo[^\n]*([\s\S]*?)(?:---|Partida|$)/i)?.[1] ?? "";
   const mostVal = extractTeamPercent(mostSect, team);
   if (mostVal !== null) side.most_corners_1x2_pct = side.most_corners_1x2_pct ?? mostVal;
 
@@ -438,7 +451,12 @@ function extractTeamPercent(block: string, team: string): number | null {
 
 function buildNormalizedLines(side: PasteCornerSide): PasteCornerSide["normalized_market_lines"] {
   const out: PasteCornerSide["normalized_market_lines"] = [];
-  const push = (lineKey: string, value_pct: number, dir: "over" | "under", scope: "general" | "home_away") => {
+  const push = (
+    lineKey: string,
+    value_pct: number,
+    dir: "over" | "under",
+    scope: "general" | "home_away",
+  ) => {
     const { line_value, market_normalized } = normalizeCornerLine(lineKey, dir);
     out.push({
       label: `${dir === "under" ? "-" : "+"}${lineKey}`,
@@ -461,12 +479,18 @@ function countNonNull(obj: unknown): number {
   if (typeof obj === "number") return Number.isFinite(obj) ? 1 : 0;
   if (typeof obj === "string") return obj.trim() ? 1 : 0;
   if (Array.isArray(obj)) return obj.reduce<number>((acc, v) => acc + countNonNull(v), 0);
-  if (typeof obj === "object") return Object.values(obj as Record<string, unknown>).reduce<number>((acc, v) => acc + countNonNull(v), 0);
+  if (typeof obj === "object")
+    return Object.values(obj as Record<string, unknown>).reduce<number>(
+      (acc, v) => acc + countNonNull(v),
+      0,
+    );
   return 0;
 }
 
 function extractPerformanceScopeTexts(text: string): { generalText: string; homeAwayText: string } {
-  const starts = [...text.matchAll(/^\s*---\s*DESEMPENHO\s+GERAL[^(\n]*(?:\([^\n]*\))?\s*---\s*$/gim)];
+  const starts = [
+    ...text.matchAll(/^\s*---\s*DESEMPENHO\s+GERAL[^(\n]*(?:\([^\n]*\))?\s*---\s*$/gim),
+  ];
   if (starts.length === 0) return { generalText: "", homeAwayText: "" };
 
   const generalChunks: string[] = [];
@@ -486,7 +510,11 @@ function extractPerformanceScopeTexts(text: string): { generalText: string; home
   }
 
   const chooseChunk = (chunks: string[]) => {
-    const withFt = chunks.filter((chunk) => /\bft\b|jogo\s+completo|full\s*time/i.test(chunk.match(/Filtro\s*:\s*([^\n\r]+)/i)?.[1] ?? chunk));
+    const withFt = chunks.filter((chunk) =>
+      /\bft\b|jogo\s+completo|full\s*time/i.test(
+        chunk.match(/Filtro\s*:\s*([^\n\r]+)/i)?.[1] ?? chunk,
+      ),
+    );
     return (withFt.at(-1) ?? chunks.at(-1) ?? "") + "\n";
   };
 
@@ -495,11 +523,17 @@ function extractPerformanceScopeTexts(text: string): { generalText: string; home
 
 function inferSport(market: string): string {
   const n = normalize(market);
-  if (n.includes("escanteio") || n.includes("corner") || n.includes("gol") || n.includes("btts")) return "Futebol";
+  if (n.includes("escanteio") || n.includes("corner") || n.includes("gol") || n.includes("btts"))
+    return "Futebol";
   return "Futebol";
 }
 
-function classifyMarket(rawMarket: string): { name: string; pick: string; line: number | null; normalized: string } {
+function classifyMarket(rawMarket: string): {
+  name: string;
+  pick: string;
+  line: number | null;
+  normalized: string;
+} {
   const m = rawMarket.trim();
   const lineN = parseNum(m.match(/(\d+(?:[.,]\d+)?)/)?.[1]);
   const n = normalize(m);
@@ -508,7 +542,12 @@ function classifyMarket(rawMarket: string): { name: string; pick: string; line: 
     const pick = m;
     const name = "Escanteios";
     const dir = isUnder ? "under" : "over";
-    const normalized = lineN !== null ? (dir === "over" ? `Mais de ${lineN} escanteios` : `Menos de ${lineN} escanteios`) : m;
+    const normalized =
+      lineN !== null
+        ? dir === "over"
+          ? `Mais de ${lineN} escanteios`
+          : `Menos de ${lineN} escanteios`
+        : m;
     return { name, pick, line: lineN, normalized };
   }
   return { name: m, pick: m, line: lineN, normalized: m };
@@ -521,7 +560,10 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
   // --- Cabecalho do prognostico ---
   // Aceita "Cusco FC (2.62) x Cienciano (2.44)" e tambem "TimeA x TimeB"
   const cleanTeamName = (s: string): string =>
-    s.replace(/\(\s*\d+(?:[.,]\d+)?\s*\)/g, "").replace(/\s+/g, " ").trim();
+    s
+      .replace(/\(\s*\d+(?:[.,]\d+)?\s*\)/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
   const extractOdd = (s: string): number | null =>
     parseNum(s.match(/\(\s*(\d+(?:[.,]\d+)?)\s*\)/)?.[1] ?? null);
 
@@ -553,20 +595,28 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
 
   const marketRaw = text.match(/Mercado\s*:\s*([^\n\r]+)/i)?.[1]?.trim() ?? "";
   const marketInfo = classifyMarket(marketRaw);
-  const detection = detectFootballMarketType(text, marketRaw, marketInfo.pick, home_team, away_team);
-
+  const detection = detectFootballMarketType(
+    text,
+    marketRaw,
+    marketInfo.pick,
+    home_team,
+    away_team,
+  );
 
   const probability = parseNum(
     text.match(/Chance\s*\(?%?\)?\s*:\s*(-?\d+(?:[.,]\d+)?)/i)?.[1] ??
       text.match(/Probabilidade\s*:\s*(-?\d+(?:[.,]\d+)?)/i)?.[1],
   );
-  const offered_odd = parseNum(text.match(/Odd\s+(?:Oferecida|Ofertada|Oferecidas)\s*:\s*(-?\d+(?:[.,]\d+)?)/i)?.[1]);
+  const offered_odd = parseNum(
+    text.match(/Odd\s+(?:Oferecida|Ofertada|Oferecidas)\s*:\s*(-?\d+(?:[.,]\d+)?)/i)?.[1],
+  );
   const fair_odd = parseNum(
     text.match(/Odd\s+Esperada(?:\s*\(VE\))?\s*:\s*(-?\d+(?:[.,]\d+)?)/i)?.[1] ??
       text.match(/Odd\s+Justa\s*:\s*(-?\d+(?:[.,]\d+)?)/i)?.[1],
   );
   // EV bruto da fonte (PackBall pode mandar "0.47" como gap odd-odd, nao percentual real).
-  const ev_raw_match = text.match(/\bEV\s*:\s*(-?\d+(?:[.,]\d+)?)/i) ?? text.match(/\bVE\s*:\s*(-?\d+(?:[.,]\d+)?)/i);
+  const ev_raw_match =
+    text.match(/\bEV\s*:\s*(-?\d+(?:[.,]\d+)?)/i) ?? text.match(/\bVE\s*:\s*(-?\d+(?:[.,]\d+)?)/i);
   const ev_original = parseNum(ev_raw_match?.[1]);
   const ev_display = ev_raw_match?.[1] ?? null;
 
@@ -583,8 +633,10 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
   // se bate com odd_gap → gap de odd; caso contrario, desconhecido.
   let source_ev_type: "percent" | "odd_gap_or_unknown" | null = null;
   if (ev_original !== null) {
-    if (calculated_ev_pct !== null && Math.abs(ev_original - calculated_ev_pct) <= 1.5) source_ev_type = "percent";
-    else if (odd_gap !== null && Math.abs(ev_original - odd_gap) <= 0.05) source_ev_type = "odd_gap_or_unknown";
+    if (calculated_ev_pct !== null && Math.abs(ev_original - calculated_ev_pct) <= 1.5)
+      source_ev_type = "percent";
+    else if (odd_gap !== null && Math.abs(ev_original - odd_gap) <= 0.05)
+      source_ev_type = "odd_gap_or_unknown";
     else source_ev_type = "odd_gap_or_unknown";
   }
 
@@ -592,7 +644,6 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
   //     respeitando ordem intercalada das secoes (Total Gols, Ambas Marcam, etc.) ---
   const { generalText, homeAwayText } = partitionByLocationScope(text);
   const hasHomeAwaySection = homeAwayText.trim().length > 0;
-
 
   const general = { home: emptySide(), away: emptySide() };
   fillSideFromText(general.home, generalText, home_team, away_team, "general");
@@ -604,15 +655,29 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
     fillSideFromText(homeAway.away, homeAwayText, away_team, home_team, "home_away");
     // Espelhar campos casa/fora nos sides "general" para o simulador (que le home_away_avg_total etc.)
     general.home.home_away_avg_for = homeAway.home.home_away_avg_for ?? homeAway.home.avg_for;
-    general.home.home_away_avg_against = homeAway.home.home_away_avg_against ?? homeAway.home.avg_against;
+    general.home.home_away_avg_against =
+      homeAway.home.home_away_avg_against ?? homeAway.home.avg_against;
     general.home.home_away_avg_total = homeAway.home.home_away_avg_total ?? homeAway.home.avg_total;
-    general.home.home_away_over_lines = { ...homeAway.home.home_away_over_lines, ...homeAway.home.over_lines };
-    general.home.home_away_under_lines = { ...homeAway.home.home_away_under_lines, ...homeAway.home.under_lines };
+    general.home.home_away_over_lines = {
+      ...homeAway.home.home_away_over_lines,
+      ...homeAway.home.over_lines,
+    };
+    general.home.home_away_under_lines = {
+      ...homeAway.home.home_away_under_lines,
+      ...homeAway.home.under_lines,
+    };
     general.away.home_away_avg_for = homeAway.away.home_away_avg_for ?? homeAway.away.avg_for;
-    general.away.home_away_avg_against = homeAway.away.home_away_avg_against ?? homeAway.away.avg_against;
+    general.away.home_away_avg_against =
+      homeAway.away.home_away_avg_against ?? homeAway.away.avg_against;
     general.away.home_away_avg_total = homeAway.away.home_away_avg_total ?? homeAway.away.avg_total;
-    general.away.home_away_over_lines = { ...homeAway.away.home_away_over_lines, ...homeAway.away.over_lines };
-    general.away.home_away_under_lines = { ...homeAway.away.home_away_under_lines, ...homeAway.away.under_lines };
+    general.away.home_away_over_lines = {
+      ...homeAway.away.home_away_over_lines,
+      ...homeAway.away.over_lines,
+    };
+    general.away.home_away_under_lines = {
+      ...homeAway.away.home_away_under_lines,
+      ...homeAway.away.under_lines,
+    };
   }
 
   general.home.normalized_market_lines = buildNormalizedLines(general.home);
@@ -669,19 +734,37 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
   // ele pode nao cair em generalText. Reparseia do texto completo nesse caso.
   const isPerfEmpty = (b: GeneralPerformanceBlock | null) =>
     !b ||
-    (b.home.wins === null && b.home.draws === null && b.home.losses === null &&
-      b.home.efficiency_pct === null && b.home.avg_possession_pct === null &&
-      b.away.wins === null && b.away.draws === null && b.away.losses === null &&
-      b.away.efficiency_pct === null && b.away.avg_possession_pct === null);
+    (b.home.wins === null &&
+      b.home.draws === null &&
+      b.home.losses === null &&
+      b.home.efficiency_pct === null &&
+      b.home.avg_possession_pct === null &&
+      b.away.wins === null &&
+      b.away.draws === null &&
+      b.away.losses === null &&
+      b.away.efficiency_pct === null &&
+      b.away.avg_possession_pct === null);
   if (wantsGeneralPerf && isPerfEmpty(generalPerf)) {
     const performanceBlocks = extractPerformanceScopeTexts(text);
     if (performanceBlocks.generalText) {
-      generalPerf = parseFootballGeneralPerformance(performanceBlocks.generalText, home_team, away_team, detection.period);
+      generalPerf = parseFootballGeneralPerformance(
+        performanceBlocks.generalText,
+        home_team,
+        away_team,
+        detection.period,
+      );
     }
   }
-  const performanceBlocks = wantsGeneralPerf ? extractPerformanceScopeTexts(text) : { generalText: "", homeAwayText: "" };
+  const performanceBlocks = wantsGeneralPerf
+    ? extractPerformanceScopeTexts(text)
+    : { generalText: "", homeAwayText: "" };
   const generalPerfHA: GeneralPerformanceBlock | null = wantsGeneralPerf
-    ? parseFootballGeneralPerformance(performanceBlocks.homeAwayText || homeAwayText, home_team, away_team, detection.period)
+    ? parseFootballGeneralPerformance(
+        performanceBlocks.homeAwayText || homeAwayText,
+        home_team,
+        away_team,
+        detection.period,
+      )
     : null;
   const bttsBlock: BttsBlock | null = goalsBlock ? parseFootballBttsData(goalsBlock) : null;
   const bttsBlockHA: BttsBlock | null = goalsBlock
@@ -699,7 +782,6 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
       }
     : null;
 
-
   const missing_critical_fields: string[] = [];
   if (!home_team) missing_critical_fields.push("mandante");
   if (!away_team) missing_critical_fields.push("visitante");
@@ -709,7 +791,14 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
 
   const structured_fields_count = countNonNull({
     match: { home_team, away_team, competition, round, date, time },
-    market: { name: marketInfo.name, line: marketInfo.line, offered_odd, fair_odd, probability, ev_original },
+    market: {
+      name: marketInfo.name,
+      line: marketInfo.line,
+      offered_odd,
+      fair_odd,
+      probability,
+      ev_original,
+    },
     corners,
   });
   const has_structured_ocr_data = structured_fields_count >= 4;
@@ -717,15 +806,20 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
     0,
     Math.min(
       1,
-      0.2 + Math.min(0.6, structured_fields_count * 0.02) - Math.min(0.4, missing_critical_fields.length * 0.08),
+      0.2 +
+        Math.min(0.6, structured_fields_count * 0.02) -
+        Math.min(0.4, missing_critical_fields.length * 0.08),
     ),
   );
 
   notes.push("Dados interpretados a partir de texto colado (input_source: pasted_text).");
-  if (hasHomeAwaySection) notes.push("Identificadas duas secoes: medias gerais e medias casa/fora.");
+  if (hasHomeAwaySection)
+    notes.push("Identificadas duas secoes: medias gerais e medias casa/fora.");
   if (ev_original !== null) {
     if (source_ev_type === "percent") {
-      notes.push(`EV bruto da fonte (${ev_display}) compativel com EV percentual recalculado (${calculated_ev_pct}%).`);
+      notes.push(
+        `EV bruto da fonte (${ev_display}) compativel com EV percentual recalculado (${calculated_ev_pct}%).`,
+      );
     } else {
       notes.push(
         `EV bruto da fonte (${ev_display}) NAO e percentual confiavel — provavel gap de odd. EV recalculado pelo ASP: ${calculated_ev_pct ?? "n/d"}%.`,
@@ -733,7 +827,9 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
     }
   }
   if (home_moneyline_odd !== null || away_moneyline_odd !== null) {
-    notes.push(`Odds 1x2 detectadas na linha "Partida": ${home_team} ${home_moneyline_odd ?? "?"} x ${away_moneyline_odd ?? "?"} ${away_team}.`);
+    notes.push(
+      `Odds 1x2 detectadas na linha "Partida": ${home_team} ${home_moneyline_odd ?? "?"} x ${away_moneyline_odd ?? "?"} ${away_team}.`,
+    );
   }
 
   return {
@@ -799,7 +895,5 @@ export function parsePastedPrognostico(raw: string): PastedParsedData {
     general_performance_home_away: generalPerfHA,
     btts: bttsBlock,
     btts_home_away: bttsBlockHA,
-
   };
 }
-

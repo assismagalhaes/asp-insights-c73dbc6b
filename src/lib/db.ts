@@ -187,7 +187,8 @@ export function calcEdge(probabilidadePct: number, odd: number): number {
 
 /** Dados técnicos efetivos: contexto_modelo, dados_tecnicos ou observacoes legadas. */
 export function getDadosTecnicos(
-  p: Pick<Prognostico, "dados_tecnicos" | "observacoes"> & Partial<Pick<Prognostico, "contexto_modelo">>,
+  p: Pick<Prognostico, "dados_tecnicos" | "observacoes"> &
+    Partial<Pick<Prognostico, "contexto_modelo">>,
 ): string | null {
   return (
     (p.contexto_modelo && p.contexto_modelo.trim()) ||
@@ -201,12 +202,17 @@ const aiDb = supabase as unknown as {
   from: (table: string) => {
     select: (columns?: string) => any;
     insert: (values: Record<string, unknown> | Record<string, unknown>[]) => any;
-    upsert: (values: Record<string, unknown> | Record<string, unknown>[], opts?: Record<string, unknown>) => any;
+    upsert: (
+      values: Record<string, unknown> | Record<string, unknown>[],
+      opts?: Record<string, unknown>,
+    ) => any;
     update: (values: Record<string, unknown>) => any;
   };
 };
 
-export function normalizeAiDecision(decision: string | null | undefined): "CONFIRMAR" | "PULAR" | null {
+export function normalizeAiDecision(
+  decision: string | null | undefined,
+): "CONFIRMAR" | "PULAR" | null {
   if (!decision) return null;
   const d = decision.toUpperCase().trim();
   if (d.includes("PULAR") || d.includes("PASS") || d.includes("AGUARDAR")) return "PULAR";
@@ -226,8 +232,14 @@ export function extractRiskTags(text: string | null | undefined): string[] {
   const tags: string[] = [];
   const checks: Array<[string, RegExp]> = [
     ["info_ausente", /não encontrado|nao encontrado|ausente|incert|não confirmad|nao confirmad/],
-    ["risco_estrutural", /risco estrutural|lineup|escalação|escalacao|rotação|rotacao|desfalque|lesão|lesao|questionável|questionavel/],
-    ["fonte_fraca", /fonte insuficiente|fonte fraca|sem fonte|desatualizad|notícia antiga|noticia antiga/],
+    [
+      "risco_estrutural",
+      /risco estrutural|lineup|escalação|escalacao|rotação|rotacao|desfalque|lesão|lesao|questionável|questionavel/,
+    ],
+    [
+      "fonte_fraca",
+      /fonte insuficiente|fonte fraca|sem fonte|desatualizad|notícia antiga|noticia antiga/,
+    ],
     ["duplicidade", /duplicidade|correlaç|correlac|redundan/],
     ["volatilidade", /volátil|volatil|variância|variancia|mercado volátil|mercado volatil/],
     ["clima", /clima|vento|chuva|temperatura|weather/],
@@ -261,7 +273,9 @@ export async function saveAnaliseIaSnapshot(input: AnaliseIaInput): Promise<Anal
   return data as AnaliseIa;
 }
 
-async function createAiFeedbackForResultado(input: Omit<ResultadoRow, "id" | "created_at">): Promise<void> {
+async function createAiFeedbackForResultado(
+  input: Omit<ResultadoRow, "id" | "created_at">,
+): Promise<void> {
   if (input.resultado !== "GREEN" && input.resultado !== "RED") return;
 
   const { data: prognostico, error: progError } = await supabase
@@ -297,13 +311,15 @@ async function createAiFeedbackForResultado(input: Omit<ResultadoRow, "id" | "cr
   const rows = ((analises ?? []) as AnaliseIa[]).filter((a) => a.decisao_sugerida);
   if (!rows.length) return;
 
-  const decisaoHumana = normalizeAiDecision((validacao as Validacao | null)?.decisao ?? p.status_validacao);
+  const decisaoHumana = normalizeAiDecision(
+    (validacao as Validacao | null)?.decisao ?? p.status_validacao,
+  );
   const stakeHumana = Number((validacao as Validacao | null)?.stake_confirmada ?? p.stake ?? 0);
   const oddUsada = getOddEfetiva(p);
   const edgeUsado = getEdgeEfetivo(p);
   const lucroTeorico = input.lucro_prejuizo;
-  const lucroFinanceiro = contaBankroll ?input.lucro_prejuizo : 0;
-  const resultadoFinanceiro = contaBankroll ?input.resultado : null;
+  const lucroFinanceiro = contaBankroll ? input.lucro_prejuizo : 0;
+  const resultadoFinanceiro = contaBankroll ? input.resultado : null;
   const feedbackRows = rows.map((a) => {
     const decisaoIa = normalizeAiDecision(a.decisao_sugerida);
     const acertouIa = decisionHit(decisaoIa, input.resultado);
@@ -338,14 +354,17 @@ async function createAiFeedbackForResultado(input: Omit<ResultadoRow, "id" | "cr
       buscas_realizadas: a.buscas_realizadas,
       acertou_ia: acertouIa,
       acertou_humano: acertouHumano,
-      divergencia_ia_humano: decisaoIa != null && decisaoHumana != null ?decisaoIa !== decisaoHumana : null,
+      divergencia_ia_humano:
+        decisaoIa != null && decisaoHumana != null ? decisaoIa !== decisaoHumana : null,
       updated_at: new Date().toISOString(),
     };
   });
 
   const { error } = await aiDb
     .from("feedback_ia_resultados")
-    .upsert(feedbackRows as Record<string, unknown>[], { onConflict: "prognostico_id,analise_ia_id" });
+    .upsert(feedbackRows as Record<string, unknown>[], {
+      onConflict: "prognostico_id,analise_ia_id",
+    });
   if (error) console.warn("[Aprendizado IA] Feedback não salvo:", error.message);
 }
 
@@ -387,7 +406,7 @@ export interface Configuracao {
   updated_at: string;
 }
 
-const num = (v: unknown) => (v == null ?0 : Number(v));
+const num = (v: unknown) => (v == null ? 0 : Number(v));
 const numOrNull = (v: unknown) => {
   if (v == null || v === "") return null;
   const n = Number(String(v).replace(",", "."));
@@ -409,11 +428,9 @@ function parseNumberFromText(text: string, patterns: RegExp[]): number | null {
 }
 
 function extractOddsContext(row: Record<string, unknown>) {
-  const text = [
-    row.dados_tecnicos,
-    row.contexto_modelo,
-    row.observacoes,
-  ].map((value) => String(value ?? "")).join("\n");
+  const text = [row.dados_tecnicos, row.contexto_modelo, row.observacoes]
+    .map((value) => String(value ?? ""))
+    .join("\n");
 
   const marketBase = parseNumberFromText(text, [
     /\bodd_mercado_base\s*=\s*([0-9]+(?:[.,][0-9]+)?)/i,
@@ -441,7 +458,8 @@ function extractOddsContext(row: Record<string, unknown>) {
 
 const mapPrognostico = (r: Record<string, unknown>): Prognostico => {
   const oddsContext = extractOddsContext(r);
-  const oddMercadoBase = numOrNull(r.odd_mercado_base) ?? oddsContext.marketBase ?? oddsContext.median;
+  const oddMercadoBase =
+    numOrNull(r.odd_mercado_base) ?? oddsContext.marketBase ?? oddsContext.median;
   const oddMediana = numOrNull(r.odd_mediana) ?? oddsContext.median ?? oddMercadoBase;
   return {
     ...(r as unknown as Prognostico),
@@ -457,7 +475,7 @@ const mapPrognostico = (r: Record<string, unknown>): Prognostico => {
     edge: num(r.edge),
     edge_ajustado: numOrNull(r.edge_ajustado),
     stake: num(r.stake),
-    lucro_prejuizo: r.lucro_prejuizo == null ?null : Number(r.lucro_prejuizo),
+    lucro_prejuizo: r.lucro_prejuizo == null ? null : Number(r.lucro_prejuizo),
   };
 };
 
@@ -473,9 +491,10 @@ export function usePrognosticos() {
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []).map((r: Record<string, unknown>) => {
-        const rs = (r.resultados as Array<{ placar_final: string | null; created_at: string }> | null) ?? [];
+        const rs =
+          (r.resultados as Array<{ placar_final: string | null; created_at: string }> | null) ?? [];
         const last = rs.length
-          ?[...rs].sort((a, b) => (a.created_at < b.created_at ?1 : -1))[0]
+          ? [...rs].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0]
           : null;
         return { ...mapPrognostico(r), placar_final: last?.placar_final ?? null };
       });
@@ -534,7 +553,9 @@ function mapAspValidatorToPrognostico(row: Record<string, unknown>): Prognostico
   const fairOdd = num(row.adjusted_fair_odd) || (probability > 0 ? 100 / probability : 1);
   return {
     id: `asp-validator-${String(row.id)}`,
-    data: String(row.result_settled_at ?? row.match_date ?? String(row.created_at ?? "").slice(0, 10)),
+    data: String(
+      row.result_settled_at ?? row.match_date ?? String(row.created_at ?? "").slice(0, 10),
+    ),
     hora: null,
     esporte: String(row.sport ?? ""),
     liga: String(row.league ?? ""),
@@ -609,7 +630,11 @@ export function useCreatePrognostico() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: PrognosticoInput) => {
-      const { data, error } = await supabase.from("prognosticos").insert(input as never).select().single();
+      const { data, error } = await supabase
+        .from("prognosticos")
+        .insert(input as never)
+        .select()
+        .single();
       if (error) throw error;
       return data;
     },
@@ -622,7 +647,12 @@ export function useUpdatePrognostico() {
   return useMutation({
     mutationFn: async ({ id, ...patch }: Partial<Prognostico> & { id: string }) => {
       const { placar_final: _pf, ...rest } = patch;
-      const { data, error } = await supabase.from("prognosticos").update(rest as never).eq("id", id).select().single();
+      const { data, error } = await supabase
+        .from("prognosticos")
+        .update(rest as never)
+        .eq("id", id)
+        .select()
+        .single();
       if (error) throw error;
       return data;
     },
@@ -672,16 +702,13 @@ export function useCreateValidacao() {
       const stakeEspelhada =
         input.decisao === "PULAR"
           ? Number(input.stake_confirmada ?? 1) || 1
-          : input.stake_confirmada ?? undefined;
+          : (input.stake_confirmada ?? undefined);
       const prognosticoPatch: { status_validacao: Status; stake?: number } = {
         status_validacao: input.decisao as Status,
       };
       if (stakeEspelhada !== undefined) prognosticoPatch.stake = stakeEspelhada;
       // espelha decisão no prognóstico
-      await supabase
-        .from("prognosticos")
-        .update(prognosticoPatch)
-        .eq("id", input.prognostico_id);
+      await supabase.from("prognosticos").update(prognosticoPatch).eq("id", input.prognostico_id);
       return data;
     },
     onSuccess: () => {
@@ -764,7 +791,12 @@ export function useUpdateConfiguracao() {
   return useMutation({
     mutationFn: async (patch: Partial<Configuracao> & { id: string }) => {
       const { id, ...rest } = patch;
-      const { data, error } = await supabase.from("configuracoes").update(rest).eq("id", id).select().single();
+      const { data, error } = await supabase
+        .from("configuracoes")
+        .update(rest)
+        .eq("id", id)
+        .select()
+        .single();
       if (error) throw error;
       return data;
     },
@@ -773,7 +805,13 @@ export function useUpdateConfiguracao() {
 }
 
 // ===== Constantes auxiliares =====
-export const ESPORTES_DEFAULT = ["Futebol", "Basketball", "Baseball", "American Football", "Hockey"];
+export const ESPORTES_DEFAULT = [
+  "Futebol",
+  "Basketball",
+  "Baseball",
+  "American Football",
+  "Hockey",
+];
 
 export const MERCADOS_DEFAULT = [
   "Moneyline",
@@ -808,7 +846,8 @@ export function normalizeMercadoPadrao(mercado: string, esporte?: string | null)
   if (/handicap|spread|run line/.test(normalized)) return "Handicap Asiático";
   if (/moneyline|home\/away|home away/.test(normalized)) return "Moneyline";
   if (/over\/under pontos|total de pontos|pontos/.test(normalized)) return "Total de Pontos";
-  if (/over\/under corridas|total de corridas|corridas|runs/.test(normalized)) return "Total de Corridas";
+  if (/over\/under corridas|total de corridas|corridas|runs/.test(normalized))
+    return "Total de Corridas";
   if (/over\/under gols|total de gols|gols|goals/.test(normalized)) return "Total de Gols";
   if (/over\/under|total/.test(normalized)) {
     if (sport.includes("baseball")) return "Total de Corridas";
@@ -839,7 +878,10 @@ const ESPORTE_ALIAS: Record<string, string> = {
 };
 
 /** Normaliza par (esporte, liga) para a estrutura oficial. */
-export function normalizeEsporteLiga(input: { esporte?: string | null; liga?: string | null }): { esporte: string; liga: string | null } {
+export function normalizeEsporteLiga(input: { esporte?: string | null; liga?: string | null }): {
+  esporte: string;
+  liga: string | null;
+} {
   const rawEsp = (input.esporte ?? "").trim();
   const rawLiga = (input.liga ?? "").trim();
   const upEsp = rawEsp.toUpperCase();
@@ -1026,7 +1068,10 @@ export function useCancelarPrognostico() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("prognosticos").update({ status_publicacao: "CANCELADO" }).eq("id", id);
+      const { error } = await supabase
+        .from("prognosticos")
+        .update({ status_publicacao: "CANCELADO" })
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["prognosticos"] }),

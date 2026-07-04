@@ -12,11 +12,11 @@ import { getBestBookmaker, getMarketBaseOdd, getOfferedOdd } from "@/lib/mlb/mar
 import { matchMlbTeamName } from "@/utils/mlbTeamNameMap";
 
 export const MLB_SIMPLE_RATING_WEIGHTS = {
-  srs: 0.30,
+  srs: 0.3,
   runDiffPerGame: 0.25,
   pythWinPct: 0.15,
-  winPct: 0.10,
-  recentFormLast30: 0.10,
+  winPct: 0.1,
+  recentFormLast30: 0.1,
   homeRoadSplit: 0.05,
   luckRegression: 0.05,
 } satisfies MlbMoneylineProjectionConfig["weights"];
@@ -30,15 +30,15 @@ export const MLB_MONEYLINE_THRESHOLDS = {
   monitorEv: 0.02,
   monitorProbGap: 0.025,
   minOdd: 1.55,
-  maxOdd: 2.80,
+  maxOdd: 2.8,
 } satisfies MlbMoneylineProjectionConfig["thresholds"];
 
 export const MLB_MONEYLINE_PROJECTION_CONFIG: MlbMoneylineProjectionConfig = {
   weights: MLB_SIMPLE_RATING_WEIGHTS,
   homeFieldAdvantage: MLB_HOME_FIELD_ADVANTAGE,
   logisticScale: MLB_MONEYLINE_LOGISTIC_SCALE,
-  minModelProb: 0.30,
-  maxModelProb: 0.70,
+  minModelProb: 0.3,
+  maxModelProb: 0.7,
   thresholds: MLB_MONEYLINE_THRESHOLDS,
 };
 
@@ -81,7 +81,9 @@ export function calculateMlbTeamSimpleRating(input: MlbTeamRatingInput): MlbTeam
   };
 }
 
-export function calculateMlbMoneylineProjection(input: MlbMoneylineProjectionInput): MlbMoneylineScreenerRow {
+export function calculateMlbMoneylineProjection(
+  input: MlbMoneylineProjectionInput,
+): MlbMoneylineScreenerRow {
   const config = mergeConfig(input.config);
   const { game } = input;
   const moneyline = pickMoneylineOdds(game);
@@ -102,9 +104,18 @@ export function calculateMlbMoneylineProjection(input: MlbMoneylineProjectionInp
   const homeMarketBaseOdd = getMarketBaseOdd(moneyline.homeOdd) as number;
   const awayMarketBaseOdd = getMarketBaseOdd(moneyline.awayOdd) as number;
   const market = calculateNoVigMoneylineMarket(homeMarketBaseOdd, awayMarketBaseOdd);
-  const homeRating = calculateMlbTeamSimpleRating({ standings: game.home_standings as MlbTeamStanding, venue: "home", config });
-  const awayRating = calculateMlbTeamSimpleRating({ standings: game.away_standings as MlbTeamStanding, venue: "away", config });
-  const ratingDiff = homeRating.team_simple_rating - awayRating.team_simple_rating + config.homeFieldAdvantage;
+  const homeRating = calculateMlbTeamSimpleRating({
+    standings: game.home_standings as MlbTeamStanding,
+    venue: "home",
+    config,
+  });
+  const awayRating = calculateMlbTeamSimpleRating({
+    standings: game.away_standings as MlbTeamStanding,
+    venue: "away",
+    config,
+  });
+  const ratingDiff =
+    homeRating.team_simple_rating - awayRating.team_simple_rating + config.homeFieldAdvantage;
   const homeModelProb = clampNumber(
     logistic(ratingDiff * config.logisticScale),
     config.minModelProb,
@@ -129,11 +140,15 @@ export function calculateMlbMoneylineProjection(input: MlbMoneylineProjectionInp
   const candidateStatus = classifyCandidate({
     recommendedEv: recommendation.recommended_ev,
     recommendedOdd: recommendation.recommended_odd,
-    recommendedProbGap: recommendation.side === "home"
-      ? homeModelProb - market.home_market_implied_prob_no_vig
-      : recommendation.side === "away"
-        ? awayModelProb - market.away_market_implied_prob_no_vig
-        : Math.max(homeModelProb - market.home_market_implied_prob_no_vig, awayModelProb - market.away_market_implied_prob_no_vig),
+    recommendedProbGap:
+      recommendation.side === "home"
+        ? homeModelProb - market.home_market_implied_prob_no_vig
+        : recommendation.side === "away"
+          ? awayModelProb - market.away_market_implied_prob_no_vig
+          : Math.max(
+              homeModelProb - market.home_market_implied_prob_no_vig,
+              awayModelProb - market.away_market_implied_prob_no_vig,
+            ),
     config,
   });
 
@@ -155,16 +170,18 @@ export function calculateMlbMoneylineProjection(input: MlbMoneylineProjectionInp
     away_ev: round(awayEv, 4),
     recommended_side: recommendation.recommended_side,
     recommended_odd: recommendation.recommended_odd,
-    recommended_odd_mediana: recommendation.side === "home"
-      ? homeMarketBaseOdd
-      : recommendation.side === "away"
-        ? awayMarketBaseOdd
-        : null,
-    recommended_bookmaker_melhor: recommendation.side === "home"
-      ? getBestBookmaker(moneyline.homeOdd)
-      : recommendation.side === "away"
-        ? getBestBookmaker(moneyline.awayOdd)
-        : null,
+    recommended_odd_mediana:
+      recommendation.side === "home"
+        ? homeMarketBaseOdd
+        : recommendation.side === "away"
+          ? awayMarketBaseOdd
+          : null,
+    recommended_bookmaker_melhor:
+      recommendation.side === "home"
+        ? getBestBookmaker(moneyline.homeOdd)
+        : recommendation.side === "away"
+          ? getBestBookmaker(moneyline.awayOdd)
+          : null,
     recommended_model_prob: recommendation.recommended_model_prob,
     recommended_fair_odd: recommendation.recommended_fair_odd,
     recommended_ev: recommendation.recommended_ev,
@@ -190,7 +207,10 @@ export function calculateMlbMoneylineProjection(input: MlbMoneylineProjectionInp
   };
 }
 
-export function calculateNoVigMoneylineMarket(homeOdd: number, awayOdd: number): MlbNoVigMoneylineMarket {
+export function calculateNoVigMoneylineMarket(
+  homeOdd: number,
+  awayOdd: number,
+): MlbNoVigMoneylineMarket {
   const homeRaw = 1 / homeOdd;
   const awayRaw = 1 / awayOdd;
   const sum = homeRaw + awayRaw;
@@ -295,11 +315,17 @@ function pickMoneylineOdds(game: EnrichedMlbGame): {
   alerts: string[];
 } {
   const moneylineMarkets = game.markets.filter((market) => isMoneylineMarket(market.market));
-  const homeMatches = moneylineMarkets.filter((market) => market.odd && isTeamPick(market.pick, game.home_team_key, game.home_team));
-  const awayMatches = moneylineMarkets.filter((market) => market.odd && isTeamPick(market.pick, game.away_team_key, game.away_team));
+  const homeMatches = moneylineMarkets.filter(
+    (market) => market.odd && isTeamPick(market.pick, game.home_team_key, game.home_team),
+  );
+  const awayMatches = moneylineMarkets.filter(
+    (market) => market.odd && isTeamPick(market.pick, game.away_team_key, game.away_team),
+  );
   const alerts: string[] = [];
-  if (homeMatches.length > 1) alerts.push("Odds Moneyline duplicadas para o mandante; usando a maior odd disponivel.");
-  if (awayMatches.length > 1) alerts.push("Odds Moneyline duplicadas para o visitante; usando a maior odd disponivel.");
+  if (homeMatches.length > 1)
+    alerts.push("Odds Moneyline duplicadas para o mandante; usando a maior odd disponivel.");
+  if (awayMatches.length > 1)
+    alerts.push("Odds Moneyline duplicadas para o visitante; usando a maior odd disponivel.");
   return {
     homeOdd: pickBestOdd(homeMatches),
     awayOdd: pickBestOdd(awayMatches),
@@ -319,9 +345,11 @@ function isTeamPick(pick: string | null, teamKey: string | null, fallbackName: s
 }
 
 function pickBestOdd(markets: MlbMarketOdd[]) {
-  return markets
-    .filter((market) => Number.isFinite(Number(market.odd)) && Number(market.odd) > 1)
-    .sort((a, b) => Number(b.odd) - Number(a.odd))[0] ?? null;
+  return (
+    markets
+      .filter((market) => Number.isFinite(Number(market.odd)) && Number(market.odd) > 1)
+      .sort((a, b) => Number(b.odd) - Number(a.odd))[0] ?? null
+  );
 }
 
 function getMissingProjectionFields(
@@ -411,7 +439,12 @@ function classifyCandidate(input: {
   const odd = input.recommendedOdd ?? 0;
   const gap = input.recommendedProbGap;
   const { thresholds } = input.config;
-  if (ev >= thresholds.analyzeEv && gap >= thresholds.analyzeProbGap && odd >= thresholds.minOdd && odd <= thresholds.maxOdd) {
+  if (
+    ev >= thresholds.analyzeEv &&
+    gap >= thresholds.analyzeProbGap &&
+    odd >= thresholds.minOdd &&
+    odd <= thresholds.maxOdd
+  ) {
     return "analisar";
   }
   if (ev >= thresholds.monitorEv || gap >= thresholds.monitorProbGap) return "monitorar";
@@ -434,13 +467,23 @@ function buildReasons(input: {
   const selected = input.recommendationSide === "home" ? input.homeRating : input.awayRating;
   const opponent = input.recommendationSide === "home" ? input.awayRating : input.homeRating;
   const selectedOdd = input.recommendationSide === "home" ? input.homeOdd : input.awayOdd;
-  const selectedFairOdd = input.recommendationSide === "home" ? input.homeFairOdd : input.awayFairOdd;
-  const selectedProb = input.recommendationSide === "home" ? input.homeModelProb : input.awayModelProb;
+  const selectedFairOdd =
+    input.recommendationSide === "home" ? input.homeFairOdd : input.awayFairOdd;
+  const selectedProb =
+    input.recommendationSide === "home" ? input.homeModelProb : input.awayModelProb;
   const reasons = [
-    selected.team_simple_rating > opponent.team_simple_rating ? "Rating simples superior ao adversario" : "Ajuste contextual mantem EV apesar de rating inferior",
-    selected.rating_components.srs_component > opponent.rating_components.srs_component ? "SRS superior" : null,
-    selected.rating_components.run_diff_component > opponent.rating_components.run_diff_component ? "Run differential por jogo superior" : null,
-    selected.rating_components.pyth_component > selected.rating_components.win_pct_component ? "Pythagorean W-L% sugere desempenho melhor que o recorde real" : null,
+    selected.team_simple_rating > opponent.team_simple_rating
+      ? "Rating simples superior ao adversario"
+      : "Ajuste contextual mantem EV apesar de rating inferior",
+    selected.rating_components.srs_component > opponent.rating_components.srs_component
+      ? "SRS superior"
+      : null,
+    selected.rating_components.run_diff_component > opponent.rating_components.run_diff_component
+      ? "Run differential por jogo superior"
+      : null,
+    selected.rating_components.pyth_component > selected.rating_components.win_pct_component
+      ? "Pythagorean W-L% sugere desempenho melhor que o recorde real"
+      : null,
     selected.rating_components.recent_form_component > 0 ? "Forma recente positiva" : null,
     selectedOdd > selectedFairOdd ? "Mercado oferece odd acima da odd justa ASP" : null,
     selectedProb >= 0.5 ? "Probabilidade ASP acima de 50%" : null,
@@ -460,11 +503,19 @@ function buildAlerts(input: {
     "Modelo ainda nao considera bullpen",
     "Modelo ainda nao considera lineup confirmado",
   ];
-  if (input.homeRating.missing_fields.length) alerts.push(`Standings incompletos para mandante: ${input.homeRating.missing_fields.join(", ")}`);
-  if (input.awayRating.missing_fields.length) alerts.push(`Standings incompletos para visitante: ${input.awayRating.missing_fields.join(", ")}`);
+  if (input.homeRating.missing_fields.length)
+    alerts.push(
+      `Standings incompletos para mandante: ${input.homeRating.missing_fields.join(", ")}`,
+    );
+  if (input.awayRating.missing_fields.length)
+    alerts.push(
+      `Standings incompletos para visitante: ${input.awayRating.missing_fields.join(", ")}`,
+    );
   if (input.candidateStatus === "monitorar") alerts.push("Edge pequeno contra mercado");
-  if (Math.max(input.homeEv, input.awayEv) < 0.02) alerts.push("EV preliminar abaixo do corte minimo");
-  if (Math.max(input.homeEv, input.awayEv) >= 0.15) alerts.push("high_edge_without_pitchers: EV >= 15% sem considerar starters/bullpen");
+  if (Math.max(input.homeEv, input.awayEv) < 0.02)
+    alerts.push("EV preliminar abaixo do corte minimo");
+  if (Math.max(input.homeEv, input.awayEv) >= 0.15)
+    alerts.push("high_edge_without_pitchers: EV >= 15% sem considerar starters/bullpen");
   return alerts;
 }
 

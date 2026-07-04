@@ -17,20 +17,22 @@ import {
 import type { MlbStandingsSnapshot } from "@/types/mlbStandings";
 
 const SnapshotInputObjectSchema = z.object({
-    snapshotDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    season: z.number().int().min(2000).max(2100).optional(),
-    forceRefresh: z.boolean().optional().default(false),
-  });
+  snapshotDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  season: z.number().int().min(2000).max(2100).optional(),
+  forceRefresh: z.boolean().optional().default(false),
+});
 
-const SnapshotInputSchema = SnapshotInputObjectSchema
-  .transform((data) => {
-    const today = todayBR();
-    return {
-      snapshotDate: data.snapshotDate ?? today,
-      season: data.season ?? Number(today.slice(0, 4)),
-      forceRefresh: data.forceRefresh,
-    };
-  });
+const SnapshotInputSchema = SnapshotInputObjectSchema.transform((data) => {
+  const today = todayBR();
+  return {
+    snapshotDate: data.snapshotDate ?? today,
+    season: data.season ?? Number(today.slice(0, 4)),
+    forceRefresh: data.forceRefresh,
+  };
+});
 
 const CsvInputSchema = SnapshotInputObjectSchema.extend({
   csv: z.string().min(20, "Cole o CSV da tabela MLB Detailed Standings."),

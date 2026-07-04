@@ -1,4 +1,8 @@
-import type { MlbScreenerHandoffAuditRef, MlbScreenerHandoffAuditStatus, MlbValidatorHandoffPayload } from "@/types/mlbValidatorHandoff";
+import type {
+  MlbScreenerHandoffAuditRef,
+  MlbScreenerHandoffAuditStatus,
+  MlbValidatorHandoffPayload,
+} from "@/types/mlbValidatorHandoff";
 
 export type { MlbScreenerHandoffAuditRef, MlbScreenerHandoffAuditStatus };
 

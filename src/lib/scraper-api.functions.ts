@@ -36,7 +36,10 @@ const PackballModelSchema = z.enum(["ASP GoalMatrix", "ASP CornerMatrix"]);
 
 const PackballUploadSchema = z.object({
   modelo: PackballModelSchema,
-  date_str: z.string().regex(/^\d{2}-\d{2}-\d{4}$/).optional(),
+  date_str: z
+    .string()
+    .regex(/^\d{2}-\d{2}-\d{4}$/)
+    .optional(),
   arquivo_5: z.object({
     name: z.string().min(1),
     content: z.string().min(1),
@@ -119,7 +122,9 @@ function isBaseballBase(data: { esporte: string; liga: string }) {
 function basketballBaseUnavailable(error: unknown): never {
   const message = error instanceof Error ? error.message : String(error);
   if (/not found|404|erro http 404/i.test(message)) {
-    throw new Error("A API da VM nao encontrou a rota de Basketball solicitada. Verifique se os endpoints /modelos/base/basketball/{liga}/... estao publicados.");
+    throw new Error(
+      "A API da VM nao encontrou a rota de Basketball solicitada. Verifique se os endpoints /modelos/base/basketball/{liga}/... estao publicados.",
+    );
   }
   throw error;
 }
@@ -220,7 +225,11 @@ async function scraperRequest(path: string, init?: RequestInit) {
     }
     if (!res.ok) {
       const requestBody =
-        typeof init?.body === "string" ? init.body : init?.body ? "[body não textual]" : "(sem body)";
+        typeof init?.body === "string"
+          ? init.body
+          : init?.body
+            ? "[body não textual]"
+            : "(sem body)";
       console.error("[Scraper API] Erro na chamada", {
         status: res.status,
         path,
@@ -239,7 +248,8 @@ async function scraperRequest(path: string, init?: RequestInit) {
       const message =
         res.status === 422 && path === "/scraping/jobs"
           ? `HTTP 422 ao chamar API da VM (${path}). Payload enviado: ${requestBody}. JSON esperado: ${stringifyDebug(EXPECTED_JOB_PAYLOAD)}. Resposta da VM: ${stringifyDebug(payload)}`
-          : pickErrorMessage(payload) ?? `Erro HTTP ${res.status} ao chamar API da VM. Resposta: ${stringifyDebug(payload)}`;
+          : (pickErrorMessage(payload) ??
+            `Erro HTTP ${res.status} ao chamar API da VM. Resposta: ${stringifyDebug(payload)}`);
       throw new Error(message);
     }
     return payload;
@@ -289,7 +299,9 @@ async function scraperFormRequest(path: string, formData: FormData) {
           `API key da VM inválida ou sem permissão (HTTP ${res.status}) ao enviar arquivos. Atualize o secret SCRAPER_API_KEY em Backend → Secrets com uma chave válida da VM (${baseUrl}).`,
         );
       }
-      throw new Error(pickErrorMessage(payload) ?? `Erro HTTP ${res.status} ao enviar arquivos para a VM.`);
+      throw new Error(
+        pickErrorMessage(payload) ?? `Erro HTTP ${res.status} ao enviar arquivos para a VM.`,
+      );
     }
     return payload;
   } catch (e) {
@@ -359,7 +371,9 @@ export const getScrapingJobStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => JobIdSchema.parse(input))
   .handler(async ({ data }) => {
-    const payload = await scraperRequest(`/scraping/jobs/${encodeURIComponent(data.job_id)}/status`);
+    const payload = await scraperRequest(
+      `/scraping/jobs/${encodeURIComponent(data.job_id)}/status`,
+    );
     return {
       job_id: data.job_id,
       payload: payload as JsonValue,
@@ -382,7 +396,9 @@ export const getScrapingJobNormalized = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => JobIdSchema.parse(input))
   .handler(async ({ data }) => {
-    const payload = await scraperRequest(`/scraping/jobs/${encodeURIComponent(data.job_id)}/normalized`);
+    const payload = await scraperRequest(
+      `/scraping/jobs/${encodeURIComponent(data.job_id)}/normalized`,
+    );
     return {
       job_id: data.job_id,
       normalized_json: pickPayload(payload) as JsonValue,
@@ -434,8 +450,16 @@ export const uploadPackballModelFiles = createServerFn({ method: "POST" })
     const formData = new FormData();
     formData.append("modelo", data.modelo);
     if (data.date_str) formData.append("date_str", data.date_str);
-    formData.append("arquivo_5", new Blob([data.arquivo_5.content], { type: "text/csv" }), data.arquivo_5.name);
-    formData.append("arquivo_20", new Blob([data.arquivo_20.content], { type: "text/csv" }), data.arquivo_20.name);
+    formData.append(
+      "arquivo_5",
+      new Blob([data.arquivo_5.content], { type: "text/csv" }),
+      data.arquivo_5.name,
+    );
+    formData.append(
+      "arquivo_20",
+      new Blob([data.arquivo_20.content], { type: "text/csv" }),
+      data.arquivo_20.name,
+    );
     return (await scraperFormRequest("/modelos/packball/upload", formData)) as JsonValue;
   });
 
@@ -464,7 +488,9 @@ export const getBaseballTeams = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => BaseballYearSchema.parse(input))
   .handler(async ({ data }) => {
-    return pickPayload(await scraperRequest(`/modelos/baseball/times?ano=${encodeURIComponent(String(data.ano))}`)) as JsonValue;
+    return pickPayload(
+      await scraperRequest(`/modelos/baseball/times?ano=${encodeURIComponent(String(data.ano))}`),
+    ) as JsonValue;
   });
 
 export const getBaseballTeamLastLines = createServerFn({ method: "POST" })
@@ -472,9 +498,11 @@ export const getBaseballTeamLastLines = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => BaseballTeamLinesSchema.parse(input))
   .handler(async ({ data }) => {
     const sigla = normalizeMlbSigla(data.sigla);
-    return pickPayload(await scraperRequest(
-      `/modelos/baseball/time/${encodeURIComponent(sigla)}/ultimas-linhas?ano=${encodeURIComponent(String(data.ano))}&limite=${encodeURIComponent(String(data.limite))}`,
-    )) as JsonValue;
+    return pickPayload(
+      await scraperRequest(
+        `/modelos/baseball/time/${encodeURIComponent(sigla)}/ultimas-linhas?ano=${encodeURIComponent(String(data.ano))}&limite=${encodeURIComponent(String(data.limite))}`,
+      ),
+    ) as JsonValue;
   });
 
 export const validateBaseballLine = createServerFn({ method: "POST" })
@@ -499,7 +527,9 @@ export const addBaseballLine = createServerFn({ method: "POST" })
 
 export const removeBaseballLastLine = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => BaseballYearSchema.extend({ sigla: z.string().min(1) }).parse(input))
+  .inputValidator((input: unknown) =>
+    BaseballYearSchema.extend({ sigla: z.string().min(1) }).parse(input),
+  )
   .handler(async ({ data }) => {
     return (await scraperRequest("/modelos/baseball/base/remover-ultima", {
       method: "POST",
@@ -515,7 +545,9 @@ export const getBaseYears = createServerFn({ method: "POST" })
       return pickPayload(await scraperRequest("/modelos/baseball/anos")) as JsonValue;
     }
     try {
-      return pickPayload(await scraperRequest(`/modelos/base/basketball/${encodeURIComponent(data.liga)}/anos`)) as JsonValue;
+      return pickPayload(
+        await scraperRequest(`/modelos/base/basketball/${encodeURIComponent(data.liga)}/anos`),
+      ) as JsonValue;
     } catch (error) {
       basketballBaseUnavailable(error);
     }
@@ -526,12 +558,16 @@ export const getBaseTeams = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => BaseDataYearSchema.parse(input))
   .handler(async ({ data }) => {
     if (isBaseballBase(data)) {
-      return pickPayload(await scraperRequest(`/modelos/baseball/times?ano=${encodeURIComponent(String(data.ano))}`)) as JsonValue;
+      return pickPayload(
+        await scraperRequest(`/modelos/baseball/times?ano=${encodeURIComponent(String(data.ano))}`),
+      ) as JsonValue;
     }
     try {
-      return pickPayload(await scraperRequest(
-        `/modelos/base/basketball/${encodeURIComponent(data.liga)}/${encodeURIComponent(String(data.ano))}/times`,
-      )) as JsonValue;
+      return pickPayload(
+        await scraperRequest(
+          `/modelos/base/basketball/${encodeURIComponent(data.liga)}/${encodeURIComponent(String(data.ano))}/times`,
+        ),
+      ) as JsonValue;
     } catch (error) {
       basketballBaseUnavailable(error);
     }
@@ -543,14 +579,18 @@ export const getBaseTeamLastLines = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     if (isBaseballBase(data)) {
       const sigla = normalizeMlbSigla(data.sigla);
-      return pickPayload(await scraperRequest(
-        `/modelos/baseball/time/${encodeURIComponent(sigla)}/ultimas-linhas?ano=${encodeURIComponent(String(data.ano))}&limite=${encodeURIComponent(String(data.limite))}`,
-      )) as JsonValue;
+      return pickPayload(
+        await scraperRequest(
+          `/modelos/baseball/time/${encodeURIComponent(sigla)}/ultimas-linhas?ano=${encodeURIComponent(String(data.ano))}&limite=${encodeURIComponent(String(data.limite))}`,
+        ),
+      ) as JsonValue;
     }
     try {
-      return pickPayload(await scraperRequest(
-        `/modelos/base/basketball/${encodeURIComponent(data.liga)}/${encodeURIComponent(String(data.ano))}/${encodeURIComponent(data.sigla.toLowerCase())}/ultimas`,
-      )) as JsonValue;
+      return pickPayload(
+        await scraperRequest(
+          `/modelos/base/basketball/${encodeURIComponent(data.liga)}/${encodeURIComponent(String(data.ano))}/${encodeURIComponent(data.sigla.toLowerCase())}/ultimas`,
+        ),
+      ) as JsonValue;
     } catch (error) {
       basketballBaseUnavailable(error);
     }
@@ -563,14 +603,21 @@ export const validateBaseLine = createServerFn({ method: "POST" })
     if (isBaseballBase(data)) {
       return (await scraperRequest("/modelos/baseball/base/validar-linha", {
         method: "POST",
-        body: JSON.stringify({ ano: data.ano, sigla: normalizeMlbSigla(data.sigla), linha: data.linha }),
+        body: JSON.stringify({
+          ano: data.ano,
+          sigla: normalizeMlbSigla(data.sigla),
+          linha: data.linha,
+        }),
       })) as JsonValue;
     }
     try {
-      return (await scraperRequest(`/modelos/base/basketball/${encodeURIComponent(data.liga)}/${encodeURIComponent(String(data.ano))}/${encodeURIComponent(data.sigla.toLowerCase())}/validar`, {
-        method: "POST",
-        body: JSON.stringify({ linha: data.linha }),
-      })) as JsonValue;
+      return (await scraperRequest(
+        `/modelos/base/basketball/${encodeURIComponent(data.liga)}/${encodeURIComponent(String(data.ano))}/${encodeURIComponent(data.sigla.toLowerCase())}/validar`,
+        {
+          method: "POST",
+          body: JSON.stringify({ linha: data.linha }),
+        },
+      )) as JsonValue;
     } catch (error) {
       basketballBaseUnavailable(error);
     }
@@ -583,14 +630,21 @@ export const addBaseLine = createServerFn({ method: "POST" })
     if (isBaseballBase(data)) {
       return (await scraperRequest("/modelos/baseball/base/adicionar", {
         method: "POST",
-        body: JSON.stringify({ ano: data.ano, sigla: normalizeMlbSigla(data.sigla), linha: data.linha }),
+        body: JSON.stringify({
+          ano: data.ano,
+          sigla: normalizeMlbSigla(data.sigla),
+          linha: data.linha,
+        }),
       })) as JsonValue;
     }
     try {
-      return (await scraperRequest(`/modelos/base/basketball/${encodeURIComponent(data.liga)}/${encodeURIComponent(String(data.ano))}/${encodeURIComponent(data.sigla.toLowerCase())}/adicionar`, {
-        method: "POST",
-        body: JSON.stringify({ linha: data.linha }),
-      })) as JsonValue;
+      return (await scraperRequest(
+        `/modelos/base/basketball/${encodeURIComponent(data.liga)}/${encodeURIComponent(String(data.ano))}/${encodeURIComponent(data.sigla.toLowerCase())}/adicionar`,
+        {
+          method: "POST",
+          body: JSON.stringify({ linha: data.linha }),
+        },
+      )) as JsonValue;
     } catch (error) {
       basketballBaseUnavailable(error);
     }
@@ -598,7 +652,9 @@ export const addBaseLine = createServerFn({ method: "POST" })
 
 export const removeBaseLastLine = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => BaseDataYearSchema.extend({ sigla: z.string().min(1) }).parse(input))
+  .inputValidator((input: unknown) =>
+    BaseDataYearSchema.extend({ sigla: z.string().min(1) }).parse(input),
+  )
   .handler(async ({ data }) => {
     if (isBaseballBase(data)) {
       return (await scraperRequest("/modelos/baseball/base/remover-ultima", {
@@ -607,10 +663,13 @@ export const removeBaseLastLine = createServerFn({ method: "POST" })
       })) as JsonValue;
     }
     try {
-      return (await scraperRequest(`/modelos/base/basketball/${encodeURIComponent(data.liga)}/${encodeURIComponent(String(data.ano))}/${encodeURIComponent(data.sigla.toLowerCase())}/remover-ultima`, {
-        method: "POST",
-        body: JSON.stringify({}),
-      })) as JsonValue;
+      return (await scraperRequest(
+        `/modelos/base/basketball/${encodeURIComponent(data.liga)}/${encodeURIComponent(String(data.ano))}/${encodeURIComponent(data.sigla.toLowerCase())}/remover-ultima`,
+        {
+          method: "POST",
+          body: JSON.stringify({}),
+        },
+      )) as JsonValue;
     } catch (error) {
       basketballBaseUnavailable(error);
     }
@@ -621,12 +680,14 @@ export const createBaseSeason = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => CreateBaseSeasonSchema.parse(input))
   .handler(async ({ data }) => {
     try {
-      const path = data.esporte === "basketball"
-        ? `/modelos/base/basketball/${encodeURIComponent(data.liga)}/${encodeURIComponent(String(data.ano_destino))}/temporada`
-        : "/modelos/base/criar-temporada";
-      const body = data.esporte === "basketball"
-        ? { ano_origem: data.ano_origem, ano_destino: data.ano_destino }
-        : data;
+      const path =
+        data.esporte === "basketball"
+          ? `/modelos/base/basketball/${encodeURIComponent(data.liga)}/${encodeURIComponent(String(data.ano_destino))}/temporada`
+          : "/modelos/base/criar-temporada";
+      const body =
+        data.esporte === "basketball"
+          ? { ano_origem: data.ano_origem, ano_destino: data.ano_destino }
+          : data;
       return (await scraperRequest(path, {
         method: "POST",
         body: JSON.stringify(body),
@@ -647,7 +708,11 @@ export const processAspValidatorOcr = createServerFn({ method: "POST" })
     formData.append("upload_id", data.upload_id);
     formData.append("upload_category", data.upload_category);
     formData.append("user_comment", data.user_comment ?? "");
-    formData.append("arquivo", new Blob([bytes], { type: data.file.type || "application/octet-stream" }), data.file.name);
+    formData.append(
+      "arquivo",
+      new Blob([bytes], { type: data.file.type || "application/octet-stream" }),
+      data.file.name,
+    );
 
     return (await scraperFormRequest("/asp-validator/ocr", formData)) as JsonValue;
   });

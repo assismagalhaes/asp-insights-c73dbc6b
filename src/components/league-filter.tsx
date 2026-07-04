@@ -19,9 +19,7 @@ interface Props {
 export function LeagueFilter({ sport, value, onChange, className, placeholder = "Liga" }: Props) {
   const { data: ligas = [] } = useLigas();
   const filtradas = useMemo<Liga[]>(() => {
-    const arr = sport && sport !== "all"
-      ? ligas.filter((l: Liga) => l.esporte === sport)
-      : ligas;
+    const arr = sport && sport !== "all" ? ligas.filter((l: Liga) => l.esporte === sport) : ligas;
     return [...arr].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   }, [ligas, sport]);
 
@@ -33,7 +31,9 @@ export function LeagueFilter({ sport, value, onChange, className, placeholder = 
       <SelectContent>
         <SelectItem value="all">Todas as ligas</SelectItem>
         {filtradas.map((l) => (
-          <SelectItem key={l.id} value={l.nome}>{l.nome}</SelectItem>
+          <SelectItem key={l.id} value={l.nome}>
+            {l.nome}
+          </SelectItem>
         ))}
       </SelectContent>
     </Select>

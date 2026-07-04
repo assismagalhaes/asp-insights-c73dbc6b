@@ -80,6 +80,7 @@ Backwards-compat: para escanteios, `corners.home/away` permanecem populados como
 ## 5. Tolerância do parser
 
 Helper `normalize()` já remove acentos. Adicionar:
+
 - Sinônimos de período: `1 tempo|1º tempo|1° tempo|primeiro tempo|HT|1T` → HT; análogo ST; `jogo completo|FT|todos|tempo regulamentar` → FT.
 - Sinônimos de mercado conforme regras do briefing.
 - Ordem livre de blocos: parsers escaneiam o texto inteiro buscando marcadores `--- TITULO ---` ou cabeçalhos `TIME:`.

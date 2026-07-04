@@ -138,7 +138,9 @@ function isHalfPointLine(value: unknown): boolean {
 function requiresBaseballHalfPointLine(row: Pick<NormalizedOdd, "esporte" | "mercado">): boolean {
   const sport = String(row.esporte ?? "").toLowerCase();
   const market = String(row.mercado ?? "").toLowerCase();
-  return /baseball|mlb/.test(sport) && (/over\/under|asian handicap|handicap asi[aá]tico/.test(market));
+  return (
+    /baseball|mlb/.test(sport) && /over\/under|asian handicap|handicap asi[aá]tico/.test(market)
+  );
 }
 
 function keepAllowedMarketLine(row: NormalizedOdd): boolean {
@@ -178,11 +180,13 @@ export function extractLegacyFlashscoreMatchIdFromPath(pathname: string): string
     if (parts[i] !== "match") continue;
     let candidate = parts[i + 1] ?? "";
     if (flashscoreSportParts.has(candidate.toLowerCase())) candidate = parts[i + 2] ?? "";
-    if (flashscoreIdPattern.test(candidate) && !flashscoreTeamSlugPattern.test(candidate)) return candidate;
+    if (flashscoreIdPattern.test(candidate) && !flashscoreTeamSlugPattern.test(candidate))
+      return candidate;
   }
   for (let i = parts.length - 1; i >= 0; i--) {
     if (parts[i] === "odds") break;
-    if (flashscoreIdPattern.test(parts[i]) && !flashscoreTeamSlugPattern.test(parts[i])) return parts[i];
+    if (flashscoreIdPattern.test(parts[i]) && !flashscoreTeamSlugPattern.test(parts[i]))
+      return parts[i];
   }
   return null;
 }
@@ -233,7 +237,9 @@ function parseDate(value: unknown): string | null {
 
 function parseTime(value: unknown): string | null {
   if (!value) return null;
-  const m = String(value).trim().match(/(\d{1,2}):(\d{2})/);
+  const m = String(value)
+    .trim()
+    .match(/(\d{1,2}):(\d{2})/);
   if (!m) return null;
   return `${m[1].padStart(2, "0")}:${m[2]}`;
 }
@@ -311,11 +317,26 @@ function extractRowsByPriority(payload: unknown, keys: string[], depth = 0): VmP
 }
 
 export function extractNormalizedRows(payload: unknown): VmPayloadRow[] {
-  return extractRowsByPriority(payload, ["linhas", "rows", "odds", "data", "items", "results", "normalized_json"]);
+  return extractRowsByPriority(payload, [
+    "linhas",
+    "rows",
+    "odds",
+    "data",
+    "items",
+    "results",
+    "normalized_json",
+  ]);
 }
 
 export function extractRawGames(payload: unknown): VmPayloadRow[] {
-  return extractRowsByPriority(payload, ["jogos", "games", "_default", "data", "result", "raw_json"]);
+  return extractRowsByPriority(payload, [
+    "jogos",
+    "games",
+    "_default",
+    "data",
+    "result",
+    "raw_json",
+  ]);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -390,7 +411,11 @@ function parseCapturedAt(value: unknown): string | null {
   return null;
 }
 
-function marketPick(market: string, header: string, base: { mandante: string; visitante: string }): string {
+function marketPick(
+  market: string,
+  header: string,
+  base: { mandante: string; visitante: string },
+): string {
   const h = header.trim();
   if (h === "1") return base.mandante || "Casa";
   if (h === "2") return base.visitante || "Fora";
@@ -402,7 +427,10 @@ function marketPick(market: string, header: string, base: { mandante: string; vi
   return h || market;
 }
 
-function normalizeMarketRows(game: Record<string, unknown>, esporteHint?: string | null): NormalizedOdd[] {
+function normalizeMarketRows(
+  game: Record<string, unknown>,
+  esporteHint?: string | null,
+): NormalizedOdd[] {
   const base = baseGame(game, esporteHint);
   const gameId =
     extractFlashscoreMatchId(game.link ?? game.url ?? game.fonte) ??
@@ -450,7 +478,8 @@ function normalizeMarketRows(game: Record<string, unknown>, esporteHint?: string
           if (!odd) continue;
           const header = headers[i];
           const pick = marketPick(marketName, header, base);
-          const linha = /asian handicap/i.test(marketName) && header === "2" ? invertLine(line) : line;
+          const linha =
+            /asian handicap/i.test(marketName) && header === "2" ? invertLine(line) : line;
           const row = {
             ...base,
             mercado: marketName,
@@ -469,15 +498,21 @@ function normalizeMarketRows(game: Record<string, unknown>, esporteHint?: string
   return rows;
 }
 
-export function normalizeOddsJson(raw: unknown, opts?: { esporte?: string | null }): NormalizedCollection {
+export function normalizeOddsJson(
+  raw: unknown,
+  opts?: { esporte?: string | null },
+): NormalizedCollection {
   const games = getGames(raw);
   const rows = games.flatMap((game) => normalizeMarketRows(game, opts?.esporte));
-  const dates = rows.map((row) => row.data).filter(Boolean).sort() as string[];
+  const dates = rows
+    .map((row) => row.data)
+    .filter(Boolean)
+    .sort() as string[];
   const mercados = [...new Set(rows.map((row) => row.mercado).filter(Boolean))].sort();
   const ligas = [...new Set(rows.map((row) => row.liga).filter(Boolean))];
   const esportes = [...new Set(rows.map((row) => row.esporte).filter(Boolean))];
   return {
-    esporte: esportes.length === 1 ? esportes[0] : opts?.esporte ?? null,
+    esporte: esportes.length === 1 ? esportes[0] : (opts?.esporte ?? null),
     liga: ligas.length === 1 ? ligas[0] : null,
     data_inicio: dates[0] ?? null,
     data_fim: dates[dates.length - 1] ?? null,
@@ -488,7 +523,10 @@ export function normalizeOddsJson(raw: unknown, opts?: { esporte?: string | null
   };
 }
 
-export function normalizeVmNormalizedPayload(payload: unknown, opts?: { esporte?: string | null }): NormalizedCollection {
+export function normalizeVmNormalizedPayload(
+  payload: unknown,
+  opts?: { esporte?: string | null },
+): NormalizedCollection {
   payload = parseMaybeJson(payload);
   const root = isRecord(payload) ? payload : {};
   const nested = isRecord(root.data)
@@ -506,7 +544,13 @@ export function normalizeVmNormalizedPayload(payload: unknown, opts?: { esporte?
     .filter(isRecord)
     .filter(
       (r) =>
-        "odd" in r || "price" in r || "odds" in r || "mercado" in r || "market" in r || "pick" in r || "selection" in r,
+        "odd" in r ||
+        "price" in r ||
+        "odds" in r ||
+        "mercado" in r ||
+        "market" in r ||
+        "pick" in r ||
+        "selection" in r,
     );
 
   const recursiveFlat = collectRecords(nested, isFlatOddRecord);
@@ -518,12 +562,16 @@ export function normalizeVmNormalizedPayload(payload: unknown, opts?: { esporte?
   // Fallback: payload com estrutura de jogos (odds: { market: { period: [[headers],[row]] } })
   if (!rows.length) {
     const rawGames = extractRawGames(payload);
-    const gameRows = (rawGames.length ? rawGames : collectRecords(payload, isGameRecord)).flatMap((game) =>
-      normalizeMarketRows(game, opts?.esporte),
+    const gameRows = (rawGames.length ? rawGames : collectRecords(payload, isGameRecord)).flatMap(
+      (game) => normalizeMarketRows(game, opts?.esporte),
     );
     if (gameRows.length) {
       if (import.meta.env.DEV) {
-        console.debug("[normalizeVmNormalizedPayload] jogos encontrados por varredura:", gameRows.length, "linhas");
+        console.debug(
+          "[normalizeVmNormalizedPayload] jogos encontrados por varredura:",
+          gameRows.length,
+          "linhas",
+        );
       }
       return buildCollection(gameRows, opts?.esporte);
     }
@@ -557,18 +605,23 @@ export function normalizeVmNormalizedPayload(payload: unknown, opts?: { esporte?
     );
   }
 
-  const dates = rows.map((row) => row.data).filter(Boolean).sort() as string[];
+  const dates = rows
+    .map((row) => row.data)
+    .filter(Boolean)
+    .sort() as string[];
   const mercados = [...new Set(rows.map((row) => row.mercado).filter(Boolean))].sort();
   const ligas = [...new Set(rows.map((row) => row.liga).filter(Boolean))];
   const esportes = [...new Set(rows.map((row) => row.esporte).filter(Boolean))];
   const jogos = new Set(
     rows
-      .map((row) => (row.raw_ref?.game_id ? String(row.raw_ref.game_id) : `${row.data ?? ""}|${row.jogo}`))
+      .map((row) =>
+        row.raw_ref?.game_id ? String(row.raw_ref.game_id) : `${row.data ?? ""}|${row.jogo}`,
+      )
       .filter(Boolean),
   );
 
   return {
-    esporte: esportes.length === 1 ? esportes[0] : opts?.esporte ?? null,
+    esporte: esportes.length === 1 ? esportes[0] : (opts?.esporte ?? null),
     liga: ligas.length === 1 ? ligas[0] : null,
     data_inicio: dates[0] ?? null,
     data_fim: dates[dates.length - 1] ?? null,
@@ -580,18 +633,23 @@ export function normalizeVmNormalizedPayload(payload: unknown, opts?: { esporte?
 }
 
 function buildCollection(rows: NormalizedOdd[], esporteHint?: string | null): NormalizedCollection {
-  const dates = rows.map((row) => row.data).filter(Boolean).sort() as string[];
+  const dates = rows
+    .map((row) => row.data)
+    .filter(Boolean)
+    .sort() as string[];
   const mercados = [...new Set(rows.map((row) => row.mercado).filter(Boolean))].sort();
   const ligas = [...new Set(rows.map((row) => row.liga).filter(Boolean))];
   const esportes = [...new Set(rows.map((row) => row.esporte).filter(Boolean))];
   const jogos = new Set(
     rows
-      .map((row) => (row.raw_ref?.game_id ? String(row.raw_ref.game_id) : `${row.data ?? ""}|${row.jogo}`))
+      .map((row) =>
+        row.raw_ref?.game_id ? String(row.raw_ref.game_id) : `${row.data ?? ""}|${row.jogo}`,
+      )
       .filter(Boolean),
   );
 
   return {
-    esporte: esportes.length === 1 ? esportes[0] : esporteHint ?? null,
+    esporte: esportes.length === 1 ? esportes[0] : (esporteHint ?? null),
     liga: ligas.length === 1 ? ligas[0] : null,
     data_inicio: dates[0] ?? null,
     data_fim: dates[dates.length - 1] ?? null,
@@ -621,7 +679,9 @@ function collectRecords(
 
   if (!isRecord(value)) return [];
   const direct = predicate(value) ? [value] : [];
-  const nested = Object.values(value).flatMap((item) => collectRecords(item, predicate, depth + 1, seen));
+  const nested = Object.values(value).flatMap((item) =>
+    collectRecords(item, predicate, depth + 1, seen),
+  );
   return [...direct, ...nested];
 }
 
@@ -630,7 +690,16 @@ function hasAnyKey(record: Record<string, unknown>, keys: string[]) {
 }
 
 function isFlatOddRecord(record: Record<string, unknown>) {
-  const hasOdd = hasAnyKey(record, ["odd", "odds", "price", "cotacao", "cota", "decimal", "odd_decimal", "valor"]);
+  const hasOdd = hasAnyKey(record, [
+    "odd",
+    "odds",
+    "price",
+    "cotacao",
+    "cota",
+    "decimal",
+    "odd_decimal",
+    "valor",
+  ]);
   const hasMarketOrPick = hasAnyKey(record, [
     "mercado",
     "market",
@@ -655,8 +724,14 @@ function isGameRecord(record: Record<string, unknown>) {
 }
 
 function normalizeVmRow(row: Record<string, unknown>, esporteHint?: string | null): NormalizedOdd {
-  const mandante = requiredText(row.mandante ?? row.home ?? row.casa ?? row.home_team ?? row.time_casa, "");
-  const visitante = requiredText(row.visitante ?? row.away ?? row.fora ?? row.away_team ?? row.time_fora, "");
+  const mandante = requiredText(
+    row.mandante ?? row.home ?? row.casa ?? row.home_team ?? row.time_casa,
+    "",
+  );
+  const visitante = requiredText(
+    row.visitante ?? row.away ?? row.fora ?? row.away_team ?? row.time_fora,
+    "",
+  );
   const rawRef = isRecord(row.raw_ref) ? row.raw_ref : { vm_row: row };
   const gameId =
     extractFlashscoreMatchId(row.fonte ?? row.source ?? row.url ?? row.link) ??
@@ -668,13 +743,32 @@ function normalizeVmRow(row: Record<string, unknown>, esporteHint?: string | nul
     hora: parseTime(row.hora ?? row.hour ?? row.time ?? row.match_time),
     esporte: normalizeSport(toText(row.esporte ?? row.sport) ?? esporteHint ?? null, row),
     liga: toText(row.liga ?? row.league),
-    jogo: requiredText(row.jogo ?? row.game ?? row.match, mandante && visitante ? `${mandante} vs ${visitante}` : "Jogo sem nome"),
+    jogo: requiredText(
+      row.jogo ?? row.game ?? row.match,
+      mandante && visitante ? `${mandante} vs ${visitante}` : "Jogo sem nome",
+    ),
     mandante,
     visitante,
-    mercado: requiredText(row.mercado ?? row.market ?? row.market_name ?? row.marketName, "Mercado"),
-    pick: requiredText(row.pick ?? row.selecao ?? row.selection ?? row.selection_name ?? row.outcome, "Pick"),
+    mercado: requiredText(
+      row.mercado ?? row.market ?? row.market_name ?? row.marketName,
+      "Mercado",
+    ),
+    pick: requiredText(
+      row.pick ?? row.selecao ?? row.selection ?? row.selection_name ?? row.outcome,
+      "Pick",
+    ),
     linha: toText(row.linha ?? row.line ?? row.handicap ?? row.total),
-    odd: toNumber(row.odd ?? row.price ?? row.odds ?? row.cotacao ?? row.cota ?? row.decimal ?? row.odd_decimal ?? row.valor) ?? 0,
+    odd:
+      toNumber(
+        row.odd ??
+          row.price ??
+          row.odds ??
+          row.cotacao ??
+          row.cota ??
+          row.decimal ??
+          row.odd_decimal ??
+          row.valor,
+      ) ?? 0,
     odd_media: toNumber(row.odd_media ?? row.odd_avg),
     odd_mediana: toNumber(row.odd_mediana ?? row.odd_median),
     odd_minima: toNumber(row.odd_minima ?? row.odd_min),
@@ -684,8 +778,12 @@ function normalizeVmRow(row: Record<string, unknown>, esporteHint?: string | nul
     odd_desvio_padrao: toNumber(row.odd_desvio_padrao ?? row.odd_std),
     casas_count: toNumber(row.casas_count ?? row.bookmakers_count),
     odds_disponiveis: toNumber(row.odds_disponiveis ?? row.odds_available),
-    probabilidade_implicita_media: toNumber(row.probabilidade_implicita_media ?? row.market_prob_consensus_avg),
-    probabilidade_implicita_mediana: toNumber(row.probabilidade_implicita_mediana ?? row.market_prob_consensus_median),
+    probabilidade_implicita_media: toNumber(
+      row.probabilidade_implicita_media ?? row.market_prob_consensus_avg,
+    ),
+    probabilidade_implicita_mediana: toNumber(
+      row.probabilidade_implicita_mediana ?? row.market_prob_consensus_median,
+    ),
     margem_mercado_media: toNumber(row.margem_mercado_media ?? row.market_overround_avg),
     margem_mercado_mediana: toNumber(row.margem_mercado_mediana ?? row.market_overround_median),
     bookmaker: toText(row.bookmaker ?? row.book ?? row.casa_aposta ?? row.bookmaker_name),
@@ -711,7 +809,9 @@ function dedupeRows(rows: NormalizedOdd[]): { rows: NormalizedOdd[]; duplicated:
       row.linha ?? "",
       row.bookmaker ?? "",
       row.odd,
-    ].join("|").toLowerCase();
+    ]
+      .join("|")
+      .toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
     uniqueRows.push(row);
@@ -751,7 +851,10 @@ export function toCsv(rows: NormalizedOdd[]): string {
     "capturado_em",
   ];
   const escape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
-  return [headers.join(","), ...rows.map((row) => headers.map((h) => escape(row[h as keyof NormalizedOdd])).join(","))].join("\n");
+  return [
+    headers.join(","),
+    ...rows.map((row) => headers.map((h) => escape(row[h as keyof NormalizedOdd])).join(",")),
+  ].join("\n");
 }
 
 function toOddsJogoInsert(row: NormalizedOdd, coletaId: string) {
@@ -788,7 +891,9 @@ function toOddsJogoInsert(row: NormalizedOdd, coletaId: string) {
   };
 }
 
-function compactRawRef(rawRef: Record<string, unknown> | null | undefined): Record<string, unknown> {
+function compactRawRef(
+  rawRef: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
   if (!rawRef) return {};
   return {
     game_id: rawRef.game_id ?? null,
@@ -852,18 +957,27 @@ export function parseStoredNormalizedPreview(payload: unknown): NormalizedCollec
 
 function compactNormalizedForStorage(normalized: NormalizedCollection, rows: NormalizedOdd[]) {
   const markets = Array.from(new Set(rows.map((row) => row.mercado).filter(Boolean)));
-  const games = new Map<string, { jogo: string; mandante: string; visitante: string; data: string | null; hora: string | null; mercados: Set<string> }>();
+  const games = new Map<
+    string,
+    {
+      jogo: string;
+      mandante: string;
+      visitante: string;
+      data: string | null;
+      hora: string | null;
+      mercados: Set<string>;
+    }
+  >();
   for (const row of rows) {
     const key = [row.data ?? "", row.hora ?? "", row.jogo, row.mandante, row.visitante].join("|");
-    const current =
-      games.get(key) ?? {
-        jogo: row.jogo,
-        mandante: row.mandante,
-        visitante: row.visitante,
-        data: row.data,
-        hora: row.hora,
-        mercados: new Set<string>(),
-      };
+    const current = games.get(key) ?? {
+      jogo: row.jogo,
+      mandante: row.mandante,
+      visitante: row.visitante,
+      data: row.data,
+      hora: row.hora,
+      mercados: new Set<string>(),
+    };
     if (row.mercado) current.mercados.add(row.mercado);
     games.set(key, current);
   }
@@ -901,12 +1015,15 @@ function compactNormalizedForStorage(normalized: NormalizedCollection, rows: Nor
 function compactRawForStorage(raw: unknown): unknown {
   if (!isRecord(raw)) return raw;
   const source = String(raw.source ?? raw.fonte ?? "").toLowerCase();
-  const games = Array.isArray(raw.games) ?raw.games : Array.isArray(raw.jogos) ?raw.jogos : null;
+  const games = Array.isArray(raw.games) ? raw.games : Array.isArray(raw.jogos) ? raw.jogos : null;
   if (source !== "oddsagora" || !games) return raw;
   const compactGames = games.filter(isRecord).map((game) => {
-    const markets = isRecord(game.markets) ?game.markets : {};
+    const markets = isRecord(game.markets) ? game.markets : {};
     const markets_summary = Object.fromEntries(
-      Object.entries(markets).map(([market, rows]) => [market, Array.isArray(rows) ?rows.length : 0]),
+      Object.entries(markets).map(([market, rows]) => [
+        market,
+        Array.isArray(rows) ? rows.length : 0,
+      ]),
     );
     return {
       game_id: game.game_id ?? game.id ?? null,
@@ -934,7 +1051,9 @@ function compactRawForStorage(raw: unknown): unknown {
 
 async function insertOddsRowsInBatches(rows: NormalizedOdd[], coletaId: string) {
   for (let index = 0; index < rows.length; index += ODDS_INSERT_BATCH_SIZE) {
-    const batch = rows.slice(index, index + ODDS_INSERT_BATCH_SIZE).map((row) => toOddsJogoInsert(row, coletaId));
+    const batch = rows
+      .slice(index, index + ODDS_INSERT_BATCH_SIZE)
+      .map((row) => toOddsJogoInsert(row, coletaId));
     const { error } = await coletaDb.from("odds_jogos").insert(batch);
     if (error) throw error;
   }
@@ -950,7 +1069,11 @@ export function downloadText(filename: string, content: string, type = "text/csv
   URL.revokeObjectURL(url);
 }
 
-export async function saveCollection(raw: unknown, normalized: NormalizedCollection, parametros: Record<string, unknown>) {
+export async function saveCollection(
+  raw: unknown,
+  normalized: NormalizedCollection,
+  parametros: Record<string, unknown>,
+) {
   const deduped = dedupeRows(normalized.rows);
   const compactRows = deduped.rows.map(compactNormalizedRow);
   const normalizedSnapshot = compactNormalizedForStorage(normalized, compactRows);
@@ -1057,7 +1180,10 @@ export async function completeRemoteCollection(
     .eq("id", coletaId);
   if (error) throw error;
 
-  const { error: deleteError } = await coletaDb.from("odds_jogos").delete().eq("coleta_id", coletaId);
+  const { error: deleteError } = await coletaDb
+    .from("odds_jogos")
+    .delete()
+    .eq("coleta_id", coletaId);
   if (deleteError) throw deleteError;
 
   if (deduped.rows.length) {
@@ -1070,7 +1196,9 @@ export async function completeRemoteCollection(
 export async function fetchCollections(): Promise<ColetaOdds[]> {
   const { data, error } = await coletaDb
     .from("coletas_odds")
-    .select("id,job_id,status,esporte,liga,data_inicio,data_fim,mercados,parametros,total_jogos,total_odds,erro,created_at,updated_at")
+    .select(
+      "id,job_id,status,esporte,liga,data_inicio,data_fim,mercados,parametros,total_jogos,total_odds,erro,created_at,updated_at",
+    )
     .order("created_at", { ascending: false })
     .limit(50);
   if (error) throw error;
@@ -1099,10 +1227,14 @@ export async function fetchOddsRows(params: FetchOddsRowsParams = {}): Promise<O
   return filterOddsRowsForParams(fallbackRows, params);
 }
 
-async function fetchOddsRowsFromCollectionPayloads(params: FetchOddsRowsParams): Promise<OddsJogo[]> {
+async function fetchOddsRowsFromCollectionPayloads(
+  params: FetchOddsRowsParams,
+): Promise<OddsJogo[]> {
   let query = coletaDb
     .from("coletas_odds")
-    .select("id,job_id,status,esporte,liga,data_inicio,data_fim,raw_json,normalized_json,created_at,updated_at")
+    .select(
+      "id,job_id,status,esporte,liga,data_inicio,data_fim,raw_json,normalized_json,created_at,updated_at",
+    )
     .order("created_at", { ascending: false });
 
   if (params.date) {
@@ -1117,7 +1249,9 @@ async function fetchOddsRowsFromCollectionPayloads(params: FetchOddsRowsParams):
     if (!collectionCanContainRows(coleta, params)) continue;
     const payloads = [coleta.raw_json, coleta.normalized_json];
     for (const payload of payloads) {
-      const normalized = normalizeVmNormalizedPayload(payload, { esporte: coleta.esporte ?? params.esporte ?? null });
+      const normalized = normalizeVmNormalizedPayload(payload, {
+        esporte: coleta.esporte ?? params.esporte ?? null,
+      });
       const payloadRows = filterOddsRowsForParams(
         normalized.rows.map((row, index) => ({
           ...row,
@@ -1141,11 +1275,16 @@ async function fetchOddsRowsFromCollectionPayloads(params: FetchOddsRowsParams):
   return dedupeOddsJogoRows(rows).slice(0, params.limit ?? rows.length);
 }
 
-function collectionCanContainRows(coleta: Partial<ColetaOdds>, params: FetchOddsRowsParams): boolean {
+function collectionCanContainRows(
+  coleta: Partial<ColetaOdds>,
+  params: FetchOddsRowsParams,
+): boolean {
   const status = normalizeComparableText(coleta.status);
   if (/erro|cancel/.test(status)) return false;
-  if (params.date && !dateWithinRange(params.date, coleta.data_inicio, coleta.data_fim)) return false;
-  if (params.esporte && coleta.esporte && !sportMatches(coleta.esporte, params.esporte)) return false;
+  if (params.date && !dateWithinRange(params.date, coleta.data_inicio, coleta.data_fim))
+    return false;
+  if (params.esporte && coleta.esporte && !sportMatches(coleta.esporte, params.esporte))
+    return false;
   if (params.liga && coleta.liga && !leagueMatches(coleta.liga, params.liga)) return false;
   return true;
 }
@@ -1173,7 +1312,9 @@ function dedupeOddsJogoRows(rows: OddsJogo[]): OddsJogo[] {
       row.linha ?? "",
       row.bookmaker ?? "",
       row.odd,
-    ].join("|").toLowerCase();
+    ]
+      .join("|")
+      .toLowerCase();
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -1184,7 +1325,11 @@ function sameDate(value: unknown, expected: string): boolean {
   return parseDate(value) === parseDate(expected);
 }
 
-function dateWithinRange(date: string, start: string | null | undefined, end: string | null | undefined): boolean {
+function dateWithinRange(
+  date: string,
+  start: string | null | undefined,
+  end: string | null | undefined,
+): boolean {
   const target = parseDate(date);
   const startDate = parseDate(start);
   const endDate = parseDate(end);
@@ -1199,7 +1344,8 @@ function sportMatches(value: string | null | undefined, expected: string): boole
   const target = normalizeComparableText(expected);
   if (!current) return true;
   if (/baseball|beisebol|mlb/.test(target)) return /baseball|beisebol|mlb/.test(current);
-  if (/basketball|basquete|nba|wnba/.test(target)) return /basketball|basquete|nba|wnba/.test(current);
+  if (/basketball|basquete|nba|wnba/.test(target))
+    return /basketball|basquete|nba|wnba/.test(current);
   if (/hockey|hoquei|nhl/.test(target)) return /hockey|hoquei|nhl/.test(current);
   if (/american football|futebol americano|nfl|ncaa/.test(target)) {
     return /american football|futebol americano|nfl|ncaa/.test(current);

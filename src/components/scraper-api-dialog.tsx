@@ -53,9 +53,20 @@ function extractRows(payload: unknown, depth = 0): Row[] {
     const obj = payload as Record<string, unknown>;
     // 1) chaves prioritárias
     for (const k of [
-      "linhas", "odds", "rows", "data", "result", "results",
-      "jogos", "items", "normalized", "normalized_json", "raw_json",
-      "payload", "records", "entries",
+      "linhas",
+      "odds",
+      "rows",
+      "data",
+      "result",
+      "results",
+      "jogos",
+      "items",
+      "normalized",
+      "normalized_json",
+      "raw_json",
+      "payload",
+      "records",
+      "entries",
     ]) {
       const v = obj[k];
       if (Array.isArray(v) && v.length && typeof v[0] === "object") return v as Row[];
@@ -100,7 +111,15 @@ function pickNested(row: Row, ...paths: string[]): unknown {
 }
 
 function compactTechnicalContext(row: Row): string {
-  const source = pickNested(row, "dados_tecnicos", "technical_data", "stats", "model", "raw_ref", "metadata");
+  const source = pickNested(
+    row,
+    "dados_tecnicos",
+    "technical_data",
+    "stats",
+    "model",
+    "raw_ref",
+    "metadata",
+  );
   if (!source) return "";
   return typeof source === "string" ? source : JSON.stringify(source);
 }
@@ -111,19 +130,70 @@ function normalizeRow(row: Row): Row {
   for (const k of TARGET_KEYS) out[k] = k in row ? row[k] : "";
 
   // aliases comuns vindos da VM /normalized
-  if (!out.data) out.data = pick(row, "data_jogo", "date", "match_date", "dt", "game_date", "start_date");
-  if (!out.hora) out.hora = pick(row, "horario", "hora_jogo", "time", "kickoff", "match_time", "start_time", "hour");
+  if (!out.data)
+    out.data = pick(row, "data_jogo", "date", "match_date", "dt", "game_date", "start_date");
+  if (!out.hora)
+    out.hora = pick(
+      row,
+      "horario",
+      "hora_jogo",
+      "time",
+      "kickoff",
+      "match_time",
+      "start_time",
+      "hour",
+    );
   if (!out.esporte) out.esporte = pick(row, "sport", "esporte_nome");
-  if (!out.liga) out.liga = pick(row, "league", "campeonato", "torneio", "competition", "competition_name");
-  if (!out.mandante) out.mandante = pick(row, "home", "home_team", "time_casa", "mandante_nome", "casa", "team_home");
-  if (!out.visitante) out.visitante = pick(row, "away", "away_team", "time_fora", "visitante_nome", "fora", "team_away");
+  if (!out.liga)
+    out.liga = pick(row, "league", "campeonato", "torneio", "competition", "competition_name");
+  if (!out.mandante)
+    out.mandante = pick(
+      row,
+      "home",
+      "home_team",
+      "time_casa",
+      "mandante_nome",
+      "casa",
+      "team_home",
+    );
+  if (!out.visitante)
+    out.visitante = pick(
+      row,
+      "away",
+      "away_team",
+      "time_fora",
+      "visitante_nome",
+      "fora",
+      "team_away",
+    );
   if (!out.jogo && (out.mandante || out.visitante)) {
     out.jogo = `${String(out.mandante ?? "")} x ${String(out.visitante ?? "")}`.trim();
   }
   if (!out.jogo) out.jogo = pick(row, "match", "partida", "evento", "event", "game", "fixture");
-  if (!out.mercado) out.mercado = pick(row, "market", "market_name", "mercado_nome", "tipo_mercado", "market_type", "bet_type");
-  if (!out.pick) out.pick = pick(row, "selection", "selecao", "aposta", "pick_nome", "outcome", "runner", "side", "option");
-  if (!out.linha) out.linha = pick(row, "line", "handicap", "total", "linha_valor", "point", "points", "spread");
+  if (!out.mercado)
+    out.mercado = pick(
+      row,
+      "market",
+      "market_name",
+      "mercado_nome",
+      "tipo_mercado",
+      "market_type",
+      "bet_type",
+    );
+  if (!out.pick)
+    out.pick = pick(
+      row,
+      "selection",
+      "selecao",
+      "aposta",
+      "pick_nome",
+      "outcome",
+      "runner",
+      "side",
+      "option",
+    );
+  if (!out.linha)
+    out.linha = pick(row, "line", "handicap", "total", "linha_valor", "point", "points", "spread");
   if (!out.odd_ofertada) {
     out.odd_ofertada = pickNested(
       row,
@@ -142,11 +212,40 @@ function normalizeRow(row: Row): Row {
       "bookmaker.price",
     );
   }
-  if (!out.odd_valor) out.odd_valor = pick(row, "fair_odd", "odd_justa", "true_odd", "valor_justo", "fair", "fair_price");
-  if (!out.probabilidade_final) out.probabilidade_final = pick(row, "prob", "probability", "prob_final", "probabilidade", "probabilidade_final_pct", "prob_pct");
-  if (!out.edge) out.edge = pick(row, "ev", "value", "valor_esperado", "edge_pct", "edge_percent", "ev_pct");
+  if (!out.odd_valor)
+    out.odd_valor = pick(
+      row,
+      "fair_odd",
+      "odd_justa",
+      "true_odd",
+      "valor_justo",
+      "fair",
+      "fair_price",
+    );
+  if (!out.probabilidade_final)
+    out.probabilidade_final = pick(
+      row,
+      "prob",
+      "probability",
+      "prob_final",
+      "probabilidade",
+      "probabilidade_final_pct",
+      "prob_pct",
+    );
+  if (!out.edge)
+    out.edge = pick(row, "ev", "value", "valor_esperado", "edge_pct", "edge_percent", "ev_pct");
   if (!out.dados_tecnicos) out.dados_tecnicos = compactTechnicalContext(row);
-  if (!out.observacoes) out.observacoes = pick(row, "obs", "notes", "observacao", "bookmaker", "casa", "book", "casa_aposta");
+  if (!out.observacoes)
+    out.observacoes = pick(
+      row,
+      "obs",
+      "notes",
+      "observacao",
+      "bookmaker",
+      "casa",
+      "book",
+      "casa_aposta",
+    );
   return out;
 }
 
@@ -272,22 +371,35 @@ export function ScraperApiDialog({ onRowsReady }: Props) {
         <DialogHeader>
           <DialogTitle>Buscar jogos pela API</DialogTitle>
           <DialogDescription>
-            A VM roda a coleta em background. O resultado vai para a pré-visualização antes da importação.
+            A VM roda a coleta em background. O resultado vai para a pré-visualização antes da
+            importação.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1">
             <Label className="text-xs">Esporte *</Label>
-            <Input value={esporte} onChange={(e) => setEsporte(e.target.value)} placeholder="Futebol" />
+            <Input
+              value={esporte}
+              onChange={(e) => setEsporte(e.target.value)}
+              placeholder="Futebol"
+            />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Liga *</Label>
-            <Input value={liga} onChange={(e) => setLiga(e.target.value)} placeholder="Brasileirão" />
+            <Input
+              value={liga}
+              onChange={(e) => setLiga(e.target.value)}
+              placeholder="Brasileirão"
+            />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label className="text-xs">Data início *</Label>
-              <Input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} />
+              <Input
+                type="date"
+                value={dataInicio}
+                onChange={(e) => setDataInicio(e.target.value)}
+              />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Data fim *</Label>
@@ -304,11 +416,13 @@ export function ScraperApiDialog({ onRowsReady }: Props) {
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Bookmaker</Label>
-            <Input value={bookmaker} onChange={(e) => setBookmaker(e.target.value)} placeholder="Bet365" />
+            <Input
+              value={bookmaker}
+              onChange={(e) => setBookmaker(e.target.value)}
+              placeholder="Bet365"
+            />
           </div>
-          {statusMsg && (
-            <p className="text-xs text-muted-foreground">{statusMsg}</p>
-          )}
+          {statusMsg && <p className="text-xs text-muted-foreground">{statusMsg}</p>}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)} disabled={loading}>

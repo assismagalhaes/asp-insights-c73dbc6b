@@ -49,7 +49,9 @@ export const validateAspValidatorWithOnlineAi = createServerFn({ method: "POST" 
     const key = process.env.LOVABLE_API_KEY;
     if (!key) throw new Error("LOVABLE_API_KEY nao configurada no servidor.");
     if (!process.env.FIRECRAWL_API_KEY) {
-      throw new Error("Firecrawl nao esta conectado. Conecte-o em Conectores para usar IA + Pesquisa.");
+      throw new Error(
+        "Firecrawl nao esta conectado. Conecte-o em Conectores para usar IA + Pesquisa.",
+      );
     }
 
     const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
@@ -66,7 +68,6 @@ export const validateAspValidatorWithOnlineAi = createServerFn({ method: "POST" 
     const queryHint = buildResearchQueryHint(data.context);
     const prompt = `Contexto consolidado (esporte=${route.sport}, mercado=${route.marketDetected}; ordem: manual > structured_json > simulation_json > parecer IA anterior > pesquisa online). Use web_search/web_scrape de forma objetiva. Priorize fontes oficiais (MLB, ESPN, Baseball Savant, Baseball-Reference) e evite fontes sociais (Reddit, X, Instagram) como achado principal. Query sugerida: "${queryHint}". Retorne JSON valido.\n\n${JSON.stringify(slim)}`;
 
-
     const { text } = await generateText({
       model: gateway("google/gemini-3-flash-preview"),
       system: systemPrompt,
@@ -81,7 +82,13 @@ export const validateAspValidatorWithOnlineAi = createServerFn({ method: "POST" 
           }),
           execute: async ({ query, recency }) => {
             if (searches.length >= MAX_SEARCHES) {
-              return [{ url: "", title: "Limite de buscas atingido", snippet: "Continue com as fontes ja encontradas." }];
+              return [
+                {
+                  url: "",
+                  title: "Limite de buscas atingido",
+                  snippet: "Continue com as fontes ja encontradas.",
+                },
+              ];
             }
             searches.push(query);
             const results = await firecrawlSearch(query, { limit: 5, recency });
@@ -102,7 +109,11 @@ export const validateAspValidatorWithOnlineAi = createServerFn({ method: "POST" 
           inputSchema: z.object({ url: z.string().url() }),
           execute: async ({ url }) => {
             if (scrapeCount >= MAX_SCRAPES) {
-              return { url, title: "Limite de paginas aprofundadas atingido", markdown: "Use as fontes ja consultadas." };
+              return {
+                url,
+                title: "Limite de paginas aprofundadas atingido",
+                markdown: "Use as fontes ja consultadas.",
+              };
             }
             scrapeCount += 1;
             const scraped = await firecrawlScrape(url);
@@ -134,11 +145,17 @@ function normalizeOnlineResult(
     manual.source_probability ??
     50;
   const offeredOdd = readNumber(value.offered_odd) ?? manual.offered_odd;
-  const adjustedFairOdd = readNumber(value.adjusted_fair_odd) ?? (adjustedProbability > 0 ? round(100 / adjustedProbability) : 2);
+  const adjustedFairOdd =
+    readNumber(value.adjusted_fair_odd) ??
+    (adjustedProbability > 0 ? round(100 / adjustedProbability) : 2);
   const suggestedEv = normalizeEvPercent(readNumber(value.adjusted_ev));
   const adjustedEv =
-    assertEvConsistency(suggestedEv, adjustedProbability, offeredOdd ?? null, "asp-validator-ai-online") ??
-    calculateEvPercent(adjustedProbability, offeredOdd ?? null);
+    assertEvConsistency(
+      suggestedEv,
+      adjustedProbability,
+      offeredOdd ?? null,
+      "asp-validator-ai-online",
+    ) ?? calculateEvPercent(adjustedProbability, offeredOdd ?? null);
   const onlineSummary =
     readString(value.online_summary) ||
     "Verificacao online sem achados relevantes. Nao ha noticia ou contexto externo suficiente para alterar a analise.";
@@ -149,7 +166,9 @@ function normalizeOnlineResult(
   return {
     decision: value.decision === "CONFIRMAR" ? "CONFIRMAR" : "PULAR",
     confidence: normalizeConfidence(value.confidence),
-    source_probability: normalizeProbabilityPercent(readNumber(value.source_probability)) ?? manual.source_probability,
+    source_probability:
+      normalizeProbabilityPercent(readNumber(value.source_probability)) ??
+      manual.source_probability,
     source_fair_odd: readNumber(value.source_fair_odd) ?? manual.source_fair_odd,
     offered_odd: offeredOdd,
     source_ev: normalizeEvPercent(readNumber(value.source_ev)) ?? manual.source_ev,
@@ -157,11 +176,13 @@ function normalizeOnlineResult(
     adjusted_fair_odd: round(adjustedFairOdd),
     adjusted_ev: adjustedEv,
     online_summary: onlineSummary,
-    simulation_summary: readString(value.simulation_summary) || "Simulacao nao disponivel ou nao conclusiva.",
+    simulation_summary:
+      readString(value.simulation_summary) || "Simulacao nao disponivel ou nao conclusiva.",
     favorable_blocks: sanitizeBlocks(readStringArray(value.favorable_blocks)),
     against_blocks: sanitizeBlocks(readStringArray(value.against_blocks)),
     alerts,
-    final_analysis: readString(value.final_analysis) || "IA + Pesquisa nao forneceu parecer detalhado.",
+    final_analysis:
+      readString(value.final_analysis) || "IA + Pesquisa nao forneceu parecer detalhado.",
     analysis_context: buildAnalysisContext(context, sources, searches),
     online_context_json: {
       status: "completed",
@@ -171,7 +192,9 @@ function normalizeOnlineResult(
         ? noRelevantFindings
         : relevantFindings.length
           ? []
-          : ["Verificacao online sem achados relevantes. Nao ha noticia ou contexto externo suficiente para alterar a analise."],
+          : [
+              "Verificacao online sem achados relevantes. Nao ha noticia ou contexto externo suficiente para alterar a analise.",
+            ],
       contextual_alerts: contextualAlerts,
       sources,
       searches,
@@ -179,8 +202,15 @@ function normalizeOnlineResult(
   };
 }
 
-function buildAnalysisContext(context: Record<string, unknown>, sources: Array<{ title: string; url: string }>, searches: string[]): string {
-  const usage = context.data_usage && typeof context.data_usage === "object" ? (context.data_usage as Record<string, unknown>) : {};
+function buildAnalysisContext(
+  context: Record<string, unknown>,
+  sources: Array<{ title: string; url: string }>,
+  searches: string[],
+): string {
+  const usage =
+    context.data_usage && typeof context.data_usage === "object"
+      ? (context.data_usage as Record<string, unknown>)
+      : {};
   const route = routeValidator(context);
   return [
     "ASP Validator - IA + Pesquisa",

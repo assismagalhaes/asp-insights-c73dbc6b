@@ -1,4 +1,7 @@
-import type { MlbValidationReadinessStatus, MlbPreparedCriticalValidationPayload } from "@/types/mlbCriticalValidation";
+import type {
+  MlbValidationReadinessStatus,
+  MlbPreparedCriticalValidationPayload,
+} from "@/types/mlbCriticalValidation";
 
 export type MlbScreenerHandoffAuditStatus =
   | "created"

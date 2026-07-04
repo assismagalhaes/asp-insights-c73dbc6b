@@ -10,7 +10,10 @@ import type {
 export const validatorDb = supabase as unknown as {
   from: (table: "asp_validator_registros") => {
     select: (columns: string) => {
-      order: (column: string, options: { ascending: boolean }) => {
+      order: (
+        column: string,
+        options: { ascending: boolean },
+      ) => {
         limit: (count: number) => Promise<{ data: ValidatorRecord[] | null; error: Error | null }>;
       };
     };
@@ -29,8 +32,14 @@ export const validatorDb = supabase as unknown as {
 } & {
   from: (table: "asp_validator_uploads") => {
     select: (columns: string) => {
-      in: (column: string, values: string[]) => {
-        order: (column: string, options: { ascending: boolean }) => Promise<{ data: ValidatorUploadRecord[] | null; error: Error | null }>;
+      in: (
+        column: string,
+        values: string[],
+      ) => {
+        order: (
+          column: string,
+          options: { ascending: boolean },
+        ) => Promise<{ data: ValidatorUploadRecord[] | null; error: Error | null }>;
       };
     };
     insert: (payload: unknown) => Promise<{ error: Error | null }>;
@@ -136,8 +145,24 @@ export const INITIAL_FORM: ValidatorForm = {
   user_context: "",
 };
 
-export const SPORTS = ["Futebol", "Baseball", "Basketball", "Hockey", "American Football", "Tenis", "Outro"];
-export const PLATFORMS = ["Manual", "ASP Screener MLB", "PackBall", "Forebet", "BetClan", "Flashscore", "Outro"];
+export const SPORTS = [
+  "Futebol",
+  "Baseball",
+  "Basketball",
+  "Hockey",
+  "American Football",
+  "Tenis",
+  "Outro",
+];
+export const PLATFORMS = [
+  "Manual",
+  "ASP Screener MLB",
+  "PackBall",
+  "Forebet",
+  "BetClan",
+  "Flashscore",
+  "Outro",
+];
 export const MARKETS = [
   "Moneyline",
   "Resultado da Partida",

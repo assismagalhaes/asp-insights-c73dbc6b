@@ -2,7 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Download } from "lucide-react";
 import { StatusBadge, ResultBadge } from "@/components/status-badge";
-import { usePrognosticos, useConfiguracao, ESPORTES_DEFAULT, MERCADOS_DEFAULT, type Prognostico } from "@/lib/db";
+import {
+  usePrognosticos,
+  useConfiguracao,
+  ESPORTES_DEFAULT,
+  MERCADOS_DEFAULT,
+  type Prognostico,
+} from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -13,7 +19,13 @@ import {
 } from "@/components/ui/select";
 import { LeagueFilter } from "@/components/league-filter";
 import { PeriodFilter } from "@/components/period-filter";
-import { rangeFromPeriodo, dateInRange, lucroUnidadesAnalitico, stakeAnalitica, type PeriodoFiltro } from "@/lib/metrics";
+import {
+  rangeFromPeriodo,
+  dateInRange,
+  lucroUnidadesAnalitico,
+  stakeAnalitica,
+  type PeriodoFiltro,
+} from "@/lib/metrics";
 import { formatBR, formatHora, shouldShowLinha, todayBR } from "@/lib/date-br";
 import { DadosTecnicosViewer } from "@/components/dados-tecnicos-viewer";
 
@@ -88,23 +100,43 @@ function Historico() {
       </div>
 
       <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
-        <Select value={esporte} onValueChange={(v) => { setEsporte(v); setLiga("all"); }}>
-          <SelectTrigger><SelectValue placeholder="Esporte" /></SelectTrigger>
+        <Select
+          value={esporte}
+          onValueChange={(v) => {
+            setEsporte(v);
+            setLiga("all");
+          }}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Esporte" />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os esportes</SelectItem>
-            {esportes.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            {esportes.map((s) => (
+              <SelectItem key={s} value={s}>
+                {s}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <LeagueFilter sport={esporte} value={liga} onChange={setLiga} />
         <Select value={mercado} onValueChange={setMercado}>
-          <SelectTrigger><SelectValue placeholder="Mercado" /></SelectTrigger>
+          <SelectTrigger>
+            <SelectValue placeholder="Mercado" />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os mercados</SelectItem>
-            {mercados.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+            {mercados.map((m) => (
+              <SelectItem key={m} value={m}>
+                {m}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger><SelectValue placeholder="Validação" /></SelectTrigger>
+          <SelectTrigger>
+            <SelectValue placeholder="Validação" />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas as validações</SelectItem>
             <SelectItem value="CONFIRMA">CONFIRMA</SelectItem>
@@ -113,7 +145,9 @@ function Historico() {
           </SelectContent>
         </Select>
         <Select value={resultado} onValueChange={setResultado}>
-          <SelectTrigger><SelectValue placeholder="Resultado" /></SelectTrigger>
+          <SelectTrigger>
+            <SelectValue placeholder="Resultado" />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os resultados</SelectItem>
             <SelectItem value="GREEN">GREEN</SelectItem>
@@ -126,7 +160,11 @@ function Historico() {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
         <Stat label="Wins" value={String(wins)} tone="good" />
         <Stat label="Losses" value={String(losses)} tone="bad" />
-        <Stat label="Lucro" value={`${lucro >= 0 ?"+" : ""}${lucro.toFixed(2)}u`} tone={lucro >= 0 ?"good" : "bad"} />
+        <Stat
+          label="Lucro"
+          value={`${lucro >= 0 ? "+" : ""}${lucro.toFixed(2)}u`}
+          tone={lucro >= 0 ? "good" : "bad"}
+        />
       </div>
 
       <div className="rounded-lg border border-border bg-card overflow-hidden">
@@ -154,23 +192,39 @@ function Historico() {
             <tbody>
               {rows.map((p) => (
                 <tr key={p.id} className="border-t border-border hover:bg-muted/30">
-                  <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatBR(p.data)}</td>
-                  <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{p.hora ? formatHora(p.hora) : "-"}</td>
+                  <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">
+                    {formatBR(p.data)}
+                  </td>
+                  <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">
+                    {p.hora ? formatHora(p.hora) : "-"}
+                  </td>
                   <td className="px-3 py-2">{p.esporte}</td>
                   <td className="px-3 py-2 text-muted-foreground">{p.liga}</td>
                   <td className="px-3 py-2">{p.jogo}</td>
                   <td className="px-3 py-2 font-mono text-xs">{p.placar_final ?? "-"}</td>
                   <td className="px-3 py-2 text-muted-foreground">{p.mercado}</td>
                   <td className="px-3 py-2">{p.pick}</td>
-                  <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{shouldShowLinha(p.pick, p.linha) ? p.linha : "-"}</td>
-                  <td className="px-3 py-2 text-right font-mono">{p.odd_ofertada.toFixed(2)}</td>
-                  <td className="px-3 py-2 text-right font-mono">{stakeAnalitica(p).toFixed(1)}u</td>
-                  <td className="px-3 py-2"><StatusBadge status={p.status_validacao} /></td>
-                  <td className="px-3 py-2"><ResultBadge result={p.resultado} /></td>
-                  <td className={`px-3 py-2 text-right font-mono ${lucroUnidadesAnalitico(p) >= 0 ?"text-success" : "text-destructive"}`}>
-                    {`${lucroUnidadesAnalitico(p) >= 0 ?"+" : ""}${lucroUnidadesAnalitico(p).toFixed(2)}u`}
+                  <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                    {shouldShowLinha(p.pick, p.linha) ? p.linha : "-"}
                   </td>
-                  <td className="px-3 py-2 text-center"><DadosTecnicosViewer prognostico={p} /></td>
+                  <td className="px-3 py-2 text-right font-mono">{p.odd_ofertada.toFixed(2)}</td>
+                  <td className="px-3 py-2 text-right font-mono">
+                    {stakeAnalitica(p).toFixed(1)}u
+                  </td>
+                  <td className="px-3 py-2">
+                    <StatusBadge status={p.status_validacao} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <ResultBadge result={p.resultado} />
+                  </td>
+                  <td
+                    className={`px-3 py-2 text-right font-mono ${lucroUnidadesAnalitico(p) >= 0 ? "text-success" : "text-destructive"}`}
+                  >
+                    {`${lucroUnidadesAnalitico(p) >= 0 ? "+" : ""}${lucroUnidadesAnalitico(p).toFixed(2)}u`}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <DadosTecnicosViewer prognostico={p} />
+                  </td>
                 </tr>
               ))}
               {rows.length === 0 && (
@@ -216,7 +270,10 @@ function toHistoricoCsv(rows: Prognostico[]): string {
     { label: "job_id_coleta", value: (p) => p.job_id_coleta },
     { label: "created_at", value: (p) => p.created_at },
     { label: "updated_at", value: (p) => p.updated_at },
-    { label: "dados_tecnicos", value: (p) => p.contexto_modelo || p.dados_tecnicos || p.observacoes },
+    {
+      label: "dados_tecnicos",
+      value: (p) => p.contexto_modelo || p.dados_tecnicos || p.observacoes,
+    },
   ];
 
   return [
@@ -246,7 +303,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "go
       <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
       <div
         className={`mt-1 font-mono text-xl font-bold ${
-          tone === "good" ?"text-success" : tone === "bad" ?"text-destructive" : ""
+          tone === "good" ? "text-success" : tone === "bad" ? "text-destructive" : ""
         }`}
       >
         {value}

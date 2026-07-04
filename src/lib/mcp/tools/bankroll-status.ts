@@ -4,7 +4,8 @@ import { supabaseForUser } from "../supabase";
 export default defineTool({
   name: "bankroll_status",
   title: "Status da banca",
-  description: "Retorna o snapshot mais recente da banca (banca atual, ROI, yield, drawdown, lucro acumulado).",
+  description:
+    "Retorna o snapshot mais recente da banca (banca atual, ROI, yield, drawdown, lucro acumulado).",
   inputSchema: {},
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   handler: async (_input, ctx) => {
@@ -14,7 +15,9 @@ export default defineTool({
     const supabase = supabaseForUser(ctx);
     const { data, error } = await supabase
       .from("bankroll_historico")
-      .select("data, banca_inicial, banca_atual, lucro_acumulado, roi, yield, drawdown, valor_unidade")
+      .select(
+        "data, banca_inicial, banca_atual, lucro_acumulado, roi, yield, drawdown, valor_unidade",
+      )
       .order("data", { ascending: false })
       .limit(1)
       .maybeSingle();

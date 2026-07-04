@@ -1,7 +1,11 @@
 import type { TooltipProps } from "recharts";
 import { TOOLTIP_STYLE, TOOLTIP_LABEL_STYLE, signColor, COLOR_NEUTRAL } from "@/lib/chart-colors";
 
-type FormatterFn = (value: number, name: string, dataKey: string) => {
+type FormatterFn = (
+  value: number,
+  name: string,
+  dataKey: string,
+) => {
   label: string;
   display: string;
   /** Override de cor. Se omitir, usa signColor(value). */
@@ -31,7 +35,11 @@ export function ChartTooltip({ active, payload, label, headerFormatter, formatte
           const dk = String(entry.dataKey ?? "");
           const meta = formatter
             ? formatter(raw, String(entry.name ?? dk), dk)
-            : { label: String(entry.name ?? dk), display: String(entry.value), color: signColor(raw) };
+            : {
+                label: String(entry.name ?? dk),
+                display: String(entry.value),
+                color: signColor(raw),
+              };
           return (
             <div key={i} className="flex items-center justify-between gap-4 font-mono text-xs">
               <span style={{ color: COLOR_NEUTRAL }}>{meta.label}</span>

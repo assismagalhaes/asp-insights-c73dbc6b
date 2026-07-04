@@ -22,7 +22,9 @@ export function stakeAnalitica(p: Pick<Prognostico, "status_validacao" | "stake"
 }
 
 /** Lucro/prejuízo em unidades (independe do valor da unidade) */
-export function lucroUnidades(p: Pick<Prognostico, "resultado" | "stake" | "odd_ofertada">): number {
+export function lucroUnidades(
+  p: Pick<Prognostico, "resultado" | "stake" | "odd_ofertada">,
+): number {
   const { resultado, stake, odd_ofertada: odd } = p;
   switch (resultado) {
     case "GREEN":
@@ -91,9 +93,9 @@ export function computeMetrics(
   const lucroR = lucroU * valorUnidade;
 
   const bancaAtual = bancaInicial + lucroR;
-  const roi = totalApostadoR$ > 0 ?(lucroR / totalApostadoR$) * 100 : 0;
+  const roi = totalApostadoR$ > 0 ? (lucroR / totalApostadoR$) * 100 : 0;
   const yld = roi; // mesma fórmula (lucro / stake)
-  const winRate = resolvidas.length ?(greens / resolvidas.length) * 100 : 0;
+  const winRate = resolvidas.length ? (greens / resolvidas.length) * 100 : 0;
 
   // Drawdown a partir do timeline ordenado por data
   const timeline = bankrollTimeline(confirma, bancaInicial, valorUnidade);
@@ -138,7 +140,7 @@ export function computeValidationMetrics(
   const lucroU = rows.reduce((s, p) => s + lucroUnidadesAnalitico(p), 0);
   const lucroR = lucroU * valorUnidade;
   const oddMediaGreens = greensRows.length
-    ?greensRows.reduce((sum, p) => sum + p.odd_ofertada, 0) / greensRows.length
+    ? greensRows.reduce((sum, p) => sum + p.odd_ofertada, 0) / greensRows.length
     : 0;
 
   return {
@@ -149,9 +151,9 @@ export function computeValidationMetrics(
     totalApostadoR$,
     lucroU,
     lucroReais: lucroR,
-    roi: totalApostadoR$ > 0 ?(lucroR / totalApostadoR$) * 100 : 0,
-    yield: totalApostadoR$ > 0 ?(lucroR / totalApostadoR$) * 100 : 0,
-    winRate: resolvidas.length ?(greensRows.length / resolvidas.length) * 100 : 0,
+    roi: totalApostadoR$ > 0 ? (lucroR / totalApostadoR$) * 100 : 0,
+    yield: totalApostadoR$ > 0 ? (lucroR / totalApostadoR$) * 100 : 0,
+    winRate: resolvidas.length ? (greensRows.length / resolvidas.length) * 100 : 0,
     bancaInicial,
     bancaAtual: bancaInicial + lucroR,
     drawdown: 0,
@@ -180,8 +182,13 @@ export function bankrollTimeline(
     const delta = byDate.get(d) ?? 0;
     banca += delta;
     lucroAcum += delta;
-    const roi = bancaInicial ?(lucroAcum / bancaInicial) * 100 : 0;
-    return { data: d, banca: Number(banca.toFixed(2)), lucroAcum: Number(lucroAcum.toFixed(2)), roi: Number(roi.toFixed(2)) };
+    const roi = bancaInicial ? (lucroAcum / bancaInicial) * 100 : 0;
+    return {
+      data: d,
+      banca: Number(banca.toFixed(2)),
+      lucroAcum: Number(lucroAcum.toFixed(2)),
+      roi: Number(roi.toFixed(2)),
+    };
   });
 }
 
@@ -205,21 +212,28 @@ function brNow(): Date {
 }
 const fmt = (d: Date) => d.toISOString().slice(0, 10);
 
-export function rangeFromPeriodo(p: PeriodoFiltro, customIni?: string, customFim?: string): { ini: string | null; fim: string | null } {
+export function rangeFromPeriodo(
+  p: PeriodoFiltro,
+  customIni?: string,
+  customFim?: string,
+): { ini: string | null; fim: string | null } {
   const hoje = brNow();
   const f = fmt(hoje);
   if (p === "hoje") return { ini: f, fim: f };
   if (p === "ontem") {
-    const i = new Date(hoje); i.setDate(i.getDate() - 1);
+    const i = new Date(hoje);
+    i.setDate(i.getDate() - 1);
     const s = fmt(i);
     return { ini: s, fim: s };
   }
   if (p === "7d") {
-    const i = new Date(hoje); i.setDate(i.getDate() - 6);
+    const i = new Date(hoje);
+    i.setDate(i.getDate() - 6);
     return { ini: fmt(i), fim: f };
   }
   if (p === "30d") {
-    const i = new Date(hoje); i.setDate(i.getDate() - 29);
+    const i = new Date(hoje);
+    i.setDate(i.getDate() - 29);
     return { ini: fmt(i), fim: f };
   }
   if (p === "mes") {

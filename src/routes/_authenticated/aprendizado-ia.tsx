@@ -5,7 +5,13 @@ import { BrainCircuit, TrendingUp, Scale, Target, Split, Activity } from "lucide
 import { supabase } from "@/lib/supabase-public";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { PeriodFilter } from "@/components/period-filter";
 import { LeagueFilter } from "@/components/league-filter";
 import { StatCard } from "@/components/stat-card";
@@ -67,7 +73,12 @@ type LearningRow = Pick<
 >;
 
 type HistoricalPrognostico = Prognostico & {
-  resultados?: Array<{ resultado: string; lucro_prejuizo: number | null; created_at: string; data_resultado: string | null }>;
+  resultados?: Array<{
+    resultado: string;
+    lucro_prejuizo: number | null;
+    created_at: string;
+    data_resultado: string | null;
+  }>;
   validacoes?: Array<Partial<Validacao>>;
 };
 
@@ -117,7 +128,9 @@ function AprendizadoIaPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("prognosticos")
-        .select("*, resultados(resultado, lucro_prejuizo, data_resultado, created_at), validacoes(*)")
+        .select(
+          "*, resultados(resultado, lucro_prejuizo, data_resultado, created_at), validacoes(*)",
+        )
         .in("resultado", ["GREEN", "RED", "WIN", "WINS", "LOSS", "LOSSES"]);
       if (error) {
         console.warn("[Aprendizado IA] histórico retroativo indisponível:", error.message);
@@ -160,19 +173,21 @@ function AprendizadoIaPage() {
         stake_humana_final: stakeHumana,
         resultado_real: resultado,
         resultado_teorico: resultado,
-        resultado_financeiro: contaBankroll ?resultado : null,
+        resultado_financeiro: contaBankroll ? resultado : null,
         conta_bankroll: contaBankroll,
-        lucro_prejuizo: contaBankroll ?lucro : 0,
+        lucro_prejuizo: contaBankroll ? lucro : 0,
         lucro_unidades: lucro,
         lucro_teorico_unidades: lucro,
-        lucro_financeiro_unidades: contaBankroll ?lucro : 0,
+        lucro_financeiro_unidades: contaBankroll ? lucro : 0,
         odd_usada: getOddEfetiva(p),
         probabilidade_final: p.probabilidade_final,
         edge_usado: getEdgeEfetivo(p),
-        tags_risco: extractTagsFromLegacyText(validacao?.parecer_ia ?? validacao?.parecer_validacao ?? p.observacoes),
-        acertou_ia: decisaoIa ?decisionHit(decisaoIa, resultado) : null,
-        acertou_humano: decisaoHumana ?decisionHit(decisaoHumana, resultado) : null,
-        divergencia_ia_humano: decisaoIa && decisaoHumana ?decisaoIa !== decisaoHumana : null,
+        tags_risco: extractTagsFromLegacyText(
+          validacao?.parecer_ia ?? validacao?.parecer_validacao ?? p.observacoes,
+        ),
+        acertou_ia: decisaoIa ? decisionHit(decisaoIa, resultado) : null,
+        acertou_humano: decisaoHumana ? decisionHit(decisaoHumana, resultado) : null,
+        divergencia_ia_humano: decisaoIa && decisaoHumana ? decisaoIa !== decisaoHumana : null,
         created_at: resultadoRow?.created_at ?? p.updated_at ?? p.created_at,
       });
     }
@@ -194,7 +209,9 @@ function AprendizadoIaPage() {
       ...analises.map((a) => a.esporte).filter(Boolean),
       ...learningRows.map((row) => row.esporte).filter(Boolean),
     ] as string[];
-    return [...new Set([...esportesCfg, ...esportesImportados])].sort((a, b) => a.localeCompare(b, "pt-BR"));
+    return [...new Set([...esportesCfg, ...esportesImportados])].sort((a, b) =>
+      a.localeCompare(b, "pt-BR"),
+    );
   }, [esportesCfg, analises, learningRows]);
 
   const filteredAnalises = useMemo(
@@ -205,7 +222,8 @@ function AprendizadoIaPage() {
         if (liga !== "all" && a.liga !== liga) return false;
         if (mercado !== "all" && a.mercado !== mercado) return false;
         if (modoIa !== "all" && a.modo_ia !== modoIa) return false;
-        if (decisaoIa !== "all" && normalizeAiDecision(a.decisao_sugerida) !== decisaoIa) return false;
+        if (decisaoIa !== "all" && normalizeAiDecision(a.decisao_sugerida) !== decisaoIa)
+          return false;
         return true;
       }),
     [analises, ini, fim, esporte, liga, mercado, modoIa, decisaoIa],
@@ -219,19 +237,34 @@ function AprendizadoIaPage() {
         if (liga !== "all" && f.liga !== liga) return false;
         if (mercado !== "all" && f.mercado !== mercado) return false;
         if (modoIa !== "all" && f.modo_ia !== modoIa) return false;
-        if (decisaoIa !== "all" && normalizeAiDecision(f.decisao_ia_sugerida) !== decisaoIa) return false;
-        if (decisaoHumana !== "all" && normalizeAiDecision(f.decisao_humana_final) !== decisaoHumana) return false;
+        if (decisaoIa !== "all" && normalizeAiDecision(f.decisao_ia_sugerida) !== decisaoIa)
+          return false;
+        if (
+          decisaoHumana !== "all" &&
+          normalizeAiDecision(f.decisao_humana_final) !== decisaoHumana
+        )
+          return false;
         if (resultado !== "all" && getOutcome(f) !== resultado) return false;
         return true;
       }),
     [learningRows, ini, fim, esporte, liga, mercado, modoIa, decisaoIa, decisaoHumana, resultado],
   );
 
-  const iaConfirmadas = filteredAnalises.filter((a) => normalizeAiDecision(a.decisao_sugerida) === "CONFIRMAR");
-  const rowsComDecisaoIa = filteredFeedback.filter((row) => normalizeAiDecision(row.decisao_ia_sugerida));
-  const rowsConfirmadasIa = rowsComDecisaoIa.filter((row) => normalizeAiDecision(row.decisao_ia_sugerida) === "CONFIRMAR");
-  const feedbackConfirmadasIa = filteredFeedback.filter((f) => normalizeAiDecision(f.decisao_ia_sugerida) === "CONFIRMAR");
-  const feedbackPuladasIa = filteredFeedback.filter((f) => normalizeAiDecision(f.decisao_ia_sugerida) === "PULAR");
+  const iaConfirmadas = filteredAnalises.filter(
+    (a) => normalizeAiDecision(a.decisao_sugerida) === "CONFIRMAR",
+  );
+  const rowsComDecisaoIa = filteredFeedback.filter((row) =>
+    normalizeAiDecision(row.decisao_ia_sugerida),
+  );
+  const rowsConfirmadasIa = rowsComDecisaoIa.filter(
+    (row) => normalizeAiDecision(row.decisao_ia_sugerida) === "CONFIRMAR",
+  );
+  const feedbackConfirmadasIa = filteredFeedback.filter(
+    (f) => normalizeAiDecision(f.decisao_ia_sugerida) === "CONFIRMAR",
+  );
+  const feedbackPuladasIa = filteredFeedback.filter(
+    (f) => normalizeAiDecision(f.decisao_ia_sugerida) === "PULAR",
+  );
   const feedbackComAcertoIa = filteredFeedback.filter((f) => f.acertou_ia != null);
   const acertosIa = feedbackComAcertoIa.filter((f) => f.acertou_ia === true).length;
   const confirmadasGreen = feedbackConfirmadasIa.filter((f) => getOutcome(f) === "GREEN").length;
@@ -239,19 +272,26 @@ function AprendizadoIaPage() {
   const puladasGreen = feedbackPuladasIa.filter((f) => getOutcome(f) === "GREEN").length;
   const puladasRed = feedbackPuladasIa.filter((f) => getOutcome(f) === "RED").length;
   const lucroUnidadesIa = feedbackConfirmadasIa.reduce((sum, f) => sum + getFinancialUnits(f), 0);
-  const stakeConfirmadaIa = feedbackConfirmadasIa.reduce((sum, f) => sum + Number(f.stake_humana_final ?? f.stake_ia_sugerida ?? 0), 0);
+  const stakeConfirmadaIa = feedbackConfirmadasIa.reduce(
+    (sum, f) => sum + Number(f.stake_humana_final ?? f.stake_ia_sugerida ?? 0),
+    0,
+  );
   const divergencias = filteredFeedback.filter((f) => f.divergencia_ia_humano).length;
 
   const stats = {
     total: filteredFeedback.length,
-    local: filteredFeedback.filter((row) => row.modo_ia === "local").length || filteredAnalises.filter((a) => a.modo_ia === "local").length,
-    online: filteredFeedback.filter((row) => row.modo_ia === "online").length || filteredAnalises.filter((a) => a.modo_ia === "online").length,
+    local:
+      filteredFeedback.filter((row) => row.modo_ia === "local").length ||
+      filteredAnalises.filter((a) => a.modo_ia === "local").length,
+    online:
+      filteredFeedback.filter((row) => row.modo_ia === "online").length ||
+      filteredAnalises.filter((a) => a.modo_ia === "online").length,
     taxaConfirmacao: rowsComDecisaoIa.length
-      ?(rowsConfirmadasIa.length / rowsComDecisaoIa.length) * 100
+      ? (rowsConfirmadasIa.length / rowsComDecisaoIa.length) * 100
       : filteredAnalises.length
-        ?(iaConfirmadas.length / filteredAnalises.length) * 100
+        ? (iaConfirmadas.length / filteredAnalises.length) * 100
         : 0,
-    taxaAcerto: feedbackComAcertoIa.length ?(acertosIa / feedbackComAcertoIa.length) * 100 : 0,
+    taxaAcerto: feedbackComAcertoIa.length ? (acertosIa / feedbackComAcertoIa.length) * 100 : 0,
     confirmadasGreen,
     confirmadasRed,
     puladasGreen,
@@ -260,7 +300,7 @@ function AprendizadoIaPage() {
     confirmarIncorreto: confirmadasRed,
     pularCorreto: puladasRed,
     pularIncorreto: puladasGreen,
-    roiConfirmadasIa: stakeConfirmadaIa > 0 ?(lucroUnidadesIa / stakeConfirmadaIa) * 100 : 0,
+    roiConfirmadasIa: stakeConfirmadaIa > 0 ? (lucroUnidadesIa / stakeConfirmadaIa) * 100 : 0,
     lucroUnidades: lucroUnidadesIa,
     lucroReal: lucroUnidadesIa * valorUnidade,
     divergencias,
@@ -279,7 +319,8 @@ function AprendizadoIaPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Aprendizado da IA</h1>
         <p className="text-sm text-muted-foreground">
-          Memória operacional entre análise da IA, decisão humana e resultados GREEN/RED. Confirmadas medem banca; puladas medem qualidade da decisão de recusa.
+          Memória operacional entre análise da IA, decisão humana e resultados GREEN/RED.
+          Confirmadas medem banca; puladas medem qualidade da decisão de recusa.
         </p>
       </div>
 
@@ -294,36 +335,78 @@ function AprendizadoIaPage() {
               onCustomIniChange={setCustomIni}
               onCustomFimChange={setCustomFim}
             />
-            <Filter label="Esporte" value={esporte} onChange={(v) => { setEsporte(v); setLiga("all"); }} options={["all", ...esportes]} allLabel="Todos" />
+            <Filter
+              label="Esporte"
+              value={esporte}
+              onChange={(v) => {
+                setEsporte(v);
+                setLiga("all");
+              }}
+              options={["all", ...esportes]}
+              allLabel="Todos"
+            />
             <div>
-              <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Liga</Label>
+              <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
+                Liga
+              </Label>
               <LeagueFilter sport={esporte} value={liga} onChange={setLiga} className="h-9 w-48" />
             </div>
-            <Filter label="Mercado" value={mercado} onChange={setMercado} options={["all", ...mercados]} allLabel="Todos" />
-            <Filter label="Modo IA" value={modoIa} onChange={setModoIa} options={["all", "local", "online"]} allLabel="Todos" />
-            <Filter label="Decisão IA" value={decisaoIa} onChange={setDecisaoIa} options={["all", "CONFIRMAR", "PULAR"]} allLabel="Todas" />
-            <Filter label="Decisão humana" value={decisaoHumana} onChange={setDecisaoHumana} options={["all", "CONFIRMAR", "PULAR"]} allLabel="Todas" />
-            <Filter label="Resultado" value={resultado} onChange={setResultado} options={["all", "GREEN", "RED"]} allLabel="Todos" />
+            <Filter
+              label="Mercado"
+              value={mercado}
+              onChange={setMercado}
+              options={["all", ...mercados]}
+              allLabel="Todos"
+            />
+            <Filter
+              label="Modo IA"
+              value={modoIa}
+              onChange={setModoIa}
+              options={["all", "local", "online"]}
+              allLabel="Todos"
+            />
+            <Filter
+              label="Decisão IA"
+              value={decisaoIa}
+              onChange={setDecisaoIa}
+              options={["all", "CONFIRMAR", "PULAR"]}
+              allLabel="Todas"
+            />
+            <Filter
+              label="Decisão humana"
+              value={decisaoHumana}
+              onChange={setDecisaoHumana}
+              options={["all", "CONFIRMAR", "PULAR"]}
+              allLabel="Todas"
+            />
+            <Filter
+              label="Resultado"
+              value={resultado}
+              onChange={setResultado}
+              options={["all", "GREEN", "RED"]}
+              allLabel="Todos"
+            />
           </div>
         </CardContent>
       </Card>
 
-      {loadingHistorico ?(
+      {loadingHistorico ? (
         <Card>
           <CardContent className="py-6 text-sm text-muted-foreground">
             Carregando histórico de aprendizado...
           </CardContent>
         </Card>
-      ) : !hasData ?(
+      ) : !hasData ? (
         <Card>
           <CardContent className="py-6 text-sm text-muted-foreground">
             Nenhum dado encontrado para os filtros selecionados.
           </CardContent>
         </Card>
-      ) : feedback.length === 0 && historico.length > 0 ?(
+      ) : feedback.length === 0 && historico.length > 0 ? (
         <Card>
           <CardContent className="py-4 text-sm text-muted-foreground">
-            Histórico atualizado com dados retroativos a partir de prognósticos, validações e resultados existentes.
+            Histórico atualizado com dados retroativos a partir de prognósticos, validações e
+            resultados existentes.
           </CardContent>
         </Card>
       ) : null}
@@ -332,25 +415,90 @@ function AprendizadoIaPage() {
         <StatCard label="Prognósticos analisados" value={String(stats.total)} icon={BrainCircuit} />
         <StatCard label="IA local" value={String(stats.local)} icon={Activity} />
         <StatCard label="IA online" value={String(stats.online)} icon={Activity} />
-        <StatCard label="Taxa de confirmação IA" value={`${stats.taxaConfirmacao.toFixed(1)}%`} icon={Target} />
-        <StatCard label="Acerto geral IA" value={`${stats.taxaAcerto.toFixed(1)}%`} icon={TrendingUp} />
-        <StatCard label="Confirmadas IA GREEN/RED" value={`${stats.confirmadasGreen}/${stats.confirmadasRed}`} icon={Target} />
-        <StatCard label="ROI confirmadas IA" value={`${stats.roiConfirmadasIa.toFixed(1)}%`} icon={TrendingUp} trend={stats.roiConfirmadasIa >= 0 ?"up" : "down"} />
-        <StatCard label="Puladas IA GREEN/RED" value={`${stats.puladasGreen}/${stats.puladasRed}`} icon={Split} />
-        <StatCard label="Pular correto" value={String(stats.pularCorreto)} icon={Split} trend="up" />
-        <StatCard label="Pular incorreto" value={String(stats.pularIncorreto)} icon={Split} trend={stats.pularIncorreto > 0 ?"down" : "neutral"} />
-        <StatCard label="Confirmar correto" value={String(stats.confirmarCorreto)} icon={Target} trend="up" />
-        <StatCard label="Confirmar incorreto" value={String(stats.confirmarIncorreto)} icon={Target} trend={stats.confirmarIncorreto > 0 ?"down" : "neutral"} />
-        <StatCard label="Lucro real IA" value={`R$ ${stats.lucroReal.toFixed(2)}`} icon={Scale} trend={stats.lucroReal >= 0 ?"up" : "down"} />
-        <StatCard label="Lucro (u) IA" value={`${stats.lucroUnidades.toFixed(2)}u`} icon={Scale} trend={stats.lucroUnidades >= 0 ?"up" : "down"} />
-        <StatCard label="Divergências IA x humano" value={String(stats.divergencias)} icon={Split} />
+        <StatCard
+          label="Taxa de confirmação IA"
+          value={`${stats.taxaConfirmacao.toFixed(1)}%`}
+          icon={Target}
+        />
+        <StatCard
+          label="Acerto geral IA"
+          value={`${stats.taxaAcerto.toFixed(1)}%`}
+          icon={TrendingUp}
+        />
+        <StatCard
+          label="Confirmadas IA GREEN/RED"
+          value={`${stats.confirmadasGreen}/${stats.confirmadasRed}`}
+          icon={Target}
+        />
+        <StatCard
+          label="ROI confirmadas IA"
+          value={`${stats.roiConfirmadasIa.toFixed(1)}%`}
+          icon={TrendingUp}
+          trend={stats.roiConfirmadasIa >= 0 ? "up" : "down"}
+        />
+        <StatCard
+          label="Puladas IA GREEN/RED"
+          value={`${stats.puladasGreen}/${stats.puladasRed}`}
+          icon={Split}
+        />
+        <StatCard
+          label="Pular correto"
+          value={String(stats.pularCorreto)}
+          icon={Split}
+          trend="up"
+        />
+        <StatCard
+          label="Pular incorreto"
+          value={String(stats.pularIncorreto)}
+          icon={Split}
+          trend={stats.pularIncorreto > 0 ? "down" : "neutral"}
+        />
+        <StatCard
+          label="Confirmar correto"
+          value={String(stats.confirmarCorreto)}
+          icon={Target}
+          trend="up"
+        />
+        <StatCard
+          label="Confirmar incorreto"
+          value={String(stats.confirmarIncorreto)}
+          icon={Target}
+          trend={stats.confirmarIncorreto > 0 ? "down" : "neutral"}
+        />
+        <StatCard
+          label="Lucro real IA"
+          value={`R$ ${stats.lucroReal.toFixed(2)}`}
+          icon={Scale}
+          trend={stats.lucroReal >= 0 ? "up" : "down"}
+        />
+        <StatCard
+          label="Lucro (u) IA"
+          value={`${stats.lucroUnidades.toFixed(2)}u`}
+          icon={Scale}
+          trend={stats.lucroUnidades >= 0 ? "up" : "down"}
+        />
+        <StatCard
+          label="Divergências IA x humano"
+          value={String(stats.divergencias)}
+          icon={Split}
+        />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <ChartCard title="Acerto da IA por esporte (%)" rows={acertoPorEsporte} suffix="%" />
         <ChartCard title="Acerto da IA por mercado (%)" rows={acertoPorMercado} suffix="%" />
-        <ChartCard title="Resultado oficial por esporte das confirmadas IA (u)" rows={lucroPorEsporte} suffix="u" diverging />
-        <ChartCard title="Resultado oficial por mercado das confirmadas IA (u)" rows={lucroPorMercado} suffix="u" diverging />
+        <ChartCard
+          title="Resultado oficial por esporte das confirmadas IA (u)"
+          rows={lucroPorEsporte}
+          suffix="u"
+          diverging
+        />
+        <ChartCard
+          title="Resultado oficial por mercado das confirmadas IA (u)"
+          rows={lucroPorMercado}
+          suffix="u"
+          diverging
+        />
         <ChartCard title="IA local vs IA online (%)" rows={modoComparativo} suffix="%" />
         <ChartCard title="Tags de risco mais associadas a RED" rows={tagsRed} suffix="" />
       </div>
@@ -373,13 +521,17 @@ function Filter({
 }) {
   return (
     <div>
-      <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">{label}</Label>
+      <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
+        {label}
+      </Label>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
+        <SelectTrigger className="h-9 w-44">
+          <SelectValue />
+        </SelectTrigger>
         <SelectContent>
           {options.map((option) => (
             <SelectItem key={option} value={option}>
-              {option === "all" ?allLabel : option}
+              {option === "all" ? allLabel : option}
             </SelectItem>
           ))}
         </SelectContent>
@@ -388,26 +540,53 @@ function Filter({
   );
 }
 
-function ChartCard({ title, rows, suffix, diverging = false }: { title: string; rows: BarRow[]; suffix: string; diverging?: boolean }) {
+function ChartCard({
+  title,
+  rows,
+  suffix,
+  diverging = false,
+}: {
+  title: string;
+  rows: BarRow[];
+  suffix: string;
+  diverging?: boolean;
+}) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-sm uppercase tracking-wider text-muted-foreground">{title}</CardTitle>
+        <CardTitle className="text-sm uppercase tracking-wider text-muted-foreground">
+          {title}
+        </CardTitle>
       </CardHeader>
       <CardContent>
-        {rows.length ?(
+        {rows.length ? (
           <div className="space-y-2">
             {rows.slice(0, 10).map((row) => (
               <div key={row.label} className="space-y-1">
                 <div className="flex items-center justify-between gap-3 text-xs">
                   <span className="truncate text-muted-foreground">{row.label}</span>
-                  <span className={row.value > 0 ?"text-success" : row.value < 0 ?"text-destructive" : "text-muted-foreground"}>
-                    {row.value.toFixed(1)}{suffix}
+                  <span
+                    className={
+                      row.value > 0
+                        ? "text-success"
+                        : row.value < 0
+                          ? "text-destructive"
+                          : "text-muted-foreground"
+                    }
+                  >
+                    {row.value.toFixed(1)}
+                    {suffix}
                   </span>
                 </div>
                 <div className="h-2 rounded bg-muted">
                   <div
-                    className={diverging ?(row.value >= 0 ?"h-2 rounded bg-success" : "h-2 rounded bg-destructive") : "h-2 rounded bg-primary"}
+                    className={
+                      diverging
+                        ? row.value >= 0
+                          ? "h-2 rounded bg-success"
+                          : "h-2 rounded bg-destructive"
+                        : "h-2 rounded bg-primary"
+                    }
                     style={{ width: `${Math.max(4, Math.min(100, row.percent))}%` }}
                   />
                 </div>
@@ -415,7 +594,9 @@ function ChartCard({ title, rows, suffix, diverging = false }: { title: string; 
             ))}
           </div>
         ) : (
-          <div className="py-12 text-center text-sm text-muted-foreground">Nenhum resultado encontrado para os filtros selecionados.</div>
+          <div className="py-12 text-center text-sm text-muted-foreground">
+            Nenhum resultado encontrado para os filtros selecionados.
+          </div>
         )}
       </CardContent>
     </Card>
@@ -441,11 +622,19 @@ function rateBy(rows: LearningRow[], field: keyof LearningRow): BarRow[] {
   }
   return [...map.entries()]
     .filter(([, value]) => value.total > 0)
-    .map(([label, value]) => ({ label, value: value.total ?(value.ok / value.total) * 100 : 0, percent: value.total ?(value.ok / value.total) * 100 : 0 }))
+    .map(([label, value]) => ({
+      label,
+      value: value.total ? (value.ok / value.total) * 100 : 0,
+      percent: value.total ? (value.ok / value.total) * 100 : 0,
+    }))
     .sort((a, b) => b.value - a.value);
 }
 
-function sumBy(rows: LearningRow[], field: keyof LearningRow, sumField: keyof LearningRow): BarRow[] {
+function sumBy(
+  rows: LearningRow[],
+  field: keyof LearningRow,
+  sumField: keyof LearningRow,
+): BarRow[] {
   const map = new Map<string, number>();
   for (const row of rows) {
     const key = String(row[field] ?? "Sem dado");
@@ -486,11 +675,15 @@ function getOutcome(row: LearningRow): string | null {
 }
 
 function getFinancialUnits(row: LearningRow): number {
-  return Number(row.lucro_financeiro_unidades ?? (row.conta_bankroll === false ? 0 : row.lucro_unidades ?? 0));
+  return Number(
+    row.lucro_financeiro_unidades ?? (row.conta_bankroll === false ? 0 : (row.lucro_unidades ?? 0)),
+  );
 }
 
 function normalizeOutcome(resultado: string | null | undefined): "GREEN" | "RED" | null {
-  const value = String(resultado ?? "").toUpperCase().trim();
+  const value = String(resultado ?? "")
+    .toUpperCase()
+    .trim();
   if (["GREEN", "WIN", "WINS"].includes(value)) return "GREEN";
   if (["RED", "LOSS", "LOSSES"].includes(value)) return "RED";
   return null;
@@ -498,10 +691,17 @@ function normalizeOutcome(resultado: string | null | undefined): "GREEN" | "RED"
 
 function latestByCreatedAt<T extends { created_at?: string | null }>(rows: T[]): T | null {
   if (!rows.length) return null;
-  return [...rows].sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")))[0] ?? null;
+  return (
+    [...rows].sort((a, b) =>
+      String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")),
+    )[0] ?? null
+  );
 }
 
-function decisionHit(decision: "CONFIRMAR" | "PULAR" | null, resultado: "GREEN" | "RED"): boolean | null {
+function decisionHit(
+  decision: "CONFIRMAR" | "PULAR" | null,
+  resultado: "GREEN" | "RED",
+): boolean | null {
   if (decision === "CONFIRMAR") return resultado === "GREEN";
   if (decision === "PULAR") return resultado === "RED";
   return null;
@@ -512,8 +712,14 @@ function extractTagsFromLegacyText(text: string | null | undefined): string[] {
   const tags: string[] = [];
   const checks: Array<[string, RegExp]> = [
     ["info_ausente", /não encontrado|nao encontrado|ausente|incert|não confirmad|nao confirmad/],
-    ["risco_estrutural", /risco estrutural|lineup|escalação|escalacao|rotação|rotacao|desfalque|lesão|lesao|questionável|questionavel/],
-    ["fonte_fraca", /fonte insuficiente|fonte fraca|sem fonte|desatualizad|notícia antiga|noticia antiga/],
+    [
+      "risco_estrutural",
+      /risco estrutural|lineup|escalação|escalacao|rotação|rotacao|desfalque|lesão|lesao|questionável|questionavel/,
+    ],
+    [
+      "fonte_fraca",
+      /fonte insuficiente|fonte fraca|sem fonte|desatualizad|notícia antiga|noticia antiga/,
+    ],
     ["duplicidade", /duplicidade|correlaç|correlac|redundan/],
     ["volatilidade", /volátil|volatil|variância|variancia|mercado volátil|mercado volatil/],
     ["clima", /clima|vento|chuva|temperatura|weather/],

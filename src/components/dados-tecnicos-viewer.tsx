@@ -9,7 +9,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { getDadosTecnicos, getEdgeEfetivo, getOddEfetiva, useValidacaoByPrognostico, type Prognostico } from "@/lib/db";
+import {
+  getDadosTecnicos,
+  getEdgeEfetivo,
+  getOddEfetiva,
+  useValidacaoByPrognostico,
+  type Prognostico,
+} from "@/lib/db";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -56,7 +62,7 @@ export function DadosTecnicosViewer({ prognostico, variant = "icon", className }
   return (
     <>
       <Button
-        size={variant === "icon" ?"icon" : "sm"}
+        size={variant === "icon" ? "icon" : "sm"}
         variant="ghost"
         onClick={() => setOpen(true)}
         title="Ver contexto da análise"
@@ -85,7 +91,9 @@ export function DadosTecnicosViewer({ prognostico, variant = "icon", className }
                 <Info label="Odd valor" value={prognostico.odd_valor.toFixed(2)} />
                 <Info label="Edge usado" value={`${edgeEfetivo.toFixed(2)}%`} />
               </div>
-              {(prognostico.origem_modelo || prognostico.job_id_coleta || prognostico.arquivo_contexto) && (
+              {(prognostico.origem_modelo ||
+                prognostico.job_id_coleta ||
+                prognostico.arquivo_contexto) && (
                 <div className="grid gap-2 sm:grid-cols-2">
                   <Info label="Origem modelo" value={prognostico.origem_modelo || "-"} />
                   <Info label="Job coleta" value={prognostico.job_id_coleta || "-"} />
@@ -100,7 +108,12 @@ export function DadosTecnicosViewer({ prognostico, variant = "icon", className }
               <div className="grid gap-2 sm:grid-cols-2">
                 <Info label="Modo IA" value={validacao?.modo_ia || "-"} />
                 <Info label="Decisão IA" value={validacao?.decisao_ia_sugerida || "-"} />
-                <Info label="Stake IA" value={validacao?.stake_ia_sugerida != null ? `${validacao.stake_ia_sugerida}u` : "-"} />
+                <Info
+                  label="Stake IA"
+                  value={
+                    validacao?.stake_ia_sugerida != null ? `${validacao.stake_ia_sugerida}u` : "-"
+                  }
+                />
               </div>
               <pre className="max-h-[34vh] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 font-mono text-xs">
                 {textoIa || "Nenhuma análise de IA registrada."}
@@ -108,12 +121,19 @@ export function DadosTecnicosViewer({ prognostico, variant = "icon", className }
               <div className="grid gap-2 md:grid-cols-2">
                 <ListBlock title="Buscas realizadas" items={validacao?.buscas_realizadas ?? []} />
                 <div className="rounded-md border border-border bg-muted/20 p-3">
-                  <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Fontes consultadas</div>
-                  {validacao?.fontes_consultadas?.length ?(
+                  <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Fontes consultadas
+                  </div>
+                  {validacao?.fontes_consultadas?.length ? (
                     <ul className="space-y-1 text-xs">
                       {validacao.fontes_consultadas.map((fonte, index) => (
                         <li key={`${fonte.url}-${index}`}>
-                          <a href={fonte.url} target="_blank" rel="noreferrer noopener" className="text-primary hover:underline">
+                          <a
+                            href={fonte.url}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            className="text-primary hover:underline"
+                          >
                             {fonte.titulo || fonte.url}
                           </a>
                         </li>
@@ -135,7 +155,9 @@ export function DadosTecnicosViewer({ prognostico, variant = "icon", className }
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md border border-border bg-muted/20 p-2">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
       <div className="mt-0.5 break-words text-sm font-medium">{value}</div>
     </div>
   );
@@ -144,10 +166,14 @@ function Info({ label, value }: { label: string; value: string }) {
 function ListBlock({ title, items }: { title: string; items: string[] }) {
   return (
     <div className="rounded-md border border-border bg-muted/20 p-3">
-      <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{title}</div>
-      {items.length ?(
+      <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {title}
+      </div>
+      {items.length ? (
         <ul className="space-y-1 text-xs text-muted-foreground">
-          {items.map((item, index) => <li key={`${item}-${index}`}>- {item}</li>)}
+          {items.map((item, index) => (
+            <li key={`${item}-${index}`}>- {item}</li>
+          ))}
         </ul>
       ) : (
         <div className="text-xs text-muted-foreground">Nenhum registro.</div>

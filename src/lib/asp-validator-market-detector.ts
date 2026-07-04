@@ -22,7 +22,6 @@ export type FootballMarketType =
   | "cards"
   | "first_goal";
 
-
 export type FootballPeriod = "FT" | "HT" | "ST";
 
 export type ValidatorModel =
@@ -83,7 +82,11 @@ function detectTypeFromMarketLine(line: string): FootballMarketType | null {
   const t = norm(line);
   // Prioridade maxima: "Primeiro a marcar" deve vir ANTES de 1X2/escanteios,
   // pois pode conter palavras como "Casa"/nome do time que confundem 1X2.
-  if (/marcar\s+primeiro|marca\s+primeiro|primeiro\s+(a|para)\s+marcar|first\s+goal|first\s+to\s+score|team\s+to\s+score\s+first|abrir\s+o\s+placar/.test(t)) {
+  if (
+    /marcar\s+primeiro|marca\s+primeiro|primeiro\s+(a|para)\s+marcar|first\s+goal|first\s+to\s+score|team\s+to\s+score\s+first|abrir\s+o\s+placar/.test(
+      t,
+    )
+  ) {
     return "first_goal";
   }
   if (/escanteio|corner|canto/.test(t)) return "corners";
@@ -102,7 +105,6 @@ function detectTypeFromMarketLine(line: string): FootballMarketType | null {
     return "goals_total";
   return null;
 }
-
 
 function detectSelectionSide(
   type: FootballMarketType | null,
@@ -123,7 +125,6 @@ function detectSelectionSide(
   return null;
 }
 
-
 export function detectFootballMarketType(
   rawText: string,
   formMarket?: string | null,
@@ -140,7 +141,11 @@ export function detectFootballMarketType(
 
   // 2. So depois caimos para deteccao por blocos estatisticos auxiliares.
   if (!market_type) {
-    if (/marcar\s+primeiro|marca\s+primeiro|primeiro\s+(a|para)\s+marcar|first\s+goal|first\s+to\s+score|team\s+to\s+score\s+first|abrir\s+o\s+placar/.test(blob))
+    if (
+      /marcar\s+primeiro|marca\s+primeiro|primeiro\s+(a|para)\s+marcar|first\s+goal|first\s+to\s+score|team\s+to\s+score\s+first|abrir\s+o\s+placar/.test(
+        blob,
+      )
+    )
       market_type = "first_goal";
     else if (/escanteio|corner|canto/.test(blob)) market_type = "corners";
     else if (/cartao|cartoes|cards?|amarel|vermelh/.test(blob)) market_type = "cards";
@@ -157,11 +162,24 @@ export function detectFootballMarketType(
       market_type = "goals_total";
   }
 
-
   const line = extractLine(`${formPick || ""} ${formMarket || ""}`);
-  const pick_normalized = normalizePick(formMarket || "", formPick || "", market_type, period, line, homeTeam, awayTeam);
+  const pick_normalized = normalizePick(
+    formMarket || "",
+    formPick || "",
+    market_type,
+    period,
+    line,
+    homeTeam,
+    awayTeam,
+  );
   const validator_model = inferValidatorModelFromType(market_type);
-  const selection_side = detectSelectionSide(market_type, formPick || "", formMarket || "", homeTeam, awayTeam);
+  const selection_side = detectSelectionSide(
+    market_type,
+    formPick || "",
+    formMarket || "",
+    homeTeam,
+    awayTeam,
+  );
 
   return {
     market_type,
@@ -253,7 +271,6 @@ function normalizePick(
   }
   return raw;
 }
-
 
 /**
  * Sinonimos de "mando": retorna "all", "home" ou "away" se conseguir inferir

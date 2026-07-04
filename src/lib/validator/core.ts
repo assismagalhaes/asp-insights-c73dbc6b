@@ -139,12 +139,17 @@ export function hasIdentifiedMlbStarters(context: Record<string, unknown>): bool
   for (const path of paths) {
     let cur: unknown = context;
     for (const key of path) {
-      if (!cur || typeof cur !== "object") { cur = undefined; break; }
+      if (!cur || typeof cur !== "object") {
+        cur = undefined;
+        break;
+      }
       cur = (cur as Record<string, unknown>)[key];
     }
     if (typeof cur === "string" && cur.trim().length > 2) names.push(cur.trim());
   }
-  const summary = String((context as { imported_context_summary?: unknown }).imported_context_summary ?? "");
+  const summary = String(
+    (context as { imported_context_summary?: unknown }).imported_context_summary ?? "",
+  );
   if (/\[STARTERS\][\s\S]*n[aã]o identificado/i.test(summary)) return names.length >= 2;
   return names.length >= 2;
 }
@@ -170,13 +175,20 @@ export function enforceHardGuardrails<T extends HardGuardrailInput>(
   let final = result.final_analysis;
 
   // Item 12 — MLB Totals starter gate
-  if (route.sport === "baseball" && route.market === "totals" && !hasIdentifiedMlbStarters(context)) {
+  if (
+    route.sport === "baseball" &&
+    route.market === "totals" &&
+    !hasIdentifiedMlbStarters(context)
+  ) {
     if (decision === "CONFIRMAR") {
       decision = "PULAR";
-      final = `${final ? final + " " : ""}Decisao rebaixada para PULAR: starters nao confirmados (gate MLB Totals).`.trim();
+      final =
+        `${final ? final + " " : ""}Decisao rebaixada para PULAR: starters nao confirmados (gate MLB Totals).`.trim();
     }
     if (!alerts.some((a) => /starters/i.test(a) && /gate/i.test(a))) {
-      alerts.push("Starters nao confirmados — gate MLB Totals (PULAR obrigatorio ate confirmacao).");
+      alerts.push(
+        "Starters nao confirmados — gate MLB Totals (PULAR obrigatorio ate confirmacao).",
+      );
     }
   }
 
@@ -186,14 +198,20 @@ export function enforceHardGuardrails<T extends HardGuardrailInput>(
     const fair = result.adjusted_fair_odd;
     const offered = result.offered_odd;
     const evFail = ev === null || !Number.isFinite(ev) || ev < 3;
-    const fairFail = fair !== null && offered !== null && Number.isFinite(fair) && Number.isFinite(offered) && fair >= offered;
+    const fairFail =
+      fair !== null &&
+      offered !== null &&
+      Number.isFinite(fair) &&
+      Number.isFinite(offered) &&
+      fair >= offered;
     if (evFail || fairFail) {
       decision = "PULAR";
       const reason = evFail
         ? `EV ajustado ${ev === null ? "indefinido" : ev.toFixed(2) + "%"} abaixo do minimo de 3%`
         : `odd justa ajustada ${fair} >= odd ofertada ${offered}`;
       alerts.push(`Guardrail acionado: ${reason}. Decisao forcada para PULAR.`);
-      final = `${final ? final + " " : ""}Guardrail de banca: ${reason}; decisao ajustada para PULAR.`.trim();
+      final =
+        `${final ? final + " " : ""}Guardrail de banca: ${reason}; decisao ajustada para PULAR.`.trim();
     }
   }
 

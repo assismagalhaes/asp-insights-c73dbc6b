@@ -22,7 +22,9 @@ const snapshotDb = supabase as unknown as {
   from: (table: "asp_screener_mlb_opportunity_snapshots") => {
     select: (columns: string) => SnapshotQuery<MlbOpportunitySnapshotRecord>;
     insert: (payload: unknown) => {
-      select: (columns: string) => Promise<{ data: MlbOpportunitySnapshotRecord[] | null; error: Error | null }>;
+      select: (
+        columns: string,
+      ) => Promise<{ data: MlbOpportunitySnapshotRecord[] | null; error: Error | null }>;
     };
     update: (payload: unknown) => SnapshotUpdate;
   };
@@ -154,7 +156,11 @@ export async function createMlbDailyScreenerSnapshot(input: MlbScreenerSnapshotR
     filters_payload: toJsonSafe(input.filtersPayload ?? {}),
     metadata: toJsonSafe(input.metadata ?? {}),
   };
-  const { data, error } = await snapshotDb.from("asp_screener_mlb_daily_snapshots").insert(payload).select(DAILY_SNAPSHOT_COLUMNS).single();
+  const { data, error } = await snapshotDb
+    .from("asp_screener_mlb_daily_snapshots")
+    .insert(payload)
+    .select(DAILY_SNAPSHOT_COLUMNS)
+    .single();
   if (error) throw error;
   if (!data) throw new Error("Snapshot diario nao retornou registro criado.");
   return data;
@@ -165,17 +171,27 @@ export async function saveMlbOpportunitySnapshots(
   opportunities: MlbUnifiedOpportunity[],
 ) {
   if (!opportunities.length) return [];
-  const payloads = opportunities.map((opportunity) => buildOpportunitySnapshotPayload(daily, opportunity));
-  const { data, error } = await snapshotDb.from("asp_screener_mlb_opportunity_snapshots").insert(payloads).select(OPPORTUNITY_SNAPSHOT_COLUMNS);
+  const payloads = opportunities.map((opportunity) =>
+    buildOpportunitySnapshotPayload(daily, opportunity),
+  );
+  const { data, error } = await snapshotDb
+    .from("asp_screener_mlb_opportunity_snapshots")
+    .insert(payloads)
+    .select(OPPORTUNITY_SNAPSHOT_COLUMNS);
   if (error) throw error;
   return data ?? [];
 }
 
-export async function saveMlbScreenerRunSnapshot(input: MlbScreenerSnapshotRunInput): Promise<MlbScreenerSnapshotRunResult> {
+export async function saveMlbScreenerRunSnapshot(
+  input: MlbScreenerSnapshotRunInput,
+): Promise<MlbScreenerSnapshotRunResult> {
   const daily = await createMlbDailyScreenerSnapshot(input);
   try {
     const opportunities = await saveMlbOpportunitySnapshots(daily, input.opportunities);
-    await snapshotDb.from("asp_screener_mlb_daily_snapshots").update({ status: "completed" }).eq("id", daily.id);
+    await snapshotDb
+      .from("asp_screener_mlb_daily_snapshots")
+      .update({ status: "completed" })
+      .eq("id", daily.id);
     return { daily: { ...daily, status: "completed" }, opportunities };
   } catch (error) {
     await snapshotDb
@@ -184,7 +200,8 @@ export async function saveMlbScreenerRunSnapshot(input: MlbScreenerSnapshotRunIn
         status: "partially_completed",
         metadata: {
           ...toJsonSafe(daily.metadata ?? {}),
-          opportunity_save_error: error instanceof Error ? error.message : String(error ?? "Erro desconhecido"),
+          opportunity_save_error:
+            error instanceof Error ? error.message : String(error ?? "Erro desconhecido"),
         },
       })
       .eq("id", daily.id);
@@ -215,12 +232,19 @@ export async function listMlbOpportunitySnapshots(filters: MlbSnapshotOpportunit
 }
 
 export async function getMlbScreenerSnapshotByRunId(runId: string) {
-  const { data, error } = await snapshotDb.from("asp_screener_mlb_daily_snapshots").select(DAILY_SNAPSHOT_COLUMNS).eq("run_id", runId).single();
+  const { data, error } = await snapshotDb
+    .from("asp_screener_mlb_daily_snapshots")
+    .select(DAILY_SNAPSHOT_COLUMNS)
+    .eq("run_id", runId)
+    .single();
   if (error) throw error;
   return data;
 }
 
-export async function updateMlbOpportunitySentToValidator(opportunityId: string, handoffId: string) {
+export async function updateMlbOpportunitySentToValidator(
+  opportunityId: string,
+  handoffId: string,
+) {
   const { error } = await snapshotDb
     .from("asp_screener_mlb_opportunity_snapshots")
     .update({
@@ -254,10 +278,16 @@ export async function linkMlbOpportunitySnapshotToValidatorRecord(
 
 export function buildMlbScreenerRunId(snapshotDate: string) {
   const suffix = Math.random().toString(36).slice(2, 8);
-  return `${snapshotDate}_${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}_${suffix}`;
+  return `${snapshotDate}_${new Date()
+    .toISOString()
+    .replace(/[-:.TZ]/g, "")
+    .slice(0, 14)}_${suffix}`;
 }
 
-function buildOpportunitySnapshotPayload(daily: MlbDailyScreenerSnapshotRecord, opportunity: MlbUnifiedOpportunity) {
+function buildOpportunitySnapshotPayload(
+  daily: MlbDailyScreenerSnapshotRecord,
+  opportunity: MlbUnifiedOpportunity,
+) {
   return {
     daily_snapshot_id: daily.id,
     run_id: daily.run_id,

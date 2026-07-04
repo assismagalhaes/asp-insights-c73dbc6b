@@ -37,7 +37,7 @@ function isObj(v: unknown): v is Ctx {
 
 function slimStructuredJson(structured: unknown, marketType: string | null): unknown {
   if (!isObj(structured)) return structured;
-  const allowedMarketBlocks = marketType ? STRUCTURED_BY_MARKET[marketType] ?? [] : [];
+  const allowedMarketBlocks = marketType ? (STRUCTURED_BY_MARKET[marketType] ?? []) : [];
   const out: Ctx = {};
   for (const [k, v] of Object.entries(structured)) {
     if (STRUCTURED_KEEP_ALWAYS.has(k) || allowedMarketBlocks.includes(k)) {
@@ -77,7 +77,9 @@ function slimSimulationJson(sim: unknown): unknown {
   const overLines = (sim as Ctx).over_lines;
   if (isObj(overLines)) {
     const line = Number((sim as Ctx).line);
-    const entries = Object.entries(overLines).map(([k, v]) => [Number(k), v] as const).filter(([n]) => Number.isFinite(n));
+    const entries = Object.entries(overLines)
+      .map(([k, v]) => [Number(k), v] as const)
+      .filter(([n]) => Number.isFinite(n));
     entries.sort((a, b) => Math.abs(a[0] - line) - Math.abs(b[0] - line));
     const top = entries.slice(0, 5);
     out.over_lines = Object.fromEntries(top.map(([n, v]) => [String(n), v]));
@@ -105,7 +107,8 @@ export function slimAspValidatorContext(input: Ctx): Ctx {
 
   // 3. Filter structured_json by market_type
   const structured = isObj(ctx.structured_json) ? (ctx.structured_json as Ctx) : null;
-  const marketType = structured && typeof structured.market_type === "string" ? structured.market_type : null;
+  const marketType =
+    structured && typeof structured.market_type === "string" ? structured.market_type : null;
   if (structured) {
     ctx.structured_json = slimStructuredJson(structured, marketType);
   }

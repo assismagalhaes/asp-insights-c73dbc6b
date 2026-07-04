@@ -139,26 +139,50 @@ function PublicacaoPage() {
             onCustomFimChange={setCustomFim}
           />
           <div>
-            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Esporte</Label>
-            <Select value={fEsporte} onValueChange={(v) => { setFEsporte(v); setFLiga("all"); }}>
-              <SelectTrigger className="h-9 w-44"><SelectValue placeholder="Esporte" /></SelectTrigger>
+            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Esporte
+            </Label>
+            <Select
+              value={fEsporte}
+              onValueChange={(v) => {
+                setFEsporte(v);
+                setFLiga("all");
+              }}
+            >
+              <SelectTrigger className="h-9 w-44">
+                <SelectValue placeholder="Esporte" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os esportes</SelectItem>
-                {esportes.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                {esportes.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Liga</Label>
+            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Liga
+            </Label>
             <LeagueFilter sport={fEsporte} value={fLiga} onChange={setFLiga} className="h-9 w-48" />
           </div>
           <div>
-            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Mercado</Label>
+            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Mercado
+            </Label>
             <Select value={fMercado} onValueChange={setFMercado}>
-              <SelectTrigger className="h-9 w-52"><SelectValue placeholder="Mercado" /></SelectTrigger>
+              <SelectTrigger className="h-9 w-52">
+                <SelectValue placeholder="Mercado" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os mercados</SelectItem>
-                {mercados.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                {mercados.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {m}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -195,7 +219,10 @@ function PublicacaoPage() {
               <tbody>
                 {elegiveis.length === 0 && (
                   <tr>
-                    <td colSpan={13} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                    <td
+                      colSpan={13}
+                      className="px-4 py-8 text-center text-sm text-muted-foreground"
+                    >
                       Nenhum prognóstico aguardando publicação.
                     </td>
                   </tr>
@@ -218,17 +245,31 @@ function PublicacaoPage() {
                           )}
                         </button>
                       </td>
-                      <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatBR(p.data)}</td>
-                      <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{p.hora ? formatHora(p.hora) : "—"}</td>
+                      <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">
+                        {formatBR(p.data)}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">
+                        {p.hora ? formatHora(p.hora) : "—"}
+                      </td>
                       <td className="px-3 py-2 whitespace-nowrap">{p.esporte}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{p.liga}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
+                        {p.liga}
+                      </td>
                       <td className="px-3 py-2 whitespace-nowrap">{p.jogo}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{p.mercado}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
+                        {p.mercado}
+                      </td>
                       <td className="px-3 py-2 whitespace-nowrap">{p.pick}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{mostrarLinha ? p.linha : "—"}</td>
-                      <td className="px-3 py-2 text-right font-mono">{p.odd_ofertada.toFixed(2)}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
+                        {mostrarLinha ? p.linha : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono">
+                        {p.odd_ofertada.toFixed(2)}
+                      </td>
                       <td className="px-3 py-2 text-right font-mono">{p.stake.toFixed(1)}u</td>
-                      <td className="px-3 py-2"><StatusBadge status={p.status_validacao} /></td>
+                      <td className="px-3 py-2">
+                        <StatusBadge status={p.status_validacao} />
+                      </td>
                       <td className="px-3 py-2 text-right whitespace-nowrap">
                         <div className="flex justify-end gap-1">
                           <DadosTecnicosViewer prognostico={p} />
@@ -262,11 +303,7 @@ function PublicacaoPage() {
         </CardContent>
       </Card>
 
-      <PublishDialog
-        prognostico={previewFor}
-        canal={canal}
-        onClose={() => setPreviewFor(null)}
-      />
+      <PublishDialog prognostico={previewFor} canal={canal} onClose={() => setPreviewFor(null)} />
 
       <PublicadasRecentes prognosticos={prognosticos} />
     </div>
@@ -288,10 +325,7 @@ function PublishDialog({
 
   useEffect(() => {
     if (prognostico) {
-      const parecer =
-        validacao?.parecer_validacao?.trim() ||
-        validacao?.parecer_ia?.trim() ||
-        "";
+      const parecer = validacao?.parecer_validacao?.trim() || validacao?.parecer_ia?.trim() || "";
       setTip(
         gerarTipTexto(prognostico, {
           parecer,
@@ -326,7 +360,9 @@ function PublishDialog({
         <DialogHeader>
           <DialogTitle>Publicar Pick — {prognostico.jogo}</DialogTitle>
           <DialogDescription className="flex items-center justify-between gap-2">
-            <span>Edite a TIP final antes de copiar/publicar. Canal: <strong>{canal}</strong></span>
+            <span>
+              Edite a TIP final antes de copiar/publicar. Canal: <strong>{canal}</strong>
+            </span>
             <DadosTecnicosViewer prognostico={prognostico} variant="button" />
           </DialogDescription>
         </DialogHeader>
@@ -351,7 +387,12 @@ function PublishDialog({
 
 function PublicadasRecentes({ prognosticos }: { prognosticos: Prognostico[] }) {
   const publicadas = prognosticos
-    .filter((p) => p.status_publicacao === "PUBLICADO" || p.status_publicacao === "FINALIZADO" || p.status_publicacao === "CANCELADO")
+    .filter(
+      (p) =>
+        p.status_publicacao === "PUBLICADO" ||
+        p.status_publicacao === "FINALIZADO" ||
+        p.status_publicacao === "CANCELADO",
+    )
     .slice(0, 20);
 
   if (!publicadas.length) return null;
@@ -377,12 +418,18 @@ function PublicadasRecentes({ prognosticos }: { prognosticos: Prognostico[] }) {
               {publicadas.map((p) => (
                 <tr key={p.id} className="border-t border-border">
                   <td className="px-3 py-2 font-mono text-xs">
-                    {p.data_publicacao ? new Date(p.data_publicacao).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—"}
+                    {p.data_publicacao
+                      ? new Date(p.data_publicacao).toLocaleString("pt-BR", {
+                          timeZone: "America/Sao_Paulo",
+                        })
+                      : "—"}
                   </td>
                   <td className="px-3 py-2">{p.jogo}</td>
                   <td className="px-3 py-2">{p.pick}</td>
                   <td className="px-3 py-2 text-muted-foreground">{p.canal_publicacao ?? "—"}</td>
-                  <td className="px-3 py-2"><PublicacaoBadge status={p.status_publicacao} /></td>
+                  <td className="px-3 py-2">
+                    <PublicacaoBadge status={p.status_publicacao} />
+                  </td>
                 </tr>
               ))}
             </tbody>

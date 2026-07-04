@@ -1,13 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import {
-  CheckCircle2,
-  XCircle,
-  TrendingUp,
-  Target,
-  DollarSign,
-  Activity,
-} from "lucide-react";
+import { CheckCircle2, XCircle, TrendingUp, Target, DollarSign, Activity } from "lucide-react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -32,7 +25,6 @@ import {
   withSign,
 } from "@/lib/chart-colors";
 import { StatCard } from "@/components/stat-card";
-
 
 import {
   Select,
@@ -108,7 +100,10 @@ function Dashboard() {
   );
 
   const officialMetrics = useMemo(() => computeMetrics(filtrados, cfg), [filtrados, cfg]);
-  const metrics = useMemo(() => computeValidationMetrics(filtrados, cfg, validacao), [filtrados, cfg, validacao]);
+  const metrics = useMemo(
+    () => computeValidationMetrics(filtrados, cfg, validacao),
+    [filtrados, cfg, validacao],
+  );
   const timeline = useMemo(
     () => bankrollTimeline(filtrados, cfg?.banca_inicial ?? 0, cfg?.valor_unidade_padrao ?? 0),
     [filtrados, cfg],
@@ -120,8 +115,13 @@ function Dashboard() {
       .filter((p) => matchesValidationFilter(p, validacao))
       .forEach((p) => {
         const cur = map.get(p.esporte) ?? { lucro: 0, stake: 0 };
-        cur.lucro += validacao === "confirmadas" ?lucroUnidades(p) : lucroUnidadesAnalitico(p);
-        cur.stake += validacao === "confirmadas" ? p.stake : p.status_validacao === "PULAR" && p.stake <= 0 ? 1 : p.stake;
+        cur.lucro += validacao === "confirmadas" ? lucroUnidades(p) : lucroUnidadesAnalitico(p);
+        cur.stake +=
+          validacao === "confirmadas"
+            ? p.stake
+            : p.status_validacao === "PULAR" && p.stake <= 0
+              ? 1
+              : p.stake;
         map.set(p.esporte, cur);
       });
     return Array.from(map.entries()).map(([esporte, v]) => ({
@@ -136,13 +136,18 @@ function Dashboard() {
       .filter((p) => matchesValidationFilter(p, validacao))
       .forEach((p) => {
         const cur = map.get(p.esporte) ?? { lucro: 0, stake: 0 };
-        cur.lucro += validacao === "confirmadas" ?lucroUnidades(p) : lucroUnidadesAnalitico(p);
-        cur.stake += validacao === "confirmadas" ? p.stake : p.status_validacao === "PULAR" && p.stake <= 0 ? 1 : p.stake;
+        cur.lucro += validacao === "confirmadas" ? lucroUnidades(p) : lucroUnidadesAnalitico(p);
+        cur.stake +=
+          validacao === "confirmadas"
+            ? p.stake
+            : p.status_validacao === "PULAR" && p.stake <= 0
+              ? 1
+              : p.stake;
         map.set(p.esporte, cur);
       });
     return Array.from(map.entries()).map(([esporte, v]) => ({
       esporte,
-      roi: v.stake ?Number(((v.lucro / v.stake) * 100).toFixed(1)) : 0,
+      roi: v.stake ? Number(((v.lucro / v.stake) * 100).toFixed(1)) : 0,
     }));
   }, [filtrados, validacao]);
 
@@ -152,7 +157,11 @@ function Dashboard() {
       .filter((p) => matchesValidationFilter(p, validacao))
       .forEach((p) => {
         const mes = p.data.slice(0, 7);
-        map.set(mes, (map.get(mes) ?? 0) + (validacao === "confirmadas" ?lucroUnidades(p) : lucroUnidadesAnalitico(p)));
+        map.set(
+          mes,
+          (map.get(mes) ?? 0) +
+            (validacao === "confirmadas" ? lucroUnidades(p) : lucroUnidadesAnalitico(p)),
+        );
       });
     return Array.from(map.entries())
       .sort(([a], [b]) => a.localeCompare(b))
@@ -163,7 +172,13 @@ function Dashboard() {
     const map = new Map<string, number>();
     filtrados
       .filter((p) => matchesValidationFilter(p, validacao))
-      .forEach((p) => map.set(p.mercado, (map.get(p.mercado) ?? 0) + (validacao === "confirmadas" ?lucroUnidades(p) : lucroUnidadesAnalitico(p))));
+      .forEach((p) =>
+        map.set(
+          p.mercado,
+          (map.get(p.mercado) ?? 0) +
+            (validacao === "confirmadas" ? lucroUnidades(p) : lucroUnidadesAnalitico(p)),
+        ),
+      );
     return Array.from(map.entries()).map(([mercado, lucro]) => ({
       mercado,
       lucro: Number(lucro.toFixed(2)),
@@ -191,31 +206,61 @@ function Dashboard() {
             onCustomFimChange={setCustomFim}
           />
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Esporte</label>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
+              Esporte
+            </label>
             <Select value={esporte} onValueChange={setEsporte}>
-              <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 w-44">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                {ESPORTES.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+                {ESPORTES.map((e) => (
+                  <SelectItem key={e} value={e}>
+                    {e}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Liga</label>
-            <LeagueFilter sport={esporte === "Todos" ? "all" : esporte} value={liga} onChange={setLiga} className="h-9 w-48" />
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
+              Liga
+            </label>
+            <LeagueFilter
+              sport={esporte === "Todos" ? "all" : esporte}
+              value={liga}
+              onChange={setLiga}
+              className="h-9 w-48"
+            />
           </div>
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Mercado</label>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
+              Mercado
+            </label>
             <Select value={mercado} onValueChange={setMercado}>
-              <SelectTrigger className="h-9 w-52"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 w-52">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                {MERCADOS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                {MERCADOS.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {m}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Validação</label>
-            <Select value={validacao} onValueChange={(v) => setValidacao(v as ValidationMetricsFilter)}>
-              <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
+              Validação
+            </label>
+            <Select
+              value={validacao}
+              onValueChange={(v) => setValidacao(v as ValidationMetricsFilter)}
+            >
+              <SelectTrigger className="h-9 w-44">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="confirmadas">Confirmadas</SelectItem>
                 <SelectItem value="puladas">Puladas</SelectItem>
@@ -231,7 +276,7 @@ function Dashboard() {
         <StatCard label="Reds" value={String(metrics.reds)} icon={XCircle} tone="down" />
         <StatCard
           label="ODD MÉDIA"
-          value={metrics.oddMediaGreens ?metrics.oddMediaGreens.toFixed(2) : "-"}
+          value={metrics.oddMediaGreens ? metrics.oddMediaGreens.toFixed(2) : "-"}
           icon={Target}
           tone="neutral"
         />
@@ -239,25 +284,25 @@ function Dashboard() {
           label="Lucro (u)"
           value={`${withSign(metrics.lucroU)}u`}
           icon={Activity}
-          tone={metrics.lucroU > 0 ?"up" : metrics.lucroU < 0 ?"down" : "neutral"}
+          tone={metrics.lucroU > 0 ? "up" : metrics.lucroU < 0 ? "down" : "neutral"}
         />
         <StatCard
           label="Lucro Real"
-          value={`${metrics.lucroReais >= 0 ?"+" : "-"}R$ ${Math.abs(metrics.lucroReais).toFixed(2)}`}
+          value={`${metrics.lucroReais >= 0 ? "+" : "-"}R$ ${Math.abs(metrics.lucroReais).toFixed(2)}`}
           icon={DollarSign}
-          tone={metrics.lucroReais > 0 ?"up" : metrics.lucroReais < 0 ?"down" : "neutral"}
+          tone={metrics.lucroReais > 0 ? "up" : metrics.lucroReais < 0 ? "down" : "neutral"}
         />
         <StatCard
           label="ROI"
           value={`${withSign(metrics.roi)}%`}
           icon={TrendingUp}
-          tone={metrics.roi > 0 ?"up" : metrics.roi < 0 ?"down" : "neutral"}
+          tone={metrics.roi > 0 ? "up" : metrics.roi < 0 ? "down" : "neutral"}
         />
         <StatCard
           label="Win Rate"
           value={`${metrics.winRate.toFixed(1)}%`}
           icon={Target}
-          tone={metrics.winRate >= 50 ?"up" : metrics.winRate > 0 ?"down" : "neutral"}
+          tone={metrics.winRate >= 50 ? "up" : metrics.winRate > 0 ? "down" : "neutral"}
         />
       </div>
 
@@ -269,7 +314,9 @@ function Dashboard() {
             </h3>
             <span
               className="font-mono text-xs"
-              style={{ color: signColor(officialMetrics.bancaAtual - officialMetrics.bancaInicial) }}
+              style={{
+                color: signColor(officialMetrics.bancaAtual - officialMetrics.bancaInicial),
+              }}
             >
               R$ {officialMetrics.bancaAtual.toFixed(2)}
             </span>
@@ -287,13 +334,23 @@ function Dashboard() {
                 </linearGradient>
               </defs>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
-              <XAxis dataKey="data" stroke={axisColor} fontSize={10} tickFormatter={(d) => String(d).slice(5)} />
+              <XAxis
+                dataKey="data"
+                stroke={axisColor}
+                fontSize={10}
+                tickFormatter={(d) => String(d).slice(5)}
+              />
               <YAxis stroke={axisColor} fontSize={10} domain={["auto", "auto"]} />
               <ReferenceLine
                 y={officialMetrics.bancaInicial}
                 stroke={COLOR_REFERENCE}
                 strokeDasharray="4 4"
-                label={{ value: "Banca inicial", position: "insideTopRight", fill: COLOR_NEUTRAL, fontSize: 10 }}
+                label={{
+                  value: "Banca inicial",
+                  position: "insideTopRight",
+                  fill: COLOR_NEUTRAL,
+                  fontSize: 10,
+                }}
               />
               <Tooltip
                 content={
@@ -301,10 +358,17 @@ function Dashboard() {
                     headerFormatter={(d) => formatBR(d)}
                     formatter={(v, _n, dk) => {
                       if (dk === "banca") {
-                        return { label: "Banca", display: `R$ ${v.toFixed(2)}`, color: signColor(v - officialMetrics.bancaInicial) };
+                        return {
+                          label: "Banca",
+                          display: `R$ ${v.toFixed(2)}`,
+                          color: signColor(v - officialMetrics.bancaInicial),
+                        };
                       }
                       if (dk === "lucroAcum") {
-                        return { label: "Lucro acum.", display: `${v >= 0 ?"+" : "-"}R$ ${Math.abs(v).toFixed(2)}` };
+                        return {
+                          label: "Lucro acum.",
+                          display: `${v >= 0 ? "+" : "-"}R$ ${Math.abs(v).toFixed(2)}`,
+                        };
                       }
                       return { label: dk, display: String(v) };
                     }}
@@ -336,14 +400,23 @@ function Dashboard() {
           <ResponsiveContainer width="100%" height={340}>
             <LineChart data={timeline}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
-              <XAxis dataKey="data" stroke={axisColor} fontSize={10} tickFormatter={(d) => String(d).slice(5)} />
+              <XAxis
+                dataKey="data"
+                stroke={axisColor}
+                fontSize={10}
+                tickFormatter={(d) => String(d).slice(5)}
+              />
               <YAxis stroke={axisColor} fontSize={10} />
               <ReferenceLine y={0} stroke={COLOR_REFERENCE} strokeWidth={1.5} />
               <Tooltip
                 content={
                   <ChartTooltip
                     headerFormatter={(d) => formatBR(d)}
-                    formatter={(v) => ({ label: "ROI", display: `${withSign(v)}%`, color: signColor(v) })}
+                    formatter={(v) => ({
+                      label: "ROI",
+                      display: `${withSign(v)}%`,
+                      color: signColor(v),
+                    })}
                   />
                 }
               />
@@ -373,7 +446,11 @@ function Dashboard() {
                 cursor={{ fill: "oklch(0.28 0.02 250 / 0.3)" }}
                 content={
                   <ChartTooltip
-                    formatter={(v) => ({ label: "Lucro", display: `${withSign(v)}u`, color: signColor(v) })}
+                    formatter={(v) => ({
+                      label: "Lucro",
+                      display: `${withSign(v)}u`,
+                      color: signColor(v),
+                    })}
                   />
                 }
               />
@@ -397,16 +474,30 @@ function Dashboard() {
             Resultado por Mercado (u)
           </h3>
           <ResponsiveContainer width="100%" height={Math.max(340, marketPerf.length * 44 + 60)}>
-            <BarChart data={marketPerf} layout="vertical" margin={{ top: 8, right: 48, left: 0, bottom: 8 }}>
+            <BarChart
+              data={marketPerf}
+              layout="vertical"
+              margin={{ top: 8, right: 48, left: 0, bottom: 8 }}
+            >
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis type="number" stroke={axisColor} fontSize={10} />
-              <YAxis type="category" dataKey="mercado" stroke={axisColor} fontSize={10} width={140} />
+              <YAxis
+                type="category"
+                dataKey="mercado"
+                stroke={axisColor}
+                fontSize={10}
+                width={140}
+              />
               <ReferenceLine x={0} stroke={COLOR_REFERENCE} />
               <Tooltip
                 cursor={{ fill: "oklch(0.28 0.02 250 / 0.3)" }}
                 content={
                   <ChartTooltip
-                    formatter={(v) => ({ label: "Lucro", display: `${withSign(v)}u`, color: signColor(v) })}
+                    formatter={(v) => ({
+                      label: "Lucro",
+                      display: `${withSign(v)}u`,
+                      color: signColor(v),
+                    })}
                   />
                 }
               />
@@ -439,7 +530,11 @@ function Dashboard() {
                 cursor={{ fill: "oklch(0.28 0.02 250 / 0.3)" }}
                 content={
                   <ChartTooltip
-                    formatter={(v) => ({ label: "ROI", display: `${withSign(v, 1)}%`, color: signColor(v) })}
+                    formatter={(v) => ({
+                      label: "ROI",
+                      display: `${withSign(v, 1)}%`,
+                      color: signColor(v),
+                    })}
                   />
                 }
               />
@@ -471,7 +566,13 @@ function Dashboard() {
               <Tooltip
                 cursor={{ fill: "oklch(0.28 0.02 250 / 0.3)" }}
                 content={
-                  <ChartTooltip formatter={(v) => ({ label: "Lucro", display: `${withSign(v)}u`, color: signColor(v) })} />
+                  <ChartTooltip
+                    formatter={(v) => ({
+                      label: "Lucro",
+                      display: `${withSign(v)}u`,
+                      color: signColor(v),
+                    })}
+                  />
                 }
               />
               <Bar dataKey="lucro" radius={[4, 4, 0, 0]}>
