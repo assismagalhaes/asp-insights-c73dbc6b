@@ -11,20 +11,24 @@ import logo from "@/assets/logo-asp.png.asset.json";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
+  validateSearch: (s: Record<string, unknown>) => ({
+    next: typeof s.next === "string" && s.next.startsWith("/") && !s.next.startsWith("//") ? s.next : "/",
+  }),
   component: AuthPage,
 });
 
 function AuthPage() {
   const navigate = useNavigate();
+  const { next } = Route.useSearch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/" });
+      if (data.session) navigate({ to: next });
     });
-  }, [navigate]);
+  }, [navigate, next]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -36,8 +40,9 @@ function AuthPage() {
       return;
     }
     toast.success("Bem-vindo ao ASP Insights");
-    navigate({ to: "/" });
+    navigate({ to: next });
   }
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 relative overflow-hidden">
