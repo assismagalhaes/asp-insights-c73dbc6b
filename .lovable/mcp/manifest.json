@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "sdk_version": "0.20.0",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://rdasrnvwedasshiahjuy.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "asp-insights-mcp",
+      "version": "0.1.0",
+      "title": "ASP Insights"
+    },
+    "tools": [
+      {
+        "name": "list_prognosticos",
+        "title": "Listar prognósticos",
+        "description": "Lista os prognósticos mais recentes do usuário autenticado (jogo, mercado, odd, edge, resultado).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "limit": {
+              "default": 10,
+              "description": "Quantos prognósticos retornar.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "esporte": {
+              "description": "Filtrar por esporte (ex.: MLB, WNBA, Futebol).",
+              "type": "string"
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_validacoes",
+        "title": "Listar validações",
+        "description": "Lista as validações de IA mais recentes do usuário (decisão, parecer, modo, prognóstico associado).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "limit": {
+              "default": 10,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "decisao": {
+              "description": "Filtrar por decisão.",
+              "type": "string",
+              "enum": [
+                "CONFIRMAR",
+                "PULAR"
+              ]
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "bankroll_status",
+        "title": "Status da banca",
+        "description": "Retorna o snapshot mais recente da banca (banca atual, ROI, yield, drawdown, lucro acumulado).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
