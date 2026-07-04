@@ -64,12 +64,12 @@ export async function createMlbDailyScreenerSnapshot(input: MlbScreenerSnapshotR
     missing_data_count: counts.MISSING_DATA,
     unsupported_line_count: counts.UNSUPPORTED_LINE,
     status: "created",
-    execution_summary: {
+    execution_summary: toJsonSafe({
       counts,
       generated_at: new Date().toISOString(),
-    },
-    filters_payload: input.filtersPayload ?? {},
-    metadata: input.metadata ?? {},
+    }),
+    filters_payload: toJsonSafe(input.filtersPayload ?? {}),
+    metadata: toJsonSafe(input.metadata ?? {}),
   };
   const { data, error } = await snapshotDb.from("asp_screener_mlb_daily_snapshots").insert(payload).select("*").single();
   if (error) throw error;
@@ -100,7 +100,7 @@ export async function saveMlbScreenerRunSnapshot(input: MlbScreenerSnapshotRunIn
       .update({
         status: "partially_completed",
         metadata: {
-          ...daily.metadata,
+          ...toJsonSafe(daily.metadata ?? {}),
           opportunity_save_error: error instanceof Error ? error.message : String(error ?? "Erro desconhecido"),
         },
       })
@@ -211,16 +211,26 @@ function buildOpportunitySnapshotPayload(daily: MlbDailyScreenerSnapshotRecord, 
     correlation_group_id: opportunity.correlation_group_id,
     correlation_status: opportunity.correlation_status,
     correlated_with: opportunity.correlated_with,
-    reasons: opportunity.reasons,
-    alerts: opportunity.alerts,
-    risk_flags: opportunity.risk_flags,
-    source_projection_payload: opportunity.source_projection_payload,
-    opportunity_payload: opportunity,
-    metadata: {
+    reasons: toJsonSafe(opportunity.reasons),
+    alerts: toJsonSafe(opportunity.alerts),
+    risk_flags: toJsonSafe(opportunity.risk_flags),
+    source_projection_payload: toJsonSafe(opportunity.source_projection_payload),
+    opportunity_payload: toJsonSafe(opportunity),
+    metadata: toJsonSafe({
       score_components: opportunity.score_components,
       score_explanation: opportunity.score_explanation,
-    },
+    }),
   };
+}
+
+function toJsonSafe<T>(value: T): T {
+  return JSON.parse(
+    JSON.stringify(value, (_key, item) => {
+      if (item === undefined) return null;
+      if (typeof item === "number" && !Number.isFinite(item)) return null;
+      return item;
+    }),
+  ) as T;
 }
 
 function getOpportunityCounts(opportunities: MlbUnifiedOpportunity[]) {

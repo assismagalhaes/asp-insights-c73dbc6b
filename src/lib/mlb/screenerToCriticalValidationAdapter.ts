@@ -1,3 +1,4 @@
+import type { PrognosticoInput } from "@/lib/db";
 import type { MlbPreparedCriticalValidationPayload } from "@/types/mlbCriticalValidation";
 
 // Adaptador Screener MLB -> Validação Crítica.
@@ -109,6 +110,13 @@ function formatBrDate(iso: string | null): string {
   return `${d}/${m}/${y}`;
 }
 
+function normalizeMlbTeamName(name: string): string {
+  return name
+    .replace(/\bSt\.([A-Z])/g, "St. $1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function buildDraftId(payload: MlbPreparedCriticalValidationPayload): string {
   const cryptoSource = typeof globalThis !== "undefined" ? globalThis.crypto : undefined;
   const randomId =
@@ -202,6 +210,8 @@ function buildImportedContextSummary(payload: MlbPreparedCriticalValidationPaylo
   const awayStarter = ctx?.starting_pitchers?.away ?? null;
   const homeTeam = ctx?.teams?.home ?? null;
   const awayTeam = ctx?.teams?.away ?? null;
+  const homeTeamName = normalizeMlbTeamName(payload.game.home_team);
+  const awayTeamName = normalizeMlbTeamName(payload.game.away_team);
 
   const out: string[] = [];
 
@@ -210,7 +220,7 @@ function buildImportedContextSummary(payload: MlbPreparedCriticalValidationPaylo
   out.push("");
 
   out.push("[JOGO]");
-  out.push(`${payload.game.home_team} vs ${payload.game.away_team}`);
+  out.push(`${homeTeamName} vs ${awayTeamName}`);
   out.push(
     `Data/Hora: ${formatBrDate(payload.game.date)}${payload.game.time ? ` às ${payload.game.time}` : ""}`,
   );
@@ -268,15 +278,15 @@ function buildImportedContextSummary(payload: MlbPreparedCriticalValidationPaylo
   }
 
   out.push("[ESTATÍSTICAS DA PARTIDA]");
-  out.push(...buildTeamStatsBlock(`Mandante (${payload.game.home_team})`, homeTeam));
+  out.push(...buildTeamStatsBlock(`Mandante (${homeTeamName})`, homeTeam));
   out.push("");
-  out.push(...buildTeamStatsBlock(`Visitante (${payload.game.away_team})`, awayTeam));
+  out.push(...buildTeamStatsBlock(`Visitante (${awayTeamName})`, awayTeam));
   out.push("");
 
   out.push("[STARTERS PROVÁVEIS / CONFIRMADOS]");
-  out.push(...buildStarterBlock(`Mandante (${payload.game.home_team})`, homeStarter));
+  out.push(...buildStarterBlock(`Mandante (${homeTeamName})`, homeStarter));
   out.push("");
-  out.push(...buildStarterBlock(`Visitante (${payload.game.away_team})`, awayStarter));
+  out.push(...buildStarterBlock(`Visitante (${awayTeamName})`, awayStarter));
   out.push("");
 
   const seasonSummary = ctx?.season_series?.summary;
@@ -323,9 +333,9 @@ export function mapMlbOpportunityToCriticalValidationInput(
     source: "ASP Screener MLB",
     event_date: payload.game.date,
     event_time: payload.game.time,
-    home_team: payload.game.home_team,
-    away_team: payload.game.away_team,
-    matchup: payload.game.matchup,
+    home_team: normalizeMlbTeamName(payload.game.home_team),
+    away_team: normalizeMlbTeamName(payload.game.away_team),
+    matchup: `${normalizeMlbTeamName(payload.game.home_team)} vs ${normalizeMlbTeamName(payload.game.away_team)}`,
     market: opp.market,
     market_family: marketFamily,
     pick: opp.pick,
@@ -365,6 +375,72 @@ export function mapMlbOpportunityToCriticalValidationInput(
     imported_context_summary: buildImportedContextSummary(payload),
     source_projection_payload: payload.source_projection_payload,
     baseball_reference_context: payload.baseball_reference_context ?? null,
+  };
+}
+
+export function buildCriticalValidationPrognosticoInput(
+  draft: MlbCriticalValidationDraft,
+): PrognosticoInput {
+  const input = draft.input;
+  const homeTeam = normalizeMlbTeamName(input.home_team);
+  const awayTeam = normalizeMlbTeamName(input.away_team);
+  const medianOdd = input.median_odd ?? input.market_base_odd ?? null;
+  const marketBaseOdd = input.market_base_odd ?? input.median_odd ?? null;
+  const offeredOdd = input.odd ?? 1;
+  const fairOdd = input.fair_odd ?? offeredOdd;
+  const probabilityPct = input.model_probability == null ? 0 : input.model_probability * 100;
+  const edgePct =
+    input.ev != null
+      ? input.ev * 100
+      : input.probability_edge != null
+        ? input.probability_edge * 100
+        : 0;
+  const marketDetail = [input.market, input.pick].filter(Boolean).join(" | ");
+  const technicalContext = [
+    input.imported_context_summary,
+    "",
+    "[CLASSIFICACAO ASP INSIGHTS]",
+    "Mercado de acompanhamento: ASP Screener",
+    `Mercado original: ${input.market}`,
+    `Pick original: ${input.pick ?? "-"}`,
+    `Odd mediana: ${medianOdd ?? "-"}`,
+    `Odd mercado base: ${marketBaseOdd ?? "-"}`,
+    `Odd melhor: ${input.odd ?? "-"}`,
+    `Bookmaker melhor: ${input.bookmaker_melhor ?? "-"}`,
+    `Draft id: ${draft.draft_id}`,
+  ].join("\n");
+
+  return {
+    data: input.event_date ?? new Date().toISOString().slice(0, 10),
+    hora: input.event_time,
+    esporte: input.sport,
+    liga: input.league,
+    jogo: `${homeTeam} vs ${awayTeam}`,
+    mandante: homeTeam,
+    visitante: awayTeam,
+    mercado: "ASP Screener",
+    pick: marketDetail || input.pick || "ASP Screener",
+    linha: input.line == null ? null : String(input.line),
+    odd_ofertada: offeredOdd,
+    odd_ajustada: offeredOdd,
+    odd_mediana: medianOdd,
+    odd_mercado_base: marketBaseOdd,
+    odd_melhor: input.odd,
+    bookmaker_melhor: input.bookmaker_melhor,
+    odd_valor: fairOdd,
+    probabilidade_final: probabilityPct,
+    edge: edgePct,
+    edge_ajustado: edgePct,
+    stake: 0,
+    status_validacao: "PENDENTE",
+    status_publicacao: "NAO_PUBLICADO",
+    resultado: "PENDENTE",
+    observacoes: "Criado pelo ASP Screener MLB para revisao na Validacao Critica.",
+    dados_tecnicos: technicalContext,
+    contexto_modelo: "ASP Screener MLB",
+    arquivo_contexto: null,
+    origem_modelo: "ASP Screener MLB",
+    job_id_coleta: draft.draft_id,
   };
 }
 

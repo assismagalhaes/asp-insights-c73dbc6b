@@ -423,6 +423,7 @@ function extractOddsContext(row: Record<string, unknown>) {
   ]);
   const median = parseNumberFromText(text, [
     /\bodd_mediana\s*=\s*([0-9]+(?:[.,][0-9]+)?)/i,
+    /\bodd\s+mediana\s*\/\s*base\s+mercado\s*:?\s*([0-9]+(?:[.,][0-9]+)?)/i,
     /\bodd\s+mediana\s*:?\s*([0-9]+(?:[.,][0-9]+)?)/i,
   ]);
   const best = parseNumberFromText(text, [
@@ -432,7 +433,7 @@ function extractOddsContext(row: Record<string, unknown>) {
   ]);
   const bookmaker =
     text.match(/\bbookmaker_melhor\s*=\s*([^;,\n]+)/i)?.[1]?.trim() ||
-    text.match(/\bbookmaker\s+melhor\s+([^;,\n]+)/i)?.[1]?.trim() ||
+    text.match(/\bbookmaker\s+melhor\s*:?\s*([^;,\n]+)/i)?.[1]?.trim() ||
     null;
 
   return { marketBase, median, best, bookmaker };
