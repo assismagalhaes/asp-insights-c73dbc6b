@@ -17,7 +17,7 @@ import {
 } from "@/lib/scraper-api.functions";
 import { supabase } from "@/lib/supabase-public";
 import { normalizeEsporteLiga, normalizeMercadoPadrao } from "@/lib/db";
-import { parseBrazilianDate } from "@/lib/date-br";
+import { parseBrazilianDate, formatDateTimeBR } from "@/lib/date-br";
 
 export const Route = createFileRoute("/_authenticated/modelos-preditivos")({
   component: ModelosPreditivosPage,
@@ -273,7 +273,7 @@ function ModelosPreditivosPage() {
                   <SelectContent>
                     {concluidas.map((coleta) => (
                       <SelectItem key={coleta.id} value={coleta.id}>
-                        {coleta.created_at.slice(0, 16).replace("T", " ")} - {coleta.esporte ?? "-"} - {coleta.job_id}
+                        {formatDateTimeBR(coleta.created_at)} - {coleta.esporte ?? "-"} - {coleta.job_id}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -413,7 +413,7 @@ function ColetaResumo({ coleta }: { coleta: ColetaOdds }) {
   return (
     <div className="grid gap-3 rounded-md border p-3 text-sm sm:grid-cols-5">
       <Info label="Job" value={coleta.job_id ?? "-"} />
-      <Info label="Coleta" value={coleta.created_at.slice(0, 16).replace("T", " ")} />
+      <Info label="Coleta" value={formatDateTimeBR(coleta.created_at)} />
       <Info label="Esporte" value={coleta.esporte ?? "-"} />
       <Info label="Ligas" value={formatColetaLigas(coleta)} />
       <Info label="Linhas" value={coleta.total_odds ?? 0} />

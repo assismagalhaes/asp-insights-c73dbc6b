@@ -77,6 +77,15 @@ export function parseBrazilianDate(text: unknown): string | null {
   return `${String(y).padStart(4, "0")}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
+// Formata "YYYY-MM-DD HH:mm" no fuso America/Sao_Paulo a partir de ISO/Date.
+export function formatDateTimeBR(value: string | Date | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return typeof value === "string" ? value : "";
+  const p = nowBRParts(date);
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
+}
+
 // Formata hora "HH:mm[:ss]" -> "HH:mm". Aceita ISO ou Date e devolve HH:mm no fuso BR.
 export function formatHora(value: string | Date | null | undefined): string {
   if (value === null || value === undefined || value === "") return "";
