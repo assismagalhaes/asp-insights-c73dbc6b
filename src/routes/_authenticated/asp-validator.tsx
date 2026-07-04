@@ -4470,7 +4470,7 @@ function aiResultToValidationResult(
 
   // Reforco de protecao de banca: CONFIRMAR exige margem minima positiva.
   let decision = result.decision;
-  let alerts = [...(result.alerts ?? [])];
+  const alerts = [...(result.alerts ?? [])];
   let finalAnalysis = result.final_analysis;
   const adjustedEv = result.adjusted_ev;
   const offered = result.offered_odd;
@@ -5634,7 +5634,7 @@ function extractRobustPredictionSignals(text: string): ReturnType<typeof extract
 function extractMatchFromOcr(record: ValidatorRecord, text: string): OcrIntelligenceData["match"] {
   const competitionMatch =
     text.match(
-      /(?:World|Mundo|Competicao|Competição|Liga)\s*[:\-]\s*([^\n\r]+?)(?:\s*-\s*Rodada\s*[:\-]?\s*([^\n\r]+))?(?:\n|$)/i,
+      /(?:World|Mundo|Competicao|Competição|Liga)\s*[:-]\s*([^\n\r]+?)(?:\s*-\s*Rodada\s*[:-]?\s*([^\n\r]+))?(?:\n|$)/i,
     ) ??
     text.match(/\b(Brazil\s*:\s*Serie\s*B)\s*-\s*(Rodada\s*\d+)/i) ??
     text.match(/\b([A-Z][A-Za-z\s]+(?:Cup|League|Liga|Division|Championship))[^\n\r]*/);

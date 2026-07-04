@@ -422,10 +422,10 @@ function fillGoalsSection(
   // Over/Under gols: "Mais de X.X: TimeA 70% | TimeB 50%"
   for (const line of text.split(/\r?\n/)) {
     const overM = line.match(
-      /^\s*(?:Mais\s+de|Over|\+)\s*(\d+(?:[.,]\d+)?)\s*(?:gols?)?\s*[:\-]?\s*(.+)$/i,
+      /^\s*(?:Mais\s+de|Over|\+)\s*(\d+(?:[.,]\d+)?)\s*(?:gols?)?\s*[:-]?\s*(.+)$/i,
     );
     const underM = line.match(
-      /^\s*(?:Menos\s+de|Under|-)\s*(\d+(?:[.,]\d+)?)\s*(?:gols?)?\s*[:\-]?\s*(.+)$/i,
+      /^\s*(?:Menos\s+de|Under|-)\s*(\d+(?:[.,]\d+)?)\s*(?:gols?)?\s*[:-]?\s*(.+)$/i,
     );
     if (overM) {
       const lk = overM[1].replace(",", ".");
@@ -543,10 +543,10 @@ function fillCardsSection(
   // Over/Under cartoes
   for (const line of text.split(/\r?\n/)) {
     const overM = line.match(
-      /^\s*(?:Mais\s+de|Over|\+)\s*(\d+(?:[.,]\d+)?)\s*(?:cart[oõ]es)?\s*[:\-]?\s*(.+)$/i,
+      /^\s*(?:Mais\s+de|Over|\+)\s*(\d+(?:[.,]\d+)?)\s*(?:cart[oõ]es)?\s*[:-]?\s*(.+)$/i,
     );
     const underM = line.match(
-      /^\s*(?:Menos\s+de|Under|-)\s*(\d+(?:[.,]\d+)?)\s*(?:cart[oõ]es)?\s*[:\-]?\s*(.+)$/i,
+      /^\s*(?:Menos\s+de|Under|-)\s*(\d+(?:[.,]\d+)?)\s*(?:cart[oõ]es)?\s*[:-]?\s*(.+)$/i,
     );
     if (overM && /cart/i.test(line)) {
       const lk = overM[1].replace(",", ".");

@@ -389,8 +389,8 @@ function fillSideFromText(
 
   // 2) Over/Under: "Mais de 9.5: Atlético GO 100% | Ponte Preta 80%"
   for (const line of sectionText.split(/\r?\n/)) {
-    const overM = line.match(/^\s*(?:Mais\s+de|Over|\+)\s*(\d+(?:[.,]\d+)?)\s*[:\-]?\s*(.+)$/i);
-    const underM = line.match(/^\s*(?:Menos\s+de|Under|-)\s*(\d+(?:[.,]\d+)?)\s*[:\-]?\s*(.+)$/i);
+    const overM = line.match(/^\s*(?:Mais\s+de|Over|\+)\s*(\d+(?:[.,]\d+)?)\s*[:-]?\s*(.+)$/i);
+    const underM = line.match(/^\s*(?:Menos\s+de|Under|-)\s*(\d+(?:[.,]\d+)?)\s*[:-]?\s*(.+)$/i);
     if (overM) {
       const lineKey = overM[1].replace(",", ".");
       const sides = parseTwoSidedPercentLine(overM[2], team, otherTeam);

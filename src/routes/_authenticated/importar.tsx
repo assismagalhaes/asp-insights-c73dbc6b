@@ -128,7 +128,7 @@ function parseNumber(v: unknown): number | null {
   const s = String(v)
     .trim()
     .replace(",", ".")
-    .replace(/[^\d.\-]/g, "");
+    .replace(/[^\d.-]/g, "");
   if (!s) return null;
   const n = Number(s);
   return isNaN(n) ? null : n;

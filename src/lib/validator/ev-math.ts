@@ -43,7 +43,6 @@ export function assertEvConsistency(
   const canonical = calculateEvPercent(probabilityPercent, offeredOdd);
   if (canonical === null || suggestedEvPercent === null) return canonical;
   if (Math.abs(canonical - suggestedEvPercent) > 0.25) {
-    // eslint-disable-next-line no-console
     console.warn(
       `[${tag}] EV divergente: sugerido=${suggestedEvPercent} recalculado=${canonical} (prob=${probabilityPercent}%, odd=${offeredOdd}). Exibindo recalculado.`,
     );
