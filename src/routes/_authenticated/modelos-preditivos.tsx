@@ -17,7 +17,7 @@ import {
 } from "@/lib/scraper-api.functions";
 import { supabase } from "@/lib/supabase-public";
 import { normalizeEsporteLiga, normalizeMercadoPadrao } from "@/lib/db";
-import { parseBrazilianDate } from "@/lib/date-br";
+import { parseBrazilianDate, formatDateTimeBR } from "@/lib/date-br";
 
 export const Route = createFileRoute("/_authenticated/modelos-preditivos")({
   component: ModelosPreditivosPage,
