@@ -9,8 +9,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { ValidatorDashboardMetric as DashboardMetric, ValidatorGroupTable as GroupTable } from "@/components/asp-validator/ValidatorDashboardTable";
+import { ValidatorInfo as Info } from "@/components/asp-validator/ValidatorInfo";
+import { ValidatorPlaceholder as Placeholder } from "@/components/asp-validator/ValidatorPlaceholder";
+import { ValidatorSelectField as SelectField, ValidatorTextField as TextField } from "@/components/asp-validator/ValidatorFields";
+import { ValidatorSignalBlock as SignalBlock } from "@/components/asp-validator/ValidatorSignalBlock";
 import { validateAspValidatorWithAi, type AspValidatorAiResult } from "@/lib/asp-validator-ai.functions";
 import { validateAspValidatorWithOnlineAi, type AspValidatorOnlineAiResult } from "@/lib/asp-validator-ai-online.functions";
 import { runAspValidatorSimulation, type AspValidatorSimulationResult } from "@/lib/asp-validator-simulation";
@@ -74,7 +78,6 @@ import {
   filterDashboardRecords,
   groupValidatorRecords,
   type DashboardStats,
-  type GroupRow,
 } from "@/lib/asp-validator/dashboard";
 import {
   average,
@@ -2453,60 +2456,6 @@ function ResultRegistrationPanel({
   );
 }
 
-function DashboardMetric({ label, value, tone = "neutral" }: { label: string; value: string; tone?: "good" | "bad" | "neutral" }) {
-  const color = tone === "good" ? "text-emerald-300" : tone === "bad" ? "text-red-300" : "text-foreground";
-  return (
-    <div className="rounded-md border border-border bg-muted/15 p-3">
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className={`mt-1 text-lg font-semibold ${color}`}>{value}</div>
-    </div>
-  );
-}
-
-function GroupTable({ title, rows }: { title: string; rows: GroupRow[] }) {
-  return (
-    <div className="overflow-hidden rounded-md border border-border">
-      <div className="border-b border-border bg-muted/20 px-3 py-2 text-sm font-semibold">{title}</div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-xs">
-          <thead className="bg-muted/10 text-muted-foreground">
-            <tr>
-              {["Grupo", "Total", "G", "R", "P/V", "WR", "Lucro u", "Lucro R$", "ROI", "Odd med.", "Prob. med."].map((header) => (
-                <th key={header} className="px-3 py-2 text-left font-medium">{header}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length ? (
-              rows.map((row) => (
-                <tr key={row.label} className="border-t border-border">
-                  <td className="px-3 py-2 font-semibold">{row.label}</td>
-                  <td className="px-3 py-2">{row.total}</td>
-                  <td className="px-3 py-2 text-emerald-300">{row.green}</td>
-                  <td className="px-3 py-2 text-red-300">{row.red}</td>
-                  <td className="px-3 py-2">{row.pushVoid}</td>
-                  <td className="px-3 py-2">{row.winRate.toFixed(1)}%</td>
-                  <td className={`px-3 py-2 ${row.profitUnits >= 0 ? "text-emerald-300" : "text-red-300"}`}>{signed(row.profitUnits)}u</td>
-                  <td className={`px-3 py-2 ${row.profitBrl >= 0 ? "text-emerald-300" : "text-red-300"}`}>
-                    {row.profitBrl >= 0 ? "+" : "-"}R$ {Math.abs(row.profitBrl).toFixed(2)}
-                  </td>
-                  <td className="px-3 py-2">{signed(row.roi)}%</td>
-                  <td className="px-3 py-2">{row.averageOdd ? row.averageOdd.toFixed(2) : "-"}</td>
-                  <td className="px-3 py-2">{row.averageProbability ? `${row.averageProbability.toFixed(1)}%` : "-"}</td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={11} className="px-3 py-6 text-center text-muted-foreground">Nenhum dado para os filtros selecionados.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
 function ImportedMlbScreenerBanner({
   payload,
   warnings,
@@ -2641,73 +2590,6 @@ function ImportedMlbScreenerBanner({
         )}
       </CardContent>
     </Card>
-  );
-}
-
-function TextField({
-  label,
-  value,
-  onChange,
-  placeholder,
-  type = "text",
-  disabled = false,
-  hint,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  type?: string;
-  disabled?: boolean;
-  hint?: string;
-}) {
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <Label>{label}</Label>
-        {hint ? <span className="text-[10px] uppercase tracking-wide text-emerald-300">{hint}</span> : null}
-      </div>
-      <Input type={type} value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
-    </div>
-  );
-}
-
-function SelectField({
-  label,
-  value,
-  options,
-  onChange,
-  placeholder,
-  disabled = false,
-  hint,
-}: {
-  label: string;
-  value: string;
-  options: string[];
-  onChange: (value: string) => void;
-  placeholder?: string;
-  disabled?: boolean;
-  hint?: string;
-}) {
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <Label>{label}</Label>
-        {hint ? <span className="text-[10px] uppercase tracking-wide text-emerald-300">{hint}</span> : null}
-      </div>
-      <Select value={value} onValueChange={onChange} disabled={disabled}>
-        <SelectTrigger>
-          <SelectValue placeholder={placeholder} />
-        </SelectTrigger>
-        <SelectContent>
-          {options.map((option) => (
-            <SelectItem key={option} value={option}>
-              {option}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
   );
 }
 
@@ -3288,47 +3170,10 @@ function PastedCornerCard({
 
 
 
-function Placeholder({ icon: Icon, title, text }: { icon: typeof Search; title: string; text: string }) {
-  return (
-    <div className="rounded-md border border-dashed border-border bg-muted/10 p-3">
-      <Icon className="mb-2 h-4 w-4 text-muted-foreground" />
-      <div className="text-sm font-semibold">{title}</div>
-      <p className="mt-1 text-xs text-muted-foreground">{text}</p>
-    </div>
-  );
-}
-
 function EmptyResult() {
   return (
     <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
       Preencha o formulario e clique em Validar com IA para gerar a decisao.
-    </div>
-  );
-}
-
-function Info({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-border bg-background/40 p-3">
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="mt-1 font-mono text-sm font-semibold">{value}</div>
-    </div>
-  );
-}
-
-function SignalBlock({ title, items, tone }: { title: string; items: string[]; tone: "good" | "bad" | "warn" }) {
-  const color = tone === "good" ? "text-emerald-300" : tone === "bad" ? "text-red-300" : "text-amber-300";
-  return (
-    <div className="rounded-md border border-border p-3">
-      <p className={`mb-2 text-xs font-semibold uppercase tracking-wide ${color}`}>{title}</p>
-      {items.length ? (
-        <ul className="space-y-1 text-sm text-muted-foreground">
-          {items.map((item) => (
-            <li key={item}>- {item}</li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-sm text-muted-foreground">Nenhum ponto relevante identificado nesta fase.</p>
-      )}
     </div>
   );
 }
