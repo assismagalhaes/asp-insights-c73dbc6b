@@ -413,7 +413,7 @@ function ColetaResumo({ coleta }: { coleta: ColetaOdds }) {
   return (
     <div className="grid gap-3 rounded-md border p-3 text-sm sm:grid-cols-5">
       <Info label="Job" value={coleta.job_id ?? "-"} />
-      <Info label="Coleta" value={coleta.created_at.slice(0, 16).replace("T", " ")} />
+      <Info label="Coleta" value={formatDateTimeBR(coleta.created_at)} />
       <Info label="Esporte" value={coleta.esporte ?? "-"} />
       <Info label="Ligas" value={formatColetaLigas(coleta)} />
       <Info label="Linhas" value={coleta.total_odds ?? 0} />
