@@ -68,6 +68,38 @@ import {
   UPLOAD_CATEGORIES,
   INITIAL_DASHBOARD_FILTERS,
 } from "@/lib/asp-validator/constants";
+import {
+  buildDashboardOptions,
+  calculateValidatorDashboardStats,
+  filterDashboardRecords,
+  groupValidatorRecords,
+  type DashboardStats,
+  type GroupRow,
+} from "@/lib/asp-validator/dashboard";
+import {
+  average,
+  extractManualOnlyContext,
+  formatDate,
+  formatDateTime,
+  formatDecimalEv,
+  formatDecimalProbability,
+  formatFileSize,
+  formatNumber,
+  formatOdd,
+  formatPercent,
+  formatUploadSource,
+  hasJsonContent,
+  normalize,
+  normalizeProbability,
+  normalizeSourceEv,
+  numberToInput,
+  parseNumber,
+  percentToInput,
+  round,
+  signed,
+} from "@/lib/asp-validator/formatters";
+import { calculateValidatorProfitUnits, recordToEditable, recordToResultForm } from "@/lib/asp-validator/record-mappers";
+import { buildStoragePath } from "@/lib/asp-validator/storage";
 
 export const Route = createFileRoute("/_authenticated/asp-validator")({
   component: AspValidatorPage,
@@ -2420,36 +2452,6 @@ function ResultRegistrationPanel({
     </div>
   );
 }
-
-type DashboardStats = {
-  total: number;
-  confirmed: number;
-  skipped: number;
-  confirmedGreen: number;
-  confirmedRed: number;
-  confirmedRoi: number;
-  confirmedYield: number;
-  confirmedProfitUnits: number;
-  confirmedProfitBrl: number;
-  confirmedWinRate: number;
-  skippedGreen: number;
-  skippedRed: number;
-  skipAccuracy: number;
-};
-
-type GroupRow = {
-  label: string;
-  total: number;
-  green: number;
-  red: number;
-  pushVoid: number;
-  winRate: number;
-  profitUnits: number;
-  profitBrl: number;
-  roi: number;
-  averageOdd: number;
-  averageProbability: number;
-};
 
 function DashboardMetric({ label, value, tone = "neutral" }: { label: string; value: string; tone?: "good" | "bad" | "neutral" }) {
   const color = tone === "good" ? "text-emerald-300" : tone === "bad" ? "text-red-300" : "text-foreground";
@@ -5367,297 +5369,4 @@ function inferSourcePlatformFromStructured(structured: StructuredValidatorJson):
   if (text.includes("packball")) return "PackBall";
   if (text.includes("flashscore")) return "Flashscore";
   return "";
-}
-
-function recordToEditable(record: ValidatorRecord): EditableRecord {
-  return {
-    sport: record.sport,
-    source_platform: record.source_platform,
-    league: record.league ?? "",
-    match_date: record.match_date ?? "",
-    home_team: record.home_team,
-    away_team: record.away_team,
-    market: record.market,
-    pick: record.pick,
-    line: record.line ?? "",
-    offered_odd: numberToInput(record.offered_odd),
-    source_probability: numberToInput(record.source_probability),
-    source_fair_odd: numberToInput(record.source_fair_odd),
-    source_ev: numberToInput(record.source_ev),
-    user_context: record.user_context ?? "",
-  };
-}
-
-function recordToResultForm(record: ValidatorRecord, defaultUnitValue: number): ResultForm {
-  return {
-    result_status: record.result_status || "PENDENTE",
-    final_odd: numberToInput(record.offered_odd),
-    stake_units: numberToInput(record.stake_units ?? 1),
-    unit_value_brl: numberToInput(record.unit_value_brl ?? defaultUnitValue),
-    clv: numberToInput(record.clv),
-    final_score: record.final_score ?? "",
-    result_notes: record.result_notes ?? "",
-    result_settled_at: record.result_settled_at ?? todayBR(),
-  };
-}
-
-function calculateValidatorProfitUnits(status: string, stake: number, odd: number): number {
-  switch (status.toUpperCase()) {
-    case "GREEN":
-      return round(stake * (odd - 1), 4);
-    case "RED":
-      return round(-stake, 4);
-    case "PUSH":
-    case "VOID":
-      return 0;
-    default:
-      return 0;
-  }
-}
-
-function buildDashboardOptions(records: ValidatorRecord[]) {
-  const unique = (values: Array<string | null | undefined>) =>
-    Array.from(new Set(values.filter((value): value is string => Boolean(value)))).sort((a, b) => a.localeCompare(b));
-  return {
-    sports: unique(records.map((record) => record.sport)),
-    leagues: unique(records.map((record) => record.league)),
-    platforms: unique(records.map((record) => record.source_platform)),
-    models: unique(records.map((record) => record.validator_model)),
-    markets: unique(records.map((record) => record.market)),
-  };
-}
-
-function filterDashboardRecords(records: ValidatorRecord[], filters: ValidatorDashboardFilters): ValidatorRecord[] {
-  const minDate = getDashboardMinDate(filters.period);
-  return records.filter((record) => {
-    const date = record.result_settled_at || record.match_date || record.created_at.slice(0, 10);
-    if (minDate && date < minDate) return false;
-    if (filters.sport !== "all" && record.sport !== filters.sport) return false;
-    if (filters.league !== "all" && record.league !== filters.league) return false;
-    if (filters.source_platform !== "all" && record.source_platform !== filters.source_platform) return false;
-    if (filters.validator_model !== "all" && record.validator_model !== filters.validator_model) return false;
-    if (filters.market !== "all" && record.market !== filters.market) return false;
-    if (filters.decision !== "all" && record.decision !== filters.decision) return false;
-    if (filters.result !== "all") {
-      const result = record.result_status || "PENDENTE";
-      if (result !== filters.result) return false;
-    }
-    return true;
-  });
-}
-
-function getDashboardMinDate(period: ValidatorDashboardFilters["period"]): string | null {
-  if (period === "all") return null;
-  // Trabalha em fuso BR: usa componentes da data BR para construir a data local coerente.
-  const todayStr = todayBR();
-  const [y, m, d] = todayStr.split("-").map(Number);
-  const date = new Date(y, m - 1, d);
-  if (period === "7d") date.setDate(date.getDate() - 6);
-  if (period === "30d") date.setDate(date.getDate() - 29);
-  if (period === "month") date.setDate(1);
-  if (period === "year") {
-    date.setMonth(0);
-    date.setDate(1);
-  }
-  const yy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
-  return `${yy}-${mm}-${dd}`;
-}
-
-function calculateValidatorDashboardStats(records: ValidatorRecord[]): DashboardStats {
-  const confirmed = records.filter((record) => record.decision === "CONFIRMAR" && record.bankroll_applied && !record.is_simulated_result);
-  const skipped = records.filter((record) => record.decision === "PULAR" && record.is_simulated_result);
-  const confirmedResolved = confirmed.filter(isResolvedResult);
-  const confirmedStake = confirmedResolved.reduce((sum, record) => sum + Number(record.stake_units ?? 0), 0);
-  const confirmedProfitUnits = confirmed.reduce((sum, record) => sum + Number(record.profit_units ?? 0), 0);
-  const confirmedProfitBrl = confirmed.reduce((sum, record) => sum + Number(record.profit_brl ?? 0), 0);
-  const confirmedGreen = confirmed.filter((record) => record.result_status === "GREEN").length;
-  const confirmedRed = confirmed.filter((record) => record.result_status === "RED").length;
-  const skippedGreen = skipped.filter((record) => record.result_status === "GREEN").length;
-  const skippedRed = skipped.filter((record) => record.result_status === "RED").length;
-  const skippedResolved = skipped.filter(isResolvedResult);
-  return {
-    total: records.length,
-    confirmed: records.filter((record) => record.decision === "CONFIRMAR").length,
-    skipped: records.filter((record) => record.decision === "PULAR").length,
-    confirmedGreen,
-    confirmedRed,
-    confirmedRoi: confirmedStake > 0 ? (confirmedProfitUnits / confirmedStake) * 100 : 0,
-    confirmedYield: confirmedStake > 0 ? (confirmedProfitUnits / confirmedStake) * 100 : 0,
-    confirmedProfitUnits,
-    confirmedProfitBrl,
-    confirmedWinRate: confirmedResolved.length ? (confirmedGreen / confirmedResolved.length) * 100 : 0,
-    skippedGreen,
-    skippedRed,
-    skipAccuracy: skippedResolved.length ? (skippedRed / skippedResolved.length) * 100 : 0,
-  };
-}
-
-function groupValidatorRecords(records: ValidatorRecord[], keyFn: (record: ValidatorRecord) => string): GroupRow[] {
-  const map = new Map<string, ValidatorRecord[]>();
-  for (const record of records) {
-    const key = keyFn(record) || "-";
-    map.set(key, [...(map.get(key) ?? []), record]);
-  }
-  return Array.from(map.entries())
-    .map(([label, rows]) => {
-      const resolved = rows.filter((row) => isResolvedResult(row));
-      const green = rows.filter((row) => row.result_status === "GREEN").length;
-      const red = rows.filter((row) => row.result_status === "RED").length;
-      const pushVoid = rows.filter((row) => row.result_status === "PUSH" || row.result_status === "VOID").length;
-      const stake = resolved.reduce((sum, row) => sum + Number(row.stake_units ?? (row.decision === "PULAR" ? 1 : 0)), 0);
-      const profitUnits = rows.reduce((sum, row) => sum + Number(row.profit_units ?? 0), 0);
-      const profitBrl = rows.reduce((sum, row) => sum + Number(row.profit_brl ?? 0), 0);
-      const odds = rows.map((row) => Number(row.offered_odd ?? 0)).filter((value) => value > 0);
-      const probs = rows.map((row) => Number(row.adjusted_probability ?? 0)).filter((value) => value > 0);
-      return {
-        label,
-        total: rows.length,
-        green,
-        red,
-        pushVoid,
-        winRate: resolved.length ? (green / resolved.length) * 100 : 0,
-        profitUnits,
-        profitBrl,
-        roi: stake > 0 ? (profitUnits / stake) * 100 : 0,
-        averageOdd: odds.length ? average(odds) : 0,
-        averageProbability: probs.length ? average(probs) : 0,
-      };
-    })
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 12);
-}
-
-function isResolvedResult(record: ValidatorRecord): boolean {
-  return record.result_status === "GREEN" || record.result_status === "RED";
-}
-
-function average(values: number[]): number {
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
-}
-
-function signed(value: number): string {
-  return `${value >= 0 ? "+" : ""}${round(value, 2).toFixed(2)}`;
-}
-
-function hasJsonContent(value: Record<string, unknown> | null): boolean {
-  return Boolean(value && Object.keys(value).length > 0);
-}
-
-function parseNumber(value: string): number | null {
-  const clean = String(value || "").replace("%", "").replace(",", ".").trim();
-  if (!clean) return null;
-  const parsed = Number(clean);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function normalizeProbability(value: number | null): number | null {
-  if (value === null) return null;
-  if (value > 0 && value <= 1) return round(value * 100, 2);
-  return round(Math.max(0, Math.min(100, value)), 2);
-}
-
-function normalizeSourceEv(value: number | null, sourcePlatform?: string | null): number | null {
-  if (value === null) return null;
-  const platform = normalize(sourcePlatform || "");
-  // PackBall: EV vem como inteiro percentual (ex.: 18 = 0.18%, 41 = 0.41%).
-  // Se o usuario digitar 0.18 mantemos. Threshold > 1 cobre 18, 41, etc.
-  if (platform.includes("packball") && value > 1 && value < 100) return round(value / 100, 2);
-  return round(value, 2);
-}
-
-function normalize(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-}
-
-function round(value: number, digits = 2): number {
-  const factor = 10 ** digits;
-  return Math.round(value * factor) / factor;
-}
-
-function formatPercent(value: number | null): string {
-  return value === null ? "-" : `${round(value, 2).toFixed(2)}%`;
-}
-
-function formatDecimalProbability(value: number | null): string {
-  return value === null ? "-" : `${round(value * 100, 2).toFixed(2)}%`;
-}
-
-function formatDecimalEv(value: number | null): string {
-  return value === null ? "-" : `${round(value * 100, 2).toFixed(2)}%`;
-}
-
-function formatOdd(value: number | null): string {
-  return value === null ? "-" : value.toFixed(2);
-}
-
-function formatNumber(value: number | null | undefined): string {
-  return value === null || value === undefined || !Number.isFinite(value) ? "-" : round(value, 2).toFixed(2);
-}
-
-function numberToInput(value: number | null): string {
-  return value === null || value === undefined ? "" : String(value);
-}
-
-function percentToInput(value: number | null): string {
-  return value === null || value === undefined || !Number.isFinite(value) ? "" : String(round(value * 100, 2));
-}
-
-// Remove previous imported-screener block(s) from a user_context value.
-// Keeps only the free-form manual portion, avoiding "Importado do ASP Screener..." duplication.
-function extractManualOnlyContext(value: string | null | undefined): string {
-  if (!value) return "";
-  const text = String(value);
-  const importedMarker = "Importado do ASP Screener MLB";
-  const manualMarker = "Contexto adicional manual:";
-  if (!text.includes(importedMarker)) return text.trim();
-  // If a manual section exists after the imported block, keep only that section content.
-  const manualIdx = text.lastIndexOf(manualMarker);
-  if (manualIdx >= 0) {
-    return text.slice(manualIdx + manualMarker.length).trim();
-  }
-  // Only imported context, no manual addition -> nothing to preserve.
-  return "";
-}
-
-function formatDate(value: string | null): string {
-  if (!value) return "-";
-  const parsed = new Date(`${value}T00:00:00-03:00`);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
-}
-
-function formatDateTime(value: string | null): string {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
-}
-
-function formatFileSize(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB"];
-  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  return `${round(bytes / 1024 ** index, index === 0 ? 0 : 1)} ${units[index]}`;
-}
-
-function formatUploadSource(source?: string | null): string {
-  if (source === "clipboard") return "CTRL+V";
-  if (source === "drag_drop") return "drag/drop";
-  if (source === "manual") return "upload manual";
-  return "nao informado";
-}
-
-function buildStoragePath(userId: string, validatorId: string, uploadId: string, fileName: string): string {
-  const cleanName = (fileName || "upload")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z0-9._-]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 120) || "upload";
-  return `${userId}/${validatorId}/${uploadId}/${cleanName}`;
 }
