@@ -21,6 +21,73 @@ import {
 } from "@/lib/coleta-dados";
 import { useCreatePrognostico } from "@/lib/db";
 import {
+  copyCalibrationPayload,
+  exportCalibrationCsv,
+  exportDailySnapshotsCsv,
+  exportOpportunitySnapshotsCsv,
+} from "@/lib/asp-screener/screener-export";
+import {
+  filterCalibrationRows,
+  filterHandicapRows,
+  filterHandoffAuditRows,
+  filterOpportunityRows,
+  filterSnapshotOpportunityRows,
+  filterTotalsRows,
+  findOpportunityForCriticalPayload,
+} from "@/lib/asp-screener/screener-filters";
+import {
+  correlationLabel,
+  edgeClass,
+  evClass,
+  formatAlertMessage,
+  formatDateTime,
+  formatError,
+  formatEv,
+  formatHandicapLine,
+  formatNumber,
+  formatNumber2,
+  formatOdd,
+  formatPct,
+  formatPercentDecimal,
+  formatProbability,
+  formatProbabilitySigned,
+  formatRate,
+  formatRecord,
+  formatScore,
+  formatSignedNumber,
+  gapClass,
+  isBaseballSport,
+  isMlbLeague,
+  isSameDate,
+  leagueAverageSourceLabel,
+  opportunityStatusBadgeVariant,
+  scoreClass,
+  sourceLabel,
+  statusBadgeVariant,
+  statusLabel,
+  todayIso,
+} from "@/lib/asp-screener/screener-formatters";
+import {
+  buildCalibrationModel,
+  buildCalibrationOptionSets,
+  getHandicapStats,
+  getHandoffAuditStats,
+  getOpportunitySnapshotStats,
+  getOpportunityStats,
+  getProjectionStats,
+  getRiskFlags,
+  getTotalsStats,
+  type CalibrationAverageStats,
+  type CalibrationGroupRow,
+  type CalibrationRankingRow,
+} from "@/lib/asp-screener/screener-stats";
+import {
+  HANDOFF_AUDIT_STATUSES,
+  MLB_SCREENER_ODDS_LIMIT,
+  SNAPSHOT_OPPORTUNITY_PAGE_SIZE,
+  SNAPSHOT_PRIORITY_STATUSES,
+} from "@/lib/asp-screener/screener-ui-constants";
+import {
   getMlbStandingsSnapshotFn,
   processManualMlbStandingsCsv,
   refreshMlbStandingsFromBaseballReference,
@@ -82,9 +149,6 @@ type SnapshotResponse = {
   oddsRowsCount: number;
   fromCache: boolean;
 };
-
-const MLB_SCREENER_ODDS_LIMIT = 5000;
-const SNAPSHOT_OPPORTUNITY_PAGE_SIZE = 500;
 
 function AspScreenerPage() {
   const qc = useQueryClient();
@@ -2893,806 +2957,6 @@ function Info({ label, value }: { label: string; value: unknown }) {
   );
 }
 
-const HANDOFF_AUDIT_STATUSES: MlbScreenerHandoffAuditStatus[] = [
-  "created",
-  "sent_to_validator",
-  "applied_in_validator",
-  "discarded",
-  "expired",
-  "validation_started",
-  "validation_completed",
-  "validation_failed",
-];
-const SNAPSHOT_PRIORITY_STATUSES = ["ANALISAR", "MONITORAR", "PULAR", "MISSING_DATA", "UNSUPPORTED_LINE"];
-
-function filterSnapshotOpportunityRows(
-  rows: MlbOpportunitySnapshotRecord[],
-  filters: {
-    market: string;
-    status: string;
-    sent: "all" | "sent" | "not_sent";
-    decision: "all" | "CONFIRMAR" | "PULAR" | "pending";
-    minScore: number;
-    minEv: number;
-  },
-) {
-  return rows.filter((row) => {
-    if (filters.market !== "all" && row.market_label !== filters.market) return false;
-    if (filters.status !== "all" && row.priority_status !== filters.status) return false;
-    if (filters.sent === "sent" && !row.sent_to_validator) return false;
-    if (filters.sent === "not_sent" && row.sent_to_validator) return false;
-    if (filters.decision === "pending" && row.validator_decision) return false;
-    if (filters.decision !== "all" && filters.decision !== "pending" && row.validator_decision !== filters.decision) return false;
-    if (Number.isFinite(filters.minScore) && filters.minScore > 0 && (row.opportunity_score ?? 0) < filters.minScore) return false;
-    if (Number.isFinite(filters.minEv) && filters.minEv > 0 && ((row.ev ?? 0) * 100) < filters.minEv) return false;
-    return true;
-  });
-}
-
-function getOpportunitySnapshotStats(rows: MlbOpportunitySnapshotRecord[]) {
-  const total = rows.length;
-  const sent = rows.filter((row) => row.sent_to_validator).length;
-  return {
-    total,
-    sent,
-    sentRate: total ? (sent / total) * 100 : 0,
-    analyzeNotSent: rows.filter((row) => row.priority_status === "ANALISAR" && !row.sent_to_validator).length,
-    highScoreNotSent: rows.filter((row) => (row.opportunity_score ?? 0) >= 80 && !row.sent_to_validator).length,
-    highEvNotSent: rows.filter((row) => (row.ev ?? 0) >= 0.08 && !row.sent_to_validator).length,
-  };
-}
-
-function findOpportunityForCriticalPayload(rows: MlbUnifiedOpportunity[], payload: MlbPreparedCriticalValidationPayload) {
-  return rows.find((row) =>
-    row.game_id === payload.game.game_id &&
-    row.market_label === payload.opportunity.market &&
-    (row.pick_label ?? null) === (payload.opportunity.pick ?? null) &&
-    row.line === payload.opportunity.line,
-  );
-}
-
-function filterHandoffAuditRows(
-  rows: MlbScreenerHandoffAuditRecord[],
-  filters: {
-    status: MlbScreenerHandoffAuditStatus | "all";
-    market: string;
-    decision: "all" | "CONFIRMAR" | "PULAR" | "pending";
-    minScore: number;
-    minEv: number;
-  },
-) {
-  return rows.filter((row) => {
-    if (filters.status !== "all" && row.status !== filters.status) return false;
-    if (filters.market !== "all" && row.market !== filters.market) return false;
-    if (filters.decision === "pending" && row.validator_decision) return false;
-    if (filters.decision !== "all" && filters.decision !== "pending" && row.validator_decision !== filters.decision) return false;
-    if (Number.isFinite(filters.minScore) && filters.minScore > 0 && (row.opportunity_score ?? 0) < filters.minScore) return false;
-    if (Number.isFinite(filters.minEv) && filters.minEv > 0 && ((row.ev ?? 0) * 100) < filters.minEv) return false;
-    return true;
-  });
-}
-
-function getHandoffAuditStats(rows: MlbScreenerHandoffAuditRecord[]) {
-  const sent = rows.length;
-  const applied = rows.filter((row) => row.status === "applied_in_validator" || row.applied_at).length;
-  const discarded = rows.filter((row) => row.status === "discarded").length;
-  const expired = rows.filter((row) => row.status === "expired").length;
-  const completed = rows.filter((row) => row.status === "validation_completed").length;
-  const confirmed = rows.filter((row) => row.validator_decision === "CONFIRMAR").length;
-  const skipped = rows.filter((row) => row.validator_decision === "PULAR").length;
-  return {
-    sent,
-    applied,
-    discarded,
-    expired,
-    completed,
-    confirmed,
-    skipped,
-    sentToValidationRate: sent ? (completed / sent) * 100 : 0,
-    validationToConfirmRate: completed ? (confirmed / completed) * 100 : 0,
-  };
-}
-
-type CalibrationAverageStats = ReturnType<typeof getCalibrationAverages>;
-type CalibrationGroupRow = {
-  label: string;
-  total: number;
-  applied: number;
-  completed: number;
-  confirmed: number;
-  skipped: number;
-  confirmRate: number;
-  averageEv: number | null;
-  averageScore: number | null;
-  averageConfidence: number | null;
-  averageReadiness: number | null;
-  averageAlignment: number | null;
-};
-type CalibrationRankingRow = {
-  label: string;
-  count: number;
-  confirmRate: number;
-  skipRate: number;
-};
-
-function filterCalibrationRows(
-  rows: MlbScreenerHandoffAuditRecord[],
-  filters: {
-    status: MlbScreenerHandoffAuditStatus | "all";
-    market: string;
-    decision: "all" | "CONFIRMAR" | "PULAR" | "pending";
-    priorityStatus: string;
-    readinessStatus: string;
-    alignmentStatus: string;
-    minScore: number;
-    maxScore: number;
-    minConfidence: number;
-    maxConfidence: number;
-    minEv: number;
-    homeTeam: string;
-    awayTeam: string;
-  },
-) {
-  return rows.filter((row) => {
-    if (filters.status !== "all" && row.status !== filters.status) return false;
-    if (filters.market !== "all" && row.market !== filters.market) return false;
-    if (filters.decision === "pending" && row.validator_decision) return false;
-    if (filters.decision !== "all" && filters.decision !== "pending" && row.validator_decision !== filters.decision) return false;
-    if (filters.priorityStatus !== "all" && row.priority_status !== filters.priorityStatus) return false;
-    if (filters.readinessStatus !== "all" && row.readiness_status !== filters.readinessStatus) return false;
-    if (filters.alignmentStatus !== "all" && row.alignment_status !== filters.alignmentStatus) return false;
-    if (Number.isFinite(filters.minScore) && filters.minScore > 0 && (row.opportunity_score ?? 0) < filters.minScore) return false;
-    if (Number.isFinite(filters.maxScore) && filters.maxScore > 0 && (row.opportunity_score ?? 0) > filters.maxScore) return false;
-    if (Number.isFinite(filters.minConfidence) && filters.minConfidence > 0 && (row.confidence_score ?? 0) < filters.minConfidence) return false;
-    if (Number.isFinite(filters.maxConfidence) && filters.maxConfidence > 0 && (row.confidence_score ?? 0) > filters.maxConfidence) return false;
-    if (Number.isFinite(filters.minEv) && filters.minEv > 0 && ((row.ev ?? 0) * 100) < filters.minEv) return false;
-    if (filters.homeTeam.trim() && !normalizeText(row.home_team).includes(normalizeText(filters.homeTeam))) return false;
-    if (filters.awayTeam.trim() && !normalizeText(row.away_team).includes(normalizeText(filters.awayTeam))) return false;
-    return true;
-  });
-}
-
-function buildCalibrationOptionSets(rows: MlbScreenerHandoffAuditRecord[]) {
-  return {
-    priorityStatuses: uniqueValues(rows.map((row) => row.priority_status)),
-    readinessStatuses: uniqueValues(rows.map((row) => row.readiness_status)),
-    alignmentStatuses: uniqueValues(rows.map((row) => row.alignment_status)),
-  };
-}
-
-function buildCalibrationModel(rows: MlbScreenerHandoffAuditRecord[]) {
-  const completedRows = rows.filter(isValidationCompleted);
-  const confirmedRows = rows.filter((row) => row.validator_decision === "CONFIRMAR");
-  const skippedRows = rows.filter((row) => row.validator_decision === "PULAR");
-  const applied = rows.filter(isAppliedInValidator).length;
-  const started = rows.filter(isValidationStarted).length;
-  const completed = completedRows.length;
-  const confirmed = confirmedRows.length;
-  const skipped = skippedRows.length;
-
-  return {
-    funnel: {
-      sent: rows.length,
-      applied,
-      discarded: rows.filter((row) => row.status === "discarded").length,
-      expired: rows.filter((row) => row.status === "expired").length,
-      started,
-      completed,
-      failed: rows.filter((row) => row.status === "validation_failed").length,
-      confirmed,
-      skipped,
-      sentToAppliedRate: rows.length ? (applied / rows.length) * 100 : 0,
-      appliedToCompletedRate: applied ? (completed / applied) * 100 : 0,
-      completedToConfirmRate: completed ? (confirmed / completed) * 100 : 0,
-      completedToSkipRate: completed ? (skipped / completed) * 100 : 0,
-    },
-    averages: {
-      all: getCalibrationAverages(rows),
-      completed: getCalibrationAverages(completedRows),
-      confirmed: getCalibrationAverages(confirmedRows),
-      skipped: getCalibrationAverages(skippedRows),
-    },
-    scoreBands: groupByRanges(rows, [
-      ["0-59", 0, 59],
-      ["60-69", 60, 69],
-      ["70-79", 70, 79],
-      ["80-89", 80, 89],
-      ["90-100", 90, 100],
-    ], (row) => row.opportunity_score),
-    confidenceBands: groupByRanges(rows, [
-      ["0-49", 0, 49],
-      ["50-57", 50, 57],
-      ["58-65", 58, 65],
-      ["66-72", 66, 72],
-      ["73-78", 73, 78],
-    ], (row) => row.confidence_score),
-    marketGroups: groupByValue(rows, (row) => row.market ?? "Sem mercado"),
-    readinessGroups: groupByValue(rows, (row) => row.readiness_status ?? "Sem readiness"),
-    alignmentGroups: groupByValue(rows, (row) => row.alignment_status ?? "Sem alignment"),
-    riskFlagRanking: rankCalibrationItems(rows, getRiskFlags),
-    alertRanking: rankCalibrationItems(rows, getAlerts),
-  };
-}
-
-function getCalibrationAverages(rows: MlbScreenerHandoffAuditRecord[]) {
-  return {
-    opportunityScore: average(rows.map((row) => row.opportunity_score)),
-    confidenceScore: average(rows.map((row) => row.confidence_score)),
-    ev: average(rows.map((row) => row.ev)),
-    modelProbability: average(rows.map((row) => row.model_probability)),
-    marketProbability: average(rows.map((row) => row.market_probability_no_vig)),
-    edge: average(rows.map((row) => getProbabilityEdge(row))),
-    readinessScore: average(rows.map((row) => getReadinessScore(row.readiness_status))),
-    alignmentScore: average(rows.map((row) => row.alignment_score)),
-  };
-}
-
-function groupByRanges(
-  rows: MlbScreenerHandoffAuditRecord[],
-  ranges: Array<[string, number, number]>,
-  getValue: (row: MlbScreenerHandoffAuditRecord) => number | null,
-) {
-  return ranges.map(([label, min, max]) => buildCalibrationGroupRow(
-    label,
-    rows.filter((row) => {
-      const value = getValue(row);
-      return value != null && value >= min && value <= max;
-    }),
-  ));
-}
-
-function groupByValue(rows: MlbScreenerHandoffAuditRecord[], getValue: (row: MlbScreenerHandoffAuditRecord) => string) {
-  return uniqueValues(rows.map(getValue)).map((label) => buildCalibrationGroupRow(label, rows.filter((row) => getValue(row) === label)));
-}
-
-function buildCalibrationGroupRow(label: string, rows: MlbScreenerHandoffAuditRecord[]): CalibrationGroupRow {
-  const completed = rows.filter(isValidationCompleted).length;
-  const confirmed = rows.filter((row) => row.validator_decision === "CONFIRMAR").length;
-  return {
-    label,
-    total: rows.length,
-    applied: rows.filter(isAppliedInValidator).length,
-    completed,
-    confirmed,
-    skipped: rows.filter((row) => row.validator_decision === "PULAR").length,
-    confirmRate: completed ? (confirmed / completed) * 100 : 0,
-    averageEv: average(rows.map((row) => row.ev)),
-    averageScore: average(rows.map((row) => row.opportunity_score)),
-    averageConfidence: average(rows.map((row) => row.confidence_score)),
-    averageReadiness: average(rows.map((row) => getReadinessScore(row.readiness_status))),
-    averageAlignment: average(rows.map((row) => row.alignment_score)),
-  };
-}
-
-function rankCalibrationItems(rows: MlbScreenerHandoffAuditRecord[], getItems: (row: MlbScreenerHandoffAuditRecord) => string[]): CalibrationRankingRow[] {
-  const counts = new Map<string, MlbScreenerHandoffAuditRecord[]>();
-  for (const row of rows) {
-    for (const item of getItems(row)) {
-      counts.set(item, [...(counts.get(item) ?? []), row]);
-    }
-  }
-  return [...counts.entries()]
-    .map(([label, itemRows]) => {
-      const completed = itemRows.filter(isValidationCompleted).length;
-      const confirmed = itemRows.filter((row) => row.validator_decision === "CONFIRMAR").length;
-      const skipped = itemRows.filter((row) => row.validator_decision === "PULAR").length;
-      return {
-        label,
-        count: itemRows.length,
-        confirmRate: completed ? (confirmed / completed) * 100 : 0,
-        skipRate: completed ? (skipped / completed) * 100 : 0,
-      };
-    })
-    .sort((a, b) => b.count - a.count || b.confirmRate - a.confirmRate)
-    .slice(0, 12);
-}
-
-async function copyCalibrationPayload(row: MlbScreenerHandoffAuditRecord) {
-  try {
-    await navigator.clipboard.writeText(JSON.stringify(row.handoff_payload || row.critical_payload, null, 2));
-    toast.success("Payload de calibracao copiado.");
-  } catch {
-    toast.error("Nao foi possivel copiar o payload.");
-  }
-}
-
-function exportCalibrationCsv(rows: MlbScreenerHandoffAuditRecord[]) {
-  const headers = [
-    "handoff_id",
-    "created_at",
-    "game_id",
-    "matchup",
-    "market",
-    "pick",
-    "line",
-    "odd",
-    "ev",
-    "opportunity_score",
-    "confidence_score",
-    "readiness_status",
-    "alignment_status",
-    "status",
-    "validator_decision",
-    "validator_record_id",
-    "risk_flags",
-  ];
-  const csvRows = rows.map((row) => [
-    row.handoff_id,
-    row.created_at,
-    row.game_id,
-    row.matchup,
-    row.market,
-    row.pick,
-    row.line,
-    row.odd,
-    row.ev,
-    row.opportunity_score,
-    row.confidence_score,
-    row.readiness_status,
-    row.alignment_status,
-    row.status,
-    row.validator_decision,
-    row.validator_record_id,
-    getRiskFlags(row).join("|"),
-  ]);
-  const csv = [headers, ...csvRows].map((line) => line.map(csvCell).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `asp-screener-mlb-calibracao-${todayIso()}.csv`;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
-function exportDailySnapshotsCsv(rows: MlbDailyScreenerSnapshotRecord[]) {
-  const headers = [
-    "run_id",
-    "snapshot_date",
-    "created_at",
-    "games_count",
-    "unified_opportunities_count",
-    "analyze_count",
-    "monitor_count",
-    "skip_count",
-    "shortlist_primary_count",
-    "status",
-  ];
-  const csvRows = rows.map((row) => [
-    row.run_id,
-    row.snapshot_date,
-    row.created_at,
-    row.games_count,
-    row.unified_opportunities_count,
-    row.analyze_count,
-    row.monitor_count,
-    row.skip_count,
-    row.shortlist_primary_count,
-    row.status,
-  ]);
-  downloadCsv(`asp-screener-mlb-daily-snapshots-${todayIso()}.csv`, [headers, ...csvRows]);
-}
-
-function exportOpportunitySnapshotsCsv(rows: MlbOpportunitySnapshotRecord[]) {
-  const headers = [
-    "run_id",
-    "created_at",
-    "game_id",
-    "matchup",
-    "market_family",
-    "market_label",
-    "pick_label",
-    "line",
-    "offered_odd",
-    "median_odd",
-    "market_base_odd",
-    "bookmaker_melhor",
-    "model_prob",
-    "market_prob_no_vig",
-    "probability_edge",
-    "fair_odd",
-    "ev",
-    "opportunity_score",
-    "confidence_score",
-    "priority_status",
-    "is_primary_shortlist",
-    "sent_to_validator",
-    "validator_decision",
-    "risk_flags",
-    "alerts",
-  ];
-  const csvRows = rows.map((row) => [
-    row.run_id,
-    row.created_at,
-    row.game_id,
-    row.matchup,
-    row.market_family,
-    row.market_label,
-    row.pick_label,
-    row.line,
-    row.offered_odd,
-    getSnapshotPayloadNumber(row, "median_odd"),
-    getSnapshotPayloadNumber(row, "market_base_odd"),
-    getSnapshotPayloadString(row, "bookmaker_melhor"),
-    row.model_prob,
-    row.market_prob_no_vig,
-    row.probability_edge,
-    row.fair_odd,
-    row.ev,
-    row.opportunity_score,
-    row.confidence_score,
-    row.priority_status,
-    row.is_primary_shortlist,
-    row.sent_to_validator,
-    row.validator_decision,
-    row.risk_flags.join("|"),
-    row.alerts.join("|"),
-  ]);
-  downloadCsv(`asp-screener-mlb-opportunity-snapshots-${todayIso()}.csv`, [headers, ...csvRows]);
-}
-
-function getRiskFlags(row: MlbScreenerHandoffAuditRecord) {
-  return safeStringArray(row.opportunity_payload?.risk_flags);
-}
-
-function getAlerts(row: MlbScreenerHandoffAuditRecord) {
-  return safeStringArray(row.opportunity_payload?.alerts);
-}
-
-function getSnapshotPayloadNumber(row: MlbOpportunitySnapshotRecord, key: string) {
-  const value = row.opportunity_payload?.[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function getSnapshotPayloadString(row: MlbOpportunitySnapshotRecord, key: string) {
-  const value = row.opportunity_payload?.[key];
-  return typeof value === "string" && value ? value : null;
-}
-
-function getProbabilityEdge(row: MlbScreenerHandoffAuditRecord) {
-  if (row.model_probability == null || row.market_probability_no_vig == null) return null;
-  return row.model_probability - row.market_probability_no_vig;
-}
-
-function getReadinessScore(status: string | null) {
-  if (status === "pronto_para_validator") return 100;
-  if (status === "revisar_antes_do_validator") return 70;
-  if (status === "contexto_incompleto") return 40;
-  if (status === "nao_recomendado_para_validator") return 0;
-  return null;
-}
-
-function isAppliedInValidator(row: MlbScreenerHandoffAuditRecord) {
-  return Boolean(row.applied_at) || ["applied_in_validator", "validation_started", "validation_completed", "validation_failed"].includes(row.status);
-}
-
-function isValidationStarted(row: MlbScreenerHandoffAuditRecord) {
-  return Boolean(row.validation_started_at) || ["validation_started", "validation_completed", "validation_failed"].includes(row.status);
-}
-
-function isValidationCompleted(row: MlbScreenerHandoffAuditRecord) {
-  return row.status === "validation_completed" || Boolean(row.validation_completed_at) || Boolean(row.validator_record_id);
-}
-
-function average(values: Array<number | null | undefined>) {
-  const valid = values.filter((value): value is number => value != null && Number.isFinite(value));
-  if (!valid.length) return null;
-  return valid.reduce((sum, value) => sum + value, 0) / valid.length;
-}
-
-function uniqueValues(values: Array<string | null | undefined>) {
-  return Array.from(new Set(values.filter((value): value is string => Boolean(value)))).sort((a, b) => a.localeCompare(b));
-}
-
-function safeStringArray(value: unknown) {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
-}
-
-function csvCell(value: unknown) {
-  const text = value == null ? "" : String(value);
-  return `"${text.replace(/"/g, '""')}"`;
-}
-
-function downloadCsv(filename: string, rows: unknown[][]) {
-  const csv = rows.map((line) => line.map(csvCell).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
-function normalizeText(value: string | null | undefined) {
-  return String(value ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-}
-
-function isBaseballSport(value: string | null | undefined) {
-  const normalized = normalizeText(value);
-  return /baseball|beisebol|mlb/.test(normalized);
-}
-
-function isMlbLeague(value: string | null | undefined) {
-  const normalized = normalizeText(value);
-  return !normalized || /mlb|major league baseball/.test(normalized);
-}
-
-function normalizeDateValue(value: string | null | undefined) {
-  const text = String(value ?? "").trim();
-  const br = text.match(/^(\d{2})[/.](\d{2})[/.](\d{4})$/);
-  if (br) return `${br[3]}-${br[2]}-${br[1]}`;
-  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
-  return text;
-}
-
-function isSameDate(value: string | null | undefined, expected: string) {
-  return normalizeDateValue(value) === normalizeDateValue(expected);
-}
-
-function todayIso() {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-}
-
-function sourceLabel(source: string | null | undefined) {
-  if (source === "baseball_reference") return "Baseball-Reference";
-  if (source === "csv_manual") return "CSV manual";
-  return "-";
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
-    timeZone: "America/Sao_Paulo",
-  }).format(new Date(value));
-}
-
-function formatRecord(wins: number | null, losses: number | null) {
-  return wins == null || losses == null ? "-" : `${wins}-${losses}`;
-}
-
-function formatPct(value: number | null) {
-  if (value == null) return "-";
-  return value.toFixed(3).replace(/^0/, "");
-}
-
-function formatNumber(value: number | null) {
-  return value == null ? "-" : Number(value).toFixed(1);
-}
-
-function formatNumber2(value: number | null) {
-  return value == null ? "-" : Number(value).toFixed(2);
-}
-
-function formatOdd(value: number | null) {
-  return value == null ? "-" : Number(value).toFixed(2);
-}
-
-function formatProbability(value: number | null) {
-  return value == null ? "-" : `${(value * 100).toFixed(1)}%`;
-}
-
-function formatProbabilitySigned(value: number | null) {
-  if (value == null) return "-";
-  const prefix = value > 0 ? "+" : "";
-  return `${prefix}${(value * 100).toFixed(1)} p.p.`;
-}
-
-function formatEv(value: number | null) {
-  if (value == null) return "-";
-  const prefix = value > 0 ? "+" : "";
-  return `${prefix}${(value * 100).toFixed(2)}%`;
-}
-
-function formatPercentDecimal(value: number | null) {
-  return value == null ? "-" : `${(value * 100).toFixed(2)}%`;
-}
-
-function formatRate(value: number) {
-  return Number.isFinite(value) ? `${value.toFixed(1)}%` : "-";
-}
-
-function formatSignedNumber(value: number | null) {
-  if (value == null) return "-";
-  const prefix = value > 0 ? "+" : "";
-  return `${prefix}${value.toFixed(2)}`;
-}
-
-function formatHandicapLine(value: number | null) {
-  if (value == null) return "-";
-  const prefix = value > 0 ? "+" : "";
-  return `${prefix}${value.toFixed(1)}`;
-}
-
-function formatScore(value: number | null) {
-  return value == null || !Number.isFinite(value) ? "-" : value.toFixed(1);
-}
-
-function evClass(value: number | null) {
-  const base = "px-3 py-2 font-mono";
-  if (value == null) return base;
-  if (value >= 0.05) return `${base} text-success`;
-  if (value >= 0.02) return `${base} text-warning`;
-  if (value < 0) return `${base} text-muted-foreground`;
-  return base;
-}
-
-function edgeClass(value: number | null) {
-  const base = "px-3 py-2 font-mono";
-  if (value == null) return base;
-  if (value >= 0.05) return `${base} text-success`;
-  if (value >= 0.025) return `${base} text-warning`;
-  return `${base} text-muted-foreground`;
-}
-
-function scoreClass(value: number | null) {
-  const base = "px-3 py-2 font-mono font-semibold";
-  if (value == null) return base;
-  if (value >= 75) return `${base} text-success`;
-  if (value >= 60) return `${base} text-warning`;
-  return `${base} text-muted-foreground`;
-}
-
-function gapClass(value: number | null) {
-  const base = "px-3 py-2 font-mono";
-  if (value == null) return base;
-  if (Math.abs(value) >= 0.7) return `${base} text-success`;
-  if (Math.abs(value) >= 0.45) return `${base} text-warning`;
-  return `${base} text-muted-foreground`;
-}
-
-function getProjectionStats(rows: MlbMoneylineScreenerRow[]) {
-  return rows.reduce(
-    (acc, row) => {
-      acc.total += 1;
-      acc[row.candidate_status] += 1;
-      return acc;
-    },
-    { total: 0, analisar: 0, monitorar: 0, pular: 0, missing_data: 0 },
-  );
-}
-
-function getTotalsStats(rows: MlbTotalsScreenerRow[]) {
-  return rows.reduce(
-    (acc, row) => {
-      acc.total += 1;
-      acc[row.candidate_status] += 1;
-      if (row.is_main_total_line) acc.main += 1;
-      else acc.alternate += 1;
-      acc.gameIds.add(row.game_id);
-      return acc;
-    },
-    {
-      total: 0,
-      analisar: 0,
-      monitorar: 0,
-      pular: 0,
-      missing_data: 0,
-      main: 0,
-      alternate: 0,
-      gameIds: new Set<string>(),
-      get games() {
-        return this.gameIds.size;
-      },
-    },
-  );
-}
-
-function filterTotalsRows(rows: MlbTotalsScreenerRow[], filter: MlbTotalsFilter) {
-  if (filter === "todos") return rows;
-  if (filter === "main") return rows.filter((row) => row.is_main_total_line);
-  if (filter === "alternate") return rows.filter((row) => !row.is_main_total_line);
-  return rows.filter((row) => row.candidate_status === filter);
-}
-
-function getHandicapStats(rows: MlbHandicapScreenerRow[]) {
-  return rows.reduce(
-    (acc, row) => {
-      acc.total += 1;
-      acc[row.candidate_status] += 1;
-      if (row.is_main_handicap_line) acc.main += 1;
-      else acc.alternate += 1;
-      acc.gameIds.add(row.game_id);
-      return acc;
-    },
-    {
-      total: 0,
-      analisar: 0,
-      monitorar: 0,
-      pular: 0,
-      missing_data: 0,
-      unsupported_line: 0,
-      main: 0,
-      alternate: 0,
-      gameIds: new Set<string>(),
-      get games() {
-        return this.gameIds.size;
-      },
-    },
-  );
-}
-
-function filterHandicapRows(rows: MlbHandicapScreenerRow[], filter: MlbHandicapFilter) {
-  if (filter === "todos") return rows;
-  if (filter === "main") return rows.filter((row) => row.is_main_handicap_line);
-  if (filter === "alternate") return rows.filter((row) => !row.is_main_handicap_line);
-  return rows.filter((row) => row.candidate_status === filter);
-}
-
-function getOpportunityStats(rows: MlbUnifiedOpportunity[]) {
-  return rows.reduce(
-    (acc, row) => {
-      acc.total += 1;
-      acc[row.priority_status] += 1;
-      if (row.is_primary_shortlist) acc.primaryShortlist += 1;
-      if (row.correlation_status === "correlated_alternative") acc.correlatedAlternatives += 1;
-      if (acc.bestScore == null || row.opportunity_score > acc.bestScore) acc.bestScore = row.opportunity_score;
-      if (row.ev != null && (acc.bestEv == null || row.ev > acc.bestEv)) acc.bestEv = row.ev;
-      return acc;
-    },
-    {
-      total: 0,
-      ANALISAR: 0,
-      MONITORAR: 0,
-      PULAR: 0,
-      MISSING_DATA: 0,
-      UNSUPPORTED_LINE: 0,
-      primaryShortlist: 0,
-      correlatedAlternatives: 0,
-      bestScore: null as number | null,
-      bestEv: null as number | null,
-    },
-  );
-}
-
-function filterOpportunityRows(
-  rows: MlbUnifiedOpportunity[],
-  opts: {
-    filter: MlbOpportunityFilter;
-    hideCorrelatedAlternatives: boolean;
-    minEv: number;
-    minScore: number;
-  },
-) {
-  const minEv = Number.isFinite(opts.minEv) ? opts.minEv / 100 : null;
-  const minScore = Number.isFinite(opts.minScore) ? opts.minScore : null;
-  return rows.filter((row) => {
-    if (opts.hideCorrelatedAlternatives && row.correlation_status === "correlated_alternative") return false;
-    if (minEv != null && (row.ev == null || row.ev < minEv)) return false;
-    if (minScore != null && row.opportunity_score < minScore) return false;
-    if (opts.filter === "todos") return true;
-    if (opts.filter === "shortlist") return row.is_primary_shortlist;
-    if (opts.filter === "analisar") return row.priority_status === "ANALISAR";
-    if (opts.filter === "monitorar") return row.priority_status === "MONITORAR";
-    if (opts.filter === "pular") return row.priority_status === "PULAR";
-    if (opts.filter === "missing_data") return row.priority_status === "MISSING_DATA";
-    if (opts.filter === "unsupported_line") return row.priority_status === "UNSUPPORTED_LINE";
-    if (opts.filter === "moneyline") return row.market_family === "moneyline";
-    if (opts.filter === "totals") return row.market_family === "totals";
-    if (opts.filter === "handicap") return row.market_family === "handicap";
-    if (opts.filter === "main") return row.is_main_line;
-    if (opts.filter === "alternate") return !row.is_main_line;
-    return true;
-  });
-}
-
-function correlationLabel(row: MlbUnifiedOpportunity) {
-  if (row.correlation_status === "primary") return "Primaria do jogo";
-  if (row.correlation_status === "correlated_alternative") return "Alternativa correlacionada";
-  return "Standalone";
-}
-
 type PersistedMlbScreenerUiState = {
   version: 1;
   snapshotDate: string;
@@ -3739,64 +3003,7 @@ function writeMlbScreenerUiState(state: Omit<PersistedMlbScreenerUiState, "versi
   }
 }
 
-function opportunityStatusBadgeVariant(status: MlbUnifiedOpportunity["priority_status"]) {
-  if (status === "MISSING_DATA" || status === "UNSUPPORTED_LINE") return "destructive";
-  if (status === "ANALISAR") return "outline";
-  return "secondary";
-}
-
 async function copyText(text: string, successMessage: string) {
   await navigator.clipboard.writeText(text);
   toast.success(successMessage);
-}
-
-function leagueAverageSourceLabel(source: MlbTotalsScreenerRow["league_average_source"]) {
-  if (source === "average_row") return "Average";
-  if (source === "computed_from_teams") return "times";
-  return "fallback";
-}
-
-function statusLabel(status: MlbProjectionCandidateStatus | MlbHandicapCandidateStatus) {
-  const labels: Record<MlbProjectionCandidateStatus | MlbHandicapCandidateStatus, string> = {
-    analisar: "ANALISAR",
-    monitorar: "MONITORAR",
-    pular: "PULAR",
-    missing_data: "MISSING_DATA",
-    unsupported_line: "UNSUPPORTED_LINE",
-  };
-  return labels[status];
-}
-
-function statusBadgeVariant(status: MlbProjectionCandidateStatus | MlbHandicapCandidateStatus) {
-  if (status === "missing_data" || status === "unsupported_line") return "destructive";
-  if (status === "analisar") return "outline";
-  if (status === "monitorar") return "secondary";
-  return "secondary";
-}
-
-function formatError(error: unknown) {
-  return formatAlertMessage(error);
-}
-
-function formatAlertMessage(alert: unknown): string {
-  if (alert == null) return "Alerta desconhecido";
-  if (typeof alert === "string") return alert;
-  if (typeof alert === "number" || typeof alert === "boolean") return String(alert);
-  if (alert instanceof Error) return alert.message || "Erro desconhecido";
-  if (typeof alert === "object") {
-    const obj = alert as Record<string, unknown>;
-    if (typeof obj.message === "string" && obj.message) return obj.message;
-    if (typeof obj.error === "string" && obj.error) return obj.error;
-    if (typeof obj.details === "string" && obj.details) return obj.details;
-    if (typeof obj.description === "string" && obj.description) return obj.description;
-    if (typeof obj.statusText === "string" && obj.statusText) return obj.statusText;
-    try {
-      const json = JSON.stringify(obj);
-      if (json && json !== "{}") return json;
-    } catch {
-      /* fallthrough */
-    }
-    return "Alerta nao estruturado";
-  }
-  return String(alert);
 }
