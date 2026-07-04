@@ -7,6 +7,8 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 import { mcpPlugin } from "@lovable.dev/mcp-js/stacks/tanstack/vite";
 
+const mcpPlugins = process.platform === "win32" ? [] : [mcpPlugin()];
+
 export default defineConfig({
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
@@ -14,6 +16,8 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
-    plugins: [mcpPlugin()],
+    // The MCP routes are generated and committed; skip the generator on Windows
+    // because @lovable.dev/mcp-js 0.20.0 compares C:/ and C:\ paths directly.
+    plugins: mcpPlugins,
   },
 });
