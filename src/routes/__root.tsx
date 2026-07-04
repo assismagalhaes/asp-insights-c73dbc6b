@@ -162,7 +162,7 @@ function RootComponent() {
     queryClient.clear();
     await supabase.auth.signOut();
     toast.success("Sessão encerrada");
-    navigate({ to: "/auth", replace: true });
+    navigate({ to: "/auth", search: { next: "/" }, replace: true });
   }
 
   if (isAuthRoute) {
