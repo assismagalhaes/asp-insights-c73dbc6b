@@ -1,9 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import type { ReactNode } from "react";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ChevronDown, ClipboardCopy, DatabaseZap, FileJson, RefreshCw, RotateCw, Send, Trophy, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { ScreenerField as Field } from "@/components/asp-screener/ScreenerField";
+import { ScreenerLazyJsonDetails as LazyJsonDetails } from "@/components/asp-screener/ScreenerLazyJsonDetails";
+import { ScreenerMetricCard as Info } from "@/components/asp-screener/ScreenerMetricCard";
+import { ScreenerRateBar as RateBar } from "@/components/asp-screener/ScreenerRateBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -2061,30 +2064,6 @@ function CriticalPayloadPanel({
   );
 }
 
-const LazyJsonDetails = memo(function LazyJsonDetails({
-  value,
-  summary,
-  className,
-  summaryClassName,
-  preClassName,
-}: {
-  value: unknown;
-  summary: ReactNode;
-  className?: string;
-  summaryClassName?: string;
-  preClassName?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const jsonText = useMemo(() => (open ? JSON.stringify(value, null, 2) : ""), [open, value]);
-
-  return (
-    <details className={className} onToggle={(event) => setOpen(event.currentTarget.open)}>
-      <summary className={summaryClassName}>{summary}</summary>
-      {open ? <pre className={preClassName}>{jsonText}</pre> : null}
-    </details>
-  );
-});
-
 type HandoffAuditStats = ReturnType<typeof getHandoffAuditStats>;
 
 function HandoffAuditPanel({
@@ -2907,18 +2886,6 @@ function CalibrationDetailTable({ rows }: { rows: MlbScreenerHandoffAuditRecord[
   );
 }
 
-function RateBar({ value }: { value: number }) {
-  const width = `${Math.max(0, Math.min(100, value))}%`;
-  return (
-    <div className="min-w-32">
-      <div className="mb-1 font-mono text-xs">{formatRate(value)}</div>
-      <div className="h-2 overflow-hidden rounded bg-muted">
-        <div className="h-full bg-primary" style={{ width }} />
-      </div>
-    </div>
-  );
-}
-
 function TeamContextLine({ label, team }: { label: string; team: MlbBaseballReferenceMatchupContext["teams"]["home"] }) {
   return (
     <div>
@@ -2935,24 +2902,6 @@ function StarterContextLine({ label, starter }: { label: string; starter: MlbBas
       <div className="font-medium text-foreground">{label}: {starter.name ?? "-"}</div>
       <div>{starter.throwing_hand ?? "-"} | {starter.season_record?.raw ?? "-"} | ERA {starter.era ?? "-"} | IP {starter.innings_pitched_display ?? "-"}</div>
       <div>K {starter.strikeouts ?? "-"} | BB {starter.walks ?? "-"} | HR {starter.home_runs_allowed ?? "-"} | Score {starter.starter_quality_score ?? "-"}</div>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="space-y-1">
-      <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</Label>
-      {children}
-    </div>
-  );
-}
-
-function Info({ label, value }: { label: string; value: unknown }) {
-  return (
-    <div className="rounded-md border bg-background/50 p-3">
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="mt-1 truncate text-sm font-semibold">{String(value ?? "-")}</div>
     </div>
   );
 }
