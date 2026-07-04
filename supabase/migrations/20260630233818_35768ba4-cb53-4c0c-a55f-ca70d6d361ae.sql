@@ -1,5 +1,5 @@
 
-CREATE TABLE public.mlb_team_standings_snapshots (
+CREATE TABLE IF NOT EXISTS public.mlb_team_standings_snapshots (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   snapshot_date DATE NOT NULL,
   season INTEGER NOT NULL,
@@ -36,13 +36,15 @@ CREATE TABLE public.mlb_team_standings_snapshots (
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.mlb_team_standings_snapshots TO authenticated;
 GRANT ALL ON public.mlb_team_standings_snapshots TO service_role;
 ALTER TABLE public.mlb_team_standings_snapshots ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Admins manage mlb standings" ON public.mlb_team_standings_snapshots;
 CREATE POLICY "Admins manage mlb standings" ON public.mlb_team_standings_snapshots FOR ALL TO authenticated
   USING (public.has_role(auth.uid(), 'admin')) WITH CHECK (public.has_role(auth.uid(), 'admin'));
+DROP TRIGGER IF EXISTS mlb_standings_touch ON public.mlb_team_standings_snapshots;
 CREATE TRIGGER mlb_standings_touch BEFORE UPDATE ON public.mlb_team_standings_snapshots
   FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
-CREATE INDEX mlb_standings_snapshot_date_idx ON public.mlb_team_standings_snapshots (snapshot_date DESC, season DESC);
+CREATE INDEX IF NOT EXISTS mlb_standings_snapshot_date_idx ON public.mlb_team_standings_snapshots (snapshot_date DESC, season DESC);
 
-CREATE TABLE public.mlb_league_average_snapshots (
+CREATE TABLE IF NOT EXISTS public.mlb_league_average_snapshots (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   snapshot_date DATE NOT NULL,
   season INTEGER NOT NULL,
@@ -61,7 +63,9 @@ CREATE TABLE public.mlb_league_average_snapshots (
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.mlb_league_average_snapshots TO authenticated;
 GRANT ALL ON public.mlb_league_average_snapshots TO service_role;
 ALTER TABLE public.mlb_league_average_snapshots ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Admins manage mlb league averages" ON public.mlb_league_average_snapshots;
 CREATE POLICY "Admins manage mlb league averages" ON public.mlb_league_average_snapshots FOR ALL TO authenticated
   USING (public.has_role(auth.uid(), 'admin')) WITH CHECK (public.has_role(auth.uid(), 'admin'));
+DROP TRIGGER IF EXISTS mlb_league_avg_touch ON public.mlb_league_average_snapshots;
 CREATE TRIGGER mlb_league_avg_touch BEFORE UPDATE ON public.mlb_league_average_snapshots
   FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();

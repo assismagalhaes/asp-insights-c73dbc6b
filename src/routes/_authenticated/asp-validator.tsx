@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import type { ClipboardEvent, DragEvent } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, BrainCircuit, CheckCircle2, ClipboardCheck, ClipboardCopy, Cloud, Eye, FileJson, ImageUp, Loader2, Microscope, Plus, RefreshCw, Search, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -58,6 +58,8 @@ import type {
 } from "@/lib/asp-validator/types";
 import {
   validatorDb,
+  ASP_VALIDATOR_RECORD_LIST_COLUMNS,
+  ASP_VALIDATOR_UPLOAD_LIST_COLUMNS,
   ASP_VALIDATOR_UPLOAD_BUCKET,
   INITIAL_FORM,
   SPORTS,
@@ -70,7 +72,6 @@ import {
 export const Route = createFileRoute("/_authenticated/asp-validator")({
   component: AspValidatorPage,
 });
-
 
 function AspValidatorPage() {
   const { data: cfg } = useConfiguracao();
@@ -117,9 +118,9 @@ function AspValidatorPage() {
   // ou quando ha texto colado interpretado (fluxo principal a partir desta versao).
   const canValidate = hasManualCore || uploads.length > 0 || Boolean(pastedParsed);
 
-  const update = (field: keyof ValidatorForm, value: string) => {
+  const update = useCallback((field: keyof ValidatorForm, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
-  };
+  }, []);
 
   const applyImportedHandoffToForm = (handoff: MlbValidatorHandoffPayload, silent = false) => {
     const prefill = handoff.validator_prefill;
@@ -230,10 +231,14 @@ function AspValidatorPage() {
   };
 
 
-  const loadHistory = async () => {
+  const loadHistory = useCallback(async () => {
     setLoadingHistory(true);
     try {
-      const { data, error } = await validatorDb.from("asp_validator_registros").select("*").order("created_at", { ascending: false }).limit(500);
+      const { data, error } = await validatorDb
+        .from("asp_validator_registros")
+        .select(ASP_VALIDATOR_RECORD_LIST_COLUMNS)
+        .order("created_at", { ascending: false })
+        .limit(500);
       if (error) throw error;
       const nextRecords = data ?? [];
       setRecords(nextRecords);
@@ -246,7 +251,7 @@ function AspValidatorPage() {
       const ids = nextRecords.map((record) => record.id);
       const { data: uploadRows, error: uploadError } = await validatorDb
         .from("asp_validator_uploads")
-        .select("*")
+        .select(ASP_VALIDATOR_UPLOAD_LIST_COLUMNS)
         .in("validator_id", ids)
         .order("upload_order", { ascending: true });
       if (uploadError) throw uploadError;
@@ -256,11 +261,11 @@ function AspValidatorPage() {
     } finally {
       setLoadingHistory(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void loadHistory();
-  }, []);
+  }, [loadHistory]);
 
   useEffect(() => {
     const { payload, validation } = readMlbValidatorHandoffDraft();
@@ -306,7 +311,7 @@ function AspValidatorPage() {
     toast.success("Validacao importada do ASP Screener MLB. Revise antes de validar.");
   }, []);
 
-  const addUploads = (files: FileList | null, uploadSource: ValidatorUploadDraft["upload_source"] = "manual") => {
+  const addUploads = useCallback((files: FileList | null, uploadSource: ValidatorUploadDraft["upload_source"] = "manual") => {
     if (!files?.length) return;
     const validFiles = filterValidUploads(Array.from(files), (reason) => toast.error(reason));
     if (!validFiles.length) return;
@@ -321,13 +326,13 @@ function AspValidatorPage() {
       }));
       return [...prev, ...nextFiles];
     });
-  };
-  const updateUpload = (localId: string, patch: Partial<Pick<ValidatorUploadDraft, "upload_category" | "user_comment">>) => {
+  }, []);
+  const updateUpload = useCallback((localId: string, patch: Partial<Pick<ValidatorUploadDraft, "upload_category" | "user_comment">>) => {
     setUploads((prev) => prev.map((upload) => (upload.local_id === localId ? { ...upload, ...patch } : upload)));
-  };
-  const removeUpload = (localId: string) => {
+  }, []);
+  const removeUpload = useCallback((localId: string) => {
     setUploads((prev) => prev.filter((upload) => upload.local_id !== localId).map((upload, index) => ({ ...upload, upload_order: index + 1 })));
-  };
+  }, []);
 
   const validate = async () => {
     if (!canValidate) {
@@ -390,7 +395,7 @@ function AspValidatorPage() {
   };
 
 
-  const openRecord = (record: ValidatorRecord) => {
+  const openRecord = useCallback((record: ValidatorRecord) => {
     setSelectedRecord(record);
     const baseEditable = recordToEditable(record);
     // Auto-fill missing fields from structured_json / form_patch
@@ -412,12 +417,12 @@ function AspValidatorPage() {
       Object.fromEntries((uploadsByRecord[record.id] ?? []).map((upload) => [upload.id, upload.user_comment ?? ""])),
     );
     setOcrFilesByUpload({});
-  };
+  }, [cfg?.valor_unidade_padrao, uploadsByRecord]);
 
-  const updateEdit = (field: keyof EditableRecord, value: string) => {
+  const updateEdit = useCallback((field: keyof EditableRecord, value: string) => {
     setEditingRecord((prev) => (prev ? { ...prev, [field]: value } : prev));
     setOcrAppliedFields((prev) => ({ ...prev, [field]: false }));
-  };
+  }, []);
 
   const applyOcrDataToEditingRecord = () => {
     if (!selectedRecord || !editingRecord) return;
@@ -464,9 +469,9 @@ function AspValidatorPage() {
     toast.success("Dados OCR aplicados ao formulario. Revise e salve as alteracoes.");
   };
 
-  const updateResultForm = (field: keyof ResultForm, value: string) => {
+  const updateResultForm = useCallback((field: keyof ResultForm, value: string) => {
     setResultForm((prev) => (prev ? { ...prev, [field]: value } : prev));
-  };
+  }, []);
 
   const saveRecordEdit = async () => {
     if (!selectedRecord || !editingRecord) return;
@@ -524,7 +529,7 @@ function AspValidatorPage() {
     }
   };
 
-  const deleteRecord = async (record: ValidatorRecord) => {
+  const deleteRecord = useCallback(async (record: ValidatorRecord) => {
     if (record.result_status) {
       toast.error("Registro com resultado nao pode ser excluido.");
       return;
@@ -539,14 +544,14 @@ function AspValidatorPage() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Nao foi possivel excluir o registro.");
     }
-  };
+  }, [loadHistory, selectedRecord?.id]);
 
-  const attachOcrFile = (uploadId: string, file: File | null) => {
+  const attachOcrFile = useCallback((uploadId: string, file: File | null) => {
     if (!file) return;
     setOcrFilesByUpload((prev) => ({ ...prev, [uploadId]: file }));
-  };
+  }, []);
 
-  const processUploadOcr = async (upload: ValidatorUploadRecord): Promise<boolean> => {
+  const processUploadOcr = useCallback(async (upload: ValidatorUploadRecord): Promise<boolean> => {
     if (!selectedRecord) return false;
 
     setProcessingOcr((prev) => ({ ...prev, [upload.id]: true }));
@@ -614,9 +619,9 @@ function AspValidatorPage() {
     } finally {
       setProcessingOcr((prev) => ({ ...prev, [upload.id]: false }));
     }
-  };
+  }, [editingUploadComments, loadHistory, ocrFilesByUpload, selectedRecord, uploadsByRecord]);
 
-  const processAllAvailableOcr = async () => {
+  const processAllAvailableOcr = useCallback(async () => {
     if (!selectedRecord) return;
     const currentUploads = uploadsByRecord[selectedRecord.id] ?? [];
     const available = currentUploads.filter((upload) => Boolean(ocrFilesByUpload[upload.id]) || Boolean(upload.file_path));
@@ -635,9 +640,9 @@ function AspValidatorPage() {
       }
     }
     toast.message(`OCR em lote finalizado: ${available.length} encontrado(s), ${processed} processado(s), ${failed} falha(s).`);
-  };
+  }, [ocrFilesByUpload, processUploadOcr, selectedRecord, uploadsByRecord]);
 
-  const structureSelectedRecordOcr = async () => {
+  const structureSelectedRecordOcr = useCallback(async () => {
     if (!selectedRecord) return;
     const currentUploads = uploadsByRecord[selectedRecord.id] ?? [];
     setStructuringRecord(true);
@@ -677,9 +682,9 @@ function AspValidatorPage() {
     } finally {
       setStructuringRecord(false);
     }
-  };
+  }, [loadHistory, selectedRecord, uploadsByRecord]);
 
-  const runSelectedRecordSimulation = async () => {
+  const runSelectedRecordSimulation = useCallback(async () => {
     if (!selectedRecord) return;
     setSimulatingRecord(true);
     try {
@@ -709,9 +714,9 @@ function AspValidatorPage() {
     } finally {
       setSimulatingRecord(false);
     }
-  };
+  }, [loadHistory, selectedRecord]);
 
-  const ensureOcrForStoredUploads = async (): Promise<ValidatorUploadRecord[]> => {
+  const ensureOcrForStoredUploads = useCallback(async (): Promise<ValidatorUploadRecord[]> => {
     if (!selectedRecord) return [];
     const currentUploads = uploadsByRecord[selectedRecord.id] ?? [];
     const pending = currentUploads.filter(
@@ -723,9 +728,9 @@ function AspValidatorPage() {
       await processUploadOcr(upload);
     }
     return uploadsByRecord[selectedRecord.id] ?? currentUploads;
-  };
+  }, [processUploadOcr, selectedRecord, uploadsByRecord]);
 
-  const validateSelectedRecordWithAi = async () => {
+  const validateSelectedRecordWithAi = useCallback(async () => {
     if (!selectedRecord) return;
     setValidatingAiRecord(true);
     try {
@@ -776,9 +781,9 @@ function AspValidatorPage() {
     } finally {
       setValidatingAiRecord(false);
     }
-  };
+  }, [ensureOcrForStoredUploads, loadHistory, selectedRecord]);
 
-  const validateSelectedRecordWithOnlineAi = async () => {
+  const validateSelectedRecordWithOnlineAi = useCallback(async () => {
     if (!selectedRecord) return;
     setValidatingOnlineRecord(true);
     const before = {
@@ -879,7 +884,7 @@ function AspValidatorPage() {
     } finally {
       setValidatingOnlineRecord(false);
     }
-  };
+  }, [ensureOcrForStoredUploads, loadHistory, selectedRecord]);
 
 
   const saveRecordResult = async () => {
@@ -1519,11 +1524,22 @@ function UploadsDetail({
   onProcessUploadOcr: (upload: ValidatorUploadRecord) => Promise<boolean>;
 }) {
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
+  const imageUploads = useMemo(
+    () => uploads.filter((upload) => upload.file_path && (upload.mime_type || "").startsWith("image/")),
+    [uploads],
+  );
+  const uploadStats = useMemo(
+    () => ({
+      stored: uploads.filter((upload) => upload.file_path).length,
+      ocrCompleted: uploads.filter((upload) => upload.ocr_status === "completed").length,
+      ocrFailed: uploads.filter((upload) => upload.ocr_status === "failed").length,
+    }),
+    [uploads],
+  );
 
   useEffect(() => {
     let active = true;
     const loadPreviewUrls = async () => {
-      const imageUploads = uploads.filter((upload) => upload.file_path && (upload.mime_type || "").startsWith("image/"));
       const entries = await Promise.all(
         imageUploads.map(async (upload) => {
           try {
@@ -1541,7 +1557,7 @@ function UploadsDetail({
     return () => {
       active = false;
     };
-  }, [uploads]);
+  }, [imageUploads]);
 
   return (
     <div className="space-y-3 rounded-md border border-border bg-muted/10 p-3">
@@ -1549,9 +1565,9 @@ function UploadsDetail({
         <div className="text-sm font-semibold">Uploads vinculados</div>
         <p className="mt-1 text-xs text-muted-foreground">Arquivos armazenados no Supabase Storage e vinculados ao registro para auditoria e reprocessamento.</p>
         <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
-          <Badge variant="outline">Storage: {uploads.filter((upload) => upload.file_path).length}/{uploads.length}</Badge>
-          <Badge variant="outline">OCR completed: {uploads.filter((upload) => upload.ocr_status === "completed").length}</Badge>
-          <Badge variant="outline">Falhas: {uploads.filter((upload) => upload.ocr_status === "failed").length}</Badge>
+          <Badge variant="outline">Storage: {uploadStats.stored}/{uploads.length}</Badge>
+          <Badge variant="outline">OCR completed: {uploadStats.ocrCompleted}</Badge>
+          <Badge variant="outline">Falhas: {uploadStats.ocrFailed}</Badge>
         </div>
       </div>
       {uploads.length ? (
@@ -1917,7 +1933,7 @@ function ExtractedImageDataPanel({ structured, sport }: { structured: Structured
 }
 
 function LinePercentBadges({ title, values, prefix }: { title: string; values: Record<string, number>; prefix: string }) {
-  const entries = Object.entries(values).sort(([a], [b]) => Number(a) - Number(b));
+  const entries = useMemo(() => Object.entries(values).sort(([a], [b]) => Number(a) - Number(b)), [values]);
   if (!entries.length) return null;
   return (
     <div className="mt-3 rounded-md border border-border bg-muted/10 p-2">
@@ -1934,7 +1950,7 @@ function LinePercentBadges({ title, values, prefix }: { title: string; values: R
 }
 
 function NormalizedCornerLinesPanel({ home, away }: { home: NormalizedCornerLine[]; away: NormalizedCornerLine[] }) {
-  const all = [...home, ...away];
+  const all = useMemo(() => [...home, ...away], [away, home]);
   if (!all.length) return null;
   const renderGroup = (label: string, items: NormalizedCornerLine[]) => {
     if (!items.length) return null;

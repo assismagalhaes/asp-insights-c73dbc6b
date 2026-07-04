@@ -234,11 +234,10 @@ export function ScraperApiDialog({ onRowsReady }: Props) {
 
       const rawRows = extractRows(norm.data);
       const rows = rawRows.map(normalizeRow);
-      // diagnóstico: sempre logar shape para depurar respostas /normalized
-      // eslint-disable-next-line no-console
-      console.log("[scraper /normalized] payload:", norm.data);
-      // eslint-disable-next-line no-console
-      console.log("[scraper /normalized] rawRows:", rawRows.length, "sample:", rawRows[0]);
+      if (import.meta.env.DEV) {
+        console.debug("[scraper /normalized] payload:", norm.data);
+        console.debug("[scraper /normalized] rawRows:", rawRows.length, "sample:", rawRows[0]);
+      }
       if (!rows.length) {
         const topKeys =
           norm.data && typeof norm.data === "object" && !Array.isArray(norm.data)
@@ -247,7 +246,7 @@ export function ScraperApiDialog({ onRowsReady }: Props) {
               ? "array"
               : typeof norm.data;
         toast.error(
-          `O job concluiu mas /normalized não trouxe linhas. Chaves recebidas: ${topKeys}. Veja o console para o payload completo.`,
+          `O job concluiu mas /normalized não trouxe linhas. Chaves recebidas: ${topKeys}.`,
         );
         return;
       }
