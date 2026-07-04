@@ -61,13 +61,14 @@ export function formatBR(value: string | Date | null | undefined): string {
 export function parseBrazilianDate(text: unknown): string | null {
   if (!text) return null;
   const trimmed = String(text).trim();
-  const m = trimmed.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+  const m = trimmed.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/);
   if (!m) {
     // fallback: talvez já esteja ISO
     if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
     return null;
   }
-  let [, dd, mm, yyyy] = m;
+  const [, dd, mm, yearText] = m;
+  let yyyy = yearText;
   if (yyyy.length === 2) yyyy = `20${yyyy}`;
   const d = Number(dd);
   const mo = Number(mm);
