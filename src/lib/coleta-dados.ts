@@ -84,8 +84,23 @@ export type VmPayloadRow = Record<string, unknown>;
 
 export const NORMALIZED_PREVIEW_STORAGE_KEY = "asp:last-normalized-odds-preview";
 
+type QueryErrorLike = { message: string };
+type QueryResultLike<T = unknown> = { data: T | null; error: QueryErrorLike | null };
+type ColetaQueryLike<T = unknown> = PromiseLike<QueryResultLike<T>> & {
+  select: (columns?: string) => ColetaQueryLike<T>;
+  insert: (values: Record<string, unknown> | Record<string, unknown>[]) => ColetaQueryLike<T>;
+  update: (values: Record<string, unknown>) => ColetaQueryLike<T>;
+  delete: () => ColetaQueryLike<T>;
+  eq: (column: string, value: unknown) => ColetaQueryLike<T>;
+  lte: (column: string, value: unknown) => ColetaQueryLike<T>;
+  gte: (column: string, value: unknown) => ColetaQueryLike<T>;
+  order: (column: string, opts?: { ascending?: boolean }) => ColetaQueryLike<T>;
+  limit: (count: number) => ColetaQueryLike<T>;
+  single: () => PromiseLike<QueryResultLike<T>>;
+};
+
 const coletaDb = supabase as unknown as {
-  from: (table: string) => any;
+  from: (table: string) => ColetaQueryLike;
 };
 const ODDS_INSERT_BATCH_SIZE = 50;
 const ODDS_JOGOS_LIST_COLUMNS = [
@@ -1097,11 +1112,12 @@ export async function saveCollection(
     .single();
   if (error) throw error;
 
+  const coletaRow = coleta as ColetaOdds;
   if (deduped.rows.length) {
-    await insertOddsRowsInBatches(deduped.rows, coleta.id);
+    await insertOddsRowsInBatches(deduped.rows, coletaRow.id);
   }
 
-  return coleta as ColetaOdds;
+  return coletaRow;
 }
 
 export async function createRemoteCollection(params: {
