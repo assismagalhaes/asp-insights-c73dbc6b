@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { AlertTriangle, CheckCircle2, Database, Loader2, RotateCcw, Trash2 } from "lucide-react";
@@ -256,6 +256,49 @@ function BaseDadosPage() {
   const canAdd = Boolean(canValidate && validation && isValidationSuccess(validation));
   const canRemove = Boolean(isIntegratedBase && selectedYear && team && !busy);
 
+  const hydrateYearCounts = useCallback(
+    async (
+      items: BaseballYear[],
+      esporte: "baseball" | "basketball",
+      liga: "mlb" | "nba" | "wnba",
+    ) => {
+      return Promise.all(
+        items.map(async (item) => {
+          if (Number(item.total_csvs ?? 0) > 0) return item;
+          try {
+            const payload = await getTeams({ data: { esporte, liga, ano: item.ano } });
+            const total = parseTeams(payload, liga).length;
+            return total > 0 ? { ...item, total_csvs: total, label: undefined } : item;
+          } catch {
+            return item;
+          }
+        }),
+      );
+    },
+    [getTeams],
+  );
+
+  const loadLastLines = useCallback(
+    async (ano: number, sigla: string) => {
+      setBusy("last-lines");
+      try {
+        const payload = await getLastLines({
+          data: { esporte: apiSport, liga: apiLeague, ano, sigla, limite: 10 },
+        });
+        const parsed = parseLastLines(payload);
+        setLastLinesHeader(parsed.cabecalho);
+        setLastLines(parsed.linhas);
+        return parsed;
+      } catch (e) {
+        toast.error(formatError(e));
+        return null;
+      } finally {
+        setBusy(null);
+      }
+    },
+    [apiLeague, apiSport, getLastLines],
+  );
+
   useEffect(() => {
     if (!sport) {
       setLeague("");
@@ -308,7 +351,7 @@ function BaseDadosPage() {
     return () => {
       cancelled = true;
     };
-  }, [isIntegratedBase, apiSport, apiLeague, league]);
+  }, [isIntegratedBase, apiSport, apiLeague, league, getYears, hydrateYearCounts, isBasketball]);
 
   useEffect(() => {
     resetTeamState();
@@ -331,7 +374,7 @@ function BaseDadosPage() {
     return () => {
       cancelled = true;
     };
-  }, [isIntegratedBase, selectedYear, apiSport, apiLeague, league]);
+  }, [isIntegratedBase, selectedYear, apiSport, apiLeague, league, getTeams]);
 
   useEffect(() => {
     setLastLines([]);
@@ -340,7 +383,7 @@ function BaseDadosPage() {
     setOperation(null);
     if (!isIntegratedBase || !selectedYear || !team) return;
     void loadLastLines(selectedYear, team);
-  }, [isIntegratedBase, selectedYear, team]);
+  }, [isIntegratedBase, selectedYear, team, loadLastLines]);
 
   const placeholderMessage = useMemo(() => {
     if (!sport) return "Selecione um esporte/modelo para carregar a base de dados.";
@@ -359,24 +402,6 @@ function BaseDadosPage() {
     setOperation(null);
   }
 
-  async function loadLastLines(ano: number, sigla: string) {
-    setBusy("last-lines");
-    try {
-      const payload = await getLastLines({
-        data: { esporte: apiSport, liga: apiLeague, ano, sigla, limite: 10 },
-      });
-      const parsed = parseLastLines(payload);
-      setLastLinesHeader(parsed.cabecalho);
-      setLastLines(parsed.linhas);
-      return parsed;
-    } catch (e) {
-      toast.error(formatError(e));
-      return null;
-    } finally {
-      setBusy(null);
-    }
-  }
-
   async function refreshLastLinesAfterMutation(
     ano: number,
     sigla: string,
@@ -392,25 +417,6 @@ function BaseDadosPage() {
     } else if (optimisticLine && !latest) {
       setLastLines((current) => [...current, optimisticLine].slice(-10));
     }
-  }
-
-  async function hydrateYearCounts(
-    items: BaseballYear[],
-    esporte: "baseball" | "basketball",
-    liga: "mlb" | "nba" | "wnba",
-  ) {
-    return Promise.all(
-      items.map(async (item) => {
-        if (Number(item.total_csvs ?? 0) > 0) return item;
-        try {
-          const payload = await getTeams({ data: { esporte, liga, ano: item.ano } });
-          const total = parseTeams(payload, liga).length;
-          return total > 0 ? { ...item, total_csvs: total, label: undefined } : item;
-        } catch {
-          return item;
-        }
-      }),
-    );
   }
 
   async function handleValidate() {
