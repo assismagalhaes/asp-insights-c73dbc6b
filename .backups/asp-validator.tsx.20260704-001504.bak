@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import type { ClipboardEvent, DragEvent } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, BrainCircuit, CheckCircle2, ClipboardCheck, ClipboardCopy, Cloud, Eye, FileJson, ImageUp, Loader2, Microscope, Plus, RefreshCw, Search, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -44,34 +44,303 @@ import { linkMlbOpportunitySnapshotToValidatorRecord } from "@/lib/mlb/screenerS
 import { processAspValidatorOcr } from "@/lib/scraper-api.functions";
 import { supabase } from "@/lib/supabase-public";
 import type { MlbValidatorHandoffPayload } from "@/types/mlbValidatorHandoff";
-import type {
-  Decision,
-  ValidatorForm,
-  ValidationResult,
-  ValidatorUploadDraft,
-  ValidatorRecord,
-  ValidatorUploadRecord,
-  EditableRecord,
-  ResultForm,
-  ValidatorDashboardFilters,
-  ValidatorInsert,
-} from "@/lib/asp-validator/types";
-import {
-  validatorDb,
-  ASP_VALIDATOR_RECORD_LIST_COLUMNS,
-  ASP_VALIDATOR_UPLOAD_LIST_COLUMNS,
-  ASP_VALIDATOR_UPLOAD_BUCKET,
-  INITIAL_FORM,
-  SPORTS,
-  PLATFORMS,
-  MARKETS,
-  UPLOAD_CATEGORIES,
-  INITIAL_DASHBOARD_FILTERS,
-} from "@/lib/asp-validator/constants";
 
 export const Route = createFileRoute("/_authenticated/asp-validator")({
   component: AspValidatorPage,
 });
+
+type Decision = "CONFIRMAR" | "PULAR";
+
+type ValidatorForm = {
+  sport: string;
+  source_platform: string;
+  league: string;
+  match_date: string;
+  home_team: string;
+  away_team: string;
+  market: string;
+  pick: string;
+  line: string;
+  offered_odd: string;
+  source_probability: string;
+  source_ev: string;
+  user_context: string;
+};
+
+type ValidationResult = {
+  decision: Decision;
+  confidence: string;
+  validator_model: string;
+  source_probability: number | null;
+  source_fair_odd: number | null;
+  offered_odd: number | null;
+  source_ev: number | null;
+  adjusted_probability: number;
+  adjusted_fair_odd: number;
+  adjusted_ev: number | null;
+  simulation_summary: string;
+  favorable_blocks: string[];
+  against_blocks: string[];
+  alerts: string[];
+  final_analysis: string;
+  analysis_context: string;
+};
+
+type ValidatorUploadDraft = {
+  local_id: string;
+  file: File;
+  upload_category: string;
+  user_comment: string;
+  upload_order: number;
+  upload_source: "manual" | "drag_drop" | "clipboard";
+};
+
+type ValidatorRecord = {
+  id: string;
+  source_platform: string;
+  sport: string;
+  league: string | null;
+  match_date: string | null;
+  home_team: string;
+  away_team: string;
+  market: string;
+  pick: string;
+  line: string | null;
+  offered_odd: number | null;
+  source_probability: number | null;
+  source_ev: number | null;
+  source_fair_odd: number | null;
+  adjusted_probability: number | null;
+  adjusted_fair_odd: number | null;
+  adjusted_ev: number | null;
+  decision: Decision;
+  confidence: string;
+  validator_model: string;
+  user_context: string | null;
+  analysis_context: string | null;
+  favorable_blocks: string[];
+  against_blocks: string[];
+  alerts: string[];
+  final_analysis: string;
+  simulation_json: Record<string, unknown> | null;
+  online_context_json: Record<string, unknown> | null;
+  ocr_raw_text: string | null;
+  ocr_structured_data: Record<string, unknown> | null;
+  ocr_data_quality_score: number | null;
+  ocr_structured_fields_count: number | null;
+  simulation_type: string | null;
+  structured_json: Record<string, unknown> | null;
+  structured_status: "pending" | "processing" | "completed" | "failed" | string;
+  structured_error: string | null;
+  result_status: string | null;
+  result_settled_at: string | null;
+  final_score: string | null;
+  result_notes: string | null;
+  created_at: string;
+  updated_at: string;
+  stake_units: number | null;
+  unit_value_brl: number | null;
+  profit_units: number | null;
+  profit_brl: number | null;
+  clv: number | null;
+  is_simulated_result: boolean | null;
+  bankroll_applied: boolean | null;
+};
+
+type ValidatorUploadRecord = {
+  id: string;
+  validator_id: string;
+  file_name: string;
+  file_path: string | null;
+  storage_bucket: string | null;
+  file_type: string | null;
+  mime_type: string | null;
+  file_size: number | null;
+  upload_source: string | null;
+  upload_category: string;
+  user_comment: string | null;
+  upload_order: number;
+  ocr_status: string;
+  ocr_text: string | null;
+  ocr_error: string | null;
+  ocr_structured_data: Record<string, unknown> | null;
+  ocr_data_quality_score: number | null;
+  ocr_structured_fields_count: number | null;
+  structured_json: Record<string, unknown> | null;
+  structured_status: "pending" | "processing" | "completed" | "failed" | string;
+  structured_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type EditableRecord = Pick<
+  ValidatorForm,
+  | "sport"
+  | "source_platform"
+  | "league"
+  | "match_date"
+  | "home_team"
+  | "away_team"
+  | "market"
+  | "pick"
+  | "line"
+  | "offered_odd"
+  | "source_probability"
+  | "source_ev"
+  | "user_context"
+> & {
+  source_fair_odd: string;
+};
+
+type ResultForm = {
+  result_status: string;
+  final_odd: string;
+  stake_units: string;
+  unit_value_brl: string;
+  clv: string;
+  final_score: string;
+  result_notes: string;
+  result_settled_at: string;
+};
+
+type ValidatorDashboardFilters = {
+  period: "all" | "7d" | "30d" | "month" | "year";
+  sport: string;
+  league: string;
+  source_platform: string;
+  validator_model: string;
+  market: string;
+  decision: string;
+  result: string;
+};
+
+type ValidatorInsert = Omit<ValidatorForm, "offered_odd" | "source_probability" | "source_ev"> & {
+  offered_odd: number | null;
+  source_probability: number | null;
+  source_ev: number | null;
+  source_fair_odd: number | null;
+  adjusted_probability: number;
+  adjusted_fair_odd: number;
+  adjusted_ev: number | null;
+  decision: Decision;
+  confidence: string;
+  validator_model: string;
+  analysis_context: string;
+  favorable_blocks: string[];
+  against_blocks: string[];
+  alerts: string[];
+  final_analysis: string;
+  simulation_json: Record<string, unknown>;
+  online_context_json: Record<string, unknown>;
+  ocr_raw_text: string | null;
+  ocr_structured_data: Record<string, unknown>;
+  ocr_data_quality_score: number | null;
+  ocr_structured_fields_count: number | null;
+  structured_json: Record<string, unknown>;
+  structured_status: "pending" | "processing" | "completed" | "failed";
+  structured_error: string | null;
+  result_status: string | null;
+  stake_units: number | null;
+  unit_value_brl: number | null;
+  profit_units: number | null;
+  profit_brl: number | null;
+  clv: number | null;
+  result_settled_at: string | null;
+  final_score: string | null;
+  result_notes: string | null;
+  simulation_type: string | null;
+  is_simulated_result: boolean;
+  bankroll_applied: boolean;
+};
+
+const validatorDb = supabase as unknown as {
+  from: (table: "asp_validator_registros") => {
+    select: (columns: string) => {
+      order: (column: string, options: { ascending: boolean }) => {
+        limit: (count: number) => Promise<{ data: ValidatorRecord[] | null; error: Error | null }>;
+      };
+    };
+    insert: (payload: unknown) => {
+      select: (columns: string) => {
+        single: () => Promise<{ data: { id: string } | null; error: Error | null }>;
+      };
+    };
+    update: (payload: unknown) => {
+      eq: (column: string, value: string) => Promise<{ error: Error | null }>;
+    };
+    delete: () => {
+      eq: (column: string, value: string) => Promise<{ error: Error | null }>;
+    };
+  };
+} & {
+  from: (table: "asp_validator_uploads") => {
+    select: (columns: string) => {
+      in: (column: string, values: string[]) => {
+        order: (column: string, options: { ascending: boolean }) => Promise<{ data: ValidatorUploadRecord[] | null; error: Error | null }>;
+      };
+    };
+    insert: (payload: unknown) => Promise<{ error: Error | null }>;
+    update: (payload: unknown) => {
+      eq: (column: string, value: string) => Promise<{ error: Error | null }>;
+    };
+  };
+};
+
+const ASP_VALIDATOR_UPLOAD_BUCKET = "asp-validator-uploads";
+
+const INITIAL_FORM: ValidatorForm = {
+  sport: "Futebol",
+  source_platform: "Manual",
+  league: "",
+  match_date: "",
+  home_team: "",
+  away_team: "",
+  market: "",
+  pick: "",
+  line: "",
+  offered_odd: "",
+  source_probability: "",
+  source_ev: "",
+  user_context: "",
+};
+
+const SPORTS = ["Futebol", "Baseball", "Basketball", "Hockey", "American Football", "Tenis", "Outro"];
+const PLATFORMS = ["Manual", "ASP Screener MLB", "PackBall", "Forebet", "BetClan", "Flashscore", "Outro"];
+const MARKETS = [
+  "Moneyline",
+  "Resultado da Partida",
+  "Total de Gols",
+  "Total de Pontos",
+  "Total de Corridas",
+  "Over/Under",
+  "Handicap Asiatico",
+  "Asian Handicap",
+  "Dupla Chance",
+  "Ambas Marcam",
+  "Escanteios",
+  "Cartoes",
+  "HT/ST",
+  "Outro",
+];
+const UPLOAD_CATEGORIES = [
+  "Prognostico principal",
+  "Ultimos jogos gerais",
+  "Casa/Fora",
+  "Estatisticas do mercado",
+  "Classificacao/contexto",
+  "Outro",
+];
+
+const INITIAL_DASHBOARD_FILTERS: ValidatorDashboardFilters = {
+  period: "all",
+  sport: "all",
+  league: "all",
+  source_platform: "all",
+  validator_model: "all",
+  market: "all",
+  decision: "all",
+  result: "all",
+};
 
 function AspValidatorPage() {
   const { data: cfg } = useConfiguracao();
@@ -118,9 +387,9 @@ function AspValidatorPage() {
   // ou quando ha texto colado interpretado (fluxo principal a partir desta versao).
   const canValidate = hasManualCore || uploads.length > 0 || Boolean(pastedParsed);
 
-  const update = useCallback((field: keyof ValidatorForm, value: string) => {
+  const update = (field: keyof ValidatorForm, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
-  }, []);
+  };
 
   const applyImportedHandoffToForm = (handoff: MlbValidatorHandoffPayload, silent = false) => {
     const prefill = handoff.validator_prefill;
@@ -231,14 +500,10 @@ function AspValidatorPage() {
   };
 
 
-  const loadHistory = useCallback(async () => {
+  const loadHistory = async () => {
     setLoadingHistory(true);
     try {
-      const { data, error } = await validatorDb
-        .from("asp_validator_registros")
-        .select(ASP_VALIDATOR_RECORD_LIST_COLUMNS)
-        .order("created_at", { ascending: false })
-        .limit(500);
+      const { data, error } = await validatorDb.from("asp_validator_registros").select("*").order("created_at", { ascending: false }).limit(500);
       if (error) throw error;
       const nextRecords = data ?? [];
       setRecords(nextRecords);
@@ -251,7 +516,7 @@ function AspValidatorPage() {
       const ids = nextRecords.map((record) => record.id);
       const { data: uploadRows, error: uploadError } = await validatorDb
         .from("asp_validator_uploads")
-        .select(ASP_VALIDATOR_UPLOAD_LIST_COLUMNS)
+        .select("*")
         .in("validator_id", ids)
         .order("upload_order", { ascending: true });
       if (uploadError) throw uploadError;
@@ -261,11 +526,11 @@ function AspValidatorPage() {
     } finally {
       setLoadingHistory(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
     void loadHistory();
-  }, [loadHistory]);
+  }, []);
 
   useEffect(() => {
     const { payload, validation } = readMlbValidatorHandoffDraft();
@@ -311,7 +576,7 @@ function AspValidatorPage() {
     toast.success("Validacao importada do ASP Screener MLB. Revise antes de validar.");
   }, []);
 
-  const addUploads = useCallback((files: FileList | null, uploadSource: ValidatorUploadDraft["upload_source"] = "manual") => {
+  const addUploads = (files: FileList | null, uploadSource: ValidatorUploadDraft["upload_source"] = "manual") => {
     if (!files?.length) return;
     const validFiles = filterValidUploads(Array.from(files), (reason) => toast.error(reason));
     if (!validFiles.length) return;
@@ -326,13 +591,13 @@ function AspValidatorPage() {
       }));
       return [...prev, ...nextFiles];
     });
-  }, []);
-  const updateUpload = useCallback((localId: string, patch: Partial<Pick<ValidatorUploadDraft, "upload_category" | "user_comment">>) => {
+  };
+  const updateUpload = (localId: string, patch: Partial<Pick<ValidatorUploadDraft, "upload_category" | "user_comment">>) => {
     setUploads((prev) => prev.map((upload) => (upload.local_id === localId ? { ...upload, ...patch } : upload)));
-  }, []);
-  const removeUpload = useCallback((localId: string) => {
+  };
+  const removeUpload = (localId: string) => {
     setUploads((prev) => prev.filter((upload) => upload.local_id !== localId).map((upload, index) => ({ ...upload, upload_order: index + 1 })));
-  }, []);
+  };
 
   const validate = async () => {
     if (!canValidate) {
@@ -395,7 +660,7 @@ function AspValidatorPage() {
   };
 
 
-  const openRecord = useCallback((record: ValidatorRecord) => {
+  const openRecord = (record: ValidatorRecord) => {
     setSelectedRecord(record);
     const baseEditable = recordToEditable(record);
     // Auto-fill missing fields from structured_json / form_patch
@@ -417,12 +682,12 @@ function AspValidatorPage() {
       Object.fromEntries((uploadsByRecord[record.id] ?? []).map((upload) => [upload.id, upload.user_comment ?? ""])),
     );
     setOcrFilesByUpload({});
-  }, [cfg?.valor_unidade_padrao, uploadsByRecord]);
+  };
 
-  const updateEdit = useCallback((field: keyof EditableRecord, value: string) => {
+  const updateEdit = (field: keyof EditableRecord, value: string) => {
     setEditingRecord((prev) => (prev ? { ...prev, [field]: value } : prev));
     setOcrAppliedFields((prev) => ({ ...prev, [field]: false }));
-  }, []);
+  };
 
   const applyOcrDataToEditingRecord = () => {
     if (!selectedRecord || !editingRecord) return;
@@ -469,9 +734,9 @@ function AspValidatorPage() {
     toast.success("Dados OCR aplicados ao formulario. Revise e salve as alteracoes.");
   };
 
-  const updateResultForm = useCallback((field: keyof ResultForm, value: string) => {
+  const updateResultForm = (field: keyof ResultForm, value: string) => {
     setResultForm((prev) => (prev ? { ...prev, [field]: value } : prev));
-  }, []);
+  };
 
   const saveRecordEdit = async () => {
     if (!selectedRecord || !editingRecord) return;
@@ -529,7 +794,7 @@ function AspValidatorPage() {
     }
   };
 
-  const deleteRecord = useCallback(async (record: ValidatorRecord) => {
+  const deleteRecord = async (record: ValidatorRecord) => {
     if (record.result_status) {
       toast.error("Registro com resultado nao pode ser excluido.");
       return;
@@ -544,14 +809,14 @@ function AspValidatorPage() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Nao foi possivel excluir o registro.");
     }
-  }, [loadHistory, selectedRecord?.id]);
+  };
 
-  const attachOcrFile = useCallback((uploadId: string, file: File | null) => {
+  const attachOcrFile = (uploadId: string, file: File | null) => {
     if (!file) return;
     setOcrFilesByUpload((prev) => ({ ...prev, [uploadId]: file }));
-  }, []);
+  };
 
-  const processUploadOcr = useCallback(async (upload: ValidatorUploadRecord): Promise<boolean> => {
+  const processUploadOcr = async (upload: ValidatorUploadRecord): Promise<boolean> => {
     if (!selectedRecord) return false;
 
     setProcessingOcr((prev) => ({ ...prev, [upload.id]: true }));
@@ -619,9 +884,9 @@ function AspValidatorPage() {
     } finally {
       setProcessingOcr((prev) => ({ ...prev, [upload.id]: false }));
     }
-  }, [editingUploadComments, loadHistory, ocrFilesByUpload, selectedRecord, uploadsByRecord]);
+  };
 
-  const processAllAvailableOcr = useCallback(async () => {
+  const processAllAvailableOcr = async () => {
     if (!selectedRecord) return;
     const currentUploads = uploadsByRecord[selectedRecord.id] ?? [];
     const available = currentUploads.filter((upload) => Boolean(ocrFilesByUpload[upload.id]) || Boolean(upload.file_path));
@@ -640,9 +905,9 @@ function AspValidatorPage() {
       }
     }
     toast.message(`OCR em lote finalizado: ${available.length} encontrado(s), ${processed} processado(s), ${failed} falha(s).`);
-  }, [ocrFilesByUpload, processUploadOcr, selectedRecord, uploadsByRecord]);
+  };
 
-  const structureSelectedRecordOcr = useCallback(async () => {
+  const structureSelectedRecordOcr = async () => {
     if (!selectedRecord) return;
     const currentUploads = uploadsByRecord[selectedRecord.id] ?? [];
     setStructuringRecord(true);
@@ -682,9 +947,9 @@ function AspValidatorPage() {
     } finally {
       setStructuringRecord(false);
     }
-  }, [loadHistory, selectedRecord, uploadsByRecord]);
+  };
 
-  const runSelectedRecordSimulation = useCallback(async () => {
+  const runSelectedRecordSimulation = async () => {
     if (!selectedRecord) return;
     setSimulatingRecord(true);
     try {
@@ -714,9 +979,9 @@ function AspValidatorPage() {
     } finally {
       setSimulatingRecord(false);
     }
-  }, [loadHistory, selectedRecord]);
+  };
 
-  const ensureOcrForStoredUploads = useCallback(async (): Promise<ValidatorUploadRecord[]> => {
+  const ensureOcrForStoredUploads = async (): Promise<ValidatorUploadRecord[]> => {
     if (!selectedRecord) return [];
     const currentUploads = uploadsByRecord[selectedRecord.id] ?? [];
     const pending = currentUploads.filter(
@@ -728,9 +993,9 @@ function AspValidatorPage() {
       await processUploadOcr(upload);
     }
     return uploadsByRecord[selectedRecord.id] ?? currentUploads;
-  }, [processUploadOcr, selectedRecord, uploadsByRecord]);
+  };
 
-  const validateSelectedRecordWithAi = useCallback(async () => {
+  const validateSelectedRecordWithAi = async () => {
     if (!selectedRecord) return;
     setValidatingAiRecord(true);
     try {
@@ -781,9 +1046,9 @@ function AspValidatorPage() {
     } finally {
       setValidatingAiRecord(false);
     }
-  }, [ensureOcrForStoredUploads, loadHistory, selectedRecord]);
+  };
 
-  const validateSelectedRecordWithOnlineAi = useCallback(async () => {
+  const validateSelectedRecordWithOnlineAi = async () => {
     if (!selectedRecord) return;
     setValidatingOnlineRecord(true);
     const before = {
@@ -884,7 +1149,7 @@ function AspValidatorPage() {
     } finally {
       setValidatingOnlineRecord(false);
     }
-  }, [ensureOcrForStoredUploads, loadHistory, selectedRecord]);
+  };
 
 
   const saveRecordResult = async () => {
@@ -1524,22 +1789,11 @@ function UploadsDetail({
   onProcessUploadOcr: (upload: ValidatorUploadRecord) => Promise<boolean>;
 }) {
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
-  const imageUploads = useMemo(
-    () => uploads.filter((upload) => upload.file_path && (upload.mime_type || "").startsWith("image/")),
-    [uploads],
-  );
-  const uploadStats = useMemo(
-    () => ({
-      stored: uploads.filter((upload) => upload.file_path).length,
-      ocrCompleted: uploads.filter((upload) => upload.ocr_status === "completed").length,
-      ocrFailed: uploads.filter((upload) => upload.ocr_status === "failed").length,
-    }),
-    [uploads],
-  );
 
   useEffect(() => {
     let active = true;
     const loadPreviewUrls = async () => {
+      const imageUploads = uploads.filter((upload) => upload.file_path && (upload.mime_type || "").startsWith("image/"));
       const entries = await Promise.all(
         imageUploads.map(async (upload) => {
           try {
@@ -1557,7 +1811,7 @@ function UploadsDetail({
     return () => {
       active = false;
     };
-  }, [imageUploads]);
+  }, [uploads]);
 
   return (
     <div className="space-y-3 rounded-md border border-border bg-muted/10 p-3">
@@ -1565,9 +1819,9 @@ function UploadsDetail({
         <div className="text-sm font-semibold">Uploads vinculados</div>
         <p className="mt-1 text-xs text-muted-foreground">Arquivos armazenados no Supabase Storage e vinculados ao registro para auditoria e reprocessamento.</p>
         <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
-          <Badge variant="outline">Storage: {uploadStats.stored}/{uploads.length}</Badge>
-          <Badge variant="outline">OCR completed: {uploadStats.ocrCompleted}</Badge>
-          <Badge variant="outline">Falhas: {uploadStats.ocrFailed}</Badge>
+          <Badge variant="outline">Storage: {uploads.filter((upload) => upload.file_path).length}/{uploads.length}</Badge>
+          <Badge variant="outline">OCR completed: {uploads.filter((upload) => upload.ocr_status === "completed").length}</Badge>
+          <Badge variant="outline">Falhas: {uploads.filter((upload) => upload.ocr_status === "failed").length}</Badge>
         </div>
       </div>
       {uploads.length ? (
@@ -1933,7 +2187,7 @@ function ExtractedImageDataPanel({ structured, sport }: { structured: Structured
 }
 
 function LinePercentBadges({ title, values, prefix }: { title: string; values: Record<string, number>; prefix: string }) {
-  const entries = useMemo(() => Object.entries(values).sort(([a], [b]) => Number(a) - Number(b)), [values]);
+  const entries = Object.entries(values).sort(([a], [b]) => Number(a) - Number(b));
   if (!entries.length) return null;
   return (
     <div className="mt-3 rounded-md border border-border bg-muted/10 p-2">
@@ -1950,7 +2204,7 @@ function LinePercentBadges({ title, values, prefix }: { title: string; values: R
 }
 
 function NormalizedCornerLinesPanel({ home, away }: { home: NormalizedCornerLine[]; away: NormalizedCornerLine[] }) {
-  const all = useMemo(() => [...home, ...away], [away, home]);
+  const all = [...home, ...away];
   if (!all.length) return null;
   const renderGroup = (label: string, items: NormalizedCornerLine[]) => {
     if (!items.length) return null;

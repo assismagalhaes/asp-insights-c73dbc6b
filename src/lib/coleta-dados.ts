@@ -361,11 +361,32 @@ function baseGame(game: Record<string, unknown>, esporteHint?: string | null) {
   };
 }
 
+// Fuso horário fixo de Brasília (UTC-3). O Brasil não observa mais horário
+// de verão desde 2019, então o offset é constante.
+const BRASILIA_OFFSET = "-03:00";
+
 function parseCapturedAt(value: unknown): string | null {
   if (!value) return null;
-  const s = String(value);
-  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
-  if (m) return `${m[3]}-${m[2]}-${m[1]}T${m[4].padStart(2, "0")}:${m[5]}:00`;
+  const s = String(value).trim();
+  if (!s) return null;
+
+  // Já veio com fuso (Z ou ±HH:MM) — preservar.
+  if (/(?:Z|[+-]\d{2}:?\d{2})$/.test(s)) return s;
+
+  // Formato brasileiro "DD/MM/YYYY HH:MM[:SS]" — assumir horário de Brasília.
+  const br = s.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (br) {
+    const ss = (br[6] ?? "00").padStart(2, "0");
+    return `${br[3]}-${br[2]}-${br[1]}T${br[4].padStart(2, "0")}:${br[5]}:${ss}${BRASILIA_OFFSET}`;
+  }
+
+  // ISO sem fuso ("YYYY-MM-DDTHH:MM[:SS]" ou "YYYY-MM-DD HH:MM[:SS]") — assumir horário de Brasília.
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (iso) {
+    const ss = (iso[6] ?? "00").padStart(2, "0");
+    return `${iso[1]}-${iso[2]}-${iso[3]}T${iso[4]}:${iso[5]}:${ss}${BRASILIA_OFFSET}`;
+  }
+
   return null;
 }
 
@@ -669,7 +690,7 @@ function normalizeVmRow(row: Record<string, unknown>, esporteHint?: string | nul
     margem_mercado_mediana: toNumber(row.margem_mercado_mediana ?? row.market_overround_median),
     bookmaker: toText(row.bookmaker ?? row.book ?? row.casa_aposta ?? row.bookmaker_name),
     fonte: normalizeFlashscoreUrl(fonte) ?? fonte,
-    capturado_em: toText(row.capturado_em ?? row.captured_at ?? row.updated_at) ?? parseCapturedAt(row.att),
+    capturado_em: parseCapturedAt(row.capturado_em ?? row.captured_at ?? row.updated_at ?? row.att),
     raw_ref: rawRef,
   };
 }
