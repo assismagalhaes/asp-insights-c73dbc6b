@@ -6,9 +6,27 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { fetchCollections, type ColetaOdds } from "@/lib/coleta-dados";
 import {
   executePackballPredictiveModel,
@@ -93,11 +111,16 @@ function ModelosPreditivosPage() {
 
   const concluidas = useMemo(() => {
     if (isPackballModel(modelo)) return [];
-    const coletasConcluidas = coletas.filter((coleta) => coleta.status === "CONCLUIDA" && coleta.job_id);
+    const coletasConcluidas = coletas.filter(
+      (coleta) => coleta.status === "CONCLUIDA" && coleta.job_id,
+    );
     if (modelo === "Baseball") return coletasConcluidas.filter(isBaseballColeta);
-    if (modelo === "Basketball NBA") return coletasConcluidas.filter((coleta) => isBasketballColeta(coleta, "NBA"));
-    if (modelo === "Basketball WNBA") return coletasConcluidas.filter((coleta) => isBasketballColeta(coleta, "WNBA"));
-    if (modelo === "Futebol") return coletasConcluidas.filter((coleta) => !coleta.esporte || isFootballColeta(coleta));
+    if (modelo === "Basketball NBA")
+      return coletasConcluidas.filter((coleta) => isBasketballColeta(coleta, "NBA"));
+    if (modelo === "Basketball WNBA")
+      return coletasConcluidas.filter((coleta) => isBasketballColeta(coleta, "WNBA"));
+    if (modelo === "Futebol")
+      return coletasConcluidas.filter((coleta) => !coleta.esporte || isFootballColeta(coleta));
     return coletasConcluidas;
   }, [coletas, modelo]);
 
@@ -105,7 +128,7 @@ function ModelosPreditivosPage() {
   const coletaSelecionada = concluidas.find((coleta) => coleta.id === selectedColetaId) ?? null;
   const prognosticos = resultado?.prognosticos ?? [];
   const canExecute = packballMode
-    ?Boolean(packballFile5 && packballFile20) && !running
+    ? Boolean(packballFile5 && packballFile20) && !running
     : Boolean(coletaSelecionada) && !running;
 
   const executarModelo = async () => {
@@ -193,12 +216,16 @@ function ModelosPreditivosPage() {
 
     setSending(true);
     try {
-      const payload = prognosticos.map((p) => stripUnsupportedPrognosticoColumns(toPrognosticoInsert(p, resultado)));
+      const payload = prognosticos.map((p) =>
+        stripUnsupportedPrognosticoColumns(toPrognosticoInsert(p, resultado)),
+      );
       const { error } = await supabase.from("prognosticos").insert(payload as never);
       if (error) {
         if (isMissingOddsContextColumnError(error)) {
           const fallbackPayload = payload.map(stripOddsContextColumns);
-          const { error: fallbackError } = await supabase.from("prognosticos").insert(fallbackPayload as never);
+          const { error: fallbackError } = await supabase
+            .from("prognosticos")
+            .insert(fallbackPayload as never);
           if (fallbackError) throw fallbackError;
         } else {
           throw error;
@@ -232,7 +259,13 @@ function ModelosPreditivosPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className={packballMode ?"grid gap-3 md:grid-cols-[240px_1fr_1fr_auto] md:items-end" : "grid gap-3 md:grid-cols-[240px_1.5fr_auto] md:items-end"}>
+          <div
+            className={
+              packballMode
+                ? "grid gap-3 md:grid-cols-[240px_1fr_1fr_auto] md:items-end"
+                : "grid gap-3 md:grid-cols-[240px_1.5fr_auto] md:items-end"
+            }
+          >
             <div>
               <label className="text-sm font-medium">Modelo</label>
               <Select
@@ -245,23 +278,37 @@ function ModelosPreditivosPage() {
                   setPackballFile20(null);
                 }}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Futebol">Futebol</SelectItem>
                   <SelectItem value="Basketball NBA">Basketball NBA</SelectItem>
                   <SelectItem value="Basketball WNBA">Basketball WNBA</SelectItem>
                   <SelectItem value="Baseball">Baseball</SelectItem>
-                  <SelectItem value="Hockey" disabled>Hockey</SelectItem>
-                  <SelectItem value="American Football" disabled>American Football</SelectItem>
+                  <SelectItem value="Hockey" disabled>
+                    Hockey
+                  </SelectItem>
+                  <SelectItem value="American Football" disabled>
+                    American Football
+                  </SelectItem>
                   <SelectItem value="ASP GoalMatrix">ASP GoalMatrix</SelectItem>
                   <SelectItem value="ASP CornerMatrix">ASP CornerMatrix</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            {packballMode ?(
+            {packballMode ? (
               <>
-                <PackballFileInput label="Planilha PackBall 5j" file={packballFile5} onFile={setPackballFile5} />
-                <PackballFileInput label="Planilha PackBall 20j" file={packballFile20} onFile={setPackballFile20} />
+                <PackballFileInput
+                  label="Planilha PackBall 5j"
+                  file={packballFile5}
+                  onFile={setPackballFile5}
+                />
+                <PackballFileInput
+                  label="Planilha PackBall 20j"
+                  file={packballFile20}
+                  onFile={setPackballFile20}
+                />
               </>
             ) : (
               <div>
@@ -273,7 +320,8 @@ function ModelosPreditivosPage() {
                   <SelectContent>
                     {concluidas.map((coleta) => (
                       <SelectItem key={coleta.id} value={coleta.id}>
-                        {formatDateTimeBR(coleta.created_at)} - {coleta.esporte ?? "-"} - {coleta.job_id}
+                        {formatDateTimeBR(coleta.created_at)} - {coleta.esporte ?? "-"} -{" "}
+                        {coleta.job_id}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -282,7 +330,7 @@ function ModelosPreditivosPage() {
             )}
             <Button onClick={executarModelo} disabled={!canExecute}>
               <Play className="mr-2 h-4 w-4" />
-              {running ?"Executando..." : "Executar Modelo"}
+              {running ? "Executando..." : "Executar Modelo"}
             </Button>
           </div>
 
@@ -295,7 +343,8 @@ function ModelosPreditivosPage() {
           {packballMode && (
             <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
               <Upload className="mr-2 inline h-4 w-4" />
-              Importe as duas planilhas cruas do PackBall. O modelo organiza os dados e gera prognosticos no mesmo fluxo dos demais modelos.
+              Importe as duas planilhas cruas do PackBall. O modelo organiza os dados e gera
+              prognosticos no mesmo fluxo dos demais modelos.
             </div>
           )}
 
@@ -311,11 +360,17 @@ function ModelosPreditivosPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-5">
-            <Info label="Job" value={resultado?.job_id ?? resultado?.input_id ?? coletaSelecionada?.job_id ?? "-"} />
+            <Info
+              label="Job"
+              value={resultado?.job_id ?? resultado?.input_id ?? coletaSelecionada?.job_id ?? "-"}
+            />
             <Info label="Modelo" value={resultado?.modelo ?? modelo} />
             <Info label="CSV coleta" value={resultado?.csv_coleta ?? "-"} />
             <Info label="Arquivo" value={resultado?.arquivo_saida ?? "-"} />
-            <Info label="Prognósticos" value={resultado?.total_prognosticos ?? prognosticos.length} />
+            <Info
+              label="Prognósticos"
+              value={resultado?.total_prognosticos ?? prognosticos.length}
+            />
           </div>
 
           {resultado && (resultado.total_prognosticos ?? prognosticos.length) === 0 && (
@@ -366,7 +421,9 @@ function ModelosPreditivosPage() {
                 {prognosticos.slice(0, 100).map((p, index) => (
                   <TableRow key={`${p.jogo}-${p.mercado}-${p.pick}-${index}`}>
                     <TableCell className="whitespace-nowrap font-mono text-xs">{p.data}</TableCell>
-                    <TableCell className="whitespace-nowrap font-mono text-xs">{p.hora ?? "-"}</TableCell>
+                    <TableCell className="whitespace-nowrap font-mono text-xs">
+                      {p.hora ?? "-"}
+                    </TableCell>
                     <TableCell>{p.esporte}</TableCell>
                     <TableCell>{p.liga}</TableCell>
                     <TableCell className="min-w-56">{p.jogo}</TableCell>
@@ -375,19 +432,31 @@ function ModelosPreditivosPage() {
                     <TableCell>{p.mercado}</TableCell>
                     <TableCell>{p.pick}</TableCell>
                     <TableCell className="font-mono text-xs">{p.linha ?? "-"}</TableCell>
-                    <TableCell className="text-right font-mono">{formatOptionalNum(p.odd)}</TableCell>
-                    <TableCell className="text-right font-mono">{formatNum(p.odd_ofertada)}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatOptionalNum(p.odd)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatNum(p.odd_ofertada)}
+                    </TableCell>
                     <TableCell className="text-right font-mono">{formatNum(p.odd_valor)}</TableCell>
-                    <TableCell className="text-right font-mono">{formatOptionalPercent(p.probabilidade)}</TableCell>
-                    <TableCell className="text-right font-mono">{formatNum(p.probabilidade_final)}%</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatOptionalPercent(p.probabilidade)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatNum(p.probabilidade_final)}%
+                    </TableCell>
                     <TableCell className="text-right font-mono">{formatNum(p.edge)}%</TableCell>
-                    <TableCell className="text-right font-mono">{formatOptionalNum(p.stake)}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatOptionalNum(p.stake)}
+                    </TableCell>
                   </TableRow>
                 ))}
                 {!prognosticos.length && (
                   <TableRow>
                     <TableCell colSpan={17} className="py-12 text-center text-muted-foreground">
-                      {resultado ?"Nenhuma oportunidade EV+ encontrada para esta coleta." : "Nenhum modelo executado ainda."}
+                      {resultado
+                        ? "Nenhuma oportunidade EV+ encontrada para esta coleta."
+                        : "Nenhum modelo executado ainda."}
                     </TableCell>
                   </TableRow>
                 )}
@@ -399,7 +468,7 @@ function ModelosPreditivosPage() {
             <div className="flex justify-end">
               <Button onClick={enviarParaPrognosticos} disabled={sending}>
                 <Send className="mr-2 h-4 w-4" />
-                {sending ?"Enviando..." : "Enviar para Prognósticos"}
+                {sending ? "Enviando..." : "Enviar para Prognósticos"}
               </Button>
             </div>
           )}
@@ -439,7 +508,9 @@ function PackballFileInput({
         className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1 file:text-primary-foreground"
         onChange={(event) => onFile(event.currentTarget.files?.[0] ?? null)}
       />
-      <div className="mt-1 truncate text-xs text-muted-foreground">{file?.name ?? "Nenhum arquivo selecionado"}</div>
+      <div className="mt-1 truncate text-xs text-muted-foreground">
+        {file?.name ?? "Nenhum arquivo selecionado"}
+      </div>
     </div>
   );
 }
@@ -453,7 +524,9 @@ function Info({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function isPackballModel(modelo: ModeloDisponivel): modelo is "ASP GoalMatrix" | "ASP CornerMatrix" {
+function isPackballModel(
+  modelo: ModeloDisponivel,
+): modelo is "ASP GoalMatrix" | "ASP CornerMatrix" {
   return modelo === "ASP GoalMatrix" || modelo === "ASP CornerMatrix";
 }
 
@@ -466,28 +539,30 @@ function inferPackballDate(...names: string[]) {
 }
 
 function extractInputId(response: unknown) {
-  const root = isRecord(response) ?response : {};
-  const data = isRecord(root.data) ?root.data : isRecord(root.result) ?root.result : root;
+  const root = isRecord(response) ? response : {};
+  const data = isRecord(root.data) ? root.data : isRecord(root.result) ? root.result : root;
   const value = data.input_id ?? data.job_id ?? data.id;
   if (!value) throw new Error("A VM nao retornou input_id para executar o modelo.");
   return String(value);
 }
 
 function normalizeModelResponse(response: unknown): ModeloResultado {
-  const root = isRecord(response) ?response : {};
-  const data = isRecord(root.data) ?root.data : isRecord(root.result) ?root.result : root;
-  const prognosticos = Array.isArray(data.prognosticos) ?data.prognosticos.filter(isRecord).map(mapModeloPrognostico) : [];
+  const root = isRecord(response) ? response : {};
+  const data = isRecord(root.data) ? root.data : isRecord(root.result) ? root.result : root;
+  const prognosticos = Array.isArray(data.prognosticos)
+    ? data.prognosticos.filter(isRecord).map(mapModeloPrognostico)
+    : [];
   return {
     ok: Boolean(data.ok ?? true),
-    job_id: data.job_id ?String(data.job_id) : undefined,
-    input_id: data.input_id ?String(data.input_id) : undefined,
-    modelo: data.modelo ?String(data.modelo) : undefined,
-    csv_coleta: data.csv_coleta ?String(data.csv_coleta) : undefined,
-    arquivo_saida: data.arquivo_saida ?String(data.arquivo_saida) : undefined,
-    arquivo_contexto: data.arquivo_contexto ?String(data.arquivo_contexto) : undefined,
-    contexto_modelo: data.contexto_modelo ?String(data.contexto_modelo) : undefined,
-    dados_tecnicos: data.dados_tecnicos ?String(data.dados_tecnicos) : undefined,
-    mensagem: data.mensagem ?String(data.mensagem) : undefined,
+    job_id: data.job_id ? String(data.job_id) : undefined,
+    input_id: data.input_id ? String(data.input_id) : undefined,
+    modelo: data.modelo ? String(data.modelo) : undefined,
+    csv_coleta: data.csv_coleta ? String(data.csv_coleta) : undefined,
+    arquivo_saida: data.arquivo_saida ? String(data.arquivo_saida) : undefined,
+    arquivo_contexto: data.arquivo_contexto ? String(data.arquivo_contexto) : undefined,
+    contexto_modelo: data.contexto_modelo ? String(data.contexto_modelo) : undefined,
+    dados_tecnicos: data.dados_tecnicos ? String(data.dados_tecnicos) : undefined,
+    mensagem: data.mensagem ? String(data.mensagem) : undefined,
     total_prognosticos: toNumber(data.total_prognosticos) ?? prognosticos.length,
     prognosticos,
   };
@@ -496,32 +571,35 @@ function normalizeModelResponse(response: unknown): ModeloResultado {
 function mapModeloPrognostico(row: Record<string, unknown>): ModeloPrognostico {
   return {
     data: String(row.data ?? ""),
-    hora: row.hora ?String(row.hora) : null,
+    hora: row.hora ? String(row.hora) : null,
     esporte: String(row.esporte ?? ""),
     liga: String(row.liga ?? ""),
     jogo: String(row.jogo ?? ""),
-    mandante: row.mandante ?String(row.mandante) : null,
-    visitante: row.visitante ?String(row.visitante) : null,
+    mandante: row.mandante ? String(row.mandante) : null,
+    visitante: row.visitante ? String(row.visitante) : null,
     mercado: String(row.mercado ?? ""),
     pick: String(row.pick ?? ""),
-    linha: row.linha == null || row.linha === "" ?null : String(row.linha),
+    linha: row.linha == null || row.linha === "" ? null : String(row.linha),
     odd: toNumber(row.odd),
     odd_ofertada: toNumber(row.odd_ofertada) ?? toNumber(row.odd) ?? 0,
     odd_mediana: toNumber(row.odd_mediana ?? row.odd_median),
     odd_mercado_base: toNumber(row.odd_mercado_base ?? row.odd_mediana ?? row.odd_median),
     odd_melhor: toNumber(row.odd_melhor ?? row.odd_best),
-    bookmaker_melhor: row.bookmaker_melhor || row.bookmaker_best ? String(row.bookmaker_melhor ?? row.bookmaker_best) : null,
+    bookmaker_melhor:
+      row.bookmaker_melhor || row.bookmaker_best
+        ? String(row.bookmaker_melhor ?? row.bookmaker_best)
+        : null,
     odd_valor: toNumber(row.odd_valor) ?? 0,
     probabilidade: toNumber(row.probabilidade),
     probabilidade_final: toNumber(row.probabilidade_final) ?? toNumber(row.probabilidade) ?? 0,
     edge: toNumber(row.edge) ?? 0,
     stake: toNumber(row.stake),
-    observacoes: row.observacoes ?String(row.observacoes) : null,
-    dados_tecnicos: row.dados_tecnicos ?String(row.dados_tecnicos) : null,
-    contexto_adicional: row.contexto_adicional ?String(row.contexto_adicional) : null,
-    parecer_validacao: row.parecer_validacao ?String(row.parecer_validacao) : null,
-    contexto_modelo: row.contexto_modelo ?String(row.contexto_modelo) : null,
-    arquivo_contexto: row.arquivo_contexto ?String(row.arquivo_contexto) : null,
+    observacoes: row.observacoes ? String(row.observacoes) : null,
+    dados_tecnicos: row.dados_tecnicos ? String(row.dados_tecnicos) : null,
+    contexto_adicional: row.contexto_adicional ? String(row.contexto_adicional) : null,
+    parecer_validacao: row.parecer_validacao ? String(row.parecer_validacao) : null,
+    contexto_modelo: row.contexto_modelo ? String(row.contexto_modelo) : null,
+    arquivo_contexto: row.arquivo_contexto ? String(row.arquivo_contexto) : null,
   };
 }
 
@@ -529,20 +607,20 @@ function toPrognosticoInsert(p: ModeloPrognostico, resultado: ModeloResultado | 
   const norm = normalizeEsporteLiga({ esporte: p.esporte, liga: p.liga });
   const { mandante, visitante } = inferTeams(p);
   const dadosTecnicosBase =
-    p.dados_tecnicos?.trim() ||
-    p.contexto_adicional?.trim() ||
-    p.observacoes?.trim() ||
-    "";
+    p.dados_tecnicos?.trim() || p.contexto_adicional?.trim() || p.observacoes?.trim() || "";
   const contextoModelo = p.contexto_modelo?.trim() || null;
   const contextoDuplicado = Boolean(
     dadosTecnicosBase &&
-      contextoModelo &&
-      normalizeComparableText(dadosTecnicosBase) === normalizeComparableText(contextoModelo),
+    contextoModelo &&
+    normalizeComparableText(dadosTecnicosBase) === normalizeComparableText(contextoModelo),
   );
-  const dadosTecnicos = [
-    dadosTecnicosBase,
-    contextoModelo && !contextoDuplicado ? `Contexto do modelo:\n${contextoModelo}` : "",
-  ].filter(Boolean).join("\n\n") || null;
+  const dadosTecnicos =
+    [
+      dadosTecnicosBase,
+      contextoModelo && !contextoDuplicado ? `Contexto do modelo:\n${contextoModelo}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n") || null;
   return {
     data: parseModelDate(p.data) ?? p.data,
     hora: p.hora,
@@ -603,7 +681,10 @@ function inferTeams(p: ModeloPrognostico) {
   const mandante = p.mandante?.trim();
   const visitante = p.visitante?.trim();
   if (mandante && visitante) return { mandante, visitante };
-  const parts = p.jogo.split(/\s+(?:vs|x|v)\s+/i).map((part) => part.trim()).filter(Boolean);
+  const parts = p.jogo
+    .split(/\s+(?:vs|x|v)\s+/i)
+    .map((part) => part.trim())
+    .filter(Boolean);
   return {
     mandante: mandante || parts[0] || p.jogo,
     visitante: visitante || parts[1] || "Visitante",
@@ -617,7 +698,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function toNumber(value: unknown) {
   if (value == null || value === "") return null;
   const n = Number(String(value).replace(",", "."));
-  return Number.isFinite(n) ?n : null;
+  return Number.isFinite(n) ? n : null;
 }
 
 function formatNum(value: number) {
@@ -625,11 +706,11 @@ function formatNum(value: number) {
 }
 
 function formatOptionalNum(value: number | null | undefined) {
-  return value == null ?"-" : Number(value || 0).toFixed(2);
+  return value == null ? "-" : Number(value || 0).toFixed(2);
 }
 
 function formatOptionalPercent(value: number | null | undefined) {
-  return value == null ?"-" : `${Number(value || 0).toFixed(2)}%`;
+  return value == null ? "-" : `${Number(value || 0).toFixed(2)}%`;
 }
 
 function normalizeText(value: unknown) {
@@ -644,7 +725,9 @@ function normalizeComparableText(value: string) {
 }
 
 function coletaSearchText(coleta: ColetaOdds) {
-  return normalizeText(`${coleta.esporte ?? ""} ${coleta.liga ?? ""} ${JSON.stringify(coleta.parametros ?? {})}`);
+  return normalizeText(
+    `${coleta.esporte ?? ""} ${coleta.liga ?? ""} ${JSON.stringify(coleta.parametros ?? {})}`,
+  );
 }
 
 function isBaseballColeta(coleta: ColetaOdds) {
@@ -675,5 +758,7 @@ function formatColetaLigas(coleta: ColetaOdds) {
   if (coleta.liga) return coleta.liga;
   const leagues = coleta.parametros?.leagues;
   if (!Array.isArray(leagues) || leagues.length === 0) return "Todas";
-  return leagues.map((league) => String(league).split("/").filter(Boolean).slice(-2, -1)[0] ?? String(league)).join(", ");
+  return leagues
+    .map((league) => String(league).split("/").filter(Boolean).slice(-2, -1)[0] ?? String(league))
+    .join(", ");
 }

@@ -12,7 +12,10 @@ import logo from "@/assets/logo-asp.png.asset.json";
 export const Route = createFileRoute("/auth")({
   ssr: false,
   validateSearch: (s: Record<string, unknown>) => ({
-    next: typeof s.next === "string" && s.next.startsWith("/") && !s.next.startsWith("//") ? s.next : "/",
+    next:
+      typeof s.next === "string" && s.next.startsWith("/") && !s.next.startsWith("//")
+        ? s.next
+        : "/",
   }),
   component: AuthPage,
 });
@@ -43,7 +46,6 @@ function AuthPage() {
     navigate({ to: next });
   }
 
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 relative overflow-hidden">
       {/* glow backdrop */}
@@ -54,11 +56,7 @@ function AuthPage() {
 
       <Card className="w-full max-w-md border-border/60 backdrop-blur-sm bg-card/80 relative">
         <CardHeader className="text-center space-y-3">
-          <img
-            src={logo.url}
-            alt="ASP Insights"
-            className="mx-auto h-28 w-28 object-contain"
-          />
+          <img src={logo.url} alt="ASP Insights" className="mx-auto h-28 w-28 object-contain" />
           <CardTitle className="text-2xl tracking-tight">
             <span className="text-foreground">ASP </span>
             <span className="text-primary">Insights</span>

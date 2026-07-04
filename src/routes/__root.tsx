@@ -21,7 +21,6 @@ import { LogOut } from "lucide-react";
 import { supabase } from "@/lib/supabase-public";
 import { toast } from "sonner";
 
-
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -55,9 +54,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="text-xl font-semibold tracking-tight">Algo deu errado</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Tente novamente ou volte ao dashboard.
-        </p>
+        <p className="mt-2 text-sm text-muted-foreground">Tente novamente ou volte ao dashboard.</p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {
@@ -93,11 +90,31 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { property: "og:title", content: "ASP Insights — AI Sports Predictions" },
       { name: "twitter:title", content: "ASP Insights — AI Sports Predictions" },
-      { name: "description", content: "ASP Insights - AI Sports Predictions is a web platform for managing, validating, and tracking AI-generated sports predictions." },
-      { property: "og:description", content: "ASP Insights - AI Sports Predictions is a web platform for managing, validating, and tracking AI-generated sports predictions." },
-      { name: "twitter:description", content: "ASP Insights - AI Sports Predictions is a web platform for managing, validating, and tracking AI-generated sports predictions." },
-      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/51hpxLkxO7XfkSp96ZNusHM8mlH3/social-images/social-1780802982471-Logo_ASP_Insights.webp" },
-      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/51hpxLkxO7XfkSp96ZNusHM8mlH3/social-images/social-1780802982471-Logo_ASP_Insights.webp" },
+      {
+        name: "description",
+        content:
+          "ASP Insights - AI Sports Predictions is a web platform for managing, validating, and tracking AI-generated sports predictions.",
+      },
+      {
+        property: "og:description",
+        content:
+          "ASP Insights - AI Sports Predictions is a web platform for managing, validating, and tracking AI-generated sports predictions.",
+      },
+      {
+        name: "twitter:description",
+        content:
+          "ASP Insights - AI Sports Predictions is a web platform for managing, validating, and tracking AI-generated sports predictions.",
+      },
+      {
+        property: "og:image",
+        content:
+          "https://storage.googleapis.com/gpt-engineer-file-uploads/51hpxLkxO7XfkSp96ZNusHM8mlH3/social-images/social-1780802982471-Logo_ASP_Insights.webp",
+      },
+      {
+        name: "twitter:image",
+        content:
+          "https://storage.googleapis.com/gpt-engineer-file-uploads/51hpxLkxO7XfkSp96ZNusHM8mlH3/social-images/social-1780802982471-Logo_ASP_Insights.webp",
+      },
       { name: "twitter:card", content: "summary_large_image" },
       { property: "og:type", content: "website" },
     ],
@@ -183,9 +200,7 @@ function RootComponent() {
             <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur">
               <SidebarTrigger />
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold tracking-tight">
-                  ASP Insights
-                </span>
+                <span className="text-sm font-semibold tracking-tight">ASP Insights</span>
                 <span className="text-xs text-muted-foreground hidden sm:inline">
                   / AI Sports Predictions
                 </span>
@@ -216,4 +231,3 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
-

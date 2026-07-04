@@ -19,7 +19,9 @@ const EMPTY_VALIDATION: MlbValidatorHandoffValidationResult = {
   warnings: [],
 };
 
-export function mapMlbCriticalPayloadToValidatorInput(payload: MlbPreparedCriticalValidationPayload): MlbValidatorHandoffPrefill {
+export function mapMlbCriticalPayloadToValidatorInput(
+  payload: MlbPreparedCriticalValidationPayload,
+): MlbValidatorHandoffPrefill {
   const prep = payload.validation_preparation;
   return {
     sport: "Baseball",
@@ -31,7 +33,9 @@ export function mapMlbCriticalPayloadToValidatorInput(payload: MlbPreparedCritic
     away_team: payload.game.away_team,
     matchup: payload.game.matchup,
     market: payload.opportunity.market,
-    market_family: (payload.source_projection_payload as { market_family?: string } | null)?.market_family ?? null,
+    market_family:
+      (payload.source_projection_payload as { market_family?: string } | null)?.market_family ??
+      null,
     pick: payload.opportunity.pick,
     line: payload.opportunity.line,
     odd: payload.opportunity.odd,
@@ -56,7 +60,9 @@ export function mapMlbCriticalPayloadToValidatorInput(payload: MlbPreparedCritic
   };
 }
 
-export function buildMlbValidatorHandoffPayload(payload: MlbPreparedCriticalValidationPayload): MlbValidatorHandoffPayload {
+export function buildMlbValidatorHandoffPayload(
+  payload: MlbPreparedCriticalValidationPayload,
+): MlbValidatorHandoffPayload {
   const createdAt = new Date();
   const expiresAt = new Date(createdAt.getTime() + ASP_VALIDATOR_HANDOFF_TTL_MS);
   const prefill = mapMlbCriticalPayloadToValidatorInput(payload);
@@ -85,7 +91,10 @@ export function buildMlbValidatorHandoffPayload(payload: MlbPreparedCriticalVali
   };
 }
 
-export function validateMlbValidatorHandoffPayload(payload: unknown, now = new Date()): MlbValidatorHandoffValidationResult {
+export function validateMlbValidatorHandoffPayload(
+  payload: unknown,
+  now = new Date(),
+): MlbValidatorHandoffValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
   const handoff = payload as Partial<MlbValidatorHandoffPayload> | null;
@@ -94,10 +103,12 @@ export function validateMlbValidatorHandoffPayload(payload: unknown, now = new D
     return { ...EMPTY_VALIDATION, errors: ["Payload de handoff ausente ou invalido."] };
   }
 
-  if (handoff.handoff_version !== MLB_VALIDATOR_HANDOFF_VERSION) errors.push("Versao do handoff incompativel.");
+  if (handoff.handoff_version !== MLB_VALIDATOR_HANDOFF_VERSION)
+    errors.push("Versao do handoff incompativel.");
   if (handoff.source_module !== "ASP Screener MLB") errors.push("Origem do handoff incompativel.");
   if (handoff.target_module !== "ASP Validator") errors.push("Destino do handoff incompativel.");
-  if (handoff.source_sport !== "Baseball" || handoff.source_league !== "MLB") errors.push("Esporte/liga incompativel com ASP Validator MLB.");
+  if (handoff.source_sport !== "Baseball" || handoff.source_league !== "MLB")
+    errors.push("Esporte/liga incompativel com ASP Validator MLB.");
 
   const prefill = handoff.validator_prefill;
   if (!prefill || typeof prefill !== "object") {
@@ -141,7 +152,9 @@ export function serializeMlbValidatorHandoff(payload: MlbValidatorHandoffPayload
   return JSON.stringify(payload);
 }
 
-export function deserializeMlbValidatorHandoff(value: string | null): MlbValidatorHandoffPayload | null {
+export function deserializeMlbValidatorHandoff(
+  value: string | null,
+): MlbValidatorHandoffPayload | null {
   if (!value) return null;
   try {
     return JSON.parse(value) as MlbValidatorHandoffPayload;
@@ -150,13 +163,23 @@ export function deserializeMlbValidatorHandoff(value: string | null): MlbValidat
   }
 }
 
-export function storeMlbValidatorHandoffDraft(payload: MlbValidatorHandoffPayload): MlbValidatorHandoffValidationResult {
+export function storeMlbValidatorHandoffDraft(
+  payload: MlbValidatorHandoffPayload,
+): MlbValidatorHandoffValidationResult {
   const validation = validateMlbValidatorHandoffPayload(payload);
   if (!validation.valid) return validation;
   if (typeof window === "undefined") {
-    return { ...validation, valid: false, canSend: false, errors: [...validation.errors, "sessionStorage indisponivel neste ambiente."] };
+    return {
+      ...validation,
+      valid: false,
+      canSend: false,
+      errors: [...validation.errors, "sessionStorage indisponivel neste ambiente."],
+    };
   }
-  window.sessionStorage.setItem(ASP_VALIDATOR_HANDOFF_DRAFT_KEY, serializeMlbValidatorHandoff(payload));
+  window.sessionStorage.setItem(
+    ASP_VALIDATOR_HANDOFF_DRAFT_KEY,
+    serializeMlbValidatorHandoff(payload),
+  );
   window.sessionStorage.setItem(ASP_VALIDATOR_HANDOFF_CREATED_AT_KEY, payload.created_at);
   return validation;
 }
@@ -180,7 +203,12 @@ export function readMlbValidatorHandoffDraft(now = new Date()): MlbValidatorHand
     clearMlbValidatorHandoffDraft();
     return { payload: null, validation };
   }
-  if (validation.expired || validation.errors.some((error) => /incompativel|Versao|Origem|Destino|Esporte\/liga/.test(error))) {
+  if (
+    validation.expired ||
+    validation.errors.some((error) =>
+      /incompativel|Versao|Origem|Destino|Esporte\/liga/.test(error),
+    )
+  ) {
     clearMlbValidatorHandoffDraft();
   }
   return { payload, validation };
@@ -196,7 +224,9 @@ export function buildMlbValidatorImportedContextText(payload: MlbValidatorHandof
   return payload.imported_context.summary;
 }
 
-function buildMlbValidatorImportedContextTextFromParts(payload: MlbPreparedCriticalValidationPayload): string {
+function buildMlbValidatorImportedContextTextFromParts(
+  payload: MlbPreparedCriticalValidationPayload,
+): string {
   const lines = [
     "Importado do ASP Screener MLB para preparacao de validacao controlada.",
     `Jogo: ${payload.game.matchup}`,
@@ -231,7 +261,10 @@ function buildMlbValidatorImportedContextTextFromParts(payload: MlbPreparedCriti
 
 function buildHandoffId(payload: MlbPreparedCriticalValidationPayload) {
   const cryptoSource = typeof globalThis !== "undefined" ? globalThis.crypto : undefined;
-  const randomId = cryptoSource && "randomUUID" in cryptoSource ? cryptoSource.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const randomId =
+    cryptoSource && "randomUUID" in cryptoSource
+      ? cryptoSource.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return `mlb-validator-handoff:${payload.game.game_id}:${payload.opportunity.market}:${payload.opportunity.pick ?? "pick"}:${randomId}`;
 }
 

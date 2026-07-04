@@ -9,7 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { PeriodFilter } from "@/components/period-filter";
 import { dateInRange, rangeFromPeriodo, type PeriodoFiltro } from "@/lib/metrics";
 import {
@@ -76,12 +82,18 @@ function ColetaDadosPage() {
     try {
       window.sessionStorage.setItem(NORMALIZED_PREVIEW_STORAGE_KEY, payload);
     } catch (err) {
-      console.warn("[Coleta Odds] Nao foi possivel gravar preview normalizado em sessionStorage", err);
+      console.warn(
+        "[Coleta Odds] Nao foi possivel gravar preview normalizado em sessionStorage",
+        err,
+      );
     }
     try {
       window.localStorage.setItem(NORMALIZED_PREVIEW_STORAGE_KEY, payload);
     } catch (err) {
-      console.warn("[Coleta Odds] Nao foi possivel gravar preview normalizado em localStorage", err);
+      console.warn(
+        "[Coleta Odds] Nao foi possivel gravar preview normalizado em localStorage",
+        err,
+      );
     }
   }, [normalized]);
 
@@ -114,7 +126,9 @@ function ColetaDadosPage() {
     try {
       const text = await file.text();
       const json = JSON.parse(text);
-      const normalizedData = normalizeOddsJson(json, { esporte: inferSportFromFilename(file.name) });
+      const normalizedData = normalizeOddsJson(json, {
+        esporte: inferSportFromFilename(file.name),
+      });
       setRawJson(json);
       setNormalized(normalizedData);
       toast.success(`${normalizedData.total_odds} odds normalizadas`);
@@ -146,14 +160,20 @@ function ColetaDadosPage() {
   const importarNormalizedDaVm = async (coleta: ColetaOdds) => {
     if (!coleta.job_id) throw new Error("Coleta sem job_id para consultar na VM.");
     setRemoteStatus("Buscando dados normalizados...");
-    const { raw, normalizedData } = await carregarOddsDaVm(coleta.job_id, coleta.esporte, setRemoteStatus);
+    const { raw, normalizedData } = await carregarOddsDaVm(
+      coleta.job_id,
+      coleta.esporte,
+      setRemoteStatus,
+    );
 
     setRemoteStatus("Salvando odds no banco...");
     const imported = await completeRemoteCollection(coleta.id, raw, normalizedData);
     await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
     setRawJson(raw);
     setNormalized(normalizedData);
-    toast.success(`${imported.inserted} odds importadas da VM${imported.duplicated ? ` (${imported.duplicated} duplicadas ignoradas)` : ""}`);
+    toast.success(
+      `${imported.inserted} odds importadas da VM${imported.duplicated ? ` (${imported.duplicated} duplicadas ignoradas)` : ""}`,
+    );
   };
 
   const executarColeta = async () => {
@@ -166,7 +186,10 @@ function ColetaDadosPage() {
       const scraperPayload = {
         esporte: scraperSportName(remoteParams.esporte),
         source: "OddsAgora",
-        leagues: selectedLeagues.length === 0 ? defaultLeagueValues(remoteParams.esporte) : selectedLeagues,
+        leagues:
+          selectedLeagues.length === 0
+            ? defaultLeagueValues(remoteParams.esporte)
+            : selectedLeagues,
         mercados: defaultMarketsForSport(remoteParams.esporte),
         data_inicio: remoteParams.data_inicio,
         data_fim: remoteParams.data_fim,
@@ -179,7 +202,8 @@ function ColetaDadosPage() {
       const result = await createScrapingJob({ data: scraperPayload });
       const coleta = await createRemoteCollection({
         esporte: remoteParams.esporte,
-        liga: selectedLeagueLabels(remoteParams.esporte, remoteParams.leagues).join(", ") || "Todos",
+        liga:
+          selectedLeagueLabels(remoteParams.esporte, remoteParams.leagues).join(", ") || "Todos",
         data_inicio: scraperPayload.data_inicio,
         data_fim: scraperPayload.data_fim,
         mercados: scraperPayload.mercados,
@@ -240,7 +264,11 @@ function ColetaDadosPage() {
     if (!coleta.job_id) return;
     setRemoteBusy(`normalized:${coleta.id}`);
     try {
-      const { raw, normalizedData } = await carregarOddsDaVm(coleta.job_id, coleta.esporte, setRemoteStatus);
+      const { raw, normalizedData } = await carregarOddsDaVm(
+        coleta.job_id,
+        coleta.esporte,
+        setRemoteStatus,
+      );
       if (!normalizedData.total_odds) {
         throw new Error("JSON retornado pela VM não gerou odds normalizadas.");
       }
@@ -248,7 +276,9 @@ function ColetaDadosPage() {
       await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
       setRawJson(raw);
       setNormalized(normalizedData);
-      toast.success(`${imported.inserted} odds importadas da VM${imported.duplicated ? ` (${imported.duplicated} duplicadas ignoradas)` : ""}`);
+      toast.success(
+        `${imported.inserted} odds importadas da VM${imported.duplicated ? ` (${imported.duplicated} duplicadas ignoradas)` : ""}`,
+      );
     } catch (e) {
       await updateCollectionStatus(coleta.id, "ERRO", formatVmError(e)).catch(() => null);
       await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
@@ -314,7 +344,8 @@ function ColetaDadosPage() {
           <Badge variant="outline">OddsAgora</Badge>
         </div>
         <p className="text-sm text-muted-foreground">
-          Upload manual de JSON dos scrapers Python para normalização, exportação e persistência de odds.
+          Upload manual de JSON dos scrapers Python para normalização, exportação e persistência de
+          odds.
         </p>
       </div>
 
@@ -328,8 +359,15 @@ function ColetaDadosPage() {
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <div>
               <Label>Esporte</Label>
-              <Select value={remoteParams.esporte} onValueChange={(v) => setRemoteParams((p) => ({ ...p, esporte: v, leagues: ["Todos"] }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select
+                value={remoteParams.esporte}
+                onValueChange={(v) =>
+                  setRemoteParams((p) => ({ ...p, esporte: v, leagues: ["Todos"] }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Futebol">Futebol</SelectItem>
                   <SelectItem value="Basketball">Basketball</SelectItem>
@@ -344,13 +382,26 @@ function ColetaDadosPage() {
               selected={remoteParams.leagues}
               onChange={(leagues) => setRemoteParams((p) => ({ ...p, leagues }))}
             />
-            <Field label="Data início" type="date" value={remoteParams.data_inicio} onChange={(data_inicio) => setRemoteParams((p) => ({ ...p, data_inicio }))} />
-            <Field label="Data fim" type="date" value={remoteParams.data_fim} onChange={(data_fim) => setRemoteParams((p) => ({ ...p, data_fim }))} />
+            <Field
+              label="Data início"
+              type="date"
+              value={remoteParams.data_inicio}
+              onChange={(data_inicio) => setRemoteParams((p) => ({ ...p, data_inicio }))}
+            />
+            <Field
+              label="Data fim"
+              type="date"
+              value={remoteParams.data_fim}
+              onChange={(data_fim) => setRemoteParams((p) => ({ ...p, data_fim }))}
+            />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={executarColeta} disabled={remoteBusy === "pipeline" || !remoteParams.esporte}>
+            <Button
+              onClick={executarColeta}
+              disabled={remoteBusy === "pipeline" || !remoteParams.esporte}
+            >
               <CloudDownload className="mr-2 h-4 w-4" />
-              {remoteBusy === "pipeline" ?"Coletando..." : "Executar Coleta"}
+              {remoteBusy === "pipeline" ? "Coletando..." : "Executar Coleta"}
             </Button>
             <p className="text-xs text-muted-foreground">
               A chave da VM fica protegida no servidor via SCRAPER_API_URL e SCRAPER_API_KEY.
@@ -371,12 +422,18 @@ function ColetaDadosPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base"><Upload className="h-4 w-4" /> Upload JSON</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Upload className="h-4 w-4" /> Upload JSON
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="space-y-3">
             <Label>Arquivo JSON</Label>
-            <Input type="file" accept="application/json,.json" onChange={(e) => handleFile(e.target.files?.[0] ?? null)} />
+            <Input
+              type="file"
+              accept="application/json,.json"
+              onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
+            />
             {fileName && <Badge variant="outline">{fileName}</Badge>}
             {erro && <p className="text-sm text-destructive">{erro}</p>}
             <div className="grid grid-cols-2 gap-2 text-sm">
@@ -389,10 +446,18 @@ function ColetaDadosPage() {
               <Button onClick={salvar} disabled={!normalized || saving}>
                 <Save className="mr-2 h-4 w-4" /> Salvar coleta
               </Button>
-              <Button variant="outline" disabled={!exportRows.length} onClick={() => downloadText(csvName(fileName), toCsv(exportRows))}>
+              <Button
+                variant="outline"
+                disabled={!exportRows.length}
+                onClick={() => downloadText(csvName(fileName), toCsv(exportRows))}
+              >
                 <Download className="mr-2 h-4 w-4" /> Exportar CSV
               </Button>
-              <Button variant="outline" disabled={!exportRows.length} onClick={() => exportXlsx(exportRows, fileName)}>
+              <Button
+                variant="outline"
+                disabled={!exportRows.length}
+                onClick={() => exportXlsx(exportRows, fileName)}
+              >
                 <FileSpreadsheet className="mr-2 h-4 w-4" /> Exportar XLSX
               </Button>
             </div>
@@ -414,67 +479,120 @@ function ColetaDadosPage() {
               onCustomIniChange={setCustomIni}
               onCustomFimChange={setCustomFim}
             />
-            <Filter label="Esporte" value={fEsporte} onChange={setFEsporte} options={filterOptions.esportes} />
+            <Filter
+              label="Esporte"
+              value={fEsporte}
+              onChange={setFEsporte}
+              options={filterOptions.esportes}
+            />
             <Filter label="Liga" value={fLiga} onChange={setFLiga} options={filterOptions.ligas} />
-            <Filter label="Status" value={fStatus} onChange={setFStatus} options={filterOptions.status} />
+            <Filter
+              label="Status"
+              value={fStatus}
+              onChange={setFStatus}
+              options={filterOptions.status}
+            />
           </div>
         </CardContent>
       </Card>
 
       <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Histórico de coletas</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-auto rounded-md border">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-card text-xs uppercase text-muted-foreground">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Data</th>
-                    <th className="px-3 py-2 text-left">Status</th>
-                    <th className="px-3 py-2 text-left">Esporte/Liga</th>
-                    <th className="px-3 py-2 text-left">Job</th>
-                    <th className="px-3 py-2 text-right">Jogos</th>
-                    <th className="px-3 py-2 text-right">Odds</th>
-                    <th className="px-3 py-2 text-right">Ações</th>
+        <CardHeader>
+          <CardTitle className="text-base">Histórico de coletas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-auto rounded-md border">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-card text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 text-left">Data</th>
+                  <th className="px-3 py-2 text-left">Status</th>
+                  <th className="px-3 py-2 text-left">Esporte/Liga</th>
+                  <th className="px-3 py-2 text-left">Job</th>
+                  <th className="px-3 py-2 text-right">Jogos</th>
+                  <th className="px-3 py-2 text-right">Odds</th>
+                  <th className="px-3 py-2 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleCollections.map((coleta) => (
+                  <tr key={coleta.id} className="border-t">
+                    <td className="px-3 py-2 font-mono text-xs">
+                      {coleta.created_at.slice(0, 10)}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Badge variant={coleta.erro ? "destructive" : "outline"}>
+                        {coleta.status}
+                      </Badge>
+                    </td>
+                    <td className="px-3 py-2">
+                      {coleta.esporte ?? "-"} /{" "}
+                      <span className="text-muted-foreground">{coleta.liga ?? "múltiplas"}</span>
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs">{coleta.job_id ?? "-"}</td>
+                    <td className="px-3 py-2 text-right font-mono">{coleta.total_jogos}</td>
+                    <td className="px-3 py-2 text-right font-mono">{coleta.total_odds}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!coleta.job_id || remoteBusy === `status:${coleta.id}`}
+                          onClick={() => atualizarStatus(coleta)}
+                        >
+                          <RefreshCw className="mr-1 h-3 w-3" /> Status
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={
+                            !coleta.job_id ||
+                            !isRunningStatus(coleta.status) ||
+                            remoteBusy === `resume:${coleta.id}`
+                          }
+                          onClick={() => retomarColeta(coleta)}
+                        >
+                          <RefreshCw className="mr-1 h-3 w-3" /> Retomar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={
+                            !coleta.job_id ||
+                            coleta.status !== "CONCLUIDA" ||
+                            remoteBusy === `normalized:${coleta.id}`
+                          }
+                          onClick={() => importarResultadoVm(coleta)}
+                        >
+                          <CloudDownload className="mr-1 h-3 w-3" /> Importar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={
+                            !coleta.job_id ||
+                            coleta.status !== "CONCLUIDA" ||
+                            remoteBusy === `csv:${coleta.id}`
+                          }
+                          onClick={() => baixarCsvVm(coleta)}
+                        >
+                          <Download className="mr-1 h-3 w-3" /> Baixar CSV
+                        </Button>
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {visibleCollections.map((coleta) => (
-                    <tr key={coleta.id} className="border-t">
-                      <td className="px-3 py-2 font-mono text-xs">{coleta.created_at.slice(0, 10)}</td>
-                      <td className="px-3 py-2"><Badge variant={coleta.erro ?"destructive" : "outline"}>{coleta.status}</Badge></td>
-                      <td className="px-3 py-2">{coleta.esporte ?? "-"} / <span className="text-muted-foreground">{coleta.liga ?? "múltiplas"}</span></td>
-                      <td className="px-3 py-2 font-mono text-xs">{coleta.job_id ?? "-"}</td>
-                      <td className="px-3 py-2 text-right font-mono">{coleta.total_jogos}</td>
-                      <td className="px-3 py-2 text-right font-mono">{coleta.total_odds}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex justify-end gap-2">
-                          <Button size="sm" variant="outline" disabled={!coleta.job_id || remoteBusy === `status:${coleta.id}`} onClick={() => atualizarStatus(coleta)}>
-                            <RefreshCw className="mr-1 h-3 w-3" /> Status
-                          </Button>
-                          <Button size="sm" variant="outline" disabled={!coleta.job_id || !isRunningStatus(coleta.status) || remoteBusy === `resume:${coleta.id}`} onClick={() => retomarColeta(coleta)}>
-                            <RefreshCw className="mr-1 h-3 w-3" /> Retomar
-                          </Button>
-                          <Button size="sm" variant="outline" disabled={!coleta.job_id || coleta.status !== "CONCLUIDA" || remoteBusy === `normalized:${coleta.id}`} onClick={() => importarResultadoVm(coleta)}>
-                            <CloudDownload className="mr-1 h-3 w-3" /> Importar
-                          </Button>
-                          <Button size="sm" variant="outline" disabled={!coleta.job_id || coleta.status !== "CONCLUIDA" || remoteBusy === `csv:${coleta.id}`} onClick={() => baixarCsvVm(coleta)}>
-                            <Download className="mr-1 h-3 w-3" /> Baixar CSV
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {!filteredCollections.length && <EmptyRow cols={8} />}
-                </tbody>
-              </table>
-            </div>
-            {filteredCollections.length > 10 && (
-              <p className="mt-2 text-xs text-muted-foreground">Exibindo 10 de {filteredCollections.length} coletas filtradas.</p>
-            )}
-          </CardContent>
-        </Card>
+                ))}
+                {!filteredCollections.length && <EmptyRow cols={8} />}
+              </tbody>
+            </table>
+          </div>
+          {filteredCollections.length > 10 && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Exibindo 10 de {filteredCollections.length} coletas filtradas.
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -498,7 +616,7 @@ function LeagueSelector({
   onChange: (value: string[]) => void;
 }) {
   const options = leagueOptionsForSport(esporte);
-  const selectedSet = new Set(selected.length ?selected : ["Todos"]);
+  const selectedSet = new Set(selected.length ? selected : ["Todos"]);
 
   if (esporte === "Futebol") {
     return (
@@ -510,7 +628,9 @@ function LeagueSelector({
               <label key={option.value} className="flex items-center gap-2 text-sm">
                 <Checkbox
                   checked={selectedSet.has(option.value)}
-                  onCheckedChange={(checked) => onChange(toggleLeague(selected, option.value, Boolean(checked)))}
+                  onCheckedChange={(checked) =>
+                    onChange(toggleLeague(selected, option.value, Boolean(checked)))
+                  }
                 />
                 <span>{option.label}</span>
               </label>
@@ -525,10 +645,14 @@ function LeagueSelector({
     <div>
       <Label>Liga</Label>
       <Select value={selected[0] ?? "Todos"} onValueChange={(value) => onChange([value])}>
-        <SelectTrigger><SelectValue /></SelectTrigger>
+        <SelectTrigger>
+          <SelectValue />
+        </SelectTrigger>
         <SelectContent>
           {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
           ))}
         </SelectContent>
       </Select>
@@ -557,28 +681,31 @@ function Field({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className={type === "date" ?"[color-scheme:dark] text-foreground" : undefined}
+        className={type === "date" ? "[color-scheme:dark] text-foreground" : undefined}
       />
     </div>
   );
 }
 
 function extractVmStatus(payload: unknown) {
-  const root = isObj(payload) ?payload : {};
-  const data = isObj(root.data) ?root.data : isObj(root.result) ?root.result : root;
+  const root = isObj(payload) ? payload : {};
+  const data = isObj(root.data) ? root.data : isObj(root.result) ? root.result : root;
   const raw = String(data.status ?? data.state ?? data.situacao ?? "").toUpperCase();
   const erro = data.erro ?? data.error ?? data.message;
   const status =
     raw.includes("RUN") || raw.includes("ROD") || raw.includes("PROCESS")
-      ?"RODANDO"
-      : raw.includes("DONE") || raw.includes("CONCL") || raw.includes("SUCCESS") || raw.includes("FINISH")
-        ?"CONCLUIDA"
+      ? "RODANDO"
+      : raw.includes("DONE") ||
+          raw.includes("CONCL") ||
+          raw.includes("SUCCESS") ||
+          raw.includes("FINISH")
+        ? "CONCLUIDA"
         : raw.includes("ERR") || raw.includes("FAIL")
-          ?"ERRO"
+          ? "ERRO"
           : raw.includes("PEND") || raw.includes("QUEUE")
-            ?"PENDENTE"
+            ? "PENDENTE"
             : raw || "PENDENTE";
-  return { status, erro: erro ?String(erro) : null };
+  return { status, erro: erro ? String(erro) : null };
 }
 
 async function pollVmJob(
@@ -589,7 +716,9 @@ async function pollVmJob(
 ) {
   let latestStatus = "PENDENTE";
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    onStatus(`Coleta em andamento na VM. Você pode sair da tela e voltar depois. Tentativa ${attempt}/${maxAttempts}`);
+    onStatus(
+      `Coleta em andamento na VM. Você pode sair da tela e voltar depois. Tentativa ${attempt}/${maxAttempts}`,
+    );
     const result = await getScrapingJobStatus({ data: { job_id: jobId } });
     const { status, erro } = extractVmStatus(result.payload);
     latestStatus = status;
@@ -692,7 +821,8 @@ function isObj(value: unknown): value is Record<string, unknown> {
 function formatVmError(e: unknown) {
   const message = extractErrorMessage(e);
   if (/failed to fetch|network/i.test(message)) return "VM offline ou indisponível.";
-  if (/401|403|api key|unauthorized|forbidden/i.test(message)) return "API key da VM inválida ou sem permissão.";
+  if (/401|403|api key|unauthorized|forbidden/i.test(message))
+    return "API key da VM inválida ou sem permissão.";
   if (/timeout/i.test(message)) return "Timeout ao chamar API da VM.";
   return message || "Erro ao chamar API da VM.";
 }
@@ -707,7 +837,7 @@ function extractErrorMessage(e: unknown): string {
       return e.detail
         .map((item) => {
           if (!isObj(item)) return String(item);
-          const loc = Array.isArray(item.loc) ?item.loc.join(".") : "";
+          const loc = Array.isArray(item.loc) ? item.loc.join(".") : "";
           return `${loc ? `${loc}: ` : ""}${String(item.msg ?? item.message ?? item.type ?? "erro")}`;
         })
         .join("; ");
@@ -721,15 +851,33 @@ function extractErrorMessage(e: unknown): string {
   return String(e);
 }
 
-function Filter({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
+function Filter({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+}) {
   return (
     <div>
-      <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">{label}</Label>
+      <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
+        {label}
+      </Label>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
+        <SelectTrigger className="h-9 w-44">
+          <SelectValue />
+        </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">Todos</SelectItem>
-          {options.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}
+          {options.map((option) => (
+            <SelectItem key={option} value={option}>
+              {option}
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
     </div>
@@ -747,7 +895,9 @@ function EmptyRow({ cols }: { cols: number }) {
 }
 
 function unique(values: Array<string | null | undefined>) {
-  return [...new Set(values.filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  return [...new Set(values.filter(Boolean) as string[])].sort((a, b) =>
+    a.localeCompare(b, "pt-BR"),
+  );
 }
 
 type LeagueOption = { label: string; value: string };
@@ -779,31 +929,82 @@ const LEAGUES_BY_SPORT: Record<string, LeagueOption[]> = {
   ],
   Futebol: [
     { label: "Todos", value: ALL_LEAGUES_VALUE },
-    { label: "Germany 2. Bundesliga", value: "https://www.oddsagora.com.br/football/germany/2-bundesliga" },
-    { label: "Germany Bundesliga", value: "https://www.oddsagora.com.br/football/germany/bundesliga" },
-    { label: "Austria Bundesliga", value: "https://www.oddsagora.com.br/football/austria/bundesliga" },
-    { label: "Brazil Brasileirão Betano", value: "https://www.oddsagora.com.br/football/brazil/brasileirao-betano" },
+    {
+      label: "Germany 2. Bundesliga",
+      value: "https://www.oddsagora.com.br/football/germany/2-bundesliga",
+    },
+    {
+      label: "Germany Bundesliga",
+      value: "https://www.oddsagora.com.br/football/germany/bundesliga",
+    },
+    {
+      label: "Austria Bundesliga",
+      value: "https://www.oddsagora.com.br/football/austria/bundesliga",
+    },
+    {
+      label: "Brazil Brasileirão Betano",
+      value: "https://www.oddsagora.com.br/football/brazil/brasileirao-betano",
+    },
     { label: "China Superliga", value: "https://www.oddsagora.com.br/football/china/superliga" },
-    { label: "Denmark Superliga", value: "https://www.oddsagora.com.br/football/denmark/superliga" },
-    { label: "England Premier League", value: "https://www.oddsagora.com.br/football/england/campeonato-ingles" },
-    { label: "England Championship", value: "https://www.oddsagora.com.br/football/england/2-divisao" },
-    { label: "Finland Veikkausliiga", value: "https://www.oddsagora.com.br/football/finland/veikkausliiga" },
+    {
+      label: "Denmark Superliga",
+      value: "https://www.oddsagora.com.br/football/denmark/superliga",
+    },
+    {
+      label: "England Premier League",
+      value: "https://www.oddsagora.com.br/football/england/campeonato-ingles",
+    },
+    {
+      label: "England Championship",
+      value: "https://www.oddsagora.com.br/football/england/2-divisao",
+    },
+    {
+      label: "Finland Veikkausliiga",
+      value: "https://www.oddsagora.com.br/football/finland/veikkausliiga",
+    },
     { label: "France Ligue 1", value: "https://www.oddsagora.com.br/football/france/ligue-1" },
     { label: "France Ligue 2", value: "https://www.oddsagora.com.br/football/france/ligue-2" },
-    { label: "Ireland Premier Division", value: "https://www.oddsagora.com.br/football/ireland/divisao-premier" },
+    {
+      label: "Ireland Premier Division",
+      value: "https://www.oddsagora.com.br/football/ireland/divisao-premier",
+    },
     { label: "Italy Serie A", value: "https://www.oddsagora.com.br/football/italy/serie-a" },
     { label: "Italy Serie B", value: "https://www.oddsagora.com.br/football/italy/serie-b" },
     { label: "Mexico Liga MX", value: "https://www.oddsagora.com.br/football/mexico/liga-mx" },
-    { label: "Netherlands Eredivisie", value: "https://www.oddsagora.com.br/football/netherlands/eredivisie" },
-    { label: "Norway Eliteserien", value: "https://www.oddsagora.com.br/football/norway/serie-de-elite/" },
-    { label: "Poland Ekstraklasa", value: "https://www.oddsagora.com.br/football/poland/ekstraklasa" },
-    { label: "Portugal Liga Portugal", value: "https://www.oddsagora.com.br/football/portugal/liga-portugal" },
-    { label: "Romania Superliga", value: "https://www.oddsagora.com.br/football/romania/superliga/" },
-    { label: "Scotland Premiership", value: "https://www.oddsagora.com.br/football/scotland/primeira-liga/" },
+    {
+      label: "Netherlands Eredivisie",
+      value: "https://www.oddsagora.com.br/football/netherlands/eredivisie",
+    },
+    {
+      label: "Norway Eliteserien",
+      value: "https://www.oddsagora.com.br/football/norway/serie-de-elite/",
+    },
+    {
+      label: "Poland Ekstraklasa",
+      value: "https://www.oddsagora.com.br/football/poland/ekstraklasa",
+    },
+    {
+      label: "Portugal Liga Portugal",
+      value: "https://www.oddsagora.com.br/football/portugal/liga-portugal",
+    },
+    {
+      label: "Romania Superliga",
+      value: "https://www.oddsagora.com.br/football/romania/superliga/",
+    },
+    {
+      label: "Scotland Premiership",
+      value: "https://www.oddsagora.com.br/football/scotland/primeira-liga/",
+    },
     { label: "Spain LaLiga", value: "https://www.oddsagora.com.br/football/spain/laliga/" },
     { label: "Spain LaLiga2", value: "https://www.oddsagora.com.br/football/spain/laliga2/" },
-    { label: "Sweden Allsvenskan", value: "https://www.oddsagora.com.br/football/sweden/allsvenskan" },
-    { label: "Switzerland Superliga", value: "https://www.oddsagora.com.br/football/switzerland/superliga/" },
+    {
+      label: "Sweden Allsvenskan",
+      value: "https://www.oddsagora.com.br/football/sweden/allsvenskan",
+    },
+    {
+      label: "Switzerland Superliga",
+      value: "https://www.oddsagora.com.br/football/switzerland/superliga/",
+    },
     { label: "Turkey Super Lig", value: "https://www.oddsagora.com.br/football/turkey/super-lig/" },
     { label: "USA MLS", value: "https://www.oddsagora.com.br/football/usa/mls/" },
   ],
@@ -814,16 +1015,18 @@ function leagueOptionsForSport(esporte: string) {
 }
 
 function selectedLeagueValues(esporte: string, selected: string[]) {
-  const values = selected.length ?selected : [ALL_LEAGUES_VALUE];
+  const values = selected.length ? selected : [ALL_LEAGUES_VALUE];
   if (values.includes(ALL_LEAGUES_VALUE)) return [];
   const validValues = new Set(leagueOptionsForSport(esporte).map((option) => option.value));
   return values.filter((value) => validValues.has(value));
 }
 
 function selectedLeagueLabels(esporte: string, selected: string[]) {
-  const values = selected.length ?selected : [ALL_LEAGUES_VALUE];
+  const values = selected.length ? selected : [ALL_LEAGUES_VALUE];
   if (values.includes(ALL_LEAGUES_VALUE)) return ["Todos"];
-  const labels = new Map(leagueOptionsForSport(esporte).map((option) => [option.value, option.label]));
+  const labels = new Map(
+    leagueOptionsForSport(esporte).map((option) => [option.value, option.label]),
+  );
   return values.map((value) => labels.get(value)).filter(Boolean) as string[];
 }
 
@@ -840,11 +1043,11 @@ function defaultMarketsForSport(esporte: string) {
 }
 
 function toggleLeague(current: string[], value: string, checked: boolean) {
-  if (value === ALL_LEAGUES_VALUE) return checked ?[ALL_LEAGUES_VALUE] : [];
+  if (value === ALL_LEAGUES_VALUE) return checked ? [ALL_LEAGUES_VALUE] : [];
   const base = current.filter((item) => item !== ALL_LEAGUES_VALUE);
   if (checked) return [...new Set([...base, value])];
   const next = base.filter((item) => item !== value);
-  return next.length ?next : [ALL_LEAGUES_VALUE];
+  return next.length ? next : [ALL_LEAGUES_VALUE];
 }
 
 function scraperSportName(esporte: string) {

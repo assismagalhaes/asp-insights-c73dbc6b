@@ -52,7 +52,9 @@ export function calculateMlbContextAlignment(
     const isUnder = /under/i.test(side);
     const label = isOver ? "Over" : isUnder ? "Under" : "Total";
 
-    notes.push(`Analise pela tese do ${label}: perfil de runs (starters, ataques, bullpen, parque, H2H).`);
+    notes.push(
+      `Analise pela tese do ${label}: perfil de runs (starters, ataques, bullpen, parque, H2H).`,
+    );
 
     const starters = [
       { name: homeStarter.name ?? "mandante", s: homeStarter },
@@ -65,34 +67,54 @@ export function calculateMlbContextAlignment(
       const bb9 = s.bb_per_9;
       if (era != null) {
         if (era >= 4.5) {
-          if (isOver) supporting.push(`Starter ${name} com ERA alta (${era.toFixed(2)}) favorece Over.`);
-          if (isUnder) conflicting.push(`Starter ${name} com ERA alta (${era.toFixed(2)}) conflita com tese do Under.`);
+          if (isOver)
+            supporting.push(`Starter ${name} com ERA alta (${era.toFixed(2)}) favorece Over.`);
+          if (isUnder)
+            conflicting.push(
+              `Starter ${name} com ERA alta (${era.toFixed(2)}) conflita com tese do Under.`,
+            );
         } else if (era <= 3.3) {
-          if (isUnder) supporting.push(`Starter ${name} forte (ERA ${era.toFixed(2)}) favorece Under.`);
-          if (isOver) conflicting.push(`Starter ${name} forte (ERA ${era.toFixed(2)}) conflita com tese do Over.`);
+          if (isUnder)
+            supporting.push(`Starter ${name} forte (ERA ${era.toFixed(2)}) favorece Under.`);
+          if (isOver)
+            conflicting.push(
+              `Starter ${name} forte (ERA ${era.toFixed(2)}) conflita com tese do Over.`,
+            );
         }
       }
       if (last7 != null) {
         if (last7 >= 5) {
-          if (isOver) supporting.push(`Last 7 GS ruim para ${name} (ERA ${last7.toFixed(2)}) reforca Over.`);
-          if (isUnder) conflicting.push(`Last 7 GS ruim para ${name} (ERA ${last7.toFixed(2)}) enfraquece Under.`);
+          if (isOver)
+            supporting.push(`Last 7 GS ruim para ${name} (ERA ${last7.toFixed(2)}) reforca Over.`);
+          if (isUnder)
+            conflicting.push(
+              `Last 7 GS ruim para ${name} (ERA ${last7.toFixed(2)}) enfraquece Under.`,
+            );
         } else if (last7 <= 3.2) {
-          if (isUnder) supporting.push(`Last 7 GS bom para ${name} (ERA ${last7.toFixed(2)}) reforca Under.`);
-          if (isOver) conflicting.push(`Last 7 GS bom para ${name} (ERA ${last7.toFixed(2)}) enfraquece Over.`);
+          if (isUnder)
+            supporting.push(`Last 7 GS bom para ${name} (ERA ${last7.toFixed(2)}) reforca Under.`);
+          if (isOver)
+            conflicting.push(
+              `Last 7 GS bom para ${name} (ERA ${last7.toFixed(2)}) enfraquece Over.`,
+            );
         }
       }
       if (hr9 != null) {
         if (hr9 >= 1.3) {
           if (isOver) supporting.push(`HR/9 alto para ${name} (${hr9.toFixed(2)}) favorece Over.`);
-          if (isUnder) conflicting.push(`HR/9 alto para ${name} (${hr9.toFixed(2)}) conflita com Under.`);
+          if (isUnder)
+            conflicting.push(`HR/9 alto para ${name} (${hr9.toFixed(2)}) conflita com Under.`);
         } else if (hr9 <= 0.85) {
-          if (isUnder) supporting.push(`HR/9 baixo para ${name} (${hr9.toFixed(2)}) favorece Under.`);
-          if (isOver) conflicting.push(`HR/9 baixo para ${name} (${hr9.toFixed(2)}) enfraquece Over.`);
+          if (isUnder)
+            supporting.push(`HR/9 baixo para ${name} (${hr9.toFixed(2)}) favorece Under.`);
+          if (isOver)
+            conflicting.push(`HR/9 baixo para ${name} (${hr9.toFixed(2)}) enfraquece Over.`);
         }
       }
       if (bb9 != null && bb9 >= 3.8) {
         if (isOver) supporting.push(`BB/9 alto para ${name} (${bb9.toFixed(2)}) favorece Over.`);
-        if (isUnder) conflicting.push(`BB/9 alto para ${name} (${bb9.toFixed(2)}) conflita com Under.`);
+        if (isUnder)
+          conflicting.push(`BB/9 alto para ${name} (${bb9.toFixed(2)}) conflita com Under.`);
       }
     }
 
@@ -104,41 +126,67 @@ export function calculateMlbContextAlignment(
     for (const t of teamsOffense) {
       if (t.pct == null) continue;
       if (t.pct >= 0.6) {
-        if (isOver) supporting.push(`Ataque de ${t.label} em boa fase (last10 ${(t.pct * 100).toFixed(0)}%) favorece Over.`);
-        if (isUnder) conflicting.push(`Ataque de ${t.label} em boa fase (last10 ${(t.pct * 100).toFixed(0)}%) conflita com Under.`);
+        if (isOver)
+          supporting.push(
+            `Ataque de ${t.label} em boa fase (last10 ${(t.pct * 100).toFixed(0)}%) favorece Over.`,
+          );
+        if (isUnder)
+          conflicting.push(
+            `Ataque de ${t.label} em boa fase (last10 ${(t.pct * 100).toFixed(0)}%) conflita com Under.`,
+          );
       } else if (t.pct <= 0.35) {
-        if (isUnder) supporting.push(`Ataque de ${t.label} frio (last10 ${(t.pct * 100).toFixed(0)}%) favorece Under.`);
-        if (isOver) conflicting.push(`Ataque de ${t.label} frio (last10 ${(t.pct * 100).toFixed(0)}%) enfraquece Over.`);
+        if (isUnder)
+          supporting.push(
+            `Ataque de ${t.label} frio (last10 ${(t.pct * 100).toFixed(0)}%) favorece Under.`,
+          );
+        if (isOver)
+          conflicting.push(
+            `Ataque de ${t.label} frio (last10 ${(t.pct * 100).toFixed(0)}%) enfraquece Over.`,
+          );
       }
     }
 
     // H2H recente
     const h2h = parsedContext.head_to_head.last_10_games ?? [];
     const totals = h2h
-      .map((g) => (g.home_score != null && g.away_score != null ? g.home_score + g.away_score : null))
+      .map((g) =>
+        g.home_score != null && g.away_score != null ? g.home_score + g.away_score : null,
+      )
       .filter((v): v is number => v != null);
     if (totals.length > 0 && opportunity.line != null) {
       const avg = totals.reduce((a, b) => a + b, 0) / totals.length;
       if (avg >= opportunity.line + 1) {
-        if (isOver) supporting.push(`H2H recente com totais altos (media ${avg.toFixed(1)}) favorece Over.`);
+        if (isOver)
+          supporting.push(`H2H recente com totais altos (media ${avg.toFixed(1)}) favorece Over.`);
         if (isUnder) {
-          conflicting.push(`H2H recente com totais altos (media ${avg.toFixed(1)}) conflita com Under.`);
+          conflicting.push(
+            `H2H recente com totais altos (media ${avg.toFixed(1)}) conflita com Under.`,
+          );
           flags.push("h2h_total_conflict");
         }
       } else if (avg <= opportunity.line - 1) {
-        if (isUnder) supporting.push(`H2H recente com totais baixos (media ${avg.toFixed(1)}) favorece Under.`);
+        if (isUnder)
+          supporting.push(
+            `H2H recente com totais baixos (media ${avg.toFixed(1)}) favorece Under.`,
+          );
         if (isOver) {
-          conflicting.push(`H2H recente com totais baixos (media ${avg.toFixed(1)}) conflita com Over.`);
+          conflicting.push(
+            `H2H recente com totais baixos (media ${avg.toFixed(1)}) conflita com Over.`,
+          );
           flags.push("h2h_total_conflict");
         }
       } else {
-        neutral.push(`H2H recente com totais medios (${avg.toFixed(1)}) proximo da linha ${opportunity.line}.`);
+        neutral.push(
+          `H2H recente com totais medios (${avg.toFixed(1)}) proximo da linha ${opportunity.line}.`,
+        );
       }
     }
 
     if (!homeStarter.name || !awayStarter.name) flags.push("starter_data_missing");
-    if (homeStarter.innings_pitched_decimal != null && homeStarter.innings_pitched_decimal < 40) flags.push("small_sample_pitcher");
-    if (awayStarter.innings_pitched_decimal != null && awayStarter.innings_pitched_decimal < 40) flags.push("small_sample_pitcher");
+    if (homeStarter.innings_pitched_decimal != null && homeStarter.innings_pitched_decimal < 40)
+      flags.push("small_sample_pitcher");
+    if (awayStarter.innings_pitched_decimal != null && awayStarter.innings_pitched_decimal < 40)
+      flags.push("small_sample_pitcher");
 
     // Divergencia com mercado no-vig: risk_flag, nao veto
     if (
@@ -151,25 +199,32 @@ export function calculateMlbContextAlignment(
     }
   } else {
     // Moneyline / Handicap: mantem logica por lado selecionado
-    const selectedIsHome = opportunity.selection_team === opportunity.home_team || opportunity.side === "home";
+    const selectedIsHome =
+      opportunity.selection_team === opportunity.home_team || opportunity.side === "home";
     const selectedTeam = selectedIsHome ? homeTeam : awayTeam;
     const opponentTeam = selectedIsHome ? awayTeam : homeTeam;
     const selectedStarter = selectedIsHome ? homeStarter : awayStarter;
     const opponentStarter = selectedIsHome ? awayStarter : homeStarter;
 
     if (selectedTeam.record?.win_pct != null && opponentTeam.record?.win_pct != null) {
-      if (selectedTeam.record.win_pct > opponentTeam.record.win_pct) supporting.push("Time selecionado tem recorde geral superior.");
+      if (selectedTeam.record.win_pct > opponentTeam.record.win_pct)
+        supporting.push("Time selecionado tem recorde geral superior.");
       else conflicting.push("Time selecionado nao tem vantagem de recorde geral.");
     }
     if (selectedTeam.last10?.win_pct != null && opponentTeam.last10?.win_pct != null) {
-      if (selectedTeam.last10.win_pct >= opponentTeam.last10.win_pct) supporting.push("Forma recente last10 sustenta a oportunidade.");
+      if (selectedTeam.last10.win_pct >= opponentTeam.last10.win_pct)
+        supporting.push("Forma recente last10 sustenta a oportunidade.");
       else {
         conflicting.push("Forma recente last10 favorece o adversario.");
         flags.push("recent_form_conflict");
       }
     }
-    if (opponentStarter.starter_quality_score != null && selectedStarter.starter_quality_score != null) {
-      const starterGap = selectedStarter.starter_quality_score - opponentStarter.starter_quality_score;
+    if (
+      opponentStarter.starter_quality_score != null &&
+      selectedStarter.starter_quality_score != null
+    ) {
+      const starterGap =
+        selectedStarter.starter_quality_score - opponentStarter.starter_quality_score;
       if (starterGap >= 8) supporting.push("Starter matchup favorece o lado selecionado.");
       else if (starterGap <= -8) {
         conflicting.push("Starter matchup favorece o adversario e reduz confianca.");
@@ -179,8 +234,16 @@ export function calculateMlbContextAlignment(
       flags.push("starter_data_missing");
       neutral.push("Dados de starter incompletos.");
     }
-    if (selectedStarter.innings_pitched_decimal != null && selectedStarter.innings_pitched_decimal < 40) flags.push("small_sample_pitcher");
-    if (opponentStarter.innings_pitched_decimal != null && opponentStarter.innings_pitched_decimal < 40) flags.push("small_sample_pitcher");
+    if (
+      selectedStarter.innings_pitched_decimal != null &&
+      selectedStarter.innings_pitched_decimal < 40
+    )
+      flags.push("small_sample_pitcher");
+    if (
+      opponentStarter.innings_pitched_decimal != null &&
+      opponentStarter.innings_pitched_decimal < 40
+    )
+      flags.push("small_sample_pitcher");
 
     if (opportunity.market_family === "moneyline") {
       notes.push("Moneyline: revisar se a vantagem geral sobrevive ao matchup de starters.");
@@ -205,10 +268,15 @@ export function calculateMlbContextAlignment(
   }
 
   if ((opportunity.probability_edge ?? 0) < 0.03) flags.push("market_edge_too_small");
-  if (opportunity.correlation_status === "correlated_alternative") flags.push("correlated_opportunity");
+  if (opportunity.correlation_status === "correlated_alternative")
+    flags.push("correlated_opportunity");
   if (!opportunity.is_main_line) flags.push("alternative_line_risk");
 
-  const alignmentScore = clamp(55 + supporting.length * 9 - conflicting.length * 12 - flags.length * 3, 0, 100);
+  const alignmentScore = clamp(
+    55 + supporting.length * 9 - conflicting.length * 12 - flags.length * 3,
+    0,
+    100,
+  );
   const status = getAlignmentStatus(alignmentScore, supporting.length, conflicting.length);
   return {
     alignment_status: status,
@@ -227,19 +295,28 @@ export function calculateMlbValidationReadinessScore(
   alignment: MlbContextAlignment,
 ): MlbValidationPreparation {
   const contextCompleteness = parsedContext.data_quality.confidence;
-  const opportunityQuality = clamp((opportunity.opportunity_score + opportunity.confidence_score) / 2, 0, 100);
+  const opportunityQuality = clamp(
+    (opportunity.opportunity_score + opportunity.confidence_score) / 2,
+    0,
+    100,
+  );
   const alignmentScore = alignment.alignment_score;
   const conflictScore = Math.max(0, 100 - alignment.conflicting_factors.length * 22);
-  const starterAvailability = parsedContext.starting_pitchers.home.name && parsedContext.starting_pitchers.away.name ? 100 : 35;
+  const starterAvailability =
+    parsedContext.starting_pitchers.home.name && parsedContext.starting_pitchers.away.name
+      ? 100
+      : 35;
   let score = Math.round(
     contextCompleteness * 0.35 +
-    opportunityQuality * 0.25 +
-    alignmentScore * 0.20 +
-    conflictScore * 0.10 +
-    starterAvailability * 0.10,
+      opportunityQuality * 0.25 +
+      alignmentScore * 0.2 +
+      conflictScore * 0.1 +
+      starterAvailability * 0.1,
   );
-  if (!parsedContext.teams.home.team_name || !parsedContext.teams.away.team_name) score = Math.min(score, 39);
-  if (!parsedContext.starting_pitchers.home.name || !parsedContext.starting_pitchers.away.name) score = Math.min(score, 79);
+  if (!parsedContext.teams.home.team_name || !parsedContext.teams.away.team_name)
+    score = Math.min(score, 39);
+  if (!parsedContext.starting_pitchers.home.name || !parsedContext.starting_pitchers.away.name)
+    score = Math.min(score, 79);
 
   // --- Score pós-contexto (caps por conflito / divergência / flags) ---
   const rawScore = opportunity.opportunity_score;
@@ -314,9 +391,10 @@ export function calculateMlbValidationReadinessScore(
     validation_readiness_score: score,
     readiness_status: readinessStatus,
     critical_questions: buildCriticalQuestions(opportunity),
-    recommended_next_step: readinessStatus === "pronto_para_validator"
-      ? "Pacote pronto para revisão na Validação Crítica."
-      : "Contexto incompleto: revise manualmente antes de decidir na Validação Crítica.",
+    recommended_next_step:
+      readinessStatus === "pronto_para_validator"
+        ? "Pacote pronto para revisão na Validação Crítica."
+        : "Contexto incompleto: revise manualmente antes de decidir na Validação Crítica.",
     raw_opportunity_score: rawScore,
     raw_confidence_score: rawConfidence,
     critical_adjusted_score: adjScore,
@@ -423,7 +501,11 @@ function buildCriticalQuestions(opportunity: MlbUnifiedOpportunity) {
   ];
 }
 
-function getAlignmentStatus(score: number, supports: number, conflicts: number): MlbContextAlignment["alignment_status"] {
+function getAlignmentStatus(
+  score: number,
+  supports: number,
+  conflicts: number,
+): MlbContextAlignment["alignment_status"] {
   if (supports === 0 && conflicts === 0) return "insufficient_context";
   if (score >= 68 && supports > conflicts) return "supports_screener";
   if (score <= 42 && conflicts > supports) return "conflicts_with_screener";
@@ -438,7 +520,9 @@ function getReadinessStatus(score: number): MlbValidationReadinessStatus {
   return "nao_recomendado_para_validator";
 }
 
-function formatStarter(starter: MlbPreparedCriticalValidationPayload["baseball_reference_context"]["starting_pitchers"]["home"]) {
+function formatStarter(
+  starter: MlbPreparedCriticalValidationPayload["baseball_reference_context"]["starting_pitchers"]["home"],
+) {
   return `${starter.name ?? "-"} ${starter.throwing_hand ?? ""} ERA ${starter.era ?? "-"} K/9 ${starter.k_per_9 ?? "-"}`;
 }
 

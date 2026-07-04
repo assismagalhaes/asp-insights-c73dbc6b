@@ -24,7 +24,10 @@ export type RoutedSimulationResult = AspValidatorSimulationResult & {
 };
 
 function norm(s: string): string {
-  return (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return (s || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 function readNumber(v: unknown): number | null {
@@ -68,11 +71,20 @@ export function routeSimulation(input: AspValidatorSimulationInput): RoutedSimul
   }
 
   // Primeiro a marcar - simulador dedicado
-  if (declared === "first_goal" || /marcar\s+primeiro|marca\s+primeiro|primeiro\s+(a|para)\s+marcar|first\s+goal|first\s+to\s+score|abrir\s+o\s+placar/.test(blob)) {
+  if (
+    declared === "first_goal" ||
+    /marcar\s+primeiro|marca\s+primeiro|primeiro\s+(a|para)\s+marcar|first\s+goal|first\s+to\s+score|abrir\s+o\s+placar/.test(
+      blob,
+    )
+  ) {
     const sim = simulateFirstGoal(input, period);
-    return { ...sim, market_type: "first_goal", period, model_name: "football_first_goal_simplified" };
+    return {
+      ...sim,
+      market_type: "first_goal",
+      period,
+      model_name: "football_first_goal_simplified",
+    };
   }
-
 
   // Mercados delegados ao Poisson / corner simulator existente
   const base = runAspValidatorSimulation(input);
@@ -192,7 +204,8 @@ function simulateCards(
       `Total esperado ~ ${fmt(expectedTotal)} (NUNCA somar medias totais diretamente).`,
       `Frequencia ${wantsUnder ? "Under" : "Over"} ${line}: ${fmtPct(freqProb)}; prob. original ${fmtPct(sourceProb)}; odd implicita ${fmtPct(marketProb)}.`,
     ],
-    warnings: components.length < 3 ? ["Simulacao de cartoes com pouca evidencia estruturada."] : [],
+    warnings:
+      components.length < 3 ? ["Simulacao de cartoes com pouca evidencia estruturada."] : [],
   };
 }
 
@@ -208,7 +221,13 @@ function toDecimal(v: number | null): number | null {
 }
 
 function readLine(a: any, line: number, b?: any): number | null {
-  const keys = [String(line), `+${line}`, String(Math.trunc(line)), `+${Math.trunc(line)}`, `${Math.trunc(line)}.5`];
+  const keys = [
+    String(line),
+    `+${line}`,
+    String(Math.trunc(line)),
+    `+${Math.trunc(line)}`,
+    `${Math.trunc(line)}.5`,
+  ];
   for (const map of [a, b]) {
     if (!map || typeof map !== "object") continue;
     for (const k of keys) {
@@ -251,8 +270,10 @@ function simulateFirstGoal(
   const homeName = norm(input.home_team ?? "");
   const awayName = norm(input.away_team ?? "");
   let side: "home" | "away" | null = null;
-  if (/visitante|away|\bfora\b/.test(pickText) || (awayName && pickText.includes(awayName))) side = "away";
-  else if (/mandante|home|\bcasa\b/.test(pickText) || (homeName && pickText.includes(homeName))) side = "home";
+  if (/visitante|away|\bfora\b/.test(pickText) || (awayName && pickText.includes(awayName)))
+    side = "away";
+  else if (/mandante|home|\bcasa\b/.test(pickText) || (homeName && pickText.includes(homeName)))
+    side = "home";
 
   const offeredOdd = input.offered_odd ?? readNumber(market.offered_odd ?? prediction.offered_odd);
   const sourceProb = readPct(market.probability_original ?? prediction.source_probability);
@@ -269,7 +290,9 @@ function simulateFirstGoal(
       ev: null,
       most_likely_scores: [],
       goal_distribution: {},
-      notes: ["Simulacao 'primeiro a marcar' nao realizada: lado (mandante/visitante) nao identificado."],
+      notes: [
+        "Simulacao 'primeiro a marcar' nao realizada: lado (mandante/visitante) nao identificado.",
+      ],
       warnings: ["Selecao de lado ausente para mercado first_goal."],
     };
   }
@@ -297,7 +320,9 @@ function simulateFirstGoal(
   }
 
   // Componente 3: iniciativa/eficiencia
-  const perf = (structured.general_performance_home_away ?? structured.general_performance ?? {}) as Record<string, any>;
+  const perf = (structured.general_performance_home_away ??
+    structured.general_performance ??
+    {}) as Record<string, any>;
   const sidePerf = (perf[side] ?? {}) as Record<string, any>;
   const oppPerf = (perf[side === "home" ? "away" : "home"] ?? {}) as Record<string, any>;
   const sideEff = readPct(sidePerf.efficiency_pct);
@@ -310,7 +335,8 @@ function simulateFirstGoal(
   // Combinacao ponderada
   const components: Array<{ v: number; w: number; label: string }> = [];
   if (directRate !== null) components.push({ v: directRate, w: 0.45, label: "first_goal_pct" });
-  if (goalPressure !== null) components.push({ v: goalPressure, w: 0.25, label: "pressao ofensiva" });
+  if (goalPressure !== null)
+    components.push({ v: goalPressure, w: 0.25, label: "pressao ofensiva" });
   if (initiative !== null) components.push({ v: initiative, w: 0.15, label: "iniciativa" });
   if (sourceProb !== null) components.push({ v: sourceProb, w: 0.1, label: "prob. fonte" });
   if (marketProb !== null) components.push({ v: marketProb, w: 0.05, label: "odd implicita" });
@@ -338,11 +364,15 @@ function simulateFirstGoal(
   const warnings: string[] = [];
   if (directRate !== null && oppFgRate !== null && oppFgRate >= directRate) {
     prob *= 0.9;
-    warnings.push(`Adversario tem first_goal_pct igual ou superior (${fmtPct(oppFgRate)} vs ${fmtPct(directRate)}); probabilidade penalizada em 10%.`);
+    warnings.push(
+      `Adversario tem first_goal_pct igual ou superior (${fmtPct(oppFgRate)} vs ${fmtPct(directRate)}); probabilidade penalizada em 10%.`,
+    );
   }
   // Guardrail odd baixa
   if (offeredOdd !== null && offeredOdd < 1.3 && prob < 0.85) {
-    warnings.push(`Odd baixa (${offeredOdd}) exige probabilidade ajustada >= 85%. Atual: ${fmtPct(prob)}.`);
+    warnings.push(
+      `Odd baixa (${offeredOdd}) exige probabilidade ajustada >= 85%. Atual: ${fmtPct(prob)}.`,
+    );
   }
   prob = clamp(prob, 0.05, 0.95);
 

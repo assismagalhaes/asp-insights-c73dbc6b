@@ -92,8 +92,12 @@ export function parseBaseballReferenceMatchupText(
   let awayPitcher = firstPitcher;
   let homePitcher = secondPitcher;
 
-  const expectedHomeKey = expectedTeams?.home_team_key ?? (expectedTeams?.home_team ? matchMlbTeamName(expectedTeams.home_team) : null);
-  const expectedAwayKey = expectedTeams?.away_team_key ?? (expectedTeams?.away_team ? matchMlbTeamName(expectedTeams.away_team) : null);
+  const expectedHomeKey =
+    expectedTeams?.home_team_key ??
+    (expectedTeams?.home_team ? matchMlbTeamName(expectedTeams.home_team) : null);
+  const expectedAwayKey =
+    expectedTeams?.away_team_key ??
+    (expectedTeams?.away_team ? matchMlbTeamName(expectedTeams.away_team) : null);
 
   if (expectedHomeKey || expectedAwayKey) {
     const firstKey = firstSummary.team_key;
@@ -104,8 +108,10 @@ export function parseBaseballReferenceMatchupText(
     const secondIsAway = expectedAwayKey && secondKey === expectedAwayKey;
     if (firstIsHome || secondIsAway) {
       // First block is HOME → swap team AND its associated starter together.
-      awaySummary = secondSummary; homeSummary = firstSummary;
-      awayPitcher = secondPitcher; homePitcher = firstPitcher;
+      awaySummary = secondSummary;
+      homeSummary = firstSummary;
+      awayPitcher = secondPitcher;
+      homePitcher = firstPitcher;
     } else if (firstIsAway || secondIsHome) {
       // Default already correct.
     } else if (firstKey || secondKey) {
@@ -118,19 +124,24 @@ export function parseBaseballReferenceMatchupText(
       if (hint === firstSummary.team_key) {
         // away=first, home=second — already default.
       } else if (hint === secondSummary.team_key) {
-        awaySummary = secondSummary; homeSummary = firstSummary;
-        awayPitcher = secondPitcher; homePitcher = firstPitcher;
+        awaySummary = secondSummary;
+        homeSummary = firstSummary;
+        awayPitcher = secondPitcher;
+        homePitcher = firstPitcher;
       }
     }
   }
 
   // Final safety: never allow silent duplication of the same pitcher in the payload.
   if (
-    awayPitcher.name && homePitcher.name &&
+    awayPitcher.name &&
+    homePitcher.name &&
     awayPitcher.name === homePitcher.name &&
     awayPitcher.jersey_number === homePitcher.jersey_number
   ) {
-    warnings.push("Possivel duplicacao de starter: mesmo pitcher atribuido aos dois times — starter mandante removido.");
+    warnings.push(
+      "Possivel duplicacao de starter: mesmo pitcher atribuido aos dois times — starter mandante removido.",
+    );
     homePitcher = emptyPitcher();
   }
 
@@ -167,7 +178,6 @@ export function parseBaseballReferenceMatchupText(
   return context;
 }
 
-
 function detectAwayFromSeasonSeries(text: string): string | null {
   // Look for patterns like "LAD @ATH" or "LAD @ ATH"
   const match = text.match(/\b([A-Z]{2,4})\s*@\s*([A-Z]{2,4})\b/);
@@ -178,15 +188,42 @@ function detectAwayFromSeasonSeries(text: string): string | null {
 
 function abbrevToTeamKey(abbrev: string): string | null {
   const map: Record<string, string> = {
-    ARI: "arizona_diamondbacks", ATH: "athletics", OAK: "athletics", ATL: "atlanta_braves",
-    BAL: "baltimore_orioles", BOS: "boston_red_sox", CHC: "chicago_cubs", CHW: "chicago_white_sox",
-    CWS: "chicago_white_sox", CIN: "cincinnati_reds", CLE: "cleveland_guardians", COL: "colorado_rockies",
-    DET: "detroit_tigers", HOU: "houston_astros", KC: "kansas_city_royals", KCR: "kansas_city_royals",
-    LAA: "los_angeles_angels", LAD: "los_angeles_dodgers", MIA: "miami_marlins", MIL: "milwaukee_brewers",
-    MIN: "minnesota_twins", NYM: "new_york_mets", NYY: "new_york_yankees", PHI: "philadelphia_phillies",
-    PIT: "pittsburgh_pirates", SD: "san_diego_padres", SDP: "san_diego_padres", SF: "san_francisco_giants",
-    SFG: "san_francisco_giants", SEA: "seattle_mariners", STL: "st_louis_cardinals", TB: "tampa_bay_rays",
-    TBR: "tampa_bay_rays", TEX: "texas_rangers", TOR: "toronto_blue_jays", WSH: "washington_nationals",
+    ARI: "arizona_diamondbacks",
+    ATH: "athletics",
+    OAK: "athletics",
+    ATL: "atlanta_braves",
+    BAL: "baltimore_orioles",
+    BOS: "boston_red_sox",
+    CHC: "chicago_cubs",
+    CHW: "chicago_white_sox",
+    CWS: "chicago_white_sox",
+    CIN: "cincinnati_reds",
+    CLE: "cleveland_guardians",
+    COL: "colorado_rockies",
+    DET: "detroit_tigers",
+    HOU: "houston_astros",
+    KC: "kansas_city_royals",
+    KCR: "kansas_city_royals",
+    LAA: "los_angeles_angels",
+    LAD: "los_angeles_dodgers",
+    MIA: "miami_marlins",
+    MIL: "milwaukee_brewers",
+    MIN: "minnesota_twins",
+    NYM: "new_york_mets",
+    NYY: "new_york_yankees",
+    PHI: "philadelphia_phillies",
+    PIT: "pittsburgh_pirates",
+    SD: "san_diego_padres",
+    SDP: "san_diego_padres",
+    SF: "san_francisco_giants",
+    SFG: "san_francisco_giants",
+    SEA: "seattle_mariners",
+    STL: "st_louis_cardinals",
+    TB: "tampa_bay_rays",
+    TBR: "tampa_bay_rays",
+    TEX: "texas_rangers",
+    TOR: "toronto_blue_jays",
+    WSH: "washington_nationals",
     WSN: "washington_nationals",
   };
   return map[abbrev] ?? null;
@@ -196,13 +233,24 @@ export function normalizeMlbMatchupContext(context: MlbBaseballReferenceMatchupC
   return {
     ...context,
     teams: {
-      away: { ...context.teams.away, team_key: context.teams.away.team_key ?? matchMlbTeamName(context.teams.away.team_name ?? "") },
-      home: { ...context.teams.home, team_key: context.teams.home.team_key ?? matchMlbTeamName(context.teams.home.team_name ?? "") },
+      away: {
+        ...context.teams.away,
+        team_key:
+          context.teams.away.team_key ?? matchMlbTeamName(context.teams.away.team_name ?? ""),
+      },
+      home: {
+        ...context.teams.home,
+        team_key:
+          context.teams.home.team_key ?? matchMlbTeamName(context.teams.home.team_name ?? ""),
+      },
     },
   };
 }
 
-export function extractMlbTeamSummary(rawText: string, teamName: string | null): MlbParsedTeamSummary {
+export function extractMlbTeamSummary(
+  rawText: string,
+  teamName: string | null,
+): MlbParsedTeamSummary {
   return buildTeamSummary(teamName, rawText);
 }
 
@@ -226,7 +274,9 @@ export function extractMlbSeasonSeries(rawText: string) {
   return extractSeasonSeriesAndHeadToHead(normalizeRawText(rawText)).season_series;
 }
 
-export function parseWinLossRecord(value: string | null | undefined): MlbParsedWinLossRecord | null {
+export function parseWinLossRecord(
+  value: string | null | undefined,
+): MlbParsedWinLossRecord | null {
   const raw = String(value ?? "").trim();
   const match = raw.match(/(\d+)\s*-\s*(\d+)/);
   if (!match) return null;
@@ -256,7 +306,8 @@ function buildTeamSummary(teamName: string | null, block: string): MlbParsedTeam
   return {
     team_name: teamName,
     team_key: teamName ? matchMlbTeamName(teamName) : null,
-    record: findRecord(block, /(?:record|overall|w-l)\D{0,20}(\d+\s*-\s*\d+)/i) ?? firstRecord(block),
+    record:
+      findRecord(block, /(?:record|overall|w-l)\D{0,20}(\d+\s*-\s*\d+)/i) ?? firstRecord(block),
     wins: null,
     losses: null,
     win_pct: null,
@@ -329,12 +380,9 @@ function extractPitcherCandidates(text: string): PitcherCandidate[] {
   });
 }
 
-
 function cleanPitcherName(raw: string): string {
   // Remove leading garbage like "gb ", "up ", or standings prefixes
-  return raw
-    .replace(/^.*?\b(?:gb|up|back)\b\s+/i, "")
-    .trim();
+  return raw.replace(/^.*?\b(?:gb|up|back)\b\s+/i, "").trim();
 }
 
 function buildPitcher(candidate: PitcherCandidate | null): MlbParsedStartingPitcher {
@@ -350,7 +398,8 @@ function buildPitcher(candidate: PitcherCandidate | null): MlbParsedStartingPitc
   const ip = parseBaseballInnings(seasonLine?.ip ?? null);
   const last7Ip = parseBaseballInnings(last7?.ip ?? null);
 
-  const record = candidate.season_record ?? (seasonLine ? parseWinLossRecord(seasonLine.dec) : null);
+  const record =
+    candidate.season_record ?? (seasonLine ? parseWinLossRecord(seasonLine.dec) : null);
 
   const pitcher: MlbParsedStartingPitcher = {
     name: candidate.name || null,
@@ -558,13 +607,16 @@ function findLast5VsRow(block: string): Last5VsRow | null {
   return null;
 }
 
-function calculateStarterDerivedMetrics(pitcher: MlbParsedStartingPitcher): MlbParsedStartingPitcher {
+function calculateStarterDerivedMetrics(
+  pitcher: MlbParsedStartingPitcher,
+): MlbParsedStartingPitcher {
   const ip = pitcher.innings_pitched_decimal;
   const last7Ip = pitcher.last_7_ip_decimal;
   const kPer9 = ratePer9(pitcher.strikeouts, ip);
   const bbPer9 = ratePer9(pitcher.walks, ip);
   const hrPer9 = ratePer9(pitcher.home_runs_allowed, ip);
-  const kbb = pitcher.strikeouts != null && pitcher.walks ? pitcher.strikeouts / pitcher.walks : null;
+  const kbb =
+    pitcher.strikeouts != null && pitcher.walks ? pitcher.strikeouts / pitcher.walks : null;
 
   // Quality score only if we have real data; otherwise null.
   const hasData = pitcher.era != null || ip != null || pitcher.strikeouts != null;
@@ -612,12 +664,36 @@ function calculateStarterDerivedMetrics(pitcher: MlbParsedStartingPitcher): MlbP
 
 function extractKnownTeamNames(text: string) {
   const names = [
-    "Arizona Diamondbacks", "Athletics", "Atlanta Braves", "Baltimore Orioles", "Boston Red Sox", "Chicago Cubs",
-    "Chicago White Sox", "Cincinnati Reds", "Cleveland Guardians", "Colorado Rockies", "Detroit Tigers",
-    "Houston Astros", "Kansas City Royals", "Los Angeles Angels", "Los Angeles Dodgers", "Miami Marlins",
-    "Milwaukee Brewers", "Minnesota Twins", "New York Mets", "New York Yankees", "Philadelphia Phillies",
-    "Pittsburgh Pirates", "San Diego Padres", "San Francisco Giants", "Seattle Mariners", "St. Louis Cardinals",
-    "Tampa Bay Rays", "Texas Rangers", "Toronto Blue Jays", "Washington Nationals",
+    "Arizona Diamondbacks",
+    "Athletics",
+    "Atlanta Braves",
+    "Baltimore Orioles",
+    "Boston Red Sox",
+    "Chicago Cubs",
+    "Chicago White Sox",
+    "Cincinnati Reds",
+    "Cleveland Guardians",
+    "Colorado Rockies",
+    "Detroit Tigers",
+    "Houston Astros",
+    "Kansas City Royals",
+    "Los Angeles Angels",
+    "Los Angeles Dodgers",
+    "Miami Marlins",
+    "Milwaukee Brewers",
+    "Minnesota Twins",
+    "New York Mets",
+    "New York Yankees",
+    "Philadelphia Phillies",
+    "Pittsburgh Pirates",
+    "San Diego Padres",
+    "San Francisco Giants",
+    "Seattle Mariners",
+    "St. Louis Cardinals",
+    "Tampa Bay Rays",
+    "Texas Rangers",
+    "Toronto Blue Jays",
+    "Washington Nationals",
   ];
   return names.filter((name) => new RegExp(`\\b${escapeRegex(name)}\\b`, "i").test(text));
 }
@@ -661,7 +737,9 @@ function parseGameLine(line: string): ParsedGameLine | null {
 
   if (timeIdx >= 0) {
     const time = tokens[timeIdx];
-    const teamTokens = tokens.filter((_, i) => i !== timeIdx).filter((t) => /^@?[A-Za-z]{2,4}$/.test(t));
+    const teamTokens = tokens
+      .filter((_, i) => i !== timeIdx)
+      .filter((t) => /^@?[A-Za-z]{2,4}$/.test(t));
     if (teamTokens.length < 2) return null;
     const [t1, t2] = teamTokens;
     const t1Home = t1.startsWith("@");
@@ -669,10 +747,15 @@ function parseGameLine(line: string): ParsedGameLine | null {
     const home = t1Home ? t1.slice(1) : t2Home ? t2.slice(1) : t2;
     const away = t1Home ? t2.replace(/^@/, "") : t1.replace(/^@/, "");
     return {
-      kind: "upcoming", date,
-      away_team: away, home_team: home,
-      away_score: null, home_score: null,
-      time, extra_innings: extraInnings, raw_line: line,
+      kind: "upcoming",
+      date,
+      away_team: away,
+      home_team: home,
+      away_score: null,
+      home_score: null,
+      time,
+      extra_innings: extraInnings,
+      raw_line: line,
     };
   }
 
@@ -691,10 +774,15 @@ function parseGameLine(line: string): ParsedGameLine | null {
   const away = pairs.find((p) => !p.isHome);
   if (!home || !away) return null;
   return {
-    kind: "completed", date,
-    away_team: away.team, home_team: home.team,
-    away_score: away.score, home_score: home.score,
-    time: null, extra_innings: extraInnings, raw_line: line,
+    kind: "completed",
+    date,
+    away_team: away.team,
+    home_team: home.team,
+    away_score: away.score,
+    home_score: home.score,
+    time: null,
+    extra_innings: extraInnings,
+    raw_line: line,
   };
 }
 
@@ -706,7 +794,10 @@ function extractSeasonSeriesAndHeadToHead(text: string) {
   let ssSummary: string | null = null;
   let h2hSummary: string | null = null;
 
-  const rawLines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const rawLines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
   type Mode = "none" | "ss" | "h2h";
   let mode: Mode = "none";
 
@@ -747,11 +838,15 @@ function extractSeasonSeriesAndHeadToHead(text: string) {
       } else {
         const winner =
           parsed.home_score != null && parsed.away_score != null
-            ? parsed.home_score > parsed.away_score ? parsed.home_team : parsed.away_team
+            ? parsed.home_score > parsed.away_score
+              ? parsed.home_team
+              : parsed.away_team
             : null;
         const loser =
           parsed.home_score != null && parsed.away_score != null
-            ? parsed.home_score > parsed.away_score ? parsed.away_team : parsed.home_team
+            ? parsed.home_score > parsed.away_score
+              ? parsed.away_team
+              : parsed.home_team
             : null;
         completed.push({
           date: parsed.date,
@@ -770,11 +865,15 @@ function extractSeasonSeriesAndHeadToHead(text: string) {
       if (h2h.length >= 10) continue;
       const winner =
         parsed.home_score != null && parsed.away_score != null
-          ? parsed.home_score > parsed.away_score ? parsed.home_team : parsed.away_team
+          ? parsed.home_score > parsed.away_score
+            ? parsed.home_team
+            : parsed.away_team
           : null;
       const loser =
         parsed.home_score != null && parsed.away_score != null
-          ? parsed.home_score > parsed.away_score ? parsed.away_team : parsed.home_team
+          ? parsed.home_score > parsed.away_score
+            ? parsed.away_team
+            : parsed.home_team
           : null;
       h2h.push({
         date: parsed.date,
@@ -834,9 +933,11 @@ function calculateParserQuality(context: MlbBaseballReferenceMatchupContext) {
     if (p.name && p.throwing_hand) score += 8;
     else {
       missing.push(`${side}_starter_name`);
-      warnings.push(side === "away"
-        ? "Starter visitante nao foi extraido corretamente."
-        : "Starter mandante nao foi extraido corretamente.");
+      warnings.push(
+        side === "away"
+          ? "Starter visitante nao foi extraido corretamente."
+          : "Starter mandante nao foi extraido corretamente.",
+      );
     }
     if (p.season_record) score += 3;
     if (p.age != null) score += 2;
@@ -847,8 +948,11 @@ function calculateParserQuality(context: MlbBaseballReferenceMatchupContext) {
   for (const side of ["away", "home"] as const) {
     const p = context.starting_pitchers[side];
     const seasonStatsOk =
-      p.era != null && p.innings_pitched_decimal != null && p.strikeouts != null &&
-      p.walks != null && p.home_runs_allowed != null;
+      p.era != null &&
+      p.innings_pitched_decimal != null &&
+      p.strikeouts != null &&
+      p.walks != null &&
+      p.home_runs_allowed != null;
     if (seasonStatsOk) score += 10;
     else warnings.push(`${side}: estatisticas de temporada do starter ausentes.`);
   }
@@ -860,7 +964,11 @@ function calculateParserQuality(context: MlbBaseballReferenceMatchupContext) {
   }
 
   // H2H / season series: up to +5
-  if (context.season_series.completed_games.length + context.season_series.upcoming_games.length > 0) score += 3;
+  if (
+    context.season_series.completed_games.length + context.season_series.upcoming_games.length >
+    0
+  )
+    score += 3;
   if (context.head_to_head.last_10_games.length > 0) score += 2;
 
   let confidence = clamp(score, 0, 100);
@@ -911,7 +1019,12 @@ function ratePer9(value: number | null, innings: number | null) {
 }
 
 function normalizeRawText(rawText: string) {
-  return rawText.replace(/\r/g, "\n").replace(/\t/g, " ").replace(/[ ]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+  return rawText
+    .replace(/\r/g, "\n")
+    .replace(/\t/g, " ")
+    .replace(/[ ]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function escapeRegex(input: string) {

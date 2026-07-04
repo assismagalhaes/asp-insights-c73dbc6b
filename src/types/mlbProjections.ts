@@ -127,7 +127,12 @@ export type MlbHandicapLineType = "main" | "alternate";
 export type MlbHandicapSide = "home" | "away";
 export type MlbHandicapFilter = MlbHandicapCandidateStatus | "todos" | "main" | "alternate";
 export type MlbOpportunityMarketFamily = "moneyline" | "totals" | "handicap";
-export type MlbOpportunityPriorityStatus = "ANALISAR" | "MONITORAR" | "PULAR" | "MISSING_DATA" | "UNSUPPORTED_LINE";
+export type MlbOpportunityPriorityStatus =
+  | "ANALISAR"
+  | "MONITORAR"
+  | "PULAR"
+  | "MISSING_DATA"
+  | "UNSUPPORTED_LINE";
 export type MlbOpportunityCorrelationStatus = "primary" | "correlated_alternative" | "standalone";
 export type MlbOpportunityFilter =
   | "todos"
@@ -410,8 +415,17 @@ export interface MlbOpportunityScoreComponents {
 }
 
 export interface MlbCriticalValidationContext {
-  readiness_status: "pronto_para_validator" | "revisar_antes_do_validator" | "contexto_incompleto" | "nao_recomendado_para_validator";
-  alignment_status: "supports_screener" | "mixed" | "mixed_to_conflicting" | "conflicts_with_screener" | "insufficient_context";
+  readiness_status:
+    | "pronto_para_validator"
+    | "revisar_antes_do_validator"
+    | "contexto_incompleto"
+    | "nao_recomendado_para_validator";
+  alignment_status:
+    | "supports_screener"
+    | "mixed"
+    | "mixed_to_conflicting"
+    | "conflicts_with_screener"
+    | "insufficient_context";
 }
 
 export interface MlbUnifiedOpportunity {
@@ -458,7 +472,10 @@ export interface MlbUnifiedOpportunity {
   risk_flags: string[];
   score_components: MlbOpportunityScoreComponents;
   score_explanation: string;
-  source_projection_payload: MlbMoneylineScreenerRow | MlbTotalsScreenerRow | MlbHandicapScreenerRow;
+  source_projection_payload:
+    | MlbMoneylineScreenerRow
+    | MlbTotalsScreenerRow
+    | MlbHandicapScreenerRow;
 }
 
 export interface MlbOpportunityShortlistResult {

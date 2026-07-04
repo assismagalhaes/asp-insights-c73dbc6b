@@ -4,7 +4,10 @@ import type {
   MlbScreenerHandoffAuditListFilters,
   MlbScreenerHandoffAuditRecord,
 } from "@/types/mlbScreenerHandoffAudit";
-import type { MlbScreenerHandoffAuditStatus, MlbValidatorHandoffPayload } from "@/types/mlbValidatorHandoff";
+import type {
+  MlbScreenerHandoffAuditStatus,
+  MlbValidatorHandoffPayload,
+} from "@/types/mlbValidatorHandoff";
 
 type HandoffTarget = Pick<MlbValidatorHandoffPayload, "handoff_id" | "audit"> | string;
 type ValidatorCompletionResult = {
@@ -80,17 +83,28 @@ const HANDOFF_AUDIT_COLUMNS = [
 type AuditQuery = {
   eq: (column: string, value: string) => AuditQuery;
   order: (column: string, options: { ascending: boolean }) => AuditQuery;
-  limit: (count: number) => Promise<{ data: MlbScreenerHandoffAuditRecord[] | null; error: Error | null }>;
+  limit: (
+    count: number,
+  ) => Promise<{ data: MlbScreenerHandoffAuditRecord[] | null; error: Error | null }>;
   single: () => Promise<{ data: MlbScreenerHandoffAuditRecord | null; error: Error | null }>;
 };
 
 type AuditFilter = {
-  eq: (column: string, value: string) => Promise<{ data?: MlbScreenerHandoffAuditRecord[] | null; error: Error | null }>;
+  eq: (
+    column: string,
+    value: string,
+  ) => Promise<{ data?: MlbScreenerHandoffAuditRecord[] | null; error: Error | null }>;
 };
 
-export async function createScreenerValidatorHandoffAudit(handoff: MlbValidatorHandoffPayload): Promise<MlbScreenerHandoffAuditRecord> {
+export async function createScreenerValidatorHandoffAudit(
+  handoff: MlbValidatorHandoffPayload,
+): Promise<MlbScreenerHandoffAuditRecord> {
   const payload = buildAuditInsertPayload(handoff, "sent_to_validator");
-  const { data, error } = await auditDb.from("asp_screener_validator_handoffs").insert(payload).select(HANDOFF_AUDIT_COLUMNS).single();
+  const { data, error } = await auditDb
+    .from("asp_screener_validator_handoffs")
+    .insert(payload)
+    .select(HANDOFF_AUDIT_COLUMNS)
+    .single();
   if (error) throw error;
   if (!data) throw new Error("Auditoria do handoff nao retornou registro criado.");
   return data;
@@ -134,14 +148,18 @@ export function markHandoffValidationStarted(handoff: MlbValidatorHandoffPayload
   return updateScreenerValidatorHandoffStatus(handoff, "validation_started");
 }
 
-export function markHandoffValidationCompleted(handoff: MlbValidatorHandoffPayload, completion: MlbScreenerHandoffAuditCompletion) {
+export function markHandoffValidationCompleted(
+  handoff: MlbValidatorHandoffPayload,
+  completion: MlbScreenerHandoffAuditCompletion,
+) {
   return updateScreenerValidatorHandoffStatus(handoff, "validation_completed", completion);
 }
 
 export function markHandoffValidationFailed(handoff: MlbValidatorHandoffPayload, error: unknown) {
   return updateScreenerValidatorHandoffStatus(handoff, "validation_failed", {
     metadata: {
-      validation_error: error instanceof Error ? error.message : String(error ?? "Erro desconhecido"),
+      validation_error:
+        error instanceof Error ? error.message : String(error ?? "Erro desconhecido"),
       failed_at: new Date().toISOString(),
     },
   });
@@ -161,7 +179,9 @@ export function linkHandoffToValidatorRecord(
   });
 }
 
-export async function listScreenerValidatorHandoffs(filters: MlbScreenerHandoffAuditListFilters = {}) {
+export async function listScreenerValidatorHandoffs(
+  filters: MlbScreenerHandoffAuditListFilters = {},
+) {
   const limit = filters.limit ?? 500;
   const { data, error } = await auditDb
     .from("asp_screener_validator_handoffs")
@@ -176,12 +196,19 @@ export async function listScreenerValidatorHandoffs(filters: MlbScreenerHandoffA
 }
 
 export async function getScreenerValidatorHandoffById(id: string) {
-  const { data, error } = await auditDb.from("asp_screener_validator_handoffs").select(HANDOFF_AUDIT_COLUMNS).eq("id", id).single();
+  const { data, error } = await auditDb
+    .from("asp_screener_validator_handoffs")
+    .select(HANDOFF_AUDIT_COLUMNS)
+    .eq("id", id)
+    .single();
   if (error) throw error;
   return data;
 }
 
-function buildAuditInsertPayload(handoff: MlbValidatorHandoffPayload, status: MlbScreenerHandoffAuditStatus) {
+function buildAuditInsertPayload(
+  handoff: MlbValidatorHandoffPayload,
+  status: MlbScreenerHandoffAuditStatus,
+) {
   const critical = handoff.raw_critical_payload;
   const prefill = handoff.validator_prefill;
   return {
@@ -243,7 +270,10 @@ function timestampPatch(status: MlbScreenerHandoffAuditStatus) {
   return {};
 }
 
-function filterByPeriod(rows: MlbScreenerHandoffAuditRecord[], period: MlbScreenerHandoffAuditListFilters["period"]) {
+function filterByPeriod(
+  rows: MlbScreenerHandoffAuditRecord[],
+  period: MlbScreenerHandoffAuditListFilters["period"],
+) {
   if (!period || period === "all") return rows;
   const now = Date.now();
   const minTime =

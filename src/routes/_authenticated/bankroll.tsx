@@ -39,7 +39,15 @@ import {
   signColor,
   withSign,
 } from "@/lib/chart-colors";
-import { TrendingDown, TrendingUp, Wallet, Percent, Target, Activity, DollarSign } from "lucide-react";
+import {
+  TrendingDown,
+  TrendingUp,
+  Wallet,
+  Percent,
+  Target,
+  Activity,
+  DollarSign,
+} from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/bankroll")({
@@ -72,13 +80,15 @@ function Bankroll() {
 
   const officialRows = [...prognosticos, ...aspValidatorBankroll];
   const metrics = computeMetrics(officialRows, cfg);
-  const timeline = bankrollTimeline(officialRows, metrics.bancaInicial, cfg?.valor_unidade_padrao ?? 0);
+  const timeline = bankrollTimeline(
+    officialRows,
+    metrics.bancaInicial,
+    cfg?.valor_unidade_padrao ?? 0,
+  );
 
   // valor real de 1u, conforme tipo de stake
   const valorUnidadeEfetiva =
-    tipoStake === "PERCENTUAL"
-      ? (metrics.bancaAtual * percentual) / 100
-      : unidade;
+    tipoStake === "PERCENTUAL" ? (metrics.bancaAtual * percentual) / 100 : unidade;
 
   const stakes = [0.5, 1.0, 1.5, 2.0];
 
@@ -109,12 +119,16 @@ function Bankroll() {
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Configurações</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Configurações
+          </h3>
           <div className="mt-4 grid gap-3">
             <div>
               <Label>Tipo de stake</Label>
               <Select value={tipoStake} onValueChange={(v) => setTipoStake(v as TipoStake)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="FIXO">Valor fixo</SelectItem>
                   <SelectItem value="PERCENTUAL">Percentual da banca</SelectItem>
@@ -124,43 +138,66 @@ function Bankroll() {
             {tipoStake === "FIXO" ? (
               <div>
                 <Label>Valor da unidade (R$)</Label>
-                <Input type="number" value={unidade} onChange={(e) => setUnidade(+e.target.value)} />
+                <Input
+                  type="number"
+                  value={unidade}
+                  onChange={(e) => setUnidade(+e.target.value)}
+                />
               </div>
             ) : (
               <div>
                 <Label>1u equivale a (% da banca atual)</Label>
-                <Input type="number" step="0.1" value={percentual} onChange={(e) => setPercentual(+e.target.value)} />
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={percentual}
+                  onChange={(e) => setPercentual(+e.target.value)}
+                />
                 <p className="mt-1 text-xs text-muted-foreground">
-                  1u = R$ {valorUnidadeEfetiva.toFixed(2)} (sobre banca atual de R$ {metrics.bancaAtual.toFixed(2)})
+                  1u = R$ {valorUnidadeEfetiva.toFixed(2)} (sobre banca atual de R${" "}
+                  {metrics.bancaAtual.toFixed(2)})
                 </p>
               </div>
             )}
             <div>
               <Label>Banca inicial (R$)</Label>
-              <Input type="number" value={bancaInicial} onChange={(e) => setBancaInicial(+e.target.value)} />
+              <Input
+                type="number"
+                value={bancaInicial}
+                onChange={(e) => setBancaInicial(+e.target.value)}
+              />
             </div>
             <div>
               <Label>Banca atual (R$)</Label>
               <Input value={metrics.bancaAtual.toFixed(2)} readOnly className="font-mono" />
             </div>
-            <Button onClick={salvar} disabled={updateCfg.isPending}>Salvar configurações</Button>
+            <Button onClick={salvar} disabled={updateCfg.isPending}>
+              Salvar configurações
+            </Button>
           </div>
         </div>
 
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Controle por stake ({tipoStake === "FIXO" ? "valor fixo" : `${percentual}% por unidade`})
+            Controle por stake ({tipoStake === "FIXO" ? "valor fixo" : `${percentual}% por unidade`}
+            )
           </h3>
-          <p className="mt-1 text-[10px] text-muted-foreground">% calculado sobre a banca inicial (R$ {metrics.bancaInicial.toFixed(2)}).</p>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            % calculado sobre a banca inicial (R$ {metrics.bancaInicial.toFixed(2)}).
+          </p>
           <div className="mt-4 grid grid-cols-2 gap-3">
             {stakes.map((s) => {
               const valor = s * valorUnidadeEfetiva;
               const pct = metrics.bancaInicial > 0 ? (valor / metrics.bancaInicial) * 100 : 0;
               return (
                 <div key={s} className="rounded-md border border-border bg-background/50 p-3">
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Stake {s.toFixed(1)}u</div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Stake {s.toFixed(1)}u
+                  </div>
                   <div className="mt-1 font-mono text-lg font-bold">R$ {valor.toFixed(2)}</div>
-                  <div className="text-xs text-muted-foreground">{pct.toFixed(2)}% da banca inicial</div>
+                  <div className="text-xs text-muted-foreground">
+                    {pct.toFixed(2)}% da banca inicial
+                  </div>
                 </div>
               );
             })}
@@ -219,7 +256,8 @@ function Bankroll() {
             className="font-mono text-xs"
             style={{ color: signColor(metrics.bancaAtual - metrics.bancaInicial) }}
           >
-            R$ {metrics.bancaAtual.toFixed(2)} ({withSign(metrics.bancaAtual - metrics.bancaInicial)})
+            R$ {metrics.bancaAtual.toFixed(2)} (
+            {withSign(metrics.bancaAtual - metrics.bancaInicial)})
           </span>
         </div>
         <ResponsiveContainer width="100%" height={300}>
@@ -239,13 +277,23 @@ function Bankroll() {
               </linearGradient>
             </defs>
             <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
-            <XAxis dataKey="data" stroke={axisColor} fontSize={10} tickFormatter={(d) => String(d).slice(5)} />
+            <XAxis
+              dataKey="data"
+              stroke={axisColor}
+              fontSize={10}
+              tickFormatter={(d) => String(d).slice(5)}
+            />
             <YAxis stroke={axisColor} fontSize={10} domain={["auto", "auto"]} />
             <ReferenceLine
               y={metrics.bancaInicial}
               stroke={COLOR_REFERENCE}
               strokeDasharray="4 4"
-              label={{ value: "Banca inicial", position: "insideTopRight", fill: COLOR_NEUTRAL, fontSize: 10 }}
+              label={{
+                value: "Banca inicial",
+                position: "insideTopRight",
+                fill: COLOR_NEUTRAL,
+                fontSize: 10,
+              }}
             />
             <Tooltip
               content={

@@ -3,8 +3,7 @@
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
@@ -51,10 +50,7 @@ Deno.serve(async (req) => {
     }
 
     if (!action) {
-      return json(
-        { error: "Informe 'action' (ex.: '/health' ou '/scrape')." },
-        400,
-      );
+      return json({ error: "Informe 'action' (ex.: '/health' ou '/scrape')." }, 400);
     }
 
     // Shortcuts
@@ -101,13 +97,10 @@ Deno.serve(async (req) => {
       // keep as text
     }
 
-    return new Response(
-      JSON.stringify({ ok: upstream.ok, status: upstream.status, data }),
-      {
-        status: upstream.ok ? 200 : upstream.status,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      },
-    );
+    return new Response(JSON.stringify({ ok: upstream.ok, status: upstream.status, data }), {
+      status: upstream.ok ? 200 : upstream.status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return json({ error: msg }, 500);

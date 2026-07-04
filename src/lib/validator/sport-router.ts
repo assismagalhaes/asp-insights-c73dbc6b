@@ -2,7 +2,14 @@
 // from consolidated context to pick the right rule fragments.
 
 export type SportFamily = "football" | "baseball" | "basketball" | "generic";
-export type MarketFamily = "moneyline" | "totals" | "handicap" | "corners" | "btts" | "1x2" | "generic";
+export type MarketFamily =
+  | "moneyline"
+  | "totals"
+  | "handicap"
+  | "corners"
+  | "btts"
+  | "1x2"
+  | "generic";
 
 // Fine-grained label used in UIs and prompts (e.g. baseball_total_runs).
 export type MarketDetectedLabel =
@@ -26,22 +33,35 @@ export interface ValidatorRoute {
 
 export function detectSport(context: Record<string, unknown>): SportFamily {
   const raw = readStr(context.sport) || readStr(getPath(context, ["structured_json", "sport"]));
-  const t = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const t = raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
   if (!t) return "generic";
-  if (t.startsWith("futebol") || t.startsWith("football") || t.startsWith("soccer")) return "football";
+  if (t.startsWith("futebol") || t.startsWith("football") || t.startsWith("soccer"))
+    return "football";
   if (t.startsWith("baseball") || t.includes("mlb")) return "baseball";
-  if (t.startsWith("basquete") || t.startsWith("basketball") || t.includes("nba")) return "basketball";
+  if (t.startsWith("basquete") || t.startsWith("basketball") || t.includes("nba"))
+    return "basketball";
   return "generic";
 }
 
 export function detectMarketFamily(context: Record<string, unknown>): MarketFamily {
-  const declared = readStr(getPath(context, ["structured_json", "market_family"])) || readStr(getPath(context, ["structured_json", "market_type"]));
-  const market = readStr(context.market) || readStr(getPath(context, ["structured_json", "market"])) || readStr(getPath(context, ["prediction", "market"]));
-  const pick = readStr(getPath(context, ["prediction", "pick"])) || readStr(getPath(context, ["structured_json", "pick"]));
+  const declared =
+    readStr(getPath(context, ["structured_json", "market_family"])) ||
+    readStr(getPath(context, ["structured_json", "market_type"]));
+  const market =
+    readStr(context.market) ||
+    readStr(getPath(context, ["structured_json", "market"])) ||
+    readStr(getPath(context, ["prediction", "market"]));
+  const pick =
+    readStr(getPath(context, ["prediction", "pick"])) ||
+    readStr(getPath(context, ["structured_json", "pick"]));
   const src = `${declared} ${market} ${pick}`.toLowerCase();
   if (/corner|escanteio/.test(src)) return "corners";
   if (/btts|ambos.*marc|both.*score/.test(src)) return "btts";
-  if (/(over|under|total|o\/u|totals|mais de|menos de|runs over|runs under)/.test(src)) return "totals";
+  if (/(over|under|total|o\/u|totals|mais de|menos de|runs over|runs under)/.test(src))
+    return "totals";
   if (/(handicap|spread|run line|runline|asian)/.test(src)) return "handicap";
   if (/moneyline|ml\b|money line|vencedor|match odds|match winner|1x2/.test(src)) {
     if (/1x2/.test(src)) return "1x2";

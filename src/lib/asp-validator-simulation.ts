@@ -11,7 +11,12 @@ export type AspValidatorSimulationInput = {
 };
 
 export type AspValidatorSimulationResult = {
-  model: "poisson_score_matrix" | "corner_race_simplified" | "corner_volume_matrix" | "corner_total_over_simplified" | "low_confidence_corner_race";
+  model:
+    | "poisson_score_matrix"
+    | "corner_race_simplified"
+    | "corner_volume_matrix"
+    | "corner_total_over_simplified"
+    | "low_confidence_corner_race";
   status: "completed" | "low_confidence" | "not_applicable" | "failed";
   lambda_home: number | null;
   lambda_away: number | null;
@@ -40,7 +45,9 @@ type ScoreCell = {
 
 const MAX_GOALS = 10;
 
-export function runAspValidatorSimulation(input: AspValidatorSimulationInput): AspValidatorSimulationResult {
+export function runAspValidatorSimulation(
+  input: AspValidatorSimulationInput,
+): AspValidatorSimulationResult {
   try {
     const marketText = normalize(`${input.market ?? ""} ${input.pick ?? ""}`);
     if (!isFootballLike(input.sport) || !isSupportedMarket(marketText)) {
@@ -100,7 +107,10 @@ export function runAspValidatorSimulation(input: AspValidatorSimulationInput): A
     }
 
     const fairOdd = probability > 0 ? round(1 / probability) : null;
-    const ev = input.offered_odd && input.offered_odd > 1 ? round(input.offered_odd * probability - 1, 4) : null;
+    const ev =
+      input.offered_odd && input.offered_odd > 1
+        ? round(input.offered_odd * probability - 1, 4)
+        : null;
     const status = lambda.confidence === "low" ? "low_confidence" : "completed";
 
     return {
@@ -118,7 +128,10 @@ export function runAspValidatorSimulation(input: AspValidatorSimulationInput): A
         "Probabilidade calculada por matriz de placares Poisson.",
         "A simulacao e um sinal tecnico e nao confirma nem pula prognostico sozinha.",
       ],
-      warnings: status === "low_confidence" ? [...lambda.warnings, "Simulacao de baixa confiabilidade por insuficiencia de dados."] : lambda.warnings,
+      warnings:
+        status === "low_confidence"
+          ? [...lambda.warnings, "Simulacao de baixa confiabilidade por insuficiencia de dados."]
+          : lambda.warnings,
     };
   } catch (error) {
     return {
@@ -132,7 +145,9 @@ export function runAspValidatorSimulation(input: AspValidatorSimulationInput): A
       most_likely_scores: [],
       goal_distribution: {},
       notes: [],
-      warnings: [error instanceof Error ? error.message : "Falha inesperada ao executar simulacao."],
+      warnings: [
+        error instanceof Error ? error.message : "Falha inesperada ao executar simulacao.",
+      ],
     };
   }
 }
@@ -191,26 +206,51 @@ function isCornerMarket(text: string): boolean {
   return text.includes("corner") || text.includes("escanteio") || text.includes("canto");
 }
 
-function runCornerSimulation(input: AspValidatorSimulationInput, marketText: string): AspValidatorSimulationResult {
+function runCornerSimulation(
+  input: AspValidatorSimulationInput,
+  marketText: string,
+): AspValidatorSimulationResult {
   const structured = (input.structured_json ?? {}) as Record<string, any>;
   const market = (structured.market ?? structured.prediction ?? {}) as Record<string, any>;
   const corners = (structured.corners ?? {}) as Record<string, any>;
-  const line = parseLine(input.line ?? market.line ?? readCornerRaceLine(input.pick ?? market.pick ?? ""));
-  const isTotalOverUnder = isCornerTotalOverUnderMarket(marketText, input.pick ?? market.pick ?? "", line);
+  const line = parseLine(
+    input.line ?? market.line ?? readCornerRaceLine(input.pick ?? market.pick ?? ""),
+  );
+  const isTotalOverUnder = isCornerTotalOverUnderMarket(
+    marketText,
+    input.pick ?? market.pick ?? "",
+    line,
+  );
   if (isTotalOverUnder && line !== null) {
     return runCornerTotalOverSimulation(input, structured, market, corners, line);
   }
 
   const pickText = normalize(input.pick ?? market.pick ?? "");
-  const wantsAway = pickText.includes(normalize(input.away_team ?? "")) || pickText.includes("fora") || pickText.includes("visitante") || pickText.includes("away");
+  const wantsAway =
+    pickText.includes(normalize(input.away_team ?? "")) ||
+    pickText.includes("fora") ||
+    pickText.includes("visitante") ||
+    pickText.includes("away");
   const side = wantsAway ? "away" : "home";
   const sideStats = (corners[side] ?? {}) as Record<string, number | null>;
-  const opponentStats = (corners[side === "home" ? "away" : "home"] ?? {}) as Record<string, number | null>;
+  const opponentStats = (corners[side === "home" ? "away" : "home"] ?? {}) as Record<
+    string,
+    number | null
+  >;
   const prediction = (structured.prediction ?? {}) as Record<string, any>;
-  const sourceProb = percentToDecimal(readNumber(market.probability_original ?? prediction.source_probability ?? prediction.probability_original));
-  const offeredOdd = input.offered_odd ?? readNumber(market.offered_odd ?? structured.prediction?.offered_odd);
+  const sourceProb = percentToDecimal(
+    readNumber(
+      market.probability_original ??
+        prediction.source_probability ??
+        prediction.probability_original,
+    ),
+  );
+  const offeredOdd =
+    input.offered_odd ?? readNumber(market.offered_odd ?? structured.prediction?.offered_odd);
   const marketProb = offeredOdd && offeredOdd > 1 ? 1 / offeredOdd : null;
-  const raceProb = line ? percentToDecimal(readNumber(sideStats[`race_to_${Math.trunc(line)}_pct`])) : null;
+  const raceProb = line
+    ? percentToDecimal(readNumber(sideStats[`race_to_${Math.trunc(line)}_pct`]))
+    : null;
   const avgFor = readNumber(sideStats.avg_for);
   const avgAgainstOpp = readNumber(opponentStats.avg_against);
   const avgTotal = readNumber(sideStats.avg_total ?? opponentStats.avg_total);
@@ -238,14 +278,18 @@ function runCornerSimulation(input: AspValidatorSimulationInput, marketText: str
       ev: null,
       most_likely_scores: [],
       goal_distribution: {},
-      notes: ["Simulacao simplificada de corners nao realizada por falta de dados quantitativos OCR."],
+      notes: [
+        "Simulacao simplificada de corners nao realizada por falta de dados quantitativos OCR.",
+      ],
       warnings: ["Dados OCR de corners insuficientes para estimar probabilidade."],
     };
   }
 
   const totalWeight = components.reduce((sum, item) => sum + item.weight, 0);
-  const rawProbability = components.reduce((sum, item) => sum + item.value * item.weight, 0) / totalWeight;
-  const quality = readNumber(structured.data_quality_score) ?? readNumber(structured.data_quality?.score) ?? 0.5;
+  const rawProbability =
+    components.reduce((sum, item) => sum + item.value * item.weight, 0) / totalWeight;
+  const quality =
+    readNumber(structured.data_quality_score) ?? readNumber(structured.data_quality?.score) ?? 0.5;
   const penalty = quality < 0.7 ? (0.7 - quality) * 0.12 : 0;
   const probability = clampDecimal(rawProbability - penalty, 0.05, 0.85);
   const fairOdd = probability > 0 ? round(1 / probability) : null;
@@ -266,7 +310,10 @@ function runCornerSimulation(input: AspValidatorSimulationInput, marketText: str
       `Composicao: probabilidade original ${formatProb(sourceProb)}, race ${formatProb(raceProb)}, medias ${formatProb(avgSupport)}, mercado ${formatProb(marketProb)}.`,
       "Penalidade por qualidade OCR limitada para evitar cortes agressivos sem base quantitativa.",
     ],
-    warnings: components.length < 2 ? ["Simulacao de baixa confiabilidade por pouca evidencia estruturada."] : [],
+    warnings:
+      components.length < 2
+        ? ["Simulacao de baixa confiabilidade por pouca evidencia estruturada."]
+        : [],
   };
 }
 
@@ -282,7 +329,13 @@ function runCornerTotalOverSimulation(
   const away = (corners.away ?? {}) as Record<string, any>;
   const pickText = normalize(input.pick ?? market.pick ?? "");
   const wantsUnder = pickText.includes("under") || pickText.includes("menos");
-  const sourceProb = percentToDecimal(readNumber(market.probability_original ?? prediction.source_probability ?? prediction.probability_original));
+  const sourceProb = percentToDecimal(
+    readNumber(
+      market.probability_original ??
+        prediction.source_probability ??
+        prediction.probability_original,
+    ),
+  );
   const offeredOdd = input.offered_odd ?? readNumber(market.offered_odd ?? prediction.offered_odd);
   const marketProb = offeredOdd && offeredOdd > 1 ? 1 / offeredOdd : null;
   const homeFor = readNumber(home.avg_for);
@@ -299,10 +352,13 @@ function runCornerTotalOverSimulation(
   const homeAgainstHome = readNumber(home.home_away_avg_against) ?? homeAgainst;
   const awayForAway = readNumber(away.home_away_avg_for) ?? awayFor;
   const awayAgainstAway = readNumber(away.home_away_avg_against) ?? awayAgainst;
-  const expHome = homeForHome !== null && awayAgainstAway !== null ? (homeForHome + awayAgainstAway) / 2 : null;
-  const expAway = awayForAway !== null && homeAgainstHome !== null ? (awayForAway + homeAgainstHome) / 2 : null;
+  const expHome =
+    homeForHome !== null && awayAgainstAway !== null ? (homeForHome + awayAgainstAway) / 2 : null;
+  const expAway =
+    awayForAway !== null && homeAgainstHome !== null ? (awayForAway + homeAgainstHome) / 2 : null;
   const matchupTotal = expHome !== null && expAway !== null ? expHome + expAway : null;
-  const generalAverageTotal = homeTotal !== null && awayTotal !== null ? (homeTotal + awayTotal) / 2 : null;
+  const generalAverageTotal =
+    homeTotal !== null && awayTotal !== null ? (homeTotal + awayTotal) / 2 : null;
   const expectedPieces = [
     matchupTotal,
     generalAverageTotal,
@@ -312,11 +368,12 @@ function runCornerTotalOverSimulation(
 
   // Suporte por medias: 50% quando expectedTotal == line; cada 1 canto de diferenca
   // ajusta ~8 pontos percentuais; limitado entre 30% e 78%.
-  const avgSupport = expectedTotal !== null
-    ? wantsUnder
-      ? clampDecimal(0.5 - (expectedTotal - line) * 0.08, 0.30, 0.78)
-      : clampDecimal(0.5 + (expectedTotal - line) * 0.08, 0.30, 0.78)
-    : null;
+  const avgSupport =
+    expectedTotal !== null
+      ? wantsUnder
+        ? clampDecimal(0.5 - (expectedTotal - line) * 0.08, 0.3, 0.78)
+        : clampDecimal(0.5 + (expectedTotal - line) * 0.08, 0.3, 0.78)
+      : null;
   const generalCorners = (corners.general ?? {}) as Record<string, any>;
   const homeAwayCorners = (corners.home_away ?? {}) as Record<string, any>;
   const genHome = (generalCorners.home ?? {}) as Record<string, any>;
@@ -348,7 +405,8 @@ function runCornerTotalOverSimulation(
     readLinePercent(haAway.under_lines, line),
   ]);
   const frequencyProb = percentToDecimal(wantsUnder ? underFreq : totalFreq);
-  const quality = readNumber(structured.data_quality_score) ?? readNumber(structured.data_quality?.score) ?? 0.5;
+  const quality =
+    readNumber(structured.data_quality_score) ?? readNumber(structured.data_quality?.score) ?? 0.5;
   const components = [
     sourceProb !== null ? { value: sourceProb, weight: 0.3 } : null,
     marketProb !== null ? { value: marketProb, weight: 0.15 } : null,
@@ -374,7 +432,8 @@ function runCornerTotalOverSimulation(
   }
 
   const totalWeight = components.reduce((sum, item) => sum + item.weight, 0);
-  const rawProbability = components.reduce((sum, item) => sum + item.value * item.weight, 0) / totalWeight;
+  const rawProbability =
+    components.reduce((sum, item) => sum + item.value * item.weight, 0) / totalWeight;
   const penalty = quality < 0.7 ? (0.7 - quality) * 0.08 : 0;
   const probability = clampDecimal(rawProbability - penalty, 0.05, 0.88);
   const fairOdd = probability > 0 ? round(1 / probability) : null;
@@ -402,14 +461,26 @@ function runCornerTotalOverSimulation(
       `Pesos finais: prob. original ${formatProb(sourceProb)}, odd implicita ${formatProb(marketProb)}, suporte medias ${formatProb(avgSupport)}, frequencia ${formatProb(frequencyProb)}, qualidade dados ${formatProb(quality)}.`,
     ],
 
-    warnings: components.length < 3 ? ["Simulacao de baixa confiabilidade por pouca evidencia estruturada."] : [],
+    warnings:
+      components.length < 3
+        ? ["Simulacao de baixa confiabilidade por pouca evidencia estruturada."]
+        : [],
   };
 }
 
-function isCornerTotalOverUnderMarket(marketText: string, pick: string, line: number | null): boolean {
+function isCornerTotalOverUnderMarket(
+  marketText: string,
+  pick: string,
+  line: number | null,
+): boolean {
   const text = normalize(`${marketText} ${pick}`);
   if (line === null) return false;
-  const hasTotalSide = text.includes("over") || text.includes("under") || text.includes("mais de") || text.includes("menos de") || text.includes("total");
+  const hasTotalSide =
+    text.includes("over") ||
+    text.includes("under") ||
+    text.includes("mais de") ||
+    text.includes("menos de") ||
+    text.includes("total");
   const hasCorner = text.includes("corner") || text.includes("escanteio") || text.includes("canto");
   const hasRace = text.includes("race") || text.includes("corrida") || text.includes("primeiro");
   return hasCorner && hasTotalSide && !hasRace;
@@ -425,7 +496,17 @@ function readLinePercent(lines: unknown, key: string | number): number | null {
     const exact = String(num);
     const intPart = String(Math.trunc(num));
     const dec = `${intPart}.5`;
-    candidates.push(exact, `+${exact}`, `-${exact}`, intPart, `+${intPart}`, `-${intPart}`, dec, `+${dec}`, `${exact}.0`);
+    candidates.push(
+      exact,
+      `+${exact}`,
+      `-${exact}`,
+      intPart,
+      `+${intPart}`,
+      `-${intPart}`,
+      dec,
+      `+${dec}`,
+      `${exact}.0`,
+    );
   }
   for (const c of candidates) {
     if (c in map) {
@@ -466,7 +547,9 @@ function estimateLambdas(input: AspValidatorSimulationInput): LambdaEstimate {
     lambdaHome = expHome;
     lambdaAway = expAway;
     evidence += 3;
-    notes.push(`Lambdas extraidos da forca esperada de gols: mandante ${formatNumber(expHome)}, visitante ${formatNumber(expAway)}.`);
+    notes.push(
+      `Lambdas extraidos da forca esperada de gols: mandante ${formatNumber(expHome)}, visitante ${formatNumber(expAway)}.`,
+    );
   }
 
   // Composicao tecnica via GoalsBlock estruturado do parser de texto colado.
@@ -490,20 +573,28 @@ function estimateLambdas(input: AspValidatorSimulationInput): LambdaEstimate {
     if (lambdaHome === null && homeForHA !== null && awayAgainstHA !== null) {
       lambdaHome = (homeForHA + awayAgainstHA) / 2;
       evidence += 2;
-      notes.push(`Lambda mandante por composicao casa/fora: media(${formatNumber(homeForHA)} marcados em casa, ${formatNumber(awayAgainstHA)} sofridos como visitante) = ${formatNumber(lambdaHome)}.`);
+      notes.push(
+        `Lambda mandante por composicao casa/fora: media(${formatNumber(homeForHA)} marcados em casa, ${formatNumber(awayAgainstHA)} sofridos como visitante) = ${formatNumber(lambdaHome)}.`,
+      );
     } else if (lambdaHome === null && homeForGen !== null && awayAgainstGen !== null) {
       lambdaHome = (homeForGen + awayAgainstGen) / 2;
       evidence += 2;
-      notes.push(`Lambda mandante por composicao geral: media(${formatNumber(homeForGen)} marcados, ${formatNumber(awayAgainstGen)} sofridos) = ${formatNumber(lambdaHome)}.`);
+      notes.push(
+        `Lambda mandante por composicao geral: media(${formatNumber(homeForGen)} marcados, ${formatNumber(awayAgainstGen)} sofridos) = ${formatNumber(lambdaHome)}.`,
+      );
     }
     if (lambdaAway === null && awayForHA !== null && homeAgainstHA !== null) {
       lambdaAway = (awayForHA + homeAgainstHA) / 2;
       evidence += 2;
-      notes.push(`Lambda visitante por composicao casa/fora: media(${formatNumber(awayForHA)} marcados como visitante, ${formatNumber(homeAgainstHA)} sofridos em casa) = ${formatNumber(lambdaAway)}.`);
+      notes.push(
+        `Lambda visitante por composicao casa/fora: media(${formatNumber(awayForHA)} marcados como visitante, ${formatNumber(homeAgainstHA)} sofridos em casa) = ${formatNumber(lambdaAway)}.`,
+      );
     } else if (lambdaAway === null && awayForGen !== null && homeAgainstGen !== null) {
       lambdaAway = (awayForGen + homeAgainstGen) / 2;
       evidence += 2;
-      notes.push(`Lambda visitante por composicao geral: media(${formatNumber(awayForGen)} marcados, ${formatNumber(homeAgainstGen)} sofridos) = ${formatNumber(lambdaAway)}.`);
+      notes.push(
+        `Lambda visitante por composicao geral: media(${formatNumber(awayForGen)} marcados, ${formatNumber(homeAgainstGen)} sofridos) = ${formatNumber(lambdaAway)}.`,
+      );
     }
   }
 
@@ -513,8 +604,12 @@ function estimateLambdas(input: AspValidatorSimulationInput): LambdaEstimate {
     const awayFor = readNumber(away.away_avg_for) ?? readNumber(away.avg_for);
     const awayAgainst = readNumber(away.away_avg_against) ?? readNumber(away.avg_against);
 
-    const homeParts = [homeFor, awayAgainst].filter((value): value is number => value !== null && Number.isFinite(value));
-    const awayParts = [awayFor, homeAgainst].filter((value): value is number => value !== null && Number.isFinite(value));
+    const homeParts = [homeFor, awayAgainst].filter(
+      (value): value is number => value !== null && Number.isFinite(value),
+    );
+    const awayParts = [awayFor, homeAgainst].filter(
+      (value): value is number => value !== null && Number.isFinite(value),
+    );
     if (lambdaHome === null && homeParts.length) {
       lambdaHome = average(homeParts);
       evidence += homeParts.length;
@@ -605,29 +700,46 @@ function estimateLambdas(input: AspValidatorSimulationInput): LambdaEstimate {
   }
   // Guardrail 1X2: lambdas altos sem medias estruturadas confiaveis derrubam confianca
   // para evitar projecoes infladas de vitoria mandante/visitante a partir de blob bruto.
-  let confidence: "low" | "medium" | "high" = evidence >= 4 ? "high" : evidence >= 2 ? "medium" : "low";
+  let confidence: "low" | "medium" | "high" =
+    evidence >= 4 ? "high" : evidence >= 2 ? "medium" : "low";
   if (is1x2 && !hasStructuredGoalsBlocks && (lambdaHome > 2.5 || lambdaAway > 2.5)) {
-    warnings.push("Lambda alto gerado sem medias estruturadas confiaveis; simulacao 1X2 marcada como baixa confianca.");
+    warnings.push(
+      "Lambda alto gerado sem medias estruturadas confiaveis; simulacao 1X2 marcada como baixa confianca.",
+    );
     confidence = "low";
   }
-  if (confidence === "low") warnings.push("Poucas evidencias numericas foram encontradas para calibrar a simulacao.");
+  if (confidence === "low")
+    warnings.push("Poucas evidencias numericas foram encontradas para calibrar a simulacao.");
   return { lambdaHome, lambdaAway, confidence, notes, warnings };
 }
 
-function calculateMarketProbability(matrix: ScoreCell[], marketText: string, input: AspValidatorSimulationInput, line: number | null): number | null {
+function calculateMarketProbability(
+  matrix: ScoreCell[],
+  marketText: string,
+  input: AspValidatorSimulationInput,
+  line: number | null,
+): number | null {
   const pickText = normalize(input.pick ?? "");
   const home = normalize(input.home_team ?? "");
   const away = normalize(input.away_team ?? "");
 
   if (marketText.includes("btts") || marketText.includes("ambas")) {
-    const yesPoisson = matrix.reduce((sum, cell) => sum + (cell.home > 0 && cell.away > 0 ? cell.probability : 0), 0);
+    const yesPoisson = matrix.reduce(
+      (sum, cell) => sum + (cell.home > 0 && cell.away > 0 ? cell.probability : 0),
+      0,
+    );
     const structured = (input.structured_json ?? {}) as Record<string, any>;
     const goalsBlock = (structured.goals ?? {}) as Record<string, any>;
     const genHome = ((goalsBlock.general ?? {}) as Record<string, any>).home ?? {};
     const genAway = ((goalsBlock.general ?? {}) as Record<string, any>).away ?? {};
     const haHome = ((goalsBlock.home_away ?? {}) as Record<string, any>).home ?? {};
     const haAway = ((goalsBlock.home_away ?? {}) as Record<string, any>).away ?? {};
-    const bttsValues = [genHome.btts_yes_pct, genAway.btts_yes_pct, haHome.btts_yes_pct, haAway.btts_yes_pct]
+    const bttsValues = [
+      genHome.btts_yes_pct,
+      genAway.btts_yes_pct,
+      haHome.btts_yes_pct,
+      haAway.btts_yes_pct,
+    ]
       .map((v) => readNumber(v))
       .filter((v): v is number => v !== null && Number.isFinite(v));
     let yes = yesPoisson;
@@ -651,11 +763,15 @@ function calculateMarketProbability(matrix: ScoreCell[], marketText: string, inp
       const draw = cell.home === cell.away;
       const awayWin = cell.home < cell.away;
       const hit =
-        pickText.includes("1x") || pickText.includes("casa/empate") || pickText.includes("home/draw")
+        pickText.includes("1x") ||
+        pickText.includes("casa/empate") ||
+        pickText.includes("home/draw")
           ? homeWin || draw
           : pickText.includes("12")
             ? homeWin || awayWin
-            : pickText.includes("x2") || pickText.includes("visitante/empate") || pickText.includes("away/draw")
+            : pickText.includes("x2") ||
+                pickText.includes("visitante/empate") ||
+                pickText.includes("away/draw")
               ? awayWin || draw
               : pickText.includes(home)
                 ? homeWin || draw
@@ -684,7 +800,12 @@ function calculateMarketProbability(matrix: ScoreCell[], marketText: string, inp
     return push > 0 && push < 1 ? raw / (1 - push) : raw;
   }
 
-  if (marketText.includes("over") || marketText.includes("under") || marketText.includes("total") || marketText.includes("gol")) {
+  if (
+    marketText.includes("over") ||
+    marketText.includes("under") ||
+    marketText.includes("total") ||
+    marketText.includes("gol")
+  ) {
     if (line === null) return null;
     const wantsUnder = pickText.includes("under") || pickText.includes("menos");
     const raw = matrix.reduce((sum, cell) => {
@@ -693,7 +814,10 @@ function calculateMarketProbability(matrix: ScoreCell[], marketText: string, inp
       return sum + (hit ? cell.probability : 0);
     }, 0);
     const push = Number.isInteger(line)
-      ? matrix.reduce((sum, cell) => sum + (cell.home + cell.away === line ? cell.probability : 0), 0)
+      ? matrix.reduce(
+          (sum, cell) => sum + (cell.home + cell.away === line ? cell.probability : 0),
+          0,
+        )
       : 0;
     return push > 0 && push < 1 ? raw / (1 - push) : raw;
   }
@@ -705,10 +829,15 @@ function calculateMarketProbability(matrix: ScoreCell[], marketText: string, inp
     const wantsDraw = /empate|draw|^x$/.test(pickText) || pickText === "x";
     const wantsAway =
       !wantsDraw &&
-      (/visitante|away|\bfora\b/.test(pickText) || (away && pickText.includes(away)) || pickText === "2");
+      (/visitante|away|\bfora\b/.test(pickText) ||
+        (away && pickText.includes(away)) ||
+        pickText === "2");
     const wantsHome =
-      !wantsDraw && !wantsAway &&
-      (/mandante|home|\bcasa\b/.test(pickText) || (home && pickText.includes(home)) || pickText === "1");
+      !wantsDraw &&
+      !wantsAway &&
+      (/mandante|home|\bcasa\b/.test(pickText) ||
+        (home && pickText.includes(home)) ||
+        pickText === "1");
 
     let raw = wantsDraw ? draw : wantsAway ? awayWin : wantsHome ? homeWin : 0;
     if (!wantsDraw && (wantsHome || wantsAway)) {
@@ -754,7 +883,10 @@ function topScores(matrix: ScoreCell[]): Array<{ score: string; probability: num
   return [...matrix]
     .sort((a, b) => b.probability - a.probability)
     .slice(0, 5)
-    .map((cell) => ({ score: `${cell.home}-${cell.away}`, probability: round(cell.probability, 4) }));
+    .map((cell) => ({
+      score: `${cell.home}-${cell.away}`,
+      probability: round(cell.probability, 4),
+    }));
 }
 
 function buildGoalDistribution(matrix: ScoreCell[]): Record<string, number> {
@@ -763,18 +895,26 @@ function buildGoalDistribution(matrix: ScoreCell[]): Record<string, number> {
     const total = String(cell.home + cell.away);
     distribution[total] = (distribution[total] ?? 0) + cell.probability;
   }
-  return Object.fromEntries(Object.entries(distribution).map(([total, probability]) => [total, round(probability, 4)]));
+  return Object.fromEntries(
+    Object.entries(distribution).map(([total, probability]) => [total, round(probability, 4)]),
+  );
 }
 
 function parseLine(value: string | number | null): number | null {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  const parsed = Number(String(value ?? "").replace(",", ".").match(/[+-]?\d+(?:\.\d+)?/)?.[0]);
+  const parsed = Number(
+    String(value ?? "")
+      .replace(",", ".")
+      .match(/[+-]?\d+(?:\.\d+)?/)?.[0],
+  );
   return Number.isFinite(parsed) ? parsed : null;
 }
 
 function readCornerRaceLine(value: string | number | null): number | null {
   const text = String(value ?? "");
-  const match = text.match(/(\d+(?:[,.]\d+)?)\s*(?:escanteios|cantos|corners?)\s*(?:primeiro|first)/i) ?? text.match(/race\s*to\s*(\d+(?:[,.]\d+)?)/i);
+  const match =
+    text.match(/(\d+(?:[,.]\d+)?)\s*(?:escanteios|cantos|corners?)\s*(?:primeiro|first)/i) ??
+    text.match(/race\s*to\s*(\d+(?:[,.]\d+)?)/i);
   if (!match?.[1]) return null;
   const parsed = Number(match[1].replace(",", "."));
   return Number.isFinite(parsed) ? parsed : null;
@@ -783,7 +923,12 @@ function readCornerRaceLine(value: string | number | null): number | null {
 function readNumber(value: unknown): number | null {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   if (typeof value === "string") {
-    const parsed = Number(value.replace("%", "").replace(",", ".").match(/[+-]?\d+(?:\.\d+)?/)?.[0]);
+    const parsed = Number(
+      value
+        .replace("%", "")
+        .replace(",", ".")
+        .match(/[+-]?\d+(?:\.\d+)?/)?.[0],
+    );
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;

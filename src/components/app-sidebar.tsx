@@ -8,7 +8,6 @@ import {
   BrainCircuit,
   ClipboardCheck,
   Cpu,
-  
   Settings,
   Megaphone,
   Database,
@@ -29,7 +28,6 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-
 const items = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Prognósticos", url: "/prognosticos", icon: ListChecks },
@@ -43,7 +41,7 @@ const items = [
   { title: "Histórico", url: "/historico", icon: History },
   { title: "Bankroll", url: "/bankroll", icon: Wallet },
   { title: "Aprendizado da IA", url: "/aprendizado-ia", icon: BrainCircuit },
-  
+
   { title: "Configurações", url: "/configuracoes", icon: Settings },
 ];
 

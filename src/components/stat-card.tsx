@@ -55,10 +55,7 @@ export function StatCard({
         {Icon && <Icon className={cn("h-4 w-4", iconToneClass[effectiveTone])} />}
       </div>
       <div
-        className={cn(
-          "mt-2 font-mono text-2xl font-bold tracking-tight",
-          toneClass[effectiveTone],
-        )}
+        className={cn("mt-2 font-mono text-2xl font-bold tracking-tight", toneClass[effectiveTone])}
       >
         {value}
       </div>

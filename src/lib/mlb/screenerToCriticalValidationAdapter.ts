@@ -8,7 +8,8 @@ import type { MlbPreparedCriticalValidationPayload } from "@/types/mlbCriticalVa
 
 export const MLB_CRITICAL_VALIDATION_DRAFT_VERSION = "1.0.0";
 export const ASP_CRITICAL_VALIDATION_DRAFT_KEY = "asp_critical_validation_draft";
-export const ASP_CRITICAL_VALIDATION_DRAFT_CREATED_AT_KEY = "asp_critical_validation_draft_created_at";
+export const ASP_CRITICAL_VALIDATION_DRAFT_CREATED_AT_KEY =
+  "asp_critical_validation_draft_created_at";
 export const ASP_CRITICAL_VALIDATION_DRAFT_TTL_MS = 2 * 60 * 60 * 1000;
 
 export interface MlbCriticalValidationDraftInput {
@@ -58,7 +59,9 @@ export interface MlbCriticalValidationDraftInput {
   recommended_next_step: string;
   imported_context_summary: string;
   source_projection_payload: MlbPreparedCriticalValidationPayload["source_projection_payload"];
-  baseball_reference_context: MlbPreparedCriticalValidationPayload["baseball_reference_context"] | null;
+  baseball_reference_context:
+    | MlbPreparedCriticalValidationPayload["baseball_reference_context"]
+    | null;
 }
 
 export interface MlbCriticalValidationDraft {
@@ -126,8 +129,16 @@ function buildDraftId(payload: MlbPreparedCriticalValidationPayload): string {
   return `mlb-critical-validation-draft:${payload.game.game_id}:${payload.opportunity.market}:${payload.opportunity.pick ?? "pick"}:${randomId}`;
 }
 
-type StarterLike = NonNullable<MlbPreparedCriticalValidationPayload["baseball_reference_context"]>["starting_pitchers"]["home"] | null | undefined;
-type TeamLike = NonNullable<MlbPreparedCriticalValidationPayload["baseball_reference_context"]>["teams"]["home"] | null | undefined;
+type StarterLike =
+  | NonNullable<
+      MlbPreparedCriticalValidationPayload["baseball_reference_context"]
+    >["starting_pitchers"]["home"]
+  | null
+  | undefined;
+type TeamLike =
+  | NonNullable<MlbPreparedCriticalValidationPayload["baseball_reference_context"]>["teams"]["home"]
+  | null
+  | undefined;
 
 function rawOf(r: { raw?: string | null } | null | undefined): string {
   return r?.raw ? r.raw : "não informado";
@@ -229,15 +240,20 @@ function buildImportedContextSummary(payload: MlbPreparedCriticalValidationPaylo
   out.push(`Pick: ${payload.opportunity.pick ?? "-"}`);
   out.push(`Linha: ${payload.opportunity.line ?? "-"}`);
   out.push(`Odd ofertada: ${payload.opportunity.odd ?? "-"}`);
-  out.push(`Odd mediana/base mercado: ${payload.opportunity.market_base_odd ?? payload.opportunity.median_odd ?? "-"}`);
+  out.push(
+    `Odd mediana/base mercado: ${payload.opportunity.market_base_odd ?? payload.opportunity.median_odd ?? "-"}`,
+  );
   out.push(`Bookmaker melhor: ${payload.opportunity.bookmaker_melhor ?? "-"}`);
   out.push("");
 
   out.push("[PROJEÇÃO DO SCREENER]");
   out.push(`Probabilidade ASP: ${formatPercent(payload.opportunity.model_probability)}`);
-  out.push(`Probabilidade no-vig mercado: ${formatPercent(payload.opportunity.market_probability_no_vig)}`);
+  out.push(
+    `Probabilidade no-vig mercado: ${formatPercent(payload.opportunity.market_probability_no_vig)}`,
+  );
   const edgePP =
-    payload.opportunity.probability_edge != null && Number.isFinite(payload.opportunity.probability_edge)
+    payload.opportunity.probability_edge != null &&
+    Number.isFinite(payload.opportunity.probability_edge)
       ? `${(payload.opportunity.probability_edge * 100).toFixed(2)} p.p.`
       : "-";
   out.push(`Edge de probabilidade: ${edgePP}`);
@@ -246,7 +262,9 @@ function buildImportedContextSummary(payload: MlbPreparedCriticalValidationPaylo
   out.push(`Opportunity Score bruto: ${payload.validation_preparation.raw_opportunity_score}`);
   out.push(`Confidence bruto: ${payload.validation_preparation.raw_confidence_score}`);
   out.push(`Score pós-contexto: ${payload.validation_preparation.critical_adjusted_score}`);
-  out.push(`Confiança pós-contexto: ${payload.validation_preparation.critical_adjusted_confidence}`);
+  out.push(
+    `Confiança pós-contexto: ${payload.validation_preparation.critical_adjusted_confidence}`,
+  );
   out.push(
     `Alinhamento: ${payload.context_alignment.alignment_status} (${payload.context_alignment.alignment_score})`,
   );
@@ -316,7 +334,10 @@ function buildImportedContextSummary(payload: MlbPreparedCriticalValidationPaylo
   out.push("[PROJEÇÃO TÉCNICA DO SCREENER]");
   out.push(...buildTechnicalProjectionBlock(payload));
 
-  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  return out
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 export function mapMlbOpportunityToCriticalValidationInput(
@@ -536,7 +557,10 @@ export function readCriticalValidationDraft(
     return { draft: null, validation: { ...EMPTY_VALIDATION, errors: ["Rascunho corrompido."] } };
   }
   const validation = validateCriticalValidationDraft(parsed, now);
-  if (validation.expired || validation.errors.some((e) => /incompatível|Versão|Origem|Destino/.test(e))) {
+  if (
+    validation.expired ||
+    validation.errors.some((e) => /incompatível|Versão|Origem|Destino/.test(e))
+  ) {
     clearCriticalValidationDraft();
   }
   return { draft: parsed, validation };

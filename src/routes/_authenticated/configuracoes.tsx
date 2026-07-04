@@ -49,8 +49,12 @@ function Configuracoes() {
         nome_plataforma: nome,
         valor_unidade_padrao: unidade,
         banca_inicial: bancaInicial,
-        esportes_ativos: Object.entries(esportesAtivos).filter(([, v]) => v).map(([k]) => k),
-        mercados_ativos: Object.entries(mercadosAtivos).filter(([, v]) => v).map(([k]) => k),
+        esportes_ativos: Object.entries(esportesAtivos)
+          .filter(([, v]) => v)
+          .map(([k]) => k),
+        mercados_ativos: Object.entries(mercadosAtivos)
+          .filter(([, v]) => v)
+          .map(([k]) => k),
       });
       toast.success("Configurações salvas");
     } catch (e) {
@@ -69,7 +73,9 @@ function Configuracoes() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Identidade</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Identidade
+          </h3>
           <div className="mt-4 grid gap-3">
             <div>
               <Label>Nome da plataforma</Label>
@@ -81,7 +87,11 @@ function Configuracoes() {
                 <div className="flex h-12 w-12 items-center justify-center rounded-md bg-primary text-primary-foreground">
                   <Activity className="h-6 w-6" />
                 </div>
-                <Button variant="outline" size="sm" onClick={() => toast.info("Upload de logo em breve.")}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => toast.info("Upload de logo em breve.")}
+                >
                   Trocar logotipo
                 </Button>
               </div>
@@ -92,9 +102,15 @@ function Configuracoes() {
             </div>
             <div>
               <Label>Banca inicial (R$)</Label>
-              <Input type="number" value={bancaInicial} onChange={(e) => setBancaInicial(+e.target.value)} />
+              <Input
+                type="number"
+                value={bancaInicial}
+                onChange={(e) => setBancaInicial(+e.target.value)}
+              />
             </div>
-            <Button onClick={salvar} disabled={update.isPending}>Salvar</Button>
+            <Button onClick={salvar} disabled={update.isPending}>
+              Salvar
+            </Button>
           </div>
         </div>
 
@@ -105,7 +121,10 @@ function Configuracoes() {
             </h3>
             <div className="mt-4 space-y-2">
               {ESPORTES_DEFAULT.map((e) => (
-                <div key={e} className="flex items-center justify-between rounded-md border border-border bg-background/40 px-3 py-2">
+                <div
+                  key={e}
+                  className="flex items-center justify-between rounded-md border border-border bg-background/40 px-3 py-2"
+                >
                   <span className="text-sm font-medium">{e}</span>
                   <Switch
                     checked={!!esportesAtivos[e]}
@@ -122,7 +141,10 @@ function Configuracoes() {
             </h3>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               {MERCADOS_DEFAULT.map((m) => (
-                <div key={m} className="flex items-center justify-between rounded-md border border-border bg-background/40 px-3 py-2">
+                <div
+                  key={m}
+                  className="flex items-center justify-between rounded-md border border-border bg-background/40 px-3 py-2"
+                >
                   <span className="text-sm">{m}</span>
                   <Switch
                     checked={!!mercadosAtivos[m]}

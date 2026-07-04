@@ -15,9 +15,13 @@ export function normalizeProbabilityPercent(value: number | null | undefined): n
   return round(value);
 }
 
-export function calculateEvPercent(probabilityPercent: number | null, offeredOdd: number | null): number | null {
+export function calculateEvPercent(
+  probabilityPercent: number | null,
+  offeredOdd: number | null,
+): number | null {
   if (probabilityPercent === null || offeredOdd === null) return null;
-  if (!Number.isFinite(probabilityPercent) || !Number.isFinite(offeredOdd) || offeredOdd <= 0) return null;
+  if (!Number.isFinite(probabilityPercent) || !Number.isFinite(offeredOdd) || offeredOdd <= 0)
+    return null;
   const evPercent = ((probabilityPercent / 100) * offeredOdd - 1) * 100;
   return round(evPercent);
 }

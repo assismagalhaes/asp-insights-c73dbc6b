@@ -15,14 +15,22 @@ function table(db: LooseSupabase, name: string) {
   return (db as unknown as { from: (tableName: string) => any }).from(name);
 }
 
-export async function fetchMlbOddsRowsForDate(db: LooseSupabase, snapshotDate: string): Promise<MlbOddsRow[]> {
+export async function fetchMlbOddsRowsForDate(
+  db: LooseSupabase,
+  snapshotDate: string,
+): Promise<MlbOddsRow[]> {
   const { data, error } = await table(db, "odds_jogos")
-    .select("data,hora,mandante,visitante,mercado,pick,linha,odd,odd_media,odd_mediana,odd_minima,odd_maxima,odd_melhor,bookmaker_melhor,casas_count,odds_disponiveis,probabilidade_implicita_media,probabilidade_implicita_mediana,margem_mercado_media,margem_mercado_mediana,bookmaker,fonte,esporte,liga")
+    .select(
+      "data,hora,mandante,visitante,mercado,pick,linha,odd,odd_media,odd_mediana,odd_minima,odd_maxima,odd_melhor,bookmaker_melhor,casas_count,odds_disponiveis,probabilidade_implicita_media,probabilidade_implicita_mediana,margem_mercado_media,margem_mercado_mediana,bookmaker,fonte,esporte,liga",
+    )
     .eq("data", snapshotDate)
     .limit(MLB_ODDS_ROWS_LIMIT);
   if (error) throw error;
   return (data ?? [])
-    .filter((row: Record<string, unknown>) => isBaseballSport(nullableText(row.esporte)) && isMlbLeague(nullableText(row.liga)))
+    .filter(
+      (row: Record<string, unknown>) =>
+        isBaseballSport(nullableText(row.esporte)) && isMlbLeague(nullableText(row.liga)),
+    )
     .map((row: Record<string, unknown>) => ({
       data: nullableText(row.data),
       hora: nullableText(row.hora),
@@ -79,7 +87,9 @@ export async function readMlbStandingsSnapshot(
     .eq("season", resolvedSeason)
     .order("rank", { ascending: true });
   if (error) throw error;
-  const rows = (data ?? []) as Array<MlbTeamStanding & { updated_at?: string; created_at?: string }>;
+  const rows = (data ?? []) as Array<
+    MlbTeamStanding & { updated_at?: string; created_at?: string }
+  >;
   if (!rows.length) return null;
 
   const { data: averageRows, error: averageError } = await table(db, "mlb_league_average_snapshots")
@@ -112,13 +122,16 @@ export async function saveMlbStandingsSnapshot(
   }
 
   const rows = snapshot.teams.map((team) => ({ ...team, updated_at: new Date().toISOString() }));
-  const { error } = await table(db, "mlb_team_standings_snapshots")
-    .upsert(rows, { onConflict: "snapshot_date,season,team_key" });
+  const { error } = await table(db, "mlb_team_standings_snapshots").upsert(rows, {
+    onConflict: "snapshot_date,season,team_key",
+  });
   if (error) throw error;
 
   if (snapshot.league_average) {
-    const { error: averageError } = await table(db, "mlb_league_average_snapshots")
-      .upsert({ ...snapshot.league_average, updated_at: new Date().toISOString() }, { onConflict: "snapshot_date,season" });
+    const { error: averageError } = await table(db, "mlb_league_average_snapshots").upsert(
+      { ...snapshot.league_average, updated_at: new Date().toISOString() },
+      { onConflict: "snapshot_date,season" },
+    );
     if (averageError) throw averageError;
   }
 

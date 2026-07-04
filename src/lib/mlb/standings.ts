@@ -10,7 +10,8 @@ import type {
 } from "@/types/mlbStandings";
 import { matchMlbTeamName, normalizeMlbTeamText } from "@/utils/mlbTeamNameMap";
 
-export const MLB_STANDINGS_SOURCE_URL = "https://www.baseball-reference.com/leagues/MLB-standings.shtml";
+export const MLB_STANDINGS_SOURCE_URL =
+  "https://www.baseball-reference.com/leagues/MLB-standings.shtml";
 
 type ParsedStandingsPayload = {
   teams: MlbTeamStanding[];
@@ -53,7 +54,9 @@ export function fetchMlbDetailedStandings(): Promise<string> {
   }).then(async (response) => {
     const html = await response.text();
     if (!response.ok) {
-      throw new Error(`Baseball-Reference retornou HTTP ${response.status}. Use o CSV manual como fallback.`);
+      throw new Error(
+        `Baseball-Reference retornou HTTP ${response.status}. Use o CSV manual como fallback.`,
+      );
     }
     return html;
   });
@@ -61,7 +64,11 @@ export function fetchMlbDetailedStandings(): Promise<string> {
 
 export function parseMlbStandingsHtml(
   html: string,
-  opts: { snapshotDate: string; season: number; source?: MlbStandingsSource } = defaultParseOptions(),
+  opts: {
+    snapshotDate: string;
+    season: number;
+    source?: MlbStandingsSource;
+  } = defaultParseOptions(),
 ): ParsedStandingsPayload {
   const tables = Array.from(html.matchAll(/<table[\s\S]*?<\/table>/gi)).map((match) => match[0]);
   const candidates = tables
@@ -69,9 +76,7 @@ export function parseMlbStandingsHtml(
     .map(rowsToCanonicalRecords)
     .filter((rows) => rows.some((row) => isStandingsLikeRow(row)));
 
-  const rows = candidates
-    .sort((a, b) => countTeamRows(b) - countTeamRows(a))
-    .at(0);
+  const rows = candidates.sort((a, b) => countTeamRows(b) - countTeamRows(a)).at(0);
 
   if (!rows?.length) {
     throw new Error("Tabela Major League Baseball Detailed Standings nao encontrada no HTML.");
@@ -87,7 +92,11 @@ export function parseMlbStandingsHtml(
 
 export function parseMlbStandingsCsv(
   csv: string,
-  opts: { snapshotDate: string; season: number; source?: MlbStandingsSource } = defaultParseOptions(),
+  opts: {
+    snapshotDate: string;
+    season: number;
+    source?: MlbStandingsSource;
+  } = defaultParseOptions(),
 ): ParsedStandingsPayload {
   const records = parseCsv(csv);
   if (!records.length) throw new Error("CSV manual vazio ou sem linhas validas.");
@@ -101,7 +110,12 @@ export function parseMlbStandingsCsv(
 
 export function normalizeMlbStandingsRow(
   row: MlbStandingRawRow,
-  opts: { snapshotDate: string; season: number; source: MlbStandingsSource; sourceUrl: string | null },
+  opts: {
+    snapshotDate: string;
+    season: number;
+    source: MlbStandingsSource;
+    sourceUrl: string | null;
+  },
 ): MlbTeamStanding | null {
   const teamName = cleanTeamName(textValue(row.team));
   if (!teamName || /^average$/i.test(teamName)) return null;
@@ -194,37 +208,54 @@ export function validateMlbStandings(
     .filter((team) => !matchMlbTeamName(team.team_name))
     .map((team) => team.team_name);
 
-  if (teams.length < 30) errors.push(`Foram identificados apenas ${teams.length} times MLB. O minimo esperado e 30.`);
+  if (teams.length < 30)
+    errors.push(`Foram identificados apenas ${teams.length} times MLB. O minimo esperado e 30.`);
   if (teams.some((team) => !team.team_key)) errors.push("Ha times sem team_key normalizado.");
   for (const team of teams) {
-    if (team.wins == null || team.losses == null) errors.push(`${team.team_name}: W/L ausente ou nao numerico.`);
+    if (team.wins == null || team.losses == null)
+      errors.push(`${team.team_name}: W/L ausente ou nao numerico.`);
     if (team.win_pct == null) errors.push(`${team.team_name}: W-L% ausente ou nao numerico.`);
-    if (team.runs_per_game == null || team.runs_allowed_per_game == null) errors.push(`${team.team_name}: R ou RA ausente.`);
+    if (team.runs_per_game == null || team.runs_allowed_per_game == null)
+      errors.push(`${team.team_name}: R ou RA ausente.`);
     if (team.sos == null || team.srs == null) errors.push(`${team.team_name}: SOS ou SRS ausente.`);
-    if (team.pyth_wins == null || team.pyth_losses == null) errors.push(`${team.team_name}: pythWL nao foi separado.`);
-    if (team.home_wins == null || team.home_losses == null) errors.push(`${team.team_name}: Home nao foi separado.`);
-    if (team.road_wins == null || team.road_losses == null) errors.push(`${team.team_name}: Road nao foi separado.`);
-    if (team.vs_rhp_wins == null || team.vs_rhp_losses == null) errors.push(`${team.team_name}: vRHP nao foi separado.`);
-    if (team.vs_lhp_wins == null || team.vs_lhp_losses == null) errors.push(`${team.team_name}: vLHP nao foi separado.`);
-    if (team.last10_wins == null || team.last10_losses == null) errors.push(`${team.team_name}: last10 nao foi separado.`);
-    if (team.last20_wins == null || team.last20_losses == null) errors.push(`${team.team_name}: last20 nao foi separado.`);
-    if (team.last30_wins == null || team.last30_losses == null) errors.push(`${team.team_name}: last30 nao foi separado.`);
+    if (team.pyth_wins == null || team.pyth_losses == null)
+      errors.push(`${team.team_name}: pythWL nao foi separado.`);
+    if (team.home_wins == null || team.home_losses == null)
+      errors.push(`${team.team_name}: Home nao foi separado.`);
+    if (team.road_wins == null || team.road_losses == null)
+      errors.push(`${team.team_name}: Road nao foi separado.`);
+    if (team.vs_rhp_wins == null || team.vs_rhp_losses == null)
+      errors.push(`${team.team_name}: vRHP nao foi separado.`);
+    if (team.vs_lhp_wins == null || team.vs_lhp_losses == null)
+      errors.push(`${team.team_name}: vLHP nao foi separado.`);
+    if (team.last10_wins == null || team.last10_losses == null)
+      errors.push(`${team.team_name}: last10 nao foi separado.`);
+    if (team.last20_wins == null || team.last20_losses == null)
+      errors.push(`${team.team_name}: last20 nao foi separado.`);
+    if (team.last30_wins == null || team.last30_losses == null)
+      errors.push(`${team.team_name}: last30 nao foi separado.`);
     if (!team.snapshot_date) errors.push(`${team.team_name}: snapshot_date indefinido.`);
     if (!team.season) errors.push(`${team.team_name}: season indefinido.`);
   }
 
   const oddsTeamKeys = new Set(
-    oddsRows.flatMap((row) => [row.mandante, row.visitante]).filter(Boolean).map((name) => matchMlbTeamName(name)),
+    oddsRows
+      .flatMap((row) => [row.mandante, row.visitante])
+      .filter(Boolean)
+      .map((name) => matchMlbTeamName(name)),
   );
   oddsTeamKeys.delete(null);
   const standingKeys = new Set(teams.map((team) => team.team_key));
   const matchedOddsTeams = [...oddsTeamKeys].filter((key) => key && standingKeys.has(key)).length;
   const matchRate = oddsTeamKeys.size ? matchedOddsTeams / oddsTeamKeys.size : 1;
   if (oddsTeamKeys.size && matchRate < 0.9) {
-    errors.push(`Apenas ${Math.round(matchRate * 100)}% dos times nas odds do dia foram conciliados com standings.`);
+    errors.push(
+      `Apenas ${Math.round(matchRate * 100)}% dos times nas odds do dia foram conciliados com standings.`,
+    );
   }
 
-  if (unmatchedTeams.length) warnings.push(`Times sem alias explicito: ${unmatchedTeams.join(", ")}`);
+  if (unmatchedTeams.length)
+    warnings.push(`Times sem alias explicito: ${unmatchedTeams.join(", ")}`);
 
   return {
     valid: errors.length === 0,
@@ -257,12 +288,11 @@ export function enrichMlbGamesWithStandings(
     ].join("_");
 
     if (!groups.has(gameId)) {
-      const homeStanding = homeKey ? byTeam.get(homeKey) ?? null : null;
-      const awayStanding = awayKey ? byTeam.get(awayKey) ?? null : null;
-      const missing = [
-        !homeStanding ? home : null,
-        !awayStanding ? away : null,
-      ].filter(Boolean) as string[];
+      const homeStanding = homeKey ? (byTeam.get(homeKey) ?? null) : null;
+      const awayStanding = awayKey ? (byTeam.get(awayKey) ?? null) : null;
+      const missing = [!homeStanding ? home : null, !awayStanding ? away : null].filter(
+        Boolean,
+      ) as string[];
       groups.set(gameId, {
         game_id: gameId,
         date: row.data,
@@ -274,7 +304,12 @@ export function enrichMlbGamesWithStandings(
         home_standings: homeStanding,
         away_standings: awayStanding,
         markets: [],
-        standings_status: missing.length === 0 ? "matched" : missing.length === 2 ? "missing_standings" : "partial_match",
+        standings_status:
+          missing.length === 0
+            ? "matched"
+            : missing.length === 2
+              ? "missing_standings"
+              : "partial_match",
         missing_teams: missing,
       });
     }
@@ -301,7 +336,9 @@ export function enrichMlbGamesWithStandings(
     });
   }
 
-  return [...groups.values()].sort((a, b) => `${a.date ?? ""}${a.time ?? ""}`.localeCompare(`${b.date ?? ""}${b.time ?? ""}`));
+  return [...groups.values()].sort((a, b) =>
+    `${a.date ?? ""}${a.time ?? ""}`.localeCompare(`${b.date ?? ""}${b.time ?? ""}`),
+  );
 }
 
 export function getMlbStandingsSnapshot(
@@ -335,7 +372,12 @@ function toNumberOrNull(value: unknown): number | null {
 
 function normalizeRows(
   rows: MlbStandingRawRow[],
-  opts: { snapshotDate: string; season: number; source: MlbStandingsSource; sourceUrl: string | null },
+  opts: {
+    snapshotDate: string;
+    season: number;
+    source: MlbStandingsSource;
+    sourceUrl: string | null;
+  },
 ): ParsedStandingsPayload {
   const normalizedRows = rows.map(normalizeRecordKeys);
   const teams = normalizedRows
@@ -352,7 +394,12 @@ function normalizeRows(
 
 function normalizeAverageRow(
   row: MlbStandingRawRow,
-  opts: { snapshotDate: string; season: number; source: MlbStandingsSource; sourceUrl: string | null },
+  opts: {
+    snapshotDate: string;
+    season: number;
+    source: MlbStandingsSource;
+    sourceUrl: string | null;
+  },
 ): MlbLeagueAverageSnapshot {
   return {
     snapshot_date: opts.snapshotDate,
@@ -608,7 +655,6 @@ function parsePercentage(input: unknown): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
-
 function parseDecimal(input: unknown): number | null {
   const value = Number(textValue(input).replace(",", "."));
   return Number.isFinite(value) ? value : null;
@@ -625,7 +671,10 @@ function winPct(wins: number | null, losses: number | null): number | null {
 }
 
 function cleanTeamName(input: string) {
-  return input.replace(/\(\d+\)/g, "").replace(/\*/g, "").trim();
+  return input
+    .replace(/\(\d+\)/g, "")
+    .replace(/\*/g, "")
+    .trim();
 }
 
 function textValue(input: unknown) {

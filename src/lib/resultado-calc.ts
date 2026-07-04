@@ -55,7 +55,10 @@ function mentionsTeam(pickNorm: string, team: string | null | undefined): boolea
   return parts.length > 0 && parts.some((part) => pickNorm.includes(part));
 }
 
-function splitJogoTeams(jogo: string | null | undefined): { mandante?: string; visitante?: string } {
+function splitJogoTeams(jogo: string | null | undefined): {
+  mandante?: string;
+  visitante?: string;
+} {
   const parts = String(jogo ?? "")
     .split(/\s+(?:vs|x|v)\s+/i)
     .map((part) => part.trim())
@@ -84,7 +87,8 @@ function pickSide(
 }
 
 export function calcularResultadoAuto(
-  prog: Pick<Prognostico, "mercado" | "pick" | "linha" | "mandante" | "visitante"> & Partial<Pick<Prognostico, "jogo">>,
+  prog: Pick<Prognostico, "mercado" | "pick" | "linha" | "mandante" | "visitante"> &
+    Partial<Pick<Prognostico, "jogo">>,
   placar: PlacarParsed,
 ): ResultadoCalc | null {
   const mercado = norm(prog.mercado);
@@ -118,7 +122,10 @@ export function calcularResultadoAuto(
     if (/\b1x\b/.test(pick) || has(pick, "casa ou empate", "mandante ou empate")) {
       return mandante >= visitante ? "GREEN" : "RED";
     }
-    if (/\bx2\b/.test(pick) || has(pick, "empate ou fora", "visitante ou empate", "fora ou empate")) {
+    if (
+      /\bx2\b/.test(pick) ||
+      has(pick, "empate ou fora", "visitante ou empate", "fora ou empate")
+    ) {
       return visitante >= mandante ? "GREEN" : "RED";
     }
     if (/\b12\b/.test(pick) || has(pick, "casa ou fora", "mandante ou visitante")) {
@@ -140,7 +147,8 @@ export function calcularResultadoAuto(
   }
 
   if (has(mercado, "resultado final", "moneyline")) {
-    if (has(pick, "empate", "draw") || /\bx\b/.test(pick)) return mandante === visitante ? "GREEN" : "RED";
+    if (has(pick, "empate", "draw") || /\bx\b/.test(pick))
+      return mandante === visitante ? "GREEN" : "RED";
     const lado = pickSide(prog);
     if (lado === "casa" || /\b1\b/.test(pick)) return mandante > visitante ? "GREEN" : "RED";
     if (lado === "fora" || /\b2\b/.test(pick)) return visitante > mandante ? "GREEN" : "RED";

@@ -112,7 +112,10 @@ export function formatHora(value: string | Date | null | undefined): string {
 }
 
 // A "linha" só deve aparecer quando não estiver embutida no texto do pick.
-export function shouldShowLinha(pick: string | null | undefined, linha: string | null | undefined): boolean {
+export function shouldShowLinha(
+  pick: string | null | undefined,
+  linha: string | null | undefined,
+): boolean {
   if (linha === null || linha === undefined) return false;
   const linhaStr = String(linha).trim();
   if (!linhaStr) return false;

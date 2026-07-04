@@ -1,7 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ExcelJS from "exceljs";
-import { Upload, Download, FileSpreadsheet, AlertTriangle, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import {
+  Upload,
+  Download,
+  FileSpreadsheet,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,10 +31,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import {
-  RadioGroup,
-  RadioGroupItem,
-} from "@/components/ui/radio-group";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { supabase } from "@/lib/supabase-public";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -85,14 +90,26 @@ const ALIASES: Record<Field, string[]> = {
   linha: ["linha", "line", "handicap"],
   odd_ofertada: ["odd_ofertada", "odd", "odds", "odd_oferecida", "preco"],
   odd_valor: ["odd_valor", "fair_odd", "odd_justa", "valor_odd"],
-  probabilidade_final: ["probabilidade_final", "prob", "probabilidade", "probability", "prob_final"],
+  probabilidade_final: [
+    "probabilidade_final",
+    "prob",
+    "probabilidade",
+    "probability",
+    "prob_final",
+  ],
   edge: ["edge", "ev", "valor_esperado"],
   dados_tecnicos: ["dados_tecnicos", "dados_técnicos", "tecnico", "técnico", "modelo", "tech"],
   observacoes: ["observacoes", "observações", "obs", "notes", "notas", "comentarios"],
 };
 
 const norm = (s: string) =>
-  s.toString().toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "_");
+  s
+    .toString()
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "_");
 
 function autoMap(headers: string[]): Record<Field, string | null> {
   const map = {} as Record<Field, string | null>;
@@ -108,7 +125,10 @@ function autoMap(headers: string[]): Record<Field, string | null> {
 function parseNumber(v: unknown): number | null {
   if (v == null || v === "") return null;
   if (typeof v === "number") return v;
-  const s = String(v).trim().replace(",", ".").replace(/[^\d.\-]/g, "");
+  const s = String(v)
+    .trim()
+    .replace(",", ".")
+    .replace(/[^\d.\-]/g, "");
   if (!s) return null;
   const n = Number(s);
   return isNaN(n) ? null : n;
@@ -169,7 +189,8 @@ function parseCsvAsText(text: string): Record<string, string>[] {
   const clean = text.replace(/^\uFEFF/, "");
   // Detecta separador (vírgula ou ponto-e-vírgula)
   const firstLine = clean.split(/\r?\n/, 1)[0] ?? "";
-  const sep = (firstLine.match(/;/g)?.length ?? 0) > (firstLine.match(/,/g)?.length ?? 0) ? ";" : ",";
+  const sep =
+    (firstLine.match(/;/g)?.length ?? 0) > (firstLine.match(/,/g)?.length ?? 0) ? ";" : ",";
 
   const rows: string[][] = [];
   let cur: string[] = [];
@@ -253,7 +274,9 @@ function ImportarPage() {
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buf);
       const ws = wb.worksheets[0];
-      const headerVals = (ws.getRow(1).values as unknown[]).slice(1).map((h) => String(h ?? "").trim());
+      const headerVals = (ws.getRow(1).values as unknown[])
+        .slice(1)
+        .map((h) => String(h ?? "").trim());
       json = [];
       ws.eachRow({ includeEmpty: false }, (row, idx) => {
         if (idx === 1) return;
@@ -266,7 +289,12 @@ function ImportarPage() {
           if (v == null) obj[h] = "";
           else if (v instanceof Date) obj[h] = v;
           else if (typeof v === "object") {
-            const o = v as { text?: unknown; result?: unknown; richText?: { text: string }[]; hyperlink?: unknown };
+            const o = v as {
+              text?: unknown;
+              result?: unknown;
+              richText?: { text: string }[];
+              hyperlink?: unknown;
+            };
             if (Array.isArray(o.richText)) obj[h] = o.richText.map((r) => r.text).join("");
             else if (o.text != null) obj[h] = String(o.text);
             else if (o.result != null) obj[h] = o.result;
@@ -293,7 +321,11 @@ function ImportarPage() {
     (data ?? []).forEach((r: Record<string, unknown>) => {
       set.add(
         [r.data, r.esporte, r.jogo, r.mercado, r.pick, r.linha ?? ""]
-          .map((x) => String(x ?? "").toLowerCase().trim())
+          .map((x) =>
+            String(x ?? "")
+              .toLowerCase()
+              .trim(),
+          )
           .join("||"),
       );
     });
@@ -353,9 +385,14 @@ function ImportarPage() {
 
       if (!mandante || !visitante) warnings.push("Sem mandante/visitante");
 
-      const linha = values.linha == null || values.linha === "" ? null : String(values.linha).trim();
+      const linha =
+        values.linha == null || values.linha === "" ? null : String(values.linha).trim();
       const key = [data, normESL.esporte, jogo, mercado, pick, linha ?? ""]
-        .map((x) => String(x ?? "").toLowerCase().trim())
+        .map((x) =>
+          String(x ?? "")
+            .toLowerCase()
+            .trim(),
+        )
         .join("||");
       const duplicate = errors.length === 0 && existingKeys.has(key);
 
@@ -483,7 +520,9 @@ function ImportarPage() {
         return { esporte, nome };
       });
       if (ligasArr.length) {
-        await supabase.from("ligas").upsert(ligasArr, { onConflict: "esporte,nome", ignoreDuplicates: true });
+        await supabase
+          .from("ligas")
+          .upsert(ligasArr, { onConflict: "esporte,nome", ignoreDuplicates: true });
       }
 
       let importados = 0;
@@ -531,12 +570,38 @@ function ImportarPage() {
 
   const downloadTemplate = () => {
     const cols = [
-      "data","hora","esporte","liga","jogo","mandante","visitante",
-      "mercado","pick","linha","odd_ofertada","odd_valor","probabilidade_final","edge","stake",
+      "data",
+      "hora",
+      "esporte",
+      "liga",
+      "jogo",
+      "mandante",
+      "visitante",
+      "mercado",
+      "pick",
+      "linha",
+      "odd_ofertada",
+      "odd_valor",
+      "probabilidade_final",
+      "edge",
+      "stake",
     ];
     const example = [
-      "11/06/2026","14:10","Futebol","Brasileirão","Flamengo x Palmeiras","Flamengo","Palmeiras",
-      "Resultado Final","Flamengo","","2.10","1.95","55","5.5","1",
+      "11/06/2026",
+      "14:10",
+      "Futebol",
+      "Brasileirão",
+      "Flamengo x Palmeiras",
+      "Flamengo",
+      "Palmeiras",
+      "Resultado Final",
+      "Flamengo",
+      "",
+      "2.10",
+      "1.95",
+      "55",
+      "5.5",
+      "1",
     ];
     const csv = `${cols.join(",")}\n${example.join(",")}\n`;
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -580,7 +645,11 @@ function ImportarPage() {
               (data ?? []).forEach((r: Record<string, unknown>) => {
                 set.add(
                   [r.data, r.esporte, r.jogo, r.mercado, r.pick, r.linha ?? ""]
-                    .map((x) => String(x ?? "").toLowerCase().trim())
+                    .map((x) =>
+                      String(x ?? "")
+                        .toLowerCase()
+                        .trim(),
+                    )
                     .join("||"),
                 );
               });
@@ -612,8 +681,11 @@ function ImportarPage() {
           />
           {headers.length > 0 && (
             <div className="text-xs text-muted-foreground flex items-center gap-2">
-              <FileSpreadsheet className="h-3 w-3" /> {rawRows.length} linha(s) lida(s) · {headers.length} coluna(s)
-              <Button variant="ghost" size="sm" onClick={reset}>Limpar</Button>
+              <FileSpreadsheet className="h-3 w-3" /> {rawRows.length} linha(s) lida(s) ·{" "}
+              {headers.length} coluna(s)
+              <Button variant="ghost" size="sm" onClick={reset}>
+                Limpar
+              </Button>
             </div>
           )}
         </CardContent>
@@ -668,12 +740,17 @@ function ImportarPage() {
                 <CardTitle>Pré-visualização</CardTitle>
                 <CardDescription>
                   {stats.total} linha(s) · {stats.validas} válidas · {stats.duplicadas} duplicadas ·{" "}
-                  {stats.comAlerta} com alerta · {stats.comErro} com erro · <strong>{stats.selecionadas} selecionada(s)</strong>
+                  {stats.comAlerta} com alerta · {stats.comErro} com erro ·{" "}
+                  <strong>{stats.selecionadas} selecionada(s)</strong>
                 </CardDescription>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={selectOnlyValid}>Selecionar apenas válidas</Button>
-                <Button size="sm" variant="ghost" onClick={clearSelection}>Limpar seleção</Button>
+                <Button size="sm" variant="outline" onClick={selectOnlyValid}>
+                  Selecionar apenas válidas
+                </Button>
+                <Button size="sm" variant="ghost" onClick={clearSelection}>
+                  Limpar seleção
+                </Button>
               </div>
             </div>
           </CardHeader>
@@ -772,7 +849,9 @@ function ImportarPage() {
                             </Badge>
                           )}
                         </TableCell>
-                        <TableCell className="text-xs font-mono">{formatBR(v.data as string | null)}</TableCell>
+                        <TableCell className="text-xs font-mono">
+                          {formatBR(v.data as string | null)}
+                        </TableCell>
                         <TableCell className="text-xs font-mono">{String(v.hora ?? "—")}</TableCell>
                         <TableCell className="text-xs">{String(v.esporte ?? "")}</TableCell>
                         <TableCell className="text-xs">{String(v.liga ?? "")}</TableCell>
@@ -781,7 +860,9 @@ function ImportarPage() {
                         <TableCell className="text-xs">{String(v.pick ?? "")}</TableCell>
                         <TableCell className="text-xs">{String(v.odd_ofertada ?? "")}</TableCell>
                         <TableCell className="text-xs">{String(v.odd_valor ?? "")}</TableCell>
-                        <TableCell className="text-xs">{String(v.probabilidade_final ?? "")}</TableCell>
+                        <TableCell className="text-xs">
+                          {String(v.probabilidade_final ?? "")}
+                        </TableCell>
                         <TableCell className="text-xs">{String(v.edge ?? "")}</TableCell>
                         <TableCell className="text-xs">
                           {[...r.errors, ...r.warnings, r.duplicate ? "duplicado" : ""]

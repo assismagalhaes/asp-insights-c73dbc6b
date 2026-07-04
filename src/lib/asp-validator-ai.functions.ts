@@ -74,13 +74,18 @@ export const validateAspValidatorWithAi = createServerFn({ method: "POST" })
     }
   });
 
-function normalizeAiResult(value: Record<string, unknown>, context: Record<string, unknown>): AspValidatorAiResult {
+function normalizeAiResult(
+  value: Record<string, unknown>,
+  context: Record<string, unknown>,
+): AspValidatorAiResult {
   const manual = extractManualPrediction(context);
   const adjustedProbability =
     clampNumber(normalizeProbabilityPercent(readNumber(value.adjusted_probability)), 0, 100) ??
     manual.source_probability ??
     50;
-  const adjustedFairOdd = readNumber(value.adjusted_fair_odd) ?? (adjustedProbability > 0 ? round(100 / adjustedProbability) : 2);
+  const adjustedFairOdd =
+    readNumber(value.adjusted_fair_odd) ??
+    (adjustedProbability > 0 ? round(100 / adjustedProbability) : 2);
   const offeredOdd = readNumber(value.offered_odd) ?? manual.offered_odd;
   // Sempre recalcular o EV ajustado a partir de probabilidade x odd oferecida.
   // A IA pode divergir por escala; guardrail em ev-math avisa em dev se |Δ| > 0.25 p.p.
@@ -91,7 +96,9 @@ function normalizeAiResult(value: Record<string, unknown>, context: Record<strin
   return {
     decision: value.decision === "CONFIRMAR" ? "CONFIRMAR" : "PULAR",
     confidence: normalizeConfidence(value.confidence),
-    source_probability: normalizeProbabilityPercent(readNumber(value.source_probability)) ?? manual.source_probability,
+    source_probability:
+      normalizeProbabilityPercent(readNumber(value.source_probability)) ??
+      manual.source_probability,
     source_fair_odd: readNumber(value.source_fair_odd) ?? manual.source_fair_odd,
     offered_odd: offeredOdd,
     source_ev: normalizeEvPercent(readNumber(value.source_ev)) ?? manual.source_ev,
@@ -106,12 +113,17 @@ function normalizeAiResult(value: Record<string, unknown>, context: Record<strin
     favorable_blocks: sanitizeBlocks(readStringArray(value.favorable_blocks)),
     against_blocks: sanitizeBlocks(readStringArray(value.against_blocks)),
     alerts: readStringArray(value.alerts),
-    final_analysis: readString(value.final_analysis) || "A IA nao forneceu parecer detalhado. Por seguranca, revisar manualmente.",
+    final_analysis:
+      readString(value.final_analysis) ||
+      "A IA nao forneceu parecer detalhado. Por seguranca, revisar manualmente.",
     analysis_context: buildAnalysisContext(context, true),
   };
 }
 
-function buildFallbackResult(context: Record<string, unknown>, alert: string): AspValidatorAiResult {
+function buildFallbackResult(
+  context: Record<string, unknown>,
+  alert: string,
+): AspValidatorAiResult {
   const manual = extractManualPrediction(context);
   const probability = manual.source_probability ?? 50;
   return {
@@ -124,17 +136,22 @@ function buildFallbackResult(context: Record<string, unknown>, alert: string): A
     adjusted_probability: probability,
     adjusted_fair_odd: probability > 0 ? round(100 / probability) : 2,
     adjusted_ev: calculateEvPercent(probability, manual.offered_odd ?? null),
-    simulation_summary: "Fallback seguro aplicado; simulacao nao foi suficiente para decisao automatica.",
+    simulation_summary:
+      "Fallback seguro aplicado; simulacao nao foi suficiente para decisao automatica.",
     favorable_blocks: [],
     against_blocks: ["Validacao automatica inconclusiva."],
     alerts: [alert, "Falha ao interpretar resposta da IA"],
-    final_analysis: "Por protecao de banca, a validacao foi marcada como PULAR ate nova analise manual.",
+    final_analysis:
+      "Por protecao de banca, a validacao foi marcada como PULAR ate nova analise manual.",
     analysis_context: buildAnalysisContext(context, false),
   };
 }
 
 function buildAnalysisContext(context: Record<string, unknown>, aiParsed: boolean): string {
-  const usage = context.data_usage && typeof context.data_usage === "object" ? (context.data_usage as Record<string, unknown>) : {};
+  const usage =
+    context.data_usage && typeof context.data_usage === "object"
+      ? (context.data_usage as Record<string, unknown>)
+      : {};
   const route = routeValidator(context);
   return [
     "ASP Validator - Validacao IA consolidada",

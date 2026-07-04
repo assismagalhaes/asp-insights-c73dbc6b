@@ -1,4 +1,9 @@
-import type { EnrichedMlbGame, MlbLeagueAverageSnapshot, MlbMarketOdd, MlbTeamStanding } from "@/types/mlbStandings";
+import type {
+  EnrichedMlbGame,
+  MlbLeagueAverageSnapshot,
+  MlbMarketOdd,
+  MlbTeamStanding,
+} from "@/types/mlbStandings";
 import type {
   MlbHandicapCandidateStatus,
   MlbHandicapCoverProbabilities,
@@ -19,9 +24,9 @@ export const MLB_HANDICAP_THRESHOLDS = {
   monitorEv: 0.02,
   monitorProbGap: 0.03,
   minOdd: 1.55,
-  maxOdd: 3.00,
+  maxOdd: 3.0,
   maxAnalyzeDistanceFromMainLine: 1.0,
-  maxAnalyzeOdd: 3.00,
+  maxAnalyzeOdd: 3.0,
   minAnalyzeOdd: 1.55,
   tailMassWarning: 0.995,
   runlineMinusMargin: 0.75,
@@ -104,7 +109,13 @@ export function calculateHandicapCoverProbabilities(
 ): MlbHandicapCoverProbabilities {
   const lineKind = getSupportedLineKind(line);
   if (lineKind === "unsupported") {
-    return { win_prob: 0, push_prob: 0, loss_prob: 0, supported_line_type: false, line_kind: "unsupported" };
+    return {
+      win_prob: 0,
+      push_prob: 0,
+      loss_prob: 0,
+      supported_line_type: false,
+      line_kind: "unsupported",
+    };
   }
 
   let win = 0;
@@ -128,12 +139,18 @@ export function calculateHandicapCoverProbabilities(
   };
 }
 
-export function calculateAsianHandicapEv(probabilities: MlbHandicapCoverProbabilities, odd: number) {
+export function calculateAsianHandicapEv(
+  probabilities: MlbHandicapCoverProbabilities,
+  odd: number,
+) {
   if (!probabilities.supported_line_type || !Number.isFinite(odd) || odd <= 1) return null;
   return probabilities.win_prob * (odd - 1) - probabilities.loss_prob;
 }
 
-export function calculateHandicapMarketNoVig(homeOdd: number, awayOdd: number): MlbHandicapMarketNoVig {
+export function calculateHandicapMarketNoVig(
+  homeOdd: number,
+  awayOdd: number,
+): MlbHandicapMarketNoVig {
   const homeRaw = 1 / homeOdd;
   const awayRaw = 1 / awayOdd;
   const sum = homeRaw + awayRaw;
@@ -164,7 +181,11 @@ export function normalizeHandicapMarketRows(game: EnrichedMlbGame): HandicapLine
         awayLine: null,
         alerts: [],
       };
-      group.alerts.push(!side ? "Pick do handicap nao corresponde ao mandante ou visitante." : "Linha de handicap invalida.");
+      group.alerts.push(
+        !side
+          ? "Pick do handicap nao corresponde ao mandante ou visitante."
+          : "Linha de handicap invalida.",
+      );
       groups.set(key, group);
       continue;
     }
@@ -180,11 +201,17 @@ export function normalizeHandicapMarketRows(game: EnrichedMlbGame): HandicapLine
     };
 
     if (side === "home") {
-      if (group.homeOdd) group.alerts.push("Odds Handicap duplicadas para o mandante; usando a maior odd disponivel.");
+      if (group.homeOdd)
+        group.alerts.push(
+          "Odds Handicap duplicadas para o mandante; usando a maior odd disponivel.",
+        );
       group.homeOdd = pickBestOdd([group.homeOdd, market]);
       group.homeLine = line;
     } else {
-      if (group.awayOdd) group.alerts.push("Odds Handicap duplicadas para o visitante; usando a maior odd disponivel.");
+      if (group.awayOdd)
+        group.alerts.push(
+          "Odds Handicap duplicadas para o visitante; usando a maior odd disponivel.",
+        );
       group.awayOdd = pickBestOdd([group.awayOdd, market]);
       group.awayLine = line;
     }
@@ -195,15 +222,20 @@ export function normalizeHandicapMarketRows(game: EnrichedMlbGame): HandicapLine
 }
 
 export function identifyMainHandicapLine(game: EnrichedMlbGame, groups: HandicapLineGroup[]) {
-  const pairedGroups = groups.filter((group) =>
-    getMarketBaseOdd(group.homeOdd) && getMarketBaseOdd(group.awayOdd) && Number.isFinite(group.canonicalHomeLine),
+  const pairedGroups = groups.filter(
+    (group) =>
+      getMarketBaseOdd(group.homeOdd) &&
+      getMarketBaseOdd(group.awayOdd) &&
+      Number.isFinite(group.canonicalHomeLine),
   );
   if (!pairedGroups.length) return null;
 
   const favorite = identifyMoneylineFavorite(game);
   if (favorite) {
     const targetHomeLine = favorite === "home" ? -1.5 : 1.5;
-    const standardLine = pairedGroups.find((group) => closeTo(group.canonicalHomeLine, targetHomeLine));
+    const standardLine = pairedGroups.find((group) =>
+      closeTo(group.canonicalHomeLine, targetHomeLine),
+    );
     if (standardLine) return standardLine.canonicalHomeLine;
   }
 
@@ -218,11 +250,21 @@ export function identifyMainHandicapLine(game: EnrichedMlbGame, groups: Handicap
         distanceToBalancedMarket: Math.abs(market.home_market_implied_prob_no_vig - 0.5),
       };
     })
-    .sort((a, b) => a.distanceToBalancedMarket - b.distanceToBalancedMarket || Math.abs(Math.abs(a.line) - 1.5) - Math.abs(Math.abs(b.line) - 1.5));
+    .sort(
+      (a, b) =>
+        a.distanceToBalancedMarket - b.distanceToBalancedMarket ||
+        Math.abs(Math.abs(a.line) - 1.5) - Math.abs(Math.abs(b.line) - 1.5),
+    );
 
-  return balanced[0]?.line ?? pairedGroups
-    .sort((a, b) => Math.abs(Math.abs(a.canonicalHomeLine) - 1.5) - Math.abs(Math.abs(b.canonicalHomeLine) - 1.5))[0]
-    ?.canonicalHomeLine ?? null;
+  return (
+    balanced[0]?.line ??
+    pairedGroups.sort(
+      (a, b) =>
+        Math.abs(Math.abs(a.canonicalHomeLine) - 1.5) -
+        Math.abs(Math.abs(b.canonicalHomeLine) - 1.5),
+    )[0]?.canonicalHomeLine ??
+    null
+  );
 }
 
 export function calculateMlbHandicapProjection(params: {
@@ -233,9 +275,15 @@ export function calculateMlbHandicapProjection(params: {
   config?: Partial<MlbHandicapProjectionConfig>;
 }): MlbHandicapScreenerRow {
   const config = mergeHandicapConfig(params.config);
-  const distanceFromMain = params.mainHomeHandicapLine == null
-    ? null
-    : round(Math.abs(Math.abs(params.lineGroup.canonicalHomeLine) - Math.abs(params.mainHomeHandicapLine)), 2);
+  const distanceFromMain =
+    params.mainHomeHandicapLine == null
+      ? null
+      : round(
+          Math.abs(
+            Math.abs(params.lineGroup.canonicalHomeLine) - Math.abs(params.mainHomeHandicapLine),
+          ),
+          2,
+        );
   const missingFields = getMissingHandicapFields(params.game, params.lineGroup);
   const baseRow = baseHandicapRow(params, missingFields, distanceFromMain);
 
@@ -279,8 +327,16 @@ export function calculateMlbHandicapProjection(params: {
     awayLambda: awayExpectedRuns,
     config,
   });
-  const homeCover = calculateHandicapCoverProbabilities(marginDistribution.probabilities, "home", homeLine);
-  const awayCover = calculateHandicapCoverProbabilities(marginDistribution.probabilities, "away", awayLine);
+  const homeCover = calculateHandicapCoverProbabilities(
+    marginDistribution.probabilities,
+    "home",
+    homeLine,
+  );
+  const awayCover = calculateHandicapCoverProbabilities(
+    marginDistribution.probabilities,
+    "away",
+    awayLine,
+  );
 
   if (!homeCover.supported_line_type || !awayCover.supported_line_type) {
     return {
@@ -322,14 +378,15 @@ export function calculateMlbHandicapProjection(params: {
     homeEv,
     awayEv,
   });
-  const probGap = recommendation.recommended_side === "home"
-    ? homeCover.win_prob - market.home_market_implied_prob_no_vig
-    : recommendation.recommended_side === "away"
-      ? awayCover.win_prob - market.away_market_implied_prob_no_vig
-      : Math.max(
-        homeCover.win_prob - market.home_market_implied_prob_no_vig,
-        awayCover.win_prob - market.away_market_implied_prob_no_vig,
-      );
+  const probGap =
+    recommendation.recommended_side === "home"
+      ? homeCover.win_prob - market.home_market_implied_prob_no_vig
+      : recommendation.recommended_side === "away"
+        ? awayCover.win_prob - market.away_market_implied_prob_no_vig
+        : Math.max(
+            homeCover.win_prob - market.home_market_implied_prob_no_vig,
+            awayCover.win_prob - market.away_market_implied_prob_no_vig,
+          );
   const candidateStatus = classifyHandicapCandidate({
     recommendedEv: recommendation.recommended_ev,
     recommendedOdd: recommendation.recommended_odd,
@@ -378,16 +435,18 @@ export function calculateMlbHandicapProjection(params: {
     recommended_pick: recommendation.recommended_pick,
     recommended_line: recommendation.recommended_line,
     recommended_odd: recommendation.recommended_odd,
-    recommended_odd_mediana: recommendation.recommended_side === "home"
-      ? homeMarketBaseOdd
-      : recommendation.recommended_side === "away"
-        ? awayMarketBaseOdd
-        : null,
-    recommended_bookmaker_melhor: recommendation.recommended_side === "home"
-      ? getBestBookmaker(params.lineGroup.homeOdd)
-      : recommendation.recommended_side === "away"
-        ? getBestBookmaker(params.lineGroup.awayOdd)
-        : null,
+    recommended_odd_mediana:
+      recommendation.recommended_side === "home"
+        ? homeMarketBaseOdd
+        : recommendation.recommended_side === "away"
+          ? awayMarketBaseOdd
+          : null,
+    recommended_bookmaker_melhor:
+      recommendation.recommended_side === "home"
+        ? getBestBookmaker(params.lineGroup.homeOdd)
+        : recommendation.recommended_side === "away"
+          ? getBestBookmaker(params.lineGroup.awayOdd)
+          : null,
     recommended_model_prob: recommendation.recommended_model_prob,
     recommended_push_prob: recommendation.recommended_push_prob,
     recommended_fair_odd: recommendation.recommended_fair_odd,
@@ -432,13 +491,15 @@ export function buildMlbHandicapScreenerRows(params: {
     const mainHomeHandicapLine = identifyMainHandicapLine(game, groups);
     return groups
       .sort((a, b) => a.canonicalHomeLine - b.canonicalHomeLine)
-      .map((lineGroup) => calculateMlbHandicapProjection({
-        game,
-        lineGroup,
-        mainHomeHandicapLine,
-        leagueAverage,
-        config: params.config,
-      }));
+      .map((lineGroup) =>
+        calculateMlbHandicapProjection({
+          game,
+          lineGroup,
+          mainHomeHandicapLine,
+          leagueAverage,
+          config: params.config,
+        }),
+      );
   });
 }
 
@@ -451,7 +512,9 @@ function baseHandicapRow(
   missingFields: string[],
   distanceFromMain: number | null,
 ): MlbHandicapScreenerRow {
-  const isMain = params.mainHomeHandicapLine != null && closeTo(params.lineGroup.canonicalHomeLine, params.mainHomeHandicapLine);
+  const isMain =
+    params.mainHomeHandicapLine != null &&
+    closeTo(params.lineGroup.canonicalHomeLine, params.mainHomeHandicapLine);
   return {
     game_id: params.game.game_id,
     row_id: `${params.game.game_id}_handicap_${params.lineGroup.canonicalHomeLine}`,
@@ -460,7 +523,9 @@ function baseHandicapRow(
     home_team: params.game.home_team,
     away_team: params.game.away_team,
     market: "Asian Handicap",
-    canonical_home_line: Number.isFinite(params.lineGroup.canonicalHomeLine) ? params.lineGroup.canonicalHomeLine : null,
+    canonical_home_line: Number.isFinite(params.lineGroup.canonicalHomeLine)
+      ? params.lineGroup.canonicalHomeLine
+      : null,
     line_type: isMain ? "main" : "alternate",
     is_main_handicap_line: isMain,
     main_home_handicap_line: params.mainHomeHandicapLine,
@@ -530,13 +595,27 @@ function baseHandicapRow(
   };
 }
 
-function missingGameHandicapRow(game: EnrichedMlbGame, leagueAverage: MlbLeagueAverageContext): MlbHandicapScreenerRow {
+function missingGameHandicapRow(
+  game: EnrichedMlbGame,
+  leagueAverage: MlbLeagueAverageContext,
+): MlbHandicapScreenerRow {
   return {
-    ...baseHandicapRow({
-      game,
-      lineGroup: { canonicalHomeLine: 0, homeOdd: null, awayOdd: null, homeLine: null, awayLine: null, alerts: [] },
-      mainHomeHandicapLine: null,
-    }, ["Asian Handicap"], null),
+    ...baseHandicapRow(
+      {
+        game,
+        lineGroup: {
+          canonicalHomeLine: 0,
+          homeOdd: null,
+          awayOdd: null,
+          homeLine: null,
+          awayLine: null,
+          alerts: [],
+        },
+        mainHomeHandicapLine: null,
+      },
+      ["Asian Handicap"],
+      null,
+    ),
     row_id: `${game.game_id}_handicap_missing`,
     canonical_home_line: null,
     candidate_status: "missing_data",
@@ -557,8 +636,10 @@ function getMissingHandicapFields(game: EnrichedMlbGame, lineGroup: HandicapLine
   if (!game.home_standings) missing.push("home_standings");
   if (!game.away_standings) missing.push("away_standings");
   if (!Number.isFinite(lineGroup.canonicalHomeLine)) missing.push("line valida");
-  if (lineGroup.homeLine == null || !Number.isFinite(lineGroup.homeLine)) missing.push("home_handicap_line");
-  if (lineGroup.awayLine == null || !Number.isFinite(lineGroup.awayLine)) missing.push("away_handicap_line");
+  if (lineGroup.homeLine == null || !Number.isFinite(lineGroup.homeLine))
+    missing.push("home_handicap_line");
+  if (lineGroup.awayLine == null || !Number.isFinite(lineGroup.awayLine))
+    missing.push("away_handicap_line");
   const homeOdd = getOfferedOdd(lineGroup.homeOdd);
   const awayOdd = getOfferedOdd(lineGroup.awayOdd);
   const homeMarketBaseOdd = getMarketBaseOdd(lineGroup.homeOdd);
@@ -591,22 +672,26 @@ function classifyHandicapCandidate(input: {
   const { thresholds } = input.config;
   // Alternate handicap far from main line cannot ANALISAR
   if (distance > thresholds.maxAnalyzeDistanceFromMainLine) {
-    if (ev >= thresholds.monitorEv || input.recommendedProbGap >= thresholds.monitorProbGap) return "monitorar";
+    if (ev >= thresholds.monitorEv || input.recommendedProbGap >= thresholds.monitorProbGap)
+      return "monitorar";
     return "pular";
   }
   // Cap: alt lines |line| >= 2.5 (i.e. +/-2.5, +/-3.5, +/-4.5) can only be MONITORAR at best
   if (absLine >= 2.5) {
-    if (ev >= thresholds.monitorEv || input.recommendedProbGap >= thresholds.monitorProbGap) return "monitorar";
+    if (ev >= thresholds.monitorEv || input.recommendedProbGap >= thresholds.monitorProbGap)
+      return "monitorar";
     return "pular";
   }
   // Odd bounds
   if (odd < thresholds.minAnalyzeOdd || odd > thresholds.maxAnalyzeOdd) {
-    if (ev >= thresholds.monitorEv || input.recommendedProbGap >= thresholds.monitorProbGap) return "monitorar";
+    if (ev >= thresholds.monitorEv || input.recommendedProbGap >= thresholds.monitorProbGap)
+      return "monitorar";
     return "pular";
   }
   // Runline -1.5 hardening
   if (line <= -1.5) {
-    const marginForSide = input.recommendedSide === "home" ? input.projectedMargin : -input.projectedMargin;
+    const marginForSide =
+      input.recommendedSide === "home" ? input.projectedMargin : -input.projectedMargin;
     if (
       ev >= thresholds.runlineMinusEv &&
       input.recommendedProbGap >= thresholds.runlineMinusProbGap &&
@@ -615,7 +700,8 @@ function classifyHandicapCandidate(input: {
     ) {
       return "analisar";
     }
-    if (ev >= thresholds.monitorEv || input.recommendedProbGap >= thresholds.monitorProbGap) return "monitorar";
+    if (ev >= thresholds.monitorEv || input.recommendedProbGap >= thresholds.monitorProbGap)
+      return "monitorar";
     return "pular";
   }
   // Runline +1.5 hardening
@@ -627,7 +713,8 @@ function classifyHandicapCandidate(input: {
     ) {
       return "analisar";
     }
-    if (ev >= thresholds.monitorEv || input.recommendedProbGap >= thresholds.monitorProbGap) return "monitorar";
+    if (ev >= thresholds.monitorEv || input.recommendedProbGap >= thresholds.monitorProbGap)
+      return "monitorar";
     return "pular";
   }
   // Generic 0/+-0.5/+-1 lines: use base thresholds
@@ -716,7 +803,8 @@ function buildHandicapReasons(input: {
     input.projectedMargin < 0 && !isHome ? "Margem projetada ASP favorece o visitante" : null,
     !isHome ? "Visitante recebe margem de seguranca no handicap" : null,
     fairOdd != null && offeredOdd > fairOdd ? "Odd ofertada acima da odd justa ASP" : null,
-    input.distanceFromMain != null && input.distanceFromMain <= MLB_HANDICAP_THRESHOLDS.maxAnalyzeDistanceFromMainLine
+    input.distanceFromMain != null &&
+    input.distanceFromMain <= MLB_HANDICAP_THRESHOLDS.maxAnalyzeDistanceFromMainLine
       ? "Linha proxima da linha principal"
       : null,
   ].filter(Boolean) as string[];
@@ -739,22 +827,32 @@ function buildHandicapAlerts(input: {
   const alerts = [...input.row.alerts];
   const line = input.recommendedLine ?? 0;
   const absLine = Math.abs(line);
-  if (input.distanceFromMain != null && input.distanceFromMain > MLB_HANDICAP_THRESHOLDS.maxAnalyzeDistanceFromMainLine) {
+  if (
+    input.distanceFromMain != null &&
+    input.distanceFromMain > MLB_HANDICAP_THRESHOLDS.maxAnalyzeDistanceFromMainLine
+  ) {
     alerts.push("alternate_handicap_line_risk: linha alternativa distante da principal.");
   }
   if (absLine >= 2.5) {
     alerts.push("alternate_handicap_line_risk: linha |>=2.5| limitada a MONITORAR.");
   }
   if (line <= -1.5) {
-    const marginForSide = input.recommendedSide === "home" ? input.projectedMargin : -input.projectedMargin;
+    const marginForSide =
+      input.recommendedSide === "home" ? input.projectedMargin : -input.projectedMargin;
     if (marginForSide < MLB_HANDICAP_THRESHOLDS.runlineMinusMargin) {
       alerts.push("runline_margin_risk: margem ASP < 0.75 run para -1.5.");
     }
   }
-  if (input.recommendedOdd != null && input.recommendedOdd < MLB_HANDICAP_THRESHOLDS.minAnalyzeOdd) {
+  if (
+    input.recommendedOdd != null &&
+    input.recommendedOdd < MLB_HANDICAP_THRESHOLDS.minAnalyzeOdd
+  ) {
     alerts.push("Odd baixa demais para screener preliminar.");
   }
-  if (input.recommendedOdd != null && input.recommendedOdd > MLB_HANDICAP_THRESHOLDS.maxAnalyzeOdd) {
+  if (
+    input.recommendedOdd != null &&
+    input.recommendedOdd > MLB_HANDICAP_THRESHOLDS.maxAnalyzeOdd
+  ) {
     alerts.push("Odd alta e sensivel a cauda da distribuicao.");
   }
   if (input.distributionTailWarning) {
@@ -781,9 +879,15 @@ function marketFields(market: MlbHandicapMarketNoVig) {
 }
 
 function identifyMoneylineFavorite(game: EnrichedMlbGame): MlbHandicapSide | null {
-  const moneylineMarkets = game.markets.filter((market) => /moneyline|match winner|winner|vencedor/i.test(String(market.market ?? "")));
-  const homeOdd = pickBestOdd(moneylineMarkets.filter((market) => getPickSide(market.pick, game) === "home"));
-  const awayOdd = pickBestOdd(moneylineMarkets.filter((market) => getPickSide(market.pick, game) === "away"));
+  const moneylineMarkets = game.markets.filter((market) =>
+    /moneyline|match winner|winner|vencedor/i.test(String(market.market ?? "")),
+  );
+  const homeOdd = pickBestOdd(
+    moneylineMarkets.filter((market) => getPickSide(market.pick, game) === "home"),
+  );
+  const awayOdd = pickBestOdd(
+    moneylineMarkets.filter((market) => getPickSide(market.pick, game) === "away"),
+  );
   const homeMarketBaseOdd = getMarketBaseOdd(homeOdd);
   const awayMarketBaseOdd = getMarketBaseOdd(awayOdd);
   if (!homeMarketBaseOdd || !awayMarketBaseOdd) return null;
@@ -807,14 +911,20 @@ function getPickSide(pick: string | null, game: EnrichedMlbGame): MlbHandicapSid
 }
 
 function parseHandicapLine(line: string | null) {
-  const value = Number(String(line ?? "").replace(",", ".").replace(/^\+/, ""));
+  const value = Number(
+    String(line ?? "")
+      .replace(",", ".")
+      .replace(/^\+/, ""),
+  );
   return Number.isFinite(value) ? value : null;
 }
 
 function pickBestOdd(markets: Array<MlbMarketOdd | null>) {
-  return markets
-    .filter((market): market is MlbMarketOdd => Boolean(market?.odd) && Number(market?.odd) > 1)
-    .sort((a, b) => Number(b.odd) - Number(a.odd))[0] ?? null;
+  return (
+    markets
+      .filter((market): market is MlbMarketOdd => Boolean(market?.odd) && Number(market?.odd) > 1)
+      .sort((a, b) => Number(b.odd) - Number(a.odd))[0] ?? null
+  );
 }
 
 function calculatePushAwareFairOdd(probabilities: MlbHandicapCoverProbabilities) {
@@ -830,12 +940,19 @@ function getSupportedLineKind(line: number): "half" | "integer" | "unsupported" 
   return "unsupported";
 }
 
-function getDynamicMaxRuns(homeLambda: number, awayLambda: number, config: MlbHandicapProjectionConfig) {
+function getDynamicMaxRuns(
+  homeLambda: number,
+  awayLambda: number,
+  config: MlbHandicapProjectionConfig,
+) {
   const maxLambda = Math.max(homeLambda, awayLambda);
   if (!Number.isFinite(maxLambda) || maxLambda <= 0) return config.maxRunsBase;
   return Math.min(
     config.maxRunsCap,
-    Math.max(config.maxRunsBase, Math.ceil(maxLambda + config.dynamicRunsStdDevMultiplier * Math.sqrt(maxLambda))),
+    Math.max(
+      config.maxRunsBase,
+      Math.ceil(maxLambda + config.dynamicRunsStdDevMultiplier * Math.sqrt(maxLambda)),
+    ),
   );
 }
 
@@ -848,7 +965,9 @@ function round(value: number, decimals: number) {
   return Math.round(value * factor) / factor;
 }
 
-function mergeHandicapConfig(config?: Partial<MlbHandicapProjectionConfig>): MlbHandicapProjectionConfig {
+function mergeHandicapConfig(
+  config?: Partial<MlbHandicapProjectionConfig>,
+): MlbHandicapProjectionConfig {
   return {
     ...MLB_HANDICAP_PROJECTION_CONFIG,
     ...config,

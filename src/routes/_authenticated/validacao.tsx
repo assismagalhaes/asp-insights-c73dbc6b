@@ -1,7 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { AlertTriangle, Sparkles, ShieldAlert, Brain, Loader2, Copy, Wand2, RefreshCw, X, Globe, ExternalLink, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  Sparkles,
+  ShieldAlert,
+  Brain,
+  Loader2,
+  Copy,
+  Wand2,
+  RefreshCw,
+  X,
+  Globe,
+  ExternalLink,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -56,8 +69,16 @@ export const Route = createFileRoute("/_authenticated/validacao")({
 });
 
 const decisoes: { label: Status; texto: string; color: string }[] = [
-  { label: "CONFIRMA", texto: "Confirmar", color: "bg-success text-success-foreground hover:bg-success/90" },
-  { label: "PULAR", texto: "Pular", color: "bg-destructive text-destructive-foreground hover:bg-destructive/90" },
+  {
+    label: "CONFIRMA",
+    texto: "Confirmar",
+    color: "bg-success text-success-foreground hover:bg-success/90",
+  },
+  {
+    label: "PULAR",
+    texto: "Pular",
+    color: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+  },
 ];
 
 const STAKES = ["0.5", "1.0", "1.5"];
@@ -101,8 +122,7 @@ function normalizeGroupValue(value: unknown): string {
 
 function getEventKey(prognostico: Prognostico): string {
   const jogoBase =
-    prognostico.jogo ||
-    `${prognostico.mandante ?? ""} vs ${prognostico.visitante ?? ""}`;
+    prognostico.jogo || `${prognostico.mandante ?? ""} vs ${prognostico.visitante ?? ""}`;
   const mandante = prognostico.mandante || jogoBase.split(/\s+vs\s+/i)[0] || jogoBase;
   const visitante = prognostico.visitante || jogoBase.split(/\s+vs\s+/i)[1] || "";
 
@@ -121,7 +141,9 @@ function getEventKey(prognostico: Prognostico): string {
 function getMarketFamilyKey(prognostico: Prognostico): string {
   const mercado = normalizeGroupValue(prognostico.mercado);
   if (
-    /moneyline|1x2|resultado final|vencedor|handicap|h[áa]ndicap|dupla chance|double chance/.test(mercado)
+    /moneyline|1x2|resultado final|vencedor|handicap|h[áa]ndicap|dupla chance|double chance/.test(
+      mercado,
+    )
   ) {
     return "resultado-protecao";
   }
@@ -185,13 +207,11 @@ function groupPendentes(prognosticos: Prognostico[]): ValidationGroup[] {
 }
 
 function formatOptionCount(count: number): string {
-  return count === 1 ?"1 opção pendente" : `${count} opções pendentes`;
+  return count === 1 ? "1 opção pendente" : `${count} opções pendentes`;
 }
 
 function normalizeAiChoice(value: unknown): string {
-  return normalizeGroupValue(value)
-    .replace(/\s+/g, " ")
-    .trim();
+  return normalizeGroupValue(value).replace(/\s+/g, " ").trim();
 }
 
 function findAiChosenOption(g: ValidationGroup, ia: IAResult): Prognostico | null {
@@ -242,8 +262,9 @@ function formatIaParecerForDisplay(parecer: string): string {
 }
 
 function getIaResumo(ia: IAResult): string {
-  const decisao = ia.decisao_sugerida === "CONFIRMA" ?"CONFIRMAR" : "PULAR";
-  const pick = ia.decisao_sugerida === "CONFIRMA" && ia.pick_escolhida ? ` - ${ia.pick_escolhida}` : "";
+  const decisao = ia.decisao_sugerida === "CONFIRMA" ? "CONFIRMAR" : "PULAR";
+  const pick =
+    ia.decisao_sugerida === "CONFIRMA" && ia.pick_escolhida ? ` - ${ia.pick_escolhida}` : "";
   const stake =
     ia.decisao_sugerida === "CONFIRMA" && ia.stake_sugerida != null
       ? ` - ${ia.stake_sugerida.toFixed(1)}u`
@@ -254,13 +275,19 @@ function getIaResumo(ia: IAResult): string {
 function getOnlineAlertas(parecer: string): string[] {
   const text = parecer.toLowerCase();
   const alertas: string[] = [];
-  if (/aguardar confirma|não confirmad|nao confirmad|incert|não encontrado|nao encontrado/.test(text)) {
+  if (
+    /aguardar confirma|não confirmad|nao confirmad|incert|não encontrado|nao encontrado/.test(text)
+  ) {
     alertas.push("Informação crítica não confirmada");
   }
   if (/risco alto|impacto na aposta:\s*alto/.test(text)) {
     alertas.push("Risco alto");
   }
-  if (/fonte insuficiente|sem fonte confiável|sem fonte confiavel|fonte não confiável|fonte nao confiavel/.test(text)) {
+  if (
+    /fonte insuficiente|sem fonte confiável|sem fonte confiavel|fonte não confiável|fonte nao confiavel/.test(
+      text,
+    )
+  ) {
     alertas.push("Fonte insuficiente");
   }
   if (/desatualizad|notícia antiga|noticia antiga|sem data/.test(text)) {
@@ -270,10 +297,13 @@ function getOnlineAlertas(parecer: string): string[] {
 }
 
 function autoCheck(p: Prognostico, edgeFinal: number) {
-  if (p.odd_ofertada < p.odd_valor) return { auto: "PULAR" as const, reason: "Odd ofertada menor que odd de valor" };
+  if (p.odd_ofertada < p.odd_valor)
+    return { auto: "PULAR" as const, reason: "Odd ofertada menor que odd de valor" };
   if (edgeFinal < 0) return { auto: "PULAR" as const, reason: "Edge negativo" };
-  if (p.probabilidade_final < 55) return { auto: "ALERTA" as const, reason: "Probabilidade inferior a 55%" };
-  if (p.probabilidade_final > 60) return { auto: "DESTAQUE" as const, reason: "Probabilidade superior a 60%" };
+  if (p.probabilidade_final < 55)
+    return { auto: "ALERTA" as const, reason: "Probabilidade inferior a 55%" };
+  if (p.probabilidade_final > 60)
+    return { auto: "DESTAQUE" as const, reason: "Probabilidade superior a 60%" };
   return null;
 }
 
@@ -320,10 +350,10 @@ function Validacao() {
         })
         .slice()
         .sort((a, b) => {
-          if (a.data !== b.data) return a.data < b.data ?-1 : 1;
+          if (a.data !== b.data) return a.data < b.data ? -1 : 1;
           const ha = a.hora ?? "99:99";
           const hb = b.hora ?? "99:99";
-          return ha < hb ?-1 : ha > hb ?1 : 0;
+          return ha < hb ? -1 : ha > hb ? 1 : 0;
         }),
     [prognosticos, ini, fim, fEsporte, fLiga, fMercado],
   );
@@ -361,13 +391,17 @@ function Validacao() {
   };
 
   const getBestPularOption = (g: ValidationGroup): Prognostico => {
-    return g.opcoes
-      .slice()
-      .sort((a, b) => {
-        const scoreA = (getEdgeAjustado(a) ?? a.edge ?? 0) * 2 + (a.probabilidade_final ?? 0) + (a.odd_ofertada ?? 0);
-        const scoreB = (getEdgeAjustado(b) ?? b.edge ?? 0) * 2 + (b.probabilidade_final ?? 0) + (b.odd_ofertada ?? 0);
-        return scoreB - scoreA;
-      })[0];
+    return g.opcoes.slice().sort((a, b) => {
+      const scoreA =
+        (getEdgeAjustado(a) ?? a.edge ?? 0) * 2 +
+        (a.probabilidade_final ?? 0) +
+        (a.odd_ofertada ?? 0);
+      const scoreB =
+        (getEdgeAjustado(b) ?? b.edge ?? 0) * 2 +
+        (b.probabilidade_final ?? 0) +
+        (b.odd_ofertada ?? 0);
+      return scoreB - scoreA;
+    })[0];
   };
 
   const rodarIA = async (g: ValidationGroup, modo: "local" | "online") => {
@@ -539,13 +573,13 @@ function Validacao() {
     await createVal.mutateAsync({
       prognostico_id: p.id,
       decisao,
-      stake_confirmada: decisao === "CONFIRMA" ?stakeNum : 1,
+      stake_confirmada: decisao === "CONFIRMA" ? stakeNum : 1,
       parecer_validacao: parecer,
       contexto_adicional: contextoAnalise || null,
       parecer_ia: ia?.parecer ?? null,
       decisao_ia_sugerida: ia?.decisao_sugerida ?? null,
       stake_ia_sugerida: ia?.stake_sugerida ?? null,
-      data_analise_ia: ia ?new Date().toISOString() : null,
+      data_analise_ia: ia ? new Date().toISOString() : null,
       prompt_versao: ia?.prompt_versao ?? null,
       modo_ia: ia?.modo ?? null,
       fontes_consultadas: ia?.fontes_consultadas ?? null,
@@ -568,8 +602,9 @@ function Validacao() {
     try {
       const contextoAnalise = getContextoGrupo(g).trim();
       const ia = iaResults[g.key];
-      const retained = decisao === "CONFIRMA" ?selected! : getBestPularOption(g);
-      const retainedStake = decisao === "CONFIRMA" ? Number(stakes[retained.id] ?? retained.stake ?? 0) : 1;
+      const retained = decisao === "CONFIRMA" ? selected! : getBestPularOption(g);
+      const retainedStake =
+        decisao === "CONFIRMA" ? Number(stakes[retained.id] ?? retained.stake ?? 0) : 1;
       const parecerBase = parecer || "Grupo recusado na validação crítica agrupada.";
       if (contextoAnalise) {
         const groupIds = new Set(g.opcoes.map((option) => option.id));
@@ -582,10 +617,10 @@ function Validacao() {
       }
       await registrarValidacaoGrupo(
         retained,
-        decisao === "CONFIRMA" ?"CONFIRMA" : "PULAR",
+        decisao === "CONFIRMA" ? "CONFIRMA" : "PULAR",
         parecerBase,
         contextoAnalise,
-        decisao === "CONFIRMA" ?ia : undefined,
+        decisao === "CONFIRMA" ? ia : undefined,
         retainedStake,
       );
       for (const option of g.opcoes.filter((option) => option.id !== retained.id)) {
@@ -593,7 +628,7 @@ function Validacao() {
       }
       toast.success(
         decisao === "CONFIRMA"
-          ?"Grupo validado: opção confirmada e linhas concorrentes removidas"
+          ? "Grupo validado: opção confirmada e linhas concorrentes removidas"
           : "Grupo pulado: melhor registro mantido e linhas concorrentes removidas",
       );
     } catch (e) {
@@ -612,7 +647,6 @@ function Validacao() {
 
       <ScreenerCriticalDraftPanel />
 
-
       {/* Filtros */}
       <div className="rounded-lg border border-border bg-card p-3">
         <div className="flex flex-wrap items-end gap-3">
@@ -625,26 +659,50 @@ function Validacao() {
             onCustomFimChange={setCustomFim}
           />
           <div>
-            <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Esporte</Label>
-            <Select value={fEsporte} onValueChange={(v) => { setFEsporte(v); setFLiga("all"); }}>
-              <SelectTrigger className="h-9 w-44"><SelectValue placeholder="Esporte" /></SelectTrigger>
+            <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
+              Esporte
+            </Label>
+            <Select
+              value={fEsporte}
+              onValueChange={(v) => {
+                setFEsporte(v);
+                setFLiga("all");
+              }}
+            >
+              <SelectTrigger className="h-9 w-44">
+                <SelectValue placeholder="Esporte" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os esportes</SelectItem>
-                {esportes.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                {esportes.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Liga</Label>
+            <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
+              Liga
+            </Label>
             <LeagueFilter sport={fEsporte} value={fLiga} onChange={setFLiga} className="h-9 w-48" />
           </div>
           <div>
-            <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">Mercado</Label>
+            <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
+              Mercado
+            </Label>
             <Select value={fMercado} onValueChange={setFMercado}>
-              <SelectTrigger className="h-9 w-52"><SelectValue placeholder="Mercado" /></SelectTrigger>
+              <SelectTrigger className="h-9 w-52">
+                <SelectValue placeholder="Mercado" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os mercados</SelectItem>
-                {mercados.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                {mercados.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {m}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -659,7 +717,8 @@ function Validacao() {
 
       <div className="space-y-4">
         {grupos.map((g) => {
-          const selectedOptionId = selectedByGroup[g.key] ?? (g.opcoes.length === 1 ? g.opcoes[0].id : "");
+          const selectedOptionId =
+            selectedByGroup[g.key] ?? (g.opcoes.length === 1 ? g.opcoes[0].id : "");
           const p = getSelectedOption(g) ?? g.opcoes[0];
           const oddAj = getOddAjustadaNum(p);
           const edgeAj = getEdgeAjustado(p);
@@ -686,14 +745,21 @@ function Validacao() {
                 <div>
                   <div className="flex items-center gap-2 text-xs">
                     <span className="font-mono text-muted-foreground">{formatBR(p.data)}</span>
-                    {p.hora && <span className="font-mono text-muted-foreground">às {formatHora(p.hora)}</span>}
+                    {p.hora && (
+                      <span className="font-mono text-muted-foreground">
+                        às {formatHora(p.hora)}
+                      </span>
+                    )}
                     <span className="text-muted-foreground">-</span>
-                    <span className="font-semibold uppercase tracking-wider text-primary">{p.esporte}</span>
+                    <span className="font-semibold uppercase tracking-wider text-primary">
+                      {p.esporte}
+                    </span>
                     <span className="text-muted-foreground">- {p.liga}</span>
                   </div>
                   <h3 className="mt-1 text-lg font-semibold">{p.jogo}</h3>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    Grupo: <span className="font-semibold text-foreground">{g.mercado}</span> - {formatOptionCount(g.opcoes.length)}
+                    Grupo: <span className="font-semibold text-foreground">{g.mercado}</span> -{" "}
+                    {formatOptionCount(g.opcoes.length)}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -715,7 +781,9 @@ function Validacao() {
                 </div>
                 <RadioGroup
                   value={selectedOptionId}
-                  onValueChange={(value) => setSelectedByGroup((prev) => ({ ...prev, [g.key]: value }))}
+                  onValueChange={(value) =>
+                    setSelectedByGroup((prev) => ({ ...prev, [g.key]: value }))
+                  }
                   className="grid gap-2"
                 >
                   {g.opcoes.map((opcao) => {
@@ -727,7 +795,9 @@ function Validacao() {
                         key={opcao.id}
                         className={cn(
                           "flex cursor-pointer gap-3 rounded-md border p-3 transition-colors hover:bg-muted/40",
-                          selectedOptionId === opcao.id ?"border-primary bg-primary/5" : "border-border bg-background/40",
+                          selectedOptionId === opcao.id
+                            ? "border-primary bg-primary/5"
+                            : "border-border bg-background/40",
                         )}
                       >
                         <RadioGroupItem value={opcao.id} className="mt-1" />
@@ -738,26 +808,57 @@ function Validacao() {
                             </span>
                             <span className="font-semibold">{opcao.pick}</span>
                             {shouldShowLinha(opcao.pick, opcao.linha) && (
-                              <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{opcao.linha}</span>
+                              <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+                                {opcao.linha}
+                              </span>
                             )}
                             {opcaoCheck && (
-                              <span className={cn(
-                                "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
-                                opcaoCheck.auto === "PULAR" && "bg-destructive/10 text-destructive",
-                                opcaoCheck.auto === "ALERTA" && "bg-warning/10 text-warning",
-                                opcaoCheck.auto === "DESTAQUE" && "bg-success/10 text-success",
-                              )}>
+                              <span
+                                className={cn(
+                                  "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                                  opcaoCheck.auto === "PULAR" &&
+                                    "bg-destructive/10 text-destructive",
+                                  opcaoCheck.auto === "ALERTA" && "bg-warning/10 text-warning",
+                                  opcaoCheck.auto === "DESTAQUE" && "bg-success/10 text-success",
+                                )}
+                              >
                                 {opcaoCheck.auto}
                               </span>
                             )}
                           </div>
                           <div className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-6">
-                            <span>Odd ofertada: <strong className="font-mono">{opcao.odd_ofertada.toFixed(2)}</strong></span>
-                            <span>Odd aj.: <strong className="font-mono">{(opcaoOdd ?? opcao.odd_ofertada).toFixed(2)}</strong></span>
-                            <span>Odd mediana: <strong className="font-mono">{formatOptionalOdd(opcao.odd_mediana)}</strong></span>
-                            <span>Odd valor: <strong className="font-mono">{opcao.odd_valor.toFixed(2)}</strong></span>
-                            <span>Prob.: <strong className="font-mono">{opcao.probabilidade_final.toFixed(2)}%</strong></span>
-                            <span>Edge aj.: <strong className="font-mono">{opcaoEdge != null ?`${opcaoEdge.toFixed(2)}%` : "-"}</strong></span>
+                            <span>
+                              Odd ofertada:{" "}
+                              <strong className="font-mono">{opcao.odd_ofertada.toFixed(2)}</strong>
+                            </span>
+                            <span>
+                              Odd aj.:{" "}
+                              <strong className="font-mono">
+                                {(opcaoOdd ?? opcao.odd_ofertada).toFixed(2)}
+                              </strong>
+                            </span>
+                            <span>
+                              Odd mediana:{" "}
+                              <strong className="font-mono">
+                                {formatOptionalOdd(opcao.odd_mediana)}
+                              </strong>
+                            </span>
+                            <span>
+                              Odd valor:{" "}
+                              <strong className="font-mono">{opcao.odd_valor.toFixed(2)}</strong>
+                            </span>
+                            <span>
+                              Prob.:{" "}
+                              <strong className="font-mono">
+                                {opcao.probabilidade_final.toFixed(2)}%
+                              </strong>
+                            </span>
+                            <span>
+                              Edge aj.:{" "}
+                              <strong className="font-mono">
+                                {opcaoEdge != null ? `${opcaoEdge.toFixed(2)}%` : "-"}
+                              </strong>
+                            </span>
                           </div>
                         </div>
                       </label>
@@ -769,9 +870,14 @@ function Validacao() {
               {/* Bloco de entrada */}
               <div className="rounded-md border border-border bg-background/50 p-4 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Dados do prognóstico</div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Dados do prognóstico
+                  </div>
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                    Odd em uso: <span className="font-mono font-semibold text-foreground">{(oddAj ?? p.odd_ofertada).toFixed(2)}</span>
+                    Odd em uso:{" "}
+                    <span className="font-mono font-semibold text-foreground">
+                      {(oddAj ?? p.odd_ofertada).toFixed(2)}
+                    </span>
                   </div>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -782,26 +888,47 @@ function Validacao() {
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-8">
                   <Metric label="Odd ofertada" value={p.odd_ofertada.toFixed(2)} />
                   <div>
-                    <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Odd ajustada</Label>
+                    <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Odd ajustada
+                    </Label>
                     <Input
                       type="number"
                       step="0.01"
                       placeholder={p.odd_ofertada.toFixed(2)}
-                      value={oddsAj[p.id] ?? (p.odd_ajustada != null ? p.odd_ajustada : p.odd_ofertada)}
+                      value={
+                        oddsAj[p.id] ?? (p.odd_ajustada != null ? p.odd_ajustada : p.odd_ofertada)
+                      }
                       onChange={(e) => setOddsAj({ ...oddsAj, [p.id]: e.target.value })}
                       className="mt-1 h-[51px] rounded-md border-border bg-background/50 font-mono text-base font-bold"
                     />
                   </div>
                   <Metric label="Odd mediana" value={formatOptionalOdd(p.odd_mediana)} />
-                  <Metric label="Odd mercado base" value={formatOptionalOdd(getOddMercadoBase(p))} />
+                  <Metric
+                    label="Odd mercado base"
+                    value={formatOptionalOdd(getOddMercadoBase(p))}
+                  />
                   <Metric label="Bookmaker melhor" value={getBookmakerMelhor(p)} />
                   <Metric label="Odd valor" value={p.odd_valor.toFixed(2)} />
-                  <Metric label="Probabilidade" value={`${p.probabilidade_final.toFixed(2)}%`} tone={p.probabilidade_final > 60 ?"good" : p.probabilidade_final < 55 ?"warn" : undefined} />
-                  <Metric label="Edge original" value={`${p.edge.toFixed(2)}%`} tone={p.edge < 0 ?"bad" : "good"} />
+                  <Metric
+                    label="Probabilidade"
+                    value={`${p.probabilidade_final.toFixed(2)}%`}
+                    tone={
+                      p.probabilidade_final > 60
+                        ? "good"
+                        : p.probabilidade_final < 55
+                          ? "warn"
+                          : undefined
+                    }
+                  />
+                  <Metric
+                    label="Edge original"
+                    value={`${p.edge.toFixed(2)}%`}
+                    tone={p.edge < 0 ? "bad" : "good"}
+                  />
                   <Metric
                     label="Edge ajustado"
                     value={edgeAj != null ? `${edgeAj.toFixed(2)}%` : "-"}
-                    tone={edgeAj == null ?undefined : edgeAj < 0 ?"bad" : "good"}
+                    tone={edgeAj == null ? undefined : edgeAj < 0 ? "bad" : "good"}
                   />
                 </div>
 
@@ -809,14 +936,23 @@ function Validacao() {
                   <div
                     className={cn(
                       "flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-medium",
-                      check.auto === "PULAR" && "border-destructive/40 bg-destructive/10 text-destructive",
+                      check.auto === "PULAR" &&
+                        "border-destructive/40 bg-destructive/10 text-destructive",
                       check.auto === "ALERTA" && "border-warning/40 bg-warning/10 text-warning",
                       check.auto === "DESTAQUE" && "border-success/40 bg-success/10 text-success",
                     )}
                   >
-                    {check.auto === "DESTAQUE" ?<Sparkles className="h-3.5 w-3.5" /> : check.auto === "ALERTA" ?<ShieldAlert className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
+                    {check.auto === "DESTAQUE" ? (
+                      <Sparkles className="h-3.5 w-3.5" />
+                    ) : check.auto === "ALERTA" ? (
+                      <ShieldAlert className="h-3.5 w-3.5" />
+                    ) : (
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                    )}
                     <span className="uppercase tracking-wider">{check.auto}</span>
-                    <span className="text-foreground/80 normal-case tracking-normal">- {check.reason}</span>
+                    <span className="text-foreground/80 normal-case tracking-normal">
+                      - {check.reason}
+                    </span>
                   </div>
                 )}
               </div>
@@ -858,7 +994,7 @@ function Validacao() {
                       onClick={() => rodarIA(g, "local")}
                       disabled={!!iaLoading[g.key]}
                     >
-                      {iaLoading[g.key] === "local" ?(
+                      {iaLoading[g.key] === "local" ? (
                         <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                       ) : (
                         <Brain className="h-3 w-3 mr-1" />
@@ -871,7 +1007,7 @@ function Validacao() {
                       disabled={!!iaLoading[g.key]}
                       title="Usa Gemini com pesquisa online (Firecrawl) - consome créditos extras"
                     >
-                      {iaLoading[g.key] === "online" ?(
+                      {iaLoading[g.key] === "online" ? (
                         <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                       ) : (
                         <Globe className="h-3 w-3 mr-1" />
@@ -883,10 +1019,27 @@ function Validacao() {
                         <Button size="sm" variant="outline" onClick={() => aplicarIA(g)}>
                           Aplicar
                         </Button>
-                        <Button size="sm" variant="outline" onClick={async () => { await navigator.clipboard.writeText(iaParecerDisplay); toast.success("Copiado"); }}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            await navigator.clipboard.writeText(iaParecerDisplay);
+                            toast.success("Copiado");
+                          }}
+                        >
                           <Copy className="h-3 w-3" />
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => setIaResults((s) => { const n = { ...s }; delete n[g.key]; return n; })}>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            setIaResults((s) => {
+                              const n = { ...s };
+                              delete n[g.key];
+                              return n;
+                            })
+                          }
+                        >
                           <X className="h-3 w-3" />
                         </Button>
                       </>
@@ -898,12 +1051,15 @@ function Validacao() {
                     Pesquisando notícias, lineups e contexto na web; pode levar 15-40s.
                   </p>
                 )}
-                {ia ?(
+                {ia ? (
                   <>
                     <div className="flex flex-wrap gap-2 text-xs">
                       {ia.decisao_sugerida && (
                         <span className="rounded border border-border bg-background px-2 py-0.5">
-                          Decisão: <strong>{ia.decisao_sugerida === "CONFIRMA" ?"CONFIRMAR" : "PULAR"}</strong>
+                          Decisão:{" "}
+                          <strong>
+                            {ia.decisao_sugerida === "CONFIRMA" ? "CONFIRMAR" : "PULAR"}
+                          </strong>
                         </span>
                       )}
                       {ia.stake_sugerida != null && (
@@ -930,7 +1086,10 @@ function Validacao() {
                         </div>
                         <div className="flex flex-wrap gap-1.5">
                           {getOnlineAlertas(ia.parecer).map((alerta) => (
-                            <span key={alerta} className="rounded border border-warning/30 bg-background/50 px-2 py-0.5">
+                            <span
+                              key={alerta}
+                              className="rounded border border-warning/30 bg-background/50 px-2 py-0.5"
+                            >
                               {alerta}
                             </span>
                           ))}
@@ -940,21 +1099,28 @@ function Validacao() {
                     <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded border border-border bg-background/60 p-2 font-mono text-xs">
                       {iaParecerDisplay}
                     </pre>
-                    {ia.modo === "online" && (ia.fontes_consultadas?.length || ia.buscas_realizadas?.length) ?(
+                    {ia.modo === "online" &&
+                    (ia.fontes_consultadas?.length || ia.buscas_realizadas?.length) ? (
                       <div className="rounded border border-border bg-background/60 p-2 space-y-1.5">
                         {ia.buscas_realizadas && ia.buscas_realizadas.length > 0 && (
                           <div>
-                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Buscas realizadas</div>
+                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                              Buscas realizadas
+                            </div>
                             <ul className="mt-0.5 space-y-0.5 text-xs">
                               {ia.buscas_realizadas.map((q, i) => (
-                                <li key={i} className="text-muted-foreground">- {q}</li>
+                                <li key={i} className="text-muted-foreground">
+                                  - {q}
+                                </li>
                               ))}
                             </ul>
                           </div>
                         )}
                         {ia.fontes_consultadas && ia.fontes_consultadas.length > 0 && (
                           <div>
-                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Fontes consultadas</div>
+                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                              Fontes consultadas
+                            </div>
                             <ul className="mt-0.5 space-y-0.5 text-xs">
                               {ia.fontes_consultadas.map((f, i) => (
                                 <li key={i}>
@@ -977,17 +1143,20 @@ function Validacao() {
                   </>
                 ) : (
                   <p className="text-xs text-muted-foreground">
-                    <strong>IA Local</strong>: analisa apenas dados internos e contexto local/manual. <strong>IA Local + Pesquisa</strong>: usa os dados internos e adiciona notícias, lineups, lesões e contexto online pesquisado.
+                    <strong>IA Local</strong>: analisa apenas dados internos e contexto
+                    local/manual. <strong>IA Local + Pesquisa</strong>: usa os dados internos e
+                    adiciona notícias, lineups, lesões e contexto online pesquisado.
                   </p>
                 )}
               </div>
-
 
               {/* Resumo + decisão */}
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="md:col-span-2">
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">Resumo da decisão *</Label>
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                      Resumo da decisão *
+                    </Label>
                     {!parecerCurrent && (
                       <Button
                         size="sm"
@@ -1007,14 +1176,22 @@ function Validacao() {
                 </div>
                 <div className="space-y-2">
                   <div>
-                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">Stake confirmada (u)</Label>
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                      Stake confirmada (u)
+                    </Label>
                     <Select
                       value={stakes[p.id] ?? p.stake.toFixed(1)}
                       onValueChange={(v) => setStakes({ ...stakes, [p.id]: v })}
                     >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
-                        {STAKES.map((s) => <SelectItem key={s} value={s}>{s}u</SelectItem>)}
+                        {STAKES.map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {s}u
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1043,7 +1220,8 @@ function Validacao() {
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir prognóstico?</AlertDialogTitle>
             <AlertDialogDescription>
-              {confirmDelete?.jogo} - {confirmDelete?.pick}. Esta ação não pode ser desfeita e removerá o prognóstico também da aba de Prognósticos.
+              {confirmDelete?.jogo} - {confirmDelete?.pick}. Esta ação não pode ser desfeita e
+              removerá o prognóstico também da aba de Prognósticos.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1069,10 +1247,20 @@ function Validacao() {
   );
 }
 
-function Metric({ label, value, tone }: { label: string; value: string; tone?: "good" | "bad" | "warn" }) {
+function Metric({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "good" | "bad" | "warn";
+}) {
   return (
     <div className="min-h-[72px] rounded-md border border-border bg-background/50 p-2.5">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
       <div
         className={cn(
           "mt-1 font-mono text-base font-bold",
@@ -1090,7 +1278,9 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: "
 function KV({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-h-[62px] rounded-md border border-border bg-background/50 p-2.5">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
       <div className="mt-1 break-words text-sm font-semibold">{value}</div>
     </div>
   );

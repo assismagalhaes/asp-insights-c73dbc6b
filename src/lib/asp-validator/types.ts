@@ -166,7 +166,10 @@ export type ValidatorDashboardFilters = {
   result: string;
 };
 
-export type ValidatorInsert = Omit<ValidatorForm, "offered_odd" | "source_probability" | "source_ev"> & {
+export type ValidatorInsert = Omit<
+  ValidatorForm,
+  "offered_odd" | "source_probability" | "source_ev"
+> & {
   offered_odd: number | null;
   source_probability: number | null;
   source_ev: number | null;

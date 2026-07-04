@@ -64,9 +64,11 @@ const empty: PrognosticoInput = {
   edge_ajustado: null,
 };
 
-function normalizeStatusValidacao(status: PrognosticoInput["status_validacao"]): PrognosticoInput["status_validacao"] {
+function normalizeStatusValidacao(
+  status: PrognosticoInput["status_validacao"],
+): PrognosticoInput["status_validacao"] {
   return status === "CONFIRMA_CAUTELA" || status === "PASS" || status === "AGUARDAR_NOTICIA"
-    ?"PULAR"
+    ? "PULAR"
     : status;
 }
 
@@ -150,7 +152,7 @@ export function PrognosticoDialog({
         const of = Number(next.odd_ofertada);
         const va = Number(next.odd_valor);
         if (of > 0 && va > 0) {
-          next.edge = Number((((of / va) - 1) * 100).toFixed(2));
+          next.edge = Number(((of / va - 1) * 100).toFixed(2));
         }
       }
       return next;
@@ -179,7 +181,7 @@ export function PrognosticoDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{prognostico ?"Editar Prognóstico" : "Novo Prognóstico"}</DialogTitle>
+          <DialogTitle>{prognostico ? "Editar Prognóstico" : "Novo Prognóstico"}</DialogTitle>
         </DialogHeader>
 
         <div className="grid gap-3 md:grid-cols-3">
@@ -194,21 +196,39 @@ export function PrognosticoDialog({
             />
           </Field>
           <Field label="Esporte">
-            <Select value={form.esporte} onValueChange={(v) => { set("esporte", v); set("liga", ""); }}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <Select
+              value={form.esporte}
+              onValueChange={(v) => {
+                set("esporte", v);
+                set("liga", "");
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                {esportes.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                {esportes.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </Field>
           <Field label="Liga">
             <Select value={form.liga || ""} onValueChange={(v) => set("liga", v)}>
               <SelectTrigger>
-                <SelectValue placeholder={ligasDoEsporte.length ?"Selecione a liga" : "Nenhuma liga cadastrada"} />
+                <SelectValue
+                  placeholder={
+                    ligasDoEsporte.length ? "Selecione a liga" : "Nenhuma liga cadastrada"
+                  }
+                />
               </SelectTrigger>
               <SelectContent>
                 {ligasDoEsporte.map((l) => (
-                  <SelectItem key={l.id} value={l.nome}>{l.nome}</SelectItem>
+                  <SelectItem key={l.id} value={l.nome}>
+                    {l.nome}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -227,7 +247,9 @@ export function PrognosticoDialog({
                 onClick={async () => {
                   const nome = novaLiga.trim();
                   if (!nome) return;
-                  const dup = ligasDoEsporte.find((l) => l.nome.trim().toLowerCase() === nome.toLowerCase());
+                  const dup = ligasDoEsporte.find(
+                    (l) => l.nome.trim().toLowerCase() === nome.toLowerCase(),
+                  );
                   if (dup) {
                     set("liga", dup.nome);
                     setNovaLiga("");
@@ -255,13 +277,23 @@ export function PrognosticoDialog({
             <Input value={form.visitante} onChange={(e) => set("visitante", e.target.value)} />
           </Field>
           <Field label="Jogo">
-            <Input value={form.jogo} onChange={(e) => set("jogo", e.target.value)} placeholder="Mandante x Visitante" />
+            <Input
+              value={form.jogo}
+              onChange={(e) => set("jogo", e.target.value)}
+              placeholder="Mandante x Visitante"
+            />
           </Field>
           <Field label="Mercado">
             <Select value={form.mercado} onValueChange={(v) => set("mercado", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                {mercados.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                {mercados.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {m}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </Field>
@@ -272,23 +304,56 @@ export function PrognosticoDialog({
             <Input value={form.linha ?? ""} onChange={(e) => set("linha", e.target.value)} />
           </Field>
           <Field label="Odd Ofertada">
-            <Input type="number" step="0.01" value={form.odd_ofertada} onChange={(e) => set("odd_ofertada", +e.target.value)} />
+            <Input
+              type="number"
+              step="0.01"
+              value={form.odd_ofertada}
+              onChange={(e) => set("odd_ofertada", +e.target.value)}
+            />
           </Field>
           <Field label="Odd Valor">
-            <Input type="number" step="0.01" value={form.odd_valor} onChange={(e) => set("odd_valor", +e.target.value)} />
+            <Input
+              type="number"
+              step="0.01"
+              value={form.odd_valor}
+              onChange={(e) => set("odd_valor", +e.target.value)}
+            />
           </Field>
           <Field label="Probabilidade (0-1)">
-            <Input type="number" step="0.01" value={form.probabilidade_final} onChange={(e) => set("probabilidade_final", +e.target.value)} />
+            <Input
+              type="number"
+              step="0.01"
+              value={form.probabilidade_final}
+              onChange={(e) => set("probabilidade_final", +e.target.value)}
+            />
           </Field>
           <Field label="Edge (%) — automático">
-            <Input type="number" step="0.01" value={form.edge} readOnly className="bg-muted/40 cursor-not-allowed" />
+            <Input
+              type="number"
+              step="0.01"
+              value={form.edge}
+              readOnly
+              className="bg-muted/40 cursor-not-allowed"
+            />
           </Field>
           <Field label="Stake (u)">
-            <Input type="number" step="0.1" value={form.stake} onChange={(e) => set("stake", +e.target.value)} />
+            <Input
+              type="number"
+              step="0.1"
+              value={form.stake}
+              onChange={(e) => set("stake", +e.target.value)}
+            />
           </Field>
           <Field label="Status validação">
-            <Select value={form.status_validacao} onValueChange={(v) => set("status_validacao", v as PrognosticoInput["status_validacao"])}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <Select
+              value={form.status_validacao}
+              onValueChange={(v) =>
+                set("status_validacao", v as PrognosticoInput["status_validacao"])
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="PENDENTE">PENDENTE</SelectItem>
                 <SelectItem value="CONFIRMA">CONFIRMA</SelectItem>
@@ -297,7 +362,9 @@ export function PrognosticoDialog({
             </Select>
           </Field>
           <div className="md:col-span-3">
-            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Contexto da Análise</Label>
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+              Contexto da Análise
+            </Label>
             <Textarea
               rows={4}
               placeholder="Cole aqui o contexto usado na análise: H2H, últimos jogos, projeções, odds, linhas, splits e informações adicionais."
@@ -308,9 +375,11 @@ export function PrognosticoDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
           <Button onClick={submit} disabled={create.isPending || update.isPending}>
-            {prognostico ?"Salvar" : "Criar"}
+            {prognostico ? "Salvar" : "Criar"}
           </Button>
         </DialogFooter>
       </DialogContent>

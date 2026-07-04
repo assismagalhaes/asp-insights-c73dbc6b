@@ -26,8 +26,12 @@ import type { FootballPeriod } from "./asp-validator-market-detector";
  * atribuído ao escopo do marcador que o abre. Texto antes do primeiro
  * marcador (cabeçalho da partida) é tratado como "geral".
  */
-export function partitionByLocationScope(text: string): { generalText: string; homeAwayText: string } {
-  const markerRe = /\(\s*(Todos\s+os\s+locais|Casa\s*\/\s*Fora(?:\s+para\s+(?:os\s+)?locais?)?)\s*\)/gi;
+export function partitionByLocationScope(text: string): {
+  generalText: string;
+  homeAwayText: string;
+} {
+  const markerRe =
+    /\(\s*(Todos\s+os\s+locais|Casa\s*\/\s*Fora(?:\s+para\s+(?:os\s+)?locais?)?)\s*\)/gi;
   const matches = [...text.matchAll(markerRe)];
   if (matches.length === 0) return { generalText: text, homeAwayText: "" };
   let generalText = "";
@@ -118,7 +122,10 @@ export type BttsBlock = {
 // ============================================================================
 
 function norm(s: string): string {
-  return (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return (s || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 function teamKey(s: string): string {
@@ -301,17 +308,20 @@ export function parseFootballGeneralPerformance(
 
   const perfSection =
     extractPreferredSection(text, ["DESEMPENHO\\s+GERAL", "DESEMPENHO"], period) || text;
-  const possSection = extractPreferredSection(text, ["M[ÉE]DIA\\s+POSSE\\s+DE\\s+BOLA", "POSSE\\s+DE\\s+BOLA", "POSSE"], period) || "";
-  const scoresSection = extractPreferredSection(text, [
-    "RESULTADOS\\s+MAIS\\s+FREQUENTES",
-    "PLACARES?\\s+MAIS\\s+FREQUENTES",
-    "PLACARES?",
-  ], period) || "";
+  const possSection =
+    extractPreferredSection(
+      text,
+      ["M[ÉE]DIA\\s+POSSE\\s+DE\\s+BOLA", "POSSE\\s+DE\\s+BOLA", "POSSE"],
+      period,
+    ) || "";
+  const scoresSection =
+    extractPreferredSection(
+      text,
+      ["RESULTADOS\\s+MAIS\\s+FREQUENTES", "PLACARES?\\s+MAIS\\s+FREQUENTES", "PLACARES?"],
+      period,
+    ) || "";
 
-  for (const [team, side] of [
-    [homeTeam, out.home] as const,
-    [awayTeam, out.away] as const,
-  ]) {
+  for (const [team, side] of [[homeTeam, out.home] as const, [awayTeam, out.away] as const]) {
     if (!team) continue;
     for (const block of extractTeamBlocks(perfSection, team)) {
       const wins = num(block.match(/Vit[oó]rias?\s*:?\s*(\d+(?:[.,]\d+)?)/i)?.[1]);
@@ -336,7 +346,10 @@ export function parseFootballGeneralPerformance(
       const poss = extractTeamPercent(possSection, team);
       if (poss !== null) side.avg_possession_pct = poss;
       const mostPoss = possSection.match(
-        new RegExp(`mais\\s+posse[^\\n]*\\n[\\s\\S]{0,200}?${teamKey(team)}[^%]*?(\\d+(?:[.,]\\d+)?)\\s*%`, "i"),
+        new RegExp(
+          `mais\\s+posse[^\\n]*\\n[\\s\\S]{0,200}?${teamKey(team)}[^%]*?(\\d+(?:[.,]\\d+)?)\\s*%`,
+          "i",
+        ),
       );
       if (mostPoss) side.most_possession_1x2_pct = num(mostPoss[1]);
     }
@@ -384,10 +397,7 @@ function fillGoalsSection(
   awayTeam: string,
 ): void {
   // Blocos "TIME:" com Marcados/Sofridos/Total e medias
-  for (const [team, side] of [
-    [homeTeam, target.home] as const,
-    [awayTeam, target.away] as const,
-  ]) {
+  for (const [team, side] of [[homeTeam, target.home] as const, [awayTeam, target.away] as const]) {
     if (!team) continue;
     for (const block of extractTeamBlocks(text, team)) {
       const marcados = num(block.match(/Marcados?\s*:?\s*(-?\d+(?:[.,]\d+)?)/i)?.[1]);
@@ -411,8 +421,12 @@ function fillGoalsSection(
 
   // Over/Under gols: "Mais de X.X: TimeA 70% | TimeB 50%"
   for (const line of text.split(/\r?\n/)) {
-    const overM = line.match(/^\s*(?:Mais\s+de|Over|\+)\s*(\d+(?:[.,]\d+)?)\s*(?:gols?)?\s*[:\-]?\s*(.+)$/i);
-    const underM = line.match(/^\s*(?:Menos\s+de|Under|-)\s*(\d+(?:[.,]\d+)?)\s*(?:gols?)?\s*[:\-]?\s*(.+)$/i);
+    const overM = line.match(
+      /^\s*(?:Mais\s+de|Over|\+)\s*(\d+(?:[.,]\d+)?)\s*(?:gols?)?\s*[:\-]?\s*(.+)$/i,
+    );
+    const underM = line.match(
+      /^\s*(?:Menos\s+de|Under|-)\s*(\d+(?:[.,]\d+)?)\s*(?:gols?)?\s*[:\-]?\s*(.+)$/i,
+    );
     if (overM) {
       const lk = overM[1].replace(",", ".");
       const hv = parseTwoSidedPercent(overM[2], homeTeam);
@@ -444,7 +458,10 @@ function fillGoalsSection(
   }
 
   // Marcou primeiro
-  const firstSect = extractSection(text, ["MARCOU\\s+(?:O\\s+)?PRIMEIRO(?:\\s+GOL)?", "PRIMEIRO\\s+GOL"]);
+  const firstSect = extractSection(text, [
+    "MARCOU\\s+(?:O\\s+)?PRIMEIRO(?:\\s+GOL)?",
+    "PRIMEIRO\\s+GOL",
+  ]);
   if (firstSect) {
     const simSect = firstSect.match(/Sim:?([\s\S]*?)(?:N[aã]o|---|$)/i)?.[1] ?? firstSect;
     const naoSect = firstSect.match(/N[aã]o:?([\s\S]*?)(?:---|$)/i)?.[1] ?? "";
@@ -500,17 +517,20 @@ function fillCardsSection(
   homeTeam: string,
   awayTeam: string,
 ): void {
-  for (const [team, side] of [
-    [homeTeam, target.home] as const,
-    [awayTeam, target.away] as const,
-  ]) {
+  for (const [team, side] of [[homeTeam, target.home] as const, [awayTeam, target.away] as const]) {
     if (!team) continue;
     for (const block of extractTeamBlocks(text, team)) {
       const lower = block.toLowerCase();
-      const totalAvg = num(block.match(/Total(?:\s+de\s+cart[oõ]es)?(?:\s+por\s+jogo)?\s*:?\s*(-?\d+(?:[.,]\d+)?)/i)?.[1]);
+      const totalAvg = num(
+        block.match(
+          /Total(?:\s+de\s+cart[oõ]es)?(?:\s+por\s+jogo)?\s*:?\s*(-?\d+(?:[.,]\d+)?)/i,
+        )?.[1],
+      );
       const yellow = num(block.match(/(?:Amarel[oa]s?)\s*:?\s*(-?\d+(?:[.,]\d+)?)/i)?.[1]);
       const red = num(block.match(/(?:Vermelh[oa]s?)\s*:?\s*(-?\d+(?:[.,]\d+)?)/i)?.[1]);
-      const marcados = num(block.match(/(?:Marcad|Recebid|Aplicad|Tomad)[oa]s?\s*:?\s*(-?\d+(?:[.,]\d+)?)/i)?.[1]);
+      const marcados = num(
+        block.match(/(?:Marcad|Recebid|Aplicad|Tomad)[oa]s?\s*:?\s*(-?\d+(?:[.,]\d+)?)/i)?.[1],
+      );
       const sofridos = num(block.match(/Sofridos?\s*:?\s*(-?\d+(?:[.,]\d+)?)/i)?.[1]);
       if (totalAvg !== null) side.avg_total_cards = side.avg_total_cards ?? totalAvg;
       if (yellow !== null) side.avg_yellow_total = side.avg_yellow_total ?? yellow;
@@ -522,8 +542,12 @@ function fillCardsSection(
   }
   // Over/Under cartoes
   for (const line of text.split(/\r?\n/)) {
-    const overM = line.match(/^\s*(?:Mais\s+de|Over|\+)\s*(\d+(?:[.,]\d+)?)\s*(?:cart[oõ]es)?\s*[:\-]?\s*(.+)$/i);
-    const underM = line.match(/^\s*(?:Menos\s+de|Under|-)\s*(\d+(?:[.,]\d+)?)\s*(?:cart[oõ]es)?\s*[:\-]?\s*(.+)$/i);
+    const overM = line.match(
+      /^\s*(?:Mais\s+de|Over|\+)\s*(\d+(?:[.,]\d+)?)\s*(?:cart[oõ]es)?\s*[:\-]?\s*(.+)$/i,
+    );
+    const underM = line.match(
+      /^\s*(?:Menos\s+de|Under|-)\s*(\d+(?:[.,]\d+)?)\s*(?:cart[oõ]es)?\s*[:\-]?\s*(.+)$/i,
+    );
     if (overM && /cart/i.test(line)) {
       const lk = overM[1].replace(",", ".");
       const hv = parseTwoSidedPercent(overM[2], homeTeam);

@@ -1,4 +1,9 @@
-import type { EnrichedMlbGame, MlbLeagueAverageSnapshot, MlbMarketOdd, MlbTeamStanding } from "@/types/mlbStandings";
+import type {
+  EnrichedMlbGame,
+  MlbLeagueAverageSnapshot,
+  MlbMarketOdd,
+  MlbTeamStanding,
+} from "@/types/mlbStandings";
 import { getBestBookmaker, getMarketBaseOdd, getOfferedOdd } from "@/lib/mlb/marketOdds";
 import type {
   MlbExpectedRunsComponents,
@@ -13,16 +18,16 @@ import type {
 export const MLB_TOTALS_THRESHOLDS = {
   analyzeEv: 0.06,
   analyzeProbGap: 0.05,
-  analyzeRunGap: 0.70,
+  analyzeRunGap: 0.7,
   monitorEv: 0.02,
   monitorProbGap: 0.025,
   monitorRunGap: 0.45,
   minOdd: 1.55,
-  maxOdd: 2.60,
+  maxOdd: 2.6,
   maxAnalyzeDistanceFromMainLine: 1.0,
   maxMonitorDistanceFromMainLine: 1.5,
   minAnalyzeFairOdd: 1.35,
-  maxAnalyzeOdd: 2.80,
+  maxAnalyzeOdd: 2.8,
   minAnalyzeOdd: 1.55,
 } satisfies MlbTotalsProjectionConfig["thresholds"];
 
@@ -56,12 +61,22 @@ export function calculateMlbExpectedRuns(params: {
 }): MlbExpectedRunsComponents {
   const config = mergeTotalsConfig(params.config);
   const missingFields = getExpectedRunsMissingFields(params.team, params.opponent);
-  const offenseIndex = clampNumber((params.team.runs_per_game ?? params.leagueAvgRunsPerTeam) / params.leagueAvgRunsPerTeam, 0.70, 1.30);
-  const opponentDefenseIndex = clampNumber((params.opponent.runs_allowed_per_game ?? params.leagueAvgRunsPerTeam) / params.leagueAvgRunsPerTeam, 0.70, 1.30);
-  const baseExpectedRuns = params.leagueAvgRunsPerTeam * (
-    config.offenseWeight * offenseIndex + config.opponentDefenseWeight * opponentDefenseIndex
+  const offenseIndex = clampNumber(
+    (params.team.runs_per_game ?? params.leagueAvgRunsPerTeam) / params.leagueAvgRunsPerTeam,
+    0.7,
+    1.3,
   );
-  const homeAwayAdjustment = params.venue === "home" ? config.homeRunsAdjustment : config.awayRunsAdjustment;
+  const opponentDefenseIndex = clampNumber(
+    (params.opponent.runs_allowed_per_game ?? params.leagueAvgRunsPerTeam) /
+      params.leagueAvgRunsPerTeam,
+    0.7,
+    1.3,
+  );
+  const baseExpectedRuns =
+    params.leagueAvgRunsPerTeam *
+    (config.offenseWeight * offenseIndex + config.opponentDefenseWeight * opponentDefenseIndex);
+  const homeAwayAdjustment =
+    params.venue === "home" ? config.homeRunsAdjustment : config.awayRunsAdjustment;
   const recentFormAdjustment = calculateRecentFormAdjustment(params.team, config);
   const finalExpectedRuns = clampNumber(
     baseExpectedRuns + homeAwayAdjustment + recentFormAdjustment,
@@ -109,7 +124,10 @@ export function calculateMlbProjectedTotal(params: {
   };
 }
 
-export function calculatePoissonTotalProbabilities(lambda: number, line: number): MlbPoissonTotalProbabilities {
+export function calculatePoissonTotalProbabilities(
+  lambda: number,
+  line: number,
+): MlbPoissonTotalProbabilities {
   if (!Number.isFinite(lambda) || lambda <= 0 || !Number.isFinite(line)) {
     return unsupportedPoisson();
   }
@@ -184,7 +202,10 @@ export function calculateMlbTotalsProjection(params: {
 }): MlbTotalsScreenerRow {
   const config = mergeTotalsConfig(params.config);
   const missingFields = getMissingTotalFields(params.game, params.lineGroup);
-  const distanceFromMainLine = params.mainTotalLine == null ? null : round(Math.abs(params.lineGroup.line - params.mainTotalLine), 2);
+  const distanceFromMainLine =
+    params.mainTotalLine == null
+      ? null
+      : round(Math.abs(params.lineGroup.line - params.mainTotalLine), 2);
   const baseRow = baseTotalsRow(params, missingFields, distanceFromMainLine);
 
   if (missingFields.length) {
@@ -230,12 +251,14 @@ export function calculateMlbTotalsProjection(params: {
 
   const overFairOdd = calculateFairOdd(poisson.over_win_prob);
   const underFairOdd = calculateFairOdd(poisson.under_win_prob);
-  const overEv = poisson.line_kind === "integer"
-    ? poisson.over_win_prob * (overOdd - 1) - poisson.under_win_prob
-    : poisson.over_model_prob * overOdd - 1;
-  const underEv = poisson.line_kind === "integer"
-    ? poisson.under_win_prob * (underOdd - 1) - poisson.over_win_prob
-    : poisson.under_model_prob * underOdd - 1;
+  const overEv =
+    poisson.line_kind === "integer"
+      ? poisson.over_win_prob * (overOdd - 1) - poisson.under_win_prob
+      : poisson.over_model_prob * overOdd - 1;
+  const underEv =
+    poisson.line_kind === "integer"
+      ? poisson.under_win_prob * (underOdd - 1) - poisson.over_win_prob
+      : poisson.under_model_prob * underOdd - 1;
   const recommendation = getTotalRecommendation({
     overOdd,
     underOdd,
@@ -246,14 +269,15 @@ export function calculateMlbTotalsProjection(params: {
     overModelProb: poisson.over_model_prob,
     underModelProb: poisson.under_model_prob,
   });
-  const probGap = recommendation.recommended_side === "Over"
-    ? poisson.over_model_prob - market.over_market_implied_prob_no_vig
-    : recommendation.recommended_side === "Under"
-      ? poisson.under_model_prob - market.under_market_implied_prob_no_vig
-      : Math.max(
-        poisson.over_model_prob - market.over_market_implied_prob_no_vig,
-        poisson.under_model_prob - market.under_market_implied_prob_no_vig,
-      );
+  const probGap =
+    recommendation.recommended_side === "Over"
+      ? poisson.over_model_prob - market.over_market_implied_prob_no_vig
+      : recommendation.recommended_side === "Under"
+        ? poisson.under_model_prob - market.under_market_implied_prob_no_vig
+        : Math.max(
+            poisson.over_model_prob - market.over_market_implied_prob_no_vig,
+            poisson.under_model_prob - market.under_market_implied_prob_no_vig,
+          );
   const candidateStatus = classifyTotalCandidate({
     recommendedEv: recommendation.recommended_ev,
     recommendedOdd: recommendation.recommended_odd,
@@ -294,16 +318,18 @@ export function calculateMlbTotalsProjection(params: {
     under_ev: round(underEv, 4),
     recommended_side: recommendation.recommended_side,
     recommended_odd: recommendation.recommended_odd,
-    recommended_odd_mediana: recommendation.recommended_side === "Over"
-      ? overMarketBaseOdd
-      : recommendation.recommended_side === "Under"
-        ? underMarketBaseOdd
-        : null,
-    recommended_bookmaker_melhor: recommendation.recommended_side === "Over"
-      ? getBestBookmaker(params.lineGroup.overOdd)
-      : recommendation.recommended_side === "Under"
-        ? getBestBookmaker(params.lineGroup.underOdd)
-        : null,
+    recommended_odd_mediana:
+      recommendation.recommended_side === "Over"
+        ? overMarketBaseOdd
+        : recommendation.recommended_side === "Under"
+          ? underMarketBaseOdd
+          : null,
+    recommended_bookmaker_melhor:
+      recommendation.recommended_side === "Over"
+        ? getBestBookmaker(params.lineGroup.overOdd)
+        : recommendation.recommended_side === "Under"
+          ? getBestBookmaker(params.lineGroup.underOdd)
+          : null,
     recommended_model_prob: recommendation.recommended_model_prob,
     recommended_fair_odd: recommendation.recommended_fair_odd,
     recommended_ev: recommendation.recommended_ev,
@@ -331,7 +357,11 @@ export function buildMlbTotalsScreenerRows(params: {
   leagueAverageSnapshot?: MlbLeagueAverageSnapshot | null;
   config?: Partial<MlbTotalsProjectionConfig>;
 }): MlbTotalsScreenerRow[] {
-  const leagueAverage = getLeagueAverageContext(params.standings, params.leagueAverageSnapshot, params.config);
+  const leagueAverage = getLeagueAverageContext(
+    params.standings,
+    params.leagueAverageSnapshot,
+    params.config,
+  );
   return params.games.flatMap((game) => {
     const groups = groupTotalLines(game);
     if (!groups.length) {
@@ -340,13 +370,15 @@ export function buildMlbTotalsScreenerRows(params: {
     const mainTotalLine = identifyMainTotalLine(groups);
     return groups
       .sort((a, b) => a.line - b.line)
-      .map((lineGroup) => calculateMlbTotalsProjection({
-        game,
-        lineGroup,
-        mainTotalLine,
-        leagueAverage,
-        config: params.config,
-      }));
+      .map((lineGroup) =>
+        calculateMlbTotalsProjection({
+          game,
+          lineGroup,
+          mainTotalLine,
+          leagueAverage,
+          config: params.config,
+        }),
+      );
   });
 }
 
@@ -356,7 +388,10 @@ export function getLeagueAverageContext(
   config?: Partial<MlbTotalsProjectionConfig>,
 ): MlbLeagueAverageContext {
   const mergedConfig = mergeTotalsConfig(config);
-  if (leagueAverageSnapshot?.runs_per_game_average && leagueAverageSnapshot.runs_per_game_average > 0) {
+  if (
+    leagueAverageSnapshot?.runs_per_game_average &&
+    leagueAverageSnapshot.runs_per_game_average > 0
+  ) {
     return {
       league_avg_runs_per_team: leagueAverageSnapshot.runs_per_game_average,
       league_average_source: "average_row",
@@ -367,7 +402,10 @@ export function getLeagueAverageContext(
     .filter((value): value is number => value != null && Number.isFinite(value) && value > 0);
   if (values.length) {
     return {
-      league_avg_runs_per_team: round(values.reduce((sum, value) => sum + value, 0) / values.length, 4),
+      league_avg_runs_per_team: round(
+        values.reduce((sum, value) => sum + value, 0) / values.length,
+        4,
+      ),
       league_average_source: "computed_from_teams",
     };
   }
@@ -386,11 +424,13 @@ function groupTotalLines(game: EnrichedMlbGame): TotalLineGroup[] {
     const group = groups.get(line) ?? { line, overOdd: null, underOdd: null, alerts: [] };
     const side = getTotalSide(market.pick);
     if (side === "over") {
-      if (group.overOdd) group.alerts.push("Odds Over duplicadas na mesma linha; usando a maior odd disponivel.");
+      if (group.overOdd)
+        group.alerts.push("Odds Over duplicadas na mesma linha; usando a maior odd disponivel.");
       group.overOdd = pickBestOdd([group.overOdd, market]);
     }
     if (side === "under") {
-      if (group.underOdd) group.alerts.push("Odds Under duplicadas na mesma linha; usando a maior odd disponivel.");
+      if (group.underOdd)
+        group.alerts.push("Odds Under duplicadas na mesma linha; usando a maior odd disponivel.");
       group.underOdd = pickBestOdd([group.underOdd, market]);
     }
     groups.set(line, group);
@@ -408,7 +448,8 @@ function baseTotalsRow(
   missingFields: string[],
   distanceFromMainLine: number | null,
 ): MlbTotalsScreenerRow {
-  const isMain = params.mainTotalLine != null && closeTo(params.lineGroup.line, params.mainTotalLine);
+  const isMain =
+    params.mainTotalLine != null && closeTo(params.lineGroup.line, params.mainTotalLine);
   return {
     game_id: params.game.game_id,
     row_id: `${params.game.game_id}_total_${params.lineGroup.line}`,
@@ -469,7 +510,10 @@ function baseTotalsRow(
   };
 }
 
-function missingGameTotalsRow(game: EnrichedMlbGame, leagueAverage: MlbLeagueAverageContext): MlbTotalsScreenerRow {
+function missingGameTotalsRow(
+  game: EnrichedMlbGame,
+  leagueAverage: MlbLeagueAverageContext,
+): MlbTotalsScreenerRow {
   return {
     game_id: game.game_id,
     row_id: `${game.game_id}_total_missing`,
@@ -552,7 +596,8 @@ function getMissingTotalFields(game: EnrichedMlbGame, lineGroup: TotalLineGroup)
 function getExpectedRunsMissingFields(team: MlbTeamStanding, opponent: MlbTeamStanding) {
   const missing: string[] = [];
   if (team.runs_per_game == null) missing.push(`${team.team_name}: runs_per_game`);
-  if (opponent.runs_allowed_per_game == null) missing.push(`${opponent.team_name}: runs_allowed_per_game`);
+  if (opponent.runs_allowed_per_game == null)
+    missing.push(`${opponent.team_name}: runs_allowed_per_game`);
   return missing;
 }
 
@@ -563,11 +608,18 @@ function calculateRecentFormAdjustment(team: MlbTeamStanding, config: MlbTotalsP
     [team.last10_wins, team.last10_losses],
   );
   if (recentPct == null) return 0;
-  return clampNumber((recentPct - 0.5) * config.recentFormMultiplier, config.recentFormMin, config.recentFormMax);
+  return clampNumber(
+    (recentPct - 0.5) * config.recentFormMultiplier,
+    config.recentFormMin,
+    config.recentFormMax,
+  );
 }
 
 function isTotalMarket(market: MlbMarketOdd) {
-  return /over\/under|total|totals/i.test(String(market.market ?? "")) && Boolean(getTotalSide(market.pick));
+  return (
+    /over\/under|total|totals/i.test(String(market.market ?? "")) &&
+    Boolean(getTotalSide(market.pick))
+  );
 }
 
 function getTotalSide(pick: string | null) {
@@ -577,15 +629,24 @@ function getTotalSide(pick: string | null) {
 }
 
 function extractTotalLine(market: MlbMarketOdd) {
-  const rawLine = market.line != null && market.line !== "" ? market.line : String(market.pick ?? "").match(/(\d+(?:[.,]\d+)?)/)?.[1];
-  const value = Number(String(rawLine ?? "").replace(",", ".").replace(/^\+/, ""));
+  const rawLine =
+    market.line != null && market.line !== ""
+      ? market.line
+      : String(market.pick ?? "").match(/(\d+(?:[.,]\d+)?)/)?.[1];
+  const value = Number(
+    String(rawLine ?? "")
+      .replace(",", ".")
+      .replace(/^\+/, ""),
+  );
   return Number.isFinite(value) ? value : null;
 }
 
 function pickBestOdd(markets: Array<MlbMarketOdd | null>) {
-  return markets
-    .filter((market): market is MlbMarketOdd => Boolean(market?.odd) && Number(market?.odd) > 1)
-    .sort((a, b) => Number(b.odd) - Number(a.odd))[0] ?? null;
+  return (
+    markets
+      .filter((market): market is MlbMarketOdd => Boolean(market?.odd) && Number(market?.odd) > 1)
+      .sort((a, b) => Number(b.odd) - Number(a.odd))[0] ?? null
+  );
 }
 
 function getTotalRecommendation(input: {
@@ -653,7 +714,11 @@ function classifyTotalCandidate(input: {
   ) {
     return "analisar";
   }
-  if (ev >= thresholds.monitorEv || input.runGap >= thresholds.monitorRunGap || input.recommendedProbGap >= thresholds.monitorProbGap) {
+  if (
+    ev >= thresholds.monitorEv ||
+    input.runGap >= thresholds.monitorRunGap ||
+    input.recommendedProbGap >= thresholds.monitorProbGap
+  ) {
     return "monitorar";
   }
   return "pular";
@@ -683,7 +748,9 @@ function buildTotalReasons(input: {
   const defenseStrongForHome = input.away != null && input.away.opponent_defense_index < 1;
   const defenseStrongForAway = input.home != null && input.home.opponent_defense_index < 1;
   const reasons = [
-    isOver ? "Total projetado ASP acima da linha de mercado" : "Total projetado ASP abaixo da linha de mercado",
+    isOver
+      ? "Total projetado ASP acima da linha de mercado"
+      : "Total projetado ASP abaixo da linha de mercado",
     isOver && homeOffenseHigh ? "Ataque mandante acima da media da liga" : null,
     isOver && awayOffenseHigh ? "Ataque visitante acima da media da liga" : null,
     isOver && defenseWeakForHome ? "Defesa visitante permite corridas acima da media" : null,
@@ -692,7 +759,9 @@ function buildTotalReasons(input: {
     !isOver && awayOffenseLow ? "Ataque visitante abaixo da media da liga" : null,
     !isOver && defenseStrongForHome ? "Defesa visitante segura corridas abaixo da media" : null,
     !isOver && defenseStrongForAway ? "Defesa mandante segura corridas abaixo da media" : null,
-    Math.abs(input.totalGapVsLine) >= MLB_TOTALS_THRESHOLDS.monitorRunGap ? "Gap de corridas relevante contra a linha" : null,
+    Math.abs(input.totalGapVsLine) >= MLB_TOTALS_THRESHOLDS.monitorRunGap
+      ? "Gap de corridas relevante contra a linha"
+      : null,
     fairOdd != null && offeredOdd > fairOdd ? "Odd ofertada acima da odd justa ASP" : null,
   ].filter(Boolean) as string[];
   return [...new Set(reasons)];
@@ -709,7 +778,10 @@ function buildTotalAlerts(input: {
   away: MlbExpectedRunsComponents | null;
 }) {
   const alerts = [...input.row.alerts];
-  if (input.distanceFromMainLine != null && input.distanceFromMainLine > MLB_TOTALS_THRESHOLDS.maxAnalyzeDistanceFromMainLine) {
+  if (
+    input.distanceFromMainLine != null &&
+    input.distanceFromMainLine > MLB_TOTALS_THRESHOLDS.maxAnalyzeDistanceFromMainLine
+  ) {
     alerts.push("alternate_total_line_risk: linha alternativa distante da linha principal.");
   }
   if (input.recommendedOdd != null && input.recommendedOdd < MLB_TOTALS_THRESHOLDS.minAnalyzeOdd) {
@@ -718,7 +790,10 @@ function buildTotalAlerts(input: {
   if (input.recommendedOdd != null && input.recommendedOdd > MLB_TOTALS_THRESHOLDS.maxAnalyzeOdd) {
     alerts.push("Odd alta e sensivel a cauda da distribuicao.");
   }
-  if (input.recommendedFairOdd != null && input.recommendedFairOdd < MLB_TOTALS_THRESHOLDS.minAnalyzeFairOdd) {
+  if (
+    input.recommendedFairOdd != null &&
+    input.recommendedFairOdd < MLB_TOTALS_THRESHOLDS.minAnalyzeFairOdd
+  ) {
     alerts.push("low_fair_odd_tail_risk: odd justa muito baixa (< 1.35) - risco de cauda.");
   }
   if (input.home?.missing_fields.length || input.away?.missing_fields.length) {

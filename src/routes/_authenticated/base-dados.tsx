@@ -4,14 +4,35 @@ import type { ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { AlertTriangle, CheckCircle2, Database, Loader2, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   addBaseLine,
@@ -223,10 +244,13 @@ function BaseDadosPage() {
   const maxYear = years.length ? Math.max(...years.map((item) => item.ano)) : null;
   const selectedYear = year ? Number(year) : null;
   const selectedTeam = teams.find((item) => item.sigla === team) ?? null;
-  const selectedBasketballSeasonStatus = isBasketball && selectedYear ? getBasketballSeasonStatus(selectedYear) : null;
+  const selectedBasketballSeasonStatus =
+    isBasketball && selectedYear ? getBasketballSeasonStatus(selectedYear) : null;
   const isHistoricalYear = Boolean(
     selectedYear &&
-    (isBasketball ? selectedBasketballSeasonStatus === "closed" : maxYear && selectedYear < maxYear),
+    (isBasketball
+      ? selectedBasketballSeasonStatus === "closed"
+      : maxYear && selectedYear < maxYear),
   );
   const canValidate = Boolean(isIntegratedBase && selectedYear && team && line.trim() && !busy);
   const canAdd = Boolean(canValidate && validation && isValidationSuccess(validation));
@@ -254,14 +278,20 @@ function BaseDadosPage() {
         if (cancelled) return;
         setScraperUnavailable(false);
         const parsed = parseYears(payload);
-        const resolved = isBasketball ? await hydrateYearCounts(parsed, apiSport, apiLeague) : parsed;
+        const resolved = isBasketball
+          ? await hydrateYearCounts(parsed, apiSport, apiLeague)
+          : parsed;
         if (cancelled) return;
         setYears(resolved);
-        const defaultYear = isBasketball && resolved.some((item) => item.ano === CURRENT_BASKETBALL_SEASON_YEAR)
-          ? CURRENT_BASKETBALL_SEASON_YEAR
-          : resolved.length ? Math.max(...resolved.map((item) => item.ano)) : null;
+        const defaultYear =
+          isBasketball && resolved.some((item) => item.ano === CURRENT_BASKETBALL_SEASON_YEAR)
+            ? CURRENT_BASKETBALL_SEASON_YEAR
+            : resolved.length
+              ? Math.max(...resolved.map((item) => item.ano))
+              : null;
         setYear(defaultYear ? String(defaultYear) : "");
-        if (!parsed.length) toast.warning(`A VM respondeu, mas nao retornou anos de base ${league}.`);
+        if (!parsed.length)
+          toast.warning(`A VM respondeu, mas nao retornou anos de base ${league}.`);
       })
       .catch((e) => {
         const msg = formatError(e);
@@ -291,7 +321,8 @@ function BaseDadosPage() {
         if (cancelled) return;
         const parsed = parseTeams(payload, apiLeague);
         setTeams(parsed);
-        if (!parsed.length) toast.warning(`A VM respondeu, mas nao retornou times ${league} para ${selectedYear}.`);
+        if (!parsed.length)
+          toast.warning(`A VM respondeu, mas nao retornou times ${league} para ${selectedYear}.`);
       })
       .catch((e) => toast.error(formatError(e)))
       .finally(() => {
@@ -313,7 +344,8 @@ function BaseDadosPage() {
 
   const placeholderMessage = useMemo(() => {
     if (!sport) return "Selecione um esporte/modelo para carregar a base de dados.";
-    if (!isIntegratedBase) return "Base ainda não integrada à API. Integração prevista para etapa futura.";
+    if (!isIntegratedBase)
+      return "Base ainda não integrada à API. Integração prevista para etapa futura.";
     return null;
   }, [sport, isIntegratedBase]);
 
@@ -330,7 +362,9 @@ function BaseDadosPage() {
   async function loadLastLines(ano: number, sigla: string) {
     setBusy("last-lines");
     try {
-      const payload = await getLastLines({ data: { esporte: apiSport, liga: apiLeague, ano, sigla, limite: 10 } });
+      const payload = await getLastLines({
+        data: { esporte: apiSport, liga: apiLeague, ano, sigla, limite: 10 },
+      });
       const parsed = parseLastLines(payload);
       setLastLinesHeader(parsed.cabecalho);
       setLastLines(parsed.linhas);
@@ -343,7 +377,11 @@ function BaseDadosPage() {
     }
   }
 
-  async function refreshLastLinesAfterMutation(ano: number, sigla: string, optimisticLine?: string) {
+  async function refreshLastLinesAfterMutation(
+    ano: number,
+    sigla: string,
+    optimisticLine?: string,
+  ) {
     let latest: LastLinesResult | null = null;
     for (const waitMs of [250, 750, 1500]) {
       await delay(waitMs);
@@ -356,7 +394,11 @@ function BaseDadosPage() {
     }
   }
 
-  async function hydrateYearCounts(items: BaseballYear[], esporte: "baseball" | "basketball", liga: "mlb" | "nba" | "wnba") {
+  async function hydrateYearCounts(
+    items: BaseballYear[],
+    esporte: "baseball" | "basketball",
+    liga: "mlb" | "nba" | "wnba",
+  ) {
     return Promise.all(
       items.map(async (item) => {
         if (Number(item.total_csvs ?? 0) > 0) return item;
@@ -379,7 +421,15 @@ function BaseDadosPage() {
     setBusy("validate");
     setOperation(null);
     try {
-      const payload = await validateLine({ data: { esporte: apiSport, liga: apiLeague, ano: selectedYear, sigla: team, linha: parseLineForBase(line, isBasketball) } });
+      const payload = await validateLine({
+        data: {
+          esporte: apiSport,
+          liga: apiLeague,
+          ano: selectedYear,
+          sigla: team,
+          linha: parseLineForBase(line, isBasketball),
+        },
+      });
       const result = payload as ValidationResult;
       result.valida = isValidationSuccess(result);
       setValidation(result);
@@ -397,7 +447,15 @@ function BaseDadosPage() {
     setBusy("add");
     try {
       const parsedLine = parseLineForBase(line, isBasketball);
-      const payload = await addLine({ data: { esporte: apiSport, liga: apiLeague, ano: selectedYear, sigla: team, linha: parsedLine } });
+      const payload = await addLine({
+        data: {
+          esporte: apiSport,
+          liga: apiLeague,
+          ano: selectedYear,
+          sigla: team,
+          linha: parsedLine,
+        },
+      });
       const result = payload as OperationResult;
       setValidation(null);
       setOperation(result);
@@ -419,7 +477,9 @@ function BaseDadosPage() {
     setConfirmRemove(false);
     setBusy("remove");
     try {
-      const payload = await removeLastLine({ data: { esporte: apiSport, liga: apiLeague, ano: selectedYear, sigla: team } });
+      const payload = await removeLastLine({
+        data: { esporte: apiSport, liga: apiLeague, ano: selectedYear, sigla: team },
+      });
       setOperation(payload as OperationResult);
       setValidation(null);
       toast.success(`Última linha removida da base ${league}.`);
@@ -438,7 +498,10 @@ function BaseDadosPage() {
       toast.error("Informe um ano destino válido.");
       return;
     }
-    if (seasonSport === "basketball" && (!Number.isFinite(originYear) || originYear < 2000 || originYear > 2100)) {
+    if (
+      seasonSport === "basketball" &&
+      (!Number.isFinite(originYear) || originYear < 2000 || originYear > 2100)
+    ) {
       toast.error("Informe o ano origem/schema para Basketball.");
       return;
     }
@@ -458,11 +521,19 @@ function BaseDadosPage() {
       setLeague(seasonLeague);
       setYear(String(targetYear));
       toast.success("Temporada criada/atualizada com sucesso.");
-      const refreshed = await getYears({ data: { esporte: seasonSport, liga: seasonLeague.toLowerCase() as "mlb" | "nba" | "wnba" } });
+      const refreshed = await getYears({
+        data: { esporte: seasonSport, liga: seasonLeague.toLowerCase() as "mlb" | "nba" | "wnba" },
+      });
       const parsedYears = parseYears(refreshed);
-      setYears(seasonSport === "basketball"
-        ? await hydrateYearCounts(parsedYears, seasonSport, seasonLeague.toLowerCase() as "mlb" | "nba" | "wnba")
-        : parsedYears);
+      setYears(
+        seasonSport === "basketball"
+          ? await hydrateYearCounts(
+              parsedYears,
+              seasonSport,
+              seasonLeague.toLowerCase() as "mlb" | "nba" | "wnba",
+            )
+          : parsedYears,
+      );
     } catch (e) {
       toast.error(formatError(e));
     } finally {
@@ -478,9 +549,10 @@ function BaseDadosPage() {
           <div className="space-y-1">
             <p className="font-semibold">Scraper API indisponível</p>
             <p className="text-destructive/90">
-              Não foi possível contatar o servidor da VM que fornece os dados desta tela (erro Cloudflare 1016 / DNS).
-              A origem está offline ou o registro DNS foi removido. O código do ASP Insights está íntegro — assim que o
-              host voltar, esta tela funcionará normalmente sem alterações.
+              Não foi possível contatar o servidor da VM que fornece os dados desta tela (erro
+              Cloudflare 1016 / DNS). A origem está offline ou o registro DNS foi removido. O código
+              do ASP Insights está íntegro — assim que o host voltar, esta tela funcionará
+              normalmente sem alterações.
             </p>
           </div>
         </div>
@@ -513,18 +585,30 @@ function BaseDadosPage() {
                     resetTeamState();
                   }}
                 >
-                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
                   <SelectContent>
-                    {SPORTS.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}
+                    {SPORTS.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </Field>
 
               <Field label="Liga/modelo específico">
                 <Select value={league} onValueChange={setLeague} disabled={!sport}>
-                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
                   <SelectContent>
-                    {leagues.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}
+                    {leagues.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </Field>
@@ -539,43 +623,67 @@ function BaseDadosPage() {
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
                   <Field label="Ano da base">
                     <div className="flex gap-2">
-                    <Select
-                      value={year}
-                      onValueChange={(value) => {
-                        setYear(value);
-                        resetTeamState();
-                      }}
-                      disabled={busy === "years" || !years.length}
-                    >
-                      <SelectTrigger><SelectValue placeholder={busy === "years" ? "Carregando..." : years.length ? "Ano" : "Nenhum ano encontrado"} /></SelectTrigger>
-                      <SelectContent>
-                        {years.map((item) => (
-                          <SelectItem key={item.ano} value={String(item.ano)}>
-                            {formatYearOption(item, isBasketball)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="shrink-0"
-                      onClick={() => {
-                        setSeasonSport(apiSport as "baseball" | "basketball");
-                        setSeasonLeague(league || (apiSport === "basketball" ? "NBA" : "MLB"));
-                        setSeasonOriginYear(String(selectedYear ?? maxYear ?? ""));
-                        setSeasonTargetYear("");
-                        setSeasonDialog(true);
-                      }}
-                    >
-                      + Nova Temporada
-                    </Button>
+                      <Select
+                        value={year}
+                        onValueChange={(value) => {
+                          setYear(value);
+                          resetTeamState();
+                        }}
+                        disabled={busy === "years" || !years.length}
+                      >
+                        <SelectTrigger>
+                          <SelectValue
+                            placeholder={
+                              busy === "years"
+                                ? "Carregando..."
+                                : years.length
+                                  ? "Ano"
+                                  : "Nenhum ano encontrado"
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {years.map((item) => (
+                            <SelectItem key={item.ano} value={String(item.ano)}>
+                              {formatYearOption(item, isBasketball)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="shrink-0"
+                        onClick={() => {
+                          setSeasonSport(apiSport as "baseball" | "basketball");
+                          setSeasonLeague(league || (apiSport === "basketball" ? "NBA" : "MLB"));
+                          setSeasonOriginYear(String(selectedYear ?? maxYear ?? ""));
+                          setSeasonTargetYear("");
+                          setSeasonDialog(true);
+                        }}
+                      >
+                        + Nova Temporada
+                      </Button>
                     </div>
                   </Field>
 
                   <Field label={isBasketball ? `Time ${league}` : "Time MLB"}>
-                    <Select value={team} onValueChange={setTeam} disabled={busy === "teams" || !teams.length}>
-                      <SelectTrigger><SelectValue placeholder={busy === "teams" ? "Carregando..." : teams.length ? "Selecione o time" : "Nenhum time encontrado"} /></SelectTrigger>
+                    <Select
+                      value={team}
+                      onValueChange={setTeam}
+                      disabled={busy === "teams" || !teams.length}
+                    >
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={
+                            busy === "teams"
+                              ? "Carregando..."
+                              : teams.length
+                                ? "Selecione o time"
+                                : "Nenhum time encontrado"
+                          }
+                        />
+                      </SelectTrigger>
                       <SelectContent>
                         {teams.map((item) => (
                           <SelectItem key={item.sigla} value={item.sigla}>
@@ -590,7 +698,10 @@ function BaseDadosPage() {
                 {isHistoricalYear && (
                   <div className="flex gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                    <span>Atenção: você está visualizando/editando uma base histórica de ano encerrado. Altere apenas se tiver certeza.</span>
+                    <span>
+                      Atenção: você está visualizando/editando uma base histórica de ano encerrado.
+                      Altere apenas se tiver certeza.
+                    </span>
                   </div>
                 )}
 
@@ -609,15 +720,27 @@ function BaseDadosPage() {
 
                 <div className="flex flex-wrap gap-2">
                   <Button onClick={handleValidate} disabled={!canValidate}>
-                    {busy === "validate" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                    {busy === "validate" ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                    )}
                     Validar Linha
                   </Button>
                   <Button onClick={handleAdd} disabled={!canAdd}>
                     {busy === "add" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Adicionar Linha
                   </Button>
-                  <Button variant="destructive" onClick={() => setConfirmRemove(true)} disabled={!canRemove}>
-                    {busy === "remove" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                  <Button
+                    variant="destructive"
+                    onClick={() => setConfirmRemove(true)}
+                    disabled={!canRemove}
+                  >
+                    {busy === "remove" ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="mr-2 h-4 w-4" />
+                    )}
                     Remover Última Linha
                   </Button>
                 </div>
@@ -636,7 +759,11 @@ function BaseDadosPage() {
                 disabled={!selectedYear || !team || busy === "last-lines"}
                 onClick={() => selectedYear && team && loadLastLines(selectedYear, team)}
               >
-                {busy === "last-lines" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />}
+                {busy === "last-lines" ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                )}
                 Atualizar
               </Button>
             </CardHeader>
@@ -655,14 +782,19 @@ function BaseDadosPage() {
                     </pre>
                   )}
                   {lastLines.map((item, index) => (
-                    <pre key={`${index}-${item}`} className="whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-xs">
+                    <pre
+                      key={`${index}-${item}`}
+                      className="whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-xs"
+                    >
                       {item}
                     </pre>
                   ))}
                 </div>
               ) : (
                 <div className="rounded-md border border-border bg-muted/30 p-8 text-center text-sm text-muted-foreground">
-                  {team ? "Nenhuma linha carregada para este time." : "Selecione um time para consultar as últimas linhas."}
+                  {team
+                    ? "Nenhuma linha carregada para este time."
+                    : "Selecione um time para consultar as últimas linhas."}
                 </div>
               )}
             </CardContent>
@@ -690,7 +822,8 @@ function BaseDadosPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Remover última linha?</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja remover a última linha da base de {selectedTeam?.nome ?? team}? Essa ação altera o CSV histórico, mas um backup será criado automaticamente.
+              Tem certeza que deseja remover a última linha da base de {selectedTeam?.nome ?? team}?
+              Essa ação altera o CSV histórico, mas um backup será criado automaticamente.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -718,7 +851,9 @@ function BaseDadosPage() {
                     setSeasonTargetYear("");
                   }}
                 >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="baseball">Baseball</SelectItem>
                     <SelectItem value="basketball">Basketball</SelectItem>
@@ -728,7 +863,9 @@ function BaseDadosPage() {
 
               <Field label="Liga/modelo especifico">
                 <Select value={seasonLeague} onValueChange={setSeasonLeague}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     {seasonSport === "basketball" ? (
                       <>
@@ -746,7 +883,13 @@ function BaseDadosPage() {
             {seasonSport === "basketball" && (
               <Field label="Ano origem/schema">
                 <Select value={seasonOriginYear} onValueChange={setSeasonOriginYear}>
-                  <SelectTrigger><SelectValue placeholder={years.length ? "Selecione o ano origem" : "Informe manualmente abaixo"} /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={
+                        years.length ? "Selecione o ano origem" : "Informe manualmente abaixo"
+                      }
+                    />
+                  </SelectTrigger>
                   <SelectContent>
                     {years.map((item) => (
                       <SelectItem key={`origin-${item.ano}`} value={String(item.ano)}>
@@ -777,7 +920,9 @@ function BaseDadosPage() {
             </Field>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSeasonDialog(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => setSeasonDialog(false)}>
+              Cancelar
+            </Button>
             <Button onClick={handleCreateSeason} disabled={busy === "create-season"}>
               {busy === "create-season" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Criar temporada
@@ -802,15 +947,28 @@ function ValidationPanel({ validation }: { validation: ValidationResult }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <Badge variant={validation.valida ? "outline" : "destructive"}>{validation.valida ? "Válida" : "Inválida"}</Badge>
-        {validation.arquivo && <span className="text-xs text-muted-foreground">{validation.arquivo}</span>}
+        <Badge variant={validation.valida ? "outline" : "destructive"}>
+          {validation.valida ? "Válida" : "Inválida"}
+        </Badge>
+        {validation.arquivo && (
+          <span className="text-xs text-muted-foreground">{validation.arquivo}</span>
+        )}
       </div>
       <div className="grid gap-2 md:grid-cols-3">
         {validation.liga && <Info label="Liga" value={validation.liga} />}
         {validation.ano && <Info label="Ano" value={validation.ano} />}
-        {validation.registros_identificados != null && <Info label="Registros identificados" value={validation.registros_identificados} />}
-        {validation.basic_identificado != null && <Info label="Basic identificado" value={validation.basic_identificado ? "Sim" : "Nao"} />}
-        {validation.advanced_identificado != null && <Info label="Advanced identificado" value={validation.advanced_identificado ? "Sim" : "Nao"} />}
+        {validation.registros_identificados != null && (
+          <Info label="Registros identificados" value={validation.registros_identificados} />
+        )}
+        {validation.basic_identificado != null && (
+          <Info label="Basic identificado" value={validation.basic_identificado ? "Sim" : "Nao"} />
+        )}
+        {validation.advanced_identificado != null && (
+          <Info
+            label="Advanced identificado"
+            value={validation.advanced_identificado ? "Sim" : "Nao"}
+          />
+        )}
       </div>
       <MessageList title="Erros" items={validation.erros ?? []} tone="bad" />
       <MessageList title="Avisos" items={validation.avisos ?? []} tone="warn" />
@@ -820,12 +978,13 @@ function ValidationPanel({ validation }: { validation: ValidationResult }) {
 }
 
 function OperationPanel({ operation }: { operation: OperationResult }) {
-  const hasRuntimeError = textIncludesRuntimeError(operation.stderr) || textIncludesRuntimeError(operation.stdout);
+  const hasRuntimeError =
+    textIncludesRuntimeError(operation.stderr) || textIncludesRuntimeError(operation.stdout);
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         <Badge variant={operation.status === "ok" && !hasRuntimeError ? "outline" : "destructive"}>
-          {hasRuntimeError ? "erro" : operation.status ?? "retorno"}
+          {hasRuntimeError ? "erro" : (operation.status ?? "retorno")}
         </Badge>
         {operation.mensagem && <span className="text-sm">{operation.mensagem}</span>}
       </div>
@@ -835,9 +994,15 @@ function OperationPanel({ operation }: { operation: OperationResult }) {
         <Info label="Ano" value={operation.ano ?? "-"} />
         <Info label="Ano destino" value={operation.ano_destino ?? "-"} />
         <Info label="Ano origem" value={operation.ano_origem ?? "-"} />
-        <Info label="Time" value={operation.nome_time ?? operation.sigla ?? operation.sigla_time ?? "-"} />
+        <Info
+          label="Time"
+          value={operation.nome_time ?? operation.sigla ?? operation.sigla_time ?? "-"}
+        />
         <Info label="Arquivos criados" value={operation.arquivos_criados ?? "-"} />
-        <Info label="Registros lidos" value={operation.registros_lidos ?? operation.registros_identificados ?? "-"} />
+        <Info
+          label="Registros lidos"
+          value={operation.registros_lidos ?? operation.registros_identificados ?? "-"}
+        />
         <Info label="Basic importados" value={operation.registros_basicos_importados ?? "-"} />
         <Info label="Advanced importados" value={operation.registros_avancados_importados ?? "-"} />
         <Info label="Arquivo" value={operation.arquivo_merged ?? operation.arquivo ?? "-"} />
@@ -845,22 +1010,44 @@ function OperationPanel({ operation }: { operation: OperationResult }) {
         <Info label="Raw salvo" value={operation.raw_salvo ?? "-"} />
         <Info label="Log salvo" value={operation.log_salvo ?? "-"} />
       </div>
-      {operation.erros_ignorados && <InfoBlock title="Erros/ignorados" value={formatLineValue(operation.erros_ignorados)} />}
-      {operation.linha_adicionada && <InfoBlock title="Linha adicionada" value={operation.linha_adicionada} />}
-      {operation.linha_removida && <InfoBlock title="Linha removida" value={operation.linha_removida} />}
+      {operation.erros_ignorados && (
+        <InfoBlock title="Erros/ignorados" value={formatLineValue(operation.erros_ignorados)} />
+      )}
+      {operation.linha_adicionada && (
+        <InfoBlock title="Linha adicionada" value={operation.linha_adicionada} />
+      )}
+      {operation.linha_removida && (
+        <InfoBlock title="Linha removida" value={operation.linha_removida} />
+      )}
       {operation.stdout && <InfoBlock title="Retorno da VM" value={operation.stdout} />}
       {operation.stderr && <InfoBlock title="Detalhes/erros da VM" value={operation.stderr} />}
     </div>
   );
 }
 
-function MessageList({ title, items, tone }: { title: string; items: string[]; tone: "bad" | "warn" }) {
+function MessageList({
+  title,
+  items,
+  tone,
+}: {
+  title: string;
+  items: string[];
+  tone: "bad" | "warn";
+}) {
   if (!items.length) return null;
   return (
-    <div className={tone === "bad" ? "rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive" : "rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning"}>
+    <div
+      className={
+        tone === "bad"
+          ? "rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+          : "rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning"
+      }
+    >
       <div className="mb-1 font-semibold">{title}</div>
       <ul className="list-inside list-disc space-y-1">
-        {items.map((item, index) => <li key={`${title}-${index}`}>{item}</li>)}
+        {items.map((item, index) => (
+          <li key={`${title}-${index}`}>{item}</li>
+        ))}
       </ul>
     </div>
   );
@@ -880,7 +1067,9 @@ function InfoBlock({ title, value }: { title: string; value: unknown }) {
   return (
     <div>
       <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">{title}</div>
-      <pre className="whitespace-pre-wrap rounded-md border border-border bg-background/60 p-3 font-mono text-xs">{displayValue}</pre>
+      <pre className="whitespace-pre-wrap rounded-md border border-border bg-background/60 p-3 font-mono text-xs">
+        {displayValue}
+      </pre>
     </div>
   );
 }
@@ -910,15 +1099,22 @@ function formatYearOption(item: BaseballYear, isBasketball: boolean) {
   const count = Number(item.total_csvs ?? 0);
   const rawLabel = typeof item.label === "string" ? item.label : "";
   const labelHasCsvCount = /\d+\s*CSVs?/i.test(rawLabel);
-  const label = labelHasCsvCount && (!/0\s*CSVs?/i.test(rawLabel) || count <= 0)
-    ? rawLabel
-    : `${item.ano} - ${count} CSVs`;
+  const label =
+    labelHasCsvCount && (!/0\s*CSVs?/i.test(rawLabel) || count <= 0)
+      ? rawLabel
+      : `${item.ano} - ${count} CSVs`;
   return isBasketball ? `${label} - ${formatBasketballSeasonStatus(item.ano)}` : label;
 }
 
 function parseYears(payload: unknown): BaseballYear[] {
   const value = unwrapPayload(payload);
-  const obj = value as { anos?: unknown[]; years?: unknown[]; items?: unknown[]; options?: unknown[]; detalhes?: BaseballYearDetail[] };
+  const obj = value as {
+    anos?: unknown[];
+    years?: unknown[];
+    items?: unknown[];
+    options?: unknown[];
+    detalhes?: BaseballYearDetail[];
+  };
   const rows = Array.isArray(value) ? value : (obj.anos ?? obj.years ?? obj.items ?? obj.options);
   const detailsByYear = new Map(
     (obj.detalhes ?? [])
@@ -934,8 +1130,20 @@ function parseYears(payload: unknown): BaseballYear[] {
       }
       const row = item as Record<string, unknown>;
       const ano = Number(row.ano ?? row.year ?? row.value);
-      const csvCount = firstNumber(row.csv_count, row.total_csvs, row.arquivos_csv, row.count, detailsByYear.get(ano), 0);
-      return { ...row, ano, label: typeof row.label === "string" ? row.label : undefined, total_csvs: csvCount };
+      const csvCount = firstNumber(
+        row.csv_count,
+        row.total_csvs,
+        row.arquivos_csv,
+        row.count,
+        detailsByYear.get(ano),
+        0,
+      );
+      return {
+        ...row,
+        ano,
+        label: typeof row.label === "string" ? row.label : undefined,
+        total_csvs: csvCount,
+      };
     })
     .filter((item) => Number.isFinite(item.ano))
     .sort((a, b) => b.ano - a.ano);
@@ -953,37 +1161,64 @@ function parseTeams(payload: unknown, league?: string): BaseballTeam[] {
   };
   const rows = Array.isArray(value)
     ? value
-    : (obj.options ?? obj.items ?? obj.times_detalhados ?? obj.teams_detalhados ?? obj.times ?? obj.teams);
+    : (obj.options ??
+      obj.items ??
+      obj.times_detalhados ??
+      obj.teams_detalhados ??
+      obj.times ??
+      obj.teams);
   return (rows ?? [])
     .map((item) => {
       if (typeof item === "string") return { sigla: item, nome: item };
       const row = item as Record<string, unknown>;
-      const sigla = String(row.value ?? row.sigla ?? row.codigo ?? row.time ?? row.team ?? "").trim();
+      const sigla = String(
+        row.value ?? row.sigla ?? row.codigo ?? row.time ?? row.team ?? "",
+      ).trim();
       const nome = String(row.nome ?? row.name ?? row.display ?? row.label ?? sigla).trim();
-      const label = String(row.label ?? row.display ?? (nome && nome !== sigla ? `${sigla} - ${nome}` : sigla)).trim();
+      const label = String(
+        row.label ?? row.display ?? (nome && nome !== sigla ? `${sigla} - ${nome}` : sigla),
+      ).trim();
       return { ...(item as BaseballTeam), sigla, nome, label };
     })
     .filter((item) => item.sigla)
     .map((item) => {
       const sigla = normalizeMlbSigla(item.sigla);
-      const basketballName = league === "nba" || league === "wnba" ? BASKETBALL_TEAM_NAMES[league][sigla] : undefined;
+      const basketballName =
+        league === "nba" || league === "wnba" ? BASKETBALL_TEAM_NAMES[league][sigla] : undefined;
       const nome = basketballName ?? item.nome ?? sigla;
       const existingLabel = "label" in item ? item.label : undefined;
-      return { ...item, sigla, nome, label: existingLabel || (basketballName ? `${sigla} - ${basketballName}` : nome) };
+      return {
+        ...item,
+        sigla,
+        nome,
+        label: existingLabel || (basketballName ? `${sigla} - ${basketballName}` : nome),
+      };
     })
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }
 
 function parseLastLines(payload: unknown): LastLinesResult {
   const value = unwrapPayload(payload);
-  const obj = value as { cabecalho?: unknown[]; ultimas_linhas?: unknown[]; linhas?: unknown[]; rows?: unknown[]; data?: unknown[]; mensagem?: string; message?: string };
-  const rows = Array.isArray(value) ? value : (obj.ultimas_linhas ?? obj.linhas ?? obj.rows ?? obj.data);
+  const obj = value as {
+    cabecalho?: unknown[];
+    ultimas_linhas?: unknown[];
+    linhas?: unknown[];
+    rows?: unknown[];
+    data?: unknown[];
+    mensagem?: string;
+    message?: string;
+  };
+  const rows = Array.isArray(value)
+    ? value
+    : (obj.ultimas_linhas ?? obj.linhas ?? obj.rows ?? obj.data);
   const rowItems = rows ?? [];
   const parsed = rowItems.map(formatLastLine).filter((item) => item.length > 0);
   const message = obj.mensagem ?? obj.message;
   const syntheticHeader = getSyntheticLastLinesHeader(rowItems);
   return {
-    cabecalho: Array.isArray(obj.cabecalho) ? obj.cabecalho.map((item) => String(item)).join(",") : syntheticHeader,
+    cabecalho: Array.isArray(obj.cabecalho)
+      ? obj.cabecalho.map((item) => String(item)).join(",")
+      : syntheticHeader,
     linhas: parsed.length ? parsed : message ? [message] : [],
   };
 }
@@ -997,14 +1232,29 @@ function unwrapPayload(payload: unknown): unknown {
 function formatLastLine(item: unknown): string {
   if (typeof item === "string") return item;
   if (!item || typeof item !== "object") return "";
-  const row = item as { valores?: unknown[]; linha?: unknown[]; registro?: Record<string, unknown> };
+  const row = item as {
+    valores?: unknown[];
+    linha?: unknown[];
+    registro?: Record<string, unknown>;
+  };
   if (Array.isArray(row.valores)) return row.valores.map((value) => String(value)).join(",");
   if (Array.isArray(row.linha)) return row.linha.map((value) => String(value)).join(",");
   const record = row.registro ?? (item as Record<string, unknown>);
   const basketballLine = formatBasketballLastLine(record);
   if (basketballLine) return basketballLine;
 
-  const preferred = ["data", "local", "adversario", "resultado", "pontos_time", "pontos_adversario", "off_rtg", "def_rtg", "pace", "ts_pct"];
+  const preferred = [
+    "data",
+    "local",
+    "adversario",
+    "resultado",
+    "pontos_time",
+    "pontos_adversario",
+    "off_rtg",
+    "def_rtg",
+    "pace",
+    "ts_pct",
+  ];
   const keys = preferred.filter((key) => key in record);
   const visibleKeys = keys.length ? keys : Object.keys(record).slice(0, 12);
   return visibleKeys.map((key) => `${key}: ${String(record[key] ?? "")}`).join(" | ");
@@ -1039,7 +1289,9 @@ function getSyntheticLastLinesHeader(rows: unknown[]): string | null {
     })
     .find((record) => record && formatBasketballLastLine(record));
 
-  return firstRecord ? "rk,data,local,adversario,resultado,pontos_time,pontos_adversario,off_rtg,def_rtg,pace,ts_pct" : null;
+  return firstRecord
+    ? "rk,data,local,adversario,resultado,pontos_time,pontos_adversario,off_rtg,def_rtg,pace,ts_pct"
+    : null;
 }
 
 function firstRecordValue(record: Record<string, unknown>, keys: string[]): string | null {
@@ -1078,7 +1330,8 @@ function parseCsvLine(input: string): string[] {
 
 function getLinePlaceholder(isBasketball: boolean, league: string) {
   if (!isBasketball) return "Cole aqui a linha no formato esperado pelo CSV historico da MLB.";
-  if (league === "WNBA") return "Cole aqui a linha basic da WNBA e, em seguida, a linha advanced. Pode separar por espaco ou quebra de linha.";
+  if (league === "WNBA")
+    return "Cole aqui a linha basic da WNBA e, em seguida, a linha advanced. Pode separar por espaco ou quebra de linha.";
   return "Cole aqui a linha basic da NBA e, em seguida, a linha advanced. Pode separar por espaco ou quebra de linha.";
 }
 
@@ -1096,7 +1349,8 @@ function textIncludesRuntimeError(value: unknown) {
 function isAddOperationSuccess(operation: OperationResult, isBasketball: boolean) {
   if (operation.ok === false) return false;
   if (operation.status && !/^ok|success|sucesso$/i.test(operation.status)) return false;
-  if (textIncludesRuntimeError(operation.stderr) || textIncludesRuntimeError(operation.stdout)) return false;
+  if (textIncludesRuntimeError(operation.stderr) || textIncludesRuntimeError(operation.stdout))
+    return false;
 
   if (isBasketball) {
     const basic = Number(operation.registros_basicos_importados ?? 0);
@@ -1109,7 +1363,12 @@ function isAddOperationSuccess(operation: OperationResult, isBasketball: boolean
 }
 
 function getOperationErrorMessage(operation: OperationResult) {
-  const details = [operation.stderr, operation.stdout, operation.mensagem, operation.erros_ignorados]
+  const details = [
+    operation.stderr,
+    operation.stdout,
+    operation.mensagem,
+    operation.erros_ignorados,
+  ]
     .map((value) => formatLineValue(value).trim())
     .find(Boolean);
   if (/no module named ['"]?pandas/i.test(details ?? "")) {
@@ -1137,7 +1396,13 @@ function normalizeMlbSigla(sigla: string) {
 }
 
 function isValidationSuccess(validation: ValidationResult) {
-  return (validation.ok === true || validation.valida === true || validation.valido === true || validation.valid === true) && !validation.erros?.length;
+  return (
+    (validation.ok === true ||
+      validation.valida === true ||
+      validation.valido === true ||
+      validation.valid === true) &&
+    !validation.erros?.length
+  );
 }
 
 function formatError(error: unknown) {
@@ -1149,4 +1414,3 @@ function isScraperUnavailableError(message: string) {
     message,
   );
 }
-
