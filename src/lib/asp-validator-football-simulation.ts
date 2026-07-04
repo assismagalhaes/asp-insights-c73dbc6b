@@ -23,6 +23,8 @@ export type RoutedSimulationResult = AspValidatorSimulationResult & {
   proxy_used?: string | null;
 };
 
+type DynamicRecord = Record<string, unknown>;
+
 function norm(s: string): string {
   return (s || "")
     .normalize("NFD")
@@ -58,8 +60,23 @@ function round(v: number, d = 4): number {
   return Math.round(v * f) / f;
 }
 
+function asRecord(value: unknown): DynamicRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as DynamicRecord)
+    : {};
+}
+
+function stringOrNumberValue(value: unknown): string | number | null {
+  return typeof value === "string" || typeof value === "number" ? value : null;
+}
+
+function stringValue(value: unknown): string {
+  const scalar = stringOrNumberValue(value);
+  return scalar === null ? "" : String(scalar);
+}
+
 export function routeSimulation(input: AspValidatorSimulationInput): RoutedSimulationResult {
-  const structured = (input.structured_json ?? {}) as Record<string, any>;
+  const structured = asRecord(input.structured_json);
   const declared = String(structured.market_type ?? "").toLowerCase();
   const period = String(structured.period ?? "FT").toUpperCase();
   const blob = norm(`${input.market ?? ""} ${input.pick ?? ""} ${declared}`);
@@ -91,8 +108,8 @@ export function routeSimulation(input: AspValidatorSimulationInput): RoutedSimul
   let proxy_used: string | null = null;
   if (declared === "goals_total" && period === "HT") {
     // Se nao havia goals.period === HT mas extraimos FT, marcamos como proxy
-    const goals = structured.goals as { period?: string } | undefined;
-    if (goals && goals.period && goals.period !== "HT") {
+    const goals = asRecord(structured.goals);
+    if (goals.period && goals.period !== "HT") {
       proxy_used = "FT_as_HT";
       base.notes = [
         ...base.notes,
@@ -124,16 +141,16 @@ function simulateCards(
   input: AspValidatorSimulationInput,
   period: string,
 ): AspValidatorSimulationResult {
-  const structured = (input.structured_json ?? {}) as Record<string, any>;
-  const cards = (structured.cards ?? {}) as Record<string, any>;
-  const general = (cards.general ?? cards) as Record<string, any>;
-  const home = (general.home ?? {}) as Record<string, any>;
-  const away = (general.away ?? {}) as Record<string, any>;
-  const market = (structured.market ?? structured.prediction ?? {}) as Record<string, any>;
-  const prediction = (structured.prediction ?? {}) as Record<string, any>;
+  const structured = asRecord(input.structured_json);
+  const cards = asRecord(structured.cards);
+  const general = asRecord(cards.general ?? cards);
+  const home = asRecord(general.home);
+  const away = asRecord(general.away);
+  const market = asRecord(structured.market ?? structured.prediction);
+  const prediction = asRecord(structured.prediction);
 
-  const line = parseLine(input.line ?? market.line ?? null);
-  const pickText = norm(input.pick ?? market.pick ?? "");
+  const line = parseLine(input.line ?? stringOrNumberValue(market.line));
+  const pickText = norm(stringValue(input.pick ?? market.pick));
   const wantsUnder = /under|menos/.test(pickText);
   const sourceProb = readPct(market.probability_original ?? prediction.source_probability);
   const offeredOdd = input.offered_odd ?? readNumber(market.offered_odd ?? prediction.offered_odd);
@@ -220,7 +237,7 @@ function toDecimal(v: number | null): number | null {
   return v > 0 && v <= 1 ? clamp(v, 0, 1) : clamp(v / 100, 0, 1);
 }
 
-function readLine(a: any, line: number, b?: any): number | null {
+function readLine(a: unknown, line: number, b?: unknown): number | null {
   const keys = [
     String(line),
     `+${line}`,
@@ -230,8 +247,9 @@ function readLine(a: any, line: number, b?: any): number | null {
   ];
   for (const map of [a, b]) {
     if (!map || typeof map !== "object") continue;
+    const record = asRecord(map);
     for (const k of keys) {
-      const v = readNumber(map[k]);
+      const v = readNumber(record[k]);
       if (v !== null) return v;
     }
   }
@@ -254,16 +272,16 @@ function simulateFirstGoal(
   input: AspValidatorSimulationInput,
   period: string,
 ): AspValidatorSimulationResult {
-  const structured = (input.structured_json ?? {}) as Record<string, any>;
-  const market = (structured.market ?? structured.prediction ?? {}) as Record<string, any>;
-  const prediction = (structured.prediction ?? {}) as Record<string, any>;
-  const goals = (structured.goals ?? {}) as Record<string, any>;
-  const general = (goals.general ?? {}) as Record<string, any>;
-  const homeAway = (goals.home_away ?? {}) as Record<string, any>;
-  const ghGeneral = (general.home ?? {}) as Record<string, any>;
-  const gaGeneral = (general.away ?? {}) as Record<string, any>;
-  const ghHA = (homeAway.home ?? {}) as Record<string, any>;
-  const gaHA = (homeAway.away ?? {}) as Record<string, any>;
+  const structured = asRecord(input.structured_json);
+  const market = asRecord(structured.market ?? structured.prediction);
+  const prediction = asRecord(structured.prediction);
+  const goals = asRecord(structured.goals);
+  const general = asRecord(goals.general);
+  const homeAway = asRecord(goals.home_away);
+  const ghGeneral = asRecord(general.home);
+  const gaGeneral = asRecord(general.away);
+  const ghHA = asRecord(homeAway.home);
+  const gaHA = asRecord(homeAway.away);
 
   // Determinar lado escolhido
   const pickText = norm(`${input.pick ?? market.pick ?? ""} ${input.market ?? ""}`);
@@ -320,11 +338,9 @@ function simulateFirstGoal(
   }
 
   // Componente 3: iniciativa/eficiencia
-  const perf = (structured.general_performance_home_away ??
-    structured.general_performance ??
-    {}) as Record<string, any>;
-  const sidePerf = (perf[side] ?? {}) as Record<string, any>;
-  const oppPerf = (perf[side === "home" ? "away" : "home"] ?? {}) as Record<string, any>;
+  const perf = asRecord(structured.general_performance_home_away ?? structured.general_performance);
+  const sidePerf = asRecord(perf[side]);
+  const oppPerf = asRecord(perf[side === "home" ? "away" : "home"]);
   const sideEff = readPct(sidePerf.efficiency_pct);
   const sidePoss = readPct(sidePerf.avg_possession_pct);
   let initiative: number | null = null;

@@ -43,6 +43,8 @@ type ScoreCell = {
   probability: number;
 };
 
+type DynamicRecord = Record<string, unknown>;
+
 const MAX_GOALS = 10;
 
 export function runAspValidatorSimulation(
@@ -210,34 +212,33 @@ function runCornerSimulation(
   input: AspValidatorSimulationInput,
   marketText: string,
 ): AspValidatorSimulationResult {
-  const structured = (input.structured_json ?? {}) as Record<string, any>;
-  const market = (structured.market ?? structured.prediction ?? {}) as Record<string, any>;
-  const corners = (structured.corners ?? {}) as Record<string, any>;
+  const structured = asRecord(input.structured_json);
+  const market = asRecord(structured.market ?? structured.prediction);
+  const corners = asRecord(structured.corners);
   const line = parseLine(
-    input.line ?? market.line ?? readCornerRaceLine(input.pick ?? market.pick ?? ""),
+    input.line ??
+      stringOrNumberValue(market.line) ??
+      readCornerRaceLine(stringOrNumberValue(input.pick ?? market.pick)),
   );
   const isTotalOverUnder = isCornerTotalOverUnderMarket(
     marketText,
-    input.pick ?? market.pick ?? "",
+    stringValue(input.pick ?? market.pick),
     line,
   );
   if (isTotalOverUnder && line !== null) {
     return runCornerTotalOverSimulation(input, structured, market, corners, line);
   }
 
-  const pickText = normalize(input.pick ?? market.pick ?? "");
+  const pickText = normalize(stringValue(input.pick ?? market.pick));
   const wantsAway =
     pickText.includes(normalize(input.away_team ?? "")) ||
     pickText.includes("fora") ||
     pickText.includes("visitante") ||
     pickText.includes("away");
   const side = wantsAway ? "away" : "home";
-  const sideStats = (corners[side] ?? {}) as Record<string, number | null>;
-  const opponentStats = (corners[side === "home" ? "away" : "home"] ?? {}) as Record<
-    string,
-    number | null
-  >;
-  const prediction = (structured.prediction ?? {}) as Record<string, any>;
+  const sideStats = asRecord(corners[side]);
+  const opponentStats = asRecord(corners[side === "home" ? "away" : "home"]);
+  const prediction = asRecord(structured.prediction);
   const sourceProb = percentToDecimal(
     readNumber(
       market.probability_original ??
@@ -245,8 +246,7 @@ function runCornerSimulation(
         prediction.probability_original,
     ),
   );
-  const offeredOdd =
-    input.offered_odd ?? readNumber(market.offered_odd ?? structured.prediction?.offered_odd);
+  const offeredOdd = input.offered_odd ?? readNumber(market.offered_odd ?? prediction.offered_odd);
   const marketProb = offeredOdd && offeredOdd > 1 ? 1 / offeredOdd : null;
   const raceProb = line
     ? percentToDecimal(readNumber(sideStats[`race_to_${Math.trunc(line)}_pct`]))
@@ -289,7 +289,9 @@ function runCornerSimulation(
   const rawProbability =
     components.reduce((sum, item) => sum + item.value * item.weight, 0) / totalWeight;
   const quality =
-    readNumber(structured.data_quality_score) ?? readNumber(structured.data_quality?.score) ?? 0.5;
+    readNumber(structured.data_quality_score) ??
+    readNumber(asRecord(structured.data_quality).score) ??
+    0.5;
   const penalty = quality < 0.7 ? (0.7 - quality) * 0.12 : 0;
   const probability = clampDecimal(rawProbability - penalty, 0.05, 0.85);
   const fairOdd = probability > 0 ? round(1 / probability) : null;
@@ -319,15 +321,15 @@ function runCornerSimulation(
 
 function runCornerTotalOverSimulation(
   input: AspValidatorSimulationInput,
-  structured: Record<string, any>,
-  market: Record<string, any>,
-  corners: Record<string, any>,
+  structured: DynamicRecord,
+  market: DynamicRecord,
+  corners: DynamicRecord,
   line: number,
 ): AspValidatorSimulationResult {
-  const prediction = (structured.prediction ?? {}) as Record<string, any>;
-  const home = (corners.home ?? {}) as Record<string, any>;
-  const away = (corners.away ?? {}) as Record<string, any>;
-  const pickText = normalize(input.pick ?? market.pick ?? "");
+  const prediction = asRecord(structured.prediction);
+  const home = asRecord(corners.home);
+  const away = asRecord(corners.away);
+  const pickText = normalize(stringValue(input.pick ?? market.pick));
   const wantsUnder = pickText.includes("under") || pickText.includes("menos");
   const sourceProb = percentToDecimal(
     readNumber(
@@ -374,12 +376,12 @@ function runCornerTotalOverSimulation(
         ? clampDecimal(0.5 - (expectedTotal - line) * 0.08, 0.3, 0.78)
         : clampDecimal(0.5 + (expectedTotal - line) * 0.08, 0.3, 0.78)
       : null;
-  const generalCorners = (corners.general ?? {}) as Record<string, any>;
-  const homeAwayCorners = (corners.home_away ?? {}) as Record<string, any>;
-  const genHome = (generalCorners.home ?? {}) as Record<string, any>;
-  const genAway = (generalCorners.away ?? {}) as Record<string, any>;
-  const haHome = (homeAwayCorners.home ?? {}) as Record<string, any>;
-  const haAway = (homeAwayCorners.away ?? {}) as Record<string, any>;
+  const generalCorners = asRecord(corners.general);
+  const homeAwayCorners = asRecord(corners.home_away);
+  const genHome = asRecord(generalCorners.home);
+  const genAway = asRecord(generalCorners.away);
+  const haHome = asRecord(homeAwayCorners.home);
+  const haAway = asRecord(homeAwayCorners.away);
   const totalFreq = averagePercentValues([
     readLinePercent(home.over_lines, line),
     readLinePercent(away.over_lines, line),
@@ -406,7 +408,9 @@ function runCornerTotalOverSimulation(
   ]);
   const frequencyProb = percentToDecimal(wantsUnder ? underFreq : totalFreq);
   const quality =
-    readNumber(structured.data_quality_score) ?? readNumber(structured.data_quality?.score) ?? 0.5;
+    readNumber(structured.data_quality_score) ??
+    readNumber(asRecord(structured.data_quality).score) ??
+    0.5;
   const components = [
     sourceProb !== null ? { value: sourceProb, weight: 0.3 } : null,
     marketProb !== null ? { value: marketProb, weight: 0.15 } : null,
@@ -534,10 +538,10 @@ function estimateLambdas(input: AspValidatorSimulationInput): LambdaEstimate {
   let lambdaAway: number | null = null;
   let evidence = 0;
 
-  const structured = (input.structured_json ?? {}) as Record<string, any>;
-  const goalsBlock = (structured.goals ?? {}) as Record<string, any>;
-  const home = (goalsBlock.home ?? {}) as Record<string, any>;
-  const away = (goalsBlock.away ?? {}) as Record<string, any>;
+  const structured = asRecord(input.structured_json);
+  const goalsBlock = asRecord(structured.goals);
+  const home = asRecord(goalsBlock.home);
+  const away = asRecord(goalsBlock.away);
   const marketText = normalize(`${input.market ?? ""} ${input.pick ?? ""}`);
   const isBtts = marketText.includes("btts") || marketText.includes("ambas");
 
@@ -556,12 +560,12 @@ function estimateLambdas(input: AspValidatorSimulationInput): LambdaEstimate {
   // Prioridade: home_away (recorte relevante) > general. Sem fallback de regex
   // quando esta fonte existir.
   if (lambdaHome === null || lambdaAway === null) {
-    const ha = (goalsBlock.home_away ?? {}) as Record<string, any>;
-    const gen = (goalsBlock.general ?? {}) as Record<string, any>;
-    const haHome = (ha.home ?? {}) as Record<string, any>;
-    const haAway = (ha.away ?? {}) as Record<string, any>;
-    const genHome = (gen.home ?? {}) as Record<string, any>;
-    const genAway = (gen.away ?? {}) as Record<string, any>;
+    const ha = asRecord(goalsBlock.home_away);
+    const gen = asRecord(goalsBlock.general);
+    const haHome = asRecord(ha.home);
+    const haAway = asRecord(ha.away);
+    const genHome = asRecord(gen.home);
+    const genAway = asRecord(gen.away);
     const homeForHA = readNumber(haHome.avg_for);
     const awayAgainstHA = readNumber(haAway.avg_against);
     const awayForHA = readNumber(haAway.avg_for);
@@ -631,8 +635,8 @@ function estimateLambdas(input: AspValidatorSimulationInput): LambdaEstimate {
   // estruturados de gols (mesmo parciais) — evita inflar lambdas com numeros
   // soltos do blob.
   const hasStructuredGoalsBlocks =
-    Object.keys((goalsBlock.home_away ?? {}) as Record<string, any>).length > 0 ||
-    Object.keys((goalsBlock.general ?? {}) as Record<string, any>).length > 0;
+    Object.keys(asRecord(goalsBlock.home_away)).length > 0 ||
+    Object.keys(asRecord(goalsBlock.general)).length > 0;
   const is1x2 = is1x2Market(marketText);
   // Bloqueia fallback regex para BTTS e 1X2 quando ja existem blocos estruturados
   // (mesmo parciais) — evita inflar lambdas com numeros soltos do blob.
@@ -728,12 +732,12 @@ function calculateMarketProbability(
       (sum, cell) => sum + (cell.home > 0 && cell.away > 0 ? cell.probability : 0),
       0,
     );
-    const structured = (input.structured_json ?? {}) as Record<string, any>;
-    const goalsBlock = (structured.goals ?? {}) as Record<string, any>;
-    const genHome = ((goalsBlock.general ?? {}) as Record<string, any>).home ?? {};
-    const genAway = ((goalsBlock.general ?? {}) as Record<string, any>).away ?? {};
-    const haHome = ((goalsBlock.home_away ?? {}) as Record<string, any>).home ?? {};
-    const haAway = ((goalsBlock.home_away ?? {}) as Record<string, any>).away ?? {};
+    const structured = asRecord(input.structured_json);
+    const goalsBlock = asRecord(structured.goals);
+    const genHome = asRecord(asRecord(goalsBlock.general).home);
+    const genAway = asRecord(asRecord(goalsBlock.general).away);
+    const haHome = asRecord(asRecord(goalsBlock.home_away).home);
+    const haAway = asRecord(asRecord(goalsBlock.home_away).away);
     const bttsValues = [
       genHome.btts_yes_pct,
       genAway.btts_yes_pct,
@@ -918,6 +922,21 @@ function readCornerRaceLine(value: string | number | null): number | null {
   if (!match?.[1]) return null;
   const parsed = Number(match[1].replace(",", "."));
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function asRecord(value: unknown): DynamicRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as DynamicRecord)
+    : {};
+}
+
+function stringOrNumberValue(value: unknown): string | number | null {
+  return typeof value === "string" || typeof value === "number" ? value : null;
+}
+
+function stringValue(value: unknown): string {
+  const scalar = stringOrNumberValue(value);
+  return scalar === null ? "" : String(scalar);
 }
 
 function readNumber(value: unknown): number | null {
