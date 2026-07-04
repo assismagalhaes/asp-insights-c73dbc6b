@@ -218,18 +218,15 @@ function AspScreenerPage() {
     [mlbDbOddsRows, mlbPreviewOddsRows],
   );
   const usingSavedCollectionRows = mlbDbOddsRows.some((row) => row.raw_ref?.screener_source === "coletas_odds_payload");
-  const usingVmNormalizedRows = mlbDbOddsRows.some((row) => row.raw_ref?.screener_source === "vm_normalized_job");
   const mlbOddsSourceLabel = loadingOddsRows
     ? "Carregando..."
-    : usingVmNormalizedRows
-      ? "VM /normalized"
-      : usingSavedCollectionRows
-        ? "Coleta salva"
-    : mlbDbOddsRows.length
-      ? "Banco odds_jogos"
-      : mlbPreviewOddsRows.length
-        ? "Preview normalizado"
-        : "-";
+    : usingSavedCollectionRows
+      ? "Coleta salva"
+      : mlbDbOddsRows.length
+        ? "Banco odds_jogos"
+        : mlbPreviewOddsRows.length
+          ? "Preview normalizado"
+          : "-";
   const alerts = useMemo(() => {
     if (!snapshot) return [];
     return [...snapshot.validation.errors, ...snapshot.validation.warnings];

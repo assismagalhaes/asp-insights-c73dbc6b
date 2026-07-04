@@ -1,5 +1,4 @@
 import { supabase } from "@/lib/supabase-public";
-import { getScrapingJobNormalized } from "@/lib/scraper-api.functions";
 
 export interface NormalizedOdd {
   data: string | null;
@@ -751,13 +750,41 @@ function compactNormalizedRow(row: NormalizedOdd): NormalizedOdd {
   };
 }
 
+function compactScreenerRow(row: NormalizedOdd): NormalizedOdd {
+  return {
+    data: row.data,
+    hora: row.hora,
+    esporte: row.esporte,
+    liga: row.liga,
+    jogo: row.jogo,
+    mandante: row.mandante,
+    visitante: row.visitante,
+    mercado: row.mercado,
+    pick: row.pick,
+    linha: row.linha,
+    odd: row.odd,
+    odd_media: row.odd_media ?? null,
+    odd_mediana: row.odd_mediana ?? null,
+    odd_minima: row.odd_minima ?? null,
+    odd_maxima: row.odd_maxima ?? null,
+    odd_melhor: row.odd_melhor ?? null,
+    bookmaker_melhor: row.bookmaker_melhor ?? null,
+    casas_count: row.casas_count ?? null,
+    odds_disponiveis: row.odds_disponiveis ?? null,
+    bookmaker: row.bookmaker,
+    fonte: row.fonte,
+    capturado_em: row.capturado_em,
+    raw_ref: compactRawRef(row.raw_ref),
+  };
+}
+
 export function serializeNormalizedPreview(normalized: NormalizedCollection): string {
   return JSON.stringify({
     version: 1,
     saved_at: new Date().toISOString(),
     normalized: {
       ...normalized,
-      rows: normalized.rows.map(compactNormalizedRow),
+      rows: normalized.rows.map(compactScreenerRow),
     },
   });
 }
@@ -799,7 +826,7 @@ function compactNormalizedForStorage(normalized: NormalizedCollection, rows: Nor
       ...game,
       mercados: Array.from(game.mercados),
     })),
-    rows,
+    rows: rows.map(compactScreenerRow),
     aggregate_fields: [
       "odd_media",
       "odd_mediana",
@@ -1019,19 +1046,22 @@ export async function fetchOddsRows(params: FetchOddsRowsParams = {}): Promise<O
 }
 
 async function fetchOddsRowsFromCollectionPayloads(params: FetchOddsRowsParams): Promise<OddsJogo[]> {
-  const { data, error } = await coletaDb
+  let query = coletaDb
     .from("coletas_odds")
     .select("id,job_id,status,esporte,liga,data_inicio,data_fim,raw_json,normalized_json,created_at,updated_at")
-    .order("created_at", { ascending: false })
-    .limit(params.limit ? Math.min(params.limit, 50) : 25);
+    .order("created_at", { ascending: false });
+
+  if (params.date) {
+    query = query.lte("data_inicio", params.date).gte("data_fim", params.date);
+  }
+
+  const { data, error } = await query.limit(10);
   if (error) throw error;
 
   const rows: OddsJogo[] = [];
-  let vmAttempts = 0;
   for (const coleta of (data ?? []) as Array<Partial<ColetaOdds>>) {
     if (!collectionCanContainRows(coleta, params)) continue;
     const payloads = [coleta.raw_json, coleta.normalized_json];
-    let foundRows = false;
     for (const payload of payloads) {
       const normalized = normalizeVmNormalizedPayload(payload, { esporte: coleta.esporte ?? params.esporte ?? null });
       const payloadRows = filterOddsRowsForParams(
@@ -1049,50 +1079,12 @@ async function fetchOddsRowsFromCollectionPayloads(params: FetchOddsRowsParams):
       );
       if (payloadRows.length) {
         rows.push(...payloadRows);
-        foundRows = true;
         break;
       }
-    }
-    if (!foundRows && coleta.job_id && vmAttempts < 3) {
-      vmAttempts += 1;
-      const vmRows = await fetchOddsRowsFromVmJob(coleta, params, rows.length);
-      if (vmRows.length) rows.push(...vmRows);
     }
   }
 
   return dedupeOddsJogoRows(rows).slice(0, params.limit ?? rows.length);
-}
-
-async function fetchOddsRowsFromVmJob(
-  coleta: Partial<ColetaOdds>,
-  params: FetchOddsRowsParams,
-  offset: number,
-): Promise<OddsJogo[]> {
-  if (!coleta.job_id) return [];
-  try {
-    const result = await getScrapingJobNormalized({ data: { job_id: coleta.job_id } });
-    const normalized = normalizeVmNormalizedPayload(result.normalized_json, {
-      esporte: coleta.esporte ?? params.esporte ?? null,
-    });
-    return filterOddsRowsForParams(
-      normalized.rows.map((row, index) => ({
-        ...row,
-        raw_ref: {
-          ...row.raw_ref,
-          screener_source: "vm_normalized_job",
-        },
-        id: `${coleta.id ?? coleta.job_id}:${offset + index}`,
-        coleta_id: coleta.id ?? null,
-        created_at: coleta.created_at ?? coleta.updated_at ?? new Date(0).toISOString(),
-      })),
-      params,
-    );
-  } catch (err) {
-    if (typeof console !== "undefined") {
-      console.warn("[fetchOddsRows] Nao foi possivel carregar /normalized da VM para o Screener", coleta.job_id, err);
-    }
-    return [];
-  }
 }
 
 function collectionCanContainRows(coleta: Partial<ColetaOdds>, params: FetchOddsRowsParams): boolean {
@@ -1166,8 +1158,13 @@ function leagueMatches(value: string | null | undefined, expected: string): bool
   const current = normalizeComparableText(value);
   const target = normalizeComparableText(expected);
   if (!current) return true;
+  if (isAllLeagueValue(current)) return true;
   if (/mlb|major league baseball/.test(target)) return /mlb|major league baseball/.test(current);
   return current === target || current.includes(target) || target.includes(current);
+}
+
+function isAllLeagueValue(value: string): boolean {
+  return /^(all|todos?|todas?|multiplas|multiple|varias?)$/.test(value);
 }
 
 function normalizeComparableText(value: string | null | undefined): string {
