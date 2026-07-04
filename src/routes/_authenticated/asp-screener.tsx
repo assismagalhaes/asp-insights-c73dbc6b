@@ -19,6 +19,7 @@ import {
   parseStoredNormalizedPreview,
   type NormalizedOdd,
 } from "@/lib/coleta-dados";
+import { useCreatePrognostico } from "@/lib/db";
 import {
   getMlbStandingsSnapshotFn,
   processManualMlbStandingsCsv,
@@ -51,8 +52,8 @@ import {
   validateMlbValidatorHandoffPayload,
 } from "@/lib/mlb/projections";
 import {
+  buildCriticalValidationPrognosticoInput,
   buildMlbCriticalValidationDraft,
-  storeCriticalValidationDraft,
   validateCriticalValidationDraft,
 } from "@/lib/mlb/screenerToCriticalValidationAdapter";
 import type {
@@ -85,8 +86,10 @@ type SnapshotResponse = {
 function AspScreenerPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const createPrognostico = useCreatePrognostico();
   const [snapshotDate, setSnapshotDate] = useState(todayIso());
   const [season, setSeason] = useState(new Date().getUTCFullYear());
+  const [loadedScreenerStateKey, setLoadedScreenerStateKey] = useState(() => buildMlbScreenerUiStateKey(todayIso(), new Date().getUTCFullYear()));
   const [busy, setBusy] = useState<string | null>(null);
   const [csvOpen, setCsvOpen] = useState(false);
   const [csvText, setCsvText] = useState("");
@@ -331,18 +334,55 @@ function AspScreenerPage() {
   );
 
   useEffect(() => {
-    setProjectionRows([]);
-    setProjectionGeneratedAt(null);
-    setTotalsRows([]);
-    setTotalsGeneratedAt(null);
-    setHandicapRows([]);
-    setHandicapGeneratedAt(null);
-    setOpportunityRows([]);
-    setOpportunityGeneratedAt(null);
-    setSelectedOpportunityIds([]);
+    const key = buildMlbScreenerUiStateKey(snapshotDate, season);
+    const restored = readMlbScreenerUiState(snapshotDate, season);
+    setProjectionRows(restored?.projectionRows ?? []);
+    setProjectionGeneratedAt(restored?.projectionGeneratedAt ?? null);
+    setTotalsRows(restored?.totalsRows ?? []);
+    setTotalsGeneratedAt(restored?.totalsGeneratedAt ?? null);
+    setHandicapRows(restored?.handicapRows ?? []);
+    setHandicapGeneratedAt(restored?.handicapGeneratedAt ?? null);
+    setOpportunityRows(restored?.opportunityRows ?? []);
+    setOpportunityGeneratedAt(restored?.opportunityGeneratedAt ?? null);
+    setSelectedOpportunityIds(restored?.selectedOpportunityIds ?? []);
     setParsedMatchupContext(null);
-    setCriticalPayloads([]);
+    setCriticalPayloads(restored?.criticalPayloads ?? []);
+    setLoadedScreenerStateKey(key);
   }, [snapshotDate, season]);
+
+  useEffect(() => {
+    const key = buildMlbScreenerUiStateKey(snapshotDate, season);
+    if (loadedScreenerStateKey !== key) return;
+    if (!projectionRows.length && !totalsRows.length && !handicapRows.length && !opportunityRows.length && !criticalPayloads.length) return;
+    writeMlbScreenerUiState({
+      snapshotDate,
+      season,
+      projectionRows,
+      projectionGeneratedAt,
+      totalsRows,
+      totalsGeneratedAt,
+      handicapRows,
+      handicapGeneratedAt,
+      opportunityRows,
+      opportunityGeneratedAt,
+      selectedOpportunityIds,
+      criticalPayloads,
+    });
+  }, [
+    snapshotDate,
+    season,
+    loadedScreenerStateKey,
+    projectionRows,
+    projectionGeneratedAt,
+    totalsRows,
+    totalsGeneratedAt,
+    handicapRows,
+    handicapGeneratedAt,
+    opportunityRows,
+    opportunityGeneratedAt,
+    selectedOpportunityIds,
+    criticalPayloads,
+  ]);
 
   async function refresh(forceRefresh = false) {
     setBusy(forceRefresh ? "force" : "refresh");
@@ -700,12 +740,12 @@ function AspScreenerPage() {
       toast.error(validation.errors[0] ?? "Rascunho não está pronto para envio à Validação Crítica.");
       return;
     }
-    const storageResult = storeCriticalValidationDraft(draft);
-    if (!storageResult.valid) {
-      toast.error(storageResult.errors[0] ?? "Não foi possível salvar o rascunho para a Validação Crítica.");
+    const prognostico = await createPrognostico.mutateAsync(buildCriticalValidationPrognosticoInput(draft));
+    if (!prognostico) {
+      toast.error("Nao foi possivel criar o prognostico na Validacao Critica.");
       return;
     }
-    toast.success("Rascunho enviado para Validação Crítica. Nenhum prognóstico foi criado ainda.");
+    toast.success(`Enviado para Validacao Critica como ASP Screener: ${String(prognostico.id ?? "").slice(0, 8)}`);
     void navigate({ to: "/validacao" });
   }
 
@@ -3564,6 +3604,52 @@ function correlationLabel(row: MlbUnifiedOpportunity) {
   if (row.correlation_status === "primary") return "Primaria do jogo";
   if (row.correlation_status === "correlated_alternative") return "Alternativa correlacionada";
   return "Standalone";
+}
+
+type PersistedMlbScreenerUiState = {
+  version: 1;
+  snapshotDate: string;
+  season: number;
+  projectionRows: MlbMoneylineScreenerRow[];
+  projectionGeneratedAt: string | null;
+  totalsRows: MlbTotalsScreenerRow[];
+  totalsGeneratedAt: string | null;
+  handicapRows: MlbHandicapScreenerRow[];
+  handicapGeneratedAt: string | null;
+  opportunityRows: MlbUnifiedOpportunity[];
+  opportunityGeneratedAt: string | null;
+  selectedOpportunityIds: string[];
+  criticalPayloads: MlbPreparedCriticalValidationPayload[];
+};
+
+const MLB_SCREENER_UI_STATE_PREFIX = "asp_screener_mlb_ui_state_v1";
+
+function buildMlbScreenerUiStateKey(snapshotDate: string, season: number) {
+  return `${MLB_SCREENER_UI_STATE_PREFIX}:${season}:${snapshotDate}`;
+}
+
+function readMlbScreenerUiState(snapshotDate: string, season: number): PersistedMlbScreenerUiState | null {
+  if (typeof window === "undefined") return null;
+  const raw = window.sessionStorage.getItem(buildMlbScreenerUiStateKey(snapshotDate, season));
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as PersistedMlbScreenerUiState;
+    if (parsed.version !== 1 || parsed.snapshotDate !== snapshotDate || parsed.season !== season) return null;
+    return parsed;
+  } catch {
+    window.sessionStorage.removeItem(buildMlbScreenerUiStateKey(snapshotDate, season));
+    return null;
+  }
+}
+
+function writeMlbScreenerUiState(state: Omit<PersistedMlbScreenerUiState, "version">) {
+  if (typeof window === "undefined") return;
+  const payload: PersistedMlbScreenerUiState = { version: 1, ...state };
+  try {
+    window.sessionStorage.setItem(buildMlbScreenerUiStateKey(state.snapshotDate, state.season), JSON.stringify(payload));
+  } catch (error) {
+    console.warn("Nao foi possivel persistir o estado do ASP Screener.", error);
+  }
 }
 
 function opportunityStatusBadgeVariant(status: MlbUnifiedOpportunity["priority_status"]) {
