@@ -145,7 +145,7 @@ function AspScreenerPage() {
     queryKey,
     queryFn: () => getMlbStandingsSnapshotFn({ data: { snapshotDate, season } }) as Promise<SnapshotResponse>,
   });
-  const { data: oddsRows = [] } = useQuery({
+  const { data: oddsRows = [], error: oddsRowsError, isFetching: loadingOddsRows } = useQuery({
     queryKey: ["odds-jogos-mlb-screener", snapshotDate],
     queryFn: () =>
       fetchOddsRows({
@@ -218,8 +218,13 @@ function AspScreenerPage() {
     [mlbDbOddsRows, mlbPreviewOddsRows],
   );
   const usingSavedCollectionRows = mlbDbOddsRows.some((row) => row.raw_ref?.screener_source === "coletas_odds_payload");
-  const mlbOddsSourceLabel = usingSavedCollectionRows
-    ? "Coleta salva"
+  const usingVmNormalizedRows = mlbDbOddsRows.some((row) => row.raw_ref?.screener_source === "vm_normalized_job");
+  const mlbOddsSourceLabel = loadingOddsRows
+    ? "Carregando..."
+    : usingVmNormalizedRows
+      ? "VM /normalized"
+      : usingSavedCollectionRows
+        ? "Coleta salva"
     : mlbDbOddsRows.length
       ? "Banco odds_jogos"
       : mlbPreviewOddsRows.length
@@ -847,6 +852,11 @@ function AspScreenerPage() {
               <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
                 Modelo simples de screener. Ainda nao considera starters, lineups, bullpen, clima ou validacao critica.
               </div>
+              {oddsRowsError ? (
+                <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                  Falha ao carregar odds MLB para o Screener: {(oddsRowsError as Error).message}
+                </div>
+              ) : null}
 
               <div className="grid gap-2 md:grid-cols-4">
                 <Info label="Snapshot usado" value={snapshot?.snapshot_date ?? "-"} />
