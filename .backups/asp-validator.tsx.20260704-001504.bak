@@ -44,33 +44,303 @@ import { linkMlbOpportunitySnapshotToValidatorRecord } from "@/lib/mlb/screenerS
 import { processAspValidatorOcr } from "@/lib/scraper-api.functions";
 import { supabase } from "@/lib/supabase-public";
 import type { MlbValidatorHandoffPayload } from "@/types/mlbValidatorHandoff";
-import type {
-  Decision,
-  ValidatorForm,
-  ValidationResult,
-  ValidatorUploadDraft,
-  ValidatorRecord,
-  ValidatorUploadRecord,
-  EditableRecord,
-  ResultForm,
-  ValidatorDashboardFilters,
-  ValidatorInsert,
-} from "@/lib/asp-validator/types";
-import {
-  validatorDb,
-  ASP_VALIDATOR_UPLOAD_BUCKET,
-  INITIAL_FORM,
-  SPORTS,
-  PLATFORMS,
-  MARKETS,
-  UPLOAD_CATEGORIES,
-  INITIAL_DASHBOARD_FILTERS,
-} from "@/lib/asp-validator/constants";
 
 export const Route = createFileRoute("/_authenticated/asp-validator")({
   component: AspValidatorPage,
 });
 
+type Decision = "CONFIRMAR" | "PULAR";
+
+type ValidatorForm = {
+  sport: string;
+  source_platform: string;
+  league: string;
+  match_date: string;
+  home_team: string;
+  away_team: string;
+  market: string;
+  pick: string;
+  line: string;
+  offered_odd: string;
+  source_probability: string;
+  source_ev: string;
+  user_context: string;
+};
+
+type ValidationResult = {
+  decision: Decision;
+  confidence: string;
+  validator_model: string;
+  source_probability: number | null;
+  source_fair_odd: number | null;
+  offered_odd: number | null;
+  source_ev: number | null;
+  adjusted_probability: number;
+  adjusted_fair_odd: number;
+  adjusted_ev: number | null;
+  simulation_summary: string;
+  favorable_blocks: string[];
+  against_blocks: string[];
+  alerts: string[];
+  final_analysis: string;
+  analysis_context: string;
+};
+
+type ValidatorUploadDraft = {
+  local_id: string;
+  file: File;
+  upload_category: string;
+  user_comment: string;
+  upload_order: number;
+  upload_source: "manual" | "drag_drop" | "clipboard";
+};
+
+type ValidatorRecord = {
+  id: string;
+  source_platform: string;
+  sport: string;
+  league: string | null;
+  match_date: string | null;
+  home_team: string;
+  away_team: string;
+  market: string;
+  pick: string;
+  line: string | null;
+  offered_odd: number | null;
+  source_probability: number | null;
+  source_ev: number | null;
+  source_fair_odd: number | null;
+  adjusted_probability: number | null;
+  adjusted_fair_odd: number | null;
+  adjusted_ev: number | null;
+  decision: Decision;
+  confidence: string;
+  validator_model: string;
+  user_context: string | null;
+  analysis_context: string | null;
+  favorable_blocks: string[];
+  against_blocks: string[];
+  alerts: string[];
+  final_analysis: string;
+  simulation_json: Record<string, unknown> | null;
+  online_context_json: Record<string, unknown> | null;
+  ocr_raw_text: string | null;
+  ocr_structured_data: Record<string, unknown> | null;
+  ocr_data_quality_score: number | null;
+  ocr_structured_fields_count: number | null;
+  simulation_type: string | null;
+  structured_json: Record<string, unknown> | null;
+  structured_status: "pending" | "processing" | "completed" | "failed" | string;
+  structured_error: string | null;
+  result_status: string | null;
+  result_settled_at: string | null;
+  final_score: string | null;
+  result_notes: string | null;
+  created_at: string;
+  updated_at: string;
+  stake_units: number | null;
+  unit_value_brl: number | null;
+  profit_units: number | null;
+  profit_brl: number | null;
+  clv: number | null;
+  is_simulated_result: boolean | null;
+  bankroll_applied: boolean | null;
+};
+
+type ValidatorUploadRecord = {
+  id: string;
+  validator_id: string;
+  file_name: string;
+  file_path: string | null;
+  storage_bucket: string | null;
+  file_type: string | null;
+  mime_type: string | null;
+  file_size: number | null;
+  upload_source: string | null;
+  upload_category: string;
+  user_comment: string | null;
+  upload_order: number;
+  ocr_status: string;
+  ocr_text: string | null;
+  ocr_error: string | null;
+  ocr_structured_data: Record<string, unknown> | null;
+  ocr_data_quality_score: number | null;
+  ocr_structured_fields_count: number | null;
+  structured_json: Record<string, unknown> | null;
+  structured_status: "pending" | "processing" | "completed" | "failed" | string;
+  structured_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type EditableRecord = Pick<
+  ValidatorForm,
+  | "sport"
+  | "source_platform"
+  | "league"
+  | "match_date"
+  | "home_team"
+  | "away_team"
+  | "market"
+  | "pick"
+  | "line"
+  | "offered_odd"
+  | "source_probability"
+  | "source_ev"
+  | "user_context"
+> & {
+  source_fair_odd: string;
+};
+
+type ResultForm = {
+  result_status: string;
+  final_odd: string;
+  stake_units: string;
+  unit_value_brl: string;
+  clv: string;
+  final_score: string;
+  result_notes: string;
+  result_settled_at: string;
+};
+
+type ValidatorDashboardFilters = {
+  period: "all" | "7d" | "30d" | "month" | "year";
+  sport: string;
+  league: string;
+  source_platform: string;
+  validator_model: string;
+  market: string;
+  decision: string;
+  result: string;
+};
+
+type ValidatorInsert = Omit<ValidatorForm, "offered_odd" | "source_probability" | "source_ev"> & {
+  offered_odd: number | null;
+  source_probability: number | null;
+  source_ev: number | null;
+  source_fair_odd: number | null;
+  adjusted_probability: number;
+  adjusted_fair_odd: number;
+  adjusted_ev: number | null;
+  decision: Decision;
+  confidence: string;
+  validator_model: string;
+  analysis_context: string;
+  favorable_blocks: string[];
+  against_blocks: string[];
+  alerts: string[];
+  final_analysis: string;
+  simulation_json: Record<string, unknown>;
+  online_context_json: Record<string, unknown>;
+  ocr_raw_text: string | null;
+  ocr_structured_data: Record<string, unknown>;
+  ocr_data_quality_score: number | null;
+  ocr_structured_fields_count: number | null;
+  structured_json: Record<string, unknown>;
+  structured_status: "pending" | "processing" | "completed" | "failed";
+  structured_error: string | null;
+  result_status: string | null;
+  stake_units: number | null;
+  unit_value_brl: number | null;
+  profit_units: number | null;
+  profit_brl: number | null;
+  clv: number | null;
+  result_settled_at: string | null;
+  final_score: string | null;
+  result_notes: string | null;
+  simulation_type: string | null;
+  is_simulated_result: boolean;
+  bankroll_applied: boolean;
+};
+
+const validatorDb = supabase as unknown as {
+  from: (table: "asp_validator_registros") => {
+    select: (columns: string) => {
+      order: (column: string, options: { ascending: boolean }) => {
+        limit: (count: number) => Promise<{ data: ValidatorRecord[] | null; error: Error | null }>;
+      };
+    };
+    insert: (payload: unknown) => {
+      select: (columns: string) => {
+        single: () => Promise<{ data: { id: string } | null; error: Error | null }>;
+      };
+    };
+    update: (payload: unknown) => {
+      eq: (column: string, value: string) => Promise<{ error: Error | null }>;
+    };
+    delete: () => {
+      eq: (column: string, value: string) => Promise<{ error: Error | null }>;
+    };
+  };
+} & {
+  from: (table: "asp_validator_uploads") => {
+    select: (columns: string) => {
+      in: (column: string, values: string[]) => {
+        order: (column: string, options: { ascending: boolean }) => Promise<{ data: ValidatorUploadRecord[] | null; error: Error | null }>;
+      };
+    };
+    insert: (payload: unknown) => Promise<{ error: Error | null }>;
+    update: (payload: unknown) => {
+      eq: (column: string, value: string) => Promise<{ error: Error | null }>;
+    };
+  };
+};
+
+const ASP_VALIDATOR_UPLOAD_BUCKET = "asp-validator-uploads";
+
+const INITIAL_FORM: ValidatorForm = {
+  sport: "Futebol",
+  source_platform: "Manual",
+  league: "",
+  match_date: "",
+  home_team: "",
+  away_team: "",
+  market: "",
+  pick: "",
+  line: "",
+  offered_odd: "",
+  source_probability: "",
+  source_ev: "",
+  user_context: "",
+};
+
+const SPORTS = ["Futebol", "Baseball", "Basketball", "Hockey", "American Football", "Tenis", "Outro"];
+const PLATFORMS = ["Manual", "ASP Screener MLB", "PackBall", "Forebet", "BetClan", "Flashscore", "Outro"];
+const MARKETS = [
+  "Moneyline",
+  "Resultado da Partida",
+  "Total de Gols",
+  "Total de Pontos",
+  "Total de Corridas",
+  "Over/Under",
+  "Handicap Asiatico",
+  "Asian Handicap",
+  "Dupla Chance",
+  "Ambas Marcam",
+  "Escanteios",
+  "Cartoes",
+  "HT/ST",
+  "Outro",
+];
+const UPLOAD_CATEGORIES = [
+  "Prognostico principal",
+  "Ultimos jogos gerais",
+  "Casa/Fora",
+  "Estatisticas do mercado",
+  "Classificacao/contexto",
+  "Outro",
+];
+
+const INITIAL_DASHBOARD_FILTERS: ValidatorDashboardFilters = {
+  period: "all",
+  sport: "all",
+  league: "all",
+  source_platform: "all",
+  validator_model: "all",
+  market: "all",
+  decision: "all",
+  result: "all",
+};
 
 function AspValidatorPage() {
   const { data: cfg } = useConfiguracao();
