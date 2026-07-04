@@ -8,11 +8,24 @@ import type {
 import { getMlbStandingsSnapshot, validateMlbStandings } from "@/lib/mlb/standings";
 
 type LooseSupabase = Pick<SupabaseClient, "from">;
+type QueryErrorLike = { message: string };
+type QueryResultLike<T = unknown> = { data: T | null; error: QueryErrorLike | null };
+type StandingsQueryLike<T = unknown> = PromiseLike<QueryResultLike<T>> & {
+  select: (columns?: string) => StandingsQueryLike<T>;
+  eq: (column: string, value: unknown) => StandingsQueryLike<T>;
+  order: (column: string, opts?: { ascending?: boolean }) => StandingsQueryLike<T>;
+  limit: (count: number) => StandingsQueryLike<T>;
+  upsert: (
+    values: Record<string, unknown> | Record<string, unknown>[],
+    opts?: Record<string, unknown>,
+  ) => StandingsQueryLike<T>;
+  maybeSingle: () => PromiseLike<QueryResultLike<T>>;
+};
 
 const MLB_ODDS_ROWS_LIMIT = 5000;
 
 function table(db: LooseSupabase, name: string) {
-  return (db as unknown as { from: (tableName: string) => any }).from(name);
+  return (db as unknown as { from: (tableName: string) => StandingsQueryLike }).from(name);
 }
 
 export async function fetchMlbOddsRowsForDate(
@@ -26,7 +39,7 @@ export async function fetchMlbOddsRowsForDate(
     .eq("data", snapshotDate)
     .limit(MLB_ODDS_ROWS_LIMIT);
   if (error) throw error;
-  return (data ?? [])
+  return ((data ?? []) as Record<string, unknown>[])
     .filter(
       (row: Record<string, unknown>) =>
         isBaseballSport(nullableText(row.esporte)) && isMlbLeague(nullableText(row.liga)),
@@ -73,8 +86,9 @@ export async function readMlbStandingsSnapshot(
       .maybeSingle();
     if (latestError) throw latestError;
     if (!latest) return null;
-    snapshotDate = latest.snapshot_date;
-    season = latest.season;
+    const latestRow = latest as Record<string, unknown>;
+    snapshotDate = nullableText(latestRow.snapshot_date);
+    season = nullableNumber(latestRow.season);
   }
 
   if (!snapshotDate || !season) return null;
@@ -106,7 +120,10 @@ export async function readMlbStandingsSnapshot(
     source: first.source,
     sourceUrl: first.source_url,
     importedAt: first.updated_at ?? first.created_at ?? null,
-    leagueAverage: (averageRows?.[0] as MlbLeagueAverageSnapshot | undefined) ?? null,
+    leagueAverage:
+      (((averageRows ?? []) as MlbLeagueAverageSnapshot[])[0] as
+        | MlbLeagueAverageSnapshot
+        | undefined) ?? null,
     oddsRows: params.oddsRows,
   });
 }

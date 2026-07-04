@@ -199,15 +199,25 @@ export function getDadosTecnicos(
 }
 
 const aiDb = supabase as unknown as {
-  from: (table: string) => {
-    select: (columns?: string) => any;
-    insert: (values: Record<string, unknown> | Record<string, unknown>[]) => any;
-    upsert: (
-      values: Record<string, unknown> | Record<string, unknown>[],
-      opts?: Record<string, unknown>,
-    ) => any;
-    update: (values: Record<string, unknown>) => any;
-  };
+  from: (table: string) => DbQueryLike;
+};
+
+type DbErrorLike = { message: string };
+type DbResultLike<T = unknown> = { data: T | null; error: DbErrorLike | null };
+type DbQueryLike<T = unknown> = PromiseLike<DbResultLike<T>> & {
+  select: (columns?: string) => DbQueryLike<T>;
+  insert: (values: Record<string, unknown> | Record<string, unknown>[]) => DbQueryLike<T>;
+  upsert: (
+    values: Record<string, unknown> | Record<string, unknown>[],
+    opts?: Record<string, unknown>,
+  ) => DbQueryLike<T>;
+  update: (values: Record<string, unknown>) => DbQueryLike<T>;
+  eq: (column: string, value: unknown) => DbQueryLike<T>;
+  not: (column: string, operator: string, value: unknown) => DbQueryLike<T>;
+  order: (column: string, opts?: { ascending?: boolean }) => DbQueryLike<T>;
+  limit: (count: number) => DbQueryLike<T>;
+  single: () => PromiseLike<DbResultLike<T>>;
+  maybeSingle: () => PromiseLike<DbResultLike<T>>;
 };
 
 export function normalizeAiDecision(
@@ -506,7 +516,9 @@ export function useAspValidatorBankrollPrognosticos() {
   return useQuery({
     queryKey: ["asp-validator-bankroll"],
     queryFn: async () => {
-      const { data, error } = await (supabase as unknown as { from: (table: string) => any })
+      const { data, error } = await (
+        supabase as unknown as { from: (table: string) => DbQueryLike }
+      )
         .from("asp_validator_registros")
         .select(
           [
@@ -540,7 +552,7 @@ export function useAspValidatorBankrollPrognosticos() {
         .order("match_date", { ascending: false })
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []).map(mapAspValidatorToPrognostico);
+      return ((data ?? []) as Record<string, unknown>[]).map(mapAspValidatorToPrognostico);
     },
   });
 }

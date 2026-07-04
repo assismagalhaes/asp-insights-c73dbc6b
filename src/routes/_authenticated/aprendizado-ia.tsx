@@ -33,10 +33,14 @@ export const Route = createFileRoute("/_authenticated/aprendizado-ia")({
   component: AprendizadoIaPage,
 });
 
+type QueryErrorLike = { message: string };
+type QueryResultLike<T = unknown> = { data: T | null; error: QueryErrorLike | null };
+type AiQueryLike<T = unknown> = PromiseLike<QueryResultLike<T>> & {
+  select: (columns?: string) => AiQueryLike<T>;
+};
+
 const aiDb = supabase as unknown as {
-  from: (table: string) => {
-    select: (columns?: string) => any;
-  };
+  from: (table: string) => AiQueryLike;
 };
 
 type LearningRow = Pick<

@@ -8,12 +8,18 @@ import {
   type Validacao,
 } from "@/lib/db";
 
+type QueryErrorLike = { message: string };
+type QueryResultLike<T = unknown> = { data: T | null; error: QueryErrorLike | null };
+type AiQueryLike<T = unknown> = PromiseLike<QueryResultLike<T>> & {
+  select: (columns?: string) => AiQueryLike<T>;
+  eq: (column: string, value: unknown) => AiQueryLike<T>;
+  in: (column: string, values: readonly unknown[]) => AiQueryLike<T>;
+  order: (column: string, opts?: { ascending?: boolean }) => AiQueryLike<T>;
+  limit: (count: number) => AiQueryLike<T>;
+};
+
 const aiDb = supabase as unknown as {
-  from: (table: string) => {
-    select: (columns?: string) => any;
-    order: (column: string, opts?: { ascending?: boolean }) => any;
-    limit: (count: number) => any;
-  };
+  from: (table: string) => AiQueryLike;
 };
 
 export interface SimilarAiHistorySummary {
