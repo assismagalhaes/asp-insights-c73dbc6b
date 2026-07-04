@@ -273,7 +273,7 @@ function ModelosPreditivosPage() {
                   <SelectContent>
                     {concluidas.map((coleta) => (
                       <SelectItem key={coleta.id} value={coleta.id}>
-                        {coleta.created_at.slice(0, 16).replace("T", " ")} - {coleta.esporte ?? "-"} - {coleta.job_id}
+                        {formatDateTimeBR(coleta.created_at)} - {coleta.esporte ?? "-"} - {coleta.job_id}
                       </SelectItem>
                     ))}
                   </SelectContent>
