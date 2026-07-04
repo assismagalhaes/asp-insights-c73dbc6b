@@ -657,7 +657,7 @@ function normalizeVmRow(row: Record<string, unknown>, esporteHint?: string | nul
     margem_mercado_mediana: toNumber(row.margem_mercado_mediana ?? row.market_overround_median),
     bookmaker: toText(row.bookmaker ?? row.book ?? row.casa_aposta ?? row.bookmaker_name),
     fonte: normalizeFlashscoreUrl(fonte) ?? fonte,
-    capturado_em: toText(row.capturado_em ?? row.captured_at ?? row.updated_at) ?? parseCapturedAt(row.att),
+    capturado_em: parseCapturedAt(row.capturado_em ?? row.captured_at ?? row.updated_at ?? row.att),
     raw_ref: rawRef,
   };
 }
