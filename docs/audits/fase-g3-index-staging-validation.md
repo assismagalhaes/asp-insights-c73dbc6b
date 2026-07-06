@@ -1,24 +1,21 @@
-# Fase G3 - Validacao dos indices P0/P1 em staging
+# Fase G3 - Validacao dos indices P0/P1
 
 ## Resumo
 
-Esta fase valida operacionalmente a migration de indices P0/P1 criada na G2A, sem criar nova
-mutation, sem aplicar em producao e sem alterar runtime, queries, regras, RLS, policies, dados,
-Screener, Validator, OCR, IA ou scraper.
+Esta fase valida operacionalmente a migration de indices P0/P1 criada na G2A.
 
-Status atual: **Pendente de execucao em staging**.
+Status atual: **Aplicada no banco unico atual (produtivo) do projeto Lovable Cloud em
+2026-07-06 (horario de Brasilia), com autorizacao explicita do usuario, ciente de que o
+projeto nao possui ambiente staging separado.** Aplicacao concluida sem erro; os sete
+indices foram criados. Nenhuma alteracao de dados, RLS, policies, triggers, funcoes,
+bankroll ou dashboard financeiro.
 
 ## Ambiente
 
-- Data/hora da validacao documental: 2026-07-04 16:59:16 -03:00.
-- Repositorio local: `asp-insights`.
-- Branch de referencia G2A: `codex/fase-g2a-p0-p1-indexes`.
-- Commit G2A: `82e20f6`.
-- Migration validada por inspecao:
-  `supabase/migrations/20260704163213_add_p0_p1_performance_indexes.sql`.
-- Supabase local: `supabase/config.toml` existe.
-- Supabase CLI: nao disponivel no PATH local durante esta validacao.
-- Ambiente staging conectado: nao validado nesta sessao.
+- Data/hora da aplicacao: 2026-07-06 (horario de Brasilia).
+- Ambiente: banco unico do projeto Lovable Cloud (produtivo). Nao existe staging separado.
+- Migration aplicada: `supabase/migrations/20260704163213_add_p0_p1_performance_indexes.sql`.
+- Nenhuma outra migration pendente foi aplicada nesta janela.
 - Credenciais: nenhuma credencial, token, URL sensivel ou segredo foi aberto ou registrado.
 
 ## Migration validada
