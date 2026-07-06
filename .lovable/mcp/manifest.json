@@ -5,7 +5,9 @@
   "auth": {
     "type": "oauth",
     "issuer": "https://rdasrnvwedasshiahjuy.supabase.co/auth/v1",
-    "accepted_audiences": ["authenticated"]
+    "accepted_audiences": [
+      "authenticated"
+    ]
   },
   "mcp": {
     "server": {
@@ -64,7 +66,10 @@
             "decisao": {
               "description": "Filtrar por decisão.",
               "type": "string",
-              "enum": ["CONFIRMAR", "PULAR"]
+              "enum": [
+                "CONFIRMAR",
+                "PULAR"
+              ]
             }
           }
         },
