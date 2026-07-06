@@ -47,23 +47,76 @@ o comportamento funcional deve permanecer identico, com potencial ganho de tempo
 - Historico: listagem carrega.
 - Coleta de Odds: listagem e status carregam.
 
+### Smoke manual autenticado - 2026-07-06 18:11 -03:00
+
+Resultado: **Executado no preview autenticado do projeto Lovable, sem alteracao de codigo,
+schema, dados, bankroll ou jobs**.
+
+Foi feita a localizacao do ambiente acessivel para smoke visual:
+
+- Browser integrado do Codex: sem abas abertas e sem sessao autenticada disponivel.
+- Repositorio local: nenhuma URL publica do frontend foi encontrada em arquivos nao sensiveis.
+- URLs Lovable provaveis testadas (`asp-insights-c73dbc6b.lovable.app` e
+  `preview--asp-insights-c73dbc6b.lovable.app`): retornaram 404.
+- Projeto Lovable `4dac6de8-943c-4948-9a8d-c134df0576c7`: status `ready` confirmado via
+  ferramenta Lovable.
+- Preview Lovable localizado em
+  `id-preview-8eb5bdd7--4dac6de8-943c-4948-9a8d-c134df0576c7.lovable.app`, mas redirecionou
+  para `lovable.dev/auth-bridge` e exibiu tela de login do Lovable.
+- VM `ubuntu@201.23.77.253`: conexao SSH OK; `cloudflared` aponta somente
+  `jupyter.hseconsulting.com.br` para Jupyter em `localhost:8888`.
+- VM `asp-scraper-api`: endpoint local `http://127.0.0.1:8000/health` respondeu
+  `{"status":"ok","service":"asp-insights-scraper-api"}`.
+- Nao foi encontrado frontend ASP Insights hospedado na VM.
+- Aprovacao para uso do Chrome recebida em 2026-07-06. Tentativa bloqueada porque o backend
+  `extension` nao apareceu para o Codex; os checks locais indicaram Chrome instalado, mas sem
+  native host/registro da Codex Chrome Extension disponivel neste ambiente.
+- Apos instalacao/ativacao da Codex Chrome Extension pelo usuario, o Chrome ficou disponivel
+  para o Codex e o projeto Lovable abriu com sessao autenticada.
+- O app foi validado dentro do preview autenticado do Lovable. A abertura direta do host
+  `lovableproject.com` sem a ponte do preview mostrou tela de login do app, portanto o smoke foi
+  conduzido pelo iframe autenticado do Lovable, sem registrar token de preview.
+
+Status dos modulos solicitados:
+
+| Modulo | Status | Observacao |
+| --- | --- | --- |
+| ASP Validator | OK | Tela abriu; formulario manual, dashboard especifico e filtros de periodo/esporte/liga/plataforma/modelo/mercado/decisao/resultado visiveis; `CONFIRMADAS` e `PULADAS` separados; lucro/ROI/yield confirmados exibidos apenas para confirmadas |
+| ASP Screener | OK parcial | Tela abriu; secoes Moneyline, Over/Under, Handicap, Opportunity Score, payload critico, historico de handoffs, auditoria e calibracao visiveis; payload/handoff abriu em leitura; snapshot atual exibiu `sem snapshot` e odds MLB do dia `0`, entao carga de snapshot/odds atual fica para validar quando houver snapshot do dia |
+| Dashboard geral | OK | Cards carregaram com dados reais; validacao padrao `Confirmadas`; ROI, lucro, banca e win rate exibidos sem evidencia visual de contaminacao por PULAR/handoff/snapshot/simulado |
+| Bankroll | OK | Tela abriu; configuracoes, stakes, lucro real, lucro em unidades, ROI, yield, win rate, drawdown e evolucao da banca carregaram; nao houve indicio visual de PULAR/simulado como resultado financeiro real |
+| Historico | OK | Tela abriu; filtros por periodo, esporte, liga, mercado, validacao e resultado visiveis; tabela carregou com dados tecnicos como data, hora, mercado, pick, odd, stake, validacao, resultado e lucro |
+| Coleta de Odds | OK | Tela abriu; historico de coletas carregou com status `PROCESSADO`, `CONCLUIDA` e `WARNING`; acoes `Status`, `Retomar`, `Importar` e `Baixar CSV` visiveis; nenhum job novo foi iniciado |
+| Console | OK com observacao | Sem erro critico de RLS, permissao ou falha de fetch observado; warnings nao bloqueantes do ambiente Lovable/hydration e `[normalizeVmNormalizedPayload] nenhuma linha extraida` apareceram durante a tela de Coleta |
+
+Observacoes de seguranca do smoke:
+
+- Nenhum formulario foi enviado.
+- Nenhum job novo de coleta foi iniciado.
+- Nenhuma acao de importacao, retomada, publicacao, confirmacao, pulo ou alteracao de bankroll foi executada.
+- A verificacao foi visual/leitura; nao houve limpeza, alteracao manual de dados ou migration adicional.
+
+Recomendacao: **aprovado para manter os indices G2A aplicados**, com acompanhamento normal de
+performance. O unico ponto pendente e operacional: repetir a checagem do ASP Screener quando
+houver snapshot/odds MLB do dia carregados, pois no smoke atual a tela abriu corretamente, mas o
+snapshot corrente estava vazio.
+
 ## Aplicacao em staging
 
-Resultado: **nao executada nesta sessao**.
+Resultado: **nao aplicavel ao projeto atual**.
 
 Motivos:
 
-- A G2A ainda nao estava confirmada como mergeada na `origin/main` no momento da preparacao da G3.
-- O Supabase CLI nao estava disponivel no PATH local.
+- O projeto Lovable atual usa banco unico, sem ambiente staging separado disponivel.
+- A aplicacao autorizada pelo usuario ocorreu diretamente no banco unico atual/produtivo.
 - Nenhum acesso SQL de staging foi usado nesta sessao.
-- Nenhuma aplicacao em producao foi tentada.
 
-Tempo aproximado de aplicacao: **pendente**.
+Tempo aproximado de aplicacao em staging: **nao aplicavel**.
 
-Erros de aplicacao: **nao aplicavel**, pois a migration nao foi executada.
+Erros de aplicacao em staging: **nao aplicavel**.
 
-Observacoes de lock/performance: **pendente de staging**. Para tabelas grandes, especialmente
-`odds_jogos`, observar tempo de criacao e impacto de escrita antes de producao.
+Observacoes de lock/performance: a aplicacao no banco unico foi reportada como concluida sem
+erro. Manter observacao operacional normal para tabelas grandes, especialmente `odds_jogos`.
 
 ## Inspecao recomendada dos indices
 
@@ -104,29 +157,31 @@ Status nesta sessao: **validado por inspecao; reexecucao real pendente**.
 
 ## Smoke funcional pos-migration
 
-Como a migration nao foi aplicada em staging nesta sessao, o smoke funcional real permanece
-pendente. Checklist para execucao:
+Como nao existe staging separado, o smoke funcional foi executado no preview autenticado do
+projeto Lovable apontando para o banco unico atual. Checklist consolidado:
 
 | Area | Fluxo | Status |
 | --- | --- | --- |
-| ASP Validator | Historico carrega | Pendente staging |
-| ASP Validator | Filtros funcionam | Pendente staging |
-| ASP Validator | Dashboard especifico carrega | Pendente staging |
-| ASP Validator | CONFIRMAR/PULAR continuam separados | Pendente staging |
-| ASP Validator | PULAR nao afeta bankroll | Pendente staging |
-| ASP Screener | Historico de handoffs carrega | Pendente staging |
-| ASP Screener | Snapshots carregam | Pendente staging |
-| ASP Screener | Detalhes de snapshot/handoff carregam | Pendente staging |
-| ASP Screener | Shortlist/calibracao continuam acessiveis | Pendente staging |
-| Dashboard/Bankroll | Dashboard geral carrega | Pendente staging |
-| Dashboard/Bankroll | Bankroll carrega | Pendente staging |
-| Dashboard/Bankroll | Simulado/handoff/snapshot nao entram como performance real | Pendente staging |
-| Coleta de Odds | Listagem de coletas carrega | Pendente staging |
-| Coleta de Odds | Status de coletas aparece | Pendente staging |
+| ASP Validator | Historico/dashboard carrega | OK |
+| ASP Validator | Filtros funcionam/visiveis | OK |
+| ASP Validator | Dashboard especifico carrega | OK |
+| ASP Validator | CONFIRMAR/PULAR continuam separados | OK |
+| ASP Validator | PULAR nao afeta bankroll | OK por leitura visual dos indicadores confirmados |
+| ASP Screener | Historico de handoffs carrega | OK |
+| ASP Screener | Snapshots carregam | OK parcial: tela carrega, mas snapshot atual estava vazio |
+| ASP Screener | Detalhes de snapshot/handoff carregam | OK para payload/handoff; snapshot atual vazio |
+| ASP Screener | Shortlist/calibracao continuam acessiveis | OK |
+| Dashboard/Bankroll | Dashboard geral carrega | OK |
+| Dashboard/Bankroll | Bankroll carrega | OK |
+| Dashboard/Bankroll | Simulado/handoff/snapshot nao entram como performance real | OK por leitura visual dos filtros/indicadores reais |
+| Coleta de Odds | Listagem de coletas carrega | OK |
+| Coleta de Odds | Status de coletas aparece | OK |
 
 ## Checagem simples de performance
 
-Sem staging aplicado nesta sessao, nao ha metricas reais de antes/depois. Medir em staging:
+Sem baseline temporal instrumentado antes/depois, a checagem foi visual. As telas principais
+carregaram sem lentidao evidente durante o smoke autenticado. Medidas detalhadas de Network/API
+podem ser feitas em ciclo separado, se necessario:
 
 | Fluxo | Medida sugerida | Status |
 | --- | --- | --- |
@@ -211,26 +266,30 @@ Registrar no proximo ciclo se o planner usou `Index Scan`, `Bitmap Index Scan` o
 | Migration nao cria tabelas/colunas | OK por inspecao |
 | Migration e idempotente com `IF NOT EXISTS` | OK por inspecao |
 | Nao ha `CREATE INDEX CONCURRENTLY` | OK por inspecao |
-| Indices aparecem em `pg_indexes` | Pendente staging |
-| Reexecucao nao quebra | Pendente staging |
+| Indices aparecem em `pg_indexes` | OK reportado apos aplicacao |
+| Reexecucao nao quebra | OK por `IF NOT EXISTS`; reexecucao real nao necessaria nesta etapa |
 
 ## Recomendacao para producao
 
-Classificacao: **Pendente de execucao em staging**.
+Classificacao: **Aprovado para manter os indices G2A no banco unico atual/produtivo**.
 
-Nao aplicar em producao antes de:
+Motivos:
 
-- G2A estar mergeada na `main`.
-- Migration ser aplicada em staging sem erro.
-- `pg_indexes` confirmar os sete indices.
-- Smoke funcional pos-migration passar.
-- Tabela `odds_jogos` ser avaliada quanto a volume e janela de lock.
+- G2A esta mergeada na `main`.
+- Migration foi autorizada para o banco unico atual.
+- Aplicacao foi reportada como concluida sem erro.
+- `pg_indexes` confirmou os sete indices.
+- Smoke funcional pos-aplicacao passou nos fluxos principais, com pendencia apenas para repetir
+  Screener quando houver snapshot/odds MLB do dia.
+- Nenhuma evidencia visual de alteracao em dados, RLS, policies, bankroll, regras ou dashboard
+  financeiro foi observada.
 
-Se `odds_jogos` estiver muito grande em producao, avaliar execucao operacional com
-`CREATE INDEX CONCURRENTLY` em janela propria, fora de migration transacional comum.
+Para futuras migrations de indice em tabelas grandes, avaliar janela operacional e, se necessario,
+`CREATE INDEX CONCURRENTLY` fora de migration transacional comum.
 
 ## Proxima decisao
 
-- Se staging passar sem impacto relevante: liberar producao com cautela operacional.
-- Se houver lentidao residual comprovada: avaliar G2B somente com P2/P3 selecionados por evidencia.
-- Se staging nao estiver disponivel: preparar/regularizar ambiente de staging antes de producao.
+- Manter G2A aplicada.
+- Monitorar telas pesadas e logs operacionais nas proximas horas/dias.
+- Repetir smoke do ASP Screener quando houver snapshot/odds MLB do dia carregados.
+- Nao avancar para G2B sem evidencia real de gargalo remanescente.
