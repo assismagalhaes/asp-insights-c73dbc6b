@@ -1,39 +1,51 @@
-# Fase G3 - Validacao dos indices P0/P1 em staging
+# Fase G3 - Validacao dos indices P0/P1
 
 ## Resumo
 
-Esta fase valida operacionalmente a migration de indices P0/P1 criada na G2A, sem criar nova
-mutation, sem aplicar em producao e sem alterar runtime, queries, regras, RLS, policies, dados,
-Screener, Validator, OCR, IA ou scraper.
+Esta fase valida operacionalmente a migration de indices P0/P1 criada na G2A.
 
-Status atual: **Pendente de execucao em staging**.
+Status atual: **Aplicada no banco unico atual (produtivo) do projeto Lovable Cloud em
+2026-07-06 (horario de Brasilia), com autorizacao explicita do usuario, ciente de que o
+projeto nao possui ambiente staging separado.** Aplicacao concluida sem erro; os sete
+indices foram criados. Nenhuma alteracao de dados, RLS, policies, triggers, funcoes,
+bankroll ou dashboard financeiro.
 
 ## Ambiente
 
-- Data/hora da validacao documental: 2026-07-04 16:59:16 -03:00.
-- Repositorio local: `asp-insights`.
-- Branch de referencia G2A: `codex/fase-g2a-p0-p1-indexes`.
-- Commit G2A: `82e20f6`.
-- Migration validada por inspecao:
-  `supabase/migrations/20260704163213_add_p0_p1_performance_indexes.sql`.
-- Supabase local: `supabase/config.toml` existe.
-- Supabase CLI: nao disponivel no PATH local durante esta validacao.
-- Ambiente staging conectado: nao validado nesta sessao.
+- Data/hora da aplicacao: 2026-07-06 (horario de Brasilia).
+- Ambiente: banco unico do projeto Lovable Cloud (produtivo). Nao existe staging separado.
+- Migration aplicada: `supabase/migrations/20260704163213_add_p0_p1_performance_indexes.sql`.
+- Nenhuma outra migration pendente foi aplicada nesta janela.
 - Credenciais: nenhuma credencial, token, URL sensivel ou segredo foi aberto ou registrado.
 
-## Migration validada
+## Migration aplicada
 
-A migration G2A contem somente `CREATE INDEX IF NOT EXISTS` e os sete indices P0/P1 abaixo:
+A migration G2A contem somente `CREATE INDEX IF NOT EXISTS` e os sete indices P0/P1 abaixo,
+confirmados via `pg_indexes` apos aplicacao:
 
 | Indice | Tabela | Origem G1 | Status |
 | --- | --- | --- | --- |
-| `idx_odds_jogos_data_esporte_liga_created` | `odds_jogos` | P0 | Validado por inspecao; pendente em staging |
-| `idx_prognosticos_data_created` | `prognosticos` | P1 | Validado por inspecao; pendente em staging |
-| `idx_prognosticos_import_dedupe` | `prognosticos` | P1 | Validado por inspecao; pendente em staging |
-| `idx_validacoes_prognostico_created` | `validacoes` | P1 | Validado por inspecao; pendente em staging |
-| `idx_resultados_prognostico_created` | `resultados` | P1 | Validado por inspecao; pendente em staging |
-| `idx_bankroll_historico_data_created` | `bankroll_historico` | P1 | Validado por inspecao; pendente em staging |
-| `idx_asp_validator_real_bankroll_user_match_created` | `asp_validator_registros` | P1 | Validado por inspecao; pendente em staging |
+| `idx_odds_jogos_data_esporte_liga_created` | `odds_jogos` | P0 | Criado e confirmado em `pg_indexes` |
+| `idx_prognosticos_data_created` | `prognosticos` | P1 | Criado e confirmado em `pg_indexes` |
+| `idx_prognosticos_import_dedupe` | `prognosticos` | P1 | Criado e confirmado em `pg_indexes` |
+| `idx_validacoes_prognostico_created` | `validacoes` | P1 | Criado e confirmado em `pg_indexes` |
+| `idx_resultados_prognostico_created` | `resultados` | P1 | Criado e confirmado em `pg_indexes` |
+| `idx_bankroll_historico_data_created` | `bankroll_historico` | P1 | Criado e confirmado em `pg_indexes` |
+| `idx_asp_validator_real_bankroll_user_match_created` | `asp_validator_registros` | P1 | Criado e confirmado em `pg_indexes` |
+
+## Smoke funcional pos-aplicacao
+
+Recomenda-se ao usuario validar manualmente os fluxos abaixo apos a aplicacao. Nenhuma
+alteracao de runtime, queries, RLS, policies, dados, triggers ou funcoes foi feita, portanto
+o comportamento funcional deve permanecer identico, com potencial ganho de tempo de resposta:
+
+- ASP Validator: historico, filtros, dashboard especifico, CONFIRMAR/PULAR separados,
+  PULAR nao afeta bankroll.
+- ASP Screener: historico de handoffs, snapshots, detalhes, shortlist/calibracao.
+- Dashboard/Bankroll: dashboard geral e bankroll continuam refletindo apenas performance real
+  (simulado/handoff/snapshot fora).
+- Historico: listagem carrega.
+- Coleta de Odds: listagem e status carregam.
 
 ## Aplicacao em staging
 
