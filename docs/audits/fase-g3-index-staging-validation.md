@@ -82,7 +82,7 @@ Status dos modulos solicitados:
 | Modulo | Status | Observacao |
 | --- | --- | --- |
 | ASP Validator | OK | Tela abriu; formulario manual, dashboard especifico e filtros de periodo/esporte/liga/plataforma/modelo/mercado/decisao/resultado visiveis; `CONFIRMADAS` e `PULADAS` separados; lucro/ROI/yield confirmados exibidos apenas para confirmadas |
-| ASP Screener | OK parcial | Tela abriu; secoes Moneyline, Over/Under, Handicap, Opportunity Score, payload critico, historico de handoffs, auditoria e calibracao visiveis; payload/handoff abriu em leitura; snapshot atual exibiu `sem snapshot` e odds MLB do dia `0`, entao carga de snapshot/odds atual fica para validar quando houver snapshot do dia |
+| ASP Screener | OK | Tela abriu; secoes Moneyline, Over/Under, Handicap, Opportunity Score, payload critico, historico de handoffs, auditoria e calibracao visiveis; payload/handoff abriu em leitura; rerun de 18:22 confirmou snapshot MLB `validado`, 30 times importados/conciliados e 1000 odds MLB do dia |
 | Dashboard geral | OK | Cards carregaram com dados reais; validacao padrao `Confirmadas`; ROI, lucro, banca e win rate exibidos sem evidencia visual de contaminacao por PULAR/handoff/snapshot/simulado |
 | Bankroll | OK | Tela abriu; configuracoes, stakes, lucro real, lucro em unidades, ROI, yield, win rate, drawdown e evolucao da banca carregaram; nao houve indicio visual de PULAR/simulado como resultado financeiro real |
 | Historico | OK | Tela abriu; filtros por periodo, esporte, liga, mercado, validacao e resultado visiveis; tabela carregou com dados tecnicos como data, hora, mercado, pick, odd, stake, validacao, resultado e lucro |
@@ -96,10 +96,32 @@ Observacoes de seguranca do smoke:
 - Nenhuma acao de importacao, retomada, publicacao, confirmacao, pulo ou alteracao de bankroll foi executada.
 - A verificacao foi visual/leitura; nao houve limpeza, alteracao manual de dados ou migration adicional.
 
+#### Rerun ASP Screener - 2026-07-06 18:22 -03:00
+
+Resultado: **OK**.
+
+O smoke do ASP Screener foi repetido apos o snapshot/odds estarem disponiveis:
+
+- Snapshot MLB: `validado`.
+- Ultima atualizacao: `06/07/2026, 18:20`.
+- Fonte: `CSV manual`.
+- Snapshot: `2026-07-06`.
+- Times importados: `30`.
+- Times conciliados: `30`.
+- Odds MLB do dia: `1000`.
+- Avisos: `0`.
+- Cache: `diario`.
+- Moneyline Screener exibiu `ODDS MLB CARREGADAS: 1000` e origem `Banco odds_jogos`.
+- Historico/auditoria de handoffs visivel com `HANDOFFS ENVIADOS: 4`, `APLICADOS: 4` e
+  `DESCARTADOS: 0`.
+- Payloads/handoffs e calibracao permaneceram visiveis.
+- Nenhuma projecao foi gerada, nenhum snapshot foi salvo e nenhum handoff foi enviado durante o
+  smoke.
+- Sem erro critico de RLS, permissao ou fetch no console durante o rerun.
+
 Recomendacao: **aprovado para manter os indices G2A aplicados**, com acompanhamento normal de
-performance. O unico ponto pendente e operacional: repetir a checagem do ASP Screener quando
-houver snapshot/odds MLB do dia carregados, pois no smoke atual a tela abriu corretamente, mas o
-snapshot corrente estava vazio.
+performance. A pendencia operacional anterior do ASP Screener foi fechada no rerun com
+snapshot/odds carregados.
 
 ## Aplicacao em staging
 
@@ -168,8 +190,8 @@ projeto Lovable apontando para o banco unico atual. Checklist consolidado:
 | ASP Validator | CONFIRMAR/PULAR continuam separados | OK |
 | ASP Validator | PULAR nao afeta bankroll | OK por leitura visual dos indicadores confirmados |
 | ASP Screener | Historico de handoffs carrega | OK |
-| ASP Screener | Snapshots carregam | OK parcial: tela carrega, mas snapshot atual estava vazio |
-| ASP Screener | Detalhes de snapshot/handoff carregam | OK para payload/handoff; snapshot atual vazio |
+| ASP Screener | Snapshots carregam | OK: snapshot MLB `2026-07-06` validado, 30 times e 1000 odds |
+| ASP Screener | Detalhes de snapshot/handoff carregam | OK para payload/handoff e contexto de snapshot |
 | ASP Screener | Shortlist/calibracao continuam acessiveis | OK |
 | Dashboard/Bankroll | Dashboard geral carrega | OK |
 | Dashboard/Bankroll | Bankroll carrega | OK |
@@ -279,8 +301,8 @@ Motivos:
 - Migration foi autorizada para o banco unico atual.
 - Aplicacao foi reportada como concluida sem erro.
 - `pg_indexes` confirmou os sete indices.
-- Smoke funcional pos-aplicacao passou nos fluxos principais, com pendencia apenas para repetir
-  Screener quando houver snapshot/odds MLB do dia.
+- Smoke funcional pos-aplicacao passou nos fluxos principais; rerun do Screener confirmou
+  snapshot/odds MLB do dia carregados.
 - Nenhuma evidencia visual de alteracao em dados, RLS, policies, bankroll, regras ou dashboard
   financeiro foi observada.
 
@@ -291,5 +313,5 @@ Para futuras migrations de indice em tabelas grandes, avaliar janela operacional
 
 - Manter G2A aplicada.
 - Monitorar telas pesadas e logs operacionais nas proximas horas/dias.
-- Repetir smoke do ASP Screener quando houver snapshot/odds MLB do dia carregados.
+- Monitorar ASP Screener em ciclos futuros, mas a pendencia de snapshot/odds do smoke foi fechada.
 - Nao avancar para G2B sem evidencia real de gargalo remanescente.
