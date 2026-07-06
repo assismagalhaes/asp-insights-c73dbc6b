@@ -18,19 +18,34 @@ bankroll ou dashboard financeiro.
 - Nenhuma outra migration pendente foi aplicada nesta janela.
 - Credenciais: nenhuma credencial, token, URL sensivel ou segredo foi aberto ou registrado.
 
-## Migration validada
+## Migration aplicada
 
-A migration G2A contem somente `CREATE INDEX IF NOT EXISTS` e os sete indices P0/P1 abaixo:
+A migration G2A contem somente `CREATE INDEX IF NOT EXISTS` e os sete indices P0/P1 abaixo,
+confirmados via `pg_indexes` apos aplicacao:
 
 | Indice | Tabela | Origem G1 | Status |
 | --- | --- | --- | --- |
-| `idx_odds_jogos_data_esporte_liga_created` | `odds_jogos` | P0 | Validado por inspecao; pendente em staging |
-| `idx_prognosticos_data_created` | `prognosticos` | P1 | Validado por inspecao; pendente em staging |
-| `idx_prognosticos_import_dedupe` | `prognosticos` | P1 | Validado por inspecao; pendente em staging |
-| `idx_validacoes_prognostico_created` | `validacoes` | P1 | Validado por inspecao; pendente em staging |
-| `idx_resultados_prognostico_created` | `resultados` | P1 | Validado por inspecao; pendente em staging |
-| `idx_bankroll_historico_data_created` | `bankroll_historico` | P1 | Validado por inspecao; pendente em staging |
-| `idx_asp_validator_real_bankroll_user_match_created` | `asp_validator_registros` | P1 | Validado por inspecao; pendente em staging |
+| `idx_odds_jogos_data_esporte_liga_created` | `odds_jogos` | P0 | Criado e confirmado em `pg_indexes` |
+| `idx_prognosticos_data_created` | `prognosticos` | P1 | Criado e confirmado em `pg_indexes` |
+| `idx_prognosticos_import_dedupe` | `prognosticos` | P1 | Criado e confirmado em `pg_indexes` |
+| `idx_validacoes_prognostico_created` | `validacoes` | P1 | Criado e confirmado em `pg_indexes` |
+| `idx_resultados_prognostico_created` | `resultados` | P1 | Criado e confirmado em `pg_indexes` |
+| `idx_bankroll_historico_data_created` | `bankroll_historico` | P1 | Criado e confirmado em `pg_indexes` |
+| `idx_asp_validator_real_bankroll_user_match_created` | `asp_validator_registros` | P1 | Criado e confirmado em `pg_indexes` |
+
+## Smoke funcional pos-aplicacao
+
+Recomenda-se ao usuario validar manualmente os fluxos abaixo apos a aplicacao. Nenhuma
+alteracao de runtime, queries, RLS, policies, dados, triggers ou funcoes foi feita, portanto
+o comportamento funcional deve permanecer identico, com potencial ganho de tempo de resposta:
+
+- ASP Validator: historico, filtros, dashboard especifico, CONFIRMAR/PULAR separados,
+  PULAR nao afeta bankroll.
+- ASP Screener: historico de handoffs, snapshots, detalhes, shortlist/calibracao.
+- Dashboard/Bankroll: dashboard geral e bankroll continuam refletindo apenas performance real
+  (simulado/handoff/snapshot fora).
+- Historico: listagem carrega.
+- Coleta de Odds: listagem e status carregam.
 
 ## Aplicacao em staging
 
