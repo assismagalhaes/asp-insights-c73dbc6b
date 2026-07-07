@@ -1006,20 +1006,26 @@ function AspScreenerPage() {
         );
         return;
       }
-      const prognostico = await createPrognostico.mutateAsync(
-        buildCriticalValidationPrognosticoInput(draft),
-      );
-      if (!prognostico) {
-        toast.error("Nao foi possivel criar o prognostico na Validacao Critica.");
-        return;
+      try {
+        const prognostico = await createPrognostico.mutateAsync(
+          buildCriticalValidationPrognosticoInput(draft),
+        );
+        toast.success(
+          `Enviado para Validação Crítica: ${String(prognostico.id ?? "").slice(0, 8)}`,
+        );
+        void navigate({ to: "/validacao" });
+      } catch (err) {
+        console.error("[asp-screener] falha ao enviar para Validação Crítica", err);
+        const message =
+          err instanceof Error && err.message
+            ? err.message
+            : "Não foi possível enviar para a Validação Crítica.";
+        toast.error(message);
       }
-      toast.success(
-        `Enviado para Validacao Critica como ASP Screener: ${String(prognostico.id ?? "").slice(0, 8)}`,
-      );
-      void navigate({ to: "/validacao" });
     },
     [createPrognostico, navigate],
   );
+
 
   const loadMoreSnapshotOpportunities = useCallback(() => {
     setSnapshotOpportunityLimit((limit) => limit + SNAPSHOT_OPPORTUNITY_PAGE_SIZE);
