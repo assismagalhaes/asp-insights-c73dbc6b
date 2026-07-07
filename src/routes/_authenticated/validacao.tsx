@@ -677,6 +677,9 @@ function Validacao() {
 
       <ScreenerCriticalDraftPanel />
 
+      <TelegramAlertsPanel />
+
+
       {/* Filtros */}
       <div className="rounded-lg border border-border bg-card p-3">
         <div className="flex flex-wrap items-end gap-3">
