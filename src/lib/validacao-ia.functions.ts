@@ -84,6 +84,11 @@ function isAspMatrixMarket(value: unknown): boolean {
   );
 }
 
+function isAspScreenerMarket(value: unknown): boolean {
+  const normalized = normalizeMarketName(value);
+  return normalized.includes("aspscreener") || normalized.includes("screenermlb");
+}
+
 function formatNullableOdd(value: number | null | undefined): string {
   return value != null && Number.isFinite(Number(value)) ? Number(value).toFixed(3) : "-";
 }
