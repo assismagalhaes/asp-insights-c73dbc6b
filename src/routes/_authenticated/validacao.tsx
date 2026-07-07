@@ -481,7 +481,17 @@ function Validacao() {
         },
       };
       const raw = modo === "online" ? await callIAOnline(payload) : await callIA(payload);
-      const r: IAResult = { ...(raw as Omit<IAResult, "modo">), modo };
+      const oddsAnalisadasMap: Record<string, number> = {};
+      for (const option of g.opcoes) {
+        const o = getOddAjustadaNum(option);
+        if (o != null) oddsAnalisadasMap[option.id] = o;
+      }
+      const r: IAResult = {
+        ...(raw as Omit<IAResult, "modo">),
+        modo,
+        odd_analisada: oddAj,
+        odd_analisada_por_opcao: oddsAnalisadasMap,
+      };
       const chosenByIa = r.decisao_sugerida === "CONFIRMA" ? findAiChosenOption(g, r) : null;
       const rWithAviso: IAResult = {
         ...r,
