@@ -98,8 +98,9 @@ type AuditFilter = {
 
 export async function createScreenerValidatorHandoffAudit(
   handoff: MlbValidatorHandoffPayload,
+  metadataOverride: Record<string, unknown> = {},
 ): Promise<MlbScreenerHandoffAuditRecord> {
-  const payload = buildAuditInsertPayload(handoff, "sent_to_validator");
+  const payload = buildAuditInsertPayload(handoff, "sent_to_validator", metadataOverride);
   const { data, error } = await auditDb
     .from("asp_screener_validator_handoffs")
     .insert(payload)
@@ -108,6 +109,17 @@ export async function createScreenerValidatorHandoffAudit(
   if (error) throw error;
   if (!data) throw new Error("Auditoria do handoff nao retornou registro criado.");
   return data;
+}
+
+export function createScreenerCriticalValidationHandoffAudit(
+  handoff: MlbValidatorHandoffPayload,
+  criticalPrognosticoId: string | null,
+) {
+  return createScreenerValidatorHandoffAudit(handoff, {
+    destination: "critical_validation",
+    critical_validation_prognostico_id: criticalPrognosticoId,
+    sent_via: "asp_screener_send_to_critical_validation",
+  });
 }
 
 export async function updateScreenerValidatorHandoffStatus(
@@ -208,6 +220,7 @@ export async function getScreenerValidatorHandoffById(id: string) {
 function buildAuditInsertPayload(
   handoff: MlbValidatorHandoffPayload,
   status: MlbScreenerHandoffAuditStatus,
+  metadataOverride: Record<string, unknown> = {},
 ) {
   const critical = handoff.raw_critical_payload;
   const prefill = handoff.validator_prefill;
@@ -249,6 +262,7 @@ function buildAuditInsertPayload(
     metadata: {
       created_by: "asp_screener_mlb",
       source_created_at: critical.created_at,
+      ...metadataOverride,
     },
   };
 }
