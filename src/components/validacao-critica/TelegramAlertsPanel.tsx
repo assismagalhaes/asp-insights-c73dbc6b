@@ -206,7 +206,7 @@ export function TelegramAlertsPanel() {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-2 items-end">
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto] gap-2 items-end">
         <div>
           <Label htmlFor="tg-chat-id" className="text-xs">
             Seu chat_id do Telegram (numérico)
