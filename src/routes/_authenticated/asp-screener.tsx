@@ -1011,9 +1011,40 @@ function AspScreenerPage() {
         const prognostico = await createPrognostico.mutateAsync(
           buildCriticalValidationPrognosticoInput(draft),
         );
+        const prognosticoId = prognostico?.id ? String(prognostico.id) : null;
         toast.success(
-          `Enviado para Validação Crítica: ${String(prognostico.id ?? "").slice(0, 8)}`,
+          `Enviado para Validação Crítica: ${(prognosticoId ?? "").slice(0, 8)}`,
         );
+
+        // Trilho de auditoria: registra este envio no histórico de handoffs
+        // e vincula à oportunidade do snapshot da Etapa 08 (Modo Sombra),
+        // seguindo o mesmo padrão do envio ao ASP Validator.
+        try {
+          const handoff = buildMlbValidatorHandoffPayload(payload);
+          const auditRecord = await createScreenerCriticalValidationHandoffAudit(
+            handoff,
+            prognosticoId,
+          );
+          void refetchHandoffAudit();
+          const sourceOpportunity = findOpportunityForCriticalPayload(opportunityRows, payload);
+          if (sourceOpportunity) {
+            void linkMlbOpportunitySnapshotToHandoff(
+              sourceOpportunity.opportunity_id,
+              auditRecord.handoff_id,
+            ).catch((error) => {
+              console.warn(
+                "Enviado à Validação Crítica, mas snapshot sombra não foi vinculado.",
+                error,
+              );
+            });
+          }
+        } catch (auditError) {
+          console.warn(
+            "Enviado à Validação Crítica, mas auditoria de handoff não foi salva.",
+            auditError,
+          );
+        }
+
         void navigate({ to: "/validacao" });
       } catch (err) {
         console.error("[asp-screener] falha ao enviar para Validação Crítica", err);
@@ -1028,7 +1059,7 @@ function AspScreenerPage() {
       }
 
     },
-    [createPrognostico, navigate],
+    [createPrognostico, navigate, opportunityRows, refetchHandoffAudit],
   );
 
 
