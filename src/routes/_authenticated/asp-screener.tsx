@@ -1016,12 +1016,16 @@ function AspScreenerPage() {
         void navigate({ to: "/validacao" });
       } catch (err) {
         console.error("[asp-screener] falha ao enviar para Validação Crítica", err);
+        const anyErr = err as { message?: string; details?: string; hint?: string; code?: string } | null;
         const message =
-          err instanceof Error && err.message
-            ? err.message
-            : "Não foi possível enviar para a Validação Crítica.";
+          anyErr?.message ||
+          anyErr?.details ||
+          anyErr?.hint ||
+          (anyErr?.code ? `Erro ${anyErr.code}` : null) ||
+          "Não foi possível enviar para a Validação Crítica.";
         toast.error(message);
       }
+
     },
     [createPrognostico, navigate],
   );
