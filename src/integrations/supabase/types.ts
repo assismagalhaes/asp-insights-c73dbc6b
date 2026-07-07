@@ -1204,7 +1204,10 @@ export type Database = {
       }
       prognosticos: {
         Row: {
+          arquivo_contexto: string | null
+          bookmaker_melhor: string | null
           canal_publicacao: string | null
+          contexto_modelo: string | null
           created_at: string
           dados_tecnicos: string | null
           data: string
@@ -1214,6 +1217,7 @@ export type Database = {
           esporte: string
           hora: string | null
           id: string
+          job_id_coleta: string | null
           jogo: string
           liga: string
           linha: string | null
@@ -1222,8 +1226,12 @@ export type Database = {
           mercado: string
           observacoes: string | null
           odd_ajustada: number | null
+          odd_mediana: number | null
+          odd_melhor: number | null
+          odd_mercado_base: number | null
           odd_ofertada: number
           odd_valor: number
+          origem_modelo: string | null
           pick: string
           probabilidade_final: number
           publicado_em: string | null
@@ -1237,7 +1245,10 @@ export type Database = {
           visitante: string
         }
         Insert: {
+          arquivo_contexto?: string | null
+          bookmaker_melhor?: string | null
           canal_publicacao?: string | null
+          contexto_modelo?: string | null
           created_at?: string
           dados_tecnicos?: string | null
           data?: string
@@ -1247,6 +1258,7 @@ export type Database = {
           esporte: string
           hora?: string | null
           id?: string
+          job_id_coleta?: string | null
           jogo: string
           liga: string
           linha?: string | null
@@ -1255,8 +1267,12 @@ export type Database = {
           mercado: string
           observacoes?: string | null
           odd_ajustada?: number | null
+          odd_mediana?: number | null
+          odd_melhor?: number | null
+          odd_mercado_base?: number | null
           odd_ofertada: number
           odd_valor: number
+          origem_modelo?: string | null
           pick: string
           probabilidade_final: number
           publicado_em?: string | null
@@ -1270,7 +1286,10 @@ export type Database = {
           visitante: string
         }
         Update: {
+          arquivo_contexto?: string | null
+          bookmaker_melhor?: string | null
           canal_publicacao?: string | null
+          contexto_modelo?: string | null
           created_at?: string
           dados_tecnicos?: string | null
           data?: string
@@ -1280,6 +1299,7 @@ export type Database = {
           esporte?: string
           hora?: string | null
           id?: string
+          job_id_coleta?: string | null
           jogo?: string
           liga?: string
           linha?: string | null
@@ -1288,8 +1308,12 @@ export type Database = {
           mercado?: string
           observacoes?: string | null
           odd_ajustada?: number | null
+          odd_mediana?: number | null
+          odd_melhor?: number | null
+          odd_mercado_base?: number | null
           odd_ofertada?: number
           odd_valor?: number
+          origem_modelo?: string | null
           pick?: string
           probabilidade_final?: number
           publicado_em?: string | null
