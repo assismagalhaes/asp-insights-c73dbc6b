@@ -97,9 +97,11 @@ export function calcularResultadoAuto(
 
   if (has(pick, "marcar primeiro", "primeiro a marcar", "primeiro gol")) return null;
 
+  const ehScreener = has(mercado, "asp screener", "screener");
   const ehTotal =
     has(mercado, "over under", "total de", "goalmatrix", "cornermatrix", "over", "under") ||
-    has(pick, "over", "under");
+    has(pick, "over", "under") ||
+    (ehScreener && (has(pick, "over", "under") || has(pick, "mais de", "menos de")));
   if (ehTotal && (has(pick, "over") || has(pick, "under") || has(mercado, "over", "under"))) {
     const linha = linhaDoProg(prog);
     if (linha == null) return null;
