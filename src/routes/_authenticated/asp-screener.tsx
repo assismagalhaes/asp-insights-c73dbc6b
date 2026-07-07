@@ -2404,7 +2404,7 @@ function CriticalPayloadPanel({
           payload.context_alignment.alignment_status === "conflicts_with_screener" ||
           alignmentScore <= 35 ||
           highDivergence;
-        const handleSendCritical = () => {
+        const handleSendCritical = async () => {
           if (shouldConfirm && typeof window !== "undefined") {
             const isConflict =
               payload.context_alignment.alignment_status === "conflicts_with_screener";
@@ -2425,8 +2425,18 @@ function CriticalPayloadPanel({
             const ok = window.confirm(msg);
             if (!ok) return;
           }
-          void onSendToCriticalValidation(payload);
+          try {
+            await onSendToCriticalValidation(payload);
+          } catch (err) {
+            console.error("[asp-screener] handleSendCritical falhou", err);
+            const message =
+              err instanceof Error && err.message
+                ? err.message
+                : "Erro ao enviar para Validação Crítica.";
+            toast.error(message);
+          }
         };
+
         const handleSendValidator = () => {
           void onSendToValidator(payload);
         };
