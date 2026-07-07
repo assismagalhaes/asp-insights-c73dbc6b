@@ -13,6 +13,29 @@ import {
 } from "./telegramMessage";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/telegram";
+const TELEGRAM_BOT_USERNAME = "asp_sentinel_bot";
+
+function parseTelegramSendError(raw: string): string {
+  try {
+    const parsed = JSON.parse(raw) as { description?: string; error_code?: number };
+    const description = parsed.description ?? raw;
+    if (
+      parsed.error_code === 403 &&
+      /can't initiate conversation with a user/i.test(description)
+    ) {
+      return `O bot não pode iniciar conversa com você. Abra @${TELEGRAM_BOT_USERNAME} no Telegram, envie /start e depois clique em Testar novamente.`;
+    }
+    if (/chat not found|invalid_chat_id/i.test(description)) {
+      return "chat_id não encontrado. Confirme se você colou o ID numérico correto e enviou /start para o bot do projeto.";
+    }
+    return description;
+  } catch {
+    if (/can't initiate conversation with a user/i.test(raw)) {
+      return `O bot não pode iniciar conversa com você. Abra @${TELEGRAM_BOT_USERNAME} no Telegram, envie /start e depois clique em Testar novamente.`;
+    }
+    return raw;
+  }
+}
 
 async function sendTelegramMessage(
   chatId: string,
@@ -38,7 +61,7 @@ async function sendTelegramMessage(
     }),
   });
   const body = await res.text();
-  if (!res.ok) return { ok: false, error: body.slice(0, 500), status: res.status };
+  if (!res.ok) return { ok: false, error: parseTelegramSendError(body).slice(0, 500), status: res.status };
   try {
     const parsed = JSON.parse(body) as { ok?: boolean; result?: { message_id?: number }; description?: string };
     if (!parsed.ok) return { ok: false, error: parsed.description ?? "telegram_not_ok", status: res.status };

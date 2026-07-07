@@ -22,6 +22,8 @@ import {
   syncCriticalAlertsForUser,
 } from "@/lib/validacao-critica/telegramPreMatchAlertService.functions";
 
+const TELEGRAM_BOT_USERNAME = "asp_sentinel_bot";
+
 type AlertRow = {
   id: string;
   matchup: string | null;
@@ -227,9 +229,16 @@ export function TelegramAlertsPanel() {
             >
               @userinfobot
             </a>{" "}
-            no Telegram e envie /start — ele responde com seu ID. Depois, envie /start
-            para o bot deste projeto para que ele consiga te mandar mensagens. Não use
-            @username.
+            no Telegram e envie /start — ele responde com seu ID. Depois, abra{" "}
+            <a
+              href={`https://t.me/${TELEGRAM_BOT_USERNAME}`}
+              target="_blank"
+              rel="noreferrer"
+              className="underline font-medium"
+            >
+              @{TELEGRAM_BOT_USERNAME}
+            </a>{" "}
+            e envie /start para autorizar o envio. Não use @username.
           </p>
         </div>
 
@@ -249,6 +258,11 @@ export function TelegramAlertsPanel() {
             <Send className="h-3 w-3" />
           )}
           <span className="ml-1">Testar</span>
+        </Button>
+        <Button size="sm" variant="outline" asChild>
+          <a href={`https://t.me/${TELEGRAM_BOT_USERNAME}`} target="_blank" rel="noreferrer">
+            Abrir bot
+          </a>
         </Button>
       </div>
 
