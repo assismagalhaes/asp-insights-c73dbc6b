@@ -837,6 +837,7 @@ export const MERCADOS_DEFAULT = [
   "Total de Escanteios",
   "ASP GoalMatrix",
   "ASP CornerMatrix",
+  "ASP Screener",
 ];
 
 export function normalizeMercadoPadrao(mercado: string, esporte?: string | null): string {
@@ -852,6 +853,7 @@ export function normalizeMercadoPadrao(mercado: string, esporte?: string | null)
 
   if (/asp\s*goals?matrix|goals?matrix/.test(normalized)) return "ASP GoalMatrix";
   if (/asp\s*corners?matrix|corners?matrix/.test(normalized)) return "ASP CornerMatrix";
+  if (/asp\s*screener|screener\s*mlb/.test(normalized)) return "ASP Screener";
   if (/resultado final|1x2|resultado da partida/.test(normalized)) return "Resultado da Partida";
   if (/ambas marcam|btts/.test(normalized)) return "Ambas Marcam";
   if (/dupla chance|double chance/.test(normalized)) return "Dupla Chance";

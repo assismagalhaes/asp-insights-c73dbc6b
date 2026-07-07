@@ -84,6 +84,11 @@ function isAspMatrixMarket(value: unknown): boolean {
   );
 }
 
+function isAspScreenerMarket(value: unknown): boolean {
+  const normalized = normalizeMarketName(value);
+  return normalized.includes("aspscreener") || normalized.includes("screenermlb");
+}
+
 function formatNullableOdd(value: number | null | undefined): string {
   return value != null && Number.isFinite(Number(value)) ? Number(value).toFixed(3) : "-";
 }
@@ -264,8 +269,21 @@ export const analisarValidacao = createServerFn({ method: "POST" })
       (data.prognosticos_correlacionados ?? []).some(
         (opcao) => isAspMatrixMarket(opcao.mercado) || isAspMatrixMarket(opcao.pick),
       );
+    const isAspScreener =
+      isAspScreenerMarket(p.mercado) ||
+      isAspScreenerMarket(p.pick) ||
+      isAspScreenerMarket(data.dados_tecnicos) ||
+      opcoesMesmoMercado.some(
+        (opcao) => isAspScreenerMarket(opcao.mercado) || isAspScreenerMarket(opcao.pick),
+      ) ||
+      (data.prognosticos_correlacionados ?? []).some(
+        (opcao) => isAspScreenerMarket(opcao.mercado) || isAspScreenerMarket(opcao.pick),
+      );
     const aspMatrixInstrucao = isAspMatrix
       ? `\nREGRA ESPECIFICA ATIVA - ASP GOAL/CORNER MATRIX:\nEste grupo foi identificado como ASP CornerMatrix, CornerMatrix, ASP CornersMatrix, ASP GoalMatrix, ASP GoalsMatrix, GoalMatrix ou GoalsMatrix.\nInterprete CV/Coeficiente de Variacao como metrica propria de consistencia do modelo: mais perto de 100 = maior consistencia; 60% = consistencia moderada/boa; acima de 70% = boa; acima de 80% = forte; abaixo de 50% = cautela; abaixo de 40% = baixa consistencia.\nNao use a ausencia de noticias online, escalacoes, desfalques, fontes externas ou confirmacao de titulares como motivo principal para PULAR ou reduzir confianca. Julgue principalmente os dados internos do modelo, probabilidade, odd de valor, edge, linha, medias, tendencia historica, simulacao e consistencia da amostra.\nSe mencionar CV, use linguagem de consistencia do modelo e nunca linguagem de dispersao estatistica tradicional.\n`
+      : "";
+    const aspScreenerInstrucao = isAspScreener
+      ? `\nREGRA ESPECIFICA ATIVA - ASP SCREENER (MLB):\nEste grupo veio do ASP Screener MLB. O campo Mercado = "ASP Screener" e um rotulo de origem/modelo. O mercado real (Moneyline, Total de Corridas/Over-Under, Run Line/Handicap) esta descrito no campo Pick (formato: "<mercado_original> | <pick>") e nos DADOS TECNICOS.\nInterprete a pick lendo o mercado real dentro do texto do Pick e dos dados tecnicos: over/under de corridas, moneyline do time, run line +1.5/-1.5, etc. Nao trate "ASP Screener" como mercado exotico.\nPriorize dados internos do payload: projecoes do modelo (probabilidade, fair odd, edge, EV), odds mediana/base/melhor, standings, medias da liga, matchup de pitchers/starters, fatores contextuais e alertas colados. Nao penalize por ausencia de noticias online, lineups online ou odds movement externo.\nCV, quando presente, segue a mesma leitura de consistencia dos modelos ASP (mais alto = mais consistente).\n`
       : "";
     const opcoesMesmoMercadoTexto = opcoesMesmoMercado.length
       ? opcoesMesmoMercado
@@ -329,7 +347,7 @@ Não use 1.0u como stake padrão. Se houver qualquer dúvida entre 1.0u e 0.5u, 
 Se houver opcoes concorrentes listadas acima, compare mercado, linhas, odds, probabilidade, edge, protecao da linha e risco/retorno. A resposta deve indicar a melhor opcao para CONFIRMAR ou recomendar PULAR o grupo inteiro. Nunca confirme mais de uma opcao do mesmo jogo e mesma familia de mercado.
 Nao use a opcao selecionada na interface como preferencia. Ela serve apenas para ajuste de odd; sua decisao deve comparar todas as opcoes concorrentes.
 Se sugerir CONFIRMA, devolva obrigatoriamente o campo prognostico_id_escolhido com um ID exato da lista OPÇÕES CONCORRENTES. Se sugerir PULAR, use prognostico_id_escolhido: null.
-${aspMatrixInstrucao}
+${aspMatrixInstrucao}${aspScreenerInstrucao}
 `;
 
     try {
