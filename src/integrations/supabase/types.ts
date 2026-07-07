@@ -1178,6 +1178,7 @@ export type Database = {
           email: string | null
           id: string
           nome: string | null
+          telegram_chat_id: string | null
           updated_at: string
           user_id: string
         }
@@ -1186,6 +1187,7 @@ export type Database = {
           email?: string | null
           id?: string
           nome?: string | null
+          telegram_chat_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1194,6 +1196,7 @@ export type Database = {
           email?: string | null
           id?: string
           nome?: string | null
+          telegram_chat_id?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -1359,6 +1362,117 @@ export type Database = {
           created_at?: string
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      validacao_critica_telegram_alerts: {
+        Row: {
+          alert_enabled: boolean
+          alert_minutes_before: number
+          alert_payload: Json | null
+          alert_target_at: string | null
+          attempt_count: number
+          away_team: string | null
+          created_at: string
+          critical_validation_id: string | null
+          dedupe_hash: string | null
+          event_date: string | null
+          event_start_at: string | null
+          event_time: string | null
+          home_team: string | null
+          id: string
+          last_attempt_at: string | null
+          league: string | null
+          line: string | null
+          market: string | null
+          matchup: string | null
+          metadata: Json | null
+          next_retry_at: string | null
+          odd: number | null
+          pick: string | null
+          source_payload: Json | null
+          source_record_id: string | null
+          source_table: string | null
+          sport: string | null
+          status: string
+          telegram_chat_id: string | null
+          telegram_error: string | null
+          telegram_message_id: string | null
+          telegram_sent_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          alert_enabled?: boolean
+          alert_minutes_before?: number
+          alert_payload?: Json | null
+          alert_target_at?: string | null
+          attempt_count?: number
+          away_team?: string | null
+          created_at?: string
+          critical_validation_id?: string | null
+          dedupe_hash?: string | null
+          event_date?: string | null
+          event_start_at?: string | null
+          event_time?: string | null
+          home_team?: string | null
+          id?: string
+          last_attempt_at?: string | null
+          league?: string | null
+          line?: string | null
+          market?: string | null
+          matchup?: string | null
+          metadata?: Json | null
+          next_retry_at?: string | null
+          odd?: number | null
+          pick?: string | null
+          source_payload?: Json | null
+          source_record_id?: string | null
+          source_table?: string | null
+          sport?: string | null
+          status?: string
+          telegram_chat_id?: string | null
+          telegram_error?: string | null
+          telegram_message_id?: string | null
+          telegram_sent_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          alert_enabled?: boolean
+          alert_minutes_before?: number
+          alert_payload?: Json | null
+          alert_target_at?: string | null
+          attempt_count?: number
+          away_team?: string | null
+          created_at?: string
+          critical_validation_id?: string | null
+          dedupe_hash?: string | null
+          event_date?: string | null
+          event_start_at?: string | null
+          event_time?: string | null
+          home_team?: string | null
+          id?: string
+          last_attempt_at?: string | null
+          league?: string | null
+          line?: string | null
+          market?: string | null
+          matchup?: string | null
+          metadata?: Json | null
+          next_retry_at?: string | null
+          odd?: number | null
+          pick?: string | null
+          source_payload?: Json | null
+          source_record_id?: string | null
+          source_table?: string | null
+          sport?: string | null
+          status?: string
+          telegram_chat_id?: string | null
+          telegram_error?: string | null
+          telegram_message_id?: string | null
+          telegram_sent_at?: string | null
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
