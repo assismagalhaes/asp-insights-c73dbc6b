@@ -96,6 +96,8 @@ interface IAResult {
   aviso_opcao?: string | null;
   fontes_consultadas?: { titulo: string; url: string }[];
   buscas_realizadas?: string[];
+  odd_analisada?: number | null;
+  odd_analisada_por_opcao?: Record<string, number>;
 }
 
 type ValidationGroup = {
