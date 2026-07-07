@@ -12,6 +12,7 @@ import {
 } from "@/lib/db";
 import { toast } from "sonner";
 import { Activity } from "lucide-react";
+import { TelegramAlertsPanel } from "@/components/validacao-critica/TelegramAlertsPanel";
 
 export const Route = createFileRoute("/_authenticated/configuracoes")({
   head: () => ({ meta: [{ title: "Configurações — ASP Insights" }] }),
@@ -156,6 +157,8 @@ function Configuracoes() {
           </div>
         </div>
       </div>
+
+      <TelegramAlertsPanel />
     </div>
   );
 }
