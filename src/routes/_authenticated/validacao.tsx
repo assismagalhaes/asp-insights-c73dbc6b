@@ -907,7 +907,7 @@ function Validacao() {
                     label="Odd mercado base"
                     value={formatOptionalOdd(getOddMercadoBase(p))}
                   />
-                  <Metric label="Bookmaker melhor" value={getBookmakerMelhor(p)} />
+                  
                   <Metric label="Odd valor" value={p.odd_valor.toFixed(2)} />
                   <Metric
                     label="Probabilidade"
