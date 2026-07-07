@@ -113,6 +113,7 @@ import {
   refreshMlbStandingsFromBaseballReference,
 } from "@/lib/mlb-standings.functions";
 import {
+  createScreenerCriticalValidationHandoffAudit,
   createScreenerValidatorHandoffAudit,
   listScreenerValidatorHandoffs,
 } from "@/lib/mlb/screenerHandoffAuditService";
