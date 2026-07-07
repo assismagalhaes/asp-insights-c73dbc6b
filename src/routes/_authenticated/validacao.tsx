@@ -62,6 +62,7 @@ import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ScreenerCriticalDraftPanel } from "@/components/screener-critical-draft-panel";
+import { TelegramAlertsPanel } from "@/components/validacao-critica/TelegramAlertsPanel";
 
 export const Route = createFileRoute("/_authenticated/validacao")({
   head: () => ({ meta: [{ title: "Validação Crítica - ASP Insights" }] }),
@@ -675,6 +676,9 @@ function Validacao() {
       </div>
 
       <ScreenerCriticalDraftPanel />
+
+      <TelegramAlertsPanel />
+
 
       {/* Filtros */}
       <div className="rounded-lg border border-border bg-card p-3">
