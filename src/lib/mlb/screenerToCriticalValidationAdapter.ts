@@ -458,7 +458,7 @@ export function buildCriticalValidationPrognosticoInput(
     resultado: "PENDENTE",
     observacoes: "Criado pelo ASP Screener MLB para revisao na Validacao Critica.",
     dados_tecnicos: technicalContext,
-    contexto_modelo: "ASP Screener MLB",
+    contexto_modelo: technicalContext,
     arquivo_contexto: null,
     origem_modelo: "ASP Screener MLB",
     job_id_coleta: draft.draft_id,
