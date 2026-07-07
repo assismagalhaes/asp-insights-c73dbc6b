@@ -220,6 +220,7 @@ export async function getScreenerValidatorHandoffById(id: string) {
 function buildAuditInsertPayload(
   handoff: MlbValidatorHandoffPayload,
   status: MlbScreenerHandoffAuditStatus,
+  metadataOverride: Record<string, unknown> = {},
 ) {
   const critical = handoff.raw_critical_payload;
   const prefill = handoff.validator_prefill;
@@ -261,6 +262,7 @@ function buildAuditInsertPayload(
     metadata: {
       created_by: "asp_screener_mlb",
       source_created_at: critical.created_at,
+      ...metadataOverride,
     },
   };
 }
