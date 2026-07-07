@@ -447,7 +447,7 @@ export function buildCriticalValidationPrognosticoInput(
     odd_mediana: medianOdd,
     odd_mercado_base: marketBaseOdd,
     odd_melhor: input.odd,
-    bookmaker_melhor: input.bookmaker_melhor,
+    
     odd_valor: fairOdd,
     probabilidade_final: probabilityPct,
     edge: edgePct,
