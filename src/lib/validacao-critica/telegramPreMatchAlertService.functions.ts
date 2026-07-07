@@ -189,11 +189,16 @@ export const updateCriticalAlertPrefs = createServerFn({ method: "POST" })
       .parse(v),
   )
   .handler(async ({ data, context }) => {
-    const patch: Record<string, unknown> = {};
+    const patch: {
+      alert_enabled?: boolean;
+      alert_minutes_before?: number;
+      alert_target_at?: string;
+      status?: string;
+      telegram_error?: string | null;
+    } = {};
     if (data.enabled !== undefined) patch.alert_enabled = data.enabled;
     if (data.minutes_before !== undefined) {
       patch.alert_minutes_before = data.minutes_before;
-      // Recompute alert_target_at based on the stored event_start_at
       const { data: row, error: rerr } = await context.supabase
         .from("validacao_critica_telegram_alerts")
         .select("event_start_at,status")
@@ -207,12 +212,12 @@ export const updateCriticalAlertPrefs = createServerFn({ method: "POST" })
         );
         patch.alert_target_at = target.toISOString();
       }
-      // Reset to pending if it was expired/failed and still in the future
       if (row?.status && ["expired", "failed"].includes(row.status)) {
         patch.status = "pending";
         patch.telegram_error = null;
       }
     }
+
 
     const { error } = await context.supabase
       .from("validacao_critica_telegram_alerts")
