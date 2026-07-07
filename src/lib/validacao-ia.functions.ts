@@ -323,6 +323,7 @@ OUTRAS OPÇÕES PENDENTES DO MESMO JOGO E MESMA FAMÍLIA DE MERCADO:
 ${correlacionadosTexto}
 
 INSTRUÇÃO DE AUDITORIA:
+Toda análise de valor (edge, EV, comparação com odd justa e comentários no parecer) DEVE usar exclusivamente a "Odd em uso para análise" (que já reflete a odd ajustada quando existe). Não cite a "Odd ofertada" original como base para a decisão; ela é apenas referência histórica do modelo. Se mencionar odd no parecer, use a odd em uso.
 Antes de sugerir CONFIRMA, procure motivos concretos nos dados fornecidos para PULAR. Se a tese contra a entrada for relevante com base nos dados internos, sugira PULAR. Não confirme apenas porque a entrada veio como EV+. Não trate ausência de informação externa pesquisável como motivo principal para PULAR no modo IA Local.
 Não use 1.0u como stake padrão. Se houver qualquer dúvida entre 1.0u e 0.5u, use 0.5u. Se houver dúvida entre 0.5u e PULAR, use PULAR.
 Se houver opcoes concorrentes listadas acima, compare mercado, linhas, odds, probabilidade, edge, protecao da linha e risco/retorno. A resposta deve indicar a melhor opcao para CONFIRMAR ou recomendar PULAR o grupo inteiro. Nunca confirme mais de uma opcao do mesmo jogo e mesma familia de mercado.
