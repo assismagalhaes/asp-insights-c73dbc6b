@@ -122,9 +122,16 @@ export function TelegramAlertsPanel() {
   };
 
   const saveChat = async () => {
+    const trimmed = chatId.trim();
+    if (trimmed && !/^-?\d{5,}$/.test(trimmed)) {
+      toast.error(
+        "chat_id inválido. Use o número (ex.: 123456789), não @username. Abra @userinfobot no Telegram para descobrir seu ID.",
+      );
+      return;
+    }
     setSavingChat(true);
     try {
-      const r = await callSetChat({ data: { chat_id: chatId.trim() || null } });
+      const r = await callSetChat({ data: { chat_id: trimmed || null } });
       setChatIdSaved(r.chat_id ?? "");
       toast.success("Chat Telegram salvo.");
     } catch (e) {
@@ -134,6 +141,7 @@ export function TelegramAlertsPanel() {
       setSavingChat(false);
     }
   };
+
 
   const toggleEnabled = async (a: AlertRow) => {
     try {
@@ -199,7 +207,7 @@ export function TelegramAlertsPanel() {
       <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-2 items-end">
         <div>
           <Label htmlFor="tg-chat-id" className="text-xs">
-            Seu chat_id do Telegram
+            Seu chat_id do Telegram (numérico)
           </Label>
           <Input
             id="tg-chat-id"
@@ -207,8 +215,24 @@ export function TelegramAlertsPanel() {
             onChange={(e) => setChatId(e.target.value)}
             placeholder="Ex.: 123456789"
             className="h-8"
+            inputMode="numeric"
           />
+          <p className="text-[11px] text-muted-foreground mt-1">
+            Use o ID numérico da sua conta. Abra{" "}
+            <a
+              href="https://t.me/userinfobot"
+              target="_blank"
+              rel="noreferrer"
+              className="underline"
+            >
+              @userinfobot
+            </a>{" "}
+            no Telegram e envie /start — ele responde com seu ID. Depois, envie /start
+            para o bot deste projeto para que ele consiga te mandar mensagens. Não use
+            @username.
+          </p>
         </div>
+
         <Button size="sm" onClick={saveChat} disabled={savingChat || !chatIdDirty}>
           {savingChat ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
           <span className="ml-1">Salvar</span>
