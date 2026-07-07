@@ -837,6 +837,7 @@ export const MERCADOS_DEFAULT = [
   "Total de Escanteios",
   "ASP GoalMatrix",
   "ASP CornerMatrix",
+  "ASP Screener",
 ];
 
 export function normalizeMercadoPadrao(mercado: string, esporte?: string | null): string {
