@@ -96,6 +96,8 @@ interface IAResult {
   aviso_opcao?: string | null;
   fontes_consultadas?: { titulo: string; url: string }[];
   buscas_realizadas?: string[];
+  odd_analisada?: number | null;
+  odd_analisada_por_opcao?: Record<string, number>;
 }
 
 type ValidationGroup = {
@@ -479,7 +481,17 @@ function Validacao() {
         },
       };
       const raw = modo === "online" ? await callIAOnline(payload) : await callIA(payload);
-      const r: IAResult = { ...(raw as Omit<IAResult, "modo">), modo };
+      const oddsAnalisadasMap: Record<string, number> = {};
+      for (const option of g.opcoes) {
+        const o = getOddAjustadaNum(option);
+        if (o != null) oddsAnalisadasMap[option.id] = o;
+      }
+      const r: IAResult = {
+        ...(raw as Omit<IAResult, "modo">),
+        modo,
+        odd_analisada: oddAj,
+        odd_analisada_por_opcao: oddsAnalisadasMap,
+      };
       const chosenByIa = r.decisao_sugerida === "CONFIRMA" ? findAiChosenOption(g, r) : null;
       const rWithAviso: IAResult = {
         ...r,
@@ -597,6 +609,23 @@ function Validacao() {
     if (decisao === "CONFIRMA" && !selected) {
       toast.error("Selecione uma opção para confirmar este grupo.");
       return;
+    }
+    if (decisao === "CONFIRMA" && selected) {
+      const ia = iaResults[g.key];
+      if (ia) {
+        const oddAtual = getOddAjustadaNum(selected);
+        const oddIa =
+          ia.odd_analisada_por_opcao?.[selected.id] ??
+          (selected.id === (ia.prognostico_id_escolhido ?? "") ? ia.odd_analisada : null) ??
+          ia.odd_analisada ??
+          null;
+        if (oddAtual != null && oddIa != null && Math.abs(oddAtual - oddIa) > 0.001) {
+          toast.error(
+            `A odd ajustada (${oddAtual.toFixed(2)}) mudou desde a última análise da IA (${oddIa.toFixed(2)}). Rode a IA novamente antes de confirmar.`,
+          );
+          return;
+        }
+      }
     }
 
     try {
