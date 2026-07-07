@@ -610,6 +610,23 @@ function Validacao() {
       toast.error("Selecione uma opção para confirmar este grupo.");
       return;
     }
+    if (decisao === "CONFIRMA" && selected) {
+      const ia = iaResults[g.key];
+      if (ia) {
+        const oddAtual = getOddAjustadaNum(selected);
+        const oddIa =
+          ia.odd_analisada_por_opcao?.[selected.id] ??
+          (selected.id === (ia.prognostico_id_escolhido ?? "") ? ia.odd_analisada : null) ??
+          ia.odd_analisada ??
+          null;
+        if (oddAtual != null && oddIa != null && Math.abs(oddAtual - oddIa) > 0.001) {
+          toast.error(
+            `A odd ajustada (${oddAtual.toFixed(2)}) mudou desde a última análise da IA (${oddIa.toFixed(2)}). Rode a IA novamente antes de confirmar.`,
+          );
+          return;
+        }
+      }
+    }
 
     try {
       const contextoAnalise = getContextoGrupo(g).trim();
