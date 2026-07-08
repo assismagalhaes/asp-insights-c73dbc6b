@@ -169,6 +169,59 @@ export interface FeedbackIaResultado {
   updated_at: string | null;
 }
 
+export type OpportunityRankingRunStatus = "draft" | "computed" | "applied" | "archived";
+export type OpportunityRankingSourceStage = "pre_ai_shortlist" | "post_ai_final" | "manual";
+export type OpportunityRankingStatus =
+  | "CANDIDATA"
+  | "CONFIRMA_IA"
+  | "TOP_FINAL"
+  | "RESERVA"
+  | "PULAR"
+  | "BLOQUEADA";
+
+export interface OpportunityRankingRun {
+  id: string;
+  user_id: string;
+  run_date: string;
+  source_stage: OpportunityRankingSourceStage | string;
+  status: OpportunityRankingRunStatus | string;
+  max_final_picks: number;
+  candidate_count: number;
+  confirmed_ia_count: number;
+  top_final_count: number;
+  filters_payload: unknown;
+  score_weights: unknown;
+  metadata: unknown;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OpportunityRankingItem {
+  id: string;
+  run_id: string;
+  prognostico_id: string;
+  user_id: string;
+  event_key: string;
+  group_key: string;
+  rank_prelim: number | null;
+  rank_final: number | null;
+  ranking_status: OpportunityRankingStatus | string;
+  opportunity_score_pre: number | null;
+  opportunity_score_final: number | null;
+  confidence_score: number | null;
+  ai_decision: string | null;
+  ai_stake_suggested: number | null;
+  final_stake: number | null;
+  matchup_preview_context: string | null;
+  matchup_preview_status: string;
+  score_components: unknown;
+  risk_flags: unknown;
+  reasons: unknown;
+  metadata: unknown;
+  created_at: string;
+  updated_at: string;
+}
+
 /** Odd efetiva: ajustada se houver, senão a original. */
 export function getOddEfetiva(p: Pick<Prognostico, "odd_ofertada" | "odd_ajustada">): number {
   return p.odd_ajustada != null && p.odd_ajustada > 0 ? p.odd_ajustada : p.odd_ofertada;
