@@ -9,6 +9,7 @@ import {
 } from "@/lib/db";
 import { parseBaseballReferenceMatchupText } from "@/lib/mlb/baseballReferenceMatchupParser";
 import { supabase } from "@/lib/supabase-public";
+import type { Json } from "@/integrations/supabase/types";
 
 export const MAX_FINAL_OPPORTUNITIES = 3;
 export const DEFAULT_PRE_AI_SHORTLIST_LIMIT = 12;
