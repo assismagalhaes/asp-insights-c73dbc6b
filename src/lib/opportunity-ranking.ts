@@ -9,6 +9,7 @@ import {
 } from "@/lib/db";
 import { parseBaseballReferenceMatchupText } from "@/lib/mlb/baseballReferenceMatchupParser";
 import { supabase } from "@/lib/supabase-public";
+import type { Json } from "@/integrations/supabase/types";
 
 export const MAX_FINAL_OPPORTUNITIES = 3;
 export const DEFAULT_PRE_AI_SHORTLIST_LIMIT = 12;
@@ -249,7 +250,7 @@ export async function enrichOpportunityRankingItemPreview({
     .update({
       matchup_preview_context: preview.context,
       matchup_preview_status: preview.status,
-      metadata,
+      metadata: metadata as Json,
     })
     .eq("id", itemId)
     .select("*")
@@ -436,13 +437,13 @@ export async function generateAndPersistPreAiOpportunityShortlist({
         candidate_count: candidates.length,
         confirmed_ia_count: 0,
         top_final_count: 0,
-        filters_payload: filtersPayload,
-        score_weights: PRELIMINARY_SCORE_WEIGHTS,
+        filters_payload: filtersPayload as Json,
+        score_weights: PRELIMINARY_SCORE_WEIGHTS as unknown as Json,
         metadata: {
           limit,
           generated_from: "validacao_critica_pendentes",
           generated_at: new Date().toISOString(),
-        },
+        } as Json,
       },
       { onConflict: "user_id,run_date,source_stage" },
     )
@@ -488,7 +489,7 @@ export async function generateAndPersistPreAiOpportunityShortlist({
 
   const { data: itemsRows, error: itemsError } = await supabase
     .from("opportunity_ranking_items")
-    .insert(payload)
+    .insert(payload as unknown as never)
     .select("*")
     .order("rank_prelim", { ascending: true });
   if (itemsError) throw itemsError;
