@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   AlertTriangle,
@@ -14,6 +14,7 @@ import {
   Globe,
   ExternalLink,
   Trash2,
+  Trophy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -62,7 +63,19 @@ import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ScreenerCriticalDraftPanel } from "@/components/screener-critical-draft-panel";
-
+import {
+  buildPreAiShortlist,
+  DEFAULT_PRE_AI_SHORTLIST_LIMIT,
+  getOpportunityMarketLabel,
+  getOpportunityPickLabel,
+  getOpportunitySourceLabel,
+  useApplyCriticalValidationToOpportunityRanking,
+  useGeneratePreAiOpportunityShortlist,
+  useEnrichOpportunityRankingItemPreview,
+  useLatestPreAiOpportunityShortlist,
+  type PersistedOpportunityRankingRun,
+  type RankedOpportunityCandidate,
+} from "@/lib/opportunity-ranking";
 
 export const Route = createFileRoute("/_authenticated/validacao")({
   head: () => ({ meta: [{ title: "Validação Crítica - ASP Insights" }] }),
@@ -85,6 +98,7 @@ const decisoes: { label: Status; texto: string; color: string }[] = [
 const STAKES = ["0.5", "1.0", "1.5"];
 
 const PARECER_TEMPLATE = "PULAR - risco/contexto insuficiente";
+const MATCHUP_PREVIEW_CONTEXT_MARKER = "[MATCHUPS / PREVIEW ENRIQUECIDO]";
 
 interface IAResult {
   parecer: string;
@@ -142,7 +156,7 @@ function getEventKey(prognostico: Prognostico): string {
 }
 
 function getMarketFamilyKey(prognostico: Prognostico): string {
-  const mercado = normalizeGroupValue(prognostico.mercado);
+  const mercado = normalizeGroupValue(getOpportunityMarketLabel(prognostico));
   if (
     /moneyline|1x2|resultado final|vencedor|handicap|h[áa]ndicap|dupla chance|double chance/.test(
       mercado,
@@ -156,7 +170,7 @@ function getMarketFamilyKey(prognostico: Prognostico): string {
 function getMarketFamilyLabel(prognostico: Prognostico): string {
   return getMarketFamilyKey(prognostico) === "resultado-protecao"
     ? "Resultado / Proteção de Resultado"
-    : prognostico.mercado;
+    : getOpportunityMarketLabel(prognostico);
 }
 
 function getValidationGroupKey(prognostico: Prognostico): string {
@@ -202,9 +216,11 @@ function groupPendentes(prognosticos: Prognostico[]): ValidationGroup[] {
   return Array.from(map.values()).map((group) => ({
     ...group,
     opcoes: group.opcoes.slice().sort((a, b) => {
-      const pa = `${a.pick} ${a.linha ?? ""}`;
-      const pb = `${b.pick} ${b.linha ?? ""}`;
-      return `${a.mercado} ${pa}`.localeCompare(`${b.mercado} ${pb}`);
+      const pa = `${getOpportunityPickLabel(a)} ${a.linha ?? ""}`;
+      const pb = `${getOpportunityPickLabel(b)} ${b.linha ?? ""}`;
+      return `${getOpportunityMarketLabel(a)} ${pa}`.localeCompare(
+        `${getOpportunityMarketLabel(b)} ${pb}`,
+      );
     }),
   }));
 }
@@ -229,8 +245,8 @@ function findAiChosenOption(g: ValidationGroup, ia: IAResult): Prognostico | nul
 
   return (
     g.opcoes.find((p) => {
-      const optionLabel = normalizeAiChoice(`${p.pick} ${p.linha ?? ""}`);
-      const optionPick = normalizeAiChoice(p.pick);
+      const optionLabel = normalizeAiChoice(`${getOpportunityPickLabel(p)} ${p.linha ?? ""}`);
+      const optionPick = normalizeAiChoice(getOpportunityPickLabel(p));
       return optionLabel === pick || optionPick === pick || optionLabel.includes(pick);
     }) ?? null
   );
@@ -242,6 +258,12 @@ function getContextoInicialGrupo(g: ValidationGroup): string {
     if (dados?.trim()) return dados.trim();
   }
   return "";
+}
+
+function mergeMatchupPreviewContext(baseContext: string, previewContext: string): string {
+  const base = baseContext.split(MATCHUP_PREVIEW_CONTEXT_MARKER)[0]?.trim() ?? "";
+  const preview = previewContext.trim();
+  return [base, preview].filter(Boolean).join("\n\n");
 }
 
 function formatIaParecerForDisplay(parecer: string): string {
@@ -318,6 +340,10 @@ function Validacao() {
   const deleteProg = useDeletePrognostico();
   const callIA = useServerFn(analisarValidacao);
   const callIAOnline = useServerFn(analisarValidacaoOnline);
+  const latestPreAiShortlist = useLatestPreAiOpportunityShortlist();
+  const generatePreAiShortlist = useGeneratePreAiOpportunityShortlist();
+  const enrichPreview = useEnrichOpportunityRankingItemPreview();
+  const applyRankingValidation = useApplyCriticalValidationToOpportunityRanking();
   const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
   const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
 
@@ -362,6 +388,104 @@ function Validacao() {
   );
 
   const grupos = useMemo(() => groupPendentes(pendentes), [pendentes]);
+  const preAiCandidates = useMemo(
+    () => buildPreAiShortlist(pendentes, DEFAULT_PRE_AI_SHORTLIST_LIMIT),
+    [pendentes],
+  );
+
+  const gerarShortlistPreIa = async () => {
+    try {
+      const saved = await generatePreAiShortlist.mutateAsync({
+        prognosticos: pendentes,
+        filtersPayload: {
+          periodo,
+          customIni,
+          customFim,
+          ini,
+          fim,
+          esporte: fEsporte,
+          liga: fLiga,
+          mercado: fMercado,
+          total_pendentes: pendentes.length,
+          total_grupos: grupos.length,
+        },
+      });
+      toast.success(`Shortlist pré-IA gerada com ${saved.items.length} candidata(s).`);
+    } catch (e) {
+      toast.error((e as Error).message || "Erro ao gerar shortlist pré-IA.");
+    }
+  };
+
+  useEffect(() => {
+    const items = latestPreAiShortlist.data?.items ?? [];
+    const loadedPreviewItems = items.filter(
+      (item) => item.matchup_preview_status === "loaded" && item.matchup_preview_context?.trim(),
+    );
+    if (!loadedPreviewItems.length || !grupos.length) return;
+
+    setContextos((prev) => {
+      let changed = false;
+      const next = { ...prev };
+
+      for (const item of loadedPreviewItems) {
+        const eventKey = item.event_key;
+        const previewContext = item.matchup_preview_context?.trim() ?? "";
+        if (!previewContext) continue;
+
+        const relatedGroups = grupos.filter((group) => group.eventKey === eventKey);
+        const firstGroup = relatedGroups[0];
+        const current = next[eventKey] ?? (firstGroup ? getContextoInicialGrupo(firstGroup) : "");
+        if (current.includes(MATCHUP_PREVIEW_CONTEXT_MARKER)) continue;
+
+        const merged = mergeMatchupPreviewContext(current, previewContext);
+        next[eventKey] = merged;
+        for (const group of relatedGroups) next[group.key] = merged;
+        changed = true;
+      }
+
+      return changed ? next : prev;
+    });
+  }, [latestPreAiShortlist.data?.items, grupos]);
+
+  const aplicarMatchupPreview = async (itemId: string, rawPreviewText: string) => {
+    const item = latestPreAiShortlist.data?.items.find((row) => row.id === itemId);
+    if (!item) {
+      toast.error("Gere ou selecione uma shortlist salva antes de aplicar o preview.");
+      return false;
+    }
+    const prognostico = pendentes.find((p) => p.id === item.prognostico_id);
+    if (!prognostico) {
+      toast.error("Prognostico da shortlist nao esta mais entre os pendentes filtrados.");
+      return false;
+    }
+    try {
+      const updated = await enrichPreview.mutateAsync({
+        itemId,
+        prognostico,
+        rawPreviewText,
+      });
+      const previewContext = updated.matchup_preview_context?.trim();
+      if (previewContext) {
+        setContextos((prev) => {
+          const next = { ...prev };
+          const eventKey = item.event_key;
+          const group = grupos.find((g) => g.eventKey === eventKey);
+          const base = prev[eventKey] ?? (group ? getContextoInicialGrupo(group) : "");
+          const merged = mergeMatchupPreviewContext(base, previewContext);
+          next[eventKey] = merged;
+          for (const g of grupos) {
+            if (g.eventKey === eventKey) next[g.key] = merged;
+          }
+          return next;
+        });
+      }
+      toast.success("Matchups/Preview aplicado a oportunidade da shortlist.");
+      return true;
+    } catch (e) {
+      toast.error((e as Error).message || "Erro ao aplicar Matchups/Preview.");
+      return false;
+    }
+  };
 
   const getContextoGrupo = (g: ValidationGroup): string =>
     contextos[g.key] ?? contextos[g.eventKey] ?? getContextoInicialGrupo(g);
@@ -417,8 +541,9 @@ function Validacao() {
       const calibracao = await getAiCalibrationSummary(p);
       const opcoesMesmoMercado = g.opcoes.map((option) => ({
         prognostico_id: option.id,
-        mercado: option.mercado,
-        pick: option.pick,
+        mercado: getOpportunityMarketLabel(option),
+        pick: getOpportunityPickLabel(option),
+        origem: getOpportunitySourceLabel(option),
         linha: option.linha,
         odd_original: option.odd_ofertada,
         odd_ajustada: getOddAjustadaNum(option),
@@ -434,8 +559,9 @@ function Validacao() {
       const prognosticosCorrelacionados = g.opcoes
         .filter((other) => other.id !== p.id)
         .map((other) => ({
-          mercado: other.mercado,
-          pick: other.pick,
+          mercado: getOpportunityMarketLabel(other),
+          pick: getOpportunityPickLabel(other),
+          origem: getOpportunitySourceLabel(other),
           linha: other.linha,
           odd_original: other.odd_ofertada,
           odd_ajustada: getOddAjustadaNum(other),
@@ -454,8 +580,9 @@ function Validacao() {
           esporte: p.esporte,
           liga: p.liga,
           jogo: p.jogo,
-          mercado: p.mercado,
-          pick: p.pick,
+          mercado: getOpportunityMarketLabel(p),
+          pick: getOpportunityPickLabel(p),
+          origem: getOpportunitySourceLabel(p),
           linha: p.linha,
           odd_original: p.odd_ofertada,
           odd_ajustada: oddAj,
@@ -522,8 +649,8 @@ function Validacao() {
         modo_ia: modo,
         esporte: snapshotOption.esporte,
         liga: snapshotOption.liga,
-        mercado: snapshotOption.mercado,
-        pick: snapshotOption.pick,
+        mercado: getOpportunityMarketLabel(snapshotOption),
+        pick: getOpportunityPickLabel(snapshotOption),
         linha: snapshotOption.linha,
         jogo: snapshotOption.jogo,
         data_evento: snapshotOption.data,
@@ -598,6 +725,20 @@ function Validacao() {
       fontes_consultadas: ia?.fontes_consultadas ?? null,
       buscas_realizadas: ia?.buscas_realizadas ?? null,
     });
+
+    try {
+      await applyRankingValidation.mutateAsync({
+        prognosticoId: p.id,
+        decisao,
+        aiDecision: ia?.decisao_sugerida ?? null,
+        aiStakeSuggested: ia?.stake_sugerida ?? null,
+        finalStake: decisao === "CONFIRMA" ? stakeNum : 1,
+        parecer,
+      });
+    } catch (e) {
+      console.warn("[Opportunity Ranking] Validacao salva, mas ranking nao atualizado:", e);
+      toast.warning("Validacao salva, mas o ranking final nao foi atualizado automaticamente.");
+    }
   };
 
   const decidirGrupo = async (g: ValidationGroup, decisao: Status) => {
@@ -741,6 +882,16 @@ function Validacao() {
         </div>
       </div>
 
+      <PreAiShortlistPanel
+        candidates={preAiCandidates}
+        latest={latestPreAiShortlist.data ?? null}
+        loadingLatest={latestPreAiShortlist.isLoading}
+        generating={generatePreAiShortlist.isPending}
+        enrichingPreview={enrichPreview.isPending}
+        onGenerate={gerarShortlistPreIa}
+        onEnrichPreview={aplicarMatchupPreview}
+      />
+
       {grupos.length === 0 && (
         <div className="rounded-lg border border-border bg-card p-8 text-center text-sm text-muted-foreground">
           Não há prognósticos pendentes de validação.
@@ -755,7 +906,10 @@ function Validacao() {
           const oddAj = getOddAjustadaNum(p);
           const edgeAj = getEdgeAjustado(p);
           const check = autoCheck(p, edgeAj ?? p.edge);
-          const mostrarLinha = shouldShowLinha(p.pick, p.linha);
+          const marketLabel = getOpportunityMarketLabel(p);
+          const pickLabel = getOpportunityPickLabel(p);
+          const sourceLabel = getOpportunitySourceLabel(p);
+          const mostrarLinha = shouldShowLinha(pickLabel, p.linha);
           const contextoAnalise = getContextoGrupo(g);
           const parecerCurrent = pareceres[g.key] ?? "";
           const ia = iaResults[g.key];
@@ -822,6 +976,8 @@ function Validacao() {
                     const opcaoOdd = getOddAjustadaNum(opcao);
                     const opcaoEdge = getEdgeAjustado(opcao);
                     const opcaoCheck = autoCheck(opcao, opcaoEdge ?? opcao.edge);
+                    const opcaoMarketLabel = getOpportunityMarketLabel(opcao);
+                    const opcaoPickLabel = getOpportunityPickLabel(opcao);
                     return (
                       <label
                         key={opcao.id}
@@ -836,10 +992,10 @@ function Validacao() {
                         <div className="min-w-0 flex-1 space-y-2">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="rounded border border-border bg-muted/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                              {opcao.mercado}
+                              {opcaoMarketLabel}
                             </span>
-                            <span className="font-semibold">{opcao.pick}</span>
-                            {shouldShowLinha(opcao.pick, opcao.linha) && (
+                            <span className="font-semibold">{opcaoPickLabel}</span>
+                            {shouldShowLinha(opcaoPickLabel, opcao.linha) && (
                               <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
                                 {opcao.linha}
                               </span>
@@ -913,8 +1069,9 @@ function Validacao() {
                   </div>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                  <KV label="Mercado" value={p.mercado} />
-                  <KV label="Pick" value={p.pick} />
+                  <KV label="Mercado" value={marketLabel} />
+                  <KV label="Pick" value={pickLabel} />
+                  <KV label="Origem" value={sourceLabel} />
                   {mostrarLinha && <KV label="Linha" value={p.linha ?? "-"} />}
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-8">
@@ -1277,6 +1434,280 @@ function Validacao() {
       </AlertDialog>
     </div>
   );
+}
+
+function PreAiShortlistPanel({
+  candidates,
+  latest,
+  loadingLatest,
+  generating,
+  enrichingPreview,
+  onGenerate,
+  onEnrichPreview,
+}: {
+  candidates: RankedOpportunityCandidate[];
+  latest: PersistedOpportunityRankingRun | null;
+  loadingLatest: boolean;
+  generating: boolean;
+  enrichingPreview: boolean;
+  onGenerate: () => void;
+  onEnrichPreview: (itemId: string, rawPreviewText: string) => Promise<boolean>;
+}) {
+  const top = candidates.slice(0, 5);
+  const savedItems = latest?.items ?? [];
+  const [selectedPreviewItemId, setSelectedPreviewItemId] = useState("");
+  const [previewText, setPreviewText] = useState("");
+  const selectedPreviewItem =
+    savedItems.find((item) => item.id === selectedPreviewItemId) ?? savedItems[0] ?? null;
+  const selectedPreviewItemIdEffective = selectedPreviewItem?.id ?? "";
+  const loadedPreviewCount = savedItems.filter(
+    (item) => item.matchup_preview_status === "loaded",
+  ).length;
+  const finalItems = savedItems
+    .filter((item) => ["TOP_FINAL", "RESERVA", "CONFIRMA_IA"].includes(item.ranking_status))
+    .slice()
+    .sort(
+      (a, b) =>
+        (a.rank_final ?? 99) - (b.rank_final ?? 99) ||
+        Number(b.opportunity_score_final ?? 0) - Number(a.opportunity_score_final ?? 0),
+    );
+  const latestDate = latest?.run.created_at
+    ? new Date(latest.run.created_at).toLocaleString("pt-BR")
+    : null;
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <Trophy className="h-4 w-4 text-primary" />
+            Shortlist Pré-IA
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Triagem operacional dos prognósticos pendentes. Esta etapa apenas ranqueia candidatas
+            para análise; ainda não confirma entrada, publicação ou bankroll.
+          </p>
+        </div>
+        <Button size="sm" onClick={onGenerate} disabled={generating}>
+          {generating ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
+          Gerar shortlist
+        </Button>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-4">
+        <Metric label="Candidatas agora" value={String(candidates.length)} />
+        <Metric label="Limite pré-IA" value={String(DEFAULT_PRE_AI_SHORTLIST_LIMIT)} />
+        <Metric label="Último run" value={loadingLatest ? "..." : latestDate ?? "-"} />
+        <Metric
+          label="Itens salvos"
+          value={
+            loadingLatest
+              ? "..."
+              : `${String(latest?.items.length ?? 0)} / ${loadedPreviewCount} preview`
+          }
+        />
+      </div>
+
+      {savedItems.length > 0 && (
+        <div className="rounded-md border border-border bg-background/50 p-3 space-y-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-[260px] flex-1">
+              <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Oportunidade salva para Matchups/Preview
+              </Label>
+              <Select value={selectedPreviewItemIdEffective} onValueChange={setSelectedPreviewItemId}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Selecione uma oportunidade" />
+                </SelectTrigger>
+                <SelectContent>
+                  {savedItems.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {formatRankingItemLabel(item)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!selectedPreviewItemIdEffective || enrichingPreview}
+              onClick={async () => {
+                if (!previewText.trim()) {
+                  toast.error("Cole o Matchups/Preview antes de aplicar.");
+                  return;
+                }
+                const applied = await onEnrichPreview(selectedPreviewItemIdEffective, previewText);
+                if (applied) setPreviewText("");
+              }}
+            >
+              {enrichingPreview ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
+              Aplicar preview
+            </Button>
+          </div>
+          <Textarea
+            rows={5}
+            placeholder="Cole aqui o Matchups/Preview do confronto selecionado. Para MLB, pode ser o texto do Baseball-Reference; para outros esportes, use preview/H2H/noticias/splits relevantes."
+            value={previewText}
+            onChange={(event) => setPreviewText(event.target.value)}
+          />
+          {selectedPreviewItem && (
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Status do preview:{" "}
+              <span className="font-semibold text-foreground">
+                {formatPreviewStatus(selectedPreviewItem.matchup_preview_status)}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {finalItems.length > 0 && (
+        <div className="overflow-auto rounded-md border border-border">
+          <table className="w-full min-w-[760px] text-xs">
+            <thead className="bg-primary/10 text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2 text-left font-semibold">Final</th>
+                <th className="px-3 py-2 text-left font-semibold">Jogo</th>
+                <th className="px-3 py-2 text-left font-semibold">Status</th>
+                <th className="px-3 py-2 text-right font-semibold">Score final</th>
+                <th className="px-3 py-2 text-right font-semibold">Stake</th>
+              </tr>
+            </thead>
+            <tbody>
+              {finalItems.map((item) => {
+                const metadata = asRankingItemMetadata(item);
+                return (
+                  <tr key={item.id} className="border-t border-border">
+                    <td className="px-3 py-2 font-mono">
+                      {item.ranking_status === "TOP_FINAL" ? `#${item.rank_final}` : "-"}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="font-medium">{String(metadata.jogo ?? item.event_key)}</div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {[metadata.mercado_operacional ?? metadata.mercado, metadata.pick_operacional ?? metadata.pick]
+                          .filter(Boolean)
+                          .join(" | ")}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <span
+                        className={cn(
+                          "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                          item.ranking_status === "TOP_FINAL" &&
+                            "bg-success/10 text-success",
+                          item.ranking_status === "RESERVA" && "bg-muted text-muted-foreground",
+                          item.ranking_status === "CONFIRMA_IA" &&
+                            "bg-primary/10 text-primary",
+                        )}
+                      >
+                        {item.ranking_status}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono">
+                      {formatOptionalNumber(item.opportunity_score_final)}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono">
+                      {item.final_stake != null ? `${Number(item.final_stake).toFixed(1)}u` : "-"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {top.length > 0 ? (
+        <div className="overflow-auto rounded-md border border-border">
+          <table className="w-full min-w-[760px] text-xs">
+            <thead className="bg-muted/50 text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2 text-left font-semibold">Rank</th>
+                <th className="px-3 py-2 text-left font-semibold">Jogo</th>
+                <th className="px-3 py-2 text-left font-semibold">Mercado</th>
+                <th className="px-3 py-2 text-left font-semibold">Pick</th>
+                <th className="px-3 py-2 text-right font-semibold">Score</th>
+                <th className="px-3 py-2 text-right font-semibold">Conf.</th>
+                <th className="px-3 py-2 text-right font-semibold">Edge</th>
+              </tr>
+            </thead>
+            <tbody>
+              {top.map((candidate, index) => (
+                <tr key={candidate.prognostico.id} className="border-t border-border">
+                  <td className="px-3 py-2 font-mono">{index + 1}</td>
+                  <td className="px-3 py-2">
+                    <div className="font-medium">{candidate.prognostico.jogo}</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      {formatBR(candidate.prognostico.data)}
+                      {candidate.prognostico.hora
+                        ? ` às ${formatHora(candidate.prognostico.hora)}`
+                        : ""}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2">
+                    {getOpportunityMarketLabel(candidate.prognostico)}
+                  </td>
+                  <td className="px-3 py-2">
+                    {getOpportunityPickLabel(candidate.prognostico)}
+                    {shouldShowLinha(
+                      getOpportunityPickLabel(candidate.prognostico),
+                      candidate.prognostico.linha,
+                    )
+                      ? ` ${candidate.prognostico.linha ?? ""}`
+                      : ""}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono">
+                    {candidate.opportunity_score_pre.toFixed(1)}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono">
+                    {candidate.confidence_score.toFixed(1)}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono">
+                    {candidate.prognostico.edge.toFixed(2)}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
+          Nenhuma candidata elegível com os filtros atuais.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function formatRankingItemLabel(item: PersistedOpportunityRankingRun["items"][number]): string {
+  const metadata = asRankingItemMetadata(item);
+  const rank = item.rank_prelim ? `#${item.rank_prelim}` : "#-";
+  const jogo = String(metadata.jogo ?? item.event_key);
+  const pick = [metadata.mercado_operacional ?? metadata.mercado, metadata.pick_operacional ?? metadata.pick]
+    .filter(Boolean)
+    .join(" | ");
+  return [rank, jogo, pick].filter(Boolean).join(" - ");
+}
+
+function formatPreviewStatus(status: string): string {
+  if (status === "loaded") return "carregado";
+  if (status === "queued") return "em fila";
+  if (status === "missing") return "ausente";
+  if (status === "error") return "erro";
+  return "nao solicitado";
+}
+
+function formatOptionalNumber(value: number | null | undefined): string {
+  return value != null && Number.isFinite(Number(value)) ? Number(value).toFixed(1) : "-";
+}
+
+function asRankingItemMetadata(
+  item: PersistedOpportunityRankingRun["items"][number],
+): Record<string, unknown> {
+  return item.metadata && typeof item.metadata === "object" && !Array.isArray(item.metadata)
+    ? (item.metadata as Record<string, unknown>)
+    : {};
 }
 
 function Metric({

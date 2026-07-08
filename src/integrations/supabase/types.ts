@@ -1328,6 +1328,150 @@ export type Database = {
         }
         Relationships: []
       }
+      opportunity_ranking_items: {
+        Row: {
+          ai_decision: string | null
+          ai_stake_suggested: number | null
+          confidence_score: number | null
+          created_at: string
+          event_key: string
+          final_stake: number | null
+          group_key: string
+          id: string
+          matchup_preview_context: string | null
+          matchup_preview_status: string
+          metadata: Json
+          opportunity_score_final: number | null
+          opportunity_score_pre: number | null
+          prognostico_id: string
+          rank_final: number | null
+          rank_prelim: number | null
+          ranking_status: string
+          reasons: Json
+          risk_flags: Json
+          run_id: string
+          score_components: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ai_decision?: string | null
+          ai_stake_suggested?: number | null
+          confidence_score?: number | null
+          created_at?: string
+          event_key: string
+          final_stake?: number | null
+          group_key: string
+          id?: string
+          matchup_preview_context?: string | null
+          matchup_preview_status?: string
+          metadata?: Json
+          opportunity_score_final?: number | null
+          opportunity_score_pre?: number | null
+          prognostico_id: string
+          rank_final?: number | null
+          rank_prelim?: number | null
+          ranking_status?: string
+          reasons?: Json
+          risk_flags?: Json
+          run_id: string
+          score_components?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          ai_decision?: string | null
+          ai_stake_suggested?: number | null
+          confidence_score?: number | null
+          created_at?: string
+          event_key?: string
+          final_stake?: number | null
+          group_key?: string
+          id?: string
+          matchup_preview_context?: string | null
+          matchup_preview_status?: string
+          metadata?: Json
+          opportunity_score_final?: number | null
+          opportunity_score_pre?: number | null
+          prognostico_id?: string
+          rank_final?: number | null
+          rank_prelim?: number | null
+          ranking_status?: string
+          reasons?: Json
+          risk_flags?: Json
+          run_id?: string
+          score_components?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_ranking_items_prognostico_id_fkey"
+            columns: ["prognostico_id"]
+            isOneToOne: false
+            referencedRelation: "prognosticos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_ranking_items_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "opportunity_ranking_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      opportunity_ranking_runs: {
+        Row: {
+          candidate_count: number
+          confirmed_ia_count: number
+          created_at: string
+          filters_payload: Json
+          id: string
+          max_final_picks: number
+          metadata: Json
+          run_date: string
+          score_weights: Json
+          source_stage: string
+          status: string
+          top_final_count: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          candidate_count?: number
+          confirmed_ia_count?: number
+          created_at?: string
+          filters_payload?: Json
+          id?: string
+          max_final_picks?: number
+          metadata?: Json
+          run_date?: string
+          score_weights?: Json
+          source_stage?: string
+          status?: string
+          top_final_count?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          candidate_count?: number
+          confirmed_ia_count?: number
+          created_at?: string
+          filters_payload?: Json
+          id?: string
+          max_final_picks?: number
+          metadata?: Json
+          run_date?: string
+          score_weights?: Json
+          source_stage?: string
+          status?: string
+          top_final_count?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       resultados: {
         Row: {
           created_at: string
