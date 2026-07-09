@@ -65,6 +65,7 @@ import { cn } from "@/lib/utils";
 import { ScreenerCriticalDraftPanel } from "@/components/screener-critical-draft-panel";
 import {
   buildPreAiShortlist,
+  calculatePreliminaryOpportunityScore,
   DEFAULT_PRE_AI_SHORTLIST_LIMIT,
   getOpportunityMarketLabel,
   getOpportunityPickLabel,
@@ -76,11 +77,6 @@ import {
   type PersistedOpportunityRankingRun,
   type RankedOpportunityCandidate,
 } from "@/lib/opportunity-ranking";
-import {
-  buildCriticalShortlist,
-  type CriticalShortlistCandidate,
-  type CriticalShortlistResult,
-} from "@/lib/critical-validation/critical-shortlist-ranking";
 
 export const Route = createFileRoute("/_authenticated/validacao")({
   head: () => ({ meta: [{ title: "Validação Crítica - ASP Insights" }] }),
@@ -232,15 +228,15 @@ function groupPendentes(prognosticos: Prognostico[]): ValidationGroup[] {
 
 function getBestGroupCandidate(
   group: ValidationGroup,
-  candidates: Map<string, CriticalShortlistCandidate>,
-): CriticalShortlistCandidate | null {
+  candidates: Map<string, RankedOpportunityCandidate>,
+): RankedOpportunityCandidate | null {
   return group.opcoes
     .map((option) => candidates.get(option.id) ?? null)
-    .filter((candidate): candidate is CriticalShortlistCandidate => Boolean(candidate))
+    .filter((candidate): candidate is RankedOpportunityCandidate => Boolean(candidate))
     .sort(
       (a, b) =>
-        b.critical_shortlist_score - a.critical_shortlist_score ||
-        b.critical_shortlist_confidence - a.critical_shortlist_confidence,
+        b.opportunity_score_pre - a.opportunity_score_pre ||
+        b.confidence_score - a.confidence_score,
     )[0] ?? null;
 }
 
@@ -406,24 +402,26 @@ function Validacao() {
     [prognosticos, ini, fim, fEsporte, fLiga, fMercado],
   );
 
-  const criticalShortlist = useMemo(() => buildCriticalShortlist(pendentes), [pendentes]);
-  const criticalCandidateById = useMemo(
-    () => new Map(criticalShortlist.ranked.map((candidate) => [candidate.prognostico.id, candidate])),
-    [criticalShortlist],
+  const preliminaryCandidateById = useMemo(
+    () => new Map(pendentes.map((p) => {
+      const candidate = calculatePreliminaryOpportunityScore(p);
+      return [p.id, candidate] as const;
+    })),
+    [pendentes],
   );
   const grupos = useMemo(() => {
     const base = groupPendentes(pendentes);
     return base.sort((a, b) => {
-      const bestA = getBestGroupCandidate(a, criticalCandidateById);
-      const bestB = getBestGroupCandidate(b, criticalCandidateById);
+      const bestA = getBestGroupCandidate(a, preliminaryCandidateById);
+      const bestB = getBestGroupCandidate(b, preliminaryCandidateById);
       return (
-        (bestB?.critical_shortlist_score ?? -1) - (bestA?.critical_shortlist_score ?? -1) ||
-        (bestB?.critical_shortlist_confidence ?? -1) - (bestA?.critical_shortlist_confidence ?? -1) ||
+        (bestB?.opportunity_score_pre ?? -1) - (bestA?.opportunity_score_pre ?? -1) ||
+        (bestB?.confidence_score ?? -1) - (bestA?.confidence_score ?? -1) ||
         a.data.localeCompare(b.data) ||
         (a.hora ?? "99:99").localeCompare(b.hora ?? "99:99")
       );
     });
-  }, [pendentes, criticalCandidateById]);
+  }, [pendentes, preliminaryCandidateById]);
   const preAiCandidates = useMemo(
     () => buildPreAiShortlist(pendentes, DEFAULT_PRE_AI_SHORTLIST_LIMIT),
     [pendentes],
@@ -555,21 +553,14 @@ function Validacao() {
 
   const getBestPularOption = (g: ValidationGroup): Prognostico => {
     return g.opcoes.slice().sort((a, b) => {
-      const rankA = criticalCandidateById.get(a.id);
-      const rankB = criticalCandidateById.get(b.id);
+      const rankA = preliminaryCandidateById.get(a.id);
+      const rankB = preliminaryCandidateById.get(b.id);
       return (
-        (rankB?.critical_shortlist_score ?? -1) - (rankA?.critical_shortlist_score ?? -1) ||
-        (rankB?.critical_shortlist_confidence ?? -1) - (rankA?.critical_shortlist_confidence ?? -1) ||
+        (rankB?.opportunity_score_pre ?? -1) - (rankA?.opportunity_score_pre ?? -1) ||
+        (rankB?.confidence_score ?? -1) - (rankA?.confidence_score ?? -1) ||
         (getEdgeAjustado(b) ?? b.edge ?? 0) - (getEdgeAjustado(a) ?? a.edge ?? 0)
       );
     })[0];
-  };
-
-  const analisarCandidato = (candidate: CriticalShortlistCandidate) => {
-    const group = grupos.find((g) => g.opcoes.some((option) => option.id === candidate.prognostico.id));
-    if (!group) return;
-    setSelectedByGroup((prev) => ({ ...prev, [group.key]: candidate.prognostico.id }));
-    toast.success("Candidato selecionado no grupo de validacao abaixo.");
   };
 
   const rodarIA = async (g: ValidationGroup, modo: "local" | "online") => {
@@ -931,11 +922,6 @@ function Validacao() {
         enrichingPreview={enrichPreview.isPending}
         onGenerate={gerarShortlistPreIa}
         onEnrichPreview={aplicarMatchupPreview}
-      />
-
-      <CriticalShortlistPanel
-        result={criticalShortlist}
-        onAnalyze={analisarCandidato}
       />
 
       {grupos.length === 0 && (
@@ -1482,136 +1468,6 @@ function Validacao() {
   );
 }
 
-function CriticalShortlistPanel({
-  result,
-  onAnalyze,
-}: {
-  result: CriticalShortlistResult;
-  onAnalyze: (candidate: CriticalShortlistCandidate) => void;
-}) {
-  const rows = result.shortlist;
-  if (!result.stats.total) return null;
-  return (
-    <div className="space-y-3 rounded-lg border border-border bg-card p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold">Ranking preliminar da Validacao Critica</h2>
-          <p className="text-xs text-muted-foreground">
-            Priorizacao neutra dos pendentes. Origem aparece apenas como metadado, sem bonus nominal no score.
-          </p>
-        </div>
-        <div className="text-xs text-muted-foreground">
-          Shortlist pre-IA: <span className="font-mono font-semibold text-foreground">{rows.length}</span> / 12
-        </div>
-      </div>
-
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
-        <MiniStat label="Pendentes" value={result.stats.total} />
-        <MiniStat label="Candidatas" value={result.stats.candidates} />
-        <MiniStat label="Monitorar" value={result.stats.monitor} />
-        <MiniStat label="Reservas" value={result.stats.reserves} />
-        <MiniStat label="Bloqueadas" value={result.stats.blocked} />
-        <MiniStat label="Melhor score" value={formatScore(result.stats.bestScore)} />
-        <MiniStat label="Maior edge" value={formatPercent(result.stats.bestEdge)} />
-      </div>
-
-      {result.challengerAlert && (
-        <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5" />
-          <span>{result.challengerAlert.message}</span>
-        </div>
-      )}
-
-      <div className="overflow-x-auto rounded-md border border-border">
-        <table className="w-full min-w-[1180px] text-left text-xs">
-          <thead className="bg-muted/50 text-[10px] uppercase tracking-wider text-muted-foreground">
-            <tr>
-              {["Rank", "Jogo", "Mercado", "Pick", "Odd", "Valor", "Prob.", "Impl.", "Margem", "Edge", "Score", "Conf.", "Status", "Flags", "Acao"].map((header) => (
-                <th key={header} className="px-3 py-2 font-semibold">{header}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((candidate) => {
-              const p = candidate.prognostico;
-              const hasHighRisk = candidate.risk_flags.some((flag) => flag.severity === "high" || flag.severity === "critical");
-              return (
-                <tr key={p.id} className="border-t border-border align-top">
-                  <td className="px-3 py-2 font-mono">{candidate.rank ?? "-"}</td>
-                  <td className="px-3 py-2">
-                    <div className="font-semibold">{p.jogo}</div>
-                    <div className="text-muted-foreground">
-                      {formatBR(p.data)} {p.hora ? formatHora(p.hora) : ""} | {p.esporte} | {p.liga}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2">{p.mercado}</td>
-                  <td className="px-3 py-2">
-                    <div className="font-semibold">{p.pick}</div>
-                    {p.linha && <div className="font-mono text-muted-foreground">{p.linha}</div>}
-                  </td>
-                  <td className="px-3 py-2 font-mono">{p.odd_ofertada.toFixed(2)}</td>
-                  <td className="px-3 py-2 font-mono">{p.odd_valor.toFixed(2)}</td>
-                  <td className="px-3 py-2 font-mono">{formatPercent(p.probabilidade_final)}</td>
-                  <td className="px-3 py-2 font-mono">{formatPercent(candidate.implied_probability)}</td>
-                  <td className="px-3 py-2 font-mono">{formatSignedPercent(candidate.probability_margin)}</td>
-                  <td className="px-3 py-2 font-mono">{formatSignedPercent(candidate.effective_edge)}</td>
-                  <td className="px-3 py-2 font-mono font-semibold">{formatScore(candidate.critical_shortlist_score)}</td>
-                  <td className="px-3 py-2 font-mono">{formatScore(candidate.critical_shortlist_confidence)}</td>
-                  <td className="px-3 py-2">
-                    <span
-                      className={cn(
-                        "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
-                        candidate.critical_shortlist_status === "CANDIDATA" && "bg-success/10 text-success",
-                        candidate.critical_shortlist_status === "MONITORAR" && "bg-primary/10 text-primary",
-                        candidate.critical_shortlist_status === "RESERVA" && "bg-muted text-muted-foreground",
-                        candidate.critical_shortlist_status === "BLOQUEADA" && "bg-destructive/10 text-destructive",
-                      )}
-                    >
-                      {candidate.critical_shortlist_status}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className={cn("max-w-52", hasHighRisk && "text-warning")}>
-                      {candidate.risk_flags.slice(0, 3).map((flag) => flag.code).join(", ") || "-"}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2">
-                    <Button size="sm" variant="outline" onClick={() => onAnalyze(candidate)}>
-                      Analisar
-                    </Button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="grid gap-2 lg:grid-cols-2">
-        {rows.slice(0, 4).map((candidate) => (
-          <details key={candidate.prognostico.id} className="rounded-md border border-border bg-background/50 p-3">
-            <summary className="cursor-pointer text-sm font-semibold">
-              #{candidate.rank} {candidate.prognostico.jogo} - componentes do score
-            </summary>
-            <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
-              <KV label="Value" value={formatScore(candidate.components.value_score)} />
-              <KV label="Margem prob." value={formatScore(candidate.components.probability_margin_score)} />
-              <KV label="Dados" value={formatScore(candidate.components.data_readiness_score)} />
-              <KV label="Risco mercado" value={formatScore(candidate.components.market_risk_score)} />
-              <KV label="Timing" value={formatScore(candidate.components.timing_score)} />
-              <KV label="Integridade fonte" value={formatScore(candidate.components.source_integrity_score)} />
-            </div>
-            <div className="mt-3 text-xs text-muted-foreground">{candidate.score_explanation}</div>
-            {candidate.missing_fields.length > 0 && (
-              <div className="mt-2 text-xs text-warning">Campos ausentes: {candidate.missing_fields.join(", ")}</div>
-            )}
-          </details>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function PreAiShortlistPanel({
   candidates,
   latest,
@@ -1854,29 +1710,6 @@ function PreAiShortlistPanel({
       )}
     </div>
   );
-}
-
-function MiniStat({ label, value }: { label: string; value: string | number | null }) {
-  return (
-    <div className="min-h-[58px] rounded-md border border-border bg-background/50 p-2.5">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="mt-1 font-mono text-base font-bold">{value ?? "-"}</div>
-    </div>
-  );
-}
-
-function formatScore(value: number | null | undefined): string {
-  return value != null && Number.isFinite(Number(value)) ? Number(value).toFixed(1) : "-";
-}
-
-function formatPercent(value: number | null | undefined): string {
-  return value != null && Number.isFinite(Number(value)) ? `${Number(value).toFixed(2)}%` : "-";
-}
-
-function formatSignedPercent(value: number | null | undefined): string {
-  if (value == null || !Number.isFinite(Number(value))) return "-";
-  const numeric = Number(value);
-  return `${numeric >= 0 ? "+" : ""}${numeric.toFixed(2)}%`;
 }
 
 function formatRankingItemLabel(item: PersistedOpportunityRankingRun["items"][number]): string {

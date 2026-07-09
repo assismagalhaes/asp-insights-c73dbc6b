@@ -10,16 +10,21 @@ import {
 import { parseBaseballReferenceMatchupText } from "@/lib/mlb/baseballReferenceMatchupParser";
 import { supabase } from "@/lib/supabase-public";
 import type { Json } from "@/integrations/supabase/types";
+import {
+  calculateCriticalShortlistConfidence,
+  calculateCriticalShortlistScore,
+  classifyCriticalShortlistCandidate,
+} from "@/lib/critical-validation/critical-shortlist-ranking";
 
 export const MAX_FINAL_OPPORTUNITIES = 3;
 export const DEFAULT_PRE_AI_SHORTLIST_LIMIT = 12;
 export const PRELIMINARY_SCORE_WEIGHTS = {
-  edgeQuality: 0.28,
-  probabilityQuality: 0.18,
-  oddQuality: 0.16,
-  valueGap: 0.18,
-  dataQuality: 0.14,
-  modelOrigin: 0.06,
+  valueScore: 0.38,
+  probabilityMarginScore: 0.24,
+  dataReadinessScore: 0.20,
+  marketRiskScore: 0.10,
+  timingScore: 0.06,
+  sourceIntegrityScore: 0.02,
 } as const;
 
 export type OpportunityRankingStatus =
@@ -542,45 +547,41 @@ export function buildOpportunityGroupKey(prognostico: Prognostico): string {
 export function calculatePreliminaryOpportunityScore(
   prognostico: Prognostico,
 ): RankedOpportunityCandidate {
-  const edge = getEdgeEfetivo(prognostico);
-  const odd = getOddEfetiva(prognostico);
-  const valueGapPct =
-    prognostico.odd_valor > 0 ? ((odd / prognostico.odd_valor - 1) * 100) : null;
-  const riskFlags = getPreliminaryRiskFlags(prognostico, edge, odd, valueGapPct);
-  const componentsBase = {
-    edge_quality_score: normalizePositive(edge, 20),
-    probability_quality_score: normalizeProbabilityPct(prognostico.probabilidade_final),
-    odd_quality_score: getOddQualityScore(odd),
-    value_gap_score: normalizePositive(valueGapPct, 18),
-    data_quality_score: getDataQualityScore(prognostico),
-    model_origin_score: getModelOriginScore(prognostico),
-  };
-  const riskPenalty = getRiskPenalty(riskFlags);
-  const rawScore =
-    componentsBase.edge_quality_score * PRELIMINARY_SCORE_WEIGHTS.edgeQuality +
-    componentsBase.probability_quality_score * PRELIMINARY_SCORE_WEIGHTS.probabilityQuality +
-    componentsBase.odd_quality_score * PRELIMINARY_SCORE_WEIGHTS.oddQuality +
-    componentsBase.value_gap_score * PRELIMINARY_SCORE_WEIGHTS.valueGap +
-    componentsBase.data_quality_score * PRELIMINARY_SCORE_WEIGHTS.dataQuality +
-    componentsBase.model_origin_score * PRELIMINARY_SCORE_WEIGHTS.modelOrigin;
-  const finalScore = round(clamp(rawScore - riskPenalty, 0, 100), 1);
+  const critical = calculateCriticalShortlistScore(prognostico);
+  const confidence = calculateCriticalShortlistConfidence(prognostico, critical.flags);
+  const rankingStatus = classifyCriticalShortlistCandidate(
+    critical.score,
+    confidence,
+    critical.flags,
+    prognostico,
+  );
+  const riskFlags = critical.flags.map((flag) => flag.code);
+  const rawScore = round(
+    clamp(critical.score + critical.components.risk_penalty, 0, 100),
+    1,
+  );
   const score_components: OpportunityScoreComponents = {
-    ...componentsBase,
-    risk_penalty: riskPenalty,
-    raw_score: round(rawScore, 1),
-    final_score: finalScore,
+    edge_quality_score: critical.components.value_score,
+    probability_quality_score: critical.components.probability_margin_score,
+    odd_quality_score: critical.components.odds_operational_score,
+    value_gap_score: critical.valueGap != null ? normalizePositive(critical.valueGap, 18) : critical.components.value_score,
+    data_quality_score: critical.components.data_readiness_score,
+    model_origin_score: critical.components.source_integrity_score,
+    risk_penalty: critical.components.risk_penalty,
+    raw_score: rawScore,
+    final_score: critical.score,
   };
 
   return {
     prognostico,
     event_key: buildOpportunityEventKey(prognostico),
     group_key: buildOpportunityGroupKey(prognostico),
-    ranking_status: riskFlags.includes("hard_block") ? "BLOQUEADA" : "CANDIDATA",
-    opportunity_score_pre: finalScore,
-    confidence_score: calculatePreliminaryConfidence(prognostico, riskFlags),
+    ranking_status: rankingStatus === "BLOQUEADA" ? "BLOQUEADA" : "CANDIDATA",
+    opportunity_score_pre: critical.score,
+    confidence_score: confidence,
     score_components,
     risk_flags: riskFlags,
-    reasons: buildPreliminaryReasons(prognostico, edge, odd, valueGapPct, finalScore),
+    reasons: buildPreliminaryReasonsFromCritical(prognostico, critical),
   };
 }
 
@@ -608,86 +609,23 @@ function comparePreliminaryCandidates(
   );
 }
 
-function getPreliminaryRiskFlags(
+function buildPreliminaryReasonsFromCritical(
   prognostico: Prognostico,
-  edge: number,
-  odd: number,
-  valueGapPct: number | null,
-): string[] {
-  const flags: string[] = [];
-  if (!prognostico.pick || !prognostico.mercado || !Number.isFinite(odd)) flags.push("hard_block");
-  if (edge <= 0) flags.push("edge_nao_positivo");
-  if (valueGapPct != null && valueGapPct < 0) flags.push("odd_abaixo_valor");
-  if (prognostico.probabilidade_final < 50) flags.push("probabilidade_baixa");
-  if (odd < 1.4) flags.push("odd_muito_baixa");
-  if (odd > 3.2) flags.push("odd_muito_alta");
-  if (!getDadosTecnicos(prognostico)?.trim()) flags.push("contexto_tecnico_ausente");
-  return Array.from(new Set(flags));
-}
-
-function buildPreliminaryReasons(
-  prognostico: Prognostico,
-  edge: number,
-  odd: number,
-  valueGapPct: number | null,
-  score: number,
+  critical: ReturnType<typeof calculateCriticalShortlistScore>,
 ): string[] {
   const reasons = [
-    `Score preliminar ${score.toFixed(1)} com edge efetivo ${edge.toFixed(2)}%.`,
-    `Odd efetiva ${odd.toFixed(2)} contra odd de valor ${prognostico.odd_valor.toFixed(2)}.`,
+    `Score preliminar neutro ${critical.score.toFixed(1)} com edge efetivo ${(critical.effectiveEdge ?? getEdgeEfetivo(prognostico)).toFixed(2)}%.`,
+    `Probabilidade implicita ${formatNumber(critical.impliedProbability)}% e margem ${formatNumber(critical.probabilityMargin)} p.p.`,
+    `Odd efetiva ${getOddEfetiva(prognostico).toFixed(2)} contra odd de valor ${prognostico.odd_valor.toFixed(2)}.`,
   ];
-  if (valueGapPct != null) reasons.push(`Gap de valor da odd: ${valueGapPct.toFixed(2)}%.`);
+  if (critical.valueGap != null) reasons.push(`Gap de valor da odd: ${critical.valueGap.toFixed(2)}%.`);
   if (getDadosTecnicos(prognostico)?.trim()) {
     reasons.push("Contexto tecnico do modelo disponivel para enriquecimento/IA.");
   }
+  if (critical.missingFields.length) {
+    reasons.push(`Campos a revisar antes da IA: ${critical.missingFields.join(", ")}.`);
+  }
   return reasons;
-}
-
-function calculatePreliminaryConfidence(prognostico: Prognostico, riskFlags: string[]): number {
-  let score = 62;
-  if (getDadosTecnicos(prognostico)?.trim()) score += 10;
-  if (prognostico.origem_modelo?.trim()) score += 5;
-  if (getEdgeEfetivo(prognostico) >= 8) score += 8;
-  if (prognostico.probabilidade_final >= 58) score += 5;
-  score -= riskFlags.length * 6;
-  if (riskFlags.includes("hard_block")) score = 0;
-  return round(clamp(score, 0, 100), 1);
-}
-
-function getDataQualityScore(prognostico: Prognostico): number {
-  const dados = getDadosTecnicos(prognostico)?.trim() ?? "";
-  if (dados.length >= 2000) return 100;
-  if (dados.length >= 800) return 82;
-  if (dados.length >= 250) return 62;
-  if (dados.length > 0) return 40;
-  return 18;
-}
-
-function getModelOriginScore(prognostico: Prognostico): number {
-  const origin = `${prognostico.origem_modelo ?? ""} ${prognostico.contexto_modelo ?? ""}`.trim();
-  if (/ASP Screener|GoalMatrix|CornerMatrix/i.test(origin)) return 85;
-  if (origin) return 70;
-  return 50;
-}
-
-function getOddQualityScore(odd: number): number {
-  if (!Number.isFinite(odd) || odd <= 0) return 0;
-  if (odd >= 1.7 && odd <= 2.2) return 100;
-  if ((odd >= 1.5 && odd < 1.7) || (odd > 2.2 && odd <= 2.6)) return 78;
-  if ((odd >= 1.4 && odd < 1.5) || (odd > 2.6 && odd <= 3.2)) return 45;
-  return 18;
-}
-
-function getRiskPenalty(flags: string[]): number {
-  return flags.reduce((sum, flag) => {
-    if (flag === "hard_block") return sum + 100;
-    if (flag === "edge_nao_positivo") return sum + 35;
-    if (flag === "odd_abaixo_valor") return sum + 25;
-    if (flag === "contexto_tecnico_ausente") return sum + 12;
-    if (flag === "probabilidade_baixa") return sum + 12;
-    if (flag === "odd_muito_baixa" || flag === "odd_muito_alta") return sum + 10;
-    return sum;
-  }, 0);
 }
 
 function isMlbPrognostico(prognostico: Prognostico): boolean {
@@ -762,13 +700,6 @@ function normalizeKeyPart(value: unknown): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ");
-}
-
-function normalizeProbabilityPct(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  if (value <= 50) return 20;
-  if (value >= 65) return 100;
-  return round(20 + ((value - 50) / 15) * 80, 1);
 }
 
 function normalizePositive(value: number | null, cap: number): number {
