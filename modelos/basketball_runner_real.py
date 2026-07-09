@@ -1842,7 +1842,10 @@ def normalize_date_for_model(value: Any) -> str:
 
 
 def format_date_for_app(value: Any) -> str:
-    dt = pd.to_datetime(value, errors='coerce', dayfirst=False)
+    # dayfirst=True: as entradas do fluxo brasileiro chegam como DD/MM/YYYY.
+    # Sem esse flag, o pandas assume mês-primeiro e "09/07/2026" (9 de julho)
+    # vira 2026-09-07, quebrando o filtro "Hoje" na Validação Crítica.
+    dt = pd.to_datetime(value, errors='coerce', dayfirst=True)
     if pd.notna(dt):
         return dt.strftime('%d/%m/%Y')
     return clean(value)
