@@ -74,16 +74,6 @@ function normalizeMarketName(value: unknown): string {
     .toLowerCase();
 }
 
-function isAspMatrixMarket(value: unknown): boolean {
-  const normalized = normalizeMarketName(value);
-  return (
-    normalized.includes("cornermatrix") ||
-    normalized.includes("cornersmatrix") ||
-    normalized.includes("goalmatrix") ||
-    normalized.includes("goalsmatrix")
-  );
-}
-
 function isAspScreenerMarket(value: unknown): boolean {
   const normalized = normalizeMarketName(value);
   return normalized.includes("aspscreener") || normalized.includes("screenermlb");
@@ -138,22 +128,6 @@ Regras para grupo de opções concorrentes:
 - Moneyline/1X2, Handicap e Dupla Chance podem representar a mesma tese de resultado/proteção. Compare proteção da linha, risco/retorno e exposição duplicada, e escolha somente uma entrada principal quando forem correlatas.
 - Se nenhuma opção tiver sustentação técnica suficiente, retorne PULAR.
 - Se houver risco estrutural relevante, prefira PULAR.
-
-Regra específica para IA Local em ASP CornerMatrix e ASP GoalMatrix/ASP GoalsMatrix:
-- Aplique esta regra apenas quando o mercado/modelo contiver ASP CornerMatrix, CornerMatrix, ASP CornersMatrix, ASP GoalMatrix, ASP GoalsMatrix, GoalMatrix ou GoalsMatrix.
-- Nesses modelos, o campo CV/Coeficiente de Variação é uma métrica própria de consistência do modelo, não o CV estatístico tradicional.
-- Não interprete CV alto como dispersão, oscilação, variabilidade alta ou baixa confiabilidade.
-- Interpretação correta do CV nesses modelos: quanto mais próximo de 100, maior a consistência; quanto mais baixo, menor a consistência.
-- CV de 60% indica consistência moderada/boa dentro da métrica do modelo. Não classifique como alta inconsistência.
-- CV acima de 70% indica boa consistência.
-- CV acima de 80% indica consistência forte.
-- CV abaixo de 50% pede atenção/cautela.
-- CV abaixo de 40% indica baixa consistência.
-- Frases proibidas para esses modelos: "CV de 60% indica alta inconsistência", "CV elevado indica oscilação", "CV próximo de 100 indica maior variabilidade", "CV alto reduz confiabilidade".
-- A ausência de notícias online, contexto externo, escalações prováveis, desfalques, informações recentes de imprensa, movimentação de mercado ou confirmação de titulares NÃO deve ser usada como motivo principal para PULAR ou reduzir confiança nesses modelos.
-- Para esses modelos, priorize dados técnicos do próprio modelo, médias, linhas analisadas, probabilidade, odd de valor, edge, consistência da amostra, CV como consistência, coerência entre tendência histórica/simulação/linha ofertada e qualidade da oportunidade.
-- Só sugira PULAR nesses modelos quando houver fragilidade nos dados internos do modelo: edge fraco, odd sem valor, linha incompatível com projeção, baixa consistência, conflito forte entre indicadores internos ou dados técnicos insuficientes.
-- Essa exceção não vale para Moneyline, Over/Under comum, Handicap comum, Dupla Chance, Basketball, Baseball, Hockey, American Football ou demais mercados.
 
 Gates obrigatórios:
 - Gate 1 — Coerência técnica: tese precisa estar coerente com mercado, pick, linha, probabilidade, edge ajustado/original, contexto informado, esporte e liga. Conflito técnico relevante = PULAR.
@@ -259,16 +233,6 @@ export const analisarValidacao = createServerFn({ method: "POST" })
     const oddFinal = p.odd_ajustada ?? p.odd_original;
     const edgeFinal = p.edge_ajustado ?? p.edge_original;
     const opcoesMesmoMercado = data.opcoes_mesmo_mercado ?? [];
-    const isAspMatrix =
-      isAspMatrixMarket(p.mercado) ||
-      isAspMatrixMarket(p.pick) ||
-      isAspMatrixMarket(data.dados_tecnicos) ||
-      opcoesMesmoMercado.some(
-        (opcao) => isAspMatrixMarket(opcao.mercado) || isAspMatrixMarket(opcao.pick),
-      ) ||
-      (data.prognosticos_correlacionados ?? []).some(
-        (opcao) => isAspMatrixMarket(opcao.mercado) || isAspMatrixMarket(opcao.pick),
-      );
     const isAspScreener =
       isAspScreenerMarket(p.mercado) ||
       isAspScreenerMarket(p.pick) ||
@@ -279,11 +243,8 @@ export const analisarValidacao = createServerFn({ method: "POST" })
       (data.prognosticos_correlacionados ?? []).some(
         (opcao) => isAspScreenerMarket(opcao.mercado) || isAspScreenerMarket(opcao.pick),
       );
-    const aspMatrixInstrucao = isAspMatrix
-      ? `\nREGRA ESPECIFICA ATIVA - ASP GOAL/CORNER MATRIX:\nEste grupo foi identificado como ASP CornerMatrix, CornerMatrix, ASP CornersMatrix, ASP GoalMatrix, ASP GoalsMatrix, GoalMatrix ou GoalsMatrix.\nInterprete CV/Coeficiente de Variacao como metrica propria de consistencia do modelo: mais perto de 100 = maior consistencia; 60% = consistencia moderada/boa; acima de 70% = boa; acima de 80% = forte; abaixo de 50% = cautela; abaixo de 40% = baixa consistencia.\nNao use a ausencia de noticias online, escalacoes, desfalques, fontes externas ou confirmacao de titulares como motivo principal para PULAR ou reduzir confianca. Julgue principalmente os dados internos do modelo, probabilidade, odd de valor, edge, linha, medias, tendencia historica, simulacao e consistencia da amostra.\nSe mencionar CV, use linguagem de consistencia do modelo e nunca linguagem de dispersao estatistica tradicional.\n`
-      : "";
     const aspScreenerInstrucao = isAspScreener
-      ? `\nREGRA ESPECIFICA ATIVA - ASP SCREENER (MLB):\nEste grupo veio do ASP Screener MLB. O campo Mercado = "ASP Screener" e um rotulo de origem/modelo. O mercado real (Moneyline, Total de Corridas/Over-Under, Run Line/Handicap) esta descrito no campo Pick (formato: "<mercado_original> | <pick>") e nos DADOS TECNICOS.\nInterprete a pick lendo o mercado real dentro do texto do Pick e dos dados tecnicos: over/under de corridas, moneyline do time, run line +1.5/-1.5, etc. Nao trate "ASP Screener" como mercado exotico.\nPriorize dados internos do payload: projecoes do modelo (probabilidade, fair odd, edge, EV), odds mediana/base/melhor, standings, medias da liga, matchup de pitchers/starters, fatores contextuais e alertas colados. Nao penalize por ausencia de noticias online, lineups online ou odds movement externo.\nCV, quando presente, segue a mesma leitura de consistencia dos modelos ASP (mais alto = mais consistente).\n`
+      ? `\nREGRA DE INTERPRETACAO DE ORIGEM ESTRUTURADA (MLB):\nEste grupo veio de modelo preditivo estruturado. O campo Mercado pode ser apenas um rotulo de origem/modelo; o mercado real (Moneyline, Total de Corridas/Over-Under, Run Line/Handicap) pode estar descrito no campo Pick (formato: "<mercado_original> | <pick>") e nos DADOS TECNICOS.\nInterprete a pick lendo o mercado real dentro do texto do Pick e dos dados tecnicos: over/under de corridas, moneyline do time, run line +1.5/-1.5, etc. Nao trate o rotulo de origem como mercado exotico.\nPriorize dados internos do payload: projecoes do modelo (probabilidade, fair odd, edge, EV), odds mediana/base/melhor, standings, medias da liga, matchup de pitchers/starters, fatores contextuais e alertas colados. Nao penalize por ausencia de noticias online, lineups online ou odds movement externo.\n`
       : "";
     const opcoesMesmoMercadoTexto = opcoesMesmoMercado.length
       ? opcoesMesmoMercado
@@ -347,7 +308,7 @@ Não use 1.0u como stake padrão. Se houver qualquer dúvida entre 1.0u e 0.5u, 
 Se houver opcoes concorrentes listadas acima, compare mercado, linhas, odds, probabilidade, edge, protecao da linha e risco/retorno. A resposta deve indicar a melhor opcao para CONFIRMAR ou recomendar PULAR o grupo inteiro. Nunca confirme mais de uma opcao do mesmo jogo e mesma familia de mercado.
 Nao use a opcao selecionada na interface como preferencia. Ela serve apenas para ajuste de odd; sua decisao deve comparar todas as opcoes concorrentes.
 Se sugerir CONFIRMA, devolva obrigatoriamente o campo prognostico_id_escolhido com um ID exato da lista OPÇÕES CONCORRENTES. Se sugerir PULAR, use prognostico_id_escolhido: null.
-${aspMatrixInstrucao}${aspScreenerInstrucao}
+${aspScreenerInstrucao}
 `;
 
     try {

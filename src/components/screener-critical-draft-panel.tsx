@@ -11,15 +11,12 @@ import {
 } from "@/lib/mlb/screenerToCriticalValidationAdapter";
 
 /**
- * Banner discreto exibido no topo da Validação Crítica quando existe
- * um rascunho vindo do ASP Screener MLB em sessionStorage.
+ * Banner discreto exibido no topo da Validacao Critica quando existe
+ * um rascunho vindo de modelo preditivo em sessionStorage.
  *
- * - Mantém o layout genérico da Validação Crítica (sem cards específicos).
- * - Ao importar, cria um prognóstico PENDENTE (resultado + status_validacao)
- *   pré-preenchido com jogo, mercado, pick, odds, probabilidade, edge e
- *   `dados_tecnicos` já com o contexto estruturado do Screener.
- * - Não altera bankroll e não confirma nada automaticamente. A decisão
- *   Confirmar/Pular continua manual, pelos controles genéricos da tela.
+ * - Ao importar, cria um prognostico PENDENTE.
+ * - A origem aparece apenas como metadado.
+ * - Nao altera bankroll e nao confirma nada automaticamente.
  */
 export function ScreenerCriticalDraftPanel({ onApplied }: { onApplied?: () => void }) {
   const [draft, setDraft] = useState<MlbCriticalValidationDraft | null>(null);
@@ -61,14 +58,14 @@ export function ScreenerCriticalDraftPanel({ onApplied }: { onApplied?: () => vo
         status_validacao: "PENDENTE",
         status_publicacao: "NAO_PUBLICADO",
         resultado: "PENDENTE",
-        observacoes: `Origem: ASP Screener MLB · Draft ${draft.draft_id}`,
+        observacoes: `Origem: ${input.source} - Draft ${draft.draft_id}`,
         dados_tecnicos: input.imported_context_summary,
       };
       const { error } = await supabase.from("prognosticos").insert(body as never);
       if (error) throw error;
       clearCriticalValidationDraft();
       setDraft(null);
-      toast.success("Rascunho importado como prognóstico pendente na Validação Crítica.");
+      toast.success("Rascunho importado como prognostico pendente na Validacao Critica.");
       onApplied?.();
     } catch (e) {
       toast.error((e as Error).message);
@@ -82,7 +79,7 @@ export function ScreenerCriticalDraftPanel({ onApplied }: { onApplied?: () => vo
     try {
       clearCriticalValidationDraft();
       setDraft(null);
-      toast.success("Rascunho do Screener descartado.");
+      toast.success("Rascunho de modelo preditivo descartado.");
     } finally {
       setBusy(null);
     }
@@ -91,16 +88,16 @@ export function ScreenerCriticalDraftPanel({ onApplied }: { onApplied?: () => vo
   return (
     <div className="rounded-md border border-primary/40 bg-primary/5 px-4 py-3 flex flex-wrap items-center gap-3">
       <Badge variant="outline" className="border-primary/50 text-primary">
-        Rascunho ASP Screener MLB
+        Rascunho de modelo preditivo
       </Badge>
       <span className="text-sm text-foreground">
         <strong>{jogo}</strong>
-        <span className="text-muted-foreground"> · {input.market}</span>
-        {input.pick && <span className="text-muted-foreground"> · {input.pick}</span>}
-        {input.line != null && <span className="text-muted-foreground"> · linha {input.line}</span>}
+        <span className="text-muted-foreground"> | {input.market}</span>
+        {input.pick && <span className="text-muted-foreground"> | {input.pick}</span>}
+        {input.line != null && <span className="text-muted-foreground"> | linha {input.line}</span>}
       </span>
       <span className="text-xs text-muted-foreground">
-        Dados adicionados ao contexto técnico. Nenhum prognóstico é criado até você importar.
+        Origem: {input.source}. Dados adicionados ao contexto tecnico; nenhum prognostico e criado ate voce importar.
       </span>
       <div className="ml-auto flex items-center gap-2">
         <Button size="sm" onClick={importar} disabled={busy !== null}>
