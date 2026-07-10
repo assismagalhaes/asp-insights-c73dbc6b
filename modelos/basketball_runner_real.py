@@ -29,22 +29,31 @@ NOTEBOOKS = {
 
 MIN_ODD_EXPORT = 1.25
 MAX_ODD_EXPORT = 2.00
-BASKETBALL_WNBA_MODEL_VERSION = "BASKETBALL_WNBA_V1_4_SIM_MARKETS"
-BASKETBALL_WNBA_HANDICAP_MODEL_VERSION = "BASKETBALL_WNBA_V1_7_HANDICAP_CONTROLLED"
-WNBA_CURRENT_SEASON_YEAR = 2026
-WNBA_PREVIOUS_SEASON_YEAR = 2025
+BASKETBALL_WNBA_MODEL_VERSION = "BASKETBALL_WNBA_V2_0_CALIBRATED"
+BASKETBALL_WNBA_HANDICAP_MODEL_VERSION = BASKETBALL_WNBA_MODEL_VERSION
+WNBA_CURRENT_SEASON_YEAR = datetime.now().year
+WNBA_PREVIOUS_SEASON_YEAR = WNBA_CURRENT_SEASON_YEAR - 1
 WNBA_TOTAL_PRIOR = 0.50
 WNBA_TOTAL_PRIOR_STRENGTH = 10.0
 WNBA_TOTAL_LOW_SAMPLE = 10
 WNBA_OVERCONFIDENCE_CUTOFF = 70.0
 WNBA_HANDICAP_ENABLED_V1_1 = False
 WNBA_HANDICAP_ENABLED_V1_7 = True
-WNBA_TOTAL_V1_3_WEIGHTS = {"hist": 0.35, "sim": 0.35, "vig": 0.30}
-WNBA_MONEYLINE_V1_4_WEIGHTS = {"hist": 0.35, "sim": 0.35, "vig": 0.30}
-WNBA_HANDICAP_V1_8_WEIGHTS = {"hist": 0.35, "sim": 0.35, "vig": 0.30}
+WNBA_TOTAL_BLEND_WEIGHTS = {"hist": 0.40, "sim": 0.45, "vig": 0.15}
+WNBA_MONEYLINE_BLEND_WEIGHTS = {"hist": 0.40, "sim": 0.45, "vig": 0.15}
+WNBA_HANDICAP_BLEND_WEIGHTS = {"hist": 0.40, "sim": 0.45, "vig": 0.15}
 WNBA_TOTAL_SIMULATIONS = 10_000
-WNBA_TOTAL_MARKET_ANCHOR_WEIGHT = 0.40
+WNBA_TOTAL_MARKET_ANCHOR_WEIGHT = 0.15
 WNBA_TOTAL_MIN_TEAM_SD = 8.0
+WNBA_MAX_DATA_AGE_DAYS = 14
+WNBA_MIN_EDGE_BY_MARKET = {"moneyline": 2.0, "total": 3.0, "handicap": 3.0}
+WNBA_MIN_HANDICAP_PROBABILITY = 54.0
+WNBA_MAX_CORRELATED_LINES = 3
+WNBA_KELLY_FRACTION = 0.125
+WNBA_MAX_PICK_UNITS = 1.0
+WNBA_MAX_MARKET_UNITS = 1.5
+WNBA_MAX_GAME_UNITS = 2.0
+WNBA_MAX_BEST_TO_MEDIAN_RATIO = 1.20
 
 
 def main() -> None:
@@ -58,6 +67,8 @@ def main() -> None:
 
     try:
         module = load_notebook_module(league)
+        if league == 'WNBA':
+            configure_wnba_data_access(module)
         games = long_csv_to_wide(csv_coleta_path, league, module)
         if games.empty:
             result = empty_result(league, output_path, 'CSV da coleta não trouxe jogos Basketball válidos para a liga selecionada.')
@@ -75,6 +86,8 @@ def main() -> None:
 
         for _, row in games.iterrows():
             try:
+                if league == 'WNBA':
+                    prepare_wnba_game_context(module, row)
                 res = module.analyze_game(row, linhas_ou, hc_idxs)
                 home = row['home_sigla']
                 away = row['away_sigla']
@@ -107,17 +120,18 @@ def main() -> None:
                     item.setdefault('parecer_validacao', build_parecer(item))
                     item.setdefault('odd', item.get('odd_ofertada'))
                     item.setdefault('probabilidade', item.get('probabilidade_final'))
-                    item.setdefault('stake', stake_sugerida(to_float(item.get('probabilidade_final')), to_float(item.get('edge'))))
+                    item.setdefault('stake', stake_sugerida(to_float(item.get('probabilidade_final')), to_float(item.get('edge')), to_float(item.get('odd_ofertada'))))
                 rows.extend(game_rows)
             except Exception as exc:  # keep other games running
                 errors.append(f"{row.get('home')} vs {row.get('away')}: {exc}")
 
+        if league == 'WNBA':
+            rows = apply_wnba_exposure_caps(rows)
         rows = normalize_rows(rows, league)
         handicap_shadow_diagnostics = None
         if league == 'WNBA':
-            activation = build_wnba_handicap_controlled_activation_from_csv(csv_coleta_path)
             rows.sort(key=lambda r: (r.get('data') or '', r.get('hora') or '', r.get('jogo') or '', r.get('mercado') or '', -float(r.get('edge') or 0)))
-            handicap_shadow_diagnostics = activation.get('handicap_shadow_diagnostics')
+            handicap_shadow_diagnostics = build_wnba_runtime_diagnostics(rows, errors)
         write_output_csv(output_path, rows)
         contexto_modelo = '\n\n'.join(contexts[:20])
         msg = None
@@ -224,6 +238,132 @@ def load_notebook_module(league: str) -> types.SimpleNamespace:
     return types.SimpleNamespace(**ns)
 
 
+def configure_wnba_data_access(module: Any) -> None:
+    """Read the consolidated WNBA files and enforce an as-of prediction cutoff."""
+
+    original_loader = module.carregar_dados_time
+    cache: dict[tuple[str, str, str, bool, str], pd.DataFrame] = {}
+
+    def load_team(team: str, season: str, local: str | None = None, filtrar_ot: bool = False) -> pd.DataFrame:
+        cutoff = getattr(module, '_wnba_prediction_cutoff', None)
+        cutoff_key = cutoff.isoformat() if isinstance(cutoff, datetime) else ''
+        key = (str(team).upper(), str(season), str(local), bool(filtrar_ot), cutoff_key)
+        if key in cache:
+            return cache[key].copy()
+
+        base = Path(getattr(module, 'HIST_DIR', JUPYTER_DIR / 'dados_basquete'))
+        merged_path = base / 'wnba' / str(season) / 'merged' / f'dados_basquete_{str(team).lower()}.csv'
+        if merged_path.exists():
+            try:
+                frame = normalize_wnba_merged_frame(module, module._read_csv_flex(merged_path))
+            except Exception as exc:
+                raise RuntimeError(f'WNBA_MERGED_READ_ERROR:{team}:{season}:{exc}') from exc
+        else:
+            frame = original_loader(team, season, local=None, filtrar_ot=False)
+
+        if frame is None or getattr(frame, 'empty', True):
+            cache[key] = pd.DataFrame()
+            return cache[key].copy()
+
+        frame = frame.copy()
+        date_col = 'Date' if 'Date' in frame.columns else 'date' if 'date' in frame.columns else None
+        if cutoff is not None and date_col:
+            dates = parse_mixed_dates(frame[date_col])
+            frame = frame[dates < pd.Timestamp(cutoff).normalize()].copy()
+        if filtrar_ot and 'OT' in frame.columns:
+            overtime = frame['OT'].fillna('').astype(str).str.strip()
+            frame = frame[overtime.eq('') | overtime.str.lower().eq('nan')].copy()
+        if local == 'casa' and 'Loc' in frame.columns:
+            frame = frame[frame['Loc'].fillna('').astype(str).str.strip().ne('@')].copy()
+        elif local == 'fora' and 'Loc' in frame.columns:
+            frame = frame[frame['Loc'].fillna('').astype(str).str.strip().eq('@')].copy()
+        if date_col and date_col in frame.columns:
+            frame = frame.assign(_wnba_sort_date=parse_mixed_dates(frame[date_col])).sort_values('_wnba_sort_date').drop(columns='_wnba_sort_date')
+        cache[key] = frame.reset_index(drop=True)
+        return cache[key].copy()
+
+    module.carregar_dados_time = load_team
+    module._wnba_data_access_cache = cache
+
+
+def normalize_wnba_merged_frame(module: Any, raw: pd.DataFrame) -> pd.DataFrame:
+    legacy = module.normalizar_schema_wnba(raw)
+    required_manual = {'data', 'adversario', 'pontos_time', 'pontos_adversario'}
+    if not required_manual.issubset(raw.columns):
+        return legacy
+    manual_source = raw[raw['data'].notna()].copy()
+    if manual_source.empty:
+        return legacy
+    manual = pd.DataFrame(index=manual_source.index)
+    manual['Date'] = parse_mixed_dates(manual_source['data'])
+    local_values = manual_source['local'] if 'local' in manual_source.columns else pd.Series('', index=manual_source.index)
+    result_values = manual_source['resultado'] if 'resultado' in manual_source.columns else pd.Series('', index=manual_source.index)
+    manual['Loc'] = local_values.fillna('').astype(str).str.strip()
+    manual['Opponent'] = manual_source['adversario'].fillna('').astype(str).str.upper().str.strip()
+    manual['opp_sigla'] = manual['Opponent'].apply(lambda value: value if value in getattr(module, 'TEAMS', {}) else (module.team_name_to_sigla(value) or value))
+    manual['Rslt'] = result_values.fillna('').astype(str).str.upper().str.strip()
+    manual['Tm'] = pd.to_numeric(manual_source['pontos_time'], errors='coerce')
+    manual['Opp'] = pd.to_numeric(manual_source['pontos_adversario'], errors='coerce')
+    manual['Unnamed: 2'] = manual['Loc']
+    manual['Unnamed: 4'] = manual['Rslt']
+    manual['ORtg'] = merged_numeric_column(manual_source, 'off_rtg', 'ORtg')
+    manual['DRtg'] = merged_numeric_column(manual_source, 'def_rtg', 'DRtg')
+    manual['Pace'] = merged_numeric_column(manual_source, 'pace', 'Pace')
+    manual['NetRtg'] = manual['ORtg'] - manual['DRtg']
+    manual['OT'] = manual_source['OT'] if 'OT' in manual_source.columns else math.nan
+    manual = manual.dropna(subset=['Date', 'Tm', 'Opp'])
+    combined = pd.concat([legacy, manual], ignore_index=True)
+    combined = combined.drop_duplicates(subset=['Date', 'Opponent', 'Tm', 'Opp'], keep='last')
+    return combined.sort_values('Date').reset_index(drop=True)
+
+
+def merged_numeric_column(frame: pd.DataFrame, primary: str, fallback: str) -> pd.Series:
+    values = pd.to_numeric(frame[primary], errors='coerce') if primary in frame.columns else pd.Series(index=frame.index, dtype=float)
+    if fallback in frame.columns:
+        values = values.combine_first(pd.to_numeric(frame[fallback], errors='coerce'))
+    return values
+
+
+def parse_mixed_dates(values: Any) -> pd.Series:
+    series = values if isinstance(values, pd.Series) else pd.Series(values)
+    text = series.astype(str).str.strip()
+    iso_mask = text.str.match(r'^\d{4}-\d{2}-\d{2}(?:[ T].*)?$')
+    parsed = pd.Series(pd.NaT, index=series.index, dtype='datetime64[ns]')
+    parsed.loc[iso_mask] = pd.to_datetime(text.loc[iso_mask].str.slice(0, 10), format='%Y-%m-%d', errors='coerce')
+    parsed.loc[~iso_mask] = pd.to_datetime(text.loc[~iso_mask], errors='coerce', dayfirst=True)
+    return parsed
+
+
+def parse_single_date(value: Any) -> pd.Timestamp:
+    text = clean(value)
+    if re.match(r'^\d{4}-\d{2}-\d{2}(?:[ T].*)?$', text):
+        return pd.to_datetime(text[:10], format='%Y-%m-%d', errors='coerce')
+    return pd.to_datetime(text, errors='coerce', dayfirst=True)
+
+
+def prepare_wnba_game_context(module: Any, row: pd.Series) -> None:
+    game_date = parse_single_date(row.get('date'))
+    if pd.isna(game_date):
+        raise RuntimeError('WNBA_DATA_INVALID_GAME_DATE')
+    module._wnba_prediction_cutoff = game_date.to_pydatetime()
+    module._wnba_dataframe_cache = {}
+    module._wnba_expected_points_cache = {}
+    current, previous = wnba_operational_seasons(module._wnba_prediction_cutoff)
+    module.TEMPORADA_ATUAL = current
+    module.TEMPORADA_PASSADA = previous
+    for team in (str(row.get('home_sigla') or ''), str(row.get('away_sigla') or '')):
+        frame = module.carregar_dados_time(team, current, local=None, filtrar_ot=False)
+        if frame.empty:
+            raise RuntimeError(f'WNBA_DATA_MISSING_CURRENT_SEASON:{team}')
+        date_col = 'Date' if 'Date' in frame.columns else 'date' if 'date' in frame.columns else None
+        latest = parse_mixed_dates(frame[date_col]).max() if date_col else pd.NaT
+        if pd.isna(latest):
+            raise RuntimeError(f'WNBA_DATA_MISSING_DATES:{team}')
+        age_days = (pd.Timestamp(game_date).normalize() - pd.Timestamp(latest).normalize()).days
+        if age_days > WNBA_MAX_DATA_AGE_DAYS:
+            raise RuntimeError(f'WNBA_DATA_STALE:{team}:{age_days}d')
+
+
 def long_csv_to_wide(csv_path: Path, league: str, module: Any) -> pd.DataFrame:
     if not csv_path.exists():
         raise RuntimeError(f'CSV da coleta não encontrado: {csv_path}')
@@ -289,6 +429,8 @@ def long_csv_to_wide(csv_path: Path, league: str, module: Any) -> pd.DataFrame:
             continue
 
         if 'handicap' in mercado and linha is not None:
+            if not is_supported_half_handicap_line(linha):
+                continue
             if home_norm and (home_norm in pick_norm or pick_norm in home_norm):
                 pair_key = (key, float(linha))
                 pair = handicap_pairs.setdefault(
@@ -380,7 +522,7 @@ def detect_hc_indexes(df: pd.DataFrame) -> list[str]:
 
 
 def update_model_periods(module: Any, league: str, games: pd.DataFrame) -> None:
-    dt = pd.to_datetime(games['date'].iloc[0], errors='coerce')
+    dt = parse_single_date(games['date'].iloc[0])
     if pd.isna(dt):
         dt = datetime.now()
     if league == 'WNBA':
@@ -641,8 +783,6 @@ def wnba_operational_seasons(value: datetime | None = None) -> tuple[str, str]:
     """Return WNBA operational seasons without leaking future bases into the model."""
 
     year = int(getattr(value, "year", WNBA_CURRENT_SEASON_YEAR) or WNBA_CURRENT_SEASON_YEAR)
-    if year >= WNBA_CURRENT_SEASON_YEAR:
-        return str(WNBA_CURRENT_SEASON_YEAR), str(WNBA_PREVIOUS_SEASON_YEAR)
     return str(year), str(year - 1)
 
 
@@ -654,7 +794,7 @@ def apply_wnba_v1_1_controls(module: Any, row: pd.Series, res: dict, rows: list[
         adjusted = apply_wnba_v1_1_to_pick(module, row, res, dict(item), home, away, lines=lines)
         if adjusted is not None:
             selected.append(adjusted)
-    return selected
+    return limit_wnba_correlated_lines(selected)
 
 
 def apply_wnba_v1_1_to_pick(module: Any, row: pd.Series, res: dict, item: dict[str, Any], home: str, away: str, lines: list[float] | None = None) -> dict[str, Any] | None:
@@ -689,16 +829,27 @@ def apply_wnba_v1_1_to_pick(module: Any, row: pd.Series, res: dict, item: dict[s
     odd = to_float(item.get('odd_ofertada'))
     prob = to_float(item.get('probabilidade_final'))
     odd_valor = to_float(item.get('odd_valor'))
+    median_odd = to_float(item.get('odd_mediana'))
     if odd is None or odd <= 1:
         return mark_wnba_discard(item, "INVALID_ODD", keep=False)
     if odd_valor is None or odd_valor <= 1:
         return mark_wnba_discard(item, "NO_MARKET_BASELINE", keep=False)
     if prob is None or prob <= 0:
         return mark_wnba_discard(item, "INVALID_PROBABILITY", keep=False)
+    if median_odd is not None and median_odd > 1 and odd / median_odd > WNBA_MAX_BEST_TO_MEDIAN_RATIO:
+        return mark_wnba_discard(item, "SUSPICIOUS_BEST_ODD", keep=False)
     if prob >= WNBA_OVERCONFIDENCE_CUTOFF:
         return mark_wnba_discard(item, "OVERCONFIDENCE_CAP", keep=False)
+    market_key = 'handicap' if 'handicap' in market else 'total' if any(token in market for token in ('overunder', 'total', 'pontos')) else 'moneyline'
+    if market_key == 'handicap' and prob < WNBA_MIN_HANDICAP_PROBABILITY:
+        return mark_wnba_discard(item, "LOW_HANDICAP_PROBABILITY", keep=False)
+    if market_key == 'handicap' and int(item.get('_hist_games') or 0) < WNBA_TOTAL_LOW_SAMPLE:
+        return mark_wnba_discard(item, "LOW_HANDICAP_HISTORY", keep=False)
     if odd <= odd_valor:
         return mark_wnba_discard(item, "NO_EV_AFTER_V1_1", keep=False)
+    minimum_edge = WNBA_MIN_EDGE_BY_MARKET[market_key]
+    if float(item.get('edge') or 0.0) < minimum_edge:
+        return mark_wnba_discard(item, f"EDGE_BELOW_{minimum_edge:.1f}", keep=False)
     if not (odd > MIN_ODD_EXPORT and odd <= MAX_ODD_EXPORT):
         return mark_wnba_discard(item, "ODD_OUT_OF_RANGE", keep=False)
 
@@ -726,13 +877,14 @@ def recalculate_wnba_moneyline_pick(module: Any, row: pd.Series, res: dict, item
     simulation = wnba_simulate_matchup(module, row, res, home, away, lines=lines)
     sim_prob = simulation['home_win_probability'] if pick_side == 'home' else simulation['away_win_probability']
     vig_prob = vig[0] if pick_side == 'home' else vig[1]
-    weights = WNBA_MONEYLINE_V1_4_WEIGHTS
-    prob = (
+    weights = WNBA_MONEYLINE_BLEND_WEIGHTS
+    raw_prob = (
         float(weights.get('hist', 0.35)) * hist['taxa_com_shrinkage'] +
         float(weights.get('sim', 0.35)) * sim_prob +
         float(weights.get('vig', 0.30)) * vig_prob
     )
-    prob = max(0.0, min(0.99, prob))
+    raw_prob = max(0.0, min(0.99, raw_prob))
+    prob, haircut = conservative_wnba_probability(raw_prob, hist['jogos_considerados'], 'moneyline')
     odd_valor = 1.0 / prob if prob else 0.0
     edge = odd * prob - 1.0
     selected_base_col = 'odds_HomeAway_FT_including_OT_1' if pick_side == 'home' else 'odds_HomeAway_FT_including_OT_2'
@@ -745,12 +897,15 @@ def recalculate_wnba_moneyline_pick(module: Any, row: pd.Series, res: dict, item
     item['odd_mercado_base'] = round(market_odd, 3)
     item['odd_melhor'] = round(odd, 2)
     item['bookmaker_melhor'] = bookmaker_from_wide(row, selected_base_col) or item.get('bookmaker_melhor')
+    item['_hist_games'] = hist['jogos_considerados']
     debug = {
         'mercado': 'Moneyline',
         'side': pick_side,
         'prob_hist': round(hist['taxa_com_shrinkage'] * 100.0, 2),
         'prob_sim': round(sim_prob * 100.0, 2),
         'prob_no_vig': round(vig_prob * 100.0, 2),
+        'prob_bruta_blend': round(raw_prob * 100.0, 2),
+        'haircut_incerteza_pp': round(haircut * 100.0, 2),
         'odd_mediana': round(market_odd, 3),
         'odd_mercado_base': round(market_odd, 3),
         'odd_melhor': round(odd, 2),
@@ -785,13 +940,14 @@ def recalculate_wnba_handicap_pick(module: Any, row: pd.Series, res: dict, item:
     hist = wnba_historical_handicap_probability(module, home, away, pick_side, line)
     simulation = wnba_simulate_matchup(module, row, res, home, away, handicap_line=line, handicap_side=pick_side, lines=lines)
     sim_prob = simulation['handicap_cover_probability']
-    weights = WNBA_HANDICAP_V1_8_WEIGHTS
-    prob = (
+    weights = WNBA_HANDICAP_BLEND_WEIGHTS
+    raw_prob = (
         float(weights.get('hist', 0.35)) * hist['taxa_com_shrinkage'] +
         float(weights.get('sim', 0.35)) * sim_prob +
         float(weights.get('vig', 0.30)) * no_vig
     )
-    prob = max(0.0, min(0.99, prob))
+    raw_prob = max(0.0, min(0.99, raw_prob))
+    prob, haircut = conservative_wnba_probability(raw_prob, hist['jogos_considerados'], 'handicap')
     odd_valor = 1.0 / prob if prob else 0.0
     edge = odd * prob - 1.0
     market_odd = market_pair[0] if market_pair else odd
@@ -803,6 +959,9 @@ def recalculate_wnba_handicap_pick(module: Any, row: pd.Series, res: dict, item:
     item['odd_mercado_base'] = round(market_odd, 3)
     item['odd_melhor'] = round(odd, 2)
     item['bookmaker_melhor'] = (market_pair[2] if market_pair else '') or item.get('bookmaker_melhor')
+    item['_hist_games'] = hist['jogos_considerados']
+    item['_selection_side'] = pick_side
+    item['_market_anchor_line'] = wnba_handicap_anchor_for_side(row, pick_side)
     debug = {
         'mercado': 'Handicap',
         'side': pick_side,
@@ -810,6 +969,8 @@ def recalculate_wnba_handicap_pick(module: Any, row: pd.Series, res: dict, item:
         'prob_hist': round(hist['taxa_com_shrinkage'] * 100.0, 2),
         'prob_sim': round(sim_prob * 100.0, 2),
         'prob_no_vig': round(no_vig * 100.0, 2),
+        'prob_bruta_blend': round(raw_prob * 100.0, 2),
+        'haircut_incerteza_pp': round(haircut * 100.0, 2),
         'odd_mediana': round(market_odd, 3),
         'odd_mercado_base': round(market_odd, 3),
         'odd_melhor': round(odd, 2),
@@ -855,13 +1016,15 @@ def recalculate_wnba_total_pick(module: Any, row: pd.Series, res: dict, item: di
         return None
     sim_prob = simulation['probability'] * 100.0
     vig_prob = (vig[0] if side == 'over' else vig[1]) * 100.0
-    weights = WNBA_TOTAL_V1_3_WEIGHTS
-    prob = (
+    weights = WNBA_TOTAL_BLEND_WEIGHTS
+    raw_prob = (
         float(weights.get('hist', 0.30)) * hist['taxa_com_shrinkage'] * 100.0 +
         float(weights.get('sim', 0.40)) * sim_prob +
         float(weights.get('vig', 0.30)) * vig_prob
     )
-    prob = max(0.0, min(99.0, prob))
+    raw_prob = max(0.0, min(99.0, raw_prob))
+    conservative_prob, haircut = conservative_wnba_probability(raw_prob / 100.0, hist['jogos_considerados'], 'total')
+    prob = conservative_prob * 100.0
     odd_valor = 100.0 / prob if prob else 0.0
     edge = (odd / odd_valor - 1.0) * 100.0 if odd_valor else 0.0
     selected_col = over_col if side == 'over' else under_col
@@ -873,6 +1036,9 @@ def recalculate_wnba_total_pick(module: Any, row: pd.Series, res: dict, item: di
     item['odd_mercado_base'] = round(market_odd, 3)
     item['odd_melhor'] = round(odd, 2)
     item['bookmaker_melhor'] = bookmaker_from_wide(row, selected_col) or item.get('bookmaker_melhor')
+    item['_hist_games'] = hist['jogos_considerados']
+    item['_selection_side'] = side
+    item['_market_anchor_line'] = simulation['market_anchor_line']
     debug = {
         'mercado': 'Total de Pontos',
         'linha_avaliada': line,
@@ -880,6 +1046,8 @@ def recalculate_wnba_total_pick(module: Any, row: pd.Series, res: dict, item: di
         'prob_hist': round(hist['taxa_com_shrinkage'] * 100.0, 2),
         'prob_sim': round(sim_prob, 2),
         'prob_no_vig': round(vig_prob, 2),
+        'prob_bruta_blend': round(raw_prob, 2),
+        'haircut_incerteza_pp': round(haircut * 100.0, 2),
         'odd_mediana': round(market_odd, 3),
         'odd_mercado_base': round(market_odd, 3),
         'odd_melhor': round(odd, 2),
@@ -928,13 +1096,15 @@ def wnba_simulated_total_probability(
     seed = (
         f"{row.get('date')}|{row.get('time')}|{home}|{away}|"
         f"{round(home_expected, 3)}|{round(away_expected, 3)}|"
-        f"{round(expectation['home_sd'], 3)}|{round(expectation['away_sd'], 3)}"
+        f"{round(expectation['home_sd'], 3)}|{round(expectation['away_sd'], 3)}|"
+        f"{round(expectation['score_correlation'], 4)}"
     )
     simulation = run_wnba_total_monte_carlo(
         home_expected,
         away_expected,
         expectation['home_sd'],
         expectation['away_sd'],
+        expectation['score_correlation'],
         line,
         side,
         simulations=WNBA_TOTAL_SIMULATIONS,
@@ -947,6 +1117,8 @@ def wnba_simulated_total_probability(
             'away_expected': away_expected,
             'home_sd': expectation['home_sd'],
             'away_sd': expectation['away_sd'],
+            'score_correlation': expectation['score_correlation'],
+            'projected_pace': expectation['projected_pace'],
             'model_total_expected': model_total,
             'market_anchor_line': market_anchor,
             'calibrated_total_expected': calibrated_total,
@@ -964,12 +1136,13 @@ def wnba_calculate_expected_points(module: Any, home: str, away: str, lines: lis
     cache_key = (
         home,
         away,
+        str(getattr(module, '_wnba_prediction_cutoff', '')),
         tuple(round(float(line), 3) for line in metric_lines if to_float(line) is not None),
     )
     if cache_key in cache:
         return dict(cache[cache_key])
-    home_metrics = module.calcular_metricas_time(home, 'casa', metric_lines)
-    away_metrics = module.calcular_metricas_time(away, 'fora', metric_lines)
+    home_metrics = wnba_team_metric_profile(module, home, 'casa')
+    away_metrics = wnba_team_metric_profile(module, away, 'fora')
     home_scored = require_float_metric(home_metrics, 'media_tm', f'{home} media_tm')
     home_allowed = require_float_metric(home_metrics, 'media_opp', f'{home} media_opp')
     away_scored = require_float_metric(away_metrics, 'media_tm', f'{away} media_tm')
@@ -979,8 +1152,20 @@ def wnba_calculate_expected_points(module: Any, home: str, away: str, lines: lis
     away_scored_sd = require_float_metric(away_metrics, 'std_tm', f'{away} std_tm')
     away_allowed_sd = require_float_metric(away_metrics, 'std_opp', f'{away} std_opp')
 
-    home_expected = max(0.0, home_scored * 0.55 + away_allowed * 0.45)
-    away_expected = max(0.0, away_scored * 0.55 + home_allowed * 0.45)
+    raw_home = home_scored * 0.55 + away_allowed * 0.45
+    raw_away = away_scored * 0.55 + home_allowed * 0.45
+    projected_pace = average_valid(home_metrics.get('pace'), away_metrics.get('pace'))
+    efficiency_home = None
+    efficiency_away = None
+    if projected_pace and projected_pace > 0:
+        home_efficiency = weighted_valid(home_metrics.get('ortg'), away_metrics.get('drtg'), 0.55, 0.45)
+        away_efficiency = weighted_valid(away_metrics.get('ortg'), home_metrics.get('drtg'), 0.55, 0.45)
+        if home_efficiency is not None:
+            efficiency_home = home_efficiency * projected_pace / 100.0
+        if away_efficiency is not None:
+            efficiency_away = away_efficiency * projected_pace / 100.0
+    home_expected = max(0.0, 0.65 * raw_home + 0.35 * efficiency_home) if efficiency_home is not None else max(0.0, raw_home)
+    away_expected = max(0.0, 0.65 * raw_away + 0.35 * efficiency_away) if efficiency_away is not None else max(0.0, raw_away)
     home_sd = max(
         WNBA_TOTAL_MIN_TEAM_SD,
         math.sqrt((home_scored_sd * 0.55) ** 2 + (away_allowed_sd * 0.45) ** 2),
@@ -994,9 +1179,109 @@ def wnba_calculate_expected_points(module: Any, home: str, away: str, lines: lis
         'away_expected': away_expected,
         'home_sd': home_sd,
         'away_sd': away_sd,
+        'score_correlation': max(-0.25, min(0.35, average_valid(home_metrics.get('score_correlation'), away_metrics.get('score_correlation')) or 0.0)),
+        'projected_pace': projected_pace or 0.0,
+        'home_raw_expected': raw_home,
+        'away_raw_expected': raw_away,
+        'home_efficiency_expected': efficiency_home or raw_home,
+        'away_efficiency_expected': efficiency_away or raw_away,
     }
     cache[cache_key] = dict(result)
     return result
+
+
+def wnba_team_metric_profile(module: Any, team: str, local: str) -> dict[str, float]:
+    frames, weights = wnba_non_overlapping_period_frames(module, team, local)
+    period_stats: dict[str, dict[str, float]] = {}
+    for period, frame in frames.items():
+        if frame is None or frame.empty or weights.get(period, 0.0) <= 0:
+            continue
+        scored = numeric_series(frame, ('pontos_time', 'Tm', 'PTS', 'R', 'Pontos'))
+        allowed = numeric_series(frame, ('pontos_adversario', 'Opp.1', 'Opp', 'RA', 'Pontos_Adv'))
+        if scored.empty or allowed.empty:
+            continue
+        period_stats[period] = {
+            'media_tm': float(scored.mean()),
+            'media_opp': float(allowed.mean()),
+            'std_tm': float(scored.std(ddof=1)) if len(scored) > 1 else WNBA_TOTAL_MIN_TEAM_SD,
+            'std_opp': float(allowed.std(ddof=1)) if len(allowed) > 1 else WNBA_TOTAL_MIN_TEAM_SD,
+            'ortg': numeric_mean(frame, ('ORtg', 'off_rtg')),
+            'drtg': numeric_mean(frame, ('DRtg', 'def_rtg')),
+            'pace': numeric_mean(frame, ('Pace', 'pace')),
+        }
+    if not period_stats:
+        raise ValueError(f'Metricas WNBA ausentes para {team}')
+    normalized = normalize_weight_subset(weights, tuple(period_stats))
+    result: dict[str, float] = {}
+    for metric in ('media_tm', 'media_opp', 'ortg', 'drtg', 'pace'):
+        usable = {key: value[metric] for key, value in period_stats.items() if math.isfinite(value[metric]) and value[metric] > 0}
+        metric_weights = normalize_weight_subset(normalized, tuple(usable)) if usable else {}
+        result[metric] = sum(metric_weights[key] * value for key, value in usable.items()) if usable else 0.0
+    for mean_key, sd_key in (('media_tm', 'std_tm'), ('media_opp', 'std_opp')):
+        variance = sum(
+            normalized[key] * (max(WNBA_TOTAL_MIN_TEAM_SD, stats[sd_key]) ** 2 + (stats[mean_key] - result[mean_key]) ** 2)
+            for key, stats in period_stats.items()
+        )
+        result[sd_key] = math.sqrt(max(variance, WNBA_TOTAL_MIN_TEAM_SD ** 2))
+    current_all = wnba_current_all_frame(module, team)
+    scored_all = numeric_series(current_all, ('pontos_time', 'Tm', 'PTS', 'R', 'Pontos'))
+    allowed_all = numeric_series(current_all, ('pontos_adversario', 'Opp.1', 'Opp', 'RA', 'Pontos_Adv'))
+    paired = pd.concat([scored_all.rename('scored'), allowed_all.rename('allowed')], axis=1).dropna()
+    correlation = paired['scored'].corr(paired['allowed']) if len(paired) >= 6 else 0.0
+    result['score_correlation'] = float(correlation) if pd.notna(correlation) else 0.0
+    return result
+
+
+def wnba_current_all_frame(module: Any, team: str) -> pd.DataFrame:
+    current, _ = wnba_operational_seasons(getattr(module, '_wnba_prediction_cutoff', None))
+    return wnba_load_team_dataframe(module, team, current, local=None)
+
+
+def wnba_non_overlapping_period_frames(module: Any, team: str, local: str) -> tuple[dict[str, pd.DataFrame], dict[str, float]]:
+    current, previous = wnba_operational_seasons(getattr(module, '_wnba_prediction_cutoff', None))
+    current_all = wnba_load_team_dataframe(module, team, current, local=None)
+    current_local = wnba_load_team_dataframe(module, team, current, local=local)
+    recent = current_all.tail(10).copy() if not current_all.empty else pd.DataFrame()
+    date_col = 'Date' if 'Date' in recent.columns else 'date' if 'date' in recent.columns else None
+    if date_col and not current_local.empty:
+        recent_dates = set(parse_mixed_dates(recent[date_col]).dropna().dt.normalize())
+        current_dates = parse_mixed_dates(current_local[date_col]).dt.normalize()
+        current_local = current_local[~current_dates.isin(recent_dates)].copy()
+    frames = {
+        'passada': wnba_load_team_dataframe(module, team, previous, local=local),
+        'atual': current_local,
+        'recente': recent,
+    }
+    weights = wnba_get_season_weights(module, len(current_all))
+    available = tuple(key for key, frame in frames.items() if frame is not None and not frame.empty and weights.get(key, 0) > 0)
+    return frames, normalize_weight_subset(weights, available) if available else weights
+
+
+def numeric_series(frame: Any, keys: tuple[str, ...]) -> pd.Series:
+    if frame is None or getattr(frame, 'empty', True):
+        return pd.Series(dtype=float)
+    combined = pd.Series(index=frame.index, dtype=float)
+    for key in keys:
+        if key in frame.columns:
+            combined = combined.combine_first(pd.to_numeric(frame[key], errors='coerce'))
+    return combined.dropna().reset_index(drop=True)
+
+
+def numeric_mean(frame: Any, keys: tuple[str, ...]) -> float:
+    values = numeric_series(frame, keys)
+    return float(values.mean()) if not values.empty else 0.0
+
+
+def weighted_valid(first: Any, second: Any, first_weight: float, second_weight: float) -> float | None:
+    values = [(to_float(first), first_weight), (to_float(second), second_weight)]
+    valid = [(value, weight) for value, weight in values if value is not None and value > 0]
+    total = sum(weight for _, weight in valid)
+    return sum(value * weight for value, weight in valid) / total if total else None
+
+
+def average_valid(*values: Any) -> float | None:
+    valid = [value for value in (to_float(item) for item in values) if value is not None and value > 0]
+    return sum(valid) / len(valid) if valid else None
 
 
 def require_float_metric(metrics: dict[str, Any], key: str, label: str) -> float:
@@ -1043,6 +1328,7 @@ def run_wnba_total_monte_carlo(
     away_mean: float,
     home_sd: float,
     away_sd: float,
+    score_correlation: float,
     line: float,
     side: str,
     simulations: int,
@@ -1057,9 +1343,13 @@ def run_wnba_total_monte_carlo(
         rng = random.Random(seed)
         totals: list[float] = []
         total_sum = 0.0
+        rho = max(-0.95, min(0.95, score_correlation))
+        residual_scale = math.sqrt(max(0.0, 1.0 - rho * rho))
         for _ in range(simulations):
-            home_points = max(0.0, rng.normalvariate(home_mean, home_sd))
-            away_points = max(0.0, rng.normalvariate(away_mean, away_sd))
+            home_z = rng.gauss(0.0, 1.0)
+            away_z = rho * home_z + residual_scale * rng.gauss(0.0, 1.0)
+            home_points = max(0.0, home_mean + home_sd * home_z)
+            away_points = max(0.0, away_mean + away_sd * away_z)
             total_points = home_points + away_points
             totals.append(total_points)
             total_sum += total_points
@@ -1111,7 +1401,8 @@ def wnba_simulate_matchup(
     cache_key = (
         f"{row.get('date')}|{row.get('time')}|{home}|{away}|"
         f"{round(home_expected, 3)}|{round(away_expected, 3)}|"
-        f"{round(expectation['home_sd'], 3)}|{round(expectation['away_sd'], 3)}"
+        f"{round(expectation['home_sd'], 3)}|{round(expectation['away_sd'], 3)}|"
+        f"{round(expectation['score_correlation'], 4)}"
     )
     cache = res.setdefault('_wnba_matchup_sim_cache', {})
     if cache_key not in cache:
@@ -1121,9 +1412,13 @@ def wnba_simulate_matchup(
         away_wins = 0
         margin_sum = 0.0
         total_sum = 0.0
+        rho = max(-0.95, min(0.95, expectation['score_correlation']))
+        residual_scale = math.sqrt(max(0.0, 1.0 - rho * rho))
         for _ in range(WNBA_TOTAL_SIMULATIONS):
-            home_points = max(0.0, rng.normalvariate(home_expected, expectation['home_sd']))
-            away_points = max(0.0, rng.normalvariate(away_expected, expectation['away_sd']))
+            home_z = rng.gauss(0.0, 1.0)
+            away_z = rho * home_z + residual_scale * rng.gauss(0.0, 1.0)
+            home_points = max(0.0, home_expected + expectation['home_sd'] * home_z)
+            away_points = max(0.0, away_expected + expectation['away_sd'] * away_z)
             margin = home_points - away_points
             margins.append(margin)
             margin_sum += margin
@@ -1172,6 +1467,8 @@ def wnba_simulate_matchup(
         'away_expected': away_expected,
         'home_sd': expectation['home_sd'],
         'away_sd': expectation['away_sd'],
+        'score_correlation': expectation['score_correlation'],
+        'projected_pace': expectation['projected_pace'],
         'model_total_expected': model_total,
         'market_anchor_line': market_anchor,
         'calibrated_total_expected': calibrated_total,
@@ -1202,14 +1499,7 @@ def wnba_historical_moneyline_probability(module: Any, home: str, away: str, pic
 
 
 def wnba_team_win_component_probability(module: Any, team: str, local: str, win: bool) -> dict[str, Any]:
-    current, previous = wnba_operational_seasons(datetime(WNBA_CURRENT_SEASON_YEAR, 1, 1))
-    current_all = wnba_load_team_dataframe(module, team, current, local=None)
-    base_weights = wnba_get_season_weights(module, len(current_all))
-    period_frames = {
-        'passada': wnba_load_team_dataframe(module, team, previous, local=local),
-        'atual': wnba_load_team_dataframe(module, team, current, local=local),
-        'recente': current_all.tail(10).copy() if current_all is not None and not getattr(current_all, 'empty', True) else pd.DataFrame(),
-    }
+    period_frames, base_weights = wnba_non_overlapping_period_frames(module, team, local)
     return wnba_binary_rate_by_period(period_frames, base_weights, lambda row: wnba_row_is_win(row) is win)
 
 
@@ -1224,14 +1514,7 @@ def wnba_historical_handicap_probability(module: Any, home: str, away: str, pick
 
 
 def wnba_team_handicap_component_probability(module: Any, team: str, local: str, line: float, invert: bool = False) -> dict[str, Any]:
-    current, previous = wnba_operational_seasons(datetime(WNBA_CURRENT_SEASON_YEAR, 1, 1))
-    current_all = wnba_load_team_dataframe(module, team, current, local=None)
-    base_weights = wnba_get_season_weights(module, len(current_all))
-    period_frames = {
-        'passada': wnba_load_team_dataframe(module, team, previous, local=local),
-        'atual': wnba_load_team_dataframe(module, team, current, local=local),
-        'recente': current_all.tail(10).copy() if current_all is not None and not getattr(current_all, 'empty', True) else pd.DataFrame(),
-    }
+    period_frames, base_weights = wnba_non_overlapping_period_frames(module, team, local)
 
     def covers(row: Any) -> bool | None:
         team_points = first_float(row, ('pontos_time', 'PTS', 'Tm', 'R', 'Pontos'))
@@ -1441,14 +1724,7 @@ def wnba_historical_total_probability(module: Any, home: str, away: str, line: f
 
 
 def wnba_team_total_component_probability(module: Any, team: str, local: str, line: float, side: str) -> dict[str, Any]:
-    current, previous = wnba_operational_seasons(datetime(WNBA_CURRENT_SEASON_YEAR, 1, 1))
-    current_all = wnba_load_team_dataframe(module, team, current, local=None)
-    base_weights = wnba_get_season_weights(module, len(current_all))
-    period_frames = {
-        'passada': wnba_load_team_dataframe(module, team, previous, local=local),
-        'atual': wnba_load_team_dataframe(module, team, current, local=local),
-        'recente': current_all.tail(10).copy() if current_all is not None and not getattr(current_all, 'empty', True) else pd.DataFrame(),
-    }
+    period_frames, base_weights = wnba_non_overlapping_period_frames(module, team, local)
     available_keys = tuple(key for key, frame in period_frames.items() if frame is not None and not getattr(frame, 'empty', True) and base_weights.get(key, 0) > 0)
     if not available_keys:
         return {
@@ -1558,7 +1834,7 @@ def wnba_load_team_dataframe(module: Any, team: str, season: str, local: str | N
     if cache is None:
         cache = {}
         setattr(module, '_wnba_dataframe_cache', cache)
-    cache_key = (str(team), str(season), str(local))
+    cache_key = (str(team), str(season), str(local), str(getattr(module, '_wnba_prediction_cutoff', '')))
     if cache_key in cache:
         return cache[cache_key]
     try:
@@ -1631,6 +1907,116 @@ def no_vig_pair(odd_a: float, odd_b: float) -> tuple[float, float] | None:
     return inv_a / total, inv_b / total
 
 
+def conservative_wnba_probability(probability: float, historical_games: int, market: str) -> tuple[float, float]:
+    effective_n = max(10, int(historical_games or 0))
+    standard_error = math.sqrt(max(0.0, probability * (1.0 - probability)) / effective_n)
+    factor = 0.75 if market == 'total' else 0.50
+    haircut = min(0.06 if market == 'total' else 0.04, factor * standard_error)
+    return max(0.01, min(0.99, probability - haircut)), haircut
+
+
+def is_supported_half_handicap_line(line: Any) -> bool:
+    value = to_float(line)
+    if value is None:
+        return False
+    return math.isclose(abs(value) % 1.0, 0.5, abs_tol=1e-9)
+
+
+def limit_wnba_correlated_lines(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    moneylines = [row for row in rows if normalize_text(row.get('mercado')) == 'moneyline']
+    restricted = [row for row in rows if normalize_text(row.get('mercado')) != 'moneyline']
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in restricted:
+        grouped.setdefault(normalize_text(row.get('mercado')), []).append(row)
+    selected = [max(moneylines, key=lambda item: float(item.get('edge') or 0.0))] if moneylines else []
+    for group in grouped.values():
+        valid = [row for row in group if to_float(row.get('linha')) is not None]
+        if not valid:
+            continue
+        principal = min(
+            valid,
+            key=lambda item: (
+                abs(float(item.get('linha')) - float(item.get('_market_anchor_line') if item.get('_market_anchor_line') is not None else item.get('linha'))),
+                -float(item.get('edge') or 0.0),
+            ),
+        )
+        side = principal.get('_selection_side')
+        same_side = [row for row in valid if row.get('_selection_side') == side]
+        same_side.sort(
+            key=lambda item: (
+                abs(float(item.get('linha')) - float(principal.get('_market_anchor_line') if principal.get('_market_anchor_line') is not None else principal.get('linha'))),
+                -float(item.get('edge') or 0.0),
+            )
+        )
+        selected.extend(same_side[:WNBA_MAX_CORRELATED_LINES])
+    return selected
+
+
+def wnba_handicap_anchor_for_side(row: Any, pick_side: str) -> float | None:
+    best: tuple[float, float] | None = None
+    for idx in range(1, 40):
+        home_line = to_float(get_row_value(row, (f'odds_Asian_handicap_FT_including_OT_Linha{idx}_HANDICAP',)))
+        away_line = to_float(get_row_value(row, (f'odds_Asian_handicap_FT_including_OT_Linha{idx}_Opp_HANDICAP',)))
+        home_odd = market_odd_from_wide(row, f'odds_Asian_handicap_FT_including_OT_Linha{idx}_1')
+        away_odd = market_odd_from_wide(row, f'odds_Asian_handicap_FT_including_OT_Linha{idx}_Opp_Odd')
+        if None in (home_line, away_line, home_odd, away_odd):
+            continue
+        no_vig = no_vig_pair(float(home_odd), float(away_odd))
+        if no_vig is None:
+            continue
+        distance = abs(no_vig[0] - 0.5)
+        line = float(home_line) if pick_side == 'home' else float(away_line)
+        if best is None or distance < best[0]:
+            best = (distance, line)
+    return best[1] if best else None
+
+
+def apply_wnba_exposure_caps(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    game_used: dict[str, float] = {}
+    market_used: dict[tuple[str, str], float] = {}
+    kept: list[dict[str, Any]] = []
+    for row in sorted(rows, key=lambda item: -float(item.get('edge') or 0.0)):
+        game = str(row.get('jogo') or '')
+        market = normalize_text(row.get('mercado'))
+        requested = parse_units(stake_sugerida(row.get('probabilidade_final'), row.get('edge'), row.get('odd_ofertada')))
+        available = min(
+            WNBA_MAX_GAME_UNITS - game_used.get(game, 0.0),
+            WNBA_MAX_MARKET_UNITS - market_used.get((game, market), 0.0),
+            WNBA_MAX_PICK_UNITS,
+        )
+        allocated = math.floor(max(0.0, min(requested, available)) * 4.0 + 1e-9) / 4.0
+        if allocated < 0.25:
+            continue
+        row['stake'] = f'{allocated:.2f}'.rstrip('0').rstrip('.') + 'u'
+        game_used[game] = game_used.get(game, 0.0) + allocated
+        market_used[(game, market)] = market_used.get((game, market), 0.0) + allocated
+        kept.append(row)
+    return kept
+
+
+def parse_units(value: Any) -> float:
+    try:
+        return float(str(value or '').lower().replace('u', '').strip())
+    except ValueError:
+        return 0.0
+
+
+def build_wnba_runtime_diagnostics(rows: list[dict[str, Any]], errors: list[str]) -> dict[str, Any]:
+    return {
+        'enabled': True,
+        'mode': 'single_controlled_engine',
+        'model_version': BASKETBALL_WNBA_MODEL_VERSION,
+        'published_count': len(rows),
+        'handicap_count': sum(1 for row in rows if 'handicap' in normalize_text(row.get('mercado'))),
+        'data_errors': [error for error in errors if 'WNBA_DATA_' in error][:20],
+        'limits': {
+            'max_lines_per_market': WNBA_MAX_CORRELATED_LINES,
+            'max_market_units': WNBA_MAX_MARKET_UNITS,
+            'max_game_units': WNBA_MAX_GAME_UNITS,
+        },
+    }
+
+
 def mark_wnba_discard(item: dict[str, Any], reason: str, keep: bool = False) -> dict[str, Any] | None:
     item['wnba_v1_1_discard_reason'] = reason
     item['observacoes'] = append_wnba_debug(item.get('observacoes'), {'discard_reason': reason}, [reason])
@@ -1645,7 +2031,7 @@ def append_wnba_debug(observacao: Any, debug: dict[str, Any], reasons: list[str]
     if reason_text:
         debug_items.append(f"motivos={reason_text}")
     if debug_items:
-        parts.append("WNBA V1.1: " + "; ".join(debug_items))
+        parts.append("WNBA V2.0: " + "; ".join(debug_items))
     return " | ".join(parts)
 
 
@@ -1693,7 +2079,7 @@ def normalize_rows(rows: list[dict[str, Any]], league: str) -> list[dict[str, An
             'probabilidade': prob,
             'probabilidade_final': prob,
             'edge': edge,
-            'stake': row.get('stake') or stake_sugerida(prob, edge),
+            'stake': row.get('stake') or stake_sugerida(prob, edge, odd),
             'observacoes': enrich_wnba_observacoes(row, league),
             'dados_tecnicos': enrich_wnba_context(row.get('dados_tecnicos'), row, league),
             'contexto_adicional': enrich_wnba_context(row.get('contexto_modelo') or row.get('dados_tecnicos'), row, league),
@@ -1835,7 +2221,7 @@ def format_line_key(value: float) -> str:
 
 def normalize_date_for_model(value: Any) -> str:
     text = clean(value)
-    dt = pd.to_datetime(text, errors='coerce', dayfirst=True)
+    dt = parse_single_date(text)
     if pd.notna(dt):
         return dt.strftime('%Y-%m-%d')
     return text
@@ -1845,7 +2231,7 @@ def format_date_for_app(value: Any) -> str:
     # dayfirst=True: as entradas do fluxo brasileiro chegam como DD/MM/YYYY.
     # Sem esse flag, o pandas assume mês-primeiro e "09/07/2026" (9 de julho)
     # vira 2026-09-07, quebrando o filtro "Hoje" na Validação Crítica.
-    dt = pd.to_datetime(value, errors='coerce', dayfirst=True)
+    dt = parse_single_date(value)
     if pd.notna(dt):
         return dt.strftime('%d/%m/%Y')
     return clean(value)
@@ -1857,14 +2243,19 @@ def normalize_time(value: Any) -> str:
     return m.group(1) if m else text
 
 
-def stake_sugerida(prob: float | None, edge: float | None) -> str:
-    prob = prob or 0
-    edge = edge or 0
-    if prob >= 65 and edge >= 8:
-        return '1.5u'
-    if prob >= 60 and edge >= 4:
-        return '1.0u'
-    return '0.5u'
+def stake_sugerida(prob: float | None, edge: float | None, odd: float | None = None) -> str:
+    probability = (to_float(prob) or 0.0) / 100.0
+    edge_decimal = (to_float(edge) or 0.0) / 100.0
+    offered_odd = to_float(odd)
+    if offered_odd is None and probability > 0:
+        offered_odd = (1.0 + edge_decimal) / probability
+    if probability <= 0 or offered_odd is None or offered_odd <= 1:
+        return '0.25u'
+    full_kelly = max(0.0, (offered_odd * probability - 1.0) / (offered_odd - 1.0))
+    units = min(WNBA_MAX_PICK_UNITS, full_kelly * WNBA_KELLY_FRACTION * 100.0)
+    rounded = math.floor(units * 4.0 + 1e-9) / 4.0
+    rounded = max(0.25, rounded)
+    return f'{rounded:.2f}'.rstrip('0').rstrip('.') + 'u'
 
 
 def build_parecer(row: dict[str, Any]) -> str:

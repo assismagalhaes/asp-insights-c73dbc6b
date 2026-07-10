@@ -61,8 +61,79 @@ class BasketballWnbaV11Tests(unittest.TestCase):
     def test_wnba_2026_is_current_operational_season(self) -> None:
         self.assertEqual(runner.wnba_operational_seasons(datetime(2026, 6, 1)), ("2026", "2025"))
 
-    def test_wnba_2027_does_not_become_current_operational_season(self) -> None:
-        self.assertEqual(runner.wnba_operational_seasons(datetime(2027, 6, 1)), ("2026", "2025"))
+    def test_wnba_season_advances_with_prediction_date(self) -> None:
+        self.assertEqual(runner.wnba_operational_seasons(datetime(2027, 6, 1)), ("2027", "2026"))
+
+    def test_iso_date_is_not_reinterpreted_as_day_first(self) -> None:
+        self.assertEqual(runner.parse_single_date("2026-07-09").strftime("%Y-%m-%d"), "2026-07-09")
+        self.assertEqual(runner.format_date_for_app("2026-07-09"), "09/07/2026")
+
+    def test_only_half_point_handicap_lines_are_supported(self) -> None:
+        self.assertTrue(runner.is_supported_half_handicap_line(-4.5))
+        self.assertTrue(runner.is_supported_half_handicap_line(7.5))
+        self.assertFalse(runner.is_supported_half_handicap_line(-4.25))
+        self.assertFalse(runner.is_supported_half_handicap_line(7.75))
+
+    def test_probability_haircut_is_larger_for_small_samples(self) -> None:
+        small, small_haircut = runner.conservative_wnba_probability(0.62, 10, "total")
+        large, large_haircut = runner.conservative_wnba_probability(0.62, 100, "total")
+        self.assertLess(small, large)
+        self.assertGreater(small_haircut, large_haircut)
+
+    def test_correlated_market_limit_keeps_principal_and_two_alternatives(self) -> None:
+        rows = [
+            {
+                "mercado": "Over/Under Pontos",
+                "pick": f"Under {line}",
+                "linha": line,
+                "edge": edge,
+                "_selection_side": "under",
+                "_market_anchor_line": 170.5,
+            }
+            for line, edge in ((168.5, 8), (169.5, 7), (170.5, 6), (171.5, 5), (172.5, 4))
+        ]
+        selected = runner.limit_wnba_correlated_lines(rows)
+        self.assertEqual(len(selected), 3)
+        self.assertEqual([row["linha"] for row in selected], [170.5, 169.5, 171.5])
+
+    def test_fractional_kelly_is_capped_per_pick(self) -> None:
+        self.assertEqual(runner.stake_sugerida(70.0, 40.0, 2.0), "1u")
+        self.assertEqual(runner.stake_sugerida(52.0, 3.0, 1.98), "0.25u")
+
+    def test_exposure_caps_market_and_game(self) -> None:
+        rows = [
+            {
+                "jogo": "A vs B",
+                "mercado": "Over/Under Pontos",
+                "pick": f"Under {line}",
+                "probabilidade_final": 65.0,
+                "edge": edge,
+                "odd_ofertada": 1.90,
+            }
+            for line, edge in ((170.5, 20), (171.5, 18), (172.5, 16))
+        ]
+        selected = runner.apply_wnba_exposure_caps(rows)
+        self.assertLessEqual(sum(runner.parse_units(row["stake"]) for row in selected), runner.WNBA_MAX_MARKET_UNITS)
+
+    def test_data_access_prefers_merged_and_applies_as_of_cutoff(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            merged = base / "wnba" / "2026" / "merged"
+            merged.mkdir(parents=True)
+            pd.DataFrame([
+                {"Date": "2026-06-01", "Loc": "", "pontos_time": 80, "pontos_adversario": 75},
+                {"Date": "2026-06-10", "Loc": "", "pontos_time": 90, "pontos_adversario": 85},
+            ]).to_csv(merged / "dados_basquete_tor.csv", index=False)
+            module = SimpleNamespace(
+                HIST_DIR=base,
+                carregar_dados_time=lambda *args, **kwargs: pd.DataFrame([{"Date": "2026-01-01", "pontos_time": 1}]),
+                _read_csv_flex=lambda path: pd.read_csv(path),
+                normalizar_schema_wnba=lambda frame: frame,
+            )
+            runner.configure_wnba_data_access(module)
+            module._wnba_prediction_cutoff = datetime(2026, 6, 5)
+            result = module.carregar_dados_time("TOR", "2026", local="casa", filtrar_ot=False)
+            self.assertEqual(result["pontos_time"].tolist(), [80])
 
     def test_total_points_uses_real_rate_against_line_not_binary_expectation(self) -> None:
         module = FakeWnbaModule([
@@ -149,7 +220,7 @@ class BasketballWnbaV11Tests(unittest.TestCase):
             "probabilidade_final": 55.0,
         }
         adjusted, debug = runner.recalculate_wnba_total_pick(module, row, res, item, "TOR", "PHO", lines=[176.5])
-        self.assertEqual(debug["pesos_probabilidade"], runner.WNBA_TOTAL_V1_3_WEIGHTS)
+        self.assertEqual(debug["pesos_probabilidade"], runner.WNBA_TOTAL_BLEND_WEIGHTS)
         self.assertEqual(debug["simulacoes"], runner.WNBA_TOTAL_SIMULATIONS)
         self.assertIn("total_calibrado", debug)
         self.assertIn("home", debug["componentes_historicos"])
@@ -395,7 +466,7 @@ class BasketballWnbaV11Tests(unittest.TestCase):
             "odd_ofertada": 1.80,
         }
         adjusted, debug = runner.recalculate_wnba_moneyline_pick(module, row, res, item, "TOR", "PHO", lines=[170.5])
-        self.assertEqual(debug["pesos_probabilidade"], runner.WNBA_MONEYLINE_V1_4_WEIGHTS)
+        self.assertEqual(debug["pesos_probabilidade"], runner.WNBA_MONEYLINE_BLEND_WEIGHTS)
         self.assertIn("vitorias_reais", debug)
         self.assertIn("vitorias_sim_home", debug)
         self.assertIn("prob_no_vig", debug)
@@ -460,7 +531,7 @@ class BasketballWnbaV11Tests(unittest.TestCase):
             "odd_ofertada": 1.91,
         }
         adjusted, debug = runner.recalculate_wnba_handicap_pick(module, row, res, item, "TOR", "PHO", lines=[170.5])
-        self.assertEqual(debug["pesos_probabilidade"], runner.WNBA_HANDICAP_V1_8_WEIGHTS)
+        self.assertEqual(debug["pesos_probabilidade"], runner.WNBA_HANDICAP_BLEND_WEIGHTS)
         self.assertIn("coberturas_reais", debug)
         self.assertIn("coberturas_simuladas", debug)
         self.assertIn("prob_no_vig", debug)

@@ -1303,6 +1303,7 @@ def _executar_modelo_basketball(job_id: str, liga: str):
         "dados_tecnicos": resposta_script.get("dados_tecnicos", ""),
         "mensagem": resposta_script.get("mensagem"),
         "prognosticos": resposta_script.get("prognosticos", []),
+        "handicap_shadow_diagnostics": resposta_script.get("handicap_shadow_diagnostics"),
     }
 
     return limpar_json_nan(resposta_final)
