@@ -34,7 +34,8 @@ SET scope_key = lower(concat_ws('|',
 ));
 
 ALTER TABLE public.opportunity_ranking_runs
-  DROP CONSTRAINT IF EXISTS opportunity_ranking_runs_user_date_stage_uq;
+  DROP CONSTRAINT IF EXISTS opportunity_ranking_runs_user_date_stage_uq,
+  DROP CONSTRAINT IF EXISTS opportunity_ranking_runs_user_date_stage_scope_uq;
 
 ALTER TABLE public.opportunity_ranking_runs
   ADD CONSTRAINT opportunity_ranking_runs_user_date_stage_scope_uq
@@ -47,14 +48,17 @@ CREATE INDEX IF NOT EXISTS idx_opp_rank_runs_scope_history
 ALTER TABLE public.prognosticos
   ADD COLUMN IF NOT EXISTS is_top_final boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS top_final_rank integer,
-  ADD COLUMN IF NOT EXISTS top_final_run_id uuid
-    REFERENCES public.opportunity_ranking_runs(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS top_final_run_id uuid,
   ADD COLUMN IF NOT EXISTS top_final_at timestamptz;
 
 ALTER TABLE public.prognosticos
-  DROP CONSTRAINT IF EXISTS prognosticos_top_final_rank_check;
+  DROP CONSTRAINT IF EXISTS prognosticos_top_final_rank_check,
+  DROP CONSTRAINT IF EXISTS prognosticos_top_final_run_id_fkey;
 
 ALTER TABLE public.prognosticos
+  ADD CONSTRAINT prognosticos_top_final_run_id_fkey
+    FOREIGN KEY (top_final_run_id)
+    REFERENCES public.opportunity_ranking_runs(id) ON DELETE SET NULL,
   ADD CONSTRAINT prognosticos_top_final_rank_check
     CHECK (top_final_rank IS NULL OR top_final_rank BETWEEN 1 AND 3);
 
