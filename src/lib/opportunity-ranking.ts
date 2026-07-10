@@ -18,11 +18,12 @@ import {
 
 export const MAX_FINAL_OPPORTUNITIES = 3;
 export const DEFAULT_PRE_AI_SHORTLIST_LIMIT = 12;
+export const MAX_PRE_AI_THESES_PER_EVENT = 2;
 export const PRELIMINARY_SCORE_WEIGHTS = {
   valueScore: 0.38,
   probabilityMarginScore: 0.24,
-  dataReadinessScore: 0.20,
-  marketRiskScore: 0.10,
+  dataReadinessScore: 0.2,
+  marketRiskScore: 0.1,
   timingScore: 0.06,
   sourceIntegrityScore: 0.02,
 } as const;
@@ -59,6 +60,19 @@ export interface RankedOpportunityCandidate {
   score_components: OpportunityScoreComponents;
   risk_flags: string[];
   reasons: string[];
+  group_size: number;
+  group_alternatives: RankedOpportunityAlternative[];
+}
+
+export interface RankedOpportunityAlternative {
+  prognostico_id: string;
+  mercado: string;
+  pick: string;
+  linha: string | null;
+  odd_ofertada: number;
+  edge: number;
+  opportunity_score_pre: number;
+  confidence_score: number;
 }
 
 export interface PersistedOpportunityRankingRun {
@@ -429,7 +443,8 @@ export async function generateAndPersistPreAiOpportunityShortlist({
   const userId = userData.user?.id;
   if (!userId) throw new Error("Sessao Supabase nao encontrada para gerar ranking.");
 
-  const candidates = buildPreAiShortlist(prognosticos, limit);
+  const allEligibleCandidates = buildEligiblePreAiCandidates(prognosticos);
+  const candidates = selectDiversifiedPreAiShortlist(allEligibleCandidates, limit);
   const { data: runRow, error: runError } = await supabase
     .from("opportunity_ranking_runs")
     .upsert(
@@ -446,6 +461,8 @@ export async function generateAndPersistPreAiOpportunityShortlist({
         score_weights: PRELIMINARY_SCORE_WEIGHTS as unknown as Json,
         metadata: {
           limit,
+          total_eligible_before_grouping: allEligibleCandidates.length,
+          max_theses_per_event: MAX_PRE_AI_THESES_PER_EVENT,
           generated_from: "validacao_critica_pendentes",
           generated_at: new Date().toISOString(),
         } as Json,
@@ -489,6 +506,9 @@ export async function generateAndPersistPreAiOpportunityShortlist({
       data: candidate.prognostico.data,
       hora: candidate.prognostico.hora,
       jogo: candidate.prognostico.jogo,
+      thesis_group_key: candidate.group_key,
+      thesis_group_size: candidate.group_size,
+      alternatives: candidate.group_alternatives,
     },
   }));
 
@@ -541,7 +561,7 @@ export function buildOpportunityEventKey(prognostico: Prognostico): string {
 }
 
 export function buildOpportunityGroupKey(prognostico: Prognostico): string {
-  return `${buildOpportunityEventKey(prognostico)}|${getMarketFamilyKey(prognostico)}`;
+  return `${buildOpportunityEventKey(prognostico)}|${getMarketFamilyKey(prognostico)}|${getSelectionSideKey(prognostico)}`;
 }
 
 export function calculatePreliminaryOpportunityScore(
@@ -556,15 +576,15 @@ export function calculatePreliminaryOpportunityScore(
     prognostico,
   );
   const riskFlags = critical.flags.map((flag) => flag.code);
-  const rawScore = round(
-    clamp(critical.score + critical.components.risk_penalty, 0, 100),
-    1,
-  );
+  const rawScore = round(clamp(critical.score + critical.components.risk_penalty, 0, 100), 1);
   const score_components: OpportunityScoreComponents = {
     edge_quality_score: critical.components.value_score,
     probability_quality_score: critical.components.probability_margin_score,
     odd_quality_score: critical.components.odds_operational_score,
-    value_gap_score: critical.valueGap != null ? normalizePositive(critical.valueGap, 18) : critical.components.value_score,
+    value_gap_score:
+      critical.valueGap != null
+        ? normalizePositive(critical.valueGap, 18)
+        : critical.components.value_score,
     data_quality_score: critical.components.data_readiness_score,
     model_origin_score: critical.components.source_integrity_score,
     risk_penalty: critical.components.risk_penalty,
@@ -582,6 +602,8 @@ export function calculatePreliminaryOpportunityScore(
     score_components,
     risk_flags: riskFlags,
     reasons: buildPreliminaryReasonsFromCritical(prognostico, critical),
+    group_size: 1,
+    group_alternatives: [],
   };
 }
 
@@ -589,12 +611,83 @@ export function buildPreAiShortlist(
   prognosticos: Prognostico[],
   limit = DEFAULT_PRE_AI_SHORTLIST_LIMIT,
 ): RankedOpportunityCandidate[] {
+  return selectDiversifiedPreAiShortlist(buildEligiblePreAiCandidates(prognosticos), limit);
+}
+
+function buildEligiblePreAiCandidates(prognosticos: Prognostico[]): RankedOpportunityCandidate[] {
   return prognosticos
     .filter((p) => p.resultado === "PENDENTE" && p.status_validacao === "PENDENTE")
     .map(calculatePreliminaryOpportunityScore)
     .filter((item) => item.ranking_status !== "BLOQUEADA")
-    .sort(comparePreliminaryCandidates)
-    .slice(0, limit);
+    .sort(comparePreliminaryCandidates);
+}
+
+function selectDiversifiedPreAiShortlist(
+  candidates: RankedOpportunityCandidate[],
+  limit: number,
+): RankedOpportunityCandidate[] {
+  const representatives = Array.from(groupCandidatesByThesis(candidates).values())
+    .map((group) => buildThesisRepresentative(group))
+    .sort(comparePreliminaryCandidates);
+  const eventCounts = new Map<string, number>();
+  const selected: RankedOpportunityCandidate[] = [];
+
+  for (const candidate of representatives) {
+    if (selected.length >= limit) break;
+    const count = eventCounts.get(candidate.event_key) ?? 0;
+    if (count >= MAX_PRE_AI_THESES_PER_EVENT) continue;
+    selected.push(candidate);
+    eventCounts.set(candidate.event_key, count + 1);
+  }
+
+  return selected;
+}
+
+function groupCandidatesByThesis(
+  candidates: RankedOpportunityCandidate[],
+): Map<string, RankedOpportunityCandidate[]> {
+  const groups = new Map<string, RankedOpportunityCandidate[]>();
+  for (const candidate of candidates) {
+    const existing = groups.get(candidate.group_key);
+    if (existing) existing.push(candidate);
+    else groups.set(candidate.group_key, [candidate]);
+  }
+  return groups;
+}
+
+function buildThesisRepresentative(
+  group: RankedOpportunityCandidate[],
+): RankedOpportunityCandidate {
+  const sorted = group.slice().sort(comparePreliminaryCandidates);
+  const [best, ...alternatives] = sorted;
+  return {
+    ...best,
+    group_size: sorted.length,
+    group_alternatives: alternatives.map(candidateToAlternative),
+    reasons: [
+      ...best.reasons,
+      ...(alternatives.length
+        ? [
+            `${alternatives.length} linha(s) correlacionada(s) agrupada(s) como alternativas desta tese.`,
+          ]
+        : []),
+    ],
+  };
+}
+
+function candidateToAlternative(
+  candidate: RankedOpportunityCandidate,
+): RankedOpportunityAlternative {
+  return {
+    prognostico_id: candidate.prognostico.id,
+    mercado: getOpportunityMarketLabel(candidate.prognostico),
+    pick: getOpportunityPickLabel(candidate.prognostico),
+    linha: candidate.prognostico.linha,
+    odd_ofertada: getOddEfetiva(candidate.prognostico),
+    edge: getEdgeEfetivo(candidate.prognostico),
+    opportunity_score_pre: candidate.opportunity_score_pre,
+    confidence_score: candidate.confidence_score,
+  };
 }
 
 function comparePreliminaryCandidates(
@@ -618,7 +711,8 @@ function buildPreliminaryReasonsFromCritical(
     `Probabilidade implicita ${formatNumber(critical.impliedProbability)}% e margem ${formatNumber(critical.probabilityMargin)} p.p.`,
     `Odd efetiva ${getOddEfetiva(prognostico).toFixed(2)} contra odd de valor ${prognostico.odd_valor.toFixed(2)}.`,
   ];
-  if (critical.valueGap != null) reasons.push(`Gap de valor da odd: ${critical.valueGap.toFixed(2)}%.`);
+  if (critical.valueGap != null)
+    reasons.push(`Gap de valor da odd: ${critical.valueGap.toFixed(2)}%.`);
   if (getDadosTecnicos(prognostico)?.trim()) {
     reasons.push("Contexto tecnico do modelo disponivel para enriquecimento/IA.");
   }
@@ -668,16 +762,47 @@ function formatNumber(value: number | null | undefined): string {
 }
 
 function getMarketFamilyKey(prognostico: Prognostico): string {
-  const mercado = normalizeKeyPart(getOpportunityMarketLabel(prognostico));
-  if (
-    /moneyline|1x2|resultado final|resultadofinal|vencedor|handicap|dupla chance|duplachance|double chance|doublechance/.test(
-      mercado,
-    )
-  ) {
-    return "resultado-protecao";
+  const mercado = normalizeKeyPart(
+    `${getOpportunityMarketLabel(prognostico)} ${getOpportunityPickLabel(prognostico)}`,
+  );
+  if (/player prop|props|jogador|rebotes|assistencias|pra\b/.test(mercado)) return "player-props";
+  if (/escanteio|corner/.test(mercado)) return "escanteios";
+  if (/handicap|spread|run line|asian/.test(mercado)) return "handicap-spread";
+  if (/overunder|over under|total|over\b|under\b|gols|pontos|corridas|runs/.test(mercado))
+    return "totais";
+  if (/dupla chance|duplachance|double chance|doublechance/.test(mercado)) return "dupla-chance";
+  if (/moneyline|1x2|resultado final|resultadofinal|vencedor/.test(mercado)) return "resultado";
+  return `mercado:${normalizeKeyPart(getOpportunityMarketLabel(prognostico))}`;
+}
+
+function getSelectionSideKey(prognostico: Prognostico): string {
+  const marketFamily = getMarketFamilyKey(prognostico);
+  const pick = normalizeKeyPart(getOpportunityPickLabel(prognostico));
+  const line = normalizeKeyPart(prognostico.linha);
+  const pickWithoutNumbers = pick
+    .replace(/[+-]?\d+(?:[.,]\d+)?/g, " ")
+    .replace(/\bmeio\b|\bhalf\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (marketFamily === "totais") {
+    if (/\bover\b|\bmais\b|acima/.test(pick)) return "over";
+    if (/\bunder\b|\bmenos\b|abaixo/.test(pick)) return "under";
   }
-  if (/overunder|over under|total/.test(mercado)) return "totais";
-  return `mercado:${mercado}`;
+
+  if (marketFamily === "handicap-spread") {
+    return pickWithoutNumbers || line || "handicap-side";
+  }
+
+  if (marketFamily === "resultado" || marketFamily === "dupla-chance") {
+    return pickWithoutNumbers || "resultado-side";
+  }
+
+  if (marketFamily === "escanteios" || marketFamily === "player-props") {
+    return pickWithoutNumbers || line || marketFamily;
+  }
+
+  return `${pickWithoutNumbers}|${line}`.replace(/\|$/, "") || "default-side";
 }
 
 function isSourceOnlyMarket(value: string): boolean {

@@ -75,6 +75,7 @@ import {
   useEnrichOpportunityRankingItemPreview,
   useLatestPreAiOpportunityShortlist,
   type PersistedOpportunityRankingRun,
+  type RankedOpportunityAlternative,
   type RankedOpportunityCandidate,
 } from "@/lib/opportunity-ranking";
 
@@ -230,14 +231,16 @@ function getBestGroupCandidate(
   group: ValidationGroup,
   candidates: Map<string, RankedOpportunityCandidate>,
 ): RankedOpportunityCandidate | null {
-  return group.opcoes
-    .map((option) => candidates.get(option.id) ?? null)
-    .filter((candidate): candidate is RankedOpportunityCandidate => Boolean(candidate))
-    .sort(
-      (a, b) =>
-        b.opportunity_score_pre - a.opportunity_score_pre ||
-        b.confidence_score - a.confidence_score,
-    )[0] ?? null;
+  return (
+    group.opcoes
+      .map((option) => candidates.get(option.id) ?? null)
+      .filter((candidate): candidate is RankedOpportunityCandidate => Boolean(candidate))
+      .sort(
+        (a, b) =>
+          b.opportunity_score_pre - a.opportunity_score_pre ||
+          b.confidence_score - a.confidence_score,
+      )[0] ?? null
+  );
 }
 
 function formatOptionCount(count: number): string {
@@ -403,10 +406,13 @@ function Validacao() {
   );
 
   const preliminaryCandidateById = useMemo(
-    () => new Map(pendentes.map((p) => {
-      const candidate = calculatePreliminaryOpportunityScore(p);
-      return [p.id, candidate] as const;
-    })),
+    () =>
+      new Map(
+        pendentes.map((p) => {
+          const candidate = calculatePreliminaryOpportunityScore(p);
+          return [p.id, candidate] as const;
+        }),
+      ),
     [pendentes],
   );
   const grupos = useMemo(() => {
@@ -850,8 +856,6 @@ function Validacao() {
 
       <ScreenerCriticalDraftPanel />
 
-
-
       {/* Filtros */}
       <div className="rounded-lg border border-border bg-card p-3">
         <div className="flex flex-wrap items-end gap-3">
@@ -1128,7 +1132,7 @@ function Validacao() {
                     label="Odd mercado base"
                     value={formatOptionalOdd(getOddMercadoBase(p))}
                   />
-                  
+
                   <Metric label="Odd valor" value={p.odd_valor.toFixed(2)} />
                   <Metric
                     label="Probabilidade"
@@ -1529,7 +1533,7 @@ function PreAiShortlistPanel({
       <div className="grid gap-2 sm:grid-cols-4">
         <Metric label="Candidatas agora" value={String(candidates.length)} />
         <Metric label="Limite pré-IA" value={String(DEFAULT_PRE_AI_SHORTLIST_LIMIT)} />
-        <Metric label="Último run" value={loadingLatest ? "..." : latestDate ?? "-"} />
+        <Metric label="Último run" value={loadingLatest ? "..." : (latestDate ?? "-")} />
         <Metric
           label="Itens salvos"
           value={
@@ -1547,7 +1551,10 @@ function PreAiShortlistPanel({
               <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Oportunidade salva para Matchups/Preview
               </Label>
-              <Select value={selectedPreviewItemIdEffective} onValueChange={setSelectedPreviewItemId}>
+              <Select
+                value={selectedPreviewItemIdEffective}
+                onValueChange={setSelectedPreviewItemId}
+              >
                 <SelectTrigger className="mt-1">
                   <SelectValue placeholder="Selecione uma oportunidade" />
                 </SelectTrigger>
@@ -1584,11 +1591,18 @@ function PreAiShortlistPanel({
             onChange={(event) => setPreviewText(event.target.value)}
           />
           {selectedPreviewItem && (
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              Status do preview:{" "}
-              <span className="font-semibold text-foreground">
-                {formatPreviewStatus(selectedPreviewItem.matchup_preview_status)}
-              </span>
+            <div className="space-y-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+              <div>
+                Status do preview:{" "}
+                <span className="font-semibold text-foreground">
+                  {formatPreviewStatus(selectedPreviewItem.matchup_preview_status)}
+                </span>
+              </div>
+              {formatSavedAlternativesSummary(selectedPreviewItem) && (
+                <div className="normal-case tracking-normal">
+                  {formatSavedAlternativesSummary(selectedPreviewItem)}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1617,7 +1631,10 @@ function PreAiShortlistPanel({
                     <td className="px-3 py-2">
                       <div className="font-medium">{String(metadata.jogo ?? item.event_key)}</div>
                       <div className="text-[10px] text-muted-foreground">
-                        {[metadata.mercado_operacional ?? metadata.mercado, metadata.pick_operacional ?? metadata.pick]
+                        {[
+                          metadata.mercado_operacional ?? metadata.mercado,
+                          metadata.pick_operacional ?? metadata.pick,
+                        ]
                           .filter(Boolean)
                           .join(" | ")}
                       </div>
@@ -1626,11 +1643,9 @@ function PreAiShortlistPanel({
                       <span
                         className={cn(
                           "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
-                          item.ranking_status === "TOP_FINAL" &&
-                            "bg-success/10 text-success",
+                          item.ranking_status === "TOP_FINAL" && "bg-success/10 text-success",
                           item.ranking_status === "RESERVA" && "bg-muted text-muted-foreground",
-                          item.ranking_status === "CONFIRMA_IA" &&
-                            "bg-primary/10 text-primary",
+                          item.ranking_status === "CONFIRMA_IA" && "bg-primary/10 text-primary",
                         )}
                       >
                         {item.ranking_status}
@@ -1659,6 +1674,7 @@ function PreAiShortlistPanel({
                 <th className="px-3 py-2 text-left font-semibold">Jogo</th>
                 <th className="px-3 py-2 text-left font-semibold">Mercado</th>
                 <th className="px-3 py-2 text-left font-semibold">Pick</th>
+                <th className="px-3 py-2 text-left font-semibold">Alternativas</th>
                 <th className="px-3 py-2 text-right font-semibold">Score</th>
                 <th className="px-3 py-2 text-right font-semibold">Conf.</th>
                 <th className="px-3 py-2 text-right font-semibold">Edge</th>
@@ -1677,9 +1693,7 @@ function PreAiShortlistPanel({
                         : ""}
                     </div>
                   </td>
-                  <td className="px-3 py-2">
-                    {getOpportunityMarketLabel(candidate.prognostico)}
-                  </td>
+                  <td className="px-3 py-2">{getOpportunityMarketLabel(candidate.prognostico)}</td>
                   <td className="px-3 py-2">
                     {getOpportunityPickLabel(candidate.prognostico)}
                     {shouldShowLinha(
@@ -1688,6 +1702,9 @@ function PreAiShortlistPanel({
                     )
                       ? ` ${candidate.prognostico.linha ?? ""}`
                       : ""}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    {formatCandidateAlternativesSummary(candidate)}
                   </td>
                   <td className="px-3 py-2 text-right font-mono">
                     {candidate.opportunity_score_pre.toFixed(1)}
@@ -1716,10 +1733,48 @@ function formatRankingItemLabel(item: PersistedOpportunityRankingRun["items"][nu
   const metadata = asRankingItemMetadata(item);
   const rank = item.rank_prelim ? `#${item.rank_prelim}` : "#-";
   const jogo = String(metadata.jogo ?? item.event_key);
-  const pick = [metadata.mercado_operacional ?? metadata.mercado, metadata.pick_operacional ?? metadata.pick]
+  const pick = [
+    metadata.mercado_operacional ?? metadata.mercado,
+    metadata.pick_operacional ?? metadata.pick,
+  ]
     .filter(Boolean)
     .join(" | ");
-  return [rank, jogo, pick].filter(Boolean).join(" - ");
+  const alternatives = getSavedAlternatives(item).length;
+  const suffix = alternatives ? `+${alternatives} alt.` : "";
+  return [rank, jogo, pick, suffix].filter(Boolean).join(" - ");
+}
+
+function formatCandidateAlternativesSummary(candidate: RankedOpportunityCandidate): string {
+  if (!candidate.group_alternatives.length) return "-";
+  return candidate.group_alternatives.slice(0, 3).map(formatAlternativeLabel).join(" / ");
+}
+
+function formatSavedAlternativesSummary(
+  item: PersistedOpportunityRankingRun["items"][number],
+): string {
+  const alternatives = getSavedAlternatives(item);
+  if (!alternatives.length) return "";
+  return `Linhas alternativas agrupadas: ${alternatives.slice(0, 4).map(formatAlternativeLabel).join(" / ")}`;
+}
+
+function getSavedAlternatives(
+  item: PersistedOpportunityRankingRun["items"][number],
+): RankedOpportunityAlternative[] {
+  const metadata = asRankingItemMetadata(item);
+  return Array.isArray(metadata.alternatives)
+    ? metadata.alternatives.filter(isRankedOpportunityAlternative)
+    : [];
+}
+
+function isRankedOpportunityAlternative(value: unknown): value is RankedOpportunityAlternative {
+  return Boolean(
+    value && typeof value === "object" && "pick" in value && "opportunity_score_pre" in value,
+  );
+}
+
+function formatAlternativeLabel(alternative: RankedOpportunityAlternative): string {
+  const line = alternative.linha ? ` ${alternative.linha}` : "";
+  return `${alternative.pick}${line} (${alternative.opportunity_score_pre.toFixed(1)})`;
 }
 
 function formatPreviewStatus(status: string): string {
