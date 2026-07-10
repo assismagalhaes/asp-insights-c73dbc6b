@@ -2054,10 +2054,9 @@ def _split_date_time_values(date_value, time_value='') -> tuple[str, str]:
     raw_date = '' if pd.isna(date_value) else str(date_value).strip()
     raw_time = '' if pd.isna(time_value) else str(time_value).strip()
 
-    # dayfirst=True: entradas do fluxo brasileiro chegam como DD/MM/YYYY.
-    # Sem esse flag, o pandas assume mês-primeiro (US) e uma data como
-    # "09/07/2026" vira 2026-09-07 (7 de setembro) em vez de 9 de julho.
-    dt = pd.to_datetime(raw_date, errors='coerce', dayfirst=True)
+    # Entradas brasileiras usam dia primeiro; datas ISO devem preservar ano-mes-dia.
+    is_iso = bool(re.match(r'^\d{4}-\d{2}-\d{2}(?:\s|$)', raw_date))
+    dt = pd.to_datetime(raw_date, errors='coerce', dayfirst=not is_iso)
     if pd.notna(dt):
         data = dt.strftime('%d/%m/%Y')
         hora_embutida = dt.strftime('%H:%M') if (dt.hour or dt.minute or dt.second) else ''

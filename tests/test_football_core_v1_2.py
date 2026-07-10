@@ -55,6 +55,10 @@ class FootballCoreV12Test(unittest.TestCase):
         self.assertIn("2026/2027", core.CURRENT_SEASONS)
         self.assertIn("2025/2026", core.PREVIOUS_SEASONS)
 
+    def test_export_date_distinguishes_iso_from_brazilian_format(self):
+        self.assertEqual(core._split_date_time_values("2026-07-03", "12:00")[0], "03/07/2026")
+        self.assertEqual(core._split_date_time_values("09/07/2026", "12:00")[0], "09/07/2026")
+
     def test_expected_goals_apply_league_prior_shrinkage(self):
         result = core.estimate_expected_goals(
             gf_home=3.0,
