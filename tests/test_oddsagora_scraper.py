@@ -347,6 +347,7 @@ class OddsAgoraScraperParserTests(unittest.TestCase):
         self.assertEqual(rows[0]["home_odd"], 2.1)
         self.assertEqual(rows[0]["draw_odd"], 3.2)
         self.assertEqual(rows[0]["away_odd"], 3.6)
+        self.assertAlmostEqual(rows[0]["payout"], 93.8, places=1)
 
     def test_match_event_url_uses_sport_market_scope(self) -> None:
         template = {"version_id": "9", "sport_id": "1", "scope_id": "1", "xhashf": "yj650"}
@@ -414,7 +415,17 @@ class OddsAgoraScraperParserTests(unittest.TestCase):
             "d": {"oddsdata": {"back": {"E-bts": {"odds": {"16": [1.8, 1.95]}, "act": {"16": True}}}}},
         }
         double_payload = {
-            "d": {"oddsdata": {"back": {"E-double": {"odds": {"16": [1.25, 1.45, 1.32]}, "act": {"16": True}}}}},
+            "d": {
+                "oddsdata": {
+                    "back": {
+                        "E-double": {
+                            "odds": {"16": [1.25, 1.32, 1.45]},
+                            "movement": {"16": ["up", "down", "up"]},
+                            "act": {"16": True},
+                        }
+                    }
+                }
+            }
         }
 
         bts_rows = parse_match_event_payload(bts_payload, "bts", {"16": "bet365"})
@@ -423,8 +434,11 @@ class OddsAgoraScraperParserTests(unittest.TestCase):
         self.assertEqual(bts_rows[0]["yes_odd"], 1.8)
         self.assertEqual(bts_rows[0]["no_odd"], 1.95)
         self.assertEqual(double_rows[0]["home_draw_odd"], 1.25)
-        self.assertEqual(double_rows[0]["away_draw_odd"], 1.45)
         self.assertEqual(double_rows[0]["home_away_odd"], 1.32)
+        self.assertEqual(double_rows[0]["away_draw_odd"], 1.45)
+        self.assertEqual(double_rows[0]["movement"]["home_away"], "down")
+        self.assertEqual(double_rows[0]["movement"]["away_draw"], "up")
+        self.assertIsNone(double_rows[0]["payout"])
 
 
 if __name__ == "__main__":

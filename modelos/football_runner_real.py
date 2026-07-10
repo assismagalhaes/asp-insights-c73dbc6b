@@ -24,8 +24,8 @@ BASE_DIR = Path(os.environ.get("ASP_SCRAPER_BASE_DIR", "/home/ubuntu/asp-scraper
 MODELOS_DIR = BASE_DIR / "modelos"
 REAL_MODEL_PATH = MODELOS_DIR / "prognosticos_football_real.py"
 
-MODEL_VERSION = "FOOTBALL_V1_2"
-FOOTBALL_STAT_AUDIT_VERSION = "FOOTBALL_V1_2_A"
+MODEL_VERSION = "FOOTBALL_V1_3"
+FOOTBALL_STAT_AUDIT_VERSION = "FOOTBALL_V1_3_A"
 HANDICAP_ENABLED_FOOTBALL_V1_1 = True
 HANDICAP_ASIAN_ENABLED_FOOTBALL_V1_1 = True
 HANDICAP_EUROPEAN_ENABLED_FOOTBALL_V1_1 = False
@@ -36,6 +36,11 @@ MAX_ODD_FOOTBALL_V1_1 = 2.00
 OVERCONFIDENCE_CUTOFF_PCT = 70.0
 MIN_EDGE_FOOTBALL_V1_1 = 0.03
 LOW_SAMPLE_MIN_EDGE_FOOTBALL_V1_1 = 0.05
+LOW_SAMPLE_THRESHOLD_FOOTBALL_V1_3 = 15
+OVERDISPERSION_THRESHOLD_FOOTBALL_V1_3 = 1.25
+OVERDISPERSION_MIN_EDGE_FOOTBALL_V1_3 = 0.05
+DOUBLE_CHANCE_COMPLEMENT_MIN_SUM = 0.95
+MAX_SELECTIONS_PER_MATCH_FOOTBALL_V1_3 = 2
 PRIOR_PROBABILITY = 0.50
 PRIOR_STRENGTH = 10.0
 SHRINKAGE_K_FOOTBALL_V1_1 = 10.0
@@ -530,6 +535,7 @@ def _build_v1_1_note(debug: dict) -> str:
         "prior_strength",
         "shrinkage_aplicado",
         "warnings",
+        "complement_implied_sum",
         "discard_reason",
     ):
         _append_reason(parts, key, debug.get(key))
@@ -544,6 +550,8 @@ def _blend_conservative(prob_original: float, prob_no_vig: float, prob_hist: flo
 def _minimum_edge_required(market_type: str, warnings: list[str]) -> float:
     if "NEUTRAL_FALLBACK_NO_HISTORY" in warnings or "LOW_SAMPLE" in warnings:
         return LOW_SAMPLE_MIN_EDGE_FOOTBALL_V1_1
+    if "OVERDISPERSION_POISSON" in warnings:
+        return OVERDISPERSION_MIN_EDGE_FOOTBALL_V1_3
     if market_type in {"handicap", "total_goals", "btts"}:
         return MIN_EDGE_FOOTBALL_V1_1
     return MIN_EDGE_FOOTBALL_V1_1
@@ -618,8 +626,17 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
     if core_samples:
         sample_size = min(core_samples)
         debug["sample_size"] = sample_size
-        if sample_size < 10:
+        if sample_size < LOW_SAMPLE_THRESHOLD_FOOTBALL_V1_3:
             warnings.append("LOW_SAMPLE")
+
+    overdispersion_ratio = _to_float(core_debug.get("overdispersion_ratio"))
+    nbd_enabled = str(core_debug.get("nbd_enabled", "")).strip().lower() in {"1", "true", "yes", "on"}
+    if (
+        overdispersion_ratio is not None
+        and overdispersion_ratio > OVERDISPERSION_THRESHOLD_FOOTBALL_V1_3
+        and not nbd_enabled
+    ):
+        warnings.append("OVERDISPERSION_POISSON")
 
     if market_type == "handicap" and not HANDICAP_ENABLED_FOOTBALL_V1_1:
         discard_reason = "HANDICAP_BLOCKED_FOOTBALL_V1_1"
@@ -677,6 +694,17 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
                 prob_no_vig = {"1X": p_home + p_draw, "12": p_home + p_away, "X2": p_draw + p_away}.get(side)
                 if prob_no_vig is None:
                     discard_reason = "INVALID_PICK_DOUBLE_CHANCE"
+                else:
+                    complement_cols = {
+                        "1X": "odds_1X2_Full_Time_2",
+                        "12": "odds_1X2_Full_Time_X",
+                        "X2": "odds_1X2_Full_Time_1",
+                    }
+                    complement_odd = _market_odd(wide_row, complement_cols[side])
+                    complement_sum = (1.0 / market_odd_base) + (1.0 / complement_odd)
+                    debug["complement_implied_sum"] = round(complement_sum, 6)
+                    if complement_sum < DOUBLE_CHANCE_COMPLEMENT_MIN_SUM:
+                        discard_reason = "INCONSISTENT_DOUBLE_CHANCE_ODDS"
 
             elif market_type == "total_goals":
                 line = _line_to_float(row.get("linha"))
@@ -807,11 +835,12 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
             elif edge_decimal <= 0:
                 discard_reason = "NEGATIVE_EDGE_AFTER_V1_1"
             elif edge_decimal < min_edge_required:
-                discard_reason = (
-                    "LOW_SAMPLE_REQUIRES_HIGHER_EDGE"
-                    if min_edge_required > MIN_EDGE_FOOTBALL_V1_1
-                    else "EDGE_BELOW_MINIMUM_FOOTBALL_V1_1"
-                )
+                if "LOW_SAMPLE" in warnings:
+                    discard_reason = "LOW_SAMPLE_REQUIRES_HIGHER_EDGE"
+                elif "OVERDISPERSION_POISSON" in warnings:
+                    discard_reason = "OVERDISPERSION_REQUIRES_HIGHER_EDGE"
+                else:
+                    discard_reason = "EDGE_BELOW_MINIMUM_FOOTBALL_V1_1"
             else:
                 selected = row.to_dict()
                 selected["probabilidade_final"] = round(prob_final_pct, 2)
@@ -837,6 +866,136 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
     return None, discarded
 
 
+def _game_group_key(row: pd.Series) -> str:
+    jogo_id = row.get("jogo_id")
+    if jogo_id is not None and not pd.isna(jogo_id) and str(jogo_id).strip():
+        return str(jogo_id).strip()
+    jogo = row.get("jogo")
+    return "" if jogo is None or pd.isna(jogo) else str(jogo).strip()
+
+
+def _operational_utility(row: pd.Series) -> float:
+    edge = max(0.0, _to_float(row.get("edge"), 0.0))
+    probability = min(max(_to_float(row.get("probabilidade_final"), 0.0) / 100.0, 0.0), 1.0)
+    return edge * probability
+
+
+def _equivalent_event_signature(row: pd.Series) -> str | None:
+    market_type = _classify_market(row)
+    if market_type == "1x2":
+        return {"home": "home_win", "away": "away_win"}.get(_pick_side_1x2(row))
+    if market_type == "double_chance":
+        return {"1X": "home_not_lose", "X2": "away_not_lose"}.get(
+            _pick_side_double_chance(row)
+        )
+    if market_type != "handicap":
+        return None
+
+    side = _pick_side_handicap(row)
+    line = _line_to_float(row.get("linha"))
+    if side == "home" and line is not None:
+        if abs(line - 0.5) < 1e-9:
+            return "home_not_lose"
+        if abs(line + 0.5) < 1e-9:
+            return "home_win"
+    if side == "away" and line is not None:
+        if abs(line - 0.5) < 1e-9:
+            return "away_not_lose"
+        if abs(line + 0.5) < 1e-9:
+            return "away_win"
+    return None
+
+
+def _best_operational_index(df: pd.DataFrame, indices: list[int]) -> int:
+    return max(
+        indices,
+        key=lambda idx: (
+            _operational_utility(df.loc[idx]),
+            _to_float(df.loc[idx].get("edge"), 0.0),
+            _to_float(df.loc[idx].get("odd_ofertada"), 0.0),
+        ),
+    )
+
+
+def _apply_operational_controls(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    if df.empty:
+        return df.copy(), pd.DataFrame()
+
+    work = df.reset_index(drop=True).copy()
+    drop_reasons: dict[int, str] = {}
+
+    equivalent_groups: dict[tuple[str, str], list[int]] = {}
+    for idx, row in work.iterrows():
+        signature = _equivalent_event_signature(row)
+        if signature:
+            equivalent_groups.setdefault((_game_group_key(row), signature), []).append(idx)
+    for indices in equivalent_groups.values():
+        if len(indices) <= 1:
+            continue
+        keep = _best_operational_index(work, indices)
+        for idx in indices:
+            if idx != keep:
+                drop_reasons[idx] = "DUPLICATE_EQUIVALENT_MARKET"
+
+    result_groups: dict[str, list[int]] = {}
+    for idx, row in work.iterrows():
+        if idx not in drop_reasons and _classify_market(row) in {"1x2", "double_chance", "handicap"}:
+            result_groups.setdefault(_game_group_key(row), []).append(idx)
+    for indices in result_groups.values():
+        if len(indices) <= 1:
+            continue
+        keep = _best_operational_index(work, indices)
+        for idx in indices:
+            if idx != keep:
+                drop_reasons[idx] = "CORRELATED_RESULT_PROTECTION_MARKET"
+
+    total_groups: dict[tuple[str, str], list[int]] = {}
+    for idx, row in work.iterrows():
+        if idx in drop_reasons or _classify_market(row) != "total_goals":
+            continue
+        side = _pick_side_total(row)
+        if side:
+            total_groups.setdefault((_game_group_key(row), side), []).append(idx)
+    for indices in total_groups.values():
+        if len(indices) <= 1:
+            continue
+        keep = _best_operational_index(work, indices)
+        for idx in indices:
+            if idx != keep:
+                drop_reasons[idx] = "CORRELATED_NESTED_TOTAL_LINE"
+
+    by_game: dict[str, list[int]] = {}
+    for idx, row in work.iterrows():
+        if idx not in drop_reasons:
+            by_game.setdefault(_game_group_key(row), []).append(idx)
+    for indices in by_game.values():
+        if len(indices) <= MAX_SELECTIONS_PER_MATCH_FOOTBALL_V1_3:
+            continue
+        ranked = sorted(
+            indices,
+            key=lambda idx: (
+                _operational_utility(work.loc[idx]),
+                _to_float(work.loc[idx].get("edge"), 0.0),
+            ),
+            reverse=True,
+        )
+        for idx in ranked[MAX_SELECTIONS_PER_MATCH_FOOTBALL_V1_3:]:
+            drop_reasons[idx] = "MATCH_SELECTION_LIMIT"
+
+    discarded_rows = []
+    for idx, reason in drop_reasons.items():
+        row = work.loc[idx].to_dict()
+        row["modelo_versao"] = MODEL_VERSION
+        row["motivo_descarte_v1_1"] = reason
+        row["debug_v1_1"] = (
+            f"operational_utility={_operational_utility(work.loc[idx]):.4f} | discard_reason={reason}"
+        )
+        discarded_rows.append(row)
+
+    selected = work.drop(index=list(drop_reasons)).copy()
+    return selected.reset_index(drop=True), pd.DataFrame(discarded_rows)
+
+
 def aplicar_controles_football_v1_1(df_saida: pd.DataFrame, df_wide: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     selected = []
     discarded = []
@@ -850,7 +1009,9 @@ def aplicar_controles_football_v1_1(df_saida: pd.DataFrame, df_wide: pd.DataFram
             discarded.append(drop)
 
     selected_df = pd.DataFrame(selected)
-    discarded_df = pd.DataFrame(discarded)
+    selected_df, operational_discarded = _apply_operational_controls(selected_df)
+    discarded_frames = [frame for frame in (pd.DataFrame(discarded), operational_discarded) if not frame.empty]
+    discarded_df = pd.concat(discarded_frames, ignore_index=True) if discarded_frames else pd.DataFrame()
     return selected_df, discarded_df
 
 

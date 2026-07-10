@@ -282,6 +282,12 @@ def converter_csv_longo_para_wide(caminho_entrada, caminho_saida):
         for _, item in grupo.iterrows():
             mercado = limpar_texto(item["mercado"]).lower()
             pick = limpar_texto(item["pick"])
+            consistency_status = limpar_texto(item.get("odds_consistency_status")).lower()
+            if consistency_status == "invalid":
+                ADAPTER_WARNINGS.append(
+                    f"Odd bloqueada por incoerencia de mercado: {jogo} | mercado={mercado} | pick={pick}"
+                )
+                continue
             linha = item["linha"]
             odd = odd_ofertada(item)
             median_odd = odd_consenso(item) or odd

@@ -941,9 +941,9 @@ def _active_provider(active: Any, provider_id: str) -> bool:
 
 
 def _payout_from_odds(odds: list[float]) -> float | None:
-    if len(odds) < 2 or any(odd <= 1 for odd in odds[:2]):
+    if len(odds) < 2 or any(odd <= 1 for odd in odds):
         return None
-    return round((1 / sum(1 / odd for odd in odds[:2])) * 100, 1)
+    return round((1 / sum(1 / odd for odd in odds)) * 100, 1)
 
 
 def parse_match_event_payload(payload: dict[str, Any], market: str, provider_names: dict[str, str] | None = None) -> list[dict[str, Any]]:
@@ -1006,13 +1006,14 @@ def parse_match_event_payload(payload: dict[str, Any], market: str, provider_nam
                 parsed.append(
                     {
                         **base,
+                        "payout": None,
                         "home_draw_odd": odds[0],
-                        "away_draw_odd": odds[1],
-                        "home_away_odd": odds[2],
+                        "home_away_odd": odds[1],
+                        "away_draw_odd": odds[2],
                         "movement": {
                             "home_draw": _movement_value(item.get("movement"), provider_key, 0),
-                            "away_draw": _movement_value(item.get("movement"), provider_key, 1),
-                            "home_away": _movement_value(item.get("movement"), provider_key, 2),
+                            "home_away": _movement_value(item.get("movement"), provider_key, 1),
+                            "away_draw": _movement_value(item.get("movement"), provider_key, 2),
                         },
                     }
                 )

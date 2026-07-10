@@ -33,6 +33,7 @@ from football_probability import (
     blend_model_history,
     calibrate_binary,
     calibrate_multiclass,
+    canonical_half_handicap_settlement,
     dixon_coles_multiplier,
     load_calibration_config,
     normalize_probabilities,
@@ -1909,6 +1910,24 @@ def analyze_match(
             settlement_handicap[side][h] = settlement
             prob_handicap_aj[side][h] = round(calibrated * 100.0, 2)
             odd_justa_hand[side][h] = round(asian_fair_odd(settlement["win"], settlement["loss"]), 4)
+
+    canonical_1x2 = {
+        "home": p_final["Casa"],
+        "draw": p_final["Empate"],
+        "away": p_final["Fora"],
+    }
+    for side, canonical_side in (("casa", "home"), ("fora", "away")):
+        for h in list(settlement_handicap[side]):
+            canonical = canonical_half_handicap_settlement(canonical_1x2, canonical_side, h)
+            if canonical is None:
+                continue
+            settlement_handicap[side][h] = canonical
+            equivalent = asian_equivalent_probability(canonical["win"], canonical["loss"])
+            prob_handicap_aj[side][h] = round(equivalent * 100.0, 2)
+            odd_justa_hand[side][h] = round(
+                asian_fair_odd(canonical["win"], canonical["loss"]),
+                4,
+            )
 
     top5 = M.stack().sort_values(ascending=False).head(5)
     tp = "; ".join(

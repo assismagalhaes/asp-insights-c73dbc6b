@@ -19,6 +19,8 @@ MARKET_NAMES = {
     "double-chance": "Dupla Chance",
 }
 
+DOUBLE_CHANCE_COMPLEMENT_MIN_SUM = 0.95
+
 BASEBALL_TEAM_NAME_ALIASES = {
     "Oakland Athletics": "Athletics",
 }
@@ -337,6 +339,8 @@ def _attach_consensus(rows: list[dict[str, Any]]) -> None:
         by_pair.setdefault(_pair_key(row), []).append(row)
 
     for key, group in by_pair.items():
+        if key[1] == MARKET_NAMES["double"]:
+            continue
         sides = {str(row.get("side")): row for row in group}
         if len(sides) < 2:
             continue
@@ -399,6 +403,56 @@ def _attach_aggregates(rows: list[dict[str, Any]]) -> None:
             row["odds_disponiveis"] = row["odds_available"]
 
 
+def _attach_double_chance_consistency(rows: list[dict[str, Any]]) -> None:
+    by_game: dict[Any, dict[str, dict[str, dict[str, Any]]]] = {}
+    for row in rows:
+        game = by_game.setdefault(row.get("game_id"), {})
+        market = game.setdefault(str(row.get("market")), {})
+        market[str(row.get("side"))] = row
+
+    complements = {
+        "home_draw": "away",
+        "home_away": "draw",
+        "away_draw": "home",
+    }
+    for game in by_game.values():
+        moneyline = game.get(MARKET_NAMES["1x2"], {})
+        double_chance = game.get(MARKET_NAMES["double"], {})
+        for side, complement_side in complements.items():
+            dc_row = double_chance.get(side)
+            complement_row = moneyline.get(complement_side)
+            if not dc_row:
+                continue
+
+            dc_odd = to_float(dc_row.get("odd_median") or dc_row.get("odd"))
+            complement_odd = to_float(
+                (complement_row or {}).get("odd_median") or (complement_row or {}).get("odd")
+            )
+            implied_sum = None
+            status = "unknown"
+            reason = ""
+            if dc_odd and complement_odd and dc_odd > 1 and complement_odd > 1:
+                implied_sum = (1.0 / dc_odd) + (1.0 / complement_odd)
+                if implied_sum < DOUBLE_CHANCE_COMPLEMENT_MIN_SUM:
+                    status = "invalid"
+                    reason = "INCONSISTENT_DOUBLE_CHANCE_ODDS"
+                else:
+                    status = "valid"
+
+            for row in rows:
+                if (
+                    row.get("game_id") == dc_row.get("game_id")
+                    and row.get("market") == MARKET_NAMES["double"]
+                    and str(row.get("side")) == side
+                ):
+                    row["odds_consistency_status"] = status
+                    row["odds_consistency_valid"] = status != "invalid"
+                    row["odds_consistency_reason"] = reason
+                    row["complement_implied_sum"] = (
+                        round(implied_sum, 6) if implied_sum is not None else None
+                    )
+
+
 def normalize_oddsagora_raw(raw: dict[str, Any], job_id: str | None = None) -> dict[str, Any]:
     games = raw.get("games") if isinstance(raw.get("games"), list) else []
     rows: list[dict[str, Any]] = []
@@ -411,6 +465,7 @@ def normalize_oddsagora_raw(raw: dict[str, Any], job_id: str | None = None) -> d
 
     _attach_consensus(rows)
     _attach_aggregates(rows)
+    _attach_double_chance_consistency(rows)
 
     status = "CONCLUIDA"
     mensagem = "Coleta OddsAgora concluida."

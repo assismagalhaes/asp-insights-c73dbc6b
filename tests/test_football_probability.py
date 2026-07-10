@@ -16,6 +16,7 @@ from football_probability import (
     asian_handicap_settlement,
     blend_model_history,
     calibrate_binary,
+    canonical_half_handicap_settlement,
     dixon_coles_multiplier,
     normalize_probabilities,
     shrink_mean,
@@ -70,6 +71,17 @@ class FootballProbabilityTest(unittest.TestCase):
         self.assertAlmostEqual(settlement["win"], 0.5)
         self.assertAlmostEqual(settlement["push"], 0.25)
         self.assertAlmostEqual(settlement["loss"], 0.25)
+
+    def test_half_handicap_uses_canonical_1x2_identity(self):
+        probabilities = {"home": 52.0, "draw": 28.0, "away": 20.0}
+        home_plus = canonical_half_handicap_settlement(probabilities, "home", 0.5)
+        home_minus = canonical_half_handicap_settlement(probabilities, "home", -0.5)
+        away_plus = canonical_half_handicap_settlement(probabilities, "away", 0.5)
+
+        self.assertAlmostEqual(home_plus["win"], 0.80)
+        self.assertAlmostEqual(home_minus["win"], 0.52)
+        self.assertAlmostEqual(away_plus["win"], 0.48)
+        self.assertEqual(home_plus["push"], 0.0)
 
     def test_invalid_asian_increment_is_rejected(self):
         with self.assertRaises(ValueError):

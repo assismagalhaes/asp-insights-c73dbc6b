@@ -157,6 +157,27 @@ def asian_handicap_settlement(
     return {outcome: value / total for outcome, value in settlement.items()}
 
 
+def canonical_half_handicap_settlement(
+    probabilities_1x2: Mapping[str, float],
+    side: str,
+    line: float,
+) -> dict[str, float] | None:
+    """Mapeia handicaps +/-0.5 aos eventos equivalentes do 1X2."""
+    if abs(abs(float(line)) - 0.5) > 1e-9 or side not in {"home", "away"}:
+        return None
+
+    normalized = normalize_probabilities(probabilities_1x2, scale=1.0)
+    home = normalized.get("home", 0.0)
+    draw = normalized.get("draw", 0.0)
+    away = normalized.get("away", 0.0)
+
+    if side == "home":
+        prob_win = home + draw if line > 0 else home
+    else:
+        prob_win = away + draw if line > 0 else away
+    return {"win": prob_win, "push": 0.0, "loss": 1.0 - prob_win}
+
+
 def asian_fair_odd(prob_win: float, prob_loss: float) -> float:
     prob_win = max(0.0, float(prob_win))
     prob_loss = max(0.0, float(prob_loss))

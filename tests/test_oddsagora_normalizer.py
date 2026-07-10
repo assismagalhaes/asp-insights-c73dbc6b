@@ -219,6 +219,9 @@ class OddsAgoraNormalizerTests(unittest.TestCase):
                     "home_team": "Galway United",
                     "away_team": "St Patricks",
                     "markets": {
+                        "1x2": [
+                            {"bookmaker": "Bet365", "home_odd": 2.0, "draw_odd": 3.5, "away_odd": 3.8},
+                        ],
                         "bts": [
                             {"bookmaker": "Bet365", "yes_odd": 1.8, "no_odd": 1.95},
                             {"bookmaker": "Superbet.br", "yes_odd": 1.82, "no_odd": 1.9},
@@ -238,6 +241,41 @@ class OddsAgoraNormalizerTests(unittest.TestCase):
         self.assertEqual({row["pick"] for row in bts_rows}, {"Sim", "Não"})
         self.assertEqual({row["pick"] for row in double_rows}, {"1X", "X2", "12"})
         self.assertTrue(all("odd_media" in row for row in bts_rows + double_rows))
+        self.assertTrue(all(row["odds_consistency_status"] == "valid" for row in double_rows))
+        self.assertTrue(all(row["market_overround_median"] is None for row in double_rows))
+
+    def test_normalizer_blocks_swapped_double_chance_order(self) -> None:
+        raw = {
+            "job_id": "job-swapped-double",
+            "source": "OddsAgora",
+            "sport": "Football",
+            "games": [{
+                "game_id": "vps-sjk",
+                "date": "2026-07-10",
+                "time": "13:00",
+                "home_team": "VPS",
+                "away_team": "SJK",
+                "markets": {
+                    "1x2": [{
+                        "bookmaker": "Bet365", "home_odd": 2.0, "draw_odd": 3.6, "away_odd": 3.25,
+                    }],
+                    "double": [{
+                        "bookmaker": "Bet365",
+                        "home_draw_odd": 1.35,
+                        "home_away_odd": 1.78,
+                        "away_draw_odd": 1.29,
+                    }],
+                },
+            }],
+        }
+
+        rows = normalize_oddsagora_raw(raw)["linhas"]
+        no_draw = next(row for row in rows if row["market"] == "Dupla Chance" and row["pick"] == "12")
+
+        self.assertEqual(no_draw["odds_consistency_status"], "invalid")
+        self.assertFalse(no_draw["odds_consistency_valid"])
+        self.assertEqual(no_draw["odds_consistency_reason"], "INCONSISTENT_DOUBLE_CHANCE_ODDS")
+        self.assertLess(no_draw["complement_implied_sum"], 0.95)
 
 
 if __name__ == "__main__":

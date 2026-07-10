@@ -95,7 +95,7 @@ def output_row_with_core_debug(**overrides):
 
 class FootballRunnerV11Test(unittest.TestCase):
     def test_model_version_is_set(self):
-        self.assertEqual(runner.MODEL_VERSION, "FOOTBALL_V1_2")
+        self.assertEqual(runner.MODEL_VERSION, "FOOTBALL_V1_3")
 
     def test_no_vig_three_way_sums_to_one(self):
         probs = runner.no_vig_probability_three(2.0, 3.0, 4.0)
@@ -108,8 +108,8 @@ class FootballRunnerV11Test(unittest.TestCase):
         selected, discarded = runner._evaluate_row_v1_1(output_row(), wide_row())
         self.assertIsNone(discarded)
         self.assertIsNotNone(selected)
-        self.assertEqual(selected["modelo_versao"], "FOOTBALL_V1_2")
-        self.assertIn("modelo_versao=FOOTBALL_V1_2", selected["observacoes"])
+        self.assertEqual(selected["modelo_versao"], "FOOTBALL_V1_3")
+        self.assertIn("modelo_versao=FOOTBALL_V1_3", selected["observacoes"])
 
     def test_core_lambda_debug_is_exposed_when_available(self):
         selected, discarded = runner._evaluate_row_v1_1(output_row_with_core_debug(), wide_row())
@@ -235,6 +235,24 @@ RPI Third FC
         self.assertIsNone(discarded)
         self.assertIsNotNone(selected)
         self.assertIn("HIGH_PROBABILITY_REVIEW_FOOTBALL_V1_1", selected["observacoes"])
+
+    def test_inconsistent_double_chance_is_blocked(self):
+        row = output_row(
+            mercado="Dupla Chance",
+            pick="12",
+            odd_ofertada=1.78,
+            probabilidade_final=77.83,
+        )
+        wide = wide_row(
+            odds_Double_chance_Full_Time_12=1.78,
+            odds_1X2_Full_Time_X=3.30,
+        )
+
+        selected, discarded = runner._evaluate_row_v1_1(row, wide)
+
+        self.assertIsNone(selected)
+        self.assertEqual(discarded["motivo_descarte_v1_1"], "INCONSISTENT_DOUBLE_CHANCE_ODDS")
+        self.assertIn("complement_implied_sum=", discarded["debug_v1_1"])
 
     def test_handicap_plus_half_with_pair_is_supported(self):
         row = output_row(
@@ -375,6 +393,113 @@ RPI Third FC
         shrunk = runner.shrink_value(observed=2.5, sample=2, prior=1.2, k=10)
         self.assertLess(shrunk, 2.5)
         self.assertGreater(shrunk, 1.2)
+
+    def test_sample_below_fifteen_gets_low_sample_warning(self):
+        row = output_row_with_core_debug()
+        row["observacoes"] = row["observacoes"].replace("sample_home=24", "sample_home=11")
+
+        selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
+
+        self.assertIsNone(discarded)
+        self.assertIn("warnings=LOW_SAMPLE", selected["observacoes"])
+
+    def test_poisson_overdispersion_requires_higher_edge(self):
+        row = output_row_with_core_debug(
+            mercado="Total de Gols",
+            pick="Over 2.5 gols",
+            linha=2.5,
+            odd_ofertada=1.60,
+            probabilidade_final=65.0,
+        )
+        row["observacoes"] = row["observacoes"].replace(
+            "overdispersion_ratio=1.2200",
+            "overdispersion_ratio=1.4700",
+        )
+
+        selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
+
+        self.assertIsNone(selected)
+        self.assertEqual(discarded["motivo_descarte_v1_1"], "OVERDISPERSION_REQUIRES_HIGHER_EDGE")
+
+    def test_operational_controls_keep_best_equivalent_market(self):
+        rows = pd.DataFrame([
+            output_row(
+                jogo_id="game-1", mercado="Dupla Chance", pick="1X",
+                odd_ofertada=1.35, probabilidade_final=80.0, edge=8.0,
+            ).to_dict(),
+            output_row(
+                jogo_id="game-1", mercado="Handicap Asiatico", pick="Home FC +0.5", linha=0.5,
+                odd_ofertada=1.33, probabilidade_final=80.0, edge=6.4,
+            ).to_dict(),
+        ])
+
+        selected, discarded = runner._apply_operational_controls(rows)
+
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected.iloc[0]["pick"], "1X")
+        self.assertEqual(discarded.iloc[0]["motivo_descarte_v1_1"], "DUPLICATE_EQUIVALENT_MARKET")
+
+    def test_operational_controls_keep_one_nested_total_direction(self):
+        rows = pd.DataFrame([
+            output_row(
+                jogo_id="game-2", mercado="Total de Gols", pick="Under 2.5 gols", linha=2.5,
+                odd_ofertada=2.00, probabilidade_final=56.76, edge=13.52,
+            ).to_dict(),
+            output_row(
+                jogo_id="game-2", mercado="Total de Gols", pick="Under 3.5 gols", linha=3.5,
+                odd_ofertada=1.38, probabilidade_final=75.88, edge=4.71,
+            ).to_dict(),
+        ])
+
+        selected, discarded = runner._apply_operational_controls(rows)
+
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected.iloc[0]["pick"], "Under 2.5 gols")
+        self.assertEqual(discarded.iloc[0]["motivo_descarte_v1_1"], "CORRELATED_NESTED_TOTAL_LINE")
+
+    def test_operational_controls_limit_match_to_two_selections(self):
+        rows = pd.DataFrame([
+            output_row(
+                jogo_id="game-3", mercado="Resultado Final", pick="Home FC para vencer",
+                edge=12.0, probabilidade_final=60.0,
+            ).to_dict(),
+            output_row(
+                jogo_id="game-3", mercado="Total de Gols", pick="Over 2.5 gols", linha=2.5,
+                edge=10.0, probabilidade_final=65.0,
+            ).to_dict(),
+            output_row(
+                jogo_id="game-3", mercado="Ambas Marcam", pick="Ambas Marcam - Sim",
+                edge=4.0, probabilidade_final=55.0,
+            ).to_dict(),
+        ])
+
+        selected, discarded = runner._apply_operational_controls(rows)
+
+        self.assertEqual(len(selected), 2)
+        self.assertEqual(discarded.iloc[0]["motivo_descarte_v1_1"], "MATCH_SELECTION_LIMIT")
+
+    def test_adapter_skips_market_row_marked_inconsistent(self):
+        base = {
+            "data": "10/07/2026", "hora": "13:00", "esporte": "Football",
+            "liga": "Finland - Veikkausliiga", "country": "Finland",
+            "jogo": "VPS vs SJK", "mandante": "VPS", "visitante": "SJK",
+            "linha": "", "bookmaker": "book", "fonte": "OddsAgora",
+        }
+        rows = [
+            {**base, "mercado": "1X2", "pick": "VPS", "odd": 2.00},
+            {
+                **base, "mercado": "Dupla Chance", "pick": "12", "odd": 1.78,
+                "odds_consistency_status": "invalid",
+            },
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_path = Path(tmp) / "coleta.csv"
+            wide_path = Path(tmp) / "wide.csv"
+            pd.DataFrame(rows).to_csv(csv_path, index=False)
+            wide = football_adapter.converter_csv_longo_para_wide(csv_path, wide_path)
+
+        self.assertNotIn("odds_Double_chance_Full_Time_12", wide.columns)
+        self.assertIn("Odd bloqueada por incoerencia de mercado", wide.iloc[0]["adapter_warnings"])
 
     def test_adapter_maps_real_csv_asian_handicap_pairs(self):
         csv_path = Path(

@@ -1,5 +1,17 @@
 # Football V1.1 Technical Audit
 
+## Football V1.3 - Coerencia de Mercado e Carteira
+
+- Corrige a ordem OddsAgora da Dupla Chance para `1X`, `12`, `X2`.
+- Corrige payout 1X2 para usar as tres odds e remove payout agregado de Dupla Chance.
+- Bloqueia Dupla Chance incoerente com o resultado complementar do 1X2.
+- Canoniza as identidades `1X = mandante +0.5`, `X2 = visitante +0.5`, `1 = mandante -0.5` e `2 = visitante -0.5`.
+- Publica apenas uma oportunidade entre mercados equivalentes ou linhas de total aninhadas na mesma direcao.
+- Limita a duas selecoes por confronto e a um mercado de resultado/protecao.
+- Eleva o alerta de amostra baixa para menos de 15 jogos.
+- Exige edge minimo de 5% quando Poisson opera com sobredispersao acima de 1.25.
+- Mantem todas as alternativas no arquivo `*_all_candidates.csv` para auditoria e calibracao.
+
 ## Football V1.2 - Revisao Estatistica
 
 A V1.2 substitui os principais controles heurísticos identificados na auditoria:
