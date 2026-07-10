@@ -149,6 +149,13 @@ def is_quarter_line(valor):
     return quarter and not half_or_integer
 
 
+def is_asian_line(valor):
+    linha = normalizar_float(valor)
+    if linha is None:
+        return False
+    return -5.5 <= linha <= 5.5 and abs(linha * 4 - round(linha * 4)) < 1e-9
+
+
 def odd_ofertada(item):
     return normalizar_float(item.get("odd_melhor")) or normalizar_float(item.get("odd"))
 
@@ -331,12 +338,8 @@ def converter_csv_longo_para_wide(caminho_entrada, caminho_saida):
                     ADAPTER_WARNINGS.append(f"Handicap sem linha valida no adapter: {jogo} | pick={pick}")
                     continue
 
-                if is_quarter_line(linha_num):
-                    ADAPTER_WARNINGS.append(f"Quarter line bloqueada no adapter: {jogo} | linha={linha_num}")
-                    continue
-
-                if not is_meia_linha(linha_num):
-                    ADAPTER_WARNINGS.append(f"Handicap com push bloqueado no adapter: {jogo} | linha={linha_num}")
+                if not is_asian_line(linha_num):
+                    ADAPTER_WARNINGS.append(f"Handicap fora dos incrementos asiaticos suportados: {jogo} | linha={linha_num}")
                     continue
 
                 lado = identificar_lado_time(pick, mandante, visitante)

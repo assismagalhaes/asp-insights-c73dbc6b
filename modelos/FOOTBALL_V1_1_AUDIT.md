@@ -1,5 +1,38 @@
 # Football V1.1 Technical Audit
 
+## Football V1.2 - Revisao Estatistica
+
+A V1.2 substitui os principais controles heurísticos identificados na auditoria:
+
+- Data de referência dinâmica, derivada da coleta e com fallback no fuso `America/Sao_Paulo`.
+- Corte temporal obrigatório antes de qualquer média, forma recente, RPI ou H2H.
+- Exclusão de partidas incompletas e deduplicação da base histórica.
+- Lambdas com forças relativas de ataque/defesa e shrinkage para as médias da liga.
+- Poisson com correção Dixon-Coles; binomial negativa somente por configuração explícita.
+- Probabilidade própria separada das odds. Odds medianas são benchmark no-vig; melhor odd é usada no EV.
+- Normalização obrigatória do 1X2 e complementaridade de O/U e BTTS.
+- Pesos históricos dependentes do tamanho amostral, com limite por mercado.
+- Handicap asiático completo em incrementos de 0.25, com win/push/loss, meia-vitória e meia-derrota.
+- Calibração opcional via `FOOTBALL_CALIBRATION_PATH`.
+- Validação temporal em `modelos/football_validation.py`, com Brier, log loss, RPS 1X2, ECE, ROI, CLV e Platt walk-forward.
+
+O arquivo de calibração só deve ser ativado depois de gerado com histórico rotulado e odds registradas no momento da previsão. Sem arquivo, a calibração é identidade.
+Cada execução também gera `*_all_candidates.csv`, sem o filtro EV+, para evitar viés de seleção na calibração. Depois dos jogos, acrescente `resultado_binario`; para RPS 1X2, preencha também `resultado_1x2` com `H`, `D` ou `A`.
+
+Exemplo:
+
+```bash
+python modelos/football_validation.py historico_rotulado.csv --output-dir model_outputs/football_validation
+```
+
+Colunas mínimas: `data`, `mercado`, `probabilidade_final`, `resultado_binario` e `odd_ofertada`. `odd_fechamento` é opcional para CLV.
+Para comparar Poisson, Dixon-Coles e binomial negativa no mesmo relatório, inclua `modelo_variante`.
+As variantes são controladas por `FOOTBALL_GOAL_DISTRIBUTION=poisson|nbinom|auto` e `FOOTBALL_DIXON_COLES_ENABLED=true|false`.
+
+## Histórico V1.1
+
+As seções abaixo registram o comportamento anterior e são mantidas para comparação.
+
 ## Objetivo
 
 Football V1.1 endurece o runner atual de futebol sem substituir a arquitetura, sem alterar endpoints, telas, Supabase ou modelos ASP GoalMatrix/ASP CornerMatrix. A meta e reduzir selecoes artificiais, expor diagnostico estatistico e tratar mercados correlatos com controles tecnicos mais claros.

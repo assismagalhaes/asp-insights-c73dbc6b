@@ -4,10 +4,12 @@
 import unicodedata
 import difflib
 import logging
+import os
 import re
 import io
 from pathlib import Path
 from datetime import datetime, date
+from zoneinfo import ZoneInfo
 from typing import List, Dict, Tuple, Optional
 import warnings
 
@@ -23,6 +25,20 @@ import requests
 from math import ceil
 from scipy.stats import poisson, nbinom
 
+from football_probability import (
+    asian_equivalent_probability,
+    asian_expected_value,
+    asian_fair_odd,
+    asian_handicap_outcome_weights,
+    blend_model_history,
+    calibrate_binary,
+    calibrate_multiclass,
+    dixon_coles_multiplier,
+    load_calibration_config,
+    normalize_probabilities,
+    shrink_mean,
+)
+
 
 # -------------------------------------------------------
 # Configuração de logging (evita reconfigurar se já houver handlers)
@@ -37,7 +53,12 @@ if not logging.getLogger().handlers:
 # -------------------------------------------------------
 # Constantes e parâmetros
 # -------------------------------------------------------
-DATA_REF = "14_06_2026"
+FOOTBALL_TIMEZONE = os.environ.get("FOOTBALL_TIMEZONE", "America/Sao_Paulo")
+try:
+    _runtime_reference_date = datetime.now(ZoneInfo(FOOTBALL_TIMEZONE)).date()
+except Exception:
+    _runtime_reference_date = date.today()
+DATA_REF = os.environ.get("FOOTBALL_DATA_REF", _runtime_reference_date.strftime("%d_%m_%Y"))
 
 # Pasta que aparece em:
 # http://localhost:8888/lab/tree/OneDrive/APOSTAS%20ESPORTIVAS/FlashScore-Data
@@ -76,11 +97,24 @@ GOALS_MAX_CAP    = 12     # limite superior (custo computacional); ajuste se qui
 # -------------------------------------------------------
 # Pesos de Probabilidade
 # -------------------------------------------------------
-PROB_1X2_WEIGHTS = {"hist": 30, "pois": 30, "odds": 40}
-PROB_OU_WEIGHTS = {"hist": 35, "pois": 35, "odds": 30}
-PROB_BTTS_WEIGHTS = {"hist": 35, "pois": 35, "odds": 30}
-PROB_HANDICAP_WEIGHTS_TRI = {"hist": 25, "pois": 40, "odds": 35}
-PROB_HANDICAP_WEIGHTS = {"pois": 50, "odds": 50}
+CALIBRATION_CONFIG = load_calibration_config()
+_MODEL_CONFIG = CALIBRATION_CONFIG.get("_model", {})
+_WEIGHT_CONFIG = CALIBRATION_CONFIG.get("_weights", {})
+MAX_HISTORY_WEIGHT_1X2 = float(_WEIGHT_CONFIG.get("1x2", 0.25))
+MAX_HISTORY_WEIGHT_OU = float(_WEIGHT_CONFIG.get("total_goals", 0.25))
+MAX_HISTORY_WEIGHT_BTTS = float(_WEIGHT_CONFIG.get("btts", 0.25))
+MAX_HISTORY_WEIGHT_HANDICAP = float(_WEIGHT_CONFIG.get("asian_handicap", 0.20))
+HISTORY_RELIABILITY_K = float(_MODEL_CONFIG.get("history_reliability_k", 20.0))
+LAMBDA_PRIOR_STRENGTH = float(_MODEL_CONFIG.get("lambda_prior_strength", 10.0))
+FORM_HALF_LIFE_DAYS = float(_MODEL_CONFIG.get("form_half_life_days", 180.0))
+GOAL_DISTRIBUTION_METHOD = os.environ.get("FOOTBALL_GOAL_DISTRIBUTION", "poisson").strip().lower()
+if GOAL_DISTRIBUTION_METHOD not in {"poisson", "auto", "nbinom"}:
+    GOAL_DISTRIBUTION_METHOD = "poisson"
+DIXON_COLES_RHO = float(os.environ.get("FOOTBALL_DIXON_COLES_RHO", _MODEL_CONFIG.get("dixon_coles_rho", -0.08)))
+DIXON_COLES_ENABLED = os.environ.get(
+    "FOOTBALL_DIXON_COLES_ENABLED",
+    str(_MODEL_CONFIG.get("dixon_coles_enabled", True)),
+).strip().lower() not in {"0", "false", "no", "off"}
 
 RPI_WEIGHTS       = {"passada": 0.20, "atual": 0.50, "recente": 0.30}
 RPI_WEIGHTS_2     = {"atual": 0.65, "recente": 0.35}
@@ -222,6 +256,32 @@ def build_mmz_urls(season_code: str) -> Dict[str, str]:
 
 LEAGUES_CURRENT  = build_mmz_urls(SEASON_CTX["SEASON_CODE_CURRENT"])
 LEAGUES_PREVIOUS = build_mmz_urls(SEASON_CTX["SEASON_CODE_PREVIOUS"])
+
+
+def configure_reference_date(value) -> None:
+    """Atualiza temporadas e caminhos a partir da data real da coleta."""
+    global DATA_REF, DATA_ARQUIVO, MATCHES_JSON, MATCHES_CSV, LOVABLE_CSV
+    global SEASON_CTX, CURRENT_SEASONS, PREVIOUS_SEASONS, VALID_SEASONS
+    global LEAGUES_CURRENT, LEAGUES_PREVIOUS
+
+    value_text = str(value).strip()
+    is_iso = bool(re.match(r"^\d{4}-\d{2}-\d{2}(?:\s|$)", value_text))
+    parsed = pd.to_datetime(value, errors="coerce", dayfirst=not is_iso)
+    if pd.isna(parsed):
+        raise ValueError(f"Data de referencia invalida: {value}")
+
+    ref_date = parsed.date()
+    DATA_REF = ref_date.strftime("%d_%m_%Y")
+    DATA_ARQUIVO = DATA_REF.replace("_", ".")
+    MATCHES_JSON = DATA_DIR / f"{DATA_REF}_football.json"
+    MATCHES_CSV = DATA_DIR / f"jogos_{DATA_REF}_football.csv"
+    LOVABLE_CSV = LOVABLE_DIR / f"futebol_{DATA_ARQUIVO}.csv"
+    SEASON_CTX = build_season_context(ref_date, split_start_month=7)
+    CURRENT_SEASONS = SEASON_CTX["CURRENT_SEASONS"]
+    PREVIOUS_SEASONS = SEASON_CTX["PREVIOUS_SEASONS"]
+    VALID_SEASONS = SEASON_CTX["VALID_SEASONS"]
+    LEAGUES_CURRENT = build_mmz_urls(SEASON_CTX["SEASON_CODE_CURRENT"])
+    LEAGUES_PREVIOUS = build_mmz_urls(SEASON_CTX["SEASON_CODE_PREVIOUS"])
 
 # -------------------------------------------------------
 # Ligas "EXTRA" (link fixo com histórico)
@@ -660,6 +720,40 @@ def resolve_team_safe(
 # -------------------------------------------------------
 # Carregamento de dados (corrigido e automatizado por temporada)
 # -------------------------------------------------------
+def clean_completed_matches(df: pd.DataFrame) -> pd.DataFrame:
+    required = {"Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG", "Season", "Liga"}
+    if df.empty:
+        return df.copy()
+    missing = required.difference(df.columns)
+    if missing:
+        raise ValueError(f"Base historica sem colunas obrigatorias: {sorted(missing)}")
+
+    cleaned = df.copy()
+    raw_dates = cleaned["Date"]
+    parsed_dates = pd.to_datetime(raw_dates, errors="coerce")
+    text_dates = raw_dates.astype("string").str.strip()
+    non_iso = ~text_dates.str.match(r"^\d{4}-\d{2}-\d{2}(?:\s|$)", na=False)
+    parsed_dates.loc[non_iso] = pd.to_datetime(raw_dates.loc[non_iso], errors="coerce", dayfirst=True)
+    cleaned["Date"] = parsed_dates
+    cleaned["FTHG"] = pd.to_numeric(cleaned["FTHG"], errors="coerce")
+    cleaned["FTAG"] = pd.to_numeric(cleaned["FTAG"], errors="coerce")
+    cleaned["HomeTeam"] = cleaned["HomeTeam"].astype("string").str.strip()
+    cleaned["AwayTeam"] = cleaned["AwayTeam"].astype("string").str.strip()
+    cleaned = cleaned.dropna(subset=["Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG"])
+    cleaned = cleaned.loc[(cleaned["HomeTeam"] != "") & (cleaned["AwayTeam"] != "")]
+    cleaned = cleaned.loc[(cleaned["FTHG"] >= 0) & (cleaned["FTAG"] >= 0)].copy()
+    cleaned["FTHG"] = cleaned["FTHG"].astype(int)
+    cleaned["FTAG"] = cleaned["FTAG"].astype(int)
+    cleaned["FTR"] = np.select(
+        [cleaned["FTHG"] > cleaned["FTAG"], cleaned["FTHG"] < cleaned["FTAG"]],
+        ["H", "A"],
+        default="D",
+    )
+    duplicate_key = ["Liga", "Season", "Date", "HomeTeam", "AwayTeam"]
+    cleaned = cleaned.drop_duplicates(subset=duplicate_key, keep="last")
+    return cleaned.sort_values(duplicate_key, kind="mergesort").reset_index(drop=True)
+
+
 def _add_round_estimates(df: pd.DataFrame) -> pd.DataFrame:
     """
     Mantém seus contadores e calcula RodadaEstimada por jogos anteriores (casa+fora).
@@ -667,6 +761,7 @@ def _add_round_estimates(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
 
+    df = clean_completed_matches(df)
     df = df.sort_values(["Liga", "Season", "Date", "HomeTeam", "AwayTeam"]).reset_index(drop=True)
 
     df["JogosAntes_Home"] = df.groupby(["Liga", "Season", "HomeTeam"]).cumcount()
@@ -978,23 +1073,46 @@ def gerar_estatisticas_comparadas(
     rodada_atual: int | None = None,
 ):
     hist = process_jogos(passada.copy(), venue)
-    cur  = process_jogos(atual.copy(), venue)
+    cur = process_jogos(atual.copy(), venue)
+    if not hist.empty:
+        hist = hist.sort_values("Date", kind="mergesort")
+    if not cur.empty:
+        cur = cur.sort_values("Date", kind="mergesort")
     last = cur.tail(5)
+    available_dates = pd.concat(
+        [frame["Date"] for frame in (hist, cur) if not frame.empty and "Date" in frame],
+        ignore_index=True,
+    ) if (not hist.empty or not cur.empty) else pd.Series(dtype="datetime64[ns]")
+    reference_date = pd.to_datetime(available_dates, errors="coerce").max() if not available_dates.empty else pd.NaT
 
     def calc(df: pd.DataFrame) -> dict[str, float]:
         if df.empty:
             return {}
+        dates = pd.to_datetime(df["Date"], errors="coerce")
+        if pd.notna(reference_date) and dates.notna().any():
+            age_days = (reference_date - dates).dt.days.clip(lower=0).fillna(FORM_HALF_LIFE_DAYS)
+            weights = np.exp(-np.log(2.0) * age_days / max(FORM_HALF_LIFE_DAYS, 1.0))
+        else:
+            weights = pd.Series(np.ones(len(df)), index=df.index)
+
+        def weighted_mean(values) -> float:
+            series = pd.to_numeric(pd.Series(values, index=df.index), errors="coerce")
+            valid = series.notna() & pd.Series(weights, index=df.index).notna()
+            if not valid.any():
+                return np.nan
+            return float(np.average(series.loc[valid], weights=pd.Series(weights, index=df.index).loc[valid]))
+
         d = {
-            "Gols Marcados (média)": df["GF"].mean(),
-            "Gols Sofridos (média)": df["GA"].mean(),
-            "Vitórias (%)":           df["Result"].eq("W").mean() * 100,
-            "Empates (%)":            df["Result"].eq("D").mean() * 100,
-            "Ambas Marcam - Sim (%)": df["BTTS"].eq("Yes").mean() * 100,
-            "Ambas Marcam - Não (%)": df["BTTS"].eq("No").mean() * 100,
+            "Gols Marcados (média)": weighted_mean(df["GF"]),
+            "Gols Sofridos (média)": weighted_mean(df["GA"]),
+            "Vitórias (%)":           weighted_mean(df["Result"].eq("W").astype(float)) * 100,
+            "Empates (%)":            weighted_mean(df["Result"].eq("D").astype(float)) * 100,
+            "Ambas Marcam - Sim (%)": weighted_mean(df["BTTS"].eq("Yes").astype(float)) * 100,
+            "Ambas Marcam - Não (%)": weighted_mean(df["BTTS"].eq("No").astype(float)) * 100,
         }
         for l in LINHAS_OU:
-            d[f"Over {l} (%)"]  = df["TotalGoals"].gt(l).mean() * 100
-            d[f"Under {l} (%)"] = df["TotalGoals"].le(l).mean() * 100
+            d[f"Over {l} (%)"]  = weighted_mean(df["TotalGoals"].gt(l).astype(float)) * 100
+            d[f"Under {l} (%)"] = weighted_mean(df["TotalGoals"].le(l).astype(float)) * 100
         return {k: round(float(v), 2) for k, v in d.items()}
 
     h = calc(hist)
@@ -1054,9 +1172,9 @@ def historico_handicap_weighted(
     nome_liga: str | None,
     rodada_atual: int | None,
 ) -> float | None:
-    cur = atual_proc
+    cur = atual_proc.sort_values("Date", kind="mergesort") if not atual_proc.empty else atual_proc
     last = cur.tail(5) if not cur.empty else cur
-    hist = passada_proc
+    hist = passada_proc.sort_values("Date", kind="mergesort") if not passada_proc.empty else passada_proc
 
     c_cov = _coverage_handicap(cur, h)
     l_cov = _coverage_handicap(last, h)
@@ -1084,6 +1202,45 @@ def historico_handicap_weighted(
             METRICAS_WEIGHTS_2["atual"]   * (c_cov or 0) +
             METRICAS_WEIGHTS_2["recente"] * (l_cov or 0), 2
         )
+
+
+def historico_handicap_settlement_weighted(
+    atual_proc: pd.DataFrame,
+    passada_proc: pd.DataFrame,
+    line: float,
+    nome_liga: str | None,
+    rodada_atual: int | None,
+) -> dict[str, float] | None:
+    cur = atual_proc.sort_values("Date", kind="mergesort") if not atual_proc.empty else atual_proc
+    hist = passada_proc.sort_values("Date", kind="mergesort") if not passada_proc.empty else passada_proc
+    recent = cur.tail(5) if not cur.empty else cur
+    current_settlement = handicap_settlement_from_history(cur, line)
+    recent_settlement = handicap_settlement_from_history(recent, line)
+    previous_settlement = handicap_settlement_from_history(hist, line)
+    if not current_settlement and not previous_settlement:
+        return None
+
+    has_previous = previous_settlement is not None
+    if nome_liga is not None and rodada_atual is not None:
+        weights = get_metricas_weights(nome_liga, int(rodada_atual), has_prev_season_data=has_previous)
+    else:
+        weights = METRICAS_WEIGHTS if has_previous else METRICAS_WEIGHTS_2
+
+    result = {"win": 0.0, "push": 0.0, "loss": 0.0}
+    components = [
+        (previous_settlement, weights.get("passada", 0.0)),
+        (current_settlement, weights.get("atual", 0.0)),
+        (recent_settlement, weights.get("recente", 0.0)),
+    ]
+    used_weight = sum(weight for settlement, weight in components if settlement is not None)
+    if used_weight <= 0:
+        return None
+    for settlement, weight in components:
+        if settlement is None:
+            continue
+        for outcome in result:
+            result[outcome] += settlement[outcome] * weight / used_weight
+    return result
 
 # -------------------------------------------------------
 # Poisson x NegBin (auto)
@@ -1184,6 +1341,28 @@ def gerar_matriz_poisson(m_c: float, m_f: float, var_c: float | None = None, var
         return pd.DataFrame(M, index=rg, columns=rg, dtype=float)
     return gerar_matriz_gols(m_c, m_f, var_c=var_c, var_f=var_f, method=method, range_gols=rg)
 
+
+def aplicar_dixon_coles(M: pd.DataFrame, lambda_home: float, lambda_away: float, rho: float = DIXON_COLES_RHO) -> pd.DataFrame:
+    covered_mass = float(M.values.sum())
+    adjusted = M.copy()
+    for home_goals in (0, 1):
+        for away_goals in (0, 1):
+            if home_goals in adjusted.index and away_goals in adjusted.columns:
+                adjusted.loc[home_goals, away_goals] *= dixon_coles_multiplier(
+                    home_goals,
+                    away_goals,
+                    lambda_home,
+                    lambda_away,
+                    rho,
+                )
+    total = float(adjusted.values.sum())
+    if total > 0:
+        adjusted = adjusted / total
+    adjusted.attrs["covered_mass"] = covered_mass
+    adjusted.attrs["tail_mass"] = max(0.0, 1.0 - covered_mass)
+    adjusted.attrs["dixon_coles_rho"] = rho
+    return adjusted
+
 def probabilidades_poisson(M: pd.DataFrame) -> dict:
     vals = M.values
     tot = vals.sum()
@@ -1223,6 +1402,90 @@ def combinar_probabilidades(hist: dict, pois: dict, odds: dict, pesos: dict) -> 
         k: round((hist[k] * pesos["hist"] + pois[k] * pesos["pois"] + odds[k] * pesos["odds"]) / 100, 2)
         for k in hist
     }
+
+
+def combinar_modelo_historico(
+    hist: dict,
+    modelo: dict,
+    sample: int,
+    max_history_weight: float,
+    calibration_key: str | None = None,
+) -> dict:
+    blended = blend_model_history(
+        model=modelo,
+        history=hist,
+        sample=sample,
+        max_history_weight=max_history_weight,
+        reliability_k=HISTORY_RELIABILITY_K,
+    )
+    if calibration_key:
+        blended = calibrate_multiclass(blended, CALIBRATION_CONFIG.get(calibration_key))
+    return {key: round(value, 4) for key, value in normalize_probabilities(blended).items()}
+
+
+def calibrar_par(prob_first: float, calibration_key: str) -> tuple[float, float]:
+    calibrated = calibrate_binary(float(prob_first) / 100.0, CALIBRATION_CONFIG.get(calibration_key)) * 100.0
+    return round(calibrated, 4), round(100.0 - calibrated, 4)
+
+
+def estimate_expected_goals(
+    gf_home: float,
+    ga_home: float,
+    gf_away: float,
+    ga_away: float,
+    sample_home: int,
+    sample_away: int,
+    league_home_goals: float,
+    league_away_goals: float,
+) -> dict[str, float]:
+    raw_home = (float(gf_home) + float(ga_away)) / 2.0
+    raw_away = (float(gf_away) + float(ga_home)) / 2.0
+    prior_home = league_home_goals if np.isfinite(league_home_goals) and league_home_goals > 0 else raw_home
+    prior_away = league_away_goals if np.isfinite(league_away_goals) and league_away_goals > 0 else raw_away
+    gf_home_shrunk = shrink_mean(gf_home, sample_home, prior_home, LAMBDA_PRIOR_STRENGTH)
+    ga_home_shrunk = shrink_mean(ga_home, sample_home, prior_away, LAMBDA_PRIOR_STRENGTH)
+    gf_away_shrunk = shrink_mean(gf_away, sample_away, prior_away, LAMBDA_PRIOR_STRENGTH)
+    ga_away_shrunk = shrink_mean(ga_away, sample_away, prior_home, LAMBDA_PRIOR_STRENGTH)
+    lambda_home = prior_home * (gf_home_shrunk / max(prior_home, 1e-9)) * (ga_away_shrunk / max(prior_home, 1e-9))
+    lambda_away = prior_away * (gf_away_shrunk / max(prior_away, 1e-9)) * (ga_home_shrunk / max(prior_away, 1e-9))
+    return {
+        "raw_home": raw_home,
+        "raw_away": raw_away,
+        "lambda_home": float(np.clip(lambda_home, 0.05, 5.0)),
+        "lambda_away": float(np.clip(lambda_away, 0.05, 5.0)),
+        "prior_home": float(prior_home),
+        "prior_away": float(prior_away),
+    }
+
+
+def handicap_settlement_from_matrix(M: pd.DataFrame, side: str, line: float) -> dict[str, float]:
+    total = float(M.values.sum())
+    settlement = {"win": 0.0, "push": 0.0, "loss": 0.0}
+    if total <= 0:
+        return settlement
+    for home_goals in M.index:
+        for away_goals in M.columns:
+            probability = float(M.loc[home_goals, away_goals]) / total
+            goal_diff = home_goals - away_goals if side == "casa" else away_goals - home_goals
+            weights = asian_handicap_outcome_weights(goal_diff, line)
+            for outcome in settlement:
+                settlement[outcome] += probability * weights[outcome]
+    return settlement
+
+
+def handicap_settlement_from_history(df_proc: pd.DataFrame, line: float) -> dict[str, float] | None:
+    if df_proc.empty or "GF" not in df_proc or "GA" not in df_proc:
+        return None
+    settlement = {"win": 0.0, "push": 0.0, "loss": 0.0}
+    count = 0
+    for _, row in df_proc.dropna(subset=["GF", "GA"]).iterrows():
+        weights = asian_handicap_outcome_weights(float(row["GF"] - row["GA"]), line)
+        for outcome in settlement:
+            settlement[outcome] += weights[outcome]
+        count += 1
+    if count <= 0:
+        return None
+    return {outcome: value / count for outcome, value in settlement.items()}
 
 # -------------------------------------------------------
 # Standings (limpeza + desempate H2H para grupos)
@@ -1350,6 +1613,17 @@ def analyze_match(
     kickoff_date = str(kickoff_date).strip() if kickoff_date is not None else ""
     kickoff_time = str(kickoff_time).strip() if kickoff_time is not None else ""
     dt_kick = pd.to_datetime(f"{kickoff_date} {kickoff_time}", format="%Y-%m-%d %H:%M", errors="coerce")
+    if pd.isna(dt_kick):
+        raise ValueError(f"Kickoff invalido para {home_team} vs {away_team}: {kickoff_date} {kickoff_time}")
+
+    match_season_context = build_season_context(dt_kick.date(), split_start_month=7)
+    current_seasons = match_season_context["CURRENT_SEASONS"]
+    previous_seasons = match_season_context["PREVIOUS_SEASONS"]
+
+    base_liga = clean_completed_matches(base_liga)
+    base_liga = base_liga.loc[base_liga["Date"] < dt_kick].copy()
+    if base_liga.empty:
+        raise ValueError(f"Sem partidas anteriores ao kickoff para {league_key}.")
 
     last5_home = get_last_games_football(base_liga, home_team, "home", n=5)
     last5_away = get_last_games_football(base_liga, away_team, "away", n=5)
@@ -1397,7 +1671,7 @@ def analyze_match(
         logging.warning(msg)
         warnings_list.append(msg)
 
-    df_liga_all = base.loc[base["Liga"] == league_key].copy()
+    df_liga_all = base_liga.copy()
     df_liga_all["Date"] = pd.to_datetime(df_liga_all["Date"], errors="coerce")
 
     liga_atual_df   = df_liga_all[df_liga_all["Season"].isin(current_seasons)].copy()
@@ -1437,7 +1711,6 @@ def analyze_match(
 
     gf1, ga1 = s1["Gols Marcados (média) (Final)"], s1["Gols Sofridos (média) (Final)"]
     gf2, ga2 = s2["Gols Marcados (média) (Final)"], s2["Gols Sofridos (média) (Final)"]
-    m_c, m_f = (gf1 + ga2) / 2, (gf2 + ga1) / 2
 
     base_liga_prior = base_liga.copy()
     if "Date" in base_liga_prior.columns:
@@ -1451,51 +1724,62 @@ def analyze_match(
     sample_away = int(len(ja2) + len(jp2))
     sample_league = int(len(base_liga_prior))
 
-    def _var_recent(df_proc: pd.DataFrame, n: int = 5) -> float:
-        if df_proc.empty or "GF" not in df_proc:
-            return 0.0
-        s = df_proc["GF"].tail(n)
-        return float(s.var(ddof=1)) if s.size >= 2 else 0.0
+    expectation = estimate_expected_goals(
+        gf1,
+        ga1,
+        gf2,
+        ga2,
+        sample_home,
+        sample_away,
+        league_avg_home_goals,
+        league_avg_away_goals,
+    )
+    m_c_raw = expectation["raw_home"]
+    m_f_raw = expectation["raw_away"]
+    m_c = expectation["lambda_home"]
+    m_f = expectation["lambda_away"]
+    prior_home = expectation["prior_home"]
+    prior_away = expectation["prior_away"]
 
-    var_c = _var_recent(ja,  n=5)
-    var_f = _var_recent(ja2, n=5)
+    def _var_stable(*frames: pd.DataFrame, fallback: float) -> float:
+        values = [frame["GF"] for frame in frames if not frame.empty and "GF" in frame]
+        if not values:
+            return fallback
+        sample = pd.concat(values, ignore_index=True).dropna()
+        return float(sample.var(ddof=1)) if sample.size >= 20 else fallback
+
+    var_c = _var_stable(ja, jp, fallback=m_c)
+    var_f = _var_stable(ja2, jp2, fallback=m_f)
 
     diff_gols_home = gf1 - ga1
     diff_gols_away = gf2 - ga2
     delta_diff_gols = round(diff_gols_home - diff_gols_away, 2)
 
-    p_ft_raw = calcular_probabilidade_sem_vig(odds_full_time)
-    p_ft = {
-        "Casa":   p_ft_raw.get("home", 0),
-        "Empate": p_ft_raw.get("draw", 0),
-        "Fora":   p_ft_raw.get("away", 0),
-    }
-
-    p_ou_raw = {l: calcular_probabilidade_sem_vig(ou) for l, ou in odds_ou.items()}
-    p_ou = {
-        l: {"Over": p_ou_raw[l].get("over", 0), "Under": p_ou_raw[l].get("under", 0)}
-        for l in p_ou_raw
-    }
-
-    p_bt_raw = calcular_probabilidade_sem_vig(odds_bt)
-    p_bt = {"Yes": p_bt_raw.get("yes", 0), "No": p_bt_raw.get("no", 0)}
-
     rg = construir_range_gols(
         m_c, m_f,
         var_c=var_c, var_f=var_f,
-        method="auto",
+        method=GOAL_DISTRIBUTION_METHOD,
         eps=GOALS_TAIL_EPS,
         min_max=GOALS_MIN_MAX,
         max_cap=GOALS_MAX_CAP,
         linhas_ou=LINHAS_OU if isinstance(LINHAS_OU, list) and len(LINHAS_OU) else None
     )
-    M = gerar_matriz_poisson(m_c, m_f, var_c=var_c, var_f=var_f, method="auto", range_gols=rg)
+    M = gerar_matriz_poisson(
+        m_c,
+        m_f,
+        var_c=var_c,
+        var_f=var_f,
+        method=GOAL_DISTRIBUTION_METHOD,
+        range_gols=rg,
+    )
+    if DIXON_COLES_ENABLED:
+        M = aplicar_dixon_coles(M, m_c, m_f, DIXON_COLES_RHO)
     pm = probabilidades_poisson(M)
 
     range_used = list(rg)
     score_matrix_probability_sum = float(M.values.sum())
-    score_matrix_tail_mass = max(0.0, 1.0 - score_matrix_probability_sum)
-    score_matrix_normalized = abs(score_matrix_probability_sum - 1.0) > 1e-9
+    score_matrix_tail_mass = float(M.attrs.get("tail_mass", max(0.0, 1.0 - score_matrix_probability_sum)))
+    score_matrix_normalized = DIXON_COLES_ENABLED or abs(score_matrix_probability_sum - 1.0) > 1e-9
     overdispersion_home = float(var_c / m_c) if m_c else np.nan
     overdispersion_away = float(var_f / m_f) if m_f else np.nan
     overdispersion_ratio = np.nanmax([overdispersion_home, overdispersion_away])
@@ -1518,8 +1802,14 @@ def analyze_match(
         "Empate": (s1["Empates (%) (Final)"] + s2["Empates (%) (Final)"]) / 2,
         "Fora": s2["Vitórias (%) (Final)"],
     }
-    raw_1x2 = combinar_probabilidades(ph_hist, pm["Resultado"], p_ft, PROB_1X2_WEIGHTS)
-    p_final = {k: round(v, 2) for k, v in raw_1x2.items()}
+    raw_1x2 = combinar_modelo_historico(
+        ph_hist,
+        pm["Resultado"],
+        sample=min(sample_home, sample_away),
+        max_history_weight=MAX_HISTORY_WEIGHT_1X2,
+        calibration_key="1x2",
+    )
+    p_final = {k: round(v, 2) for k, v in normalize_probabilities(raw_1x2).items()}
     val_h = _safe_odd_value(p_final["Casa"])
     val_x = _safe_odd_value(p_final["Empate"])
     val_a = _safe_odd_value(p_final["Fora"])
@@ -1542,39 +1832,32 @@ def analyze_match(
             "Under": (s1[f"Under {l} (%) (Final)"] + s2[f"Under {l} (%) (Final)"]) / 2,
         }
         pois_vals = pm["OverUnder"][l]
-        impl_vals = p_ou[l]
-        raw_ou = combinar_probabilidades(hist_vals, pois_vals, impl_vals, PROB_OU_WEIGHTS)
-        ou_adj[l] = {"Over": round(raw_ou["Over"], 2), "Under": round(raw_ou["Under"], 2)}
+        raw_ou = combinar_modelo_historico(
+            hist_vals,
+            pois_vals,
+            sample=min(sample_home, sample_away),
+            max_history_weight=MAX_HISTORY_WEIGHT_OU,
+        )
+        prob_over, prob_under = calibrar_par(raw_ou["Over"], "total_goals")
+        ou_adj[l] = {"Over": round(prob_over, 2), "Under": round(prob_under, 2)}
 
-    raw_btts = combinar_probabilidades(
+    raw_btts = combinar_modelo_historico(
         {
             "Yes": (s1["Ambas Marcam - Sim (%) (Final)"] + s2["Ambas Marcam - Sim (%) (Final)"]) / 2,
             "No":  (s1["Ambas Marcam - Não (%) (Final)"] + s2["Ambas Marcam - Não (%) (Final)"]) / 2,
         },
         pm["BTTS"],
-        p_bt,
-        PROB_BTTS_WEIGHTS,
+        sample=min(sample_home, sample_away),
+        max_history_weight=MAX_HISTORY_WEIGHT_BTTS,
     )
-    bt_adj = {"Yes": round(raw_btts["Yes"], 2), "No": round(raw_btts["No"], 2)}
+    prob_btts_yes, prob_btts_no = calibrar_par(raw_btts["Yes"], "btts")
+    bt_adj = {"Yes": round(prob_btts_yes, 2), "No": round(prob_btts_no, 2)}
 
-    # Handicap Asiático
-    s = M.stack()
-    total = float(s.sum())
-    idx0 = s.index.get_level_values(0).to_numpy()
-    idx1 = s.index.get_level_values(1).to_numpy()
-    vals = s.to_numpy()
-
-    model_probs = {"casa": {}, "fora": {}}
-    if total > 0:
-        for side in ("casa", "fora"):
-            diff = (idx0 - idx1) if side == "casa" else (idx1 - idx0)
-            for h in odds_handicap.get(side, {}):
-                if h < 0:
-                    mask = diff > abs(h)
-                else:
-                    mask = diff >= -h
-                prob_pct = (vals[mask].sum() / total) * 100.0
-                model_probs[side][h] = round(float(prob_pct), 2)
+    # Handicap Asiatico: win/push/loss representam fracoes esperadas da stake.
+    model_settlement = {"casa": {}, "fora": {}}
+    for side in ("casa", "fora"):
+        for h in odds_handicap.get(side, {}):
+            model_settlement[side][h] = handicap_settlement_from_matrix(M, side, h)
 
     probs_odd = {"casa": {}, "fora": {}}
     for h_home, odd_c in odds_handicap.get("casa", {}).items():
@@ -1588,30 +1871,36 @@ def analyze_match(
 
     hist_handicap = {"casa": {}, "fora": {}}
     for h in odds_handicap.get("casa", {}):
-        hist_handicap["casa"][h] = historico_handicap_weighted(ja, jp, h, league_key, rodada_atual)
+        hist_handicap["casa"][h] = historico_handicap_settlement_weighted(ja, jp, h, league_key, rodada_atual)
     for h in odds_handicap.get("fora", {}):
-        hist_handicap["fora"][h] = historico_handicap_weighted(ja2, jp2, h, league_key, rodada_atual)
+        hist_handicap["fora"][h] = historico_handicap_settlement_weighted(ja2, jp2, h, league_key, rodada_atual)
 
     prob_handicap_aj = {"casa": {}, "fora": {}}
-    for side in ("casa", "fora"):
-        common_h = set(model_probs[side].keys()).intersection(probs_odd[side].keys())
-        for h in sorted(common_h):
-            hist_val = hist_handicap[side].get(h, None)
-            if (hist_val is not None) and np.isfinite(hist_val):
-                w = PROB_HANDICAP_WEIGHTS_TRI
-                num = (hist_val * w["hist"] + model_probs[side][h] * w["pois"] + probs_odd[side][h] * w["odds"])
-                den = (w["hist"] + w["pois"] + w["odds"])
-                prob_handicap_aj[side][h] = round(num / den, 2)
-            else:
-                w = PROB_HANDICAP_WEIGHTS
-                num = (model_probs[side][h] * w["pois"] + probs_odd[side][h] * w["odds"])
-                den = (w["pois"] + w["odds"])
-                prob_handicap_aj[side][h] = round(num / den, 2)
-
+    settlement_handicap = {"casa": {}, "fora": {}}
     odd_justa_hand = {"casa": {}, "fora": {}}
     for side in ("casa", "fora"):
-        for h, v in prob_handicap_aj[side].items():
-            odd_justa_hand[side][h] = round(100.0 / v, 2) if v > 0 else np.nan
+        common_h = set(model_settlement[side].keys()).intersection(probs_odd[side].keys())
+        for h in sorted(common_h):
+            model_values = {k: v * 100.0 for k, v in model_settlement[side][h].items()}
+            history = hist_handicap[side].get(h)
+            history_values = {k: v * 100.0 for k, v in history.items()} if history else None
+            sample = sample_home if side == "casa" else sample_away
+            blended = blend_model_history(
+                model_values,
+                history_values,
+                sample=sample,
+                max_history_weight=MAX_HISTORY_WEIGHT_HANDICAP,
+                reliability_k=HISTORY_RELIABILITY_K,
+            )
+            settlement = {key: value / 100.0 for key, value in blended.items()}
+            decisive = settlement["win"] + settlement["loss"]
+            equivalent = asian_equivalent_probability(settlement["win"], settlement["loss"])
+            calibrated = calibrate_binary(equivalent, CALIBRATION_CONFIG.get("asian_handicap"))
+            settlement["win"] = decisive * calibrated
+            settlement["loss"] = decisive * (1.0 - calibrated)
+            settlement_handicap[side][h] = settlement
+            prob_handicap_aj[side][h] = round(calibrated * 100.0, 2)
+            odd_justa_hand[side][h] = round(asian_fair_odd(settlement["win"], settlement["loss"]), 4)
 
     top5 = M.stack().sort_values(ascending=False).head(5)
     tp = "; ".join(
@@ -1627,8 +1916,8 @@ def analyze_match(
         "Media_GF_Home": gf1, "Media_GA_Home": ga1,
         "Media_GF_Away": gf2, "Media_GA_Away": ga2,
         "Media_Total_Gols": round(m_c+m_f, 2),
-        "Lambda_Home_Raw": round(m_c, 4),
-        "Lambda_Away_Raw": round(m_f, 4),
+        "Lambda_Home_Raw": round(m_c_raw, 4),
+        "Lambda_Away_Raw": round(m_f_raw, 4),
         "Lambda_Home_Final": round(m_c, 4),
         "Lambda_Away_Final": round(m_f, 4),
         "League_Avg_Home_Goals": round(league_avg_home_goals, 4) if np.isfinite(league_avg_home_goals) else np.nan,
@@ -1637,12 +1926,21 @@ def analyze_match(
         "Sample_Away": sample_away,
         "Sample_League": sample_league,
         "Shrinkage_Applied": True,
-        "Shrinkage_K": "dynamic_by_league_weights",
-        "Prior_Home": round(league_avg_home_goals, 4) if np.isfinite(league_avg_home_goals) else np.nan,
-        "Prior_Away": round(league_avg_away_goals, 4) if np.isfinite(league_avg_away_goals) else np.nan,
-        "Poisson_Enabled": True,
-        "NBD_Evaluated": True,
-        "NBD_Enabled": bool((var_c > m_c * (1 + OVERDISP_TOL)) or (var_f > m_f * (1 + OVERDISP_TOL))),
+        "Shrinkage_K": LAMBDA_PRIOR_STRENGTH,
+        "Prior_Home": round(prior_home, 4),
+        "Prior_Away": round(prior_away, 4),
+        "Poisson_Enabled": GOAL_DISTRIBUTION_METHOD != "nbinom",
+        "NBD_Evaluated": GOAL_DISTRIBUTION_METHOD in {"auto", "nbinom"},
+        "NBD_Enabled": GOAL_DISTRIBUTION_METHOD == "nbinom" or (
+            GOAL_DISTRIBUTION_METHOD == "auto"
+            and ((var_c > m_c * (1 + OVERDISP_TOL)) or (var_f > m_f * (1 + OVERDISP_TOL)))
+        ),
+        "Goal_Distribution_Method": GOAL_DISTRIBUTION_METHOD,
+        "Dixon_Coles_Enabled": DIXON_COLES_ENABLED,
+        "Dixon_Coles_Rho": DIXON_COLES_RHO,
+        "Model_Variant": GOAL_DISTRIBUTION_METHOD + ("+dixon_coles" if DIXON_COLES_ENABLED else ""),
+        "Market_Odds_Used_In_Probability": False,
+        "RPI_Used_In_Probability": False,
         "Overdispersion_Ratio": round(float(overdispersion_ratio), 4) if np.isfinite(overdispersion_ratio) else np.nan,
         "Score_Matrix_Max_Goals": max(range_used) if range_used else np.nan,
         "Score_Matrix_Tail_Mass": round(score_matrix_tail_mass, 8),
@@ -1682,15 +1980,23 @@ def analyze_match(
         res[f"OddReal_Under_{l}"]  = odds_ou[l]["under"]
 
     for h in sorted(prob_handicap_aj["casa"]):
+        settlement = settlement_handicap["casa"][h]
         res[f"HandicapCasa_Line_{h}"]      = h
         res[f"Prob_Handicap_Casa_{h}"]     = prob_handicap_aj["casa"][h]
         res[f"OddValor_Handicap_Casa_{h}"] = odd_justa_hand["casa"][h]
         res[f"OddReal_Handicap_Casa_{h}"]  = odds_handicap["casa"][h]
+        res[f"ProbWin_Handicap_Casa_{h}"]   = settlement["win"]
+        res[f"ProbPush_Handicap_Casa_{h}"]  = settlement["push"]
+        res[f"ProbLoss_Handicap_Casa_{h}"]  = settlement["loss"]
     for h in sorted(prob_handicap_aj["fora"]):
+        settlement = settlement_handicap["fora"][h]
         res[f"HandicapFora_Line_{h}"]      = h
         res[f"Prob_Handicap_Fora_{h}"]     = prob_handicap_aj["fora"][h]
         res[f"OddValor_Handicap_Fora_{h}"] = odd_justa_hand["fora"][h]
         res[f"OddReal_Handicap_Fora_{h}"]  = odds_handicap["fora"][h]
+        res[f"ProbWin_Handicap_Fora_{h}"]   = settlement["win"]
+        res[f"ProbPush_Handicap_Fora_{h}"]  = settlement["push"]
+        res[f"ProbLoss_Handicap_Fora_{h}"]  = settlement["loss"]
 
     res["OU_Lines"]      = sorted(odds_ou.keys())
     res["HC_Lines_Casa"] = sorted(prob_handicap_aj["casa"].keys())
@@ -1826,6 +2132,8 @@ def montar_observacoes_lovable(res: dict) -> str:
         f"Delta RPI {safe_float(res.get('Delta_RPI'), 0):+.3f}",
         f"Exp. gols {safe_float(res.get('Media_Total_Gols'), 0):.2f}",
         f"Delta gols {safe_float(res.get('Delta_Diff_Gols'), 0):+.2f}",
+        f"core_lambda_home_raw={safe_float(res.get('Lambda_Home_Raw'), 0):.4f}",
+        f"core_lambda_away_raw={safe_float(res.get('Lambda_Away_Raw'), 0):.4f}",
         f"core_lambda_home={safe_float(res.get('Lambda_Home_Final'), 0):.4f}",
         f"core_lambda_away={safe_float(res.get('Lambda_Away_Final'), 0):.4f}",
         f"league_avg_home_goals={safe_float(res.get('League_Avg_Home_Goals'), 0):.4f}",
@@ -1839,6 +2147,9 @@ def montar_observacoes_lovable(res: dict) -> str:
         f"score_matrix_probability_sum={safe_float(res.get('Score_Matrix_Probability_Sum'), 0):.8f}",
         f"nbd_enabled={res.get('NBD_Enabled', False)}",
         f"overdispersion_ratio={safe_float(res.get('Overdispersion_Ratio'), 0):.4f}",
+        f"goal_distribution={res.get('Goal_Distribution_Method', 'poisson')}",
+        f"dixon_coles_rho={safe_float(res.get('Dixon_Coles_Rho'), 0):.4f}",
+        f"market_odds_used_in_probability={res.get('Market_Odds_Used_In_Probability', False)}",
     ]
 
     if top5:
@@ -1851,7 +2162,7 @@ def montar_observacoes_lovable(res: dict) -> str:
     return '; '.join(partes)
 
 
-def montar_linhas_lovable(res: dict) -> list[dict]:
+def montar_linhas_lovable(res: dict, ev_only: bool = True) -> list[dict]:
     """
     Gera linhas planas para importação no Lovable, seguindo o modelo WNBA.
 
@@ -1873,31 +2184,58 @@ def montar_linhas_lovable(res: dict) -> list[dict]:
         'esporte': 'Futebol',
         'liga': res.get('League', ''),
         'jogo': f"{mandante} vs {visitante}",
+        'jogo_id': f"{data_fmt}|{hora}|{res.get('League', '')}|{mandante} vs {visitante}",
         'mandante': mandante,
         'visitante': visitante,
+        'modelo_variante': res.get('Model_Variant', 'poisson+dixon_coles'),
     }
     linhas: list[dict] = []
 
-    def add(mercado, pick, linha, probabilidade_final, odd_valor, odd_ofertada):
-        if not _is_ev_plus(odd_ofertada, odd_valor):
-            return
-        edge = _edge_percent(odd_ofertada, odd_valor)
+    def add(
+        mercado,
+        pick,
+        linha,
+        probabilidade_final,
+        odd_valor,
+        odd_ofertada,
+        prob_win=None,
+        prob_push=None,
+        prob_loss=None,
+        opcao_1x2='',
+    ):
+        if ev_only:
+            if not _is_ev_plus(odd_ofertada, odd_valor):
+                return
+        else:
+            try:
+                if not np.isfinite(float(odd_ofertada)) or not np.isfinite(float(odd_valor)) or float(odd_ofertada) <= 1 or float(odd_valor) <= 0:
+                    return
+            except (TypeError, ValueError):
+                return
+        if prob_win is not None and prob_loss is not None:
+            edge = asian_expected_value(prob_win, prob_loss, odd_ofertada) * 100.0
+        else:
+            edge = _edge_percent(odd_ofertada, odd_valor)
         linhas.append({
             **base_common,
             'mercado': mercado,
+            'opcao_1x2': opcao_1x2,
             'pick': pick,
             'linha': '' if linha is None or pd.isna(linha) else linha,
             'odd_ofertada': round(float(odd_ofertada), 2),
             'odd_valor': round(float(odd_valor), 2),
             'probabilidade_final': round(float(probabilidade_final), 2),
             'edge': round(edge, 2),
+            'prob_win': '' if prob_win is None else round(float(prob_win), 8),
+            'prob_push': '' if prob_push is None else round(float(prob_push), 8),
+            'prob_loss': '' if prob_loss is None else round(float(prob_loss), 8),
             'observacoes': observacoes,
         })
 
     # Resultado Final / 1X2
-    add('Resultado Final', f'{mandante} para vencer', '', res.get('Prob_Casa'), res.get('OddValor_Casa'), res.get('OddReal_Casa'))
-    add('Resultado Final', 'Empate', '', res.get('Prob_Empate'), res.get('OddValor_Empate'), res.get('OddReal_Empate'))
-    add('Resultado Final', f'{visitante} para vencer', '', res.get('Prob_Fora'), res.get('OddValor_Fora'), res.get('OddReal_Fora'))
+    add('Resultado Final', f'{mandante} para vencer', '', res.get('Prob_Casa'), res.get('OddValor_Casa'), res.get('OddReal_Casa'), opcao_1x2='H')
+    add('Resultado Final', 'Empate', '', res.get('Prob_Empate'), res.get('OddValor_Empate'), res.get('OddReal_Empate'), opcao_1x2='D')
+    add('Resultado Final', f'{visitante} para vencer', '', res.get('Prob_Fora'), res.get('OddValor_Fora'), res.get('OddReal_Fora'), opcao_1x2='A')
 
     # Dupla Chance
     for dc in ('1X', '12', 'X2'):
@@ -1915,17 +2253,23 @@ def montar_linhas_lovable(res: dict) -> list[dict]:
     # Handicap Asiático
     for h in res.get('HC_Lines_Casa', []):
         h_float = float(h)
-        add('Handicap Asiático', f'{mandante} {h_float:+.1f}', h_float,
+        add('Handicap Asiático', f'{mandante} {h_float:+g}', h_float,
             res.get(f'Prob_Handicap_Casa_{h}'),
             res.get(f'OddValor_Handicap_Casa_{h}'),
-            res.get(f'OddReal_Handicap_Casa_{h}'))
+            res.get(f'OddReal_Handicap_Casa_{h}'),
+            res.get(f'ProbWin_Handicap_Casa_{h}'),
+            res.get(f'ProbPush_Handicap_Casa_{h}'),
+            res.get(f'ProbLoss_Handicap_Casa_{h}'))
 
     for h in res.get('HC_Lines_Fora', []):
         h_float = float(h)
-        add('Handicap Asiático', f'{visitante} {h_float:+.1f}', h_float,
+        add('Handicap Asiático', f'{visitante} {h_float:+g}', h_float,
             res.get(f'Prob_Handicap_Fora_{h}'),
             res.get(f'OddValor_Handicap_Fora_{h}'),
-            res.get(f'OddReal_Handicap_Fora_{h}'))
+            res.get(f'OddReal_Handicap_Fora_{h}'),
+            res.get(f'ProbWin_Handicap_Fora_{h}'),
+            res.get(f'ProbPush_Handicap_Fora_{h}'),
+            res.get(f'ProbLoss_Handicap_Fora_{h}'))
 
     return linhas
 
@@ -1939,9 +2283,9 @@ def exportar_lovable(rows: list[dict], path: Path = LOVABLE_CSV) -> Path:
     """Exporta CSV do Lovable exatamente no layout definido pelo modelo WNBA."""
     path.parent.mkdir(parents=True, exist_ok=True)
     colunas = [
-        'data', 'hora', 'esporte', 'liga', 'jogo', 'mandante', 'visitante',
-        'mercado', 'pick', 'linha', 'odd_ofertada', 'odd_valor',
-        'probabilidade_final', 'edge', 'observacoes'
+        'data', 'hora', 'esporte', 'liga', 'jogo', 'jogo_id', 'mandante', 'visitante',
+        'modelo_variante', 'mercado', 'opcao_1x2', 'pick', 'linha', 'odd_ofertada', 'odd_valor',
+        'probabilidade_final', 'edge', 'prob_win', 'prob_push', 'prob_loss', 'observacoes'
     ]
 
     df_out = pd.DataFrame(rows)
@@ -2303,8 +2647,7 @@ def main():
         team_lookup_by_league[liga] = mapping
 
     # 8) Base geral
-    base = pd.concat([df_cur, df_prev, df_extra], ignore_index=True)
-    base.dropna(subset=["HomeTeam","AwayTeam"], inplace=True)
+    base = clean_completed_matches(pd.concat([df_cur, df_prev, df_extra], ignore_index=True))
 
     def norm_in_league(raw: str, league: str):
         lookup = team_lookup_by_league.get(league, {})
@@ -2351,13 +2694,10 @@ def main():
             logging.warning(f"Nenhuma linha de OU válida para {row['home_norm']} vs {row['away_norm']}, pulando.")
             continue
 
-        # Handicap Asiático real
-        # Regra do modelo: considerar SOMENTE linhas com final .5
-        # Ex.: -5.5, -4.5, ..., -0.5, +0.5, ..., +4.5, +5.5
-        ALLOWED_HANDS = [x + 0.5 for x in range(-6, 6)]  # -5.5 até +5.5, sem linhas inteiras
-
-        def is_allowed_half_handicap(h: float) -> bool:
-            return any(abs(float(h) - allowed) < 1e-9 for allowed in ALLOWED_HANDS)
+        # Handicap Asiatico completo em incrementos de 0.25, de -5.5 a +5.5.
+        def is_allowed_asian_handicap(h: float) -> bool:
+            value = float(h)
+            return -5.5 <= value <= 5.5 and abs(value * 4 - round(value * 4)) < 1e-9
 
         odds_handicap_real = {"casa": {}, "fora": {}}
         for idx in hp_indices:
@@ -2368,7 +2708,7 @@ def main():
                 if not pd.isna(raw_h) and not pd.isna(odd_h) and odd_h > 0:
                     try:
                         h = float(raw_h)
-                        if is_allowed_half_handicap(h):
+                        if is_allowed_asian_handicap(h):
                             odds_handicap_real["casa"][h] = odd_h
                     except ValueError:
                         logging.error(f"Handicap casa não numérico: {raw_h}")
@@ -2380,7 +2720,7 @@ def main():
                 if not pd.isna(raw_h) and not pd.isna(odd_h) and odd_h > 0:
                     try:
                         h = float(raw_h)
-                        if is_allowed_half_handicap(h):
+                        if is_allowed_asian_handicap(h):
                             odds_handicap_real["fora"][h] = odd_h
                     except ValueError:
                         logging.error(f"Handicap fora não numérico: {raw_h}")
@@ -2420,11 +2760,16 @@ def main():
         print_analysis(res, st)
 
     prognosticos_lovable = []
+    candidatos_auditoria = []
     for res in results:
         prognosticos_lovable.extend(gerar_linhas_prognosticos_lovable(res))
+        candidatos_auditoria.extend(montar_linhas_lovable(res, ev_only=False))
 
-    caminho_lovable = salvar_prognosticos_lovable(prognosticos_lovable)
+    caminho_lovable = salvar_prognosticos_lovable(prognosticos_lovable, caminho=LOVABLE_CSV)
+    caminho_auditoria = LOVABLE_CSV.with_name(f"{LOVABLE_CSV.stem}_all_candidates.csv")
+    exportar_lovable(candidatos_auditoria, path=caminho_auditoria)
     logging.info(f"Arquivo de prognósticos para Lovable salvo em: {caminho_lovable}")
+    logging.info(f"Arquivo completo para calibracao salvo em: {caminho_auditoria}")
     logging.info(f"Total de linhas exportadas para o Lovable: {len(prognosticos_lovable)}")
 
 if __name__ == "__main__":

@@ -12,18 +12,24 @@ from pathlib import Path
 import pandas as pd
 
 from football_adapter import converter_csv_longo_para_wide
+from football_probability import (
+    asian_equivalent_probability,
+    asian_expected_value,
+    asian_fair_odd,
+    asian_handicap_settlement,
+)
 
 
 BASE_DIR = Path(os.environ.get("ASP_SCRAPER_BASE_DIR", "/home/ubuntu/asp-scraper-api"))
 MODELOS_DIR = BASE_DIR / "modelos"
 REAL_MODEL_PATH = MODELOS_DIR / "prognosticos_football_real.py"
 
-MODEL_VERSION = "FOOTBALL_V1_1"
-FOOTBALL_STAT_AUDIT_VERSION = "FOOTBALL_V1_1_B"
+MODEL_VERSION = "FOOTBALL_V1_2"
+FOOTBALL_STAT_AUDIT_VERSION = "FOOTBALL_V1_2_A"
 HANDICAP_ENABLED_FOOTBALL_V1_1 = True
 HANDICAP_ASIAN_ENABLED_FOOTBALL_V1_1 = True
 HANDICAP_EUROPEAN_ENABLED_FOOTBALL_V1_1 = False
-HANDICAP_QUARTER_LINES_ENABLED_FOOTBALL_V1_1 = False
+HANDICAP_QUARTER_LINES_ENABLED_FOOTBALL_V1_1 = True
 HANDICAP_AMBIGUOUS_BLOCKED_FOOTBALL_V1_1 = True
 MIN_ODD_FOOTBALL_V1_1 = 1.25
 MAX_ODD_FOOTBALL_V1_1 = 2.00
@@ -216,24 +222,13 @@ def score_matrix_probabilities(score_matrix: dict, line: float = 2.5) -> dict:
 
 def score_matrix_handicap_probability(score_matrix: dict, side: str, line: float) -> dict:
     matrix = score_matrix["matrix"]
-    prob_win = prob_push = prob_loss = 0.0
-
+    score_probabilities = []
     for home_goals, row in enumerate(matrix):
         for away_goals, prob in enumerate(row):
             goal_diff = home_goals - away_goals if side == "home" else away_goals - home_goals
-            outcome = handicap_outcome(goal_diff, line)
-            if outcome == "win":
-                prob_win += prob
-            elif outcome == "push":
-                prob_push += prob
-            else:
-                prob_loss += prob
-
-    return {
-        "prob_win": prob_win,
-        "prob_push": prob_push,
-        "prob_loss": prob_loss,
-    }
+            score_probabilities.append((goal_diff, prob))
+    settlement = asian_handicap_settlement(score_probabilities, line)
+    return {f"prob_{key}": value for key, value in settlement.items()}
 
 
 def _line_to_float(value):
@@ -292,7 +287,7 @@ def calculate_handicap_ev(prob_win: float, prob_push: float, offered_odd: float)
     if prob_win < 0 or prob_push < 0 or prob_win + prob_push > 1:
         raise ValueError("Probabilidades invalidas para EV de handicap.")
     prob_loss = 1.0 - prob_win - prob_push
-    return prob_win * (offered_odd - 1.0) - prob_loss
+    return asian_expected_value(prob_win, prob_loss, offered_odd)
 
 
 def _line_key(line: float) -> str:
@@ -476,8 +471,8 @@ def _extract_note_value(text: str, key: str):
 def _extract_core_stat_debug(row: pd.Series) -> dict:
     observacoes = str(row.get("observacoes", "") or "")
     return {
-        "lambda_home_raw": _extract_note_value(observacoes, "core_lambda_home"),
-        "lambda_away_raw": _extract_note_value(observacoes, "core_lambda_away"),
+        "lambda_home_raw": _extract_note_value(observacoes, "core_lambda_home_raw"),
+        "lambda_away_raw": _extract_note_value(observacoes, "core_lambda_away_raw"),
         "lambda_home_final": _extract_note_value(observacoes, "core_lambda_home"),
         "lambda_away_final": _extract_note_value(observacoes, "core_lambda_away"),
         "league_avg_home_goals": _extract_note_value(observacoes, "league_avg_home_goals"),
@@ -542,7 +537,8 @@ def _build_v1_1_note(debug: dict) -> str:
 
 
 def _blend_conservative(prob_original: float, prob_no_vig: float, prob_hist: float = PRIOR_PROBABILITY) -> float:
-    return (prob_hist * 0.35) + (prob_original * 0.35) + (prob_no_vig * 0.30)
+    # Mantido por compatibilidade. A probabilidade propria nao incorpora odds.
+    return prob_original
 
 
 def _minimum_edge_required(market_type: str, warnings: list[str]) -> float:
@@ -566,12 +562,6 @@ def _overconfidence_decision(market_type: str, row: pd.Series, prob_final_pct: f
     warnings.append("HIGH_PROBABILITY_REVIEW_FOOTBALL_V1_1")
     if naturally_high:
         return None
-
-    if market_type in {"1x2", "handicap"}:
-        return "OVERCONFIDENCE_CAP_FOOTBALL_V1_1"
-
-    if "NEUTRAL_FALLBACK_NO_HISTORY" in warnings:
-        return "OVERCONFIDENCE_LOW_SAMPLE_FOOTBALL_V1_1"
 
     return None
 
@@ -606,19 +596,30 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
     warnings = []
     discard_reason = None
     sample_size = 0
-    prob_hist = apply_shrinkage(PRIOR_PROBABILITY, sample_size)
+    prob_hist = None
     prob_no_vig = None
+    handicap_settlement_values = None
     debug = {
         **_base_stat_audit_debug(market_type),
         "prob_original": None if original_prob is None else round(original_prob, 4),
-        "prob_hist": round(prob_hist, 4),
+        "prob_hist": None,
         "sample_size": sample_size,
         "prior": PRIOR_PROBABILITY,
         "prior_strength": PRIOR_STRENGTH,
-        "shrinkage_aplicado": True,
+        "shrinkage_aplicado": "core_empirical_bayes",
     }
     core_debug = {k: v for k, v in _extract_core_stat_debug(row).items() if v not in (None, "")}
     debug.update(core_debug)
+    core_samples = [
+        _to_float(core_debug.get("sample_home")),
+        _to_float(core_debug.get("sample_away")),
+    ]
+    core_samples = [int(value) for value in core_samples if value is not None and value >= 0]
+    if core_samples:
+        sample_size = min(core_samples)
+        debug["sample_size"] = sample_size
+        if sample_size < 10:
+            warnings.append("LOW_SAMPLE")
 
     if market_type == "handicap" and not HANDICAP_ENABLED_FOOTBALL_V1_1:
         discard_reason = "HANDICAP_BLOCKED_FOOTBALL_V1_1"
@@ -696,7 +697,6 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
                     prob_no_vig = {"over": p_over, "under": p_under}.get(side)
                     if prob_no_vig is None:
                         discard_reason = "INVALID_PICK_TOTALS"
-                    warnings.append("NEUTRAL_FALLBACK_NO_HISTORY")
 
             elif market_type == "btts":
                 yes_col = "odds_Both_teams_to_score_Full_Time_YES"
@@ -715,7 +715,6 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
                 prob_no_vig = {"yes": p_yes, "no": p_no}.get(side)
                 if prob_no_vig is None:
                     discard_reason = "INVALID_PICK_BTTS"
-                warnings.append("NEUTRAL_FALLBACK_NO_HISTORY")
 
             elif market_type == "handicap":
                 mercado_text = _norm_text(row.get("mercado"))
@@ -729,11 +728,7 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
 
                     if side is None:
                         discard_reason = "HANDICAP_AMBIGUOUS_BLOCKED_FOOTBALL_V1_1"
-                    elif _is_quarter_line(line):
-                        discard_reason = "HANDICAP_QUARTER_LINE_BLOCKED_FOOTBALL_V1_1"
-                    elif _is_integer_line(line):
-                        discard_reason = "HANDICAP_PUSH_PROBABILITY_UNAVAILABLE"
-                    elif not _is_half_handicap_line(line):
+                    elif line is None or abs(line * 4 - round(line * 4)) > 1e-9:
                         discard_reason = "HANDICAP_LINE_UNSUPPORTED_FOOTBALL_V1_1"
                     else:
                         pair = _find_asian_handicap_market_pair(wide_row, line, side)
@@ -743,8 +738,28 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
                             selected_odd, opposite_odd, bookmaker_melhor = pair
                             market_odd_base = selected_odd
                             prob_no_vig, _ = no_vig_probability_pair(selected_odd, opposite_odd)
-                            warnings.append("HANDICAP_ASIAN_HALF_LINE_ONLY")
-                            warnings.append("NEUTRAL_FALLBACK_NO_HISTORY")
+                            prob_win = _to_float(row.get("prob_win"))
+                            prob_push = _to_float(row.get("prob_push"))
+                            prob_loss = _to_float(row.get("prob_loss"))
+                            if all(value is not None for value in (prob_win, prob_push, prob_loss)):
+                                total_settlement = prob_win + prob_push + prob_loss
+                                if total_settlement <= 0:
+                                    discard_reason = "HANDICAP_SETTLEMENT_INVALID"
+                                else:
+                                    handicap_settlement_values = {
+                                        "win": prob_win / total_settlement,
+                                        "push": prob_push / total_settlement,
+                                        "loss": prob_loss / total_settlement,
+                                    }
+                            elif _is_half_handicap_line(line):
+                                handicap_settlement_values = {
+                                    "win": original_prob,
+                                    "push": 0.0,
+                                    "loss": 1.0 - original_prob,
+                                }
+                            else:
+                                discard_reason = "HANDICAP_SETTLEMENT_UNAVAILABLE"
+                            warnings.append("HANDICAP_ASIAN_FULL_SETTLEMENT")
         except Exception:
             discard_reason = "NO_MARKET_BASELINE"
 
@@ -755,14 +770,23 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
     debug["bookmaker_melhor"] = bookmaker_melhor
 
     if discard_reason is None:
-        prob_final = _blend_conservative(original_prob, prob_no_vig, prob_hist)
-        prob_final_pct = prob_final * 100.0
-        fair_odd = (1.0 / prob_final) if prob_final > 0 else None
+        prob_final = original_prob
         if market_type == "handicap":
-            edge_decimal = calculate_handicap_ev(prob_final, 0.0, offered_odd)
-            edge_decimal_override = edge_decimal
+            prob_win = handicap_settlement_values["win"]
+            prob_push = handicap_settlement_values["push"]
+            prob_loss = handicap_settlement_values["loss"]
+            prob_final = asian_equivalent_probability(prob_win, prob_loss)
+            fair_odd = asian_fair_odd(prob_win, prob_loss)
+            edge_decimal = asian_expected_value(prob_win, prob_loss, offered_odd)
+            debug.update({
+                "prob_win": round(prob_win, 6),
+                "prob_push": round(prob_push, 6),
+                "prob_loss": round(prob_loss, 6),
+            })
         else:
+            fair_odd = (1.0 / prob_final) if prob_final > 0 else None
             edge_decimal = (offered_odd * prob_final) - 1.0
+        prob_final_pct = prob_final * 100.0
         min_edge_required = _minimum_edge_required(market_type, warnings)
 
         debug.update({
@@ -1066,7 +1090,10 @@ def executar_modelo_real(caminho_csv_longo, caminho_saida):
     # 2. Carrega modelo real extraído do notebook
     modelo = carregar_modulo_modelo_real()
 
-    # 3. Tenta sobrescrever variáveis globais, caso o notebook use alguma delas
+    # 3. Configura a temporada pela data real da coleta e define caminhos da execucao.
+    reference_dates = pd.to_datetime(df_wide.get("date"), errors="coerce")
+    if reference_dates.notna().any() and hasattr(modelo, "configure_reference_date"):
+        modelo.configure_reference_date(reference_dates.max())
     modelo.MATCHES_CSV = caminho_wide
     modelo.LOVABLE_CSV = caminho_saida
     modelo.ARQ_PROGNOSTICOS_LOVABLE = caminho_saida
@@ -1088,9 +1115,8 @@ def executar_modelo_real(caminho_csv_longo, caminho_saida):
     # 5. Salva o relatório técnico filtrado em TXT
     caminho_contexto = salvar_contexto_modelo(contexto_modelo, caminho_saida)
 
-    # 6. O notebook original salva em pasta própria.
-    # Pegamos o CSV mais recente gerado na pasta Prognostico.
-    arquivo_real = arquivo_csv_mais_recente(pasta_prognostico)
+    # 6. O modelo V1.2 grava diretamente no caminho isolado desta execucao.
+    arquivo_real = caminho_saida if caminho_saida.exists() else arquivo_csv_mais_recente(pasta_prognostico)
 
     if arquivo_real is None:
         raise FileNotFoundError(
@@ -1106,9 +1132,12 @@ def executar_modelo_real(caminho_csv_longo, caminho_saida):
         "esporte",
         "liga",
         "jogo",
+        "jogo_id",
         "mandante",
         "visitante",
+        "modelo_variante",
         "mercado",
+        "opcao_1x2",
         "pick",
         "linha",
         "odd_ofertada",
@@ -1119,6 +1148,9 @@ def executar_modelo_real(caminho_csv_longo, caminho_saida):
         "odd_valor",
         "probabilidade_final",
         "edge",
+        "prob_win",
+        "prob_push",
+        "prob_loss",
         "observacoes",
     ]
 

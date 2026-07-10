@@ -38,6 +38,18 @@ def wide_row(**overrides):
         "odds_Asian_handicap_Full_Time_Linha2_1": 1.95,
         "odds_Asian_handicap_Full_Time_Linha2_Opp_HANDICAP": 0.5,
         "odds_Asian_handicap_Full_Time_Linha2_Opp_Odd": 1.95,
+        "odds_Asian_handicap_Full_Time_Linha3_HANDICAP": 0.0,
+        "odds_Asian_handicap_Full_Time_Linha3_1": 2.05,
+        "odds_Asian_handicap_Full_Time_Linha3_Opp_HANDICAP": 0.0,
+        "odds_Asian_handicap_Full_Time_Linha3_Opp_Odd": 1.85,
+        "odds_Asian_handicap_Full_Time_Linha4_HANDICAP": 0.25,
+        "odds_Asian_handicap_Full_Time_Linha4_1": 2.00,
+        "odds_Asian_handicap_Full_Time_Linha4_Opp_HANDICAP": -0.25,
+        "odds_Asian_handicap_Full_Time_Linha4_Opp_Odd": 1.90,
+        "odds_Asian_handicap_Full_Time_Linha5_HANDICAP": 1.0,
+        "odds_Asian_handicap_Full_Time_Linha5_1": 2.10,
+        "odds_Asian_handicap_Full_Time_Linha5_Opp_HANDICAP": -1.0,
+        "odds_Asian_handicap_Full_Time_Linha5_Opp_Odd": 1.80,
     }
     row.update(overrides)
     return pd.Series(row)
@@ -83,7 +95,7 @@ def output_row_with_core_debug(**overrides):
 
 class FootballRunnerV11Test(unittest.TestCase):
     def test_model_version_is_set(self):
-        self.assertEqual(runner.MODEL_VERSION, "FOOTBALL_V1_1")
+        self.assertEqual(runner.MODEL_VERSION, "FOOTBALL_V1_2")
 
     def test_no_vig_three_way_sums_to_one(self):
         probs = runner.no_vig_probability_three(2.0, 3.0, 4.0)
@@ -96,8 +108,8 @@ class FootballRunnerV11Test(unittest.TestCase):
         selected, discarded = runner._evaluate_row_v1_1(output_row(), wide_row())
         self.assertIsNone(discarded)
         self.assertIsNotNone(selected)
-        self.assertEqual(selected["modelo_versao"], "FOOTBALL_V1_1")
-        self.assertIn("modelo_versao=FOOTBALL_V1_1", selected["observacoes"])
+        self.assertEqual(selected["modelo_versao"], "FOOTBALL_V1_2")
+        self.assertIn("modelo_versao=FOOTBALL_V1_2", selected["observacoes"])
 
     def test_core_lambda_debug_is_exposed_when_available(self):
         selected, discarded = runner._evaluate_row_v1_1(output_row_with_core_debug(), wide_row())
@@ -150,7 +162,7 @@ RPI Third FC
 
         self.assertEqual(selected, "")
 
-    def test_total_uses_exact_line_pair_and_shrinkage_note(self):
+    def test_total_uses_exact_line_pair_without_market_blending(self):
         row = output_row(
             mercado="Total de Gols",
             pick="Over 2.5 gols",
@@ -161,8 +173,8 @@ RPI Third FC
         selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
         self.assertIsNone(discarded)
         self.assertIsNotNone(selected)
-        self.assertIn("NEUTRAL_FALLBACK_NO_HISTORY", selected["observacoes"])
-        self.assertLess(float(selected["probabilidade_final"]), 70.0)
+        self.assertNotIn("NEUTRAL_FALLBACK_NO_HISTORY", selected["observacoes"])
+        self.assertEqual(float(selected["probabilidade_final"]), 70.0)
 
     def test_total_uses_median_odd_for_market_probability_and_best_odd_for_ev(self):
         row = output_row(
@@ -193,6 +205,19 @@ RPI Third FC
         self.assertIn(f"prob_no_vig={expected_prob:.4f}", selected["observacoes"])
         self.assertIn("odd_mercado_base=1.7", selected["observacoes"])
 
+    def test_btts_probability_is_not_blended_with_market(self):
+        row = output_row(
+            mercado="Ambas Marcam",
+            pick="Ambas Marcam - Sim",
+            odd_ofertada=1.95,
+            probabilidade_final=65.0,
+        )
+        selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
+        self.assertIsNone(discarded)
+        self.assertIsNotNone(selected)
+        self.assertEqual(selected["probabilidade_final"], 65.0)
+        self.assertIn("prob_no_vig=0.5", selected["observacoes"])
+
     def test_total_quarter_line_is_rejected(self):
         row = output_row(mercado="Total de Gols", pick="Over 2.25 gols", linha=2.25)
         selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
@@ -222,7 +247,7 @@ RPI Third FC
         selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
         self.assertIsNone(discarded)
         self.assertIsNotNone(selected)
-        self.assertIn("HANDICAP_ASIAN_HALF_LINE_ONLY", selected["observacoes"])
+        self.assertIn("HANDICAP_ASIAN_FULL_SETTLEMENT", selected["observacoes"])
         self.assertIn("edge_formula=prob_win*(odd-1)-prob_loss", selected["observacoes"])
 
     def test_handicap_minus_half_with_pair_is_supported(self):
@@ -237,30 +262,43 @@ RPI Third FC
         self.assertIsNone(discarded)
         self.assertIsNotNone(selected)
 
-    def test_handicap_zero_is_blocked_without_push_probability(self):
-        row = output_row(mercado="Handicap Asiatico", pick="Home FC 0", linha=0.0)
+    def test_handicap_zero_uses_push_probability(self):
+        row = output_row(
+            mercado="Handicap Asiatico", pick="Home FC 0", linha=0.0,
+            odd_ofertada=2.00, probabilidade_final=55.56,
+            prob_win=0.50, prob_push=0.10, prob_loss=0.40,
+        )
         selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
-        self.assertIsNone(selected)
-        self.assertEqual(discarded["motivo_descarte_v1_1"], "HANDICAP_PUSH_PROBABILITY_UNAVAILABLE")
+        self.assertIsNone(discarded)
+        self.assertIsNotNone(selected)
+        self.assertAlmostEqual(selected["edge"], 10.0, places=2)
 
-    def test_handicap_plus_one_is_blocked_without_push_probability(self):
-        row = output_row(mercado="Handicap Asiatico", pick="Home FC +1.0", linha=1.0)
+    def test_handicap_plus_one_is_supported(self):
+        row = output_row(
+            mercado="Handicap Asiatico", pick="Home FC +1.0", linha=1.0,
+            odd_ofertada=2.00, probabilidade_final=55.56,
+            prob_win=0.50, prob_push=0.10, prob_loss=0.40,
+        )
         selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
-        self.assertIsNone(selected)
-        self.assertEqual(discarded["motivo_descarte_v1_1"], "HANDICAP_PUSH_PROBABILITY_UNAVAILABLE")
+        self.assertIsNone(discarded)
+        self.assertIsNotNone(selected)
 
-    def test_handicap_minus_one_is_blocked_without_push_probability(self):
+    def test_handicap_minus_one_requires_matching_market_pair(self):
         row = output_row(mercado="Handicap Asiatico", pick="Home FC -1.0", linha=-1.0)
         selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
         self.assertIsNone(selected)
-        self.assertEqual(discarded["motivo_descarte_v1_1"], "HANDICAP_PUSH_PROBABILITY_UNAVAILABLE")
+        self.assertEqual(discarded["motivo_descarte_v1_1"], "HANDICAP_NO_PAIRED_ODDS")
 
-    def test_handicap_quarter_lines_are_blocked(self):
-        for line in (0.25, -0.25, 0.75, -0.75):
-            row = output_row(mercado="Handicap Asiatico", pick=f"Home FC {line:+.2f}", linha=line)
-            selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
-            self.assertIsNone(selected)
-            self.assertEqual(discarded["motivo_descarte_v1_1"], "HANDICAP_QUARTER_LINE_BLOCKED_FOOTBALL_V1_1")
+    def test_handicap_quarter_line_is_supported_with_half_settlement(self):
+        row = output_row(
+            mercado="Handicap Asiatico", pick="Home FC +0.25", linha=0.25,
+            odd_ofertada=2.00, probabilidade_final=56.25,
+            prob_win=0.45, prob_push=0.20, prob_loss=0.35,
+        )
+        selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
+        self.assertIsNone(discarded)
+        self.assertIsNotNone(selected)
+        self.assertAlmostEqual(selected["edge"], 10.0, places=2)
 
     def test_european_handicap_is_not_treated_as_asian(self):
         row = output_row(mercado="Handicap Europeu 3 vias", pick="Home FC +1", linha=1.0)
@@ -387,6 +425,32 @@ RPI Third FC
 
         self.assertEqual(wide.iloc[0]["country"], "China")
         self.assertEqual(wide.iloc[0]["league"], "Super League")
+
+    def test_adapter_preserves_integer_and_quarter_asian_lines(self):
+        base = {
+            "data": "09/07/2026", "hora": "19:00", "esporte": "Football",
+            "liga": "Brazil - Serie A", "country": "Brazil",
+            "jogo": "Home FC vs Away FC", "mandante": "Home FC", "visitante": "Away FC",
+            "mercado": "Handicap Asiatico", "bookmaker": "book", "fonte": "source",
+        }
+        rows = []
+        for line in (0.0, 0.25):
+            rows.extend([
+                {**base, "pick": "Home FC", "linha": line, "odd": 1.95},
+                {**base, "pick": "Away FC", "linha": line, "odd": 1.95},
+            ])
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_path = Path(tmp) / "coleta.csv"
+            wide_path = Path(tmp) / "wide.csv"
+            pd.DataFrame(rows).to_csv(csv_path, index=False)
+            wide = football_adapter.converter_csv_longo_para_wide(csv_path, wide_path)
+        home_lines = {
+            float(value)
+            for column, value in wide.iloc[0].items()
+            if column.endswith("_HANDICAP") and pd.notna(value)
+        }
+        self.assertIn(0.0, home_lines)
+        self.assertIn(0.25, home_lines)
 
     def test_adapter_preserves_median_and_best_odds_columns(self):
         with tempfile.TemporaryDirectory() as tmp:
