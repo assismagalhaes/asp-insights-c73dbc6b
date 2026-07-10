@@ -95,18 +95,6 @@ const CreateBaseSeasonSchema = BaseDataSchema.extend({
   ano_origem: z.number().int().min(2000).max(2100).optional(),
 });
 
-const AspValidatorOcrSchema = z.object({
-  validator_id: z.string().min(1),
-  upload_id: z.string().min(1),
-  upload_category: z.string().min(1),
-  user_comment: z.string().optional().default(""),
-  file: z.object({
-    name: z.string().min(1),
-    type: z.string().optional().default("application/octet-stream"),
-    content_base64: z.string().min(1),
-  }),
-});
-
 type ScraperPayload = Record<string, unknown>;
 type JsonValue = string | number | boolean | null | { [k: string]: JsonValue } | JsonValue[];
 
@@ -696,23 +684,4 @@ export const createBaseSeason = createServerFn({ method: "POST" })
       if (data.esporte === "basketball") basketballBaseUnavailable(error);
       throw error;
     }
-  });
-
-export const processAspValidatorOcr = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => AspValidatorOcrSchema.parse(input))
-  .handler(async ({ data }) => {
-    const bytes = Uint8Array.from(atob(data.file.content_base64), (char) => char.charCodeAt(0));
-    const formData = new FormData();
-    formData.append("validator_id", data.validator_id);
-    formData.append("upload_id", data.upload_id);
-    formData.append("upload_category", data.upload_category);
-    formData.append("user_comment", data.user_comment ?? "");
-    formData.append(
-      "arquivo",
-      new Blob([bytes], { type: data.file.type || "application/octet-stream" }),
-      data.file.name,
-    );
-
-    return (await scraperFormRequest("/asp-validator/ocr", formData)) as JsonValue;
   });

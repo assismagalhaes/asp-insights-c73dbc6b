@@ -22,13 +22,7 @@ import {
 } from "@/components/ui/select";
 import { StatCard } from "@/components/stat-card";
 import { ChartTooltip } from "@/components/chart-tooltip";
-import {
-  useConfiguracao,
-  useUpdateConfiguracao,
-  usePrognosticos,
-  useAspValidatorBankrollPrognosticos,
-  type TipoStake,
-} from "@/lib/db";
+import { useConfiguracao, useUpdateConfiguracao, usePrognosticos, type TipoStake } from "@/lib/db";
 import { computeMetrics, bankrollTimeline } from "@/lib/metrics";
 import { formatBR } from "@/lib/date-br";
 import {
@@ -61,7 +55,6 @@ const axisColor = COLOR_AXIS;
 function Bankroll() {
   const { data: cfg } = useConfiguracao();
   const { data: prognosticos = [] } = usePrognosticos();
-  const { data: aspValidatorBankroll = [] } = useAspValidatorBankrollPrognosticos();
   const updateCfg = useUpdateConfiguracao();
 
   const [unidade, setUnidade] = useState(10);
@@ -78,7 +71,7 @@ function Bankroll() {
     }
   }, [cfg]);
 
-  const officialRows = [...prognosticos, ...aspValidatorBankroll];
+  const officialRows = prognosticos;
   const metrics = computeMetrics(officialRows, cfg);
   const timeline = bankrollTimeline(
     officialRows,

@@ -33,13 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  usePrognosticos,
-  useAspValidatorBankrollPrognosticos,
-  useConfiguracao,
-  MERCADOS_DEFAULT,
-  ESPORTES_DEFAULT,
-} from "@/lib/db";
+import { usePrognosticos, useConfiguracao, MERCADOS_DEFAULT, ESPORTES_DEFAULT } from "@/lib/db";
 import { LeagueFilter } from "@/components/league-filter";
 import { PeriodFilter } from "@/components/period-filter";
 import { formatBR } from "@/lib/date-br";
@@ -74,7 +68,6 @@ const MERCADOS = ["Todos", ...MERCADOS_DEFAULT];
 
 function Dashboard() {
   const { data: prognosticos = [] } = usePrognosticos();
-  const { data: aspValidatorBankroll = [] } = useAspValidatorBankrollPrognosticos();
   const { data: cfg } = useConfiguracao();
 
   const [periodo, setPeriodo] = useState<PeriodoFiltro>("tudo");
@@ -89,14 +82,14 @@ function Dashboard() {
 
   const filtrados = useMemo(
     () =>
-      [...prognosticos, ...aspValidatorBankroll].filter((p) => {
+      prognosticos.filter((p) => {
         if (!dateInRange(p.data, ini, fim)) return false;
         if (esporte !== "Todos" && p.esporte !== esporte) return false;
         if (liga !== "all" && p.liga !== liga) return false;
         if (mercado !== "Todos" && p.mercado !== mercado) return false;
         return true;
       }),
-    [prognosticos, aspValidatorBankroll, ini, fim, esporte, liga, mercado],
+    [prognosticos, ini, fim, esporte, liga, mercado],
   );
 
   const officialMetrics = useMemo(() => computeMetrics(filtrados, cfg), [filtrados, cfg]);

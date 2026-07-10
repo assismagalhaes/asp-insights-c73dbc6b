@@ -23,8 +23,6 @@ import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authen
 import { Route as AuthenticatedColetaDadosRouteImport } from './routes/_authenticated/coleta-dados'
 import { Route as AuthenticatedBaseDadosRouteImport } from './routes/_authenticated/base-dados'
 import { Route as AuthenticatedBankrollRouteImport } from './routes/_authenticated/bankroll'
-import { Route as AuthenticatedAspValidatorRouteImport } from './routes/_authenticated/asp-validator'
-import { Route as AuthenticatedAspScreenerRouteImport } from './routes/_authenticated/asp-screener'
 import { Route as AuthenticatedAprendizadoIaRouteImport } from './routes/_authenticated/aprendizado-ia'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
@@ -105,18 +103,6 @@ const AuthenticatedBankrollRoute = AuthenticatedBankrollRouteImport.update({
   path: '/bankroll',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedAspValidatorRoute =
-  AuthenticatedAspValidatorRouteImport.update({
-    id: '/asp-validator',
-    path: '/asp-validator',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedAspScreenerRoute =
-  AuthenticatedAspScreenerRouteImport.update({
-    id: '/asp-screener',
-    path: '/asp-screener',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 const AuthenticatedAprendizadoIaRoute =
   AuthenticatedAprendizadoIaRouteImport.update({
     id: '/aprendizado-ia',
@@ -160,8 +146,6 @@ export interface FileRoutesByFullPath {
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
-  '/asp-screener': typeof AuthenticatedAspScreenerRoute
-  '/asp-validator': typeof AuthenticatedAspValidatorRoute
   '/bankroll': typeof AuthenticatedBankrollRoute
   '/base-dados': typeof AuthenticatedBaseDadosRoute
   '/coleta-dados': typeof AuthenticatedColetaDadosRoute
@@ -182,8 +166,6 @@ export interface FileRoutesByTo {
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
-  '/asp-screener': typeof AuthenticatedAspScreenerRoute
-  '/asp-validator': typeof AuthenticatedAspValidatorRoute
   '/bankroll': typeof AuthenticatedBankrollRoute
   '/base-dados': typeof AuthenticatedBaseDadosRoute
   '/coleta-dados': typeof AuthenticatedColetaDadosRoute
@@ -207,8 +189,6 @@ export interface FileRoutesById {
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/_authenticated/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
-  '/_authenticated/asp-screener': typeof AuthenticatedAspScreenerRoute
-  '/_authenticated/asp-validator': typeof AuthenticatedAspValidatorRoute
   '/_authenticated/bankroll': typeof AuthenticatedBankrollRoute
   '/_authenticated/base-dados': typeof AuthenticatedBaseDadosRoute
   '/_authenticated/coleta-dados': typeof AuthenticatedColetaDadosRoute
@@ -233,8 +213,6 @@ export interface FileRouteTypes {
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
     | '/aprendizado-ia'
-    | '/asp-screener'
-    | '/asp-validator'
     | '/bankroll'
     | '/base-dados'
     | '/coleta-dados'
@@ -255,8 +233,6 @@ export interface FileRouteTypes {
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
     | '/aprendizado-ia'
-    | '/asp-screener'
-    | '/asp-validator'
     | '/bankroll'
     | '/base-dados'
     | '/coleta-dados'
@@ -279,8 +255,6 @@ export interface FileRouteTypes {
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
     | '/_authenticated/aprendizado-ia'
-    | '/_authenticated/asp-screener'
-    | '/_authenticated/asp-validator'
     | '/_authenticated/bankroll'
     | '/_authenticated/base-dados'
     | '/_authenticated/coleta-dados'
@@ -408,20 +382,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBankrollRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/asp-validator': {
-      id: '/_authenticated/asp-validator'
-      path: '/asp-validator'
-      fullPath: '/asp-validator'
-      preLoaderRoute: typeof AuthenticatedAspValidatorRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/asp-screener': {
-      id: '/_authenticated/asp-screener'
-      path: '/asp-screener'
-      fullPath: '/asp-screener'
-      preLoaderRoute: typeof AuthenticatedAspScreenerRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/aprendizado-ia': {
       id: '/_authenticated/aprendizado-ia'
       path: '/aprendizado-ia'
@@ -469,8 +429,6 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAprendizadoIaRoute: typeof AuthenticatedAprendizadoIaRoute
-  AuthenticatedAspScreenerRoute: typeof AuthenticatedAspScreenerRoute
-  AuthenticatedAspValidatorRoute: typeof AuthenticatedAspValidatorRoute
   AuthenticatedBankrollRoute: typeof AuthenticatedBankrollRoute
   AuthenticatedBaseDadosRoute: typeof AuthenticatedBaseDadosRoute
   AuthenticatedColetaDadosRoute: typeof AuthenticatedColetaDadosRoute
@@ -486,8 +444,6 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAprendizadoIaRoute: AuthenticatedAprendizadoIaRoute,
-  AuthenticatedAspScreenerRoute: AuthenticatedAspScreenerRoute,
-  AuthenticatedAspValidatorRoute: AuthenticatedAspValidatorRoute,
   AuthenticatedBankrollRoute: AuthenticatedBankrollRoute,
   AuthenticatedBaseDadosRoute: AuthenticatedBaseDadosRoute,
   AuthenticatedColetaDadosRoute: AuthenticatedColetaDadosRoute,

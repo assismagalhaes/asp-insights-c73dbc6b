@@ -3,6 +3,3 @@ uvicorn[standard]==0.34.0
 pydantic==2.10.4
 python-multipart==0.0.32
 cryptography==49.0.0
-pillow==11.0.0
-pytesseract==0.3.13
-pypdf==5.1.0

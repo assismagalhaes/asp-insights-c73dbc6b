@@ -114,15 +114,11 @@ export function isFinalExecutableStatus(status: OpportunityRankingStatus): boole
 }
 
 export function getOpportunityMarketLabel(prognostico: Pick<Prognostico, "mercado" | "pick">) {
-  if (!isSourceOnlyMarket(prognostico.mercado)) return prognostico.mercado;
-  const [market] = splitCompoundPick(prognostico.pick);
-  return market || "Mercado do modelo";
+  return prognostico.mercado;
 }
 
 export function getOpportunityPickLabel(prognostico: Pick<Prognostico, "mercado" | "pick">) {
-  if (!isSourceOnlyMarket(prognostico.mercado)) return prognostico.pick;
-  const [, pick] = splitCompoundPick(prognostico.pick);
-  return pick || prognostico.pick;
+  return prognostico.pick;
 }
 
 export function getOpportunitySourceLabel(
@@ -803,19 +799,6 @@ function getSelectionSideKey(prognostico: Prognostico): string {
   }
 
   return `${pickWithoutNumbers}|${line}`.replace(/\|$/, "") || "default-side";
-}
-
-function isSourceOnlyMarket(value: string): boolean {
-  return /asp screener/i.test(value);
-}
-
-function splitCompoundPick(value: string): [string, string] {
-  const parts = value
-    .split("|")
-    .map((part) => part.trim())
-    .filter(Boolean);
-  if (parts.length < 2) return ["", value.trim()];
-  return [parts[0], parts.slice(1).join(" | ")];
 }
 
 function normalizeKeyPart(value: unknown): string {

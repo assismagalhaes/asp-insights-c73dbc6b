@@ -1,5 +1,3 @@
-import type { MlbUnifiedOpportunity } from "@/types/mlbProjections";
-
 export interface MlbParsedWinLossRecord {
   raw: string;
   wins: number | null;
@@ -154,82 +152,4 @@ export interface MlbBaseballReferenceMatchupContext {
     warnings: string[];
     confidence: number;
   };
-}
-
-export type MlbContextAlignmentStatus =
-  | "supports_screener"
-  | "conflicts_with_screener"
-  | "mixed"
-  | "mixed_to_conflicting"
-  | "insufficient_context";
-export type MlbValidationReadinessStatus =
-  | "pronto_para_validator"
-  | "revisar_antes_do_validator"
-  | "contexto_incompleto"
-  | "nao_recomendado_para_validator";
-
-export interface MlbContextAlignment {
-  alignment_status: MlbContextAlignmentStatus;
-  alignment_score: number;
-  supporting_factors: string[];
-  conflicting_factors: string[];
-  neutral_factors: string[];
-  market_specific_notes: string[];
-  critical_flags: string[];
-}
-
-export interface MlbValidationPreparation {
-  validation_readiness_score: number;
-  readiness_status: MlbValidationReadinessStatus;
-  critical_questions: string[];
-  recommended_next_step: string;
-  // Score bruto do Screener (nunca sobrescrever). Preservado para auditoria.
-  raw_opportunity_score: number;
-  raw_confidence_score: number;
-  // Scores pós-contexto, com caps aplicados por alignment/divergence/flags.
-  critical_adjusted_score: number;
-  critical_adjusted_confidence: number;
-  // Sinalização visual sugerida para a UI (badges).
-  critical_adjusted_status: "strong_conflict" | "review_before_validator" | "aligned";
-  post_context_risk_flags: string[];
-}
-
-export interface MlbPreparedCriticalValidationPayload {
-  source: "ASP Screener MLB";
-  stage: "Critical Validation Preparation";
-  sport: "Baseball";
-  league: "MLB";
-  created_at: string;
-  game: {
-    game_id: string;
-    date: string | null;
-    time: string | null;
-    home_team: string;
-    away_team: string;
-    matchup: string;
-  };
-  opportunity: {
-    market: string;
-    pick: string | null;
-    line: number | null;
-    odd: number | null;
-    median_odd: number | null;
-    market_base_odd: number | null;
-    bookmaker_melhor: string | null;
-    model_probability: number | null;
-    market_probability_no_vig: number | null;
-    probability_edge: number | null;
-    fair_odd: number | null;
-    ev: number | null;
-    opportunity_score: number;
-    confidence_score: number;
-    priority_status: string;
-    reasons: string[];
-    alerts: string[];
-    risk_flags: string[];
-  };
-  baseball_reference_context: MlbBaseballReferenceMatchupContext;
-  context_alignment: MlbContextAlignment;
-  validation_preparation: MlbValidationPreparation;
-  source_projection_payload: MlbUnifiedOpportunity["source_projection_payload"];
 }

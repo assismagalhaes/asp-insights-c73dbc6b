@@ -1,6 +1,5 @@
 // Server functions for Critical Validation pre-match Telegram alerts.
-// Scope: Validação Crítica only. Does NOT touch ASP Screener, ASP Validator,
-// bankroll, prognostico creation, dashboards or handoff.
+// Scope: Validação Crítica only. Does not alter other application modules.
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -19,10 +18,7 @@ function parseTelegramSendError(raw: string): string {
   try {
     const parsed = JSON.parse(raw) as { description?: string; error_code?: number };
     const description = parsed.description ?? raw;
-    if (
-      parsed.error_code === 403 &&
-      /can't initiate conversation with a user/i.test(description)
-    ) {
+    if (parsed.error_code === 403 && /can't initiate conversation with a user/i.test(description)) {
       return `O bot não pode iniciar conversa com você. Abra @${TELEGRAM_BOT_USERNAME} no Telegram, envie /start e depois clique em Testar novamente.`;
     }
     if (/chat not found|invalid_chat_id/i.test(description)) {
@@ -61,10 +57,16 @@ async function sendTelegramMessage(
     }),
   });
   const body = await res.text();
-  if (!res.ok) return { ok: false, error: parseTelegramSendError(body).slice(0, 500), status: res.status };
+  if (!res.ok)
+    return { ok: false, error: parseTelegramSendError(body).slice(0, 500), status: res.status };
   try {
-    const parsed = JSON.parse(body) as { ok?: boolean; result?: { message_id?: number }; description?: string };
-    if (!parsed.ok) return { ok: false, error: parsed.description ?? "telegram_not_ok", status: res.status };
+    const parsed = JSON.parse(body) as {
+      ok?: boolean;
+      result?: { message_id?: number };
+      description?: string;
+    };
+    if (!parsed.ok)
+      return { ok: false, error: parsed.description ?? "telegram_not_ok", status: res.status };
     return { ok: true, message_id: String(parsed.result?.message_id ?? "") };
   } catch {
     return { ok: false, error: "invalid_json_response", status: res.status };
@@ -240,7 +242,6 @@ export const updateCriticalAlertPrefs = createServerFn({ method: "POST" })
         patch.telegram_error = null;
       }
     }
-
 
     const { error } = await context.supabase
       .from("validacao_critica_telegram_alerts")

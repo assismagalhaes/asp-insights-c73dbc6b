@@ -62,7 +62,6 @@ import { getAiCalibrationSummary } from "@/lib/ai-learning";
 import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { ScreenerCriticalDraftPanel } from "@/components/screener-critical-draft-panel";
 import {
   buildPreAiShortlist,
   calculatePreliminaryOpportunityScore,
@@ -853,8 +852,6 @@ function Validacao() {
           Segunda camada analítica dos prognósticos gerados pelos modelos.
         </p>
       </div>
-
-      <ScreenerCriticalDraftPanel />
 
       {/* Filtros */}
       <div className="rounded-lg border border-border bg-card p-3">

@@ -6,12 +6,10 @@ import {
   History,
   Wallet,
   BrainCircuit,
-  ClipboardCheck,
   Cpu,
   Settings,
   Megaphone,
   Database,
-  Search,
 } from "lucide-react";
 import logo from "@/assets/logo-asp.png.asset.json";
 
@@ -32,11 +30,9 @@ const items = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Prognósticos", url: "/prognosticos", icon: ListChecks },
   { title: "Coleta de Odds", url: "/coleta-dados", icon: Database },
-  { title: "ASP Screener", url: "/asp-screener", icon: Search },
   { title: "Base de Dados", url: "/base-dados", icon: Database },
   { title: "Modelos Preditivos", url: "/modelos-preditivos", icon: Cpu },
   { title: "Validação Crítica", url: "/validacao", icon: ShieldCheck },
-  { title: "ASP Validator", url: "/asp-validator", icon: ClipboardCheck },
   { title: "Publicação", url: "/publicacao", icon: Megaphone },
   { title: "Histórico", url: "/historico", icon: History },
   { title: "Bankroll", url: "/bankroll", icon: Wallet },

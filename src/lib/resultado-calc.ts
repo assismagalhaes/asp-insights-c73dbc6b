@@ -97,11 +97,9 @@ export function calcularResultadoAuto(
 
   if (has(pick, "marcar primeiro", "primeiro a marcar", "primeiro gol")) return null;
 
-  const ehScreener = has(mercado, "asp screener", "screener");
   const ehTotal =
     has(mercado, "over under", "total de", "goalmatrix", "cornermatrix", "over", "under") ||
-    has(pick, "over", "under") ||
-    (ehScreener && (has(pick, "over", "under") || has(pick, "mais de", "menos de")));
+    has(pick, "over", "under");
   if (ehTotal && (has(pick, "over") || has(pick, "under") || has(mercado, "over", "under"))) {
     const linha = linhaDoProg(prog);
     if (linha == null) return null;
@@ -135,7 +133,7 @@ export function calcularResultadoAuto(
     }
   }
 
-  if (has(mercado, "handicap", "spread") || (ehScreener && has(pick, "handicap", "run line", "spread", "+", "-"))) {
+  if (has(mercado, "handicap", "spread")) {
     const linha = linhaDoProg(prog);
     if (linha != null) {
       const lado = pickSide(prog);
@@ -149,18 +147,12 @@ export function calcularResultadoAuto(
     if (has(pick, "fora mais", "visitante mais")) return visitante > mandante ? "GREEN" : "RED";
   }
 
-  if (has(mercado, "resultado final", "moneyline") || (ehScreener && has(pick, "moneyline", "ml"))) {
+  if (has(mercado, "resultado final", "moneyline")) {
     if (has(pick, "empate", "draw") || /\bx\b/.test(pick))
       return mandante === visitante ? "GREEN" : "RED";
     const lado = pickSide(prog);
     if (lado === "casa" || /\b1\b/.test(pick)) return mandante > visitante ? "GREEN" : "RED";
     if (lado === "fora" || /\b2\b/.test(pick)) return visitante > mandante ? "GREEN" : "RED";
-  }
-
-  if (ehScreener) {
-    const lado = pickSide(prog);
-    if (lado === "casa") return mandante > visitante ? "GREEN" : "RED";
-    if (lado === "fora") return visitante > mandante ? "GREEN" : "RED";
   }
 
   return null;
