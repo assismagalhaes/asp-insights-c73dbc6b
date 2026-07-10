@@ -1354,6 +1354,13 @@ function textIncludesRuntimeError(value: unknown) {
   return /traceback|modulenotfounderror|exception|error:|erro:|no module named/.test(text);
 }
 
+function extractStdoutNumber(text: string, label: RegExp): number {
+  const match = text.match(label);
+  if (!match) return 0;
+  const n = Number(match[1]);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function isAddOperationSuccess(operation: OperationResult, isBasketball: boolean) {
   if (operation.ok === false) return false;
   if (operation.status && !/^ok|success|sucesso$/i.test(operation.status)) return false;
@@ -1361,10 +1368,15 @@ function isAddOperationSuccess(operation: OperationResult, isBasketball: boolean
     return false;
 
   if (isBasketball) {
-    const basic = Number(operation.registros_basicos_importados ?? 0);
-    const advanced = Number(operation.registros_avancados_importados ?? 0);
-    const identified = Number(operation.registros_identificados ?? operation.registros_lidos ?? 0);
-    if (basic <= 0 && advanced <= 0 && identified <= 0) return false;
+    const stdout = formatLineValue(operation.stdout);
+    const basic = Number(operation.registros_basicos_importados ?? 0)
+      || extractStdoutNumber(stdout, /Registros\s+b[aá]sicos\s+importados:\s*(\d+)/i);
+    const advanced = Number(operation.registros_avancados_importados ?? 0)
+      || extractStdoutNumber(stdout, /Registros\s+avan[cç]ados\s+importados:\s*(\d+)/i);
+    const identified = Number(operation.registros_identificados ?? operation.registros_lidos ?? 0)
+      || extractStdoutNumber(stdout, /Registros\s+(?:identificados|lidos):\s*(\d+)/i);
+    const importConcluded = /IMPORTA[CÇ][AÃ]O\s+CONCLU[ÍI]DA/i.test(stdout);
+    if (basic <= 0 && advanced <= 0 && identified <= 0 && !importConcluded) return false;
   }
 
   return true;
