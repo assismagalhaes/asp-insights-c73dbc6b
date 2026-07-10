@@ -386,6 +386,18 @@ class BasketballWnbaV11Tests(unittest.TestCase):
         self.assertEqual(home_pair, (1.88, 1.74, "Book Home"))
         self.assertIsNone(runner.wnba_handicap_market_pair(row, "away", -4.5))
 
+    def test_wnba_handicap_market_pair_scans_dynamic_indexes(self) -> None:
+        row = pd.Series({
+            "odds_Asian_handicap_FT_including_OT_Linha45_HANDICAP": 8.5,
+            "odds_Asian_handicap_FT_including_OT_Linha45_1": 1.88,
+            "odds_Asian_handicap_FT_including_OT_Linha45_1_MEDIANA": 1.79,
+            "odds_Asian_handicap_FT_including_OT_Linha45_Opp_HANDICAP": -8.5,
+            "odds_Asian_handicap_FT_including_OT_Linha45_Opp_Odd": 2.02,
+            "odds_Asian_handicap_FT_including_OT_Linha45_Opp_Odd_MEDIANA": 1.95,
+        })
+        self.assertEqual(runner.wnba_handicap_indexes_from_row(row), [45])
+        self.assertEqual(runner.wnba_handicap_market_pair(row, "home", 8.5), (1.79, 1.95, ""))
+
     def test_wnba_simulation_respects_away_handicap_sign(self) -> None:
         module = FakeWnbaModule([
             {"pontos_time": 82, "pontos_adversario": 78},

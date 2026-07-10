@@ -452,12 +452,16 @@ def long_csv_to_wide(csv_path: Path, league: str, module: Any) -> pd.DataFrame:
                 pair['away_bookmaker_melhor'] = bookmaker
                 pair['away_line'] = float(linha)
 
-    for idx, pair in enumerate(handicap_pairs.values(), start=1):
+    handicap_index_by_game: dict[int, int] = {}
+    for pair in handicap_pairs.values():
         if pair.get('home_odd') is None or pair.get('away_odd') is None:
             continue
         if pair.get('home_line') is None or pair.get('away_line') is None:
             continue
         game = pair['game']
+        game_identity = id(game)
+        idx = handicap_index_by_game.get(game_identity, 0) + 1
+        handicap_index_by_game[game_identity] = idx
         home_line = float(pair['home_line'])
         away_line = float(pair['away_line'])
         game[f'odds_Asian_handicap_FT_including_OT_Linha{idx}_HANDICAP'] = home_line
@@ -1954,7 +1958,7 @@ def limit_wnba_correlated_lines(rows: list[dict[str, Any]]) -> list[dict[str, An
 
 def wnba_handicap_anchor_for_side(row: Any, pick_side: str) -> float | None:
     best: tuple[float, float] | None = None
-    for idx in range(1, 40):
+    for idx in wnba_handicap_indexes_from_row(row):
         home_line = to_float(get_row_value(row, (f'odds_Asian_handicap_FT_including_OT_Linha{idx}_HANDICAP',)))
         away_line = to_float(get_row_value(row, (f'odds_Asian_handicap_FT_including_OT_Linha{idx}_Opp_HANDICAP',)))
         home_odd = market_odd_from_wide(row, f'odds_Asian_handicap_FT_including_OT_Linha{idx}_1')
@@ -2162,7 +2166,7 @@ def bookmaker_from_wide(row: Any, base_col: str) -> str:
 def wnba_handicap_market_pair(row: Any, pick_side: str, line: float) -> tuple[float, float, str] | None:
     if row is None:
         return None
-    for idx in range(1, 40):
+    for idx in wnba_handicap_indexes_from_row(row):
         home_line_col = f'odds_Asian_handicap_FT_including_OT_Linha{idx}_HANDICAP'
         home_odd_col = f'odds_Asian_handicap_FT_including_OT_Linha{idx}_1'
         away_line_col = f'odds_Asian_handicap_FT_including_OT_Linha{idx}_Opp_HANDICAP'
@@ -2181,6 +2185,19 @@ def wnba_handicap_market_pair(row: Any, pick_side: str, line: float) -> tuple[fl
         if pick_side == 'away' and math.isclose(away_line, line, abs_tol=1e-9):
             return away_odd, home_odd, bookmaker_from_wide(row, away_odd_col)
     return None
+
+
+def wnba_handicap_indexes_from_row(row: Any) -> list[int]:
+    try:
+        keys = row.index if hasattr(row, 'index') else row.keys()
+    except Exception:
+        return []
+    indexes = {
+        int(match.group(1))
+        for key in keys
+        if (match := re.search(r'odds_Asian_handicap_FT_including_OT_Linha(\d+)_HANDICAP$', str(key)))
+    }
+    return sorted(indexes)
 
 
 def max_odd(current: Any, odd: float) -> float:
