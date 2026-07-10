@@ -754,6 +754,14 @@ def clean_completed_matches(df: pd.DataFrame) -> pd.DataFrame:
     return cleaned.sort_values(duplicate_key, kind="mergesort").reset_index(drop=True)
 
 
+def filter_matches_before_kickoff(df: pd.DataFrame, kickoff) -> pd.DataFrame:
+    kickoff_ts = pd.to_datetime(kickoff, errors="coerce")
+    if pd.isna(kickoff_ts):
+        raise ValueError(f"Kickoff invalido para corte temporal: {kickoff}")
+    dates = pd.to_datetime(df["Date"], errors="coerce")
+    return df.loc[dates.dt.normalize() < kickoff_ts.normalize()].copy()
+
+
 def _add_round_estimates(df: pd.DataFrame) -> pd.DataFrame:
     """
     Mantém seus contadores e calcula RodadaEstimada por jogos anteriores (casa+fora).
@@ -1621,7 +1629,7 @@ def analyze_match(
     previous_seasons = match_season_context["PREVIOUS_SEASONS"]
 
     base_liga = clean_completed_matches(base_liga)
-    base_liga = base_liga.loc[base_liga["Date"] < dt_kick].copy()
+    base_liga = filter_matches_before_kickoff(base_liga, dt_kick)
     if base_liga.empty:
         raise ValueError(f"Sem partidas anteriores ao kickoff para {league_key}.")
 

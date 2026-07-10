@@ -41,6 +41,14 @@ class FootballCoreV12Test(unittest.TestCase):
         self.assertEqual(cleaned.iloc[0]["Date"], pd.Timestamp("2026-07-01"))
         self.assertEqual(cleaned.iloc[1]["Date"], pd.Timestamp("2026-07-02"))
 
+    def test_temporal_cut_excludes_the_match_day_without_historical_kickoff_time(self):
+        frame = pd.DataFrame({
+            "Date": [pd.Timestamp("2026-07-08"), pd.Timestamp("2026-07-09")],
+            "value": ["previous", "same_day"],
+        })
+        filtered = core.filter_matches_before_kickoff(frame, pd.Timestamp("2026-07-09 19:00"))
+        self.assertEqual(filtered["value"].tolist(), ["previous"])
+
     def test_reference_date_rolls_split_season_in_july(self):
         core.configure_reference_date("09/07/2026")
         self.assertEqual(core.SEASON_CTX["ref_date"], pd.Timestamp("2026-07-09").date())
