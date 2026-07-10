@@ -405,17 +405,11 @@ function BaseDadosPage() {
   async function refreshLastLinesAfterMutation(
     ano: number,
     sigla: string,
-    optimisticLine?: string,
+    _optimisticLine?: string,
   ) {
-    let latest: LastLinesResult | null = null;
     for (const waitMs of [250, 750, 1500]) {
       await delay(waitMs);
-      latest = await loadLastLines(ano, sigla);
-    }
-    if (optimisticLine && latest && !hasEquivalentLine(latest.linhas, optimisticLine)) {
-      setLastLines([...latest.linhas, optimisticLine].slice(-10));
-    } else if (optimisticLine && !latest) {
-      setLastLines((current) => [...current, optimisticLine].slice(-10));
+      await loadLastLines(ano, sigla);
     }
   }
 
