@@ -464,12 +464,14 @@ function BaseDadosPage() {
       });
       const result = payload as OperationResult;
       setValidation(null);
-      setOperation(result);
       if (!isAddOperationSuccess(result, isBasketball)) {
+        setOperation(result);
         toast.error(getOperationErrorMessage(result));
         return;
       }
-      toast.success(`Linha adicionada à base ${league}.`);
+      setOperation(null);
+      setLine("");
+      toast.success("Linha adicionada com sucesso.");
       await refreshLastLinesAfterMutation(selectedYear, team, formatLineValue(parsedLine));
     } catch (e) {
       toast.error(formatError(e));
