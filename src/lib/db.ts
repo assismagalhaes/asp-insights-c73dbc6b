@@ -45,6 +45,10 @@ export interface Prognostico {
   arquivo_contexto: string | null;
   origem_modelo: string | null;
   job_id_coleta: string | null;
+  is_top_final: boolean;
+  top_final_rank: number | null;
+  top_final_run_id: string | null;
+  top_final_at: string | null;
   data_publicacao: string | null;
   tip_texto: string | null;
   publicado_em: string | null;
@@ -164,6 +168,12 @@ export interface OpportunityRankingRun {
   filters_payload: unknown;
   score_weights: unknown;
   metadata: unknown;
+  event_date_from: string | null;
+  event_date_to: string | null;
+  sport_scope: string;
+  league_scope: string;
+  market_scope: string;
+  scope_key: string;
   created_at: string;
   updated_at: string;
 }
@@ -558,6 +568,10 @@ export type PrognosticoInput = Omit<
   | "arquivo_contexto"
   | "origem_modelo"
   | "job_id_coleta"
+  | "is_top_final"
+  | "top_final_rank"
+  | "top_final_run_id"
+  | "top_final_at"
 > & {
   status_publicacao?: StatusPublicacao;
   resultado?: Resultado;

@@ -72,7 +72,7 @@ import {
   useApplyCriticalValidationToOpportunityRanking,
   useGeneratePreAiOpportunityShortlist,
   useEnrichOpportunityRankingItemPreview,
-  useLatestPreAiOpportunityShortlist,
+  usePreAiOpportunityShortlistHistory,
   type PersistedOpportunityRankingRun,
   type RankedOpportunityAlternative,
   type RankedOpportunityCandidate,
@@ -357,7 +357,12 @@ function Validacao() {
   const deleteProg = useDeletePrognostico();
   const callIA = useServerFn(analisarValidacao);
   const callIAOnline = useServerFn(analisarValidacaoOnline);
-  const latestPreAiShortlist = useLatestPreAiOpportunityShortlist();
+  const shortlistHistory = usePreAiOpportunityShortlistHistory();
+  const [selectedShortlistRunId, setSelectedShortlistRunId] = useState("");
+  const selectedShortlist =
+    shortlistHistory.data?.find((entry) => entry.run.id === selectedShortlistRunId) ??
+    shortlistHistory.data?.[0] ??
+    null;
   const generatePreAiShortlist = useGeneratePreAiOpportunityShortlist();
   const enrichPreview = useEnrichOpportunityRankingItemPreview();
   const applyRankingValidation = useApplyCriticalValidationToOpportunityRanking();
@@ -449,6 +454,7 @@ function Validacao() {
           total_grupos: grupos.length,
         },
       });
+      setSelectedShortlistRunId(saved.run.id);
       toast.success(`Shortlist pré-IA gerada com ${saved.items.length} candidata(s).`);
     } catch (e) {
       toast.error((e as Error).message || "Erro ao gerar shortlist pré-IA.");
@@ -456,7 +462,7 @@ function Validacao() {
   };
 
   useEffect(() => {
-    const items = latestPreAiShortlist.data?.items ?? [];
+    const items = selectedShortlist?.items ?? [];
     const loadedPreviewItems = items.filter(
       (item) => item.matchup_preview_status === "loaded" && item.matchup_preview_context?.trim(),
     );
@@ -484,17 +490,17 @@ function Validacao() {
 
       return changed ? next : prev;
     });
-  }, [latestPreAiShortlist.data?.items, grupos]);
+  }, [selectedShortlist?.items, grupos]);
 
   const aplicarMatchupPreview = async (itemId: string, rawPreviewText: string) => {
-    const item = latestPreAiShortlist.data?.items.find((row) => row.id === itemId);
+    const item = selectedShortlist?.items.find((row) => row.id === itemId);
     if (!item) {
       toast.error("Gere ou selecione uma shortlist salva antes de aplicar o preview.");
       return false;
     }
-    const prognostico = pendentes.find((p) => p.id === item.prognostico_id);
+    const prognostico = prognosticos.find((p) => p.id === item.prognostico_id);
     if (!prognostico) {
-      toast.error("Prognostico da shortlist nao esta mais entre os pendentes filtrados.");
+      toast.error("O prognóstico desta shortlist não está mais cadastrado.");
       return false;
     }
     try {
@@ -917,10 +923,13 @@ function Validacao() {
 
       <PreAiShortlistPanel
         candidates={preAiCandidates}
-        latest={latestPreAiShortlist.data ?? null}
-        loadingLatest={latestPreAiShortlist.isLoading}
+        latest={selectedShortlist}
+        history={shortlistHistory.data ?? []}
+        selectedRunId={selectedShortlist?.run.id ?? ""}
+        loadingLatest={shortlistHistory.isLoading}
         generating={generatePreAiShortlist.isPending}
         enrichingPreview={enrichPreview.isPending}
+        onSelectRun={setSelectedShortlistRunId}
         onGenerate={gerarShortlistPreIa}
         onEnrichPreview={aplicarMatchupPreview}
       />
@@ -1472,17 +1481,23 @@ function Validacao() {
 function PreAiShortlistPanel({
   candidates,
   latest,
+  history,
+  selectedRunId,
   loadingLatest,
   generating,
   enrichingPreview,
+  onSelectRun,
   onGenerate,
   onEnrichPreview,
 }: {
   candidates: RankedOpportunityCandidate[];
   latest: PersistedOpportunityRankingRun | null;
+  history: PersistedOpportunityRankingRun[];
+  selectedRunId: string;
   loadingLatest: boolean;
   generating: boolean;
   enrichingPreview: boolean;
+  onSelectRun: (runId: string) => void;
   onGenerate: () => void;
   onEnrichPreview: (itemId: string, rawPreviewText: string) => Promise<boolean>;
 }) {
@@ -1526,6 +1541,36 @@ function PreAiShortlistPanel({
           Gerar shortlist
         </Button>
       </div>
+
+      {history.length > 0 && (
+        <div className="flex flex-wrap items-end gap-3 rounded-md border border-border bg-background/50 p-3">
+          <div className="min-w-[280px] flex-1">
+            <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Histórico salvo por período e modalidade
+            </Label>
+            <Select value={selectedRunId} onValueChange={onSelectRun}>
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Selecione uma shortlist salva" />
+              </SelectTrigger>
+              <SelectContent>
+                {history.map((entry) => (
+                  <SelectItem key={entry.run.id} value={entry.run.id}>
+                    {formatShortlistRunLabel(entry)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {latest && (
+            <div className="text-xs text-muted-foreground">
+              <div>{formatShortlistScope(latest.run)}</div>
+              <div className="mt-1 font-mono text-[10px]">
+                {latest.run.top_final_count} top final de {latest.run.candidate_count} candidata(s)
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-2 sm:grid-cols-4">
         <Metric label="Candidatas agora" value={String(candidates.length)} />
@@ -1724,6 +1769,26 @@ function PreAiShortlistPanel({
       )}
     </div>
   );
+}
+
+function formatShortlistRunLabel(entry: PersistedOpportunityRankingRun): string {
+  const { run } = entry;
+  const period = formatShortlistPeriod(run);
+  const sport = run.sport_scope === "all" ? "Todos os esportes" : run.sport_scope;
+  const league = run.league_scope === "all" ? "Todas as ligas" : run.league_scope;
+  return `${period} | ${sport} | ${league} | ${run.top_final_count} final`;
+}
+
+function formatShortlistScope(run: PersistedOpportunityRankingRun["run"]): string {
+  const market = run.market_scope === "all" ? "Todos os mercados" : run.market_scope;
+  return `${formatShortlistPeriod(run)} · ${run.sport_scope === "all" ? "Todos os esportes" : run.sport_scope} · ${market}`;
+}
+
+function formatShortlistPeriod(run: PersistedOpportunityRankingRun["run"]): string {
+  if (!run.event_date_from && !run.event_date_to) return formatBR(run.run_date);
+  const from = run.event_date_from ? formatBR(run.event_date_from) : "...";
+  const to = run.event_date_to ? formatBR(run.event_date_to) : "...";
+  return from === to ? from : `${from} a ${to}`;
 }
 
 function formatRankingItemLabel(item: PersistedOpportunityRankingRun["items"][number]): string {

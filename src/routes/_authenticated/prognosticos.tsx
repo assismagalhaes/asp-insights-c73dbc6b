@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -110,6 +111,7 @@ function Prognosticos() {
   const [fMercado, setFMercado] = useState("all");
   const [fValidacao, setFValidacao] = useState("all");
   const [fResultado, setFResultado] = useState("all");
+  const [fTopFinal, setFTopFinal] = useState("all");
   const [fLinha, setFLinha] = useState("");
   const [periodo, setPeriodo] = useState<PeriodoFiltro>("tudo");
   const [customIni, setCustomIni] = useState("");
@@ -135,6 +137,8 @@ function Prognosticos() {
       if (fMercado !== "all" && p.mercado !== fMercado) return false;
       if (fValidacao !== "all" && p.status_validacao !== fValidacao) return false;
       if (fResultado !== "all" && p.resultado !== fResultado) return false;
+      if (fTopFinal === "yes" && !p.is_top_final) return false;
+      if (fTopFinal === "no" && p.is_top_final) return false;
       if (fLinha.trim()) {
         const q = fLinha.trim().toLowerCase();
         const inLinha = (p.linha ?? "").toString().toLowerCase().includes(q);
@@ -174,6 +178,7 @@ function Prognosticos() {
     fMercado,
     fValidacao,
     fResultado,
+    fTopFinal,
     fLinha,
   ]);
 
@@ -385,6 +390,16 @@ function Prognosticos() {
               <SelectItem value="PENDENTE">PENDENTE</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={fTopFinal} onValueChange={setFTopFinal}>
+            <SelectTrigger className="h-10 w-full">
+              <SelectValue placeholder="Origem shortlist" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos: Top Final</SelectItem>
+              <SelectItem value="yes">Somente Top Final</SelectItem>
+              <SelectItem value="no">Fora do Top Final</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -531,6 +546,9 @@ function Prognosticos() {
                     sortDir={sortDir}
                     onClick={toggleSort}
                   />
+                  <th className="px-3 py-2 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                    Top final
+                  </th>
                   <SortableTh
                     label="Validação"
                     k="status_validacao"
@@ -554,7 +572,7 @@ function Prognosticos() {
                 {isLoading && (
                   <tr>
                     <td
-                      colSpan={18}
+                      colSpan={19}
                       className="px-4 py-8 text-center text-sm text-muted-foreground"
                     >
                       Carregando...
@@ -564,7 +582,7 @@ function Prognosticos() {
                 {!isLoading && sorted.length === 0 && (
                   <tr>
                     <td
-                      colSpan={18}
+                      colSpan={19}
                       className="px-4 py-8 text-center text-sm text-muted-foreground"
                     >
                       Nenhum prognóstico cadastrado.
@@ -623,6 +641,18 @@ function Prognosticos() {
                         )}
                       </td>
                       <td className="px-3 py-2 text-right font-mono">{p.stake.toFixed(1)}u</td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {p.is_top_final ? (
+                          <Badge title="Prognóstico selecionado no ranking final da shortlist">
+                            <Trophy className="size-3" />
+                            TOP FINAL{p.top_final_rank ? ` #${p.top_final_rank}` : ""}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" title="Prognóstico fora do Top Final">
+                            Não
+                          </Badge>
+                        )}
+                      </td>
                       <td className="px-3 py-2">
                         <StatusBadge status={p.status_validacao} />
                       </td>

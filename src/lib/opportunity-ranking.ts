@@ -87,6 +87,15 @@ export interface GeneratePreAiShortlistInput {
   filtersPayload?: Record<string, unknown>;
 }
 
+export interface OpportunityRankingScope {
+  eventDateFrom: string | null;
+  eventDateTo: string | null;
+  sport: string;
+  league: string;
+  market: string;
+  scopeKey: string;
+}
+
 export interface EnrichOpportunityRankingItemPreviewInput {
   itemId: string;
   prognostico: Prognostico;
@@ -134,12 +143,20 @@ export function useLatestPreAiOpportunityShortlist() {
   });
 }
 
+export function usePreAiOpportunityShortlistHistory(limit = 50) {
+  return useQuery({
+    queryKey: ["opportunity-ranking", "pre-ai-history", limit],
+    queryFn: () => fetchPreAiOpportunityShortlistHistory(limit),
+  });
+}
+
 export function useGeneratePreAiOpportunityShortlist() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: generateAndPersistPreAiOpportunityShortlist,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["opportunity-ranking"] });
+      qc.invalidateQueries({ queryKey: ["prognosticos"] });
     },
   });
 }
@@ -160,8 +177,43 @@ export function useApplyCriticalValidationToOpportunityRanking() {
     mutationFn: applyCriticalValidationToOpportunityRanking,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["opportunity-ranking"] });
+      qc.invalidateQueries({ queryKey: ["prognosticos"] });
     },
   });
+}
+
+export async function fetchPreAiOpportunityShortlistHistory(
+  limit = 50,
+): Promise<PersistedOpportunityRankingRun[]> {
+  const { data: runRows, error: runError } = await supabase
+    .from("opportunity_ranking_runs")
+    .select("*")
+    .eq("source_stage", "pre_ai_shortlist")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (runError) throw runError;
+
+  const runs = (runRows ?? []) as OpportunityRankingRun[];
+  if (!runs.length) return [];
+
+  const { data: itemRows, error: itemError } = await supabase
+    .from("opportunity_ranking_items")
+    .select("*")
+    .in(
+      "run_id",
+      runs.map((run) => run.id),
+    )
+    .order("rank_prelim", { ascending: true });
+  if (itemError) throw itemError;
+
+  const itemsByRun = new Map<string, OpportunityRankingItem[]>();
+  for (const item of (itemRows ?? []) as OpportunityRankingItem[]) {
+    const items = itemsByRun.get(item.run_id) ?? [];
+    items.push(item);
+    itemsByRun.set(item.run_id, items);
+  }
+
+  return runs.map((run) => ({ run, items: itemsByRun.get(run.id) ?? [] }));
 }
 
 export async function fetchLatestPreAiOpportunityShortlist(): Promise<PersistedOpportunityRankingRun | null> {
@@ -379,7 +431,7 @@ async function recomputeFinalRankingForRun(runId: string): Promise<void> {
         numericOrZero(b.item.opportunity_score_pre) - numericOrZero(a.item.opportunity_score_pre),
     );
 
-  await Promise.all(
+  const itemUpdates = await Promise.all(
     confirmed.map(({ item, finalScore }, index) =>
       supabase
         .from("opportunity_ranking_items")
@@ -391,6 +443,37 @@ async function recomputeFinalRankingForRun(runId: string): Promise<void> {
         .eq("id", item.id),
     ),
   );
+  const failedItemUpdate = itemUpdates.find((result) => result.error);
+  if (failedItemUpdate?.error) throw failedItemUpdate.error;
+
+  const { error: clearMarkerError } = await supabase
+    .from("prognosticos")
+    .update({
+      is_top_final: false,
+      top_final_rank: null,
+      top_final_run_id: null,
+      top_final_at: null,
+    })
+    .eq("top_final_run_id", runId);
+  if (clearMarkerError) throw clearMarkerError;
+
+  const topFinal = confirmed.slice(0, MAX_FINAL_OPPORTUNITIES);
+  const markedAt = new Date().toISOString();
+  const markerUpdates = await Promise.all(
+    topFinal.map(({ item }, index) =>
+      supabase
+        .from("prognosticos")
+        .update({
+          is_top_final: true,
+          top_final_rank: index + 1,
+          top_final_run_id: runId,
+          top_final_at: markedAt,
+        })
+        .eq("id", item.prognostico_id),
+    ),
+  );
+  const failedMarkerUpdate = markerUpdates.find((result) => result.error);
+  if (failedMarkerUpdate?.error) throw failedMarkerUpdate.error;
 
   const { data: runRows, error: runFetchError } = await supabase
     .from("opportunity_ranking_runs")
@@ -441,12 +524,19 @@ export async function generateAndPersistPreAiOpportunityShortlist({
 
   const allEligibleCandidates = buildEligiblePreAiCandidates(prognosticos);
   const candidates = selectDiversifiedPreAiShortlist(allEligibleCandidates, limit);
+  const scope = buildOpportunityRankingScope(prognosticos, filtersPayload);
   const { data: runRow, error: runError } = await supabase
     .from("opportunity_ranking_runs")
     .upsert(
       {
         user_id: userId,
         run_date: runDate,
+        event_date_from: scope.eventDateFrom,
+        event_date_to: scope.eventDateTo,
+        sport_scope: scope.sport,
+        league_scope: scope.league,
+        market_scope: scope.market,
+        scope_key: scope.scopeKey,
         source_stage: "pre_ai_shortlist",
         status: "computed",
         max_final_picks: MAX_FINAL_OPPORTUNITIES,
@@ -463,12 +553,23 @@ export async function generateAndPersistPreAiOpportunityShortlist({
           generated_at: new Date().toISOString(),
         } as Json,
       },
-      { onConflict: "user_id,run_date,source_stage" },
+      { onConflict: "user_id,run_date,source_stage,scope_key" },
     )
     .select("*")
     .single();
   if (runError) throw runError;
   const run = runRow as OpportunityRankingRun;
+
+  const { error: clearMarkerError } = await supabase
+    .from("prognosticos")
+    .update({
+      is_top_final: false,
+      top_final_rank: null,
+      top_final_run_id: null,
+      top_final_at: null,
+    })
+    .eq("top_final_run_id", run.id);
+  if (clearMarkerError) throw clearMarkerError;
 
   const { error: deleteError } = await supabase
     .from("opportunity_ranking_items")
@@ -519,6 +620,52 @@ export async function generateAndPersistPreAiOpportunityShortlist({
     run,
     items: (itemsRows ?? []) as OpportunityRankingItem[],
   };
+}
+
+export function buildOpportunityRankingScope(
+  prognosticos: Prognostico[],
+  filtersPayload: Record<string, unknown>,
+): OpportunityRankingScope {
+  const dates = prognosticos
+    .map((item) => item.data)
+    .filter(isIsoDate)
+    .sort();
+  const eventDateFrom = asIsoDate(filtersPayload.ini) ?? dates[0] ?? null;
+  const eventDateTo = asIsoDate(filtersPayload.fim) ?? dates.at(-1) ?? null;
+  const sport = resolveScopeValue(
+    filtersPayload.esporte,
+    prognosticos.map((item) => item.esporte),
+  );
+  const league = resolveScopeValue(
+    filtersPayload.liga,
+    prognosticos.map((item) => item.liga),
+  );
+  const market = resolveScopeValue(
+    filtersPayload.mercado,
+    prognosticos.map((item) => item.mercado),
+  );
+  const scopeKey = [eventDateFrom ?? "all", eventDateTo ?? "all", sport, league, market]
+    .map(normalizeKeyPart)
+    .join("|");
+
+  return { eventDateFrom, eventDateTo, sport, league, market, scopeKey };
+}
+
+function resolveScopeValue(filterValue: unknown, values: string[]): string {
+  const filter = String(filterValue ?? "").trim();
+  if (filter && filter.toLowerCase() !== "all") return filter;
+
+  const uniqueValues = [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+  return uniqueValues.length === 1 ? uniqueValues[0] : "all";
+}
+
+function asIsoDate(value: unknown): string | null {
+  const text = String(value ?? "").trim();
+  return isIsoDate(text) ? text : null;
+}
+
+function isIsoDate(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
 export function normalizeRankingStatus(value: unknown): OpportunityRankingStatus {

@@ -1270,13 +1270,19 @@ export type Database = {
           candidate_count: number
           confirmed_ia_count: number
           created_at: string
+          event_date_from: string | null
+          event_date_to: string | null
           filters_payload: Json
           id: string
+          league_scope: string
           max_final_picks: number
+          market_scope: string
           metadata: Json
           run_date: string
           score_weights: Json
+          scope_key: string
           source_stage: string
+          sport_scope: string
           status: string
           top_final_count: number
           updated_at: string
@@ -1286,13 +1292,19 @@ export type Database = {
           candidate_count?: number
           confirmed_ia_count?: number
           created_at?: string
+          event_date_from?: string | null
+          event_date_to?: string | null
           filters_payload?: Json
           id?: string
+          league_scope?: string
           max_final_picks?: number
+          market_scope?: string
           metadata?: Json
           run_date?: string
           score_weights?: Json
+          scope_key?: string
           source_stage?: string
+          sport_scope?: string
           status?: string
           top_final_count?: number
           updated_at?: string
@@ -1302,13 +1314,19 @@ export type Database = {
           candidate_count?: number
           confirmed_ia_count?: number
           created_at?: string
+          event_date_from?: string | null
+          event_date_to?: string | null
           filters_payload?: Json
           id?: string
+          league_scope?: string
           max_final_picks?: number
+          market_scope?: string
           metadata?: Json
           run_date?: string
           score_weights?: Json
+          scope_key?: string
           source_stage?: string
+          sport_scope?: string
           status?: string
           top_final_count?: number
           updated_at?: string
@@ -1361,6 +1379,7 @@ export type Database = {
           esporte: string
           hora: string | null
           id: string
+          is_top_final: boolean
           job_id_coleta: string | null
           jogo: string
           liga: string
@@ -1385,6 +1404,9 @@ export type Database = {
           status_publicacao: string
           status_validacao: string
           tip_texto: string | null
+          top_final_at: string | null
+          top_final_rank: number | null
+          top_final_run_id: string | null
           updated_at: string
           visitante: string
         }
@@ -1402,6 +1424,7 @@ export type Database = {
           esporte: string
           hora?: string | null
           id?: string
+          is_top_final?: boolean
           job_id_coleta?: string | null
           jogo: string
           liga: string
@@ -1426,6 +1449,9 @@ export type Database = {
           status_publicacao?: string
           status_validacao?: string
           tip_texto?: string | null
+          top_final_at?: string | null
+          top_final_rank?: number | null
+          top_final_run_id?: string | null
           updated_at?: string
           visitante: string
         }
@@ -1443,6 +1469,7 @@ export type Database = {
           esporte?: string
           hora?: string | null
           id?: string
+          is_top_final?: boolean
           job_id_coleta?: string | null
           jogo?: string
           liga?: string
@@ -1467,10 +1494,21 @@ export type Database = {
           status_publicacao?: string
           status_validacao?: string
           tip_texto?: string | null
+          top_final_at?: string | null
+          top_final_rank?: number | null
+          top_final_run_id?: string | null
           updated_at?: string
           visitante?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "prognosticos_top_final_run_id_fkey"
+            columns: ["top_final_run_id"]
+            isOneToOne: false
+            referencedRelation: "opportunity_ranking_runs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       resultados: {
         Row: {
