@@ -1,21 +1,22 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  LayoutDashboard,
-  ListChecks,
-  ShieldCheck,
-  History,
-  Wallet,
   BrainCircuit,
   Cpu,
-  Settings,
-  Megaphone,
   Database,
+  History,
+  LayoutDashboard,
+  ListChecks,
+  Megaphone,
+  Settings,
+  ShieldCheck,
+  Wallet,
 } from "lucide-react";
 import logo from "@/assets/logo-asp.png.asset.json";
 
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -23,74 +24,119 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarRail,
+  SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { useSidebar } from "@/components/ui/sidebar-context";
 
-const items = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Prognósticos", url: "/prognosticos", icon: ListChecks },
-  { title: "Coleta de Odds", url: "/coleta-dados", icon: Database },
-  { title: "Base de Dados", url: "/base-dados", icon: Database },
-  { title: "Modelos Preditivos", url: "/modelos-preditivos", icon: Cpu },
-  { title: "Validação Crítica", url: "/validacao", icon: ShieldCheck },
-  { title: "Publicação", url: "/publicacao", icon: Megaphone },
-  { title: "Histórico", url: "/historico", icon: History },
-  { title: "Bankroll", url: "/bankroll", icon: Wallet },
-  { title: "Aprendizado da IA", url: "/aprendizado-ia", icon: BrainCircuit },
-
-  { title: "Configurações", url: "/configuracoes", icon: Settings },
+const navigationGroups = [
+  {
+    label: "Visão geral",
+    items: [{ title: "Dashboard", url: "/", icon: LayoutDashboard }],
+  },
+  {
+    label: "Operação",
+    items: [
+      { title: "Prognósticos", url: "/prognosticos", icon: ListChecks },
+      { title: "Validação Crítica", url: "/validacao", icon: ShieldCheck },
+      { title: "Publicação", url: "/publicacao", icon: Megaphone },
+    ],
+  },
+  {
+    label: "Dados e modelos",
+    items: [
+      { title: "Coleta de Odds", url: "/coleta-dados", icon: Database },
+      { title: "Base de Dados", url: "/base-dados", icon: Database },
+      { title: "Modelos Preditivos", url: "/modelos-preditivos", icon: Cpu },
+      { title: "Aprendizado da IA", url: "/aprendizado-ia", icon: BrainCircuit },
+    ],
+  },
+  {
+    label: "Gestão",
+    items: [
+      { title: "Histórico", url: "/historico", icon: History },
+      { title: "Bankroll", url: "/bankroll", icon: Wallet },
+    ],
+  },
 ];
 
+const settingsItem = { title: "Configurações", url: "/configuracoes", icon: Settings };
+
 export function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, isMobile, setOpenMobile } = useSidebar();
   const collapsed = state === "collapsed";
-  const pathname = useRouterState({ select: (r) => r.location.pathname });
+  const pathname = useRouterState({ select: (routerState) => routerState.location.pathname });
+
+  const closeMobileMenu = () => {
+    if (isMobile) setOpenMobile(false);
+  };
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border">
+    <Sidebar collapsible="offcanvas" className="border-r border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border">
         <div className="flex items-center gap-2 px-2 py-3">
           <img
             src={logo.url}
             alt="ASP Insights"
-            className="h-9 w-9 shrink-0 rounded-md object-contain"
+            className="size-9 shrink-0 rounded-md object-contain"
           />
           {!collapsed && (
-            <div className="flex flex-col leading-tight">
+            <div className="flex min-w-0 flex-col leading-tight">
               <span className="text-sm font-bold tracking-tight">
                 <span className="text-foreground">ASP </span>
                 <span className="text-primary">Insights</span>
               </span>
-              <span className="text-[10px] text-accent uppercase tracking-[0.15em]">
+              <span className="truncate text-[10px] uppercase tracking-[0.15em] text-accent">
                 AI Sports Predictions
               </span>
             </div>
           )}
+          <SidebarTrigger className="ml-auto shrink-0" />
         </div>
       </SidebarHeader>
 
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Navegação</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {items.map((item) => {
-                const active = pathname === item.url;
-                return (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={active}>
-                      <Link to={item.url} className="flex items-center gap-2">
-                        <item.icon className="h-4 w-4" />
-                        {!collapsed && <span>{item.title}</span>}
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+      <SidebarContent className="gap-0 py-2">
+        {navigationGroups.map((group) => (
+          <SidebarGroup key={group.label} className="py-1.5">
+            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {group.items.map((item) => {
+                  const active = pathname === item.url;
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild isActive={active} tooltip={item.title}>
+                        <Link to={item.url} onClick={closeMobileMenu}>
+                          <item.icon />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
+
+      <SidebarFooter className="border-t border-sidebar-border p-2">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              isActive={pathname === settingsItem.url}
+              tooltip={settingsItem.title}
+            >
+              <Link to={settingsItem.url} onClick={closeMobileMenu}>
+                <settingsItem.icon />
+                <span>{settingsItem.title}</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+      <SidebarRail />
     </Sidebar>
   );
 }
