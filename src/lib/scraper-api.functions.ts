@@ -187,10 +187,10 @@ function extractJobId(payload: unknown): string {
   return String(value);
 }
 
-async function scraperRequest(path: string, init?: RequestInit) {
+async function scraperRequest(path: string, init?: RequestInit, timeoutMs = 45000) {
   const { baseUrl, apiKey } = getScraperConfig();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 45000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(`${baseUrl}${path}`, {
       ...init,
