@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "generated_at": null,
+  "markets": {
+    "ou": {"active": false, "out_of_sample": true, "sample_size": 0, "intercept": 0.0, "slope": 1.0},
+    "mais_cantos": {"active": false, "out_of_sample": true, "sample_size": 0, "intercept": 0.0, "slope": 1.0},
+    "race_3": {"active": false, "out_of_sample": true, "sample_size": 0, "intercept": 0.0, "slope": 1.0},
+    "race_5": {"active": false, "out_of_sample": true, "sample_size": 0, "intercept": 0.0, "slope": 1.0}
+  },
+  "league_alpha": {},
+  "league_baselines": {}
+}

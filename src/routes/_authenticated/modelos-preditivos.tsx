@@ -269,9 +269,7 @@ function ModelosPreditivosPage() {
           <div
             className={
               packballMode
-                ? modelo === "ASP GoalMatrix"
-                  ? "grid gap-3 md:grid-cols-[220px_1fr_1fr_180px_auto] md:items-end"
-                  : "grid gap-3 md:grid-cols-[240px_1fr_1fr_auto] md:items-end"
+                ? "grid gap-3 md:grid-cols-[220px_1fr_1fr_180px_auto] md:items-end"
                 : "grid gap-3 md:grid-cols-[240px_1.5fr_auto] md:items-end"
             }
           >
@@ -327,7 +325,7 @@ function ModelosPreditivosPage() {
                   file={packballFile20}
                   onFile={setPackballFile20}
                 />
-                {modelo === "ASP GoalMatrix" ? (
+                {packballMode ? (
                   <div>
                     <label className="text-sm font-medium">Execução</label>
                     <Select

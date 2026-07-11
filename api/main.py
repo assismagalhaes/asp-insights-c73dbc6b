@@ -1501,7 +1501,7 @@ def executar_modelo_packball(
         str(output_path),
         str(meta.get("date_str") or ""),
     ]
-    if expected_model == "ASP GoalMatrix":
+    if expected_model in {"ASP GoalMatrix", "ASP CornerMatrix"}:
         command.append(run_mode)
 
     resultado = subprocess.run(
@@ -1541,7 +1541,7 @@ def executar_modelo_packball(
         "input_id": input_id,
         "job_id": input_id,
         "modelo": model_name,
-        "run_mode": run_mode if expected_model == "ASP GoalMatrix" else "prognostico",
+        "run_mode": run_mode if expected_model in {"ASP GoalMatrix", "ASP CornerMatrix"} else "prognostico",
         "csv_coleta": None,
         "arquivo_saida": f"{config['output_prefix']}_{input_id}.csv",
         "arquivo_contexto": resposta_script.get("arquivo_contexto"),
@@ -1569,7 +1569,7 @@ def executar_modelo_cornermatrix(
     payload: ExecutarPackballModeloRequest,
     authorization: str | None = Header(default=None)
 ):
-    return executar_modelo_packball(payload.input_id, "ASP CornerMatrix", authorization)
+    return executar_modelo_packball(payload.input_id, "ASP CornerMatrix", authorization, payload.run_mode)
 
 # ============================================================
 # ROTAS - MODELOS BASEBALL - BASE HISTÓRICA
