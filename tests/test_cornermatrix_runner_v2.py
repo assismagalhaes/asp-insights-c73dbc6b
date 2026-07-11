@@ -39,12 +39,28 @@ class CornerMatrixRunnerV2Tests(unittest.TestCase):
             "Média Cantos Marcados Casa", "Média Cantos Sofridos Casa",
             "Média Cantos Marcados Visitante", "Média Cantos Sofridos Visitante",
         ):
-            row[f"{name}_5"] = 7.0
+            row[f"{name}_10"] = 7.0
             row[f"{name}_20"] = 5.0
         result = runner.build_dynamic_weights(pd.DataFrame([row]))
-        self.assertGreaterEqual(result.loc[0, "_w20"], 0.45)
-        self.assertLessEqual(result.loc[0, "_w20"], 0.68)
-        self.assertAlmostEqual(result.loc[0, "_w5"] + result.loc[0, "_w20"], 1.0)
+        self.assertGreaterEqual(result.loc[0, "_w20"], 0.55)
+        self.assertLessEqual(result.loc[0, "_w20"], 0.70)
+        self.assertAlmostEqual(result.loc[0, "_w10"] + result.loc[0, "_w20"], 1.0)
+
+    def test_consistency_scale_normalizes_fractional_columns(self) -> None:
+        frame = pd.DataFrame({column: [0.6, 0.8, 1.0] for column in runner.CV_COLS_INPUT})
+        normalized, scale = runner.normalize_consistency_scale(frame, "fixture")
+        self.assertEqual(scale, "0-1_to_0-100")
+        self.assertEqual(normalized[runner.CV_COLS_INPUT[0]].tolist(), [60.0, 80.0, 100.0])
+
+    def test_window_profile_rejects_legacy_five_game_recent_file(self) -> None:
+        frame = pd.DataFrame({"Jogos Coletados Casa": [5], "Jogos Coletados Visitante": [5]})
+        with self.assertRaisesRegex(ValueError, "CORNERMATRIX_WINDOW_MISMATCH"):
+            runner.validate_window_profile(frame, 10, "recent10")
+
+    def test_probability_weights_sum_to_one(self) -> None:
+        self.assertAlmostEqual(runner.w_hist + runner.w_sim + runner.w_imp, 1.0)
+        self.assertAlmostEqual(runner.w_hist_dir + runner.w_sim_dir + runner.w_imp_dir, 1.0)
+        self.assertEqual(runner.w_imp, 0.15)
 
     def test_poisson_gamma_vector_alpha_preserves_means_and_covariance(self) -> None:
         home, away = runner.simulate_poisson_gamma_bivariate(
@@ -128,10 +144,10 @@ class CornerMatrixRunnerV2Tests(unittest.TestCase):
             })
             return dict(zip(runner.SOURCE_HEADERS, [normalized[column] for column in runner.cols_normalizados]))
 
-        five = runner.coerce_numeric(runner.normalize_columns(pd.DataFrame([raw_row(5)])))
+        ten = runner.coerce_numeric(runner.normalize_columns(pd.DataFrame([raw_row(10)])))
         twenty = runner.coerce_numeric(runner.normalize_columns(pd.DataFrame([raw_row(20)])))
-        merged = runner.merge_5_20(
-            runner.filter_by_status_and_games(five, ("NS",), n_games=5),
+        merged = runner.merge_10_20(
+            runner.filter_by_status_and_games(ten, ("NS",), n_games=10),
             runner.filter_by_status_and_games(twenty, ("NS",), n_games=20),
         )
         self.assertEqual(len(merged), 1)

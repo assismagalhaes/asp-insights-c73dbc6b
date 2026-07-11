@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-PACKBALL_FILE_5 = "PackBall Custom cantos_5 {date}.csv"
+PACKBALL_FILE_10 = "PackBall Custom cantos_10 {date}.csv"
 PACKBALL_FILE_20 = "PackBall Custom cantos_20 {date}.csv"
 
 try:
@@ -44,7 +44,7 @@ output_dir = Path("Prognostico")
 # Nome comercial do modelo para identificação no Lovable.
 # Mantém o campo 'mercado' como nome do modelo, igual ao ASP GoalMatrix.
 MODEL_NAME = "ASP CornerMatrix"
-MODEL_VERSION = "v2.0"
+MODEL_VERSION = "v2.1"
 
 # Modo de execução:
 #   prognostico = apenas jogos NS
@@ -59,11 +59,18 @@ STATUSES_BY_MODE = {
 STATUSES = STATUSES_BY_MODE.get(RUN_MODE, ("NS",))
 
 # Pesos finais — odds entram apenas como ajuste mínimo de mercado.
-# Mesma filosofia do ASP GoalMatrix: modelo/simulação acima da implícita.
-w_hist, w_sim, w_imp = 0.40, 0.50, 0.10
+# Histórico e simulação compartilham a mesma origem; o mercado recebe 15% para reduzir eco do modelo.
+w_hist, w_sim, w_imp = 0.35, 0.50, 0.15
 
 # Mercados direcionais de cantos são mais voláteis que O/U.
-w_hist_dir, w_sim_dir, w_imp_dir = 0.35, 0.55, 0.10
+w_hist_dir, w_sim_dir, w_imp_dir = 0.30, 0.55, 0.15
+
+RECENT_WEIGHT_BASE = 0.35
+RECENT_WEIGHT_MIN = 0.30
+RECENT_WEIGHT_MAX = 0.45
+RECENT_DIVERGENCE_START = 0.80
+RECENT_DIVERGENCE_RANGE = 2.50
+RECENT_DIVERGENCE_MAX_BOOST = 0.10
 
 ths_ft = [7.5, 8.5, 9.5, 10.5, 11.5]
 race_targets = [3, 5]
@@ -259,7 +266,7 @@ def sniff_sep(path: Path) -> str:
 
 def load_cantos_data(date_str: str, base_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     files = {
-        "5": base_dir / f"PackBall Custom cantos_5 {date_str}.csv",
+        "10": base_dir / f"PackBall Custom cantos_10 {date_str}.csv",
         "20": base_dir / f"PackBall Custom cantos_20 {date_str}.csv",
     }
     dfs: dict[str, pd.DataFrame] = {}
@@ -270,7 +277,7 @@ def load_cantos_data(date_str: str, base_dir: Path) -> tuple[pd.DataFrame, pd.Da
         df = pd.read_csv(path, sep=sep, encoding="utf-8", engine="python")
         logging.info(f"{label} jogos lido com sep='{sep}': {path.name} -> {df.shape}")
         dfs[label] = df
-    return dfs["5"], dfs["20"]
+    return dfs["10"], dfs["20"]
 
 
 def file_sha256(path: Path) -> str:
@@ -340,6 +347,26 @@ def coerce_numeric(df: pd.DataFrame) -> pd.DataFrame:
     for c in num_cols:
         df[c] = _to_numeric_series(df[c])
     return df
+
+
+def normalize_consistency_scale(df: pd.DataFrame, label: str) -> tuple[pd.DataFrame, str]:
+    df = df.copy()
+    scales = []
+    for column in CV_COLS_INPUT:
+        values = pd.to_numeric(df[column], errors="coerce").dropna()
+        if values.empty:
+            continue
+        positive_fraction = values[(values > 0) & (values <= 1.0)]
+        above_one = values[values > 1.0]
+        if len(positive_fraction) >= 3 and len(above_one) and len(positive_fraction) / len(values) >= 0.10:
+            raise ValueError(f"CORNERMATRIX_CV_MIXED_SCALE:{label}:{column}")
+        if float(values.max()) <= 1.0:
+            df[column] = pd.to_numeric(df[column], errors="coerce") * 100.0
+            scales.append("0-1_to_0-100")
+        else:
+            scales.append("0-100")
+    detected = "0-1_to_0-100" if scales and all(scale == "0-1_to_0-100" for scale in scales) else "0-100"
+    return df, detected
 
 
 def sanitize_pct_like_columns(df: pd.DataFrame, label: str = "") -> pd.DataFrame:
@@ -420,6 +447,16 @@ def filter_by_status_and_games(df: pd.DataFrame, statuses=("NS",), n_games: int 
     return df
 
 
+def validate_window_profile(df: pd.DataFrame, expected_games: int, label: str) -> None:
+    counts = pd.concat([
+        pd.to_numeric(df["Jogos Coletados Casa"], errors="coerce"),
+        pd.to_numeric(df["Jogos Coletados Visitante"], errors="coerce"),
+    ]).dropna()
+    if counts.empty or float(counts.max()) != float(expected_games) or bool((counts > expected_games).any()):
+        observed = sorted({int(value) for value in counts.unique()}) if not counts.empty else []
+        raise ValueError(f"CORNERMATRIX_WINDOW_MISMATCH:{label}:expected_max={expected_games}:observed={observed}")
+
+
 def weighted_mix_pct(parts: list[pd.Series], weights: list[float]) -> pd.Series:
     """Mistura em % ignorando NaNs e renormalizando os pesos por linha."""
     w = np.asarray(weights, dtype=float)
@@ -449,106 +486,98 @@ def dedupe_by_keys_keep_most_complete(df: pd.DataFrame, keys: list[str]) -> pd.D
     return df
 
 
-def audit_merge_keys(df5u: pd.DataFrame, df20u: pd.DataFrame) -> None:
-    only_5 = df5u[MERGE_KEYS].merge(df20u[MERGE_KEYS], on=MERGE_KEYS, how="left", indicator=True)
-    only_5 = only_5[only_5["_merge"] == "left_only"]
+def audit_merge_keys(df10u: pd.DataFrame, df20u: pd.DataFrame) -> None:
+    only_10 = df10u[MERGE_KEYS].merge(df20u[MERGE_KEYS], on=MERGE_KEYS, how="left", indicator=True)
+    only_10 = only_10[only_10["_merge"] == "left_only"]
 
-    only_20 = df20u[MERGE_KEYS].merge(df5u[MERGE_KEYS], on=MERGE_KEYS, how="left", indicator=True)
+    only_20 = df20u[MERGE_KEYS].merge(df10u[MERGE_KEYS], on=MERGE_KEYS, how="left", indicator=True)
     only_20 = only_20[only_20["_merge"] == "left_only"]
 
-    if len(only_5):
-        logging.warning(f"Jogos presentes apenas no arquivo 5j: {len(only_5)}")
+    if len(only_10):
+        logging.warning(f"Jogos presentes apenas no arquivo 10j: {len(only_10)}")
     if len(only_20):
         logging.warning(f"Jogos presentes apenas no arquivo 20j: {len(only_20)}")
 
 
-def merge_5_20(df5: pd.DataFrame, df20: pd.DataFrame) -> pd.DataFrame:
-    df5u = dedupe_by_keys_keep_most_complete(df5, MERGE_KEYS)
+def merge_10_20(df10: pd.DataFrame, df20: pd.DataFrame) -> pd.DataFrame:
+    df10u = dedupe_by_keys_keep_most_complete(df10, MERGE_KEYS)
     df20u = dedupe_by_keys_keep_most_complete(df20, MERGE_KEYS)
 
-    audit_merge_keys(df5u, df20u)
+    audit_merge_keys(df10u, df20u)
 
-    merged = df5u.merge(
+    merged = df10u.merge(
         df20u,
         on=MERGE_KEYS,
         how="inner",
-        suffixes=("_5", "_20"),
+        suffixes=("_10", "_20"),
         validate="one_to_one",
     )
     return merged.reset_index(drop=True)
 
 # ------------------------------------------------------------
-# PESOS DINÂMICOS 5/20 via CV + divergência recente
+# PESOS DINÂMICOS: FORMA 10J + ESTRUTURA DE MANDO 20J
 # ------------------------------------------------------------
 def build_dynamic_weights(merged: pd.DataFrame) -> pd.DataFrame:
     """
     No PackBall usado aqui: CV maior = maior consistência.
 
-    Lógica igual ao GoalMatrix:
-      - 20j é a âncora estrutural.
-      - 5j é ajuste de forma recente.
-      - CV alto aumenta o peso do 20j.
-      - divergência 5j vs 20j reduz levemente o peso do 20j.
+    CV é um índice de consistência: quanto maior, mais confiável.
+    O/U usa índice com maior peso no total da partida; mercados direcionais
+    usam maior peso na consistência de cantos marcados.
     """
     merged = merged.copy()
 
-    cv_idx_home_20 = (
-        0.30 * merged["CV Média Cantos Casa_20"] +
-        0.70 * merged["CV Média Cantos Marcados Casa_20"]
-    )
-    cv_idx_away_20 = (
-        0.30 * merged["CV Média Cantos Visitante_20"] +
-        0.70 * merged["CV Média Cantos Marcados Visitante_20"]
-    )
+    total_home = 0.60 * merged["CV Média Cantos Casa_20"] + 0.40 * merged["CV Média Cantos Marcados Casa_20"]
+    total_away = 0.60 * merged["CV Média Cantos Visitante_20"] + 0.40 * merged["CV Média Cantos Marcados Visitante_20"]
+    direction_home = 0.30 * merged["CV Média Cantos Casa_20"] + 0.70 * merged["CV Média Cantos Marcados Casa_20"]
+    direction_away = 0.30 * merged["CV Média Cantos Visitante_20"] + 0.70 * merged["CV Média Cantos Marcados Visitante_20"]
+    force_home = 0.50 * merged["CV Média Cantos Casa_20"] + 0.50 * merged["CV Média Cantos Marcados Casa_20"]
+    force_away = 0.50 * merged["CV Média Cantos Visitante_20"] + 0.50 * merged["CV Média Cantos Marcados Visitante_20"]
 
-    merged["_cv_idx_home_20"] = cv_idx_home_20
-    merged["_cv_idx_away_20"] = cv_idx_away_20
-    merged["_cv_game"] = (cv_idx_home_20 + cv_idx_away_20) / 2.0
-
-    w20_base = 0.30 + 0.0040 * merged["_cv_game"]
+    merged["_cv_total_home_20"], merged["_cv_total_away_20"] = total_home, total_away
+    merged["_cv_direction_home_20"], merged["_cv_direction_away_20"] = direction_home, direction_away
+    merged["_cv_idx_home_20"], merged["_cv_idx_away_20"] = force_home, force_away
+    merged["_cv_game"] = (force_home + force_away) / 2.0
 
     delta_form = (
-        (merged["Média Cantos Marcados Casa_5"] - merged["Média Cantos Marcados Casa_20"]).abs() +
-        (merged["Média Cantos Sofridos Casa_5"] - merged["Média Cantos Sofridos Casa_20"]).abs() +
-        (merged["Média Cantos Marcados Visitante_5"] - merged["Média Cantos Marcados Visitante_20"]).abs() +
-        (merged["Média Cantos Sofridos Visitante_5"] - merged["Média Cantos Sofridos Visitante_20"]).abs()
+        (merged["Média Cantos Marcados Casa_10"] - merged["Média Cantos Marcados Casa_20"]).abs() +
+        (merged["Média Cantos Sofridos Casa_10"] - merged["Média Cantos Sofridos Casa_20"]).abs() +
+        (merged["Média Cantos Marcados Visitante_10"] - merged["Média Cantos Marcados Visitante_20"]).abs() +
+        (merged["Média Cantos Sofridos Visitante_10"] - merged["Média Cantos Sofridos Visitante_20"]).abs()
     ) / 4.0
 
-    merged["_delta_form_5v20"] = delta_form.round(3)
-
-    # Em cantos, variações de 1+ canto entre 5j e 20j já podem indicar forma recente.
-    # Penalidade máxima de 10 p.p. no peso do 20j.
-    recency_boost = ((delta_form - 0.80) / 2.50).clip(lower=0.0, upper=0.10)
-
-    merged["_w20"] = (w20_base - recency_boost).clip(lower=0.45, upper=0.68)
-    merged["_w5"] = 1.0 - merged["_w20"]
+    merged["_delta_form_10v20"] = delta_form.round(3)
+    recency_boost = (((delta_form - RECENT_DIVERGENCE_START) / RECENT_DIVERGENCE_RANGE).clip(0.0, 1.0) * RECENT_DIVERGENCE_MAX_BOOST)
+    consistency_adjustment = ((50.0 - merged["_cv_game"]) / 100.0).clip(-0.03, 0.05)
+    merged["_w10"] = (RECENT_WEIGHT_BASE + recency_boost + consistency_adjustment).clip(RECENT_WEIGHT_MIN, RECENT_WEIGHT_MAX)
+    merged["_w20"] = 1.0 - merged["_w10"]
     return merged
 
 
 def blend(merged: pd.DataFrame, col_base: str) -> pd.Series:
-    """Mistura 5j e 20j com pesos dinâmicos e renormaliza se uma base faltar."""
-    c5 = f"{col_base}_5"
+    """Mistura forma geral de 10j e estrutura de mando de 20j."""
+    c10 = f"{col_base}_10"
     c20 = f"{col_base}_20"
 
-    if c5 not in merged.columns or c20 not in merged.columns:
-        raise KeyError(f"Colunas esperadas não encontradas para blend: {c5} / {c20}")
+    if c10 not in merged.columns or c20 not in merged.columns:
+        raise KeyError(f"Colunas esperadas não encontradas para blend: {c10} / {c20}")
 
-    if ("_w5" not in merged.columns) or ("_w20" not in merged.columns):
-        w5 = pd.Series(0.50, index=merged.index, dtype=float)
-        w20 = pd.Series(0.50, index=merged.index, dtype=float)
+    if ("_w10" not in merged.columns) or ("_w20" not in merged.columns):
+        w10 = pd.Series(RECENT_WEIGHT_BASE, index=merged.index, dtype=float)
+        w20 = 1.0 - w10
     else:
-        w5 = merged["_w5"].astype(float)
+        w10 = merged["_w10"].astype(float)
         w20 = merged["_w20"].astype(float)
 
-    x5 = merged[c5].astype(float)
+    x10 = merged[c10].astype(float)
     x20 = merged[c20].astype(float)
 
-    valid5 = x5.notna()
+    valid10 = x10.notna()
     valid20 = x20.notna()
 
-    den = valid5.astype(float) * w5 + valid20.astype(float) * w20
+    den = valid10.astype(float) * w10 + valid20.astype(float) * w20
     num = (
-        x5.fillna(0.0) * w5 * valid5.astype(float) +
+        x10.fillna(0.0) * w10 * valid10.astype(float) +
         x20.fillna(0.0) * w20 * valid20.astype(float)
     )
 
@@ -561,17 +590,17 @@ def blend(merged: pd.DataFrame, col_base: str) -> pd.Series:
 def blend_optional(merged: pd.DataFrame, col_base: str, default: float | None = None) -> pd.Series:
     """
     Versão tolerante do blend:
-      - usa 5j/20j quando as duas colunas existem;
+      - usa 10j/20j quando as duas colunas existem;
       - usa a coluna disponível quando apenas uma existir;
       - aplica default quando tudo estiver ausente.
     """
-    c5 = f"{col_base}_5"
+    c10 = f"{col_base}_10"
     c20 = f"{col_base}_20"
 
-    if c5 in merged.columns and c20 in merged.columns:
+    if c10 in merged.columns and c20 in merged.columns:
         out = blend(merged, col_base)
-    elif c5 in merged.columns:
-        out = merged[c5].astype(float)
+    elif c10 in merged.columns:
+        out = merged[c10].astype(float)
     elif c20 in merged.columns:
         out = merged[c20].astype(float)
     elif col_base in merged.columns:
@@ -731,11 +760,11 @@ def _is_value_pick(
     return odd >= odd_valor * float(buffer) and edge >= float(min_edge)
 
 
-def _passes_cv_filter(row: pd.Series, min_cv: float) -> bool:
+def _passes_cv_filter(row: pd.Series, min_cv: float, cv_field_home: str, cv_field_away: str) -> bool:
     """Exige consistência mínima dos dois times para o mercado."""
     try:
-        cv_home = float(row.get("CV Cantos Marcados Casa"))
-        cv_away = float(row.get("CV Cantos Marcados Visitante"))
+        cv_home = float(row.get(cv_field_home))
+        cv_away = float(row.get(cv_field_away))
     except Exception:
         return False
 
@@ -763,6 +792,7 @@ def apply_value_filter(
     min_prob: float = MIN_PROB,
     min_cv: float | None = None,
     min_edge: float = 0.0,
+    cv_fields: tuple[str, str] = ("CV Index Total Casa", "CV Index Total Visitante"),
 ) -> pd.DataFrame:
     """Aplica filtro de valor, faixa de odd, probabilidade mínima e CV mínimo do mercado."""
     base = base.copy()
@@ -773,7 +803,7 @@ def apply_value_filter(
             return False
         if min_cv is None:
             return True
-        return _passes_cv_filter(r, min_cv=min_cv)
+        return _passes_cv_filter(r, min_cv=min_cv, cv_field_home=cv_fields[0], cv_field_away=cv_fields[1])
 
     mask = base.apply(_row_ok, axis=1)
     base.loc[~mask, [prob_col, odd_col]] = np.nan
@@ -1275,9 +1305,10 @@ def _diagnostic_text(row: pd.Series, diagnostics: dict) -> str:
         f"prob_pre_haircut={_fmt_obs_num(diagnostics.get('prob_pre_haircut'), 2)}; haircut_pp={_fmt_obs_num(diagnostics.get('haircut_pp'), 2)}; "
         f"component_spread_pp={_fmt_obs_num(diagnostics.get('component_spread_pp'), 2)}; "
         f"market_conflict_status={diagnostics.get('market_conflict_status')}; calibration_status={diagnostics.get('calibration_status')}; "
-        f"w5={_fmt_obs_num(row.get('w5'), 3)}; w20={_fmt_obs_num(row.get('w20'), 3)}; "
+        f"w10={_fmt_obs_num(row.get('w10'), 3)}; w20={_fmt_obs_num(row.get('w20'), 3)}; "
         f"league_baseline_status={row.get('League Baseline Status')}; alpha={_fmt_obs_num(row.get('Alpha Liga'), 4)}; "
-        f"alpha_status={row.get('Alpha Status')}; input_hash_5={RUN_PROVENANCE.get('sha256_5', '-')}; "
+        f"alpha_status={row.get('Alpha Status')}; cv_scale_10={RUN_PROVENANCE.get('cv_scale_10', '-')}; "
+        f"cv_scale_20={RUN_PROVENANCE.get('cv_scale_20', '-')}; input_hash_10={RUN_PROVENANCE.get('sha256_10', '-')}; "
         f"input_hash_20={RUN_PROVENANCE.get('sha256_20', '-')}; schema_hash={RUN_PROVENANCE.get('schema_hash', '-')}"
     )
 
@@ -1285,7 +1316,12 @@ def _add_lovable_row(rows: list[dict], row: pd.Series, mercado: str, pick: str, 
     min_prob, min_cv, min_edge = _market_thresholds(mercado, pick)
     if not _is_value_pick(prob, odd, min_prob=min_prob, min_edge=min_edge):
         return
-    if not _passes_cv_filter(row, min_cv=min_cv):
+    cv_fields = (
+        ("CV Index Total Casa", "CV Index Total Visitante")
+        if str(mercado).strip().lower() == "over/under cantos"
+        else ("CV Index Direcional Casa", "CV Index Direcional Visitante")
+    )
+    if not _passes_cv_filter(row, min_cv=min_cv, cv_field_home=cv_fields[0], cv_field_away=cv_fields[1]):
         return
 
     prob = float(prob)
@@ -1442,30 +1478,36 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
     base_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1) Ler e normalizar (5 + 20)
-    df5_raw, df20_raw = load_cantos_data(date_str, base_dir)
-    validate_source_schema(df5_raw, "5j")
+    # 1) Ler e normalizar (forma geral 10j + mando 20j)
+    df10_raw, df20_raw = load_cantos_data(date_str, base_dir)
+    validate_source_schema(df10_raw, "10j")
     validate_source_schema(df20_raw, "20j")
-    if list(df5_raw.columns) != list(df20_raw.columns):
-        raise ValueError("CORNERMATRIX_SCHEMA_MISMATCH:5j_vs_20j")
-    df5 = coerce_numeric(normalize_columns(df5_raw))
+    if list(df10_raw.columns) != list(df20_raw.columns):
+        raise ValueError("CORNERMATRIX_SCHEMA_MISMATCH:10j_vs_20j")
+    df10 = coerce_numeric(normalize_columns(df10_raw))
     df20 = coerce_numeric(normalize_columns(df20_raw))
+    validate_window_profile(df10, 10, "recent10")
+    validate_window_profile(df20, 20, "venue20")
+    df10, cv_scale_10 = normalize_consistency_scale(df10, "10j")
+    df20, cv_scale_20 = normalize_consistency_scale(df20, "20j")
+    RUN_PROVENANCE["cv_scale_10"] = cv_scale_10
+    RUN_PROVENANCE["cv_scale_20"] = cv_scale_20
 
-    df5 = sanitize_pct_like_columns(df5, "df5")
+    df10 = sanitize_pct_like_columns(df10, "df10")
     df20 = sanitize_pct_like_columns(df20, "df20")
 
-    sanity_check_ranges(df5, "df5")
+    sanity_check_ranges(df10, "df10")
     sanity_check_ranges(df20, "df20")
 
     # 2) Filtrar conforme RUN_MODE
-    df5_f = filter_by_status_and_games(df5, STATUSES, n_games=5)
+    df10_f = filter_by_status_and_games(df10, STATUSES, n_games=10)
     df20_f = filter_by_status_and_games(df20, STATUSES, n_games=20)
     logging.info(f"RUN_MODE={RUN_MODE} | STATUS={STATUSES}")
-    logging.info(f"df5_filtrado: {df5_f.shape} | df20_filtrado: {df20_f.shape}")
+    logging.info(f"df10_filtrado: {df10_f.shape} | df20_filtrado: {df20_f.shape}")
 
     # 3) Merge
-    merged = merge_5_20(df5_f, df20_f)
-    logging.info(f"merged (5+20) shape: {merged.shape}")
+    merged = merge_10_20(df10_f, df20_f)
+    logging.info(f"merged (10+20) shape: {merged.shape}")
 
     # Mantemos também as colunas _20 de Expectativa/Média Liga para compor baseline estrutural.
     # 4) Pesos dinâmicos
@@ -1508,19 +1550,19 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
         "Time Casa": merged["Time Casa"],
         "Time Visitante": merged["Time Visitante"],
 
-        "Odd Casa MO": merged["Odd Casa Vencer_5"],
-        "Odd Visitante MO": merged["Odd Visitante Vencer_5"],
+        "Odd Casa MO": merged["Odd Casa Vencer_10"],
+        "Odd Visitante MO": merged["Odd Visitante Vencer_10"],
 
         "Expectativa de Cantos": blend_optional(merged, "Expectativa de Cantos").round(2),
         "Média Cantos Liga": blend_optional(merged, "Média Cantos Liga").round(2),
 
-        "Classificação Casa": merged["Classificação Casa_5"],
-        "Classificação Visitante": merged["Classificação Visitante_5"],
+        "Classificação Casa": merged["Classificação Casa_10"],
+        "Classificação Visitante": merged["Classificação Visitante_10"],
 
-        "w5": merged["_w5"].round(3),
+        "w10": merged["_w10"].round(3),
         "w20": merged["_w20"].round(3),
         "CV Game": merged["_cv_game"].round(2),
-        "Delta Form 5v20": merged["_delta_form_5v20"].round(3),
+        "Delta Form 10v20": merged["_delta_form_10v20"].round(3),
 
         "Share Home": merged["_share_home"].round(3),
         "Gamma Home": merged["_gamma_home"].round(3),
@@ -1536,6 +1578,10 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
 
         "CV Index Casa": (blend(merged, "CV Média Cantos Casa") * 0.30 + blend(merged, "CV Média Cantos Marcados Casa") * 0.70).round(2),
         "CV Index Visitante": (blend(merged, "CV Média Cantos Visitante") * 0.30 + blend(merged, "CV Média Cantos Marcados Visitante") * 0.70).round(2),
+        "CV Index Total Casa": merged["_cv_total_home_20"].round(2),
+        "CV Index Total Visitante": merged["_cv_total_away_20"].round(2),
+        "CV Index Direcional Casa": merged["_cv_direction_home_20"].round(2),
+        "CV Index Direcional Visitante": merged["_cv_direction_away_20"].round(2),
 
         "Média Marcados Casa": mu_home_marked.round(2),
         "Média Sofridos Casa": mu_home_conceded.round(2),
@@ -1605,8 +1651,8 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
 
         odd_o_src = f"Odd Over {t} cantos"
         odd_u_src = f"Odd Under {t} cantos"
-        odd_o = merged[f"{odd_o_src}_5"].astype(float)
-        odd_u = merged[f"{odd_u_src}_5"].astype(float)
+        odd_o = merged[f"{odd_o_src}_10"].astype(float)
+        odd_u = merged[f"{odd_u_src}_10"].astype(float)
 
         imp_o, imp_u = vig_free_probs_from_odds_2way(odd_o.values, odd_u.values)
         imp_o = pd.Series(imp_o * 100.0, index=base.index)
@@ -1658,8 +1704,8 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
     sim_v = pd.Series(lt.mean(axis=1) * 100.0, index=base.index)
     sim_t = pd.Series(eq.mean(axis=1) * 100.0, index=base.index)
 
-    odd_c = merged["Odd Casa Mais Cantos_5"].astype(float)
-    odd_v = merged["Odd Visitante Mais Cantos_5"].astype(float)
+    odd_c = merged["Odd Casa Mais Cantos_10"].astype(float)
+    odd_v = merged["Odd Visitante Mais Cantos_10"].astype(float)
 
     imp_c_arr, imp_v_arr = vig_free_probs_from_odds_2way(odd_c.values, odd_v.values)
     imp_c = pd.Series(imp_c_arr * 100.0, index=base.index)
@@ -1695,8 +1741,9 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
 
     base = add_directional_cost_indicators(base)
 
-    base = apply_value_filter(base, "Casa Mais Cantos prob", "Odd Casa Mais Cantos", min_prob=MIN_PROB_MAIS, min_cv=MIN_CV_MAIS, min_edge=MIN_EDGE_MAIS)
-    base = apply_value_filter(base, "Visitante Mais Cantos prob", "Odd Visitante Mais Cantos", min_prob=MIN_PROB_MAIS, min_cv=MIN_CV_MAIS, min_edge=MIN_EDGE_MAIS)
+    directional_cv = ("CV Index Direcional Casa", "CV Index Direcional Visitante")
+    base = apply_value_filter(base, "Casa Mais Cantos prob", "Odd Casa Mais Cantos", min_prob=MIN_PROB_MAIS, min_cv=MIN_CV_MAIS, min_edge=MIN_EDGE_MAIS, cv_fields=directional_cv)
+    base = apply_value_filter(base, "Visitante Mais Cantos prob", "Odd Visitante Mais Cantos", min_prob=MIN_PROB_MAIS, min_cv=MIN_CV_MAIS, min_edge=MIN_EDGE_MAIS, cv_fields=directional_cv)
 
     # ------------------------------------------------------------
     # 10) Race 3 e 5 Cantos
@@ -1709,8 +1756,8 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
         sim_home = pd.Series(p_home_cf, index=base.index)
         sim_away = pd.Series(100.0 - p_home_cf, index=base.index)
 
-        odd_home = merged[f"Odd Casa Race {k} Cantos_5"].astype(float)
-        odd_away = merged[f"Odd Visitante Race {k} Cantos_5"].astype(float)
+        odd_home = merged[f"Odd Casa Race {k} Cantos_10"].astype(float)
+        odd_away = merged[f"Odd Visitante Race {k} Cantos_10"].astype(float)
 
         imp_home, imp_away = vig_free_probs_from_odds_2way(odd_home.values, odd_away.values)
         imp_home = pd.Series(imp_home * 100.0, index=base.index)
@@ -1739,8 +1786,8 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
 
         base = add_race_cost_indicators(base, k=k)
 
-        base = apply_value_filter(base, f"Casa Race {k} Cantos prob", f"Odd Casa Race {k} Cantos", min_prob=MIN_PROB_RACE, min_cv=MIN_CV_RACE, min_edge=MIN_EDGE_RACE)
-        base = apply_value_filter(base, f"Visitante Race {k} Cantos prob", f"Odd Visitante Race {k} Cantos", min_prob=MIN_PROB_RACE, min_cv=MIN_CV_RACE, min_edge=MIN_EDGE_RACE)
+        base = apply_value_filter(base, f"Casa Race {k} Cantos prob", f"Odd Casa Race {k} Cantos", min_prob=MIN_PROB_RACE, min_cv=MIN_CV_RACE, min_edge=MIN_EDGE_RACE, cv_fields=directional_cv)
+        base = apply_value_filter(base, f"Visitante Race {k} Cantos prob", f"Odd Visitante Race {k} Cantos", min_prob=MIN_PROB_RACE, min_cv=MIN_CV_RACE, min_edge=MIN_EDGE_RACE, cv_fields=directional_cv)
 
     # ------------------------------------------------------------
     # 11) Filtros finais de qualidade
@@ -1909,7 +1956,7 @@ def print_cantos_prognostics(base: pd.DataFrame, status_filter=None):
         lam_t = row.get("Lambda Total", pd.NA)
 
         print("--- DADOS TÉCNICOS ---")
-        print(f"w5/w20:                        {_fmt_float(row.get('w5'), 3)} / {_fmt_float(row.get('w20'), 3)}")
+        print(f"w10/w20:                       {_fmt_float(row.get('w10'), 3)} / {_fmt_float(row.get('w20'), 3)}")
         print(f"Delta Form 5v20:               {_fmt_float(row.get('Delta Form 5v20'), 3)}")
         print(f"Share Home (liga):             {_fmt_float(row.get('Share Home'), 3)}")
         print(f"Gamma Home/Away:               {_fmt_float(row.get('Gamma Home'), 3)} / {_fmt_float(row.get('Gamma Away'), 3)}\n")
@@ -2024,15 +2071,15 @@ def run_cli() -> None:
     if len(sys.argv) < 4:
         payload = {
             "ok": False,
-            "erro": "Uso: python runner.py CSV_5 CSV_20 OUTPUT_CSV [DD-MM-YYYY] [prognostico|backtest]",
+            "erro": "Uso: python runner.py CSV_10 CSV_20 OUTPUT_CSV [DD-MM-YYYY] [prognostico|backtest]",
         }
         print(json.dumps(payload, ensure_ascii=False))
         return
 
-    csv5 = Path(sys.argv[1]).resolve()
+    csv10 = Path(sys.argv[1]).resolve()
     csv20 = Path(sys.argv[2]).resolve()
     output_path = Path(sys.argv[3]).resolve()
-    cli_date = sys.argv[4].strip() if len(sys.argv) >= 5 and sys.argv[4].strip() else _infer_date_str([csv5, csv20])
+    cli_date = sys.argv[4].strip() if len(sys.argv) >= 5 and sys.argv[4].strip() else _infer_date_str([csv10, csv20])
     cli_run_mode = sys.argv[5].strip().lower() if len(sys.argv) >= 6 else "prognostico"
     if cli_run_mode not in {"prognostico", "backtest"}:
         print(json.dumps({"ok": False, "erro": f"RUN_MODE inválido: {cli_run_mode}"}, ensure_ascii=False))
@@ -2040,8 +2087,8 @@ def run_cli() -> None:
     globals()["RUN_MODE"] = cli_run_mode
     globals()["STATUSES"] = STATUSES_BY_MODE[cli_run_mode]
 
-    if not csv5.exists():
-        print(json.dumps({"ok": False, "erro": f"Arquivo 5j n?o encontrado: {csv5}"}, ensure_ascii=False))
+    if not csv10.exists():
+        print(json.dumps({"ok": False, "erro": f"Arquivo 10j não encontrado: {csv10}"}, ensure_ascii=False))
         return
     if not csv20.exists():
         print(json.dumps({"ok": False, "erro": f"Arquivo 20j n?o encontrado: {csv20}"}, ensure_ascii=False))
@@ -2049,20 +2096,20 @@ def run_cli() -> None:
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    source_preview = pd.read_csv(csv5, sep=sniff_sep(csv5), encoding="utf-8", engine="python", nrows=1)
+    source_preview = pd.read_csv(csv10, sep=sniff_sep(csv10), encoding="utf-8", engine="python", nrows=1)
     globals()["RUN_PROVENANCE"] = {
         "generated_at": datetime.now(timezone.utc).isoformat(), "source": "PackBall external CSV import",
-        "source_file_5": csv5.name, "source_file_20": csv20.name,
-        "sha256_5": file_sha256(csv5), "sha256_20": file_sha256(csv20),
+        "source_file_10": csv10.name, "source_file_20": csv20.name,
+        "sha256_10": file_sha256(csv10), "sha256_20": file_sha256(csv20),
         "schema_hash": schema_sha256(source_preview.columns), "model_version": MODEL_VERSION,
         "prediction_date": cli_date, "run_mode": cli_run_mode, "kickoff_timezone": "America/Sao_Paulo",
     }
 
     with tempfile.TemporaryDirectory(prefix="asp_packball_model_") as tmp_name:
         tmp_dir = Path(tmp_name)
-        expected5 = tmp_dir / PACKBALL_FILE_5.format(date=cli_date)
+        expected10 = tmp_dir / PACKBALL_FILE_10.format(date=cli_date)
         expected20 = tmp_dir / PACKBALL_FILE_20.format(date=cli_date)
-        shutil.copy2(csv5, expected5)
+        shutil.copy2(csv10, expected10)
         shutil.copy2(csv20, expected20)
 
         globals()["date_str"] = cli_date
@@ -2075,7 +2122,7 @@ def run_cli() -> None:
         lovable.to_csv(output_path, index=False, encoding="utf-8-sig")
         records = _to_records(lovable)
         snapshot = {
-            **RUN_PROVENANCE, "input_path_5": str(csv5), "input_path_20": str(csv20),
+            **RUN_PROVENANCE, "input_path_10": str(csv10), "input_path_20": str(csv20),
             "output_path": str(output_path), "calibration_path": str(CALIBRATION_PATH),
             "predictions": records, "walk_forward_rows": build_walk_forward_snapshot_rows(records),
         }

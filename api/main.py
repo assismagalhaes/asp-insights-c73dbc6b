@@ -1421,7 +1421,7 @@ async def upload_packball_model_files(
     if not re.fullmatch(r"\d{2}-\d{2}-\d{4}", selected_date):
         raise HTTPException(status_code=422, detail="Data deve estar no formato DD-MM-YYYY.")
 
-    recent_window = 10 if model_name == "ASP GoalMatrix" else 5
+    recent_window = 10 if model_name in {"ASP GoalMatrix", "ASP CornerMatrix"} else 5
     file5_path = target_dir / f"packball_{recent_window}.csv"
     file20_path = target_dir / "packball_20.csv"
     size5 = await save_uploaded_packball_file(arquivo_5, file5_path)
@@ -1447,11 +1447,11 @@ async def upload_packball_model_files(
         "janela_recente": recent_window,
         "perfil_recente": (
             "10 jogos, todos os mandos e ligas, sem temporada anterior"
-            if model_name == "ASP GoalMatrix" else "5 jogos"
+            if model_name in {"ASP GoalMatrix", "ASP CornerMatrix"} else "5 jogos"
         ),
         "perfil_20": (
             "20 jogos, mandante em casa e visitante fora, todas as ligas, com temporada anterior"
-            if model_name == "ASP GoalMatrix" else "20 jogos"
+            if model_name in {"ASP GoalMatrix", "ASP CornerMatrix"} else "20 jogos"
         ),
         "created_at": datetime.now().isoformat(),
     }

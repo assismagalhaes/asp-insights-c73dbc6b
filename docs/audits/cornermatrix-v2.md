@@ -2,14 +2,16 @@
 
 ## Input contract
 
-- PackBall external CSV files remain at 5 and 20 matches.
-- Both teams must have exactly 5/5 or 20/20 collected matches in the corresponding file.
+- Recent signal: 10 matches across all venues/leagues, excluding the previous season.
+- Venue signal: 20 home-at-home / away-at-away matches across all leagues, allowing the previous season.
+- Both teams must have exactly 10/10 or 20/20 collected matches in the corresponding file.
 - Forecast mode accepts `NS` (`NF` is normalized to `NS`); backtest mode accepts only `FT`.
 - Schema order, SHA-256 hashes, generation time and source filenames are persisted per run.
 
 ## Mathematical model
 
-- Recent and structural averages are blended with dynamic 5/20 weights based on the PackBall consistency index and form divergence.
+- Recent and structural averages are blended with dynamic 10/20 weights. Recent form is bounded at 30–45%; venue structure receives 55–70%.
+- PackBall CV is treated as a consistency score: 0–1 columns are normalized to 0–100 and mixed scales are rejected. O/U uses 60% total-corner consistency + 40% scored-corner consistency; directional markets use 30% + 70%.
 - Team corner rates use league-total priors, fixed home share until a valid OOS league baseline exists, attack/defense strength shrinkage and bounded lambdas.
 - Full-time corners use a bivariate Poisson-Gamma mixture. League overdispersion activates only from settled OOS samples and is shrunk to the global alpha prior.
 - Race-to-3/5 keeps the beta closed form: the shared Gamma factor scales both rates equally and therefore cancels from the first-arrival ordering probability.
@@ -19,6 +21,7 @@
 
 - O/U, More Corners and Race require valid paired odds before no-vig calculation.
 - Historical, simulation and no-vig components are exported separately.
+- Probability weights are 35/50/15 for O/U and 30/55/15 for directional markets (history/simulation/no-vig).
 - Component spread above 15 pp receives a symmetric haircut toward market; spread at or above 22 pp is marked `CONFLITO_FORTE_COM_MERCADO`.
 - Initial minimum edges are 5% for O/U and 6% for More Corners/Race.
 - O/U exports at most one principal line and two correlated alternatives on the same side; directional markets export one selection per market.

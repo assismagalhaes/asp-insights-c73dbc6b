@@ -138,7 +138,7 @@ function ModelosPreditivosPage() {
     if (packballMode) {
       if (!packballFile5 || !packballFile20) {
         toast.error(
-          modelo === "ASP GoalMatrix"
+          isPackballModel(modelo)
             ? "Selecione as planilhas PackBall de 10j gerais e 20j por mando."
             : "Selecione as planilhas PackBall de 5j e 20j.",
         );
@@ -309,7 +309,7 @@ function ModelosPreditivosPage() {
               <>
                 <PackballFileInput
                   label={
-                    modelo === "ASP GoalMatrix"
+                    isPackballModel(modelo)
                       ? "PackBall 10j gerais"
                       : "Planilha PackBall 5j"
                   }
