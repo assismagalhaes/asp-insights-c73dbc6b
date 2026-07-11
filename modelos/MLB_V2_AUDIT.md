@@ -17,6 +17,7 @@
 ## Distribuicao e probabilidades
 
 - Corridas por equipe seguem Negative Binomial com sobredispersao inicial 0.08.
+- A cobertura de handicap usa a mesma matriz Negative Binomial, inclusive no modo shadow; o identificador operacional e `MLB_V2_1_HANDICAP_NB_SHADOW`.
 - Moneyline separa a massa de empate apos nove entradas e condiciona os dois lados a um resultado decidido.
 - O componente historico de moneyline usa Log5 com shrinkage, garantindo lados complementares.
 - Pesos iniciais de moneyline: historico 15%, simulacao 35%, mercado no-vig 50%.
@@ -47,3 +48,7 @@ Base local disponivel em 10/07/2026:
 - calibracao mantida inativa por amostra insuficiente.
 
 Os resultados sao direcionais e nao justificam aumentar stake ou ativar calibracao antes de uma amostra temporal maior.
+
+O auditor tambem materializa as oportunidades qualificadas em modo sombra no arquivo
+`mlb_v2_handicap_shadow_walk_forward.csv`, sem publica-las, para permitir a validacao
+walk-forward especifica do handicap antes de qualquer ativacao operacional.

@@ -16,7 +16,7 @@ from typing import Any
 HIST_DIR = Path(os.getenv("BASEBALL_HIST_DIR", "/home/ubuntu/jupyter/dados_baseball"))
 
 MODEL_VERSION = "MLB_V2_0"
-BASEBALL_MLB_HANDICAP_MODEL_VERSION = "MLB_V2_0_HANDICAP_SHADOW"
+BASEBALL_MLB_HANDICAP_MODEL_VERSION = "MLB_V2_1_HANDICAP_NB_SHADOW"
 HANDICAP_ENABLED_MLB_V1_1 = False
 HANDICAP_CONTROLLED_ACTIVATION_MLB_V1_1 = False
 HANDICAP_SHADOW_ENABLED = True
@@ -1051,6 +1051,8 @@ def add_handicap_pick(
         "expected_away": expected_away,
         "expected_margin_home": expected_margin_home,
         "expected_margin_away": expected_margin_away,
+        "score_distribution": "Negative Binomial",
+        "runs_overdispersion": RUNS_OVERDISPERSION,
         "warnings": ";".join(warnings),
     }
 
@@ -1099,7 +1101,7 @@ def add_handicap_pick(
 
     hist = historical_handicap_cover_rate(team_stats, line)
     hist_prob = float(hist["cover_rate_shrunk"])
-    sim_prob = handicap_cover_probability_poisson(expected_home, expected_away, side, line)
+    sim_prob = handicap_cover_probability_overdispersed(expected_home, expected_away, side, line)
     market_odd = market_odd or odd
     other_market_odd = other_market_odd or other_odd
     vig_prob = no_vig_probability(market_odd, other_market_odd)
@@ -1122,6 +1124,8 @@ def add_handicap_pick(
         "losses_historicos": hist["losses"],
         "cover_rate_raw": hist["cover_rate_raw"],
         "cover_rate_shrunk": hist["cover_rate_shrunk"],
+        "score_distribution": "Negative Binomial",
+        "runs_overdispersion": RUNS_OVERDISPERSION,
     }
 
     if prob < HANDICAP_MIN_PROB:
@@ -1771,6 +1775,8 @@ def write_handicap_audit_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "expected_away",
         "expected_margin_home",
         "expected_margin_away",
+        "score_distribution",
+        "runs_overdispersion",
         "passou_filtros",
         "motivo_descarte",
         "warnings",
@@ -2011,14 +2017,20 @@ def win_probability_poisson(home_lam: float, away_lam: float, max_runs: int = 20
     return home_win
 
 
-def handicap_cover_probability_poisson(expected_home: float, expected_away: float, side: str, line: float, max_runs: int = 20) -> float:
+def handicap_cover_probability_overdispersed(
+    expected_home: float,
+    expected_away: float,
+    side: str,
+    line: float,
+    dispersion: float = RUNS_OVERDISPERSION,
+    max_runs: int = MAX_DISTRIBUTION_RUNS,
+) -> float:
     normalized_side = str(side).strip().lower()
     if normalized_side not in {"home", "away"}:
         raise ValueError("side deve ser 'home' ou 'away'")
 
-    del max_runs
-    home_distribution = score_distribution(expected_home, RUNS_OVERDISPERSION)
-    away_distribution = score_distribution(expected_away, RUNS_OVERDISPERSION)
+    home_distribution = score_distribution(expected_home, dispersion, max_runs)
+    away_distribution = score_distribution(expected_away, dispersion, max_runs)
     prob = 0.0
     for home_runs, p_home in enumerate(home_distribution):
         for away_runs, p_away in enumerate(away_distribution):
@@ -2027,6 +2039,24 @@ def handicap_cover_probability_poisson(expected_home: float, expected_away: floa
             if margin + line > 0:
                 prob += score_prob
     return max(0.01, min(0.99, prob))
+
+
+def handicap_cover_probability_poisson(
+    expected_home: float,
+    expected_away: float,
+    side: str,
+    line: float,
+    max_runs: int = MAX_DISTRIBUTION_RUNS,
+) -> float:
+    """Compatibility wrapper for callers that still use the legacy name."""
+    return handicap_cover_probability_overdispersed(
+        expected_home,
+        expected_away,
+        side,
+        line,
+        dispersion=RUNS_OVERDISPERSION,
+        max_runs=max_runs,
+    )
 
 
 def handicap_probability(team_lam: float, opponent_lam: float, line: float, max_runs: int = 20) -> float:

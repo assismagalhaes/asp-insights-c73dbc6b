@@ -326,10 +326,59 @@ def build_temp_history(results: list[dict[str, Any]], root: Path) -> Path:
     return root
 
 
-def run_runner(module: Any, odds_paths: list[Path], history_dir: Path, results: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def materialize_handicap_shadow_rows(
+    audit_rows: list[dict[str, Any]],
+    game: dict[str, Any],
+    result: dict[str, Any],
+) -> list[dict[str, Any]]:
+    materialized: list[dict[str, Any]] = []
+    for row in audit_rows:
+        if row.get("motivo_descarte") != "HANDICAP_SHADOW_ONLY":
+            continue
+        probability = _float(row.get("prob_final"))
+        opportunity = {
+            "data": game.get("data"),
+            "hora": game.get("hora"),
+            "esporte": "Baseball",
+            "liga": game.get("liga") or "MLB",
+            "jogo": game.get("jogo"),
+            "mandante": game.get("home"),
+            "visitante": game.get("away"),
+            "mercado": "Handicap Asiatico",
+            "pick": row.get("pick"),
+            "linha": row.get("linha"),
+            "modelo_versao": row.get("model_version") or v11.BASEBALL_MLB_HANDICAP_MODEL_VERSION,
+            "odd": row.get("odd_melhor") or row.get("odd"),
+            "odd_ofertada": row.get("odd_melhor") or row.get("odd"),
+            "odd_mediana": row.get("odd_mediana"),
+            "bookmaker_melhor": row.get("bookmaker_melhor"),
+            "probabilidade": round(probability * 100, 2),
+            "probabilidade_final": round(probability * 100, 2),
+            "probabilidade_v2": probability,
+            "edge": round(_float(row.get("edge")), 2),
+            "edge_v2": _float(row.get("edge")) / 100.0,
+            "prob_hist": row.get("prob_hist"),
+            "prob_sim": row.get("prob_sim"),
+            "prob_no_vig": row.get("prob_no_vig"),
+            "score_distribution": row.get("score_distribution") or "Negative Binomial",
+            "runs_overdispersion": row.get("runs_overdispersion") or v11.RUNS_OVERDISPERSION,
+            "mode": "shadow_blocked",
+        }
+        opportunity["resultado_real"] = resolve_pick_result(opportunity, result)
+        materialized.append(opportunity)
+    return materialized
+
+
+def run_runner(
+    module: Any,
+    odds_paths: list[Path],
+    history_dir: Path,
+    results: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     result_index = build_result_index(results)
     predictions: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
+    handicap_shadow_predictions: list[dict[str, Any]] = []
     cutoff_history_cache: dict[str, Path] = {}
 
     for odds_path in odds_paths:
@@ -382,8 +431,17 @@ def run_runner(module: Any, odds_paths: list[Path], history_dir: Path, results: 
                 context = module.build_game_context(game, home_stats, away_stats, season)
                 if module is v11:
                     league_runs = module.load_league_average_runs(season, cutoff_date)
+                    handicap_audit_rows: list[dict[str, Any]] = []
                     picks = module.generate_game_picks(
-                        game, home_stats, away_stats, context, league_runs=league_runs
+                        game,
+                        home_stats,
+                        away_stats,
+                        context,
+                        handicap_audit_rows=handicap_audit_rows,
+                        league_runs=league_runs,
+                    )
+                    handicap_shadow_predictions.extend(
+                        materialize_handicap_shadow_rows(handicap_audit_rows, game, result)
                     )
                 else:
                     picks = module.generate_game_picks(game, home_stats, away_stats, context)
@@ -404,7 +462,7 @@ def run_runner(module: Any, odds_paths: list[Path], history_dir: Path, results: 
                         "edge_v2": _float(pick.get("edge")) / 100.0,
                     }
                 )
-    return predictions, errors
+    return predictions, errors, handicap_shadow_predictions
 
 
 def _market_rows(rows: list[dict[str, Any]], market: str | None = None) -> list[dict[str, Any]]:
@@ -597,8 +655,8 @@ def run_comparison(*, odds_dir: str | Path, results_path: str | Path, out_dir: s
     out = Path(out_dir)
     with tempfile.TemporaryDirectory() as tmp:
         history_dir = Path(tmp) / "dados_baseball_walk_forward"
-        v1_rows, v1_errors = run_runner(v1, odds_paths, history_dir, results)
-        v11_rows, v11_errors = run_runner(v11, odds_paths, history_dir, results)
+        v1_rows, v1_errors, _v1_handicap_shadow = run_runner(v1, odds_paths, history_dir, results)
+        v11_rows, v11_errors, v11_handicap_shadow = run_runner(v11, odds_paths, history_dir, results)
 
     rows = comparison_rows(v1_rows, v11_rows)
     report_path = out / REPORT_NAME
@@ -607,6 +665,9 @@ def run_comparison(*, odds_dir: str | Path, results_path: str | Path, out_dir: s
     write_csv(predictions_path, v11_rows)
     errors_path = out / "mlb_v2_walk_forward_errors.csv"
     write_csv(errors_path, v11_errors)
+    handicap_shadow_path = out / "mlb_v2_handicap_shadow_walk_forward.csv"
+    write_csv(handicap_shadow_path, v11_handicap_shadow)
+    handicap_shadow_summary = summarize_prediction_rows(v11_handicap_shadow)
     calibration_path = out / "mlb_v2_calibration_candidate.json"
     calibration_path.parent.mkdir(parents=True, exist_ok=True)
     calibration_path.write_text(
@@ -619,6 +680,8 @@ def run_comparison(*, odds_dir: str | Path, results_path: str | Path, out_dir: s
         "predictions_report": str(predictions_path),
         "calibration_candidate": str(calibration_path),
         "errors_report": str(errors_path),
+        "handicap_shadow_report": str(handicap_shadow_path),
+        "handicap_shadow_summary": handicap_shadow_summary,
         "v1_picks": len(v1_rows),
         "v2_picks": len(v11_rows),
         "v1_errors": len(v1_errors),

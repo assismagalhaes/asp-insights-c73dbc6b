@@ -59,7 +59,7 @@ class BaseballRunnerV11Tests(unittest.TestCase):
         self.assertFalse(runner.HANDICAP_ENABLED_MLB_V1_1)
         self.assertFalse(runner.HANDICAP_CONTROLLED_ACTIVATION_MLB_V1_1)
         self.assertTrue(runner.HANDICAP_SHADOW_ENABLED)
-        self.assertEqual(runner.BASEBALL_MLB_HANDICAP_MODEL_VERSION, "MLB_V2_0_HANDICAP_SHADOW")
+        self.assertEqual(runner.BASEBALL_MLB_HANDICAP_MODEL_VERSION, "MLB_V2_1_HANDICAP_NB_SHADOW")
 
     def test_totals_historical_probability_is_smoothed_not_binary(self) -> None:
         home = stats("NYY", [6, 8, 10, 12, 4])
@@ -111,10 +111,24 @@ class BaseballRunnerV11Tests(unittest.TestCase):
         self.assertIn("HANDICAP_SHADOW_ONLY", {row["motivo_descarte"] for row in audit_rows})
 
     def test_handicap_minus_one_and_half_cover_probability(self) -> None:
-        self.assertAlmostEqual(runner.handicap_cover_probability_poisson(10.0, 0.2, "home", -1.5), 0.99, delta=0.02)
+        self.assertAlmostEqual(runner.handicap_cover_probability_overdispersed(10.0, 0.2, "home", -1.5), 0.99, delta=0.02)
 
     def test_handicap_plus_one_and_half_cover_probability(self) -> None:
-        self.assertAlmostEqual(runner.handicap_cover_probability_poisson(0.2, 10.0, "away", 1.5), 0.99, delta=0.02)
+        self.assertAlmostEqual(runner.handicap_cover_probability_overdispersed(0.2, 10.0, "away", 1.5), 0.99, delta=0.02)
+
+    def test_handicap_overdispersion_changes_cover_probability(self) -> None:
+        poisson = runner.handicap_cover_probability_overdispersed(5.2, 4.1, "away", 1.5, dispersion=0.0)
+        overdispersed = runner.handicap_cover_probability_overdispersed(5.2, 4.1, "away", 1.5)
+
+        self.assertNotAlmostEqual(poisson, overdispersed, places=4)
+        self.assertGreater(poisson, 0.0)
+        self.assertLess(overdispersed, 1.0)
+
+    def test_legacy_handicap_probability_name_uses_overdispersed_engine(self) -> None:
+        legacy = runner.handicap_cover_probability_poisson(5.2, 4.1, "away", 1.5)
+        current = runner.handicap_cover_probability_overdispersed(5.2, 4.1, "away", 1.5)
+
+        self.assertAlmostEqual(legacy, current, places=12)
 
     def test_integer_handicap_line_is_blocked(self) -> None:
         self.assertFalse(runner.is_allowed_handicap_line(-1.0))
@@ -223,7 +237,7 @@ class BaseballRunnerV11Tests(unittest.TestCase):
         diagnostics = runner.build_handicap_shadow_diagnostics(rows)
 
         self.assertEqual(diagnostics["mode"], "shadow_blocked")
-        self.assertEqual(diagnostics["model_version"], "MLB_V2_0_HANDICAP_SHADOW")
+        self.assertEqual(diagnostics["model_version"], "MLB_V2_1_HANDICAP_NB_SHADOW")
         self.assertFalse(diagnostics["published"])
         self.assertEqual(diagnostics["published_count"], 0)
         self.assertEqual(diagnostics["discarded_count"], 1)
