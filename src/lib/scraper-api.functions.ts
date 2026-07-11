@@ -417,10 +417,14 @@ export const executePredictiveModel = createServerFn({ method: "POST" })
     };
     const path = endpointByModel[data.modelo];
     try {
-      const payload = await scraperRequest(path, {
-        method: "POST",
-        body: JSON.stringify({ job_id: data.job_id }),
-      });
+      const payload = await scraperRequest(
+        path,
+        {
+          method: "POST",
+          body: JSON.stringify({ job_id: data.job_id }),
+        },
+        300000,
+      );
       return payload as JsonValue;
     } catch (e) {
       const message = (e as Error).message;
