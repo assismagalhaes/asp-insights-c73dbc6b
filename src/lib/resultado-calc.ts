@@ -143,6 +143,17 @@ export function calcularResultadoAuto(
   }
 
   if (has(mercado, "cornermatrix") || has(mercado, "escanteios", "cantos")) {
+    // Race X Cantos/Corridas: pick "Casa Race N Cantos" ou "Fora Race N Cantos"
+    const race = detectRacePick(prog);
+    if (race) {
+      const { alvo, lado } = race;
+      const pickSideVal = lado === "casa" ? mandante : visitante;
+      const otherSideVal = lado === "casa" ? visitante : mandante;
+      if (pickSideVal < alvo) return "RED";
+      if (otherSideVal < alvo) return "GREEN";
+      // Ambos alcançaram o alvo: precisa entrada manual de quem chegou primeiro
+      return null;
+    }
     if (has(pick, "casa mais", "mandante mais")) return mandante > visitante ? "GREEN" : "RED";
     if (has(pick, "fora mais", "visitante mais")) return visitante > mandante ? "GREEN" : "RED";
   }
