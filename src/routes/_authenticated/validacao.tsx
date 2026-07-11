@@ -57,6 +57,7 @@ import {
   type Status,
 } from "@/lib/db";
 import { analisarValidacao } from "@/lib/validacao-ia.functions";
+import { TelegramAlertsPanel } from "@/components/validacao-critica/TelegramAlertsPanel";
 import { analisarValidacaoOnline } from "@/lib/validacao-ia-online.functions";
 import { getAiCalibrationSummary } from "@/lib/ai-learning";
 import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
@@ -858,6 +859,9 @@ function Validacao() {
           Segunda camada analítica dos prognósticos gerados pelos modelos.
         </p>
       </div>
+
+      <TelegramAlertsPanel />
+
 
       {/* Filtros */}
       <div className="rounded-lg border border-border bg-card p-3">
