@@ -55,11 +55,11 @@ def margin_stats(
 
 class BaseballRunnerV11Tests(unittest.TestCase):
     def test_model_version_and_handicap_flag_are_set(self) -> None:
-        self.assertEqual(runner.MODEL_VERSION, "MLB_V2_0_1_HISTORY_DEDUP")
+        self.assertEqual(runner.MODEL_VERSION, "MLB_V2_1_TEMPORAL_UNCERTAINTY")
         self.assertFalse(runner.HANDICAP_ENABLED_MLB_V1_1)
         self.assertFalse(runner.HANDICAP_CONTROLLED_ACTIVATION_MLB_V1_1)
         self.assertTrue(runner.HANDICAP_SHADOW_ENABLED)
-        self.assertEqual(runner.BASEBALL_MLB_HANDICAP_MODEL_VERSION, "MLB_V2_1_HANDICAP_NB_SHADOW")
+        self.assertEqual(runner.BASEBALL_MLB_HANDICAP_MODEL_VERSION, "MLB_V2_2_HANDICAP_NB_SHADOW")
 
     def test_totals_historical_probability_is_smoothed_not_binary(self) -> None:
         home = stats("NYY", [6, 8, 10, 12, 4])
@@ -237,7 +237,7 @@ class BaseballRunnerV11Tests(unittest.TestCase):
         diagnostics = runner.build_handicap_shadow_diagnostics(rows)
 
         self.assertEqual(diagnostics["mode"], "shadow_blocked")
-        self.assertEqual(diagnostics["model_version"], "MLB_V2_1_HANDICAP_NB_SHADOW")
+        self.assertEqual(diagnostics["model_version"], "MLB_V2_2_HANDICAP_NB_SHADOW")
         self.assertFalse(diagnostics["published"])
         self.assertEqual(diagnostics["published_count"], 0)
         self.assertEqual(diagnostics["discarded_count"], 1)
@@ -335,8 +335,8 @@ class BaseballRunnerV11Tests(unittest.TestCase):
 
         self.assertEqual(len(picks), 1)
         self.assertEqual(picks[0]["mercado"], "Moneyline")
-        self.assertEqual(picks[0]["modelo_versao"], "MLB_V2_0_1_HISTORY_DEDUP")
-        self.assertIn("modelo_versao=MLB_V2_0_1_HISTORY_DEDUP", picks[0]["observacoes"])
+        self.assertEqual(picks[0]["modelo_versao"], "MLB_V2_1_TEMPORAL_UNCERTAINTY")
+        self.assertIn("modelo_versao=MLB_V2_1_TEMPORAL_UNCERTAINTY", picks[0]["observacoes"])
 
     def test_moneyline_uses_median_odd_for_market_probability_and_best_odd_for_ev(self) -> None:
         picks: list[dict[str, object]] = []
@@ -394,6 +394,27 @@ class BaseballRunnerV11Tests(unittest.TestCase):
 
         self.assertGreater(result, 4.0)
         self.assertLess(result, 10.0)
+
+    def test_component_disagreement_haircut_moves_probability_toward_market(self) -> None:
+        adjusted, diagnostics = runner.apply_component_disagreement_haircut(
+            0.55,
+            {"hist": 0.47, "sim": 0.66, "vig": 0.50},
+            0.50,
+        )
+
+        self.assertAlmostEqual(adjusted, 0.5325, places=4)
+        self.assertEqual(diagnostics["status"], "haircut_applied")
+        self.assertAlmostEqual(diagnostics["component_spread"], 0.19, places=4)
+
+    def test_component_disagreement_within_tolerance_keeps_probability(self) -> None:
+        adjusted, diagnostics = runner.apply_component_disagreement_haircut(
+            0.54,
+            {"hist": 0.51, "sim": 0.60, "vig": 0.50},
+            0.50,
+        )
+
+        self.assertEqual(adjusted, 0.54)
+        self.assertEqual(diagnostics["status"], "within_tolerance")
 
     def test_history_cutoff_excludes_game_day_and_future_rows(self) -> None:
         rows = [

@@ -15,8 +15,8 @@ from typing import Any
 
 HIST_DIR = Path(os.getenv("BASEBALL_HIST_DIR", "/home/ubuntu/jupyter/dados_baseball"))
 
-MODEL_VERSION = "MLB_V2_0_1_HISTORY_DEDUP"
-BASEBALL_MLB_HANDICAP_MODEL_VERSION = "MLB_V2_1_HANDICAP_NB_SHADOW"
+MODEL_VERSION = "MLB_V2_1_TEMPORAL_UNCERTAINTY"
+BASEBALL_MLB_HANDICAP_MODEL_VERSION = "MLB_V2_2_HANDICAP_NB_SHADOW"
 HANDICAP_ENABLED_MLB_V1_1 = False
 HANDICAP_CONTROLLED_ACTIVATION_MLB_V1_1 = False
 HANDICAP_SHADOW_ENABLED = True
@@ -42,6 +42,9 @@ CALIBRATION_PATH = Path(os.getenv("MLB_CALIBRATION_PATH", Path(__file__).with_na
 PROB_ML_WEIGHTS = {"vit": 0.15, "sim": 0.35, "vig": 0.50}
 PROB_OU_WEIGHTS = {"hist": 0.20, "sim": 0.30, "vig": 0.50}
 PROB_HC_WEIGHTS = {"hist": 0.25, "sim": 0.45, "vig": 0.30}
+COMPONENT_DISAGREEMENT_THRESHOLD = 0.12
+COMPONENT_DISAGREEMENT_STRENGTH = 0.25
+COMPONENT_DISAGREEMENT_MAX_HAIRCUT = 0.03
 HANDICAP_WEIGHTS = PROB_HC_WEIGHTS
 HANDICAP_ALLOWED_LINES = {-2.5, -1.5, 1.5, 2.5}
 HANDICAP_MIN_PROB = 0.525
@@ -471,6 +474,15 @@ def load_team_stats(sigla: str, season: int, cutoff_date: str | None = None) -> 
 
     current_rows = rows_by_year.get(season, [])
     previous_rows = rows_by_year.get(season - 1, [])
+    temporal_win_rate, _temporal_win_sample = temporal_event_rate(
+        current_rows,
+        previous_rows,
+        lambda row: (
+            extract_runs(row, True) > extract_runs(row, False)
+            if extract_runs(row, True) is not None and extract_runs(row, False) is not None
+            else None
+        ),
+    )
     last5_for = [value for value in (extract_runs(row, True) for row in current_rows[-5:]) if value is not None] or scored[-5:] or scored
     last5_against = [value for value in (extract_runs(row, False) for row in current_rows[-5:]) if value is not None] or allowed[-5:] or allowed
     temporal_for = temporal_runs_average(current_rows, previous_rows, scored=True, fallback=mean(scored))
@@ -480,7 +492,7 @@ def load_team_stats(sigla: str, season: int, cutoff_date: str | None = None) -> 
         games=len(scored),
         avg_for=mean(scored),
         avg_against=mean(allowed),
-        win_rate=wins / valid_results if valid_results else 0.5,
+        win_rate=temporal_win_rate,
         last5_for=mean(last5_for),
         last5_against=mean(last5_against),
         streak=streak,
@@ -690,6 +702,33 @@ def apply_market_calibration(market: str, probability: float) -> tuple[float, di
     }
 
 
+def apply_component_disagreement_haircut(
+    probability: float,
+    components: dict[str, float],
+    market_probability: float,
+) -> tuple[float, dict[str, Any]]:
+    values = [float(value) for value in components.values() if value is not None]
+    spread = max(values) - min(values) if len(values) >= 2 else 0.0
+    excess = max(0.0, spread - COMPONENT_DISAGREEMENT_THRESHOLD)
+    requested_haircut = min(
+        COMPONENT_DISAGREEMENT_MAX_HAIRCUT,
+        excess * COMPONENT_DISAGREEMENT_STRENGTH,
+    )
+    distance_to_market = probability - market_probability
+    applied_haircut = min(abs(distance_to_market), requested_haircut)
+    adjusted = probability
+    if applied_haircut > 0:
+        adjusted -= math.copysign(applied_haircut, distance_to_market)
+    return max(0.01, min(0.99, adjusted)), {
+        "status": "haircut_applied" if applied_haircut > 0 else "within_tolerance",
+        "component_spread": spread,
+        "threshold": COMPONENT_DISAGREEMENT_THRESHOLD,
+        "haircut": applied_haircut,
+        "probability_before": probability,
+        "probability_after": adjusted,
+    }
+
+
 def selection_thesis_key(pick: dict[str, Any]) -> str:
     market = normalize_key(pick.get("mercado"))
     selection = clean(pick.get("pick"))
@@ -855,8 +894,10 @@ def add_moneyline_pick(
     vig_prob = no_vig_probability(market_odd, other_market_odd)
     hist_home = matchup_win_probability(home.win_rate, home.games, away.win_rate, away.games)
     hist_prob = hist_home if side == "home" else 1.0 - hist_home
-    raw_prob = weighted({"vit": hist_prob, "sim": sim_prob, "vig": vig_prob}, PROB_ML_WEIGHTS)
-    prob, calibration = apply_market_calibration("moneyline", raw_prob)
+    components = {"vit": hist_prob, "sim": sim_prob, "vig": vig_prob}
+    raw_prob = weighted(components, PROB_ML_WEIGHTS)
+    uncertainty_prob, uncertainty = apply_component_disagreement_haircut(raw_prob, components, vig_prob)
+    prob, calibration = apply_market_calibration("moneyline", uncertainty_prob)
     team = game["home"] if side == "home" else game["away"]
     append_if_ev(
         picks,
@@ -877,8 +918,9 @@ def add_moneyline_pick(
             "odd_melhor": odd,
             "bookmaker_melhor": quote_bookmaker(quote),
             "sample_size_hist": (home.games if side == "home" else away.games),
-            "warnings": [],
+            "warnings": ["component_disagreement_haircut"] if uncertainty["haircut"] > 0 else [],
             "prob_raw": raw_prob,
+            "uncertainty": uncertainty,
             "calibration": calibration,
             "lambda_diagnostics": lambda_diagnostics or {},
         },
@@ -911,8 +953,10 @@ def add_total_pick(
     market_odd = quote_consensus(quote) or odd
     other_market_odd = quote_consensus(other_quote) or other_odd
     vig_prob = no_vig_probability(market_odd, other_market_odd)
-    raw_prob = weighted({"hist": hist_prob, "sim": sim_prob, "vig": vig_prob}, PROB_OU_WEIGHTS)
-    prob, calibration = apply_market_calibration("totals", raw_prob)
+    components = {"hist": hist_prob, "sim": sim_prob, "vig": vig_prob}
+    raw_prob = weighted(components, PROB_OU_WEIGHTS)
+    uncertainty_prob, uncertainty = apply_component_disagreement_haircut(raw_prob, components, vig_prob)
+    prob, calibration = apply_market_calibration("totals", uncertainty_prob)
     append_if_ev(
         picks,
         game,
@@ -932,8 +976,9 @@ def add_total_pick(
             "odd_melhor": odd,
             "bookmaker_melhor": quote_bookmaker(quote),
             "sample_size_hist": sample_size_hist,
-            "warnings": warnings,
+            "warnings": [*warnings, *(["component_disagreement_haircut"] if uncertainty["haircut"] > 0 else [])],
             "prob_raw": raw_prob,
+            "uncertainty": uncertainty,
             "calibration": calibration,
             "lambda_diagnostics": lambda_diagnostics or {},
         },
@@ -1110,7 +1155,11 @@ def add_handicap_pick(
     market_odd = market_odd or odd
     other_market_odd = other_market_odd or other_odd
     vig_prob = no_vig_probability(market_odd, other_market_odd)
-    prob = weighted({"hist": hist_prob, "sim": sim_prob, "vig": vig_prob}, PROB_HC_WEIGHTS)
+    components = {"hist": hist_prob, "sim": sim_prob, "vig": vig_prob}
+    raw_prob = weighted(components, PROB_HC_WEIGHTS)
+    prob, uncertainty = apply_component_disagreement_haircut(raw_prob, components, vig_prob)
+    if uncertainty["haircut"] > 0:
+        warnings.append("component_disagreement_haircut")
     odd_valor = 1 / prob if prob > 0 else 0.0
     edge = (odd * prob - 1) * 100
     common_audit = {
@@ -1122,6 +1171,10 @@ def add_handicap_pick(
         "odd_melhor": odd,
         "bookmaker_melhor": bookmaker_melhor,
         "prob_final": prob,
+        "prob_raw": raw_prob,
+        "component_spread": uncertainty["component_spread"],
+        "uncertainty_haircut": uncertainty["haircut"],
+        "warnings": ";".join(warnings),
         "odd_justa": odd_valor,
         "edge": edge,
         "sample_size_hist": hist["sample_size_hist"],
@@ -1190,6 +1243,8 @@ def add_handicap_pick(
             "bookmaker_melhor": bookmaker_melhor,
             "sample_size_hist": hist["sample_size_hist"],
             "warnings": warnings,
+            "prob_raw": raw_prob,
+            "uncertainty": uncertainty,
         },
         min_prob=HANDICAP_MIN_PROB,
         max_prob=HANDICAP_MAX_PROB,
@@ -1237,6 +1292,7 @@ def append_if_ev(
     diagnostics = diagnostics or {}
     warnings = diagnostics.get("warnings") or []
     calibration = diagnostics.get("calibration") or {}
+    uncertainty = diagnostics.get("uncertainty") or {}
     lambda_diagnostics = diagnostics.get("lambda_diagnostics") or {}
     market_odd = parse_float(diagnostics.get("odd_consenso"))
     best_odd = parse_float(diagnostics.get("odd_melhor")) or odd
@@ -1246,6 +1302,8 @@ def append_if_ev(
         f" prob_sim={float(diagnostics.get('prob_sim', 0.0)):.4f};"
         f" prob_no_vig={float(diagnostics.get('prob_no_vig', 0.0)):.4f};"
         f" prob_raw={float(diagnostics.get('prob_raw', prob)):.4f};"
+        f" component_spread={float(uncertainty.get('component_spread', 0.0)):.4f};"
+        f" uncertainty_haircut={float(uncertainty.get('haircut', 0.0)):.4f};"
         f" odd_mercado_base={(market_odd or odd):.3f};"
         f" prob_final={prob:.4f}; sample_size_hist={int(diagnostics.get('sample_size_hist') or 0)};"
         f" calibracao={clean(calibration.get('status')) or 'identity'};"
@@ -1309,7 +1367,7 @@ def build_game_context(game: dict[str, Any], home: TeamStats, away: TeamStats, s
         home, away, league_runs
     )
     total_expected = expected_home + expected_away
-    delta_rpi = home.win_rate - away.win_rate
+    delta_temporal_win_rate = home.win_rate - away.win_rate
     home_record = season_record(home.current_rows)
     away_record = season_record(away.current_rows)
     home_rank = latest_value(home.current_rows, "Rank") or "-"
@@ -1324,10 +1382,10 @@ def build_game_context(game: dict[str, Any], home: TeamStats, away: TeamStats, s
     home_diff = home.avg_for - home.avg_against
     away_diff = away.avg_for - away.avg_against
     insight = "Confronto equilibrado"
-    if abs(delta_rpi) >= 0.080:
-        insight = f"Vantagem relevante para {game['home'] if delta_rpi > 0 else game['away']}"
-    elif abs(delta_rpi) >= 0.035:
-        insight = f"Leve vantagem para {game['home'] if delta_rpi > 0 else game['away']}"
+    if abs(delta_temporal_win_rate) >= 0.080:
+        insight = f"Vantagem relevante para {game['home'] if delta_temporal_win_rate > 0 else game['away']}"
+    elif abs(delta_temporal_win_rate) >= 0.035:
+        insight = f"Leve vantagem para {game['home'] if delta_temporal_win_rate > 0 else game['away']}"
 
     return "\n".join(
         [
@@ -1353,11 +1411,11 @@ def build_game_context(game: dict[str, Any], home: TeamStats, away: TeamStats, s
             "Streak:",
             f"   {game['home']} {format_streak(home)} | {game['away']} {format_streak(away)}",
             "",
-            "RPI:",
+            "Aproveitamento temporal ponderado:",
             f"   {game['home']} {home.win_rate:.3f} | {game['away']} {away.win_rate:.3f}",
-            f"   Delta RPI: {delta_rpi:.3f}",
+            f"   Delta de aproveitamento: {delta_temporal_win_rate:.3f}",
             "",
-            "Insights do Delta RPI:",
+            "Insight do aproveitamento temporal:",
             f"   {insight}",
             "Médias e Expectativas de Corridas",
             f"   {game['home']}: Marcadas = {home.avg_for:.2f} | Sofridas = {home.avg_against:.2f}",

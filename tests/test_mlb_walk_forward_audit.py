@@ -42,7 +42,7 @@ class MlbWalkForwardAuditTests(unittest.TestCase):
 
         self.assertEqual(len(materialized), 1)
         self.assertEqual(materialized[0]["resultado_real"], "GREEN")
-        self.assertEqual(materialized[0]["modelo_versao"], "MLB_V2_1_HANDICAP_NB_SHADOW")
+        self.assertEqual(materialized[0]["modelo_versao"], "MLB_V2_2_HANDICAP_NB_SHADOW")
         self.assertEqual(materialized[0]["score_distribution"], "Negative Binomial")
 
     def test_calibration_stays_inactive_without_minimum_temporal_sample(self) -> None:
