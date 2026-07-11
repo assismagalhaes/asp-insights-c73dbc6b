@@ -161,6 +161,7 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
             onChange={(e) => {
               setPlacar(e.target.value);
               setManual(null);
+              setRacePrimeiro(null);
             }}
             placeholder="ex: 1x7"
             autoFocus
