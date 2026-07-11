@@ -235,7 +235,16 @@ def load_notebook_module(league: str) -> types.SimpleNamespace:
         exec(compile(code, str(nb_path), 'exec'), ns)
     finally:
         os.chdir(old_cwd)
-    return types.SimpleNamespace(**ns)
+    module = types.SimpleNamespace(**ns)
+    module._notebook_globals = ns
+    return module
+
+
+def set_notebook_runtime_value(module: Any, name: str, value: Any) -> None:
+    setattr(module, name, value)
+    notebook_globals = getattr(module, '_notebook_globals', None)
+    if isinstance(notebook_globals, dict):
+        notebook_globals[name] = value
 
 
 def configure_wnba_data_access(module: Any) -> None:
@@ -282,7 +291,7 @@ def configure_wnba_data_access(module: Any) -> None:
         cache[key] = frame.reset_index(drop=True)
         return cache[key].copy()
 
-    module.carregar_dados_time = load_team
+    set_notebook_runtime_value(module, 'carregar_dados_time', load_team)
     module._wnba_data_access_cache = cache
 
 
@@ -349,8 +358,8 @@ def prepare_wnba_game_context(module: Any, row: pd.Series) -> None:
     module._wnba_dataframe_cache = {}
     module._wnba_expected_points_cache = {}
     current, previous = wnba_operational_seasons(module._wnba_prediction_cutoff)
-    module.TEMPORADA_ATUAL = current
-    module.TEMPORADA_PASSADA = previous
+    set_notebook_runtime_value(module, 'TEMPORADA_ATUAL', current)
+    set_notebook_runtime_value(module, 'TEMPORADA_PASSADA', previous)
     for team in (str(row.get('home_sigla') or ''), str(row.get('away_sigla') or '')):
         frame = module.carregar_dados_time(team, current, local=None, filtrar_ot=False)
         if frame.empty:
@@ -531,13 +540,13 @@ def update_model_periods(module: Any, league: str, games: pd.DataFrame) -> None:
         dt = datetime.now()
     if league == 'WNBA':
         current, previous = wnba_operational_seasons(dt.to_pydatetime() if hasattr(dt, 'to_pydatetime') else dt)
-        module.TEMPORADA_ATUAL = current
-        module.TEMPORADA_PASSADA = previous
+        set_notebook_runtime_value(module, 'TEMPORADA_ATUAL', current)
+        set_notebook_runtime_value(module, 'TEMPORADA_PASSADA', previous)
     else:
         current = module.nba_season_from_date(dt.to_pydatetime() if hasattr(dt, 'to_pydatetime') else dt)
         start_year = int(str(current).split('-')[0]) - 1
-        module.PERIODO_ATUAL = current
-        module.PERIODO_PASSADO = f'{start_year}-{(start_year + 1) % 100:02d}'
+        set_notebook_runtime_value(module, 'PERIODO_ATUAL', current)
+        set_notebook_runtime_value(module, 'PERIODO_PASSADO', f'{start_year}-{(start_year + 1) % 100:02d}')
 
 
 def capture_context(module: Any, res: dict, row: pd.Series, linhas_ou: list[float], hc_idxs: list[str]) -> str:

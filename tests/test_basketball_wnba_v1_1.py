@@ -135,6 +135,38 @@ class BasketballWnbaV11Tests(unittest.TestCase):
             result = module.carregar_dados_time("TOR", "2026", local="casa", filtrar_ot=False)
             self.assertEqual(result["pontos_time"].tolist(), [80])
 
+    def test_data_access_updates_notebook_function_globals(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            merged = base / "wnba" / "2026" / "merged"
+            merged.mkdir(parents=True)
+            pd.DataFrame([
+                {"Date": "2026-06-01", "Loc": "", "pontos_time": 80, "pontos_adversario": 75},
+                {"Date": "2026-06-10", "Loc": "", "pontos_time": 90, "pontos_adversario": 85},
+            ]).to_csv(merged / "dados_basquete_tor.csv", index=False)
+            notebook_globals: dict[str, object] = {}
+            exec(
+                "def carregar_dados_time(*args, **kwargs):\n"
+                "    return 'legacy'\n\n"
+                "def carregar_de_funcao_interna(*args, **kwargs):\n"
+                "    return carregar_dados_time(*args, **kwargs)\n",
+                notebook_globals,
+            )
+            module = SimpleNamespace(
+                HIST_DIR=base,
+                carregar_dados_time=notebook_globals["carregar_dados_time"],
+                carregar_de_funcao_interna=notebook_globals["carregar_de_funcao_interna"],
+                _notebook_globals=notebook_globals,
+                _read_csv_flex=lambda path: pd.read_csv(path),
+                normalizar_schema_wnba=lambda frame: frame,
+            )
+            runner.configure_wnba_data_access(module)
+            module._wnba_prediction_cutoff = datetime(2026, 6, 5)
+
+            result = module.carregar_de_funcao_interna("TOR", "2026", local="casa", filtrar_ot=False)
+
+            self.assertEqual(result["pontos_time"].tolist(), [80])
+
     def test_total_points_uses_real_rate_against_line_not_binary_expectation(self) -> None:
         module = FakeWnbaModule([
             {"pontos_time": 80, "pontos_adversario": 80},
