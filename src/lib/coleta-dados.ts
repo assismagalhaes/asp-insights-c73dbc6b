@@ -102,7 +102,7 @@ type ColetaQueryLike<T = unknown> = PromiseLike<QueryResultLike<T>> & {
 const coletaDb = supabase as unknown as {
   from: (table: string) => ColetaQueryLike;
 };
-const ODDS_INSERT_BATCH_SIZE = 50;
+const ODDS_INSERT_BATCH_SIZE = 15;
 const ODDS_JOGOS_LIST_COLUMNS = [
   "id",
   "coleta_id",
