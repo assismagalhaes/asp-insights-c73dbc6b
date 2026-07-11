@@ -2,6 +2,8 @@
 
 GoalMatrix v2.3 corrects fractional Kelly conversion to bankroll percentage units while preserving all existing exposure caps.
 
+GoalMatrix v2.4 adds market-specific consistency gates. O/U uses 60% total-goal consistency and 40% scored-goal consistency, requiring 45% per team and 50% on average. BTTS uses 30% total-goal consistency and 70% scored-goal consistency, requiring 50% per team and 55% on average. The BTTS probability floor is 54%, while its 5% minimum edge remains unchanged.
+
 ## Input contract (v2.1)
 
 - Recent signal: 10 matches across all venues and leagues, excluding the previous season.

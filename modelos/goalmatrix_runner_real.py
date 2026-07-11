@@ -37,7 +37,7 @@ output_dir = Path("Prognostico")
 
 # Nome comercial do modelo para identificação no Lovable.
 MODEL_NAME = "ASP GoalMatrix"
-MODEL_VERSION = "v2.3"
+MODEL_VERSION = "v2.4"
 
 # Modo de execução:
 #   prognostico = apenas jogos NS
@@ -91,12 +91,14 @@ n_sims = 10_000
 # Over/Under mantém corte mais aberto porque já tem filtro duro de custo de gol.
 # BTTS e Primeiro a Marcar exigem maior consistência por serem mercados mais voláteis.
 MIN_PROB_OU = 55
-MIN_PROB_BTTS = 56
+MIN_PROB_BTTS = 54
 MIN_PROB_FIRST = 58
 MIN_PROB_SEM_GOL = 60
 
 MIN_CV_OU = 50
+MIN_CV_OU_INDIVIDUAL = 45
 MIN_CV_BTTS = 55
+MIN_CV_BTTS_INDIVIDUAL = 50
 MIN_CV_FIRST = 60
 MIN_CV_SEM_GOL = 60
 
@@ -479,18 +481,30 @@ def build_dynamic_weights(merged: pd.DataFrame) -> pd.DataFrame:
     """
     merged = merged.copy()
 
-    cv_idx_home_20 = (
+    cv_total_home_20 = (
+        0.60 * merged["CV Média Gols Casa_20"] +
+        0.40 * merged["CV Média Gols Marcados Casa_20"]
+    )
+    cv_total_away_20 = (
+        0.60 * merged["CV Média Gols Visitante_20"] +
+        0.40 * merged["CV Média Gols Marcados Visitante_20"]
+    )
+    cv_btts_home_20 = (
         0.30 * merged["CV Média Gols Casa_20"] +
         0.70 * merged["CV Média Gols Marcados Casa_20"]
     )
-    cv_idx_away_20 = (
+    cv_btts_away_20 = (
         0.30 * merged["CV Média Gols Visitante_20"] +
         0.70 * merged["CV Média Gols Marcados Visitante_20"]
     )
 
-    merged["_cv_idx_home_20"] = cv_idx_home_20
-    merged["_cv_idx_away_20"] = cv_idx_away_20
-    merged["_cv_game"] = (cv_idx_home_20 + cv_idx_away_20) / 2.0
+    merged["_cv_total_home_20"] = cv_total_home_20
+    merged["_cv_total_away_20"] = cv_total_away_20
+    merged["_cv_btts_home_20"] = cv_btts_home_20
+    merged["_cv_btts_away_20"] = cv_btts_away_20
+    merged["_cv_idx_home_20"] = cv_btts_home_20
+    merged["_cv_idx_away_20"] = cv_btts_away_20
+    merged["_cv_game"] = (cv_btts_home_20 + cv_btts_away_20) / 2.0
 
     component_names = (
         "Média Gols Marcados Casa",
@@ -781,17 +795,27 @@ def _is_value_pick(
     return odd >= odd_valor * float(buffer) and edge >= float(min_edge)
 
 
-def _passes_cv_filter(row: pd.Series, min_cv: float) -> bool:
-    """Exige consistência mínima dos dois times para o mercado."""
+def _passes_cv_filter(
+    row: pd.Series,
+    min_cv: float,
+    cv_fields: tuple[str, str] = ("CV Gols Marcados Casa", "CV Gols Marcados Visitante"),
+    min_cv_individual: float | None = None,
+) -> bool:
+    """Valida o piso individual e a consistência média do confronto."""
     try:
-        cv_home = float(row.get("CV Gols Marcados Casa"))
-        cv_away = float(row.get("CV Gols Marcados Visitante"))
+        cv_home = float(row.get(cv_fields[0]))
+        cv_away = float(row.get(cv_fields[1]))
     except Exception:
         return False
 
     if not np.isfinite(cv_home) or not np.isfinite(cv_away):
         return False
-    return (cv_home >= float(min_cv)) and (cv_away >= float(min_cv))
+    individual_floor = float(min_cv if min_cv_individual is None else min_cv_individual)
+    return (
+        cv_home >= individual_floor
+        and cv_away >= individual_floor
+        and ((cv_home + cv_away) / 2.0) >= float(min_cv)
+    )
 
 
 def _market_thresholds(mercado: str, pick: str = "") -> tuple[float, float, float]:
@@ -817,6 +841,8 @@ def apply_value_filter(
     min_prob: float = MIN_PROB,
     min_cv: float | None = None,
     min_edge: float = 0.0,
+    cv_fields: tuple[str, str] = ("CV Gols Marcados Casa", "CV Gols Marcados Visitante"),
+    min_cv_individual: float | None = None,
 ) -> pd.DataFrame:
     """Aplica filtro de valor, faixa de odd, probabilidade mínima e CV mínimo do mercado."""
     base = base.copy()
@@ -829,7 +855,12 @@ def apply_value_filter(
             return False
         if min_cv is None:
             return True
-        return _passes_cv_filter(r, min_cv=min_cv)
+        return _passes_cv_filter(
+            r,
+            min_cv=min_cv,
+            cv_fields=cv_fields,
+            min_cv_individual=min_cv_individual,
+        )
 
     mask = base.apply(_row_ok, axis=1)
     base.loc[~mask, [prob_col, odd_col]] = np.nan
@@ -1175,6 +1206,18 @@ def _technical_context(row: pd.Series, mercado: str = "", pick: str = "", linha=
     away = str(row.get("Time Visitante", "") or "").strip()
     home_rank = _fmt_obs_num(row.get("Colocação Time Casa"), 0)
     away_rank = _fmt_obs_num(row.get("Colocação Time Visitante"), 0)
+    if mercado == "Over/Under Gols":
+        cv_label = "CV Index Total"
+        cv_home = row.get("CV Index Total Casa")
+        cv_away = row.get("CV Index Total Visitante")
+    elif mercado == "BTTS":
+        cv_label = "CV Index BTTS"
+        cv_home = row.get("CV Index BTTS Casa")
+        cv_away = row.get("CV Index BTTS Visitante")
+    else:
+        cv_label = "CV Gols Marcados"
+        cv_home = row.get("CV Gols Marcados Casa")
+        cv_away = row.get("CV Gols Marcados Visitante")
     lines = [
         f"Confronto: {home} ({home_rank}°) vs {away} ({away_rank}°)",
         _country_league(row),
@@ -1195,8 +1238,8 @@ def _technical_context(row: pd.Series, mercado: str = "", pick: str = "", linha=
         f"Média Gols Liga:               {_fmt_obs_num(row.get('Média Gols Liga'), 2)}",
         f"Odd Casa MO:                   {_fmt_obs_num(row.get('Odd Casa MO'), 2)}",
         f"Odd Visitante MO:              {_fmt_obs_num(row.get('Odd Visitante MO'), 2)}",
-        f"CV Gols Marcados Casa:         {_fmt_obs_num(row.get('CV Gols Marcados Casa'), 2)}%",
-        f"CV Gols Marcados Visitante:    {_fmt_obs_num(row.get('CV Gols Marcados Visitante'), 2)}%",
+        f"{cv_label} Casa:         {_fmt_obs_num(cv_home, 2)}%",
+        f"{cv_label} Visitante:    {_fmt_obs_num(cv_away, 2)}%",
         "--- OCORRÊNCIAS (HIST - MÉDIAS) ---",
         (
             "BTTS Sim/Não (avg):            "
@@ -1228,6 +1271,18 @@ def _technical_context(row: pd.Series, mercado: str = "", pick: str = "", linha=
 
 
 def _fmt_obs(row: pd.Series, mercado: str = "", pick: str = "", linha=None) -> str:
+    if mercado == "Over/Under Gols":
+        cv_label = "CV Total"
+        cv_home = row.get("CV Index Total Casa")
+        cv_away = row.get("CV Index Total Visitante")
+    elif mercado == "BTTS":
+        cv_label = "CV BTTS"
+        cv_home = row.get("CV Index BTTS Casa")
+        cv_away = row.get("CV Index BTTS Visitante")
+    else:
+        cv_label = "CV Marcados"
+        cv_home = row.get("CV Gols Marcados Casa")
+        cv_away = row.get("CV Gols Marcados Visitante")
     base_obs = (
         f"Média de Gols Marcados/Sofridos: Casa {_fmt_obs_num(row.get('Média Marcados Casa'), 2)}/"
         f"{_fmt_obs_num(row.get('Média Sofridos Casa'), 2)}; Visitante {_fmt_obs_num(row.get('Média Marcados Visitante'), 2)}/"
@@ -1236,8 +1291,8 @@ def _fmt_obs(row: pd.Series, mercado: str = "", pick: str = "", linha=None) -> s
         f"Visitante {_fmt_obs_num(row.get('Lambda Visitante'), 3)}; Total {_fmt_obs_num(row.get('Lambda Total'), 3)} | "
         f"Exp Gols Modelo: {_fmt_obs_num(row.get('Lambda Total'), 2)} | "
         f"Média Gols Liga: {_fmt_obs_num(row.get('Média Gols Liga'), 2)} | "
-        f"CV Times: Casa {_fmt_obs_num(row.get('CV Gols Marcados Casa'), 2)}%; "
-        f"Visitante {_fmt_obs_num(row.get('CV Gols Marcados Visitante'), 2)}%"
+        f"{cv_label}: Casa {_fmt_obs_num(cv_home, 2)}%; "
+        f"Visitante {_fmt_obs_num(cv_away, 2)}%"
     )
 
     extra = ""
@@ -1374,11 +1429,28 @@ def _add_lovable_row(rows: list[dict], row: pd.Series, mercado: str, pick: str, 
     min_prob, min_cv, min_edge = _market_thresholds(mercado, pick)
     if not _is_value_pick(prob, odd, min_prob=min_prob, min_edge=min_edge):
         return
-    if not _passes_cv_filter(row, min_cv=min_cv):
+    market_key = str(mercado).strip().lower()
+    if market_key == "over/under gols":
+        cv_fields = ("CV Index Total Casa", "CV Index Total Visitante")
+        min_cv_individual = MIN_CV_OU_INDIVIDUAL
+    elif market_key == "btts":
+        cv_fields = ("CV Index BTTS Casa", "CV Index BTTS Visitante")
+        min_cv_individual = MIN_CV_BTTS_INDIVIDUAL
+    else:
+        cv_fields = ("CV Gols Marcados Casa", "CV Gols Marcados Visitante")
+        min_cv_individual = None
+    if not _passes_cv_filter(
+        row,
+        min_cv=min_cv,
+        cv_fields=cv_fields,
+        min_cv_individual=min_cv_individual,
+    ):
         return
 
     prob = float(prob)
     odd = float(odd)
+    cv_home = float(row.get(cv_fields[0]))
+    cv_away = float(row.get(cv_fields[1]))
     odd_valor = 100.0 / prob
     edge = ((odd * prob / 100.0) - 1.0) * 100.0
     diagnostics = _pick_probability_diagnostics(row, mercado, pick, linha)
@@ -1407,6 +1479,9 @@ def _add_lovable_row(rows: list[dict], row: pd.Series, mercado: str, pick: str, 
         "odd_valor": round(odd_valor, 2),
         "probabilidade_final": round(prob, 2),
         "edge": round(edge, 2),
+        "cv_index_home": round(cv_home, 2),
+        "cv_index_away": round(cv_away, 2),
+        "cv_index_average": round((cv_home + cv_away) / 2.0, 2),
         "modelo_versao": MODEL_VERSION,
         "market_type": diagnostics.get("market_type"),
         "selection_side": diagnostics.get("selection_side"),
@@ -1540,7 +1615,8 @@ def build_lovable_export(base: pd.DataFrame) -> pd.DataFrame:
     cols = [
         "data", "hora", "esporte", "liga", "jogo", "mandante", "visitante",
         "mercado", "pick", "linha", "odd_ofertada", "odd_valor",
-        "probabilidade_final", "edge", "stake", "modelo_versao", "market_type", "selection_side",
+        "probabilidade_final", "edge", "cv_index_home", "cv_index_away", "cv_index_average",
+        "stake", "modelo_versao", "market_type", "selection_side",
         "selection_role", "market_conflict_status", "prob_hist", "prob_sim", "prob_no_vig",
         "prob_raw", "prob_pre_haircut", "haircut_pp", "component_spread_pp", "calibration_status",
         "observacoes", "dados_tecnicos", "contexto_adicional", "contexto_modelo",
@@ -1667,6 +1743,10 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
         "CV Gols Visitante": blend(merged, "CV Média Gols Visitante").round(2),
         "CV Gols Marcados Casa": blend(merged, "CV Média Gols Marcados Casa").round(2),
         "CV Gols Marcados Visitante": blend(merged, "CV Média Gols Marcados Visitante").round(2),
+        "CV Index Total Casa": merged["_cv_total_home_20"].round(2),
+        "CV Index Total Visitante": merged["_cv_total_away_20"].round(2),
+        "CV Index BTTS Casa": merged["_cv_btts_home_20"].round(2),
+        "CV Index BTTS Visitante": merged["_cv_btts_away_20"].round(2),
 
         "CV Index Casa": (blend(merged, "CV Média Gols Casa") * 0.30 + blend(merged, "CV Média Gols Marcados Casa") * 0.70).round(2),
         "CV Index Visitante": (blend(merged, "CV Média Gols Visitante") * 0.30 + blend(merged, "CV Média Gols Marcados Visitante") * 0.70).round(2),
@@ -1786,10 +1866,20 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
         base[f"OU {t} Conflict"] = np.where(controls["conflict"], "CONFLITO_FORTE_COM_MERCADO", "ALINHADO")
         base[f"OU {t} Calibration"] = str(controls["calibration"].get("status"))
 
-        base = apply_value_filter(base, prob_o_col, odd_o_col, min_prob=MIN_PROB_OU, min_cv=MIN_CV_OU, min_edge=MIN_EDGE_OU)
+        base = apply_value_filter(
+            base, prob_o_col, odd_o_col,
+            min_prob=MIN_PROB_OU, min_cv=MIN_CV_OU, min_edge=MIN_EDGE_OU,
+            cv_fields=("CV Index Total Casa", "CV Index Total Visitante"),
+            min_cv_individual=MIN_CV_OU_INDIVIDUAL,
+        )
         base = add_ou_goal_cost_and_filter(base, prob_o_col, odd_o_col, t, "Over")
 
-        base = apply_value_filter(base, prob_u_col, odd_u_col, min_prob=MIN_PROB_OU, min_cv=MIN_CV_OU, min_edge=MIN_EDGE_OU)
+        base = apply_value_filter(
+            base, prob_u_col, odd_u_col,
+            min_prob=MIN_PROB_OU, min_cv=MIN_CV_OU, min_edge=MIN_EDGE_OU,
+            cv_fields=("CV Index Total Casa", "CV Index Total Visitante"),
+            min_cv_individual=MIN_CV_OU_INDIVIDUAL,
+        )
         base = add_ou_goal_cost_and_filter(base, prob_u_col, odd_u_col, t, "Under")
 
     # ------------------------------------------------------------
@@ -1831,8 +1921,18 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
 
     base = add_btts_cost_indicators(base)
 
-    base = apply_value_filter(base, "BTTS Sim prob", "Odd BTTS Sim", min_prob=MIN_PROB_BTTS, min_cv=MIN_CV_BTTS, min_edge=MIN_EDGE_BTTS)
-    base = apply_value_filter(base, "BTTS Não prob", "Odd BTTS Não", min_prob=MIN_PROB_BTTS, min_cv=MIN_CV_BTTS, min_edge=MIN_EDGE_BTTS)
+    base = apply_value_filter(
+        base, "BTTS Sim prob", "Odd BTTS Sim",
+        min_prob=MIN_PROB_BTTS, min_cv=MIN_CV_BTTS, min_edge=MIN_EDGE_BTTS,
+        cv_fields=("CV Index BTTS Casa", "CV Index BTTS Visitante"),
+        min_cv_individual=MIN_CV_BTTS_INDIVIDUAL,
+    )
+    base = apply_value_filter(
+        base, "BTTS Não prob", "Odd BTTS Não",
+        min_prob=MIN_PROB_BTTS, min_cv=MIN_CV_BTTS, min_edge=MIN_EDGE_BTTS,
+        cv_fields=("CV Index BTTS Casa", "CV Index BTTS Visitante"),
+        min_cv_individual=MIN_CV_BTTS_INDIVIDUAL,
+    )
 
     # ------------------------------------------------------------
     # 10) Primeiro a Marcar (Casa/Visitante/Sem Gol) 3-way
@@ -1962,8 +2062,10 @@ def print_gols_prognostics(base: pd.DataFrame, status_filter=None):
     print("Utilize o INPUT ULTRA RÁPIDO — CONFIRMAÇÃO (GOLS & CANTOS) v2 para confirmação do prognóstico\n")
     print("=== PROGNÓSTICOS PARA GOLS ===\n")
     print(
-        f"Filtros por mercado: OU prob >= {MIN_PROB_OU}% / CV >= {MIN_CV_OU}% | "
-        f"BTTS prob >= {MIN_PROB_BTTS}% / CV >= {MIN_CV_BTTS}% | "
+        f"Filtros por mercado: OU prob >= {MIN_PROB_OU}% / CV individual >= {MIN_CV_OU_INDIVIDUAL}% "
+        f"e CV médio >= {MIN_CV_OU}% | "
+        f"BTTS prob >= {MIN_PROB_BTTS}% / CV individual >= {MIN_CV_BTTS_INDIVIDUAL}% "
+        f"e CV médio >= {MIN_CV_BTTS}% | "
         f"1º Gol prob >= {MIN_PROB_FIRST}% / CV >= {MIN_CV_FIRST}% | "
         f"Sem Gol prob >= {MIN_PROB_SEM_GOL}% / CV >= {MIN_CV_SEM_GOL}%\n"
         f"Odd entre {MIN_ODD:.2f} e {MAX_ODD:.2f} | buffer valor {VALUE_BUFFER:.2f} | "

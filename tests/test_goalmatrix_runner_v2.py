@@ -55,6 +55,57 @@ class GoalMatrixRunnerV2Tests(unittest.TestCase):
         result = runner.blend(frame, "Metric")
         self.assertAlmostEqual(result.iloc[0], 0.4 * 3.0 + 0.6 * 2.0)
 
+    def test_market_cv_indices_use_total_for_ou_and_scored_for_btts(self) -> None:
+        row = {
+            "CV Média Gols Casa_20": 60.0,
+            "CV Média Gols Marcados Casa_20": 40.0,
+            "CV Média Gols Visitante_20": 50.0,
+            "CV Média Gols Marcados Visitante_20": 70.0,
+            "Número Jogos Coletados Casa_10": 10.0,
+            "Número Jogos Coletados Visitante_10": 10.0,
+            "Número Jogos Coletados Casa_20": 20.0,
+            "Número Jogos Coletados Visitante_20": 20.0,
+        }
+        for name in (
+            "Média Gols Marcados Casa", "Média Gols Sofridos Casa",
+            "Média Gols Marcados Visitante", "Média Gols Sofridos Visitante",
+        ):
+            row[f"{name}_10"] = 2.0
+            row[f"{name}_20"] = 2.0
+        result = runner.build_dynamic_weights(pd.DataFrame([row]))
+        self.assertEqual(result.loc[0, "_cv_total_home_20"], 52.0)
+        self.assertEqual(result.loc[0, "_cv_btts_home_20"], 46.0)
+        self.assertEqual(result.loc[0, "_cv_total_away_20"], 58.0)
+        self.assertEqual(result.loc[0, "_cv_btts_away_20"], 64.0)
+
+    def test_ou_cv_filter_accepts_individual_floor_and_average(self) -> None:
+        row = pd.Series({"home": 48.0, "away": 52.0})
+        self.assertTrue(runner._passes_cv_filter(
+            row,
+            min_cv=50.0,
+            min_cv_individual=45.0,
+            cv_fields=("home", "away"),
+        ))
+
+    def test_btts_cv_filter_remains_more_conservative(self) -> None:
+        row = pd.Series({"home": 50.0, "away": 60.0})
+        self.assertTrue(runner._passes_cv_filter(
+            row,
+            min_cv=55.0,
+            min_cv_individual=50.0,
+            cv_fields=("home", "away"),
+        ))
+        row["home"] = 49.0
+        self.assertFalse(runner._passes_cv_filter(
+            row,
+            min_cv=55.0,
+            min_cv_individual=50.0,
+            cv_fields=("home", "away"),
+        ))
+
+    def test_btts_probability_floor_is_compatible_with_edge_gate(self) -> None:
+        self.assertEqual(runner.MIN_PROB_BTTS, 54)
+
     def test_partial_samples_reduce_feature_reliability(self) -> None:
         row = {
             "CV Média Gols Casa_20": 60.0,
