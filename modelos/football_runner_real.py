@@ -568,6 +568,8 @@ def _overconfidence_decision(market_type: str, row: pd.Series, prob_final_pct: f
     )
 
     warnings.append("HIGH_PROBABILITY_REVIEW_FOOTBALL_V1_1")
+    if "LOW_SAMPLE" in warnings:
+        return "LOW_SAMPLE_HIGH_PROBABILITY_REVIEW_REQUIRED"
     if naturally_high:
         return None
 

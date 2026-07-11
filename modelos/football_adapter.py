@@ -190,7 +190,7 @@ def adicionar_handicaps_asiaticos(row, handicap_items, jogo):
             if jdx in used or away_item["side"] != "away":
                 continue
 
-            if abs(float(away_item["line"]) - float(home_item["line"])) < 1e-9:
+            if abs(float(away_item["line"]) + float(home_item["line"])) < 1e-9:
                 match_idx = jdx
                 break
 

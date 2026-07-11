@@ -270,6 +270,24 @@ RPI Other FC
         self.assertIsNotNone(selected)
         self.assertIn("HIGH_PROBABILITY_REVIEW_FOOTBALL_V1_1", selected["observacoes"])
 
+    def test_low_sample_high_probability_is_blocked_for_review(self):
+        row = output_row_with_core_debug(
+            mercado="Total de Gols",
+            pick="Under 2.5 gols",
+            linha=2.5,
+            odd_ofertada=1.60,
+            probabilidade_final=72.0,
+        )
+        row["observacoes"] = row["observacoes"].replace("sample_home=24", "sample_home=8")
+
+        selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
+
+        self.assertIsNone(selected)
+        self.assertEqual(
+            discarded["motivo_descarte_v1_1"],
+            "LOW_SAMPLE_HIGH_PROBABILITY_REVIEW_REQUIRED",
+        )
+
     def test_inconsistent_double_chance_is_blocked(self):
         row = output_row(
             mercado="Dupla Chance",
@@ -596,7 +614,7 @@ RPI Other FC
         for line in (0.0, 0.25):
             rows.extend([
                 {**base, "pick": "Home FC", "linha": line, "odd": 1.95},
-                {**base, "pick": "Away FC", "linha": line, "odd": 1.95},
+                {**base, "pick": "Away FC", "linha": -line, "odd": 1.95},
             ])
         with tempfile.TemporaryDirectory() as tmp:
             csv_path = Path(tmp) / "coleta.csv"
@@ -610,6 +628,30 @@ RPI Other FC
         }
         self.assertIn(0.0, home_lines)
         self.assertIn(0.25, home_lines)
+
+    def test_adapter_pairs_opposite_handicap_lines_not_same_signed_lines(self):
+        base = {
+            "data": "11/07/2026", "hora": "12:30", "esporte": "Football",
+            "liga": "Sweden - Allsvenskan", "country": "Sweden",
+            "jogo": "Orgryte vs Hacken", "mandante": "Orgryte", "visitante": "Hacken",
+            "mercado": "Handicap Asiatico", "bookmaker": "book", "fonte": "source",
+        }
+        rows = [
+            {**base, "pick": "Orgryte +1.5", "linha": 1.5, "odd": 1.58, "odd_mediana": 1.55},
+            {**base, "pick": "Hacken -1.5", "linha": -1.5, "odd": 2.37, "odd_mediana": 2.28},
+            {**base, "pick": "Orgryte -1.5", "linha": -1.5, "odd": 9.40, "odd_mediana": 9.40},
+            {**base, "pick": "Hacken +1.5", "linha": 1.5, "odd": 1.01, "odd_mediana": 1.01},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_path = Path(tmp) / "coleta.csv"
+            wide_path = Path(tmp) / "wide.csv"
+            pd.DataFrame(rows).to_csv(csv_path, index=False)
+            wide = football_adapter.converter_csv_longo_para_wide(csv_path, wide_path)
+
+        converted = wide.iloc[0]
+        self.assertEqual(float(converted["odds_Asian_handicap_Full_Time_Linha1_HANDICAP"]), 1.5)
+        self.assertEqual(float(converted["odds_Asian_handicap_Full_Time_Linha1_Opp_HANDICAP"]), -1.5)
+        self.assertEqual(float(converted["odds_Asian_handicap_Full_Time_Linha1_Opp_Odd_MEDIANA"]), 2.28)
 
     def test_adapter_preserves_median_and_best_odds_columns(self):
         with tempfile.TemporaryDirectory() as tmp:
