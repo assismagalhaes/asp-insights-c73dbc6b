@@ -74,6 +74,11 @@ interface ModeloPrognostico {
   probabilidade_final: number;
   edge: number;
   stake?: number | null;
+  selection_role?: string | null;
+  required_edge?: number | null;
+  edge_referencial?: number | null;
+  odd_minima_publicacao?: number | null;
+  requires_executable_odd?: boolean;
   observacoes?: string | null;
   dados_tecnicos?: string | null;
   contexto_adicional?: string | null;
@@ -310,11 +315,7 @@ function ModelosPreditivosPage() {
             {packballMode ? (
               <>
                 <PackballFileInput
-                  label={
-                    isPackballModel(modelo)
-                      ? "PackBall 10j gerais"
-                      : "Planilha PackBall 5j"
-                  }
+                  label={isPackballModel(modelo) ? "PackBall 10j gerais" : "Planilha PackBall 5j"}
                   file={packballFile5}
                   onFile={setPackballFile5}
                 />
@@ -442,6 +443,7 @@ function ModelosPreditivosPage() {
                   <TableHead>Visitante</TableHead>
                   <TableHead>Mercado</TableHead>
                   <TableHead>Pick</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead>Linha</TableHead>
                   <TableHead className="text-right">Odd</TableHead>
                   <TableHead className="text-right">Odd ofertada</TableHead>
@@ -466,6 +468,13 @@ function ModelosPreditivosPage() {
                     <TableCell>{p.visitante ?? "-"}</TableCell>
                     <TableCell>{p.mercado}</TableCell>
                     <TableCell>{p.pick}</TableCell>
+                    <TableCell>
+                      {p.selection_role === "CANDIDATO_BACK" ? (
+                        <Badge variant="outline">CANDIDATO BACK</Badge>
+                      ) : (
+                        (p.selection_role ?? "-")
+                      )}
+                    </TableCell>
                     <TableCell className="font-mono text-xs">{p.linha ?? "-"}</TableCell>
                     <TableCell className="text-right font-mono">
                       {formatOptionalNum(p.odd)}
@@ -488,7 +497,7 @@ function ModelosPreditivosPage() {
                 ))}
                 {!prognosticos.length && (
                   <TableRow>
-                    <TableCell colSpan={17} className="py-12 text-center text-muted-foreground">
+                    <TableCell colSpan={18} className="py-12 text-center text-muted-foreground">
                       {resultado
                         ? "Nenhuma oportunidade EV+ encontrada para esta coleta."
                         : "Nenhum modelo executado ainda."}
@@ -562,7 +571,9 @@ function Info({ label, value }: { label: string; value: string | number }) {
 function isPackballModel(
   modelo: ModeloDisponivel,
 ): modelo is "ASP GoalMatrix" | "ASP CornerMatrix" | "ASP BackMatrix" {
-  return modelo === "ASP GoalMatrix" || modelo === "ASP CornerMatrix" || modelo === "ASP BackMatrix";
+  return (
+    modelo === "ASP GoalMatrix" || modelo === "ASP CornerMatrix" || modelo === "ASP BackMatrix"
+  );
 }
 
 function inferPackballDate(...names: string[]) {
@@ -629,6 +640,11 @@ function mapModeloPrognostico(row: Record<string, unknown>): ModeloPrognostico {
     probabilidade_final: toNumber(row.probabilidade_final) ?? toNumber(row.probabilidade) ?? 0,
     edge: toNumber(row.edge) ?? 0,
     stake: toNumber(row.stake),
+    selection_role: row.selection_role ? String(row.selection_role) : null,
+    required_edge: toNumber(row.required_edge),
+    edge_referencial: toNumber(row.edge_referencial ?? row.edge),
+    odd_minima_publicacao: toNumber(row.odd_minima_publicacao),
+    requires_executable_odd: Boolean(row.requires_executable_odd),
     observacoes: row.observacoes ? String(row.observacoes) : null,
     dados_tecnicos: row.dados_tecnicos ? String(row.dados_tecnicos) : null,
     contexto_adicional: row.contexto_adicional ? String(row.contexto_adicional) : null,
@@ -678,6 +694,10 @@ function toPrognosticoInsert(p: ModeloPrognostico, resultado: ModeloResultado | 
     stake: 0,
     observacoes: p.observacoes ?? null,
     dados_tecnicos: dadosTecnicos,
+    contexto_modelo: contextoModelo,
+    arquivo_contexto: p.arquivo_contexto ?? resultado?.arquivo_contexto ?? null,
+    origem_modelo: resultado?.modelo ?? p.mercado,
+    job_id_coleta: resultado?.job_id ?? resultado?.input_id ?? null,
     status_validacao: "PENDENTE",
     status_publicacao: "NAO_PUBLICADO",
     resultado: "PENDENTE",
@@ -685,14 +705,7 @@ function toPrognosticoInsert(p: ModeloPrognostico, resultado: ModeloResultado | 
 }
 
 function stripUnsupportedPrognosticoColumns(row: Record<string, unknown>) {
-  const {
-    contexto_modelo: _contextoModelo,
-    arquivo_contexto: _arquivoContexto,
-    origem_modelo: _origemModelo,
-    job_id_coleta: _jobIdColeta,
-    contexto_adicional: _contextoAdicional,
-    ...safeRow
-  } = row;
+  const { contexto_adicional: _contextoAdicional, ...safeRow } = row;
   return safeRow;
 }
 

@@ -2,7 +2,7 @@
 
 ## Objective
 
-Back a clear home or away favorite only when the offered price remains favorable after a three-way no-vig market anchor, an overdispersed goal simulation and independent PackBall performance signals.
+Identify qualified home or away favorite candidates from PackBall pre-match statistics, then require an executable bookmaker odd in Critical Validation before publication and bankroll allocation.
 
 ## Input contract
 
@@ -10,6 +10,7 @@ Back a clear home or away favorite only when the offered price remains favorable
 - Structural file: exactly 20 home-at-home / away-at-away matches per team, all leagues, allowing the previous season.
 - Forecast mode accepts `NS` (`NF` is normalized to `NS`); diagnostic backtest mode accepts `FT`.
 - The 83-column order, input hashes, generation timestamp and filenames are persisted per run.
+- PackBall statistics remain frozen after kickoff. The imported odds can be averages from one to five bookmakers, while the bookmaker count is unavailable per match.
 - PackBall favorite codes are: `1` home favorite, `2` away favorite, `3` super home favorite, `4` super away favorite and `5` slight favorite. For code `5`, the side is derived from the lower valid odd. Empty values mean no PackBall favorite signal and are rejected.
 
 ## Probability model
@@ -22,7 +23,7 @@ The final favorite probability combines:
 
 Recent form receives 35-45% and the 20-match venue profile receives 55-65%. Component disagreement above 15 percentage points is haircutted toward market; 22 points marks a strong conflict.
 
-## Publication controls
+## Candidate controls
 
 - Super favorite: odd from 1.05 to 1.30, minimum probability 80% and base edge 3%.
 - Standard favorite: odd from 1.30 to 2.00, minimum probability 57% and base edge 4%.
@@ -31,15 +32,23 @@ Recent form receives 35-45% and the 20-match venue profile receives 55-65%. Comp
 - CV scored-goal floor of 40% per team and 47.5% on average.
 - At least 0.20 decimal-odd separation from the opposing team.
 - Missing PackBall signal, invalid paired odds and a side disagreement are rejected.
-- Fractional Kelly is 10%, capped at 1.00u per game; strong market conflict is capped at 0.25u and marked as reserve.
+- Passing probability and CV creates a `CANDIDATO_BACK`, even when the PackBall reference edge is negative.
+
+## Validation and publication
+
+- PackBall average odds are stored as market reference, not as an executable offer.
+- Critical Validation requires an explicitly entered executable odd.
+- The adjusted edge must meet the candidate-specific minimum recorded by the runner.
+- Fractional Kelly is recalculated from the executable odd at 10%, capped at 1.00u per game; strong market conflict is capped at 0.25u.
+- A candidate with no executable odd, insufficient adjusted edge or Kelly below 0.25u cannot be confirmed or published.
 
 ## Backtest limitation
 
-Historical `FT` rows from a current export are diagnostic only because their features may have been refreshed after kickoff. Official calibration requires immutable pre-kickoff snapshots. After labeling `outcome`, run:
+Historical `FT` rows are valid for retrospective discrimination tests because PackBall statistics remain frozen. ROI calculated from PackBall average odds is still theoretical because the average may combine one to five bookmakers and is not guaranteed to be executable at one bookmaker.
 
-On the supplied files, 112 settled standard favorites with valid paired odds had a 58.0% win rate. The uncalibrated v1 score improved diagnostic ranking AUC from 0.540 for market no-vig to 0.580, but remained underconfident and did not improve Brier Score (0.2434 versus 0.2430). These figures justify keeping market as the dominant component and prohibit activating calibration from this retrospective export.
+On the July 4-10 supplied files, 999 matches crossed the exact 10/20 windows. Probability and CV qualified 30 candidates: 23 won (76.7%), for a theoretical flat-stake result of +3.87u at the PackBall average odds. No candidate met the original reference-edge gate, which motivated the two-stage executable-odd workflow.
 
-Code `5` slight favorites won 24 of 43 settled non-draw matches (55.8%) at a median favorite odd of 2.255 in the supplied export. This is supporting evidence for a separate conservative publication band, not calibration evidence, because the same post-kickoff refresh caveat applies.
+Code `5` slight favorites won 24 of 43 settled non-draw matches (55.8%) at a median favorite odd of 2.255 in the supplied export. This supports retaining a separate conservative candidate band.
 
 After labeling genuine pre-kickoff snapshots, run:
 

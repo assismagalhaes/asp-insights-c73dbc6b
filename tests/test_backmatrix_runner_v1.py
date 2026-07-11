@@ -89,6 +89,48 @@ class BackMatrixRunnerV1Tests(unittest.TestCase):
         self.assertEqual(runner.kelly_stake_units(65.0, 1.80), runner.MAX_PICK_UNITS)
         self.assertEqual(runner.kelly_stake_units(65.0, 1.80, conflict=True), runner.CONFLICT_MAX_UNITS)
 
+    def test_probability_candidate_waits_for_executable_odd(self) -> None:
+        row = pd.Series({
+            "Odds Pareadas": True,
+            "Odd Casa": 1.40,
+            "Odd Empate": 4.00,
+            "Odd Visitante": 6.00,
+            "Favoritismo PackBall": 1,
+            "CV Casa": 50.0,
+            "CV Visitante": 50.0,
+            "Prob Final Casa": 60.0,
+            "Spread Casa": 16.0,
+            "Conflict Casa": False,
+            "NoVig Casa": 65.0,
+            "Poisson Casa": 55.0,
+            "Empirica Casa": 52.0,
+            "Prob Raw Casa": 58.0,
+            "Haircut Casa": 2.0,
+            "Time Casa": "A",
+            "Time Visitante": "B",
+            "Data/Hora": pd.Timestamp("2026-07-11 12:00:00"),
+            "Pais": "BR",
+            "Liga": "Teste",
+            "Overround": 0.10,
+            "Lambda Casa": 1.8,
+            "Lambda Visitante": 0.8,
+            "NoVig Empate": 20.0,
+            "NoVig Visitante": 15.0,
+            "Poisson Empate": 25.0,
+            "Poisson Visitante": 20.0,
+            "Empirica Empate": 25.0,
+            "Empirica Visitante": 23.0,
+            "w10": 0.4,
+            "w20": 0.6,
+        })
+        prediction = runner._build_prediction(row)
+        self.assertIsNotNone(prediction)
+        self.assertEqual(prediction["selection_role"], "CANDIDATO_BACK")
+        self.assertTrue(prediction["requires_executable_odd"])
+        self.assertEqual(prediction["stake"], 0.0)
+        self.assertLess(prediction["edge_referencial"], 0.0)
+        self.assertGreater(prediction["odd_minima_publicacao"], prediction["odd_ofertada"])
+
     def test_walk_forward_snapshot_starts_unlabeled(self) -> None:
         previous = dict(runner.RUN_PROVENANCE)
         try:

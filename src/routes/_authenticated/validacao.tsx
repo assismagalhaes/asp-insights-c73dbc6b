@@ -63,6 +63,11 @@ import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
+  calculateBackMatrixKelly,
+  getBackMatrixValidationRequirements,
+  isBackMatrixPrognostico,
+} from "@/lib/backmatrix-validation";
+import {
   buildPreAiShortlist,
   calculatePreliminaryOpportunityScore,
   DEFAULT_PRE_AI_SHORTLIST_LIMIT,
@@ -338,7 +343,18 @@ function getOnlineAlertas(parecer: string): string[] {
   return Array.from(new Set(alertas));
 }
 
-function autoCheck(p: Prognostico, edgeFinal: number) {
+function autoCheck(p: Prognostico, edgeFinal: number | null, executableOdd: number | null) {
+  const backMatrix = getBackMatrixValidationRequirements(p);
+  if (backMatrix) {
+    if (!(executableOdd && executableOdd > 1))
+      return { auto: "ALERTA" as const, reason: "Informe a odd executavel antes da analise" };
+    if (edgeFinal == null || edgeFinal < backMatrix.requiredEdge)
+      return {
+        auto: "PULAR" as const,
+        reason: `Odd executavel abaixo do edge minimo de ${backMatrix.requiredEdge.toFixed(2)}%`,
+      };
+    return { auto: "DESTAQUE" as const, reason: "Odd executavel aprovada para validacao" };
+  }
   if (p.odd_ofertada < p.odd_valor)
     return { auto: "PULAR" as const, reason: "Odd ofertada menor que odd de valor" };
   if (edgeFinal < 0) return { auto: "PULAR" as const, reason: "Edge negativo" };
@@ -548,6 +564,7 @@ function Validacao() {
   const getOddAjustadaNum = (p: Prognostico): number | null => {
     const raw = oddsAj[p.id];
     if (raw !== undefined && raw !== "") return Number(raw);
+    if (isBackMatrixPrognostico(p)) return p.odd_ajustada ?? null;
     return p.odd_ajustada ?? p.odd_ofertada;
   };
 
@@ -576,6 +593,19 @@ function Validacao() {
 
   const rodarIA = async (g: ValidationGroup, modo: "local" | "online") => {
     const p = g.opcoes[0];
+    const backMatrix = getBackMatrixValidationRequirements(p);
+    const executableOdd = getOddAjustadaNum(p);
+    const executableEdge = getEdgeAjustado(p);
+    if (backMatrix && (!(executableOdd && executableOdd > 1) || executableEdge == null)) {
+      toast.error("Informe a odd executavel do BackMatrix antes de rodar a IA.");
+      return;
+    }
+    if (backMatrix && executableEdge! < backMatrix.requiredEdge) {
+      toast.error(
+        `A odd executavel precisa gerar edge minimo de ${backMatrix.requiredEdge.toFixed(2)}%.`,
+      );
+      return;
+    }
     setIaLoading((s) => ({ ...s, [g.key]: modo }));
     try {
       const contextoAnalise = getContextoGrupo(g);
@@ -796,6 +826,31 @@ function Validacao() {
       return;
     }
     if (decisao === "CONFIRMA" && selected) {
+      const backMatrix = getBackMatrixValidationRequirements(selected);
+      if (backMatrix) {
+        const explicitOdd = getOddAjustadaNum(selected);
+        const adjustedEdge = getEdgeAjustado(selected);
+        if (!(explicitOdd && explicitOdd > 1)) {
+          toast.error("Informe a odd executavel do BackMatrix antes de confirmar.");
+          return;
+        }
+        if (adjustedEdge == null || adjustedEdge < backMatrix.requiredEdge) {
+          toast.error(
+            `Odd insuficiente: o BackMatrix exige edge minimo de ${backMatrix.requiredEdge.toFixed(2)}% ` +
+              `(odd minima ${backMatrix.minimumExecutableOdd.toFixed(2)}).`,
+          );
+          return;
+        }
+        const kelly = calculateBackMatrixKelly(
+          selected.probabilidade_final,
+          explicitOdd,
+          backMatrix.strongMarketConflict,
+        );
+        if (kelly < 0.25) {
+          toast.error("A odd executavel nao produz Kelly conservador minimo de 0.25u.");
+          return;
+        }
+      }
       const ia = iaResults[g.key];
       if (ia) {
         const oddAtual = getOddAjustadaNum(selected);
@@ -817,8 +872,18 @@ function Validacao() {
       const contextoAnalise = getContextoGrupo(g).trim();
       const ia = iaResults[g.key];
       const retained = decisao === "CONFIRMA" ? selected! : getBestPularOption(g);
+      const retainedBackMatrix = getBackMatrixValidationRequirements(retained);
+      const retainedOdd = getOddAjustadaNum(retained);
       const retainedStake =
-        decisao === "CONFIRMA" ? Number(stakes[retained.id] ?? retained.stake ?? 0) : 1;
+        decisao === "CONFIRMA"
+          ? retainedBackMatrix && retainedOdd
+            ? calculateBackMatrixKelly(
+                retained.probabilidade_final,
+                retainedOdd,
+                retainedBackMatrix.strongMarketConflict,
+              )
+            : Number(stakes[retained.id] ?? retained.stake ?? 0)
+          : 1;
       const parecerBase = parecer || "Grupo recusado na validação crítica agrupada.";
       if (contextoAnalise) {
         const groupIds = new Set(g.opcoes.map((option) => option.id));
@@ -858,8 +923,6 @@ function Validacao() {
           Segunda camada analítica dos prognósticos gerados pelos modelos.
         </p>
       </div>
-
-
 
       {/* Filtros */}
       <div className="rounded-lg border border-border bg-card p-3">
@@ -949,7 +1012,16 @@ function Validacao() {
           const p = getSelectedOption(g) ?? g.opcoes[0];
           const oddAj = getOddAjustadaNum(p);
           const edgeAj = getEdgeAjustado(p);
-          const check = autoCheck(p, edgeAj ?? p.edge);
+          const backMatrixRequirements = getBackMatrixValidationRequirements(p);
+          const backMatrixKelly =
+            backMatrixRequirements && oddAj
+              ? calculateBackMatrixKelly(
+                  p.probabilidade_final,
+                  oddAj,
+                  backMatrixRequirements.strongMarketConflict,
+                )
+              : 0;
+          const check = autoCheck(p, edgeAj, oddAj);
           const marketLabel = getOpportunityMarketLabel(p);
           const pickLabel = getOpportunityPickLabel(p);
           const sourceLabel = getOpportunitySourceLabel(p);
@@ -1019,7 +1091,7 @@ function Validacao() {
                   {g.opcoes.map((opcao) => {
                     const opcaoOdd = getOddAjustadaNum(opcao);
                     const opcaoEdge = getEdgeAjustado(opcao);
-                    const opcaoCheck = autoCheck(opcao, opcaoEdge ?? opcao.edge);
+                    const opcaoCheck = autoCheck(opcao, opcaoEdge, opcaoOdd);
                     const opcaoMarketLabel = getOpportunityMarketLabel(opcao);
                     const opcaoPickLabel = getOpportunityPickLabel(opcao);
                     return (
@@ -1060,13 +1132,13 @@ function Validacao() {
                           </div>
                           <div className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-6">
                             <span>
-                              Odd ofertada:{" "}
+                              {isBackMatrixPrognostico(opcao) ? "Odd referencia:" : "Odd ofertada:"}{" "}
                               <strong className="font-mono">{opcao.odd_ofertada.toFixed(2)}</strong>
                             </span>
                             <span>
                               Odd aj.:{" "}
                               <strong className="font-mono">
-                                {(opcaoOdd ?? opcao.odd_ofertada).toFixed(2)}
+                                {opcaoOdd != null ? opcaoOdd.toFixed(2) : "-"}
                               </strong>
                             </span>
                             <span>
@@ -1106,9 +1178,9 @@ function Validacao() {
                     Dados do prognóstico
                   </div>
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                    Odd em uso:{" "}
+                    {backMatrixRequirements ? "Odd executavel:" : "Odd em uso:"}{" "}
                     <span className="font-mono font-semibold text-foreground">
-                      {(oddAj ?? p.odd_ofertada).toFixed(2)}
+                      {oddAj != null ? oddAj.toFixed(2) : "aguardando"}
                     </span>
                   </div>
                 </div>
@@ -1119,7 +1191,10 @@ function Validacao() {
                   {mostrarLinha && <KV label="Linha" value={p.linha ?? "-"} />}
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-8">
-                  <Metric label="Odd ofertada" value={p.odd_ofertada.toFixed(2)} />
+                  <Metric
+                    label={backMatrixRequirements ? "Odd referencia PackBall" : "Odd ofertada"}
+                    value={p.odd_ofertada.toFixed(2)}
+                  />
                   <div>
                     <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                       Odd ajustada
@@ -1129,7 +1204,12 @@ function Validacao() {
                       step="0.01"
                       placeholder={p.odd_ofertada.toFixed(2)}
                       value={
-                        oddsAj[p.id] ?? (p.odd_ajustada != null ? p.odd_ajustada : p.odd_ofertada)
+                        oddsAj[p.id] ??
+                        (p.odd_ajustada != null
+                          ? p.odd_ajustada
+                          : backMatrixRequirements
+                            ? ""
+                            : p.odd_ofertada)
                       }
                       onChange={(e) => setOddsAj({ ...oddsAj, [p.id]: e.target.value })}
                       className="mt-1 h-[51px] rounded-md border-border bg-background/50 font-mono text-base font-bold"
@@ -1164,6 +1244,20 @@ function Validacao() {
                     tone={edgeAj == null ? undefined : edgeAj < 0 ? "bad" : "good"}
                   />
                 </div>
+
+                {backMatrixRequirements && (
+                  <div className="grid gap-2 rounded-md border border-primary/30 bg-primary/5 p-3 sm:grid-cols-3">
+                    <Metric
+                      label="Odd minima para publicar"
+                      value={backMatrixRequirements.minimumExecutableOdd.toFixed(2)}
+                    />
+                    <Metric
+                      label="Edge minimo"
+                      value={`${backMatrixRequirements.requiredEdge.toFixed(2)}%`}
+                    />
+                    <Metric label="Kelly conservador" value={`${backMatrixKelly.toFixed(2)}u`} />
+                  </div>
+                )}
 
                 {check && (
                   <div
@@ -1412,21 +1506,29 @@ function Validacao() {
                     <Label className="text-xs uppercase tracking-wider text-muted-foreground">
                       Stake confirmada (u)
                     </Label>
-                    <Select
-                      value={stakes[p.id] ?? p.stake.toFixed(1)}
-                      onValueChange={(v) => setStakes({ ...stakes, [p.id]: v })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {STAKES.map((s) => (
-                          <SelectItem key={s} value={s}>
-                            {s}u
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {backMatrixRequirements ? (
+                      <Input
+                        value={`${backMatrixKelly.toFixed(2)}u`}
+                        readOnly
+                        className="font-mono font-semibold"
+                      />
+                    ) : (
+                      <Select
+                        value={stakes[p.id] ?? p.stake.toFixed(1)}
+                        onValueChange={(v) => setStakes({ ...stakes, [p.id]: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {STAKES.map((s) => (
+                            <SelectItem key={s} value={s}>
+                              {s}u
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
                   <div className="flex flex-col gap-1.5">
                     {decisoes.map((d) => (

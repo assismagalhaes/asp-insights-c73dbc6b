@@ -19,7 +19,7 @@ import pandas as pd
 
 
 MODEL_NAME = "ASP BackMatrix"
-MODEL_VERSION = "v1.1"
+MODEL_VERSION = "v1.2"
 PACKBALL_FILE_10 = "PackBall Custom ASP_BackMatrix_10 {date}.csv"
 PACKBALL_FILE_20 = "PackBall Custom ASP_BackMatrix_20 {date}.csv"
 
@@ -75,7 +75,8 @@ PREDICTION_COLUMNS = [
     "market_type", "selection_side", "selection_role", "market_conflict_status", "favorite_class",
     "prob_market_no_vig", "prob_poisson", "prob_empirical", "prob_raw", "prob_pre_calibration",
     "calibration_status", "haircut_pp", "component_spread_pp", "cv_home", "cv_away", "cv_average",
-    "required_edge", "observacoes", "dados_tecnicos", "contexto_adicional", "contexto_modelo", "odd",
+    "required_edge", "edge_referencial", "odd_minima_publicacao", "requires_executable_odd",
+    "odd_mercado_base", "odd_mediana", "observacoes", "dados_tecnicos", "contexto_adicional", "contexto_modelo", "odd",
     "probabilidade", "parecer_validacao",
 ]
 
@@ -501,31 +502,29 @@ def _build_prediction(row: pd.Series) -> dict | None:
     edge = (odd * probability / 100.0 - 1.0) * 100.0
     spread = float(row[f"Spread {side}"])
     required_edge = base_edge + min(2.0, max(0.0, 55.0 - cv_average) * 0.08 + max(0.0, spread - 15.0) * 0.05)
-    if edge < required_edge:
-        return None
-
     conflict = bool(row[f"Conflict {side}"])
-    stake = kelly_stake_units(probability, odd, conflict=conflict)
-    if stake < 0.25:
-        return None
+    minimum_executable_odd = (1.0 + required_edge / 100.0) / (probability / 100.0)
 
     pick = str(row["Time Casa"] if side == "Casa" else row["Time Visitante"])
     data_hora = row.get("Data/Hora")
     data = data_hora.strftime("%d/%m/%Y") if pd.notna(data_hora) else ""
     hora = data_hora.strftime("%H:%M") if pd.notna(data_hora) else ""
-    role = "RESERVA_CONFLITO_MERCADO" if conflict else "PRINCIPAL"
+    role = "CANDIDATO_BACK"
     observations = (
         f"Favorito: {pick} ({side}) | Classe PackBall: {packball_class} | "
         f"No-vig: {_fmt(row[f'NoVig {side}'])}% | Poisson-Gamma: {_fmt(row[f'Poisson {side}'])}% | "
         f"Empírica: {_fmt(row[f'Empirica {side}'])}% | Probabilidade final: {_fmt(probability)}% | "
         f"CV casa/visitante/média: {_fmt(cv_home)}/{_fmt(cv_away)}/{_fmt(cv_average)} | "
-        f"Edge exigido: {_fmt(required_edge)}% | Spread componentes: {_fmt(spread)} p.p."
+        f"Edge referencial: {_fmt(edge)}% | Edge exigido: {_fmt(required_edge)}% | "
+        f"Odd minima publicacao: {_fmt(minimum_executable_odd, 3)} | Spread componentes: {_fmt(spread)} p.p."
     )
     technical = "\n".join([
         f"Confronto: {row['Time Casa']} vs {row['Time Visitante']}",
         f"Liga: {row['Pais']} - {row['Liga']}",
         f"Data/Hora: {data} {hora}",
         f"Favorito operacional: {pick} ({side})",
+        "Status operacional: CANDIDATO_BACK - exige odd executavel na Validacao Critica.",
+        "Odds PackBall sao referencia media de 1 a 5 casas; quantidade de casas nao esta disponivel por partida.",
         f"Odds 1/X/2: {_fmt(row['Odd Casa'])} / {_fmt(row['Odd Empate'])} / {_fmt(row['Odd Visitante'])}",
         f"Overround: {_fmt(float(row['Overround']) * 100.0)}%",
         f"Lambda casa/visitante: {_fmt(row['Lambda Casa'], 3)} / {_fmt(row['Lambda Visitante'], 3)}",
@@ -551,7 +550,7 @@ def _build_prediction(row: pd.Series) -> dict | None:
         "odd_valor": round(100.0 / probability, 2),
         "probabilidade_final": round(probability, 2),
         "edge": round(edge, 2),
-        "stake": f"{stake:.2f}".rstrip("0").rstrip(".") + "u",
+        "stake": 0.0,
         "modelo_versao": MODEL_VERSION,
         "market_type": "MONEYLINE",
         "selection_side": "HOME" if side == "Casa" else "AWAY",
@@ -570,13 +569,18 @@ def _build_prediction(row: pd.Series) -> dict | None:
         "cv_away": round(cv_away, 2),
         "cv_average": round(cv_average, 2),
         "required_edge": round(required_edge, 2),
+        "edge_referencial": round(edge, 2),
+        "odd_minima_publicacao": round(minimum_executable_odd, 3),
+        "requires_executable_odd": True,
+        "odd_mercado_base": round(odd, 2),
+        "odd_mediana": None,
         "observacoes": observations,
         "dados_tecnicos": technical,
         "contexto_adicional": technical,
         "contexto_modelo": technical,
         "odd": round(odd, 2),
         "probabilidade": round(probability, 2),
-        "parecer_validacao": "AGUARDAR_VALIDACAO",
+        "parecer_validacao": "AGUARDAR_ODD_EXECUTAVEL",
     }
 
 
@@ -637,6 +641,7 @@ def build_diagnostic_funnel(base: pd.DataFrame) -> tuple[dict, str]:
         "cv_aprovado": 0,
         "probabilidade_aprovada": 0,
         "edge_aprovado": 0,
+        "candidatos_back": 0,
     }
     candidates = []
     for _, row in base.iterrows():
@@ -679,6 +684,7 @@ def build_diagnostic_funnel(base: pd.DataFrame) -> tuple[dict, str]:
         if probability < min_probability:
             continue
         counts["probabilidade_aprovada"] += 1
+        counts["candidatos_back"] += 1
         if edge < required_edge:
             continue
         counts["edge_aprovado"] += 1
@@ -796,6 +802,7 @@ def run_cli() -> None:
     RUN_PROVENANCE.update({
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source": "PackBall external CSV import",
+        "market_odds_profile": "average odds from 1 to 5 bookmakers; bookmaker count unavailable per match",
         "source_file_10": csv10.name,
         "source_file_20": csv20.name,
         "sha256_10": file_sha256(csv10),
