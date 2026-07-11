@@ -1275,12 +1275,12 @@ export type Database = {
           filters_payload: Json
           id: string
           league_scope: string
-          max_final_picks: number
           market_scope: string
+          max_final_picks: number
           metadata: Json
           run_date: string
-          score_weights: Json
           scope_key: string
+          score_weights: Json
           source_stage: string
           sport_scope: string
           status: string
@@ -1297,12 +1297,12 @@ export type Database = {
           filters_payload?: Json
           id?: string
           league_scope?: string
-          max_final_picks?: number
           market_scope?: string
+          max_final_picks?: number
           metadata?: Json
           run_date?: string
-          score_weights?: Json
           scope_key?: string
+          score_weights?: Json
           source_stage?: string
           sport_scope?: string
           status?: string
@@ -1319,12 +1319,12 @@ export type Database = {
           filters_payload?: Json
           id?: string
           league_scope?: string
-          max_final_picks?: number
           market_scope?: string
+          max_final_picks?: number
           metadata?: Json
           run_date?: string
-          score_weights?: Json
           scope_key?: string
+          score_weights?: Json
           source_stage?: string
           sport_scope?: string
           status?: string
