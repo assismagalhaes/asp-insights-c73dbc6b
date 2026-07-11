@@ -1,5 +1,7 @@
 # GoalMatrix v2 walk-forward
 
+GoalMatrix v2.3 corrects fractional Kelly conversion to bankroll percentage units while preserving all existing exposure caps.
+
 ## Input contract (v2.1)
 
 - Recent signal: 10 matches across all venues and leagues, excluding the previous season.

@@ -62,6 +62,35 @@ class CornerMatrixRunnerV2Tests(unittest.TestCase):
         self.assertAlmostEqual(runner.w_hist_dir + runner.w_sim_dir + runner.w_imp_dir, 1.0)
         self.assertEqual(runner.w_imp, 0.15)
 
+    def test_ou_cv_filter_accepts_balanced_average_with_individual_floor(self) -> None:
+        row = pd.Series({"home": 47.0, "away": 54.0})
+        self.assertTrue(runner._passes_cv_filter(
+            row,
+            min_cv=50.0,
+            min_cv_individual=45.0,
+            cv_field_home="home",
+            cv_field_away="away",
+        ))
+
+    def test_ou_cv_filter_rejects_low_individual_even_when_average_passes(self) -> None:
+        row = pd.Series({"home": 44.0, "away": 60.0})
+        self.assertFalse(runner._passes_cv_filter(
+            row,
+            min_cv=50.0,
+            min_cv_individual=45.0,
+            cv_field_home="home",
+            cv_field_away="away",
+        ))
+
+    def test_directional_cv_filter_still_requires_both_market_minimums(self) -> None:
+        row = pd.Series({"home": 54.0, "away": 60.0})
+        self.assertFalse(runner._passes_cv_filter(
+            row,
+            min_cv=55.0,
+            cv_field_home="home",
+            cv_field_away="away",
+        ))
+
     def test_poisson_gamma_vector_alpha_preserves_means_and_covariance(self) -> None:
         home, away = runner.simulate_poisson_gamma_bivariate(
             np.array([5.2]), np.array([4.4]), np.array([0.12]), 100_000, seed=9,
@@ -105,6 +134,9 @@ class CornerMatrixRunnerV2Tests(unittest.TestCase):
 
     def test_conflict_caps_kelly(self) -> None:
         self.assertLessEqual(runner.kelly_stake_units(75.0, 2.0, conflict=True), 0.25)
+
+    def test_kelly_converts_bankroll_fraction_to_units(self) -> None:
+        self.assertEqual(runner.kelly_stake_units(59.13, 1.92), 0.75)
 
     def test_correlated_limit_keeps_at_most_three_ou_lines(self) -> None:
         rows = [

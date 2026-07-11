@@ -44,7 +44,7 @@ output_dir = Path("Prognostico")
 # Nome comercial do modelo para identificação no Lovable.
 # Mantém o campo 'mercado' como nome do modelo, igual ao ASP GoalMatrix.
 MODEL_NAME = "ASP CornerMatrix"
-MODEL_VERSION = "v2.1"
+MODEL_VERSION = "v2.2"
 
 # Modo de execução:
 #   prognostico = apenas jogos NS
@@ -82,6 +82,7 @@ MIN_PROB_MAIS = 57
 MIN_PROB_RACE = 58
 
 MIN_CV_OU = 50
+MIN_CV_OU_INDIVIDUAL = 45
 MIN_CV_MAIS = 55
 MIN_CV_RACE = 58
 MIN_EDGE_OU = 5.0
@@ -760,7 +761,13 @@ def _is_value_pick(
     return odd >= odd_valor * float(buffer) and edge >= float(min_edge)
 
 
-def _passes_cv_filter(row: pd.Series, min_cv: float, cv_field_home: str, cv_field_away: str) -> bool:
+def _passes_cv_filter(
+    row: pd.Series,
+    min_cv: float,
+    cv_field_home: str,
+    cv_field_away: str,
+    min_cv_individual: float | None = None,
+) -> bool:
     """Exige consistência mínima dos dois times para o mercado."""
     try:
         cv_home = float(row.get(cv_field_home))
@@ -770,7 +777,12 @@ def _passes_cv_filter(row: pd.Series, min_cv: float, cv_field_home: str, cv_fiel
 
     if not np.isfinite(cv_home) or not np.isfinite(cv_away):
         return False
-    return (cv_home >= float(min_cv)) and (cv_away >= float(min_cv))
+    individual_floor = float(min_cv if min_cv_individual is None else min_cv_individual)
+    return (
+        cv_home >= individual_floor
+        and cv_away >= individual_floor
+        and ((cv_home + cv_away) / 2.0) >= float(min_cv)
+    )
 
 
 def _market_thresholds(mercado: str, pick: str = "") -> tuple[float, float, float]:
@@ -793,6 +805,7 @@ def apply_value_filter(
     min_cv: float | None = None,
     min_edge: float = 0.0,
     cv_fields: tuple[str, str] = ("CV Index Total Casa", "CV Index Total Visitante"),
+    min_cv_individual: float | None = None,
 ) -> pd.DataFrame:
     """Aplica filtro de valor, faixa de odd, probabilidade mínima e CV mínimo do mercado."""
     base = base.copy()
@@ -803,7 +816,13 @@ def apply_value_filter(
             return False
         if min_cv is None:
             return True
-        return _passes_cv_filter(r, min_cv=min_cv, cv_field_home=cv_fields[0], cv_field_away=cv_fields[1])
+        return _passes_cv_filter(
+            r,
+            min_cv=min_cv,
+            cv_field_home=cv_fields[0],
+            cv_field_away=cv_fields[1],
+            min_cv_individual=min_cv_individual,
+        )
 
     mask = base.apply(_row_ok, axis=1)
     base.loc[~mask, [prob_col, odd_col]] = np.nan
@@ -1321,7 +1340,14 @@ def _add_lovable_row(rows: list[dict], row: pd.Series, mercado: str, pick: str, 
         if str(mercado).strip().lower() == "over/under cantos"
         else ("CV Index Direcional Casa", "CV Index Direcional Visitante")
     )
-    if not _passes_cv_filter(row, min_cv=min_cv, cv_field_home=cv_fields[0], cv_field_away=cv_fields[1]):
+    min_cv_individual = MIN_CV_OU_INDIVIDUAL if str(mercado).strip().lower() == "over/under cantos" else None
+    if not _passes_cv_filter(
+        row,
+        min_cv=min_cv,
+        cv_field_home=cv_fields[0],
+        cv_field_away=cv_fields[1],
+        min_cv_individual=min_cv_individual,
+    ):
         return
 
     prob = float(prob)
@@ -1378,7 +1404,7 @@ def kelly_stake_units(probability_pct, odd, *, conflict: bool = False) -> float:
         return 0.0
     b = decimal_odd - 1.0
     full_kelly = max(0.0, (b * probability - (1.0 - probability)) / b)
-    units = min(MAX_PICK_UNITS, full_kelly * KELLY_FRACTION * 10.0)
+    units = min(MAX_PICK_UNITS, full_kelly * KELLY_FRACTION * 100.0)
     if conflict:
         units = min(units, 0.25)
     return math.floor(units * 4.0 + 1e-9) / 4.0
@@ -1684,10 +1710,18 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
         base[f"OU {t} Conflict"] = np.where(finalized["conflict"], "CONFLITO_FORTE_COM_MERCADO", "ALINHADO")
         base[f"OU {t} Calibration"] = finalized["calibration"]["status"]
 
-        base = apply_value_filter(base, prob_o_col, odd_o_col, min_prob=MIN_PROB_OU, min_cv=MIN_CV_OU, min_edge=MIN_EDGE_OU)
+        base = apply_value_filter(
+            base, prob_o_col, odd_o_col,
+            min_prob=MIN_PROB_OU, min_cv=MIN_CV_OU, min_edge=MIN_EDGE_OU,
+            min_cv_individual=MIN_CV_OU_INDIVIDUAL,
+        )
         base = add_ou_corner_cost_and_filter(base, prob_o_col, odd_o_col, t, "Over")
 
-        base = apply_value_filter(base, prob_u_col, odd_u_col, min_prob=MIN_PROB_OU, min_cv=MIN_CV_OU, min_edge=MIN_EDGE_OU)
+        base = apply_value_filter(
+            base, prob_u_col, odd_u_col,
+            min_prob=MIN_PROB_OU, min_cv=MIN_CV_OU, min_edge=MIN_EDGE_OU,
+            min_cv_individual=MIN_CV_OU_INDIVIDUAL,
+        )
         base = add_ou_corner_cost_and_filter(base, prob_u_col, odd_u_col, t, "Under")
 
     # ------------------------------------------------------------
@@ -1848,7 +1882,8 @@ def print_cantos_prognostics(base: pd.DataFrame, status_filter=None):
     print("Utilize o INPUT ULTRA RÁPIDO — CONFIRMAÇÃO (GOLS & CANTOS) v2 para confirmação do prognóstico\n")
     print("=== PROGNÓSTICOS PARA CANTOS ===\n")
     print(
-        f"Filtros por mercado: OU prob >= {MIN_PROB_OU}% / CV >= {MIN_CV_OU}% | "
+        f"Filtros por mercado: OU prob >= {MIN_PROB_OU}% / CV individual >= {MIN_CV_OU_INDIVIDUAL}% "
+        f"e CV médio >= {MIN_CV_OU}% | "
         f"Mais Cantos prob >= {MIN_PROB_MAIS}% / CV >= {MIN_CV_MAIS}% | "
         f"Race prob >= {MIN_PROB_RACE}% / CV >= {MIN_CV_RACE}%\n"
         f"Odd entre {MIN_ODD:.2f} e {MAX_ODD:.2f} | buffer valor {VALUE_BUFFER:.2f} | "

@@ -24,8 +24,9 @@
 - Probability weights are 35/50/15 for O/U and 30/55/15 for directional markets (history/simulation/no-vig).
 - Component spread above 15 pp receives a symmetric haircut toward market; spread at or above 22 pp is marked `CONFLITO_FORTE_COM_MERCADO`.
 - Initial minimum edges are 5% for O/U and 6% for More Corners/Race.
+- O/U requires an individual CV floor of 45% for each team and an average CV of at least 50%; directional markets retain their per-team floors.
 - O/U exports at most one principal line and two correlated alternatives on the same side; directional markets export one selection per market.
-- Stakes use conservative fractional Kelly with per-pick, per-market and per-game caps.
+- Stakes use conservative fractional Kelly converted to bankroll percentage units, with per-pick, per-market and per-game caps.
 
 ## Walk-forward
 

@@ -143,6 +143,9 @@ class GoalMatrixRunnerV2Tests(unittest.TestCase):
     def test_conflict_caps_kelly_at_quarter_unit(self) -> None:
         self.assertEqual(runner.kelly_stake_units(70.0, 2.0, conflict=True), 0.25)
 
+    def test_kelly_converts_bankroll_fraction_to_units(self) -> None:
+        self.assertEqual(runner.kelly_stake_units(57.0, 1.90), 1.0)
+
     def test_correlated_limit_keeps_principal_and_two_same_side_lines(self) -> None:
         rows = [
             {"jogo": "A vs B", "market_type": "OU", "selection_side": "UNDER", "linha": line, "edge": edge, "market_conflict_status": "ALINHADO"}

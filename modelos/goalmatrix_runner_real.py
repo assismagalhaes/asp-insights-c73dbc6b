@@ -37,7 +37,7 @@ output_dir = Path("Prognostico")
 
 # Nome comercial do modelo para identificação no Lovable.
 MODEL_NAME = "ASP GoalMatrix"
-MODEL_VERSION = "v2.2"
+MODEL_VERSION = "v2.3"
 
 # Modo de execução:
 #   prognostico = apenas jogos NS
@@ -1436,7 +1436,7 @@ def kelly_stake_units(probability_pct, odd, *, conflict: bool = False) -> float:
         return 0.0
     b = decimal_odd - 1.0
     full_kelly = max(0.0, (b * probability - (1.0 - probability)) / b)
-    units = min(MAX_PICK_UNITS, full_kelly * KELLY_FRACTION * 10.0)
+    units = min(MAX_PICK_UNITS, full_kelly * KELLY_FRACTION * 100.0)
     if conflict:
         units = min(units, 0.25)
     return math.floor(units * 4.0 + 1e-9) / 4.0
