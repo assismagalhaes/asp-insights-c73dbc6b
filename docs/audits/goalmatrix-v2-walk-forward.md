@@ -1,5 +1,13 @@
 # GoalMatrix v2 walk-forward
 
+## Input contract (v2.1)
+
+- Recent signal: 10 matches across all venues and leagues, excluding the previous season.
+- Venue signal: 20 home-at-home / away-at-away matches across all leagues, allowing the previous season.
+- The two signals are independent populations. They are blended directly and must never be subtracted to infer a synthetic previous window.
+- Partial samples are accepted from 2 recent matches and 5 venue matches. Their effective weights and team-force shrinkage scale with collected-sample coverage.
+- The runner rejects a legacy 5-match file in the recent input and records both input hashes and declared profiles in the snapshot.
+
 Every production run writes an immutable `*.snapshot.json` beside the prediction CSV. The snapshot contains input hashes, source schema hash, generation time, kickoff time, model version and one `walk_forward_rows` record per prediction.
 
 ## Labeling contract

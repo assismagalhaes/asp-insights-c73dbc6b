@@ -22,40 +22,73 @@ class GoalMatrixRunnerV2Tests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "GOALMATRIX_SCHEMA_DRIFT"):
             runner.validate_source_schema(pd.DataFrame(columns=headers), "fixture")
 
-    def test_previous_fifteen_is_removed_from_overlapping_twenty(self) -> None:
-        recent = pd.Series([3.0])
-        aggregate = pd.Series([2.0])
-        previous = runner._previous15_from_windows(recent, aggregate)
-        self.assertAlmostEqual(previous.iloc[0], 5.0 / 3.0)
-
-    def test_dynamic_recent_weight_is_bounded_and_previous_is_anchor(self) -> None:
+    def test_dynamic_recent_weight_is_bounded_and_venue_is_anchor(self) -> None:
         row = {
             "CV Média Gols Casa_20": 60.0,
             "CV Média Gols Marcados Casa_20": 60.0,
             "CV Média Gols Visitante_20": 60.0,
             "CV Média Gols Marcados Visitante_20": 60.0,
+            "Número Jogos Coletados Casa_10": 10.0,
+            "Número Jogos Coletados Visitante_10": 10.0,
+            "Número Jogos Coletados Casa_20": 20.0,
+            "Número Jogos Coletados Visitante_20": 20.0,
         }
         for name in (
             "Média Gols Marcados Casa", "Média Gols Sofridos Casa",
             "Média Gols Marcados Visitante", "Média Gols Sofridos Visitante",
         ):
-            row[f"{name}_5"] = 3.0
+            row[f"{name}_10"] = 3.0
             row[f"{name}_20"] = 2.0
         result = runner.build_dynamic_weights(pd.DataFrame([row]))
-        self.assertLessEqual(result.loc[0, "_w_recent5"], runner.RECENT_WEIGHT_MAX)
-        self.assertGreater(result.loc[0, "_w_previous15"], result.loc[0, "_w_recent5"])
-        self.assertAlmostEqual(result.loc[0, "_w_recent5"] + result.loc[0, "_w_previous15"], 1.0)
+        self.assertLessEqual(result.loc[0, "_w_recent10"], runner.RECENT_WEIGHT_MAX)
+        self.assertGreater(result.loc[0, "_w_venue20"], result.loc[0, "_w_recent10"])
+        self.assertAlmostEqual(result.loc[0, "_w_recent10"] + result.loc[0, "_w_venue20"], 1.0)
+        self.assertEqual(result.loc[0, "_feature_reliability"], 1.0)
 
-    def test_blend_uses_recent_five_and_non_overlapping_previous_fifteen(self) -> None:
+    def test_blend_uses_independent_recent_and_venue_signals(self) -> None:
         frame = pd.DataFrame([{
-            "Metric_5": 3.0,
+            "Metric_10": 3.0,
             "Metric_20": 2.0,
-            "_w_recent5": 0.4,
-            "_w_previous15": 0.6,
+            "_w_recent10": 0.4,
+            "_w_venue20": 0.6,
         }])
         result = runner.blend(frame, "Metric")
-        expected = 0.4 * 3.0 + 0.6 * (5.0 / 3.0)
-        self.assertAlmostEqual(result.iloc[0], expected)
+        self.assertAlmostEqual(result.iloc[0], 0.4 * 3.0 + 0.6 * 2.0)
+
+    def test_partial_samples_reduce_feature_reliability(self) -> None:
+        row = {
+            "CV Média Gols Casa_20": 60.0,
+            "CV Média Gols Marcados Casa_20": 60.0,
+            "CV Média Gols Visitante_20": 60.0,
+            "CV Média Gols Marcados Visitante_20": 60.0,
+            "Número Jogos Coletados Casa_10": 5.0,
+            "Número Jogos Coletados Visitante_10": 5.0,
+            "Número Jogos Coletados Casa_20": 10.0,
+            "Número Jogos Coletados Visitante_20": 10.0,
+        }
+        for name in (
+            "Média Gols Marcados Casa", "Média Gols Sofridos Casa",
+            "Média Gols Marcados Visitante", "Média Gols Sofridos Visitante",
+        ):
+            row[f"{name}_10"] = 2.0
+            row[f"{name}_20"] = 2.0
+        result = runner.build_dynamic_weights(pd.DataFrame([row]))
+        self.assertAlmostEqual(result.loc[0, "_feature_reliability"], 0.5)
+
+    def test_filter_keeps_partial_sample_above_minimum(self) -> None:
+        frame = pd.DataFrame([{
+            "Status": "NS", "Número Jogos Coletados Casa": 7,
+            "Número Jogos Coletados Visitante": 6,
+        }])
+        self.assertEqual(len(runner.filter_by_status_and_games(frame, ("NS",), min_games=5)), 1)
+
+    def test_window_profile_rejects_old_five_game_feed(self) -> None:
+        frame = pd.DataFrame({
+            "Número Jogos Coletados Casa": [5, 5],
+            "Número Jogos Coletados Visitante": [5, 5],
+        })
+        with self.assertRaisesRegex(ValueError, "GOALMATRIX_WINDOW_MISMATCH"):
+            runner.validate_window_profile(frame, expected_games=10, label="recent10")
 
     def test_poisson_gamma_preserves_means_and_adds_positive_covariance(self) -> None:
         home, away = runner.simulate_poisson_gamma_bivariate(
@@ -150,15 +183,15 @@ class GoalMatrixRunnerV2Tests(unittest.TestCase):
             values = [normalized[column] for column in runner.cols_normalizados]
             return dict(zip(runner.SOURCE_HEADERS, values))
 
-        five = pd.DataFrame([raw_row(5)])
+        ten = pd.DataFrame([raw_row(10)])
         twenty = pd.DataFrame([raw_row(20)])
-        runner.validate_source_schema(five, "5j")
+        runner.validate_source_schema(ten, "10j")
         runner.validate_source_schema(twenty, "20j")
-        five_n = runner.coerce_numeric(runner.normalize_columns(five))
+        ten_n = runner.coerce_numeric(runner.normalize_columns(ten))
         twenty_n = runner.coerce_numeric(runner.normalize_columns(twenty))
-        merged = runner.merge_5_20(
-            runner.filter_by_status_and_games(five_n, ("NS",), 5),
-            runner.filter_by_status_and_games(twenty_n, ("NS",), 20),
+        merged = runner.merge_10_20(
+            runner.filter_by_status_and_games(ten_n, ("NS",), min_games=runner.MIN_RECENT_GAMES),
+            runner.filter_by_status_and_games(twenty_n, ("NS",), min_games=runner.MIN_VENUE_GAMES),
         )
         self.assertEqual(len(merged), 1)
 

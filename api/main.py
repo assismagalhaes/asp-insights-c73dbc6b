@@ -1420,7 +1420,8 @@ async def upload_packball_model_files(
     if not re.fullmatch(r"\d{2}-\d{2}-\d{4}", selected_date):
         raise HTTPException(status_code=422, detail="Data deve estar no formato DD-MM-YYYY.")
 
-    file5_path = target_dir / "packball_5.csv"
+    recent_window = 10 if model_name == "ASP GoalMatrix" else 5
+    file5_path = target_dir / f"packball_{recent_window}.csv"
     file20_path = target_dir / "packball_20.csv"
     size5 = await save_uploaded_packball_file(arquivo_5, file5_path)
     size20 = await save_uploaded_packball_file(arquivo_20, file20_path)
@@ -1431,13 +1432,26 @@ async def upload_packball_model_files(
         "slug": config["slug"],
         "date_str": selected_date,
         "arquivo_5": str(file5_path),
+        "arquivo_recente": str(file5_path),
         "arquivo_20": str(file20_path),
         "nome_original_5": arquivo_5.filename,
+        "nome_original_recente": arquivo_5.filename,
         "nome_original_20": arquivo_20.filename,
         "tamanho_5": size5,
+        "tamanho_recente": size5,
         "tamanho_20": size20,
         "sha256_5": packball_file_sha256(file5_path),
+        "sha256_recente": packball_file_sha256(file5_path),
         "sha256_20": packball_file_sha256(file20_path),
+        "janela_recente": recent_window,
+        "perfil_recente": (
+            "10 jogos, todos os mandos e ligas, sem temporada anterior"
+            if model_name == "ASP GoalMatrix" else "5 jogos"
+        ),
+        "perfil_20": (
+            "20 jogos, mandante em casa e visitante fora, todas as ligas, com temporada anterior"
+            if model_name == "ASP GoalMatrix" else "20 jogos"
+        ),
         "created_at": datetime.now().isoformat(),
     }
     save_json(target_dir / "meta.json", meta)
@@ -1459,7 +1473,7 @@ def executar_modelo_packball(input_id: str, expected_model: str, authorization: 
         raise HTTPException(status_code=422, detail=f"Upload pertence ao modelo {model_name}.")
 
     config = PACKBALL_MODEL_CONFIG[model_name]
-    file5_path = Path(str(meta.get("arquivo_5") or ""))
+    file5_path = Path(str(meta.get("arquivo_recente") or meta.get("arquivo_5") or ""))
     file20_path = Path(str(meta.get("arquivo_20") or ""))
     if not file5_path.exists() or not file20_path.exists():
         raise HTTPException(status_code=404, detail="Arquivos PackBall do upload nao encontrados.")
@@ -1520,6 +1534,8 @@ def executar_modelo_packball(input_id: str, expected_model: str, authorization: 
         "csv_coleta": None,
         "arquivo_saida": f"{config['output_prefix']}_{input_id}.csv",
         "arquivo_contexto": resposta_script.get("arquivo_contexto"),
+        "arquivo_snapshot": resposta_script.get("arquivo_snapshot"),
+        "provenance": resposta_script.get("provenance"),
         "total_prognosticos": resposta_script.get("total_prognosticos", 0),
         "contexto_modelo": resposta_script.get("contexto_modelo", ""),
         "dados_tecnicos": resposta_script.get("dados_tecnicos", ""),

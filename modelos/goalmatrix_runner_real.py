@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-PACKBALL_FILE_5 = "PackBall Custom over_gols_ft_5 {date}.csv"
+PACKBALL_FILE_10 = "PackBall Custom over_gols_ft_10 {date}.csv"
 PACKBALL_FILE_20 = "PackBall Custom over_gols_ft_20 {date}.csv"
 
 try:
@@ -37,7 +37,7 @@ output_dir = Path("Prognostico")
 
 # Nome comercial do modelo para identificação no Lovable.
 MODEL_NAME = "ASP GoalMatrix"
-MODEL_VERSION = "v2.0"
+MODEL_VERSION = "v2.1"
 
 # Modo de execução:
 #   prognostico = apenas jogos NS
@@ -71,6 +71,10 @@ RECENT_WEIGHT_BASE = 0.35
 RECENT_DIVERGENCE_START = 0.30
 RECENT_DIVERGENCE_RANGE = 1.20
 RECENT_DIVERGENCE_MAX_BOOST = 0.10
+RECENT_WINDOW_GAMES = 10
+VENUE_WINDOW_GAMES = 20
+MIN_RECENT_GAMES = 2
+MIN_VENUE_GAMES = 5
 
 KELLY_FRACTION = 0.125
 MAX_PICK_UNITS = 1.0
@@ -236,11 +240,11 @@ def sniff_sep(path: Path) -> str:
 def load_gols_data(date_str: str, base_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Arquivos esperados:
-      - PackBall Custom over_gols_ft_5  {date_str}.csv
+      - PackBall Custom over_gols_ft_10 {date_str}.csv
       - PackBall Custom over_gols_ft_20 {date_str}.csv
     """
     files = {
-        "5":  base_dir / f"PackBall Custom over_gols_ft_5 {date_str}.csv",
+        "10": base_dir / f"PackBall Custom over_gols_ft_10 {date_str}.csv",
         "20": base_dir / f"PackBall Custom over_gols_ft_20 {date_str}.csv",
     }
     dfs = {}
@@ -251,7 +255,7 @@ def load_gols_data(date_str: str, base_dir: Path) -> tuple[pd.DataFrame, pd.Data
         df = pd.read_csv(path, sep=sep, encoding="utf-8", engine="python")
         logging.info(f"{label} jogos lido com sep='{sep}': {path.name} -> {df.shape}")
         dfs[label] = df
-    return dfs["5"], dfs["20"]
+    return dfs["10"], dfs["20"]
 
 
 def file_sha256(path: Path) -> str:
@@ -366,11 +370,11 @@ def sanity_check_ranges(df: pd.DataFrame, label: str = "") -> None:
             logging.warning(f"[{label}] {c}: {bad.sum()} CV fora de [0,100]. Possível coluna desalinhada.")
 
 
-def filter_by_status_and_games(df: pd.DataFrame, statuses=("NS",), n_games: int = 5) -> pd.DataFrame:
+def filter_by_status_and_games(df: pd.DataFrame, statuses=("NS",), min_games: int = 5) -> pd.DataFrame:
     """
     - Trata Status: FT_PEN -> FT
     - Mantém apenas os status definidos pelo RUN_MODE
-    - Mantém apenas jogos coletados exatamente n_games/n_games
+    - Mantém apenas equipes com ao menos min_games; cobertura parcial vira shrinkage.
     """
     df = df.copy()
 
@@ -384,10 +388,22 @@ def filter_by_status_and_games(df: pd.DataFrame, statuses=("NS",), n_games: int 
     df["Número Jogos Coletados Visitante"] = pd.to_numeric(df["Número Jogos Coletados Visitante"], errors="coerce")
 
     df = df[
-        (df["Número Jogos Coletados Casa"] == n_games) &
-        (df["Número Jogos Coletados Visitante"] == n_games)
+        (df["Número Jogos Coletados Casa"] >= min_games) &
+        (df["Número Jogos Coletados Visitante"] >= min_games)
     ].copy()
     return df
+
+
+def validate_window_profile(df: pd.DataFrame, expected_games: int, label: str) -> None:
+    counts = pd.concat([
+        pd.to_numeric(df["Número Jogos Coletados Casa"], errors="coerce"),
+        pd.to_numeric(df["Número Jogos Coletados Visitante"], errors="coerce"),
+    ]).dropna()
+    if counts.empty or float(counts.max()) != float(expected_games) or bool((counts > expected_games).any()):
+        observed = sorted({int(value) for value in counts.unique()}) if not counts.empty else []
+        raise ValueError(
+            f"GOALMATRIX_WINDOW_MISMATCH:{label}:expected_max={expected_games}:observed={observed}"
+        )
 
 
 def weighted_mix_pct(parts: list[pd.Series], weights: list[float]) -> pd.Series:
@@ -421,55 +437,47 @@ def dedupe_by_keys_keep_most_complete(df: pd.DataFrame, keys: list[str]) -> pd.D
     return df
 
 
-def audit_merge_keys(df5u: pd.DataFrame, df20u: pd.DataFrame) -> None:
+def audit_merge_keys(df10u: pd.DataFrame, df20u: pd.DataFrame) -> None:
     """Mantém o inner merge, mas avisa se houver divergência entre os arquivos."""
-    only_5 = df5u[MERGE_KEYS].merge(df20u[MERGE_KEYS], on=MERGE_KEYS, how="left", indicator=True)
-    only_5 = only_5[only_5["_merge"] == "left_only"]
+    only_10 = df10u[MERGE_KEYS].merge(df20u[MERGE_KEYS], on=MERGE_KEYS, how="left", indicator=True)
+    only_10 = only_10[only_10["_merge"] == "left_only"]
 
-    only_20 = df20u[MERGE_KEYS].merge(df5u[MERGE_KEYS], on=MERGE_KEYS, how="left", indicator=True)
+    only_20 = df20u[MERGE_KEYS].merge(df10u[MERGE_KEYS], on=MERGE_KEYS, how="left", indicator=True)
     only_20 = only_20[only_20["_merge"] == "left_only"]
 
-    if len(only_5):
-        logging.warning(f"Jogos presentes apenas no arquivo 5j: {len(only_5)}")
+    if len(only_10):
+        logging.warning(f"Jogos presentes apenas no arquivo 10j: {len(only_10)}")
     if len(only_20):
         logging.warning(f"Jogos presentes apenas no arquivo 20j: {len(only_20)}")
 
 
-def merge_5_20(df5: pd.DataFrame, df20: pd.DataFrame) -> pd.DataFrame:
-    df5u = dedupe_by_keys_keep_most_complete(df5, MERGE_KEYS)
+def merge_10_20(df10: pd.DataFrame, df20: pd.DataFrame) -> pd.DataFrame:
+    df10u = dedupe_by_keys_keep_most_complete(df10, MERGE_KEYS)
     df20u = dedupe_by_keys_keep_most_complete(df20, MERGE_KEYS)
 
-    audit_merge_keys(df5u, df20u)
+    audit_merge_keys(df10u, df20u)
 
-    merged = df5u.merge(
+    merged = df10u.merge(
         df20u,
         on=MERGE_KEYS,
         how="inner",
-        suffixes=("_5", "_20"),
+        suffixes=("_10", "_20"),
         validate="one_to_one",
     )
     return merged.reset_index(drop=True)
 
 # ------------------------------------------------------------
-# PESOS DINÂMICOS 5/20 via CV + divergência recente
+# PESOS DINÂMICOS: FORMA 10J + ESTRUTURA DE MANDO 20J
 # ------------------------------------------------------------
-def _previous15_from_windows(recent5: pd.Series, aggregate20: pd.Series) -> pd.Series:
-    recent = recent5.astype(float)
-    aggregate = aggregate20.astype(float)
-    previous = (20.0 * aggregate - 5.0 * recent) / 15.0
-    return previous.where(np.isfinite(previous), aggregate)
-
-
 def build_dynamic_weights(merged: pd.DataFrame) -> pd.DataFrame:
     """
     No PackBall usado aqui: CV maior = maior consistência.
 
     Lógica adotada:
-      - 20j é a âncora estrutural.
-      - 5j é ajuste de forma recente.
-      - CV alto aumenta o peso do 20j.
-      - Divergência forte entre 5j e 20j reduz levemente o peso do 20j,
-        permitindo que mudança recente de padrão tenha influência controlada.
+      - 20j por mando é a âncora estrutural.
+      - 10j gerais da temporada atual representam forma recente.
+      - As janelas são sinais independentes, não subconjuntos subtraíveis.
+      - Cobertura parcial reduz a evidência e encolhe forças ao baseline.
     """
     merged = merged.copy()
 
@@ -494,12 +502,10 @@ def build_dynamic_weights(merged: pd.DataFrame) -> pd.DataFrame:
     )
     deltas = []
     for name in component_names:
-        previous15 = _previous15_from_windows(merged[f"{name}_5"], merged[f"{name}_20"])
-        merged[f"_previous15_{name}"] = previous15
-        deltas.append((merged[f"{name}_5"].astype(float) - previous15).abs())
+        deltas.append((merged[f"{name}_10"].astype(float) - merged[f"{name}_20"].astype(float)).abs())
     delta_form = sum(deltas) / float(len(deltas))
 
-    merged["_delta_form_5v20"] = delta_form.round(3)
+    merged["_delta_form_10v20"] = delta_form.round(3)
 
     recency_boost = (
         ((delta_form - RECENT_DIVERGENCE_START) / RECENT_DIVERGENCE_RANGE)
@@ -507,52 +513,66 @@ def build_dynamic_weights(merged: pd.DataFrame) -> pd.DataFrame:
         * RECENT_DIVERGENCE_MAX_BOOST
     )
     consistency_adjustment = ((50.0 - merged["_cv_game"].astype(float)) / 100.0).clip(-0.05, 0.05)
-    merged["_w_recent5"] = (
-        RECENT_WEIGHT_BASE + recency_boost + consistency_adjustment
-    ).clip(lower=RECENT_WEIGHT_MIN, upper=RECENT_WEIGHT_MAX)
-    merged["_w_previous15"] = 1.0 - merged["_w_recent5"]
-    merged["_w5"] = merged["_w_recent5"]
-    merged["_w20"] = merged["_w_previous15"]
+    raw_recent = (RECENT_WEIGHT_BASE + recency_boost + consistency_adjustment).clip(
+        lower=RECENT_WEIGHT_MIN, upper=RECENT_WEIGHT_MAX
+    )
+    recent_home = (merged["Número Jogos Coletados Casa_10"] / RECENT_WINDOW_GAMES).clip(0.0, 1.0)
+    recent_away = (merged["Número Jogos Coletados Visitante_10"] / RECENT_WINDOW_GAMES).clip(0.0, 1.0)
+    venue_home = (merged["Número Jogos Coletados Casa_20"] / VENUE_WINDOW_GAMES).clip(0.0, 1.0)
+    venue_away = (merged["Número Jogos Coletados Visitante_20"] / VENUE_WINDOW_GAMES).clip(0.0, 1.0)
+    recent_reliability = np.sqrt(recent_home * recent_away)
+    venue_reliability = np.sqrt(venue_home * venue_away)
+
+    recent_evidence = raw_recent * recent_reliability
+    venue_evidence = (1.0 - raw_recent) * venue_reliability
+    evidence_total = (recent_evidence + venue_evidence).replace(0.0, np.nan)
+    merged["_w_recent10"] = (recent_evidence / evidence_total).fillna(raw_recent)
+    merged["_w_venue20"] = 1.0 - merged["_w_recent10"]
+    merged["_recent_reliability"] = recent_reliability
+    merged["_venue_reliability"] = venue_reliability
+    merged["_feature_reliability"] = (
+        raw_recent * recent_reliability + (1.0 - raw_recent) * venue_reliability
+    ).clip(0.0, 1.0)
+    merged["_feature_reliability_home"] = (
+        raw_recent * recent_home + (1.0 - raw_recent) * venue_home
+    ).clip(0.0, 1.0)
+    merged["_feature_reliability_away"] = (
+        raw_recent * recent_away + (1.0 - raw_recent) * venue_away
+    ).clip(0.0, 1.0)
+    merged["_w10"] = merged["_w_recent10"]
+    merged["_w20"] = merged["_w_venue20"]
     return merged
 
 
 def blend(merged: pd.DataFrame, col_base: str) -> pd.Series:
     """
-    Mistura 5j e 20j com pesos dinâmicos.
+    Mistura forma geral de 10j e estrutura de mando de 20j.
     Se uma das bases estiver ausente, renormaliza o peso para usar a base disponível.
     """
-    c5 = f"{col_base}_5"
+    c10 = f"{col_base}_10"
     c20 = f"{col_base}_20"
 
-    if c5 not in merged.columns or c20 not in merged.columns:
-        raise KeyError(f"Colunas esperadas não encontradas para blend: {c5} / {c20}")
+    if c10 not in merged.columns or c20 not in merged.columns:
+        raise KeyError(f"Colunas esperadas não encontradas para blend: {c10} / {c20}")
 
     if col_base.startswith("CV "):
         return merged[c20].astype(float)
 
-    if ("_w_recent5" not in merged.columns) or ("_w_previous15" not in merged.columns):
-        w5 = pd.Series(RECENT_WEIGHT_BASE, index=merged.index, dtype=float)
-        w15 = 1.0 - w5
+    if ("_w_recent10" not in merged.columns) or ("_w_venue20" not in merged.columns):
+        w10 = pd.Series(RECENT_WEIGHT_BASE, index=merged.index, dtype=float)
+        w20 = 1.0 - w10
     else:
-        w5 = merged["_w_recent5"].astype(float)
-        w15 = merged["_w_previous15"].astype(float)
+        w10 = merged["_w_recent10"].astype(float)
+        w20 = merged["_w_venue20"].astype(float)
 
-    x5 = merged[c5].astype(float)
+    x10 = merged[c10].astype(float)
     x20 = merged[c20].astype(float)
-    x15 = _previous15_from_windows(x5, x20)
-
-    if "Ocorrência" in col_base or col_base.startswith("H2H "):
-        x15 = x15.clip(lower=0.0, upper=100.0)
-    elif "Gols" in col_base or "Expectativa" in col_base:
-        x15 = x15.clip(lower=0.0)
-
-    valid5 = x5.notna()
-    valid15 = x15.notna()
-
-    den = valid5.astype(float) * w5 + valid15.astype(float) * w15
+    valid10 = x10.notna()
+    valid20 = x20.notna()
+    den = valid10.astype(float) * w10 + valid20.astype(float) * w20
     num = (
-        x5.fillna(0.0) * w5 * valid5.astype(float) +
-        x15.fillna(0.0) * w15 * valid15.astype(float)
+        x10.fillna(0.0) * w10 * valid10.astype(float) +
+        x20.fillna(0.0) * w20 * valid20.astype(float)
     )
 
     out = pd.Series(np.nan, index=merged.index, dtype=float)
@@ -1068,8 +1088,8 @@ def build_lambdas_force_model(
     cvh = merged2["_cv_idx_home_20"].astype(float).fillna(merged2["_cv_game"]).fillna(70.0)
     cva = merged2["_cv_idx_away_20"].astype(float).fillna(merged2["_cv_game"]).fillna(70.0)
 
-    gamma_home = _gamma_from_cv(cvh)
-    gamma_away = _gamma_from_cv(cva)
+    gamma_home = _gamma_from_cv(cvh) * merged2["_feature_reliability_home"].fillna(0.0)
+    gamma_away = _gamma_from_cv(cva) * merged2["_feature_reliability_away"].fillna(0.0)
 
     merged2["_gamma_home"] = gamma_home
     merged2["_gamma_away"] = gamma_away
@@ -1342,11 +1362,12 @@ def _diagnostic_text(row: pd.Series, diagnostics: dict) -> str:
         f"component_spread_pp={_fmt_obs_num(diagnostics.get('component_spread_pp'), 2)}; "
         f"market_conflict_status={diagnostics.get('market_conflict_status') or 'ALINHADO'}; "
         f"calibration_status={diagnostics.get('calibration_status') or 'identity'}; "
-        f"w_recent5={_fmt_obs_num(row.get('w5'), 3)}; "
-        f"w_previous15={_fmt_obs_num(row.get('w15 anterior'), 3)}; "
+        f"w_recent10={_fmt_obs_num(row.get('w10'), 3)}; "
+        f"w_venue20={_fmt_obs_num(row.get('w20'), 3)}; "
+        f"feature_reliability={_fmt_obs_num(row.get('Feature Reliability'), 3)}; "
         f"league_baseline_status={row.get('League Baseline Status')}; "
         f"alpha={_fmt_obs_num(row.get('Alpha Liga'), 4)}; alpha_status={row.get('Alpha Status')}; "
-        f"input_hash_5={RUN_PROVENANCE.get('sha256_5', '-')}; "
+        f"input_hash_10={RUN_PROVENANCE.get('sha256_10', '-')}; "
         f"input_hash_20={RUN_PROVENANCE.get('sha256_20', '-')}; "
         f"schema_hash={RUN_PROVENANCE.get('schema_hash', '-')}"
     )
@@ -1538,32 +1559,34 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
     base_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1) Ler e normalizar (5 + 20)
-    df5_raw, df20_raw = load_gols_data(date_str, base_dir)
-    validate_source_schema(df5_raw, "5j")
+    # 1) Ler e normalizar (forma geral 10j + mando 20j)
+    df10_raw, df20_raw = load_gols_data(date_str, base_dir)
+    validate_source_schema(df10_raw, "10j")
     validate_source_schema(df20_raw, "20j")
-    if list(df5_raw.columns) != list(df20_raw.columns):
-        raise ValueError("GOALMATRIX_SCHEMA_MISMATCH:5j_vs_20j")
-    df5 = coerce_numeric(normalize_columns(df5_raw))
+    if list(df10_raw.columns) != list(df20_raw.columns):
+        raise ValueError("GOALMATRIX_SCHEMA_MISMATCH:10j_vs_20j")
+    df10 = coerce_numeric(normalize_columns(df10_raw))
     df20 = coerce_numeric(normalize_columns(df20_raw))
+    validate_window_profile(df10, RECENT_WINDOW_GAMES, "recent10")
+    validate_window_profile(df20, VENUE_WINDOW_GAMES, "venue20")
 
-    df5 = sanitize_pct_like_columns(df5, "df5")
+    df10 = sanitize_pct_like_columns(df10, "df10")
     df20 = sanitize_pct_like_columns(df20, "df20")
 
-    sanity_check_ranges(df5, "df5")
+    sanity_check_ranges(df10, "df10")
     sanity_check_ranges(df20, "df20")
 
     # 2) Filtrar conforme RUN_MODE
-    df5_f = filter_by_status_and_games(df5, STATUSES, n_games=5)
-    df20_f = filter_by_status_and_games(df20, STATUSES, n_games=20)
+    df10_f = filter_by_status_and_games(df10, STATUSES, min_games=MIN_RECENT_GAMES)
+    df20_f = filter_by_status_and_games(df20, STATUSES, min_games=MIN_VENUE_GAMES)
     logging.info(f"RUN_MODE={RUN_MODE} | STATUS={STATUSES}")
-    logging.info(f"df5_filtrado: {df5_f.shape} | df20_filtrado: {df20_f.shape}")
+    logging.info(f"df10_filtrado: {df10_f.shape} | df20_filtrado: {df20_f.shape}")
 
     # 3) Merge
-    merged = merge_5_20(df5_f, df20_f)
-    logging.info(f"merged (5+20) shape: {merged.shape}")
+    merged = merge_10_20(df10_f, df20_f)
+    logging.info(f"merged (10+20) shape: {merged.shape}")
 
-    # Campos invariantes: mantém _5
+    # Odds e campos de contexto vêm do arquivo recente.
     for _c in ("Expectativa de Gols",):
         c20 = f"{_c}_20"
         if c20 in merged.columns:
@@ -1621,18 +1644,20 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
         "Time Casa": merged["Time Casa"],
         "Time Visitante": merged["Time Visitante"],
 
-        "Odd Casa MO": merged["Odd Casa Vencer_5"],
-        "Odd Visitante MO": merged["Odd Visitante Vencer_5"],
+        "Odd Casa MO": merged["Odd Casa Vencer_10"],
+        "Odd Visitante MO": merged["Odd Visitante Vencer_10"],
 
-        "Expectativa de Gols": merged["Expectativa de Gols_5"].round(2),
-        "Média Gols Liga": merged["Média Gols Liga_5"].round(2),
+        "Expectativa de Gols": merged["Expectativa de Gols_10"].round(2),
+        "Média Gols Liga": merged["Média Gols Liga_10"].round(2),
 
-        "Colocação Time Casa": merged["Colocação Time Casa_5"],
-        "Colocação Time Visitante": merged["Colocação Time Visitante_5"],
+        "Colocação Time Casa": merged["Colocação Time Casa_10"],
+        "Colocação Time Visitante": merged["Colocação Time Visitante_10"],
 
-        "w5": merged["_w_recent5"].round(3),
-        "w15 anterior": merged["_w_previous15"].round(3),
-        "w20": merged["_w_previous15"].round(3),
+        "w10": merged["_w_recent10"].round(3),
+        "w20": merged["_w_venue20"].round(3),
+        "Recent Reliability": merged["_recent_reliability"].round(3),
+        "Venue Reliability": merged["_venue_reliability"].round(3),
+        "Feature Reliability": merged["_feature_reliability"].round(3),
         "CV Game": merged["_cv_game"].round(2),
 
         "Share Home": merged["_share_home"].round(3),
@@ -1733,8 +1758,8 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
 
         odd_o_col = f"Odd Over {t} Gols"
         odd_u_col = f"Odd Under {t} Gols"
-        odd_o = merged[f"{odd_o_col}_5"]
-        odd_u = merged[f"{odd_u_col}_5"]
+        odd_o = merged[f"{odd_o_col}_10"]
+        odd_u = merged[f"{odd_u_col}_10"]
 
         imp_o, imp_u = vig_free_probs_from_odds_2way(odd_o.values, odd_u.values)
         imp_o = pd.Series(imp_o * 100.0, index=base.index)
@@ -1778,8 +1803,8 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
     sim_btts_sim = pd.Series(((sim_home_ft > 0) & (sim_away_ft > 0)).mean(axis=1) * 100.0, index=base.index)
     sim_btts_nao = 100.0 - sim_btts_sim
 
-    odd_sim = merged["Odd BTTS Sim_5"].astype(float)
-    odd_nao = merged["Odd BTTS Não_5"].astype(float)
+    odd_sim = merged["Odd BTTS Sim_10"].astype(float)
+    odd_nao = merged["Odd BTTS Não_10"].astype(float)
 
     imp_sim, imp_nao = vig_free_probs_from_odds_2way(odd_sim.values, odd_nao.values)
     imp_sim = pd.Series(imp_sim * 100.0, index=base.index)
@@ -1826,9 +1851,9 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
     sim_h = pd.Series(goal_mass.values * frac_h, index=base.index)
     sim_a = pd.Series(goal_mass.values * frac_a, index=base.index)
 
-    odd_h = merged["Odd Casa Marcar Primeiro_5"].astype(float)
-    odd_a = merged["Odd Visitante Marcar Primeiro_5"].astype(float)
-    odd_ng = merged["Odd Sem Gol_5"].astype(float)
+    odd_h = merged["Odd Casa Marcar Primeiro_10"].astype(float)
+    odd_a = merged["Odd Visitante Marcar Primeiro_10"].astype(float)
+    odd_ng = merged["Odd Sem Gol_10"].astype(float)
 
     imp_h, imp_a, imp_ng = vig_free_probs_from_odds_3way(odd_h.values, odd_a.values, odd_ng.values)
     imp_h = pd.Series(imp_h * 100.0, index=base.index)
@@ -2054,7 +2079,7 @@ def print_gols_prognostics(base: pd.DataFrame, status_filter=None):
         lam_t = row.get("Lambda Total", pd.NA)
 
         print("--- DADOS TÉCNICOS ---")
-        print(f"w5/w20:                        {_fmt_float(row.get('w5'), 3)} / {_fmt_float(row.get('w20'), 3)}")
+        print(f"w10/w20 mando:                {_fmt_float(row.get('w10'), 3)} / {_fmt_float(row.get('w20'), 3)}")
         print(f"Share Home (liga):             {_fmt_float(row.get('Share Home'), 3)}")
         print(f"Gamma Home/Away:               {_fmt_float(row.get('Gamma Home'), 3)} / {_fmt_float(row.get('Gamma Away'), 3)}\n")
 
@@ -2189,18 +2214,18 @@ def run_cli() -> None:
     if len(sys.argv) < 4:
         payload = {
             "ok": False,
-            "erro": "Uso: python runner.py CSV_5 CSV_20 OUTPUT_CSV [DD-MM-YYYY]",
+            "erro": "Uso: python runner.py CSV_10 CSV_20 OUTPUT_CSV [DD-MM-YYYY]",
         }
         print(json.dumps(payload, ensure_ascii=False))
         return
 
-    csv5 = Path(sys.argv[1]).resolve()
+    csv10 = Path(sys.argv[1]).resolve()
     csv20 = Path(sys.argv[2]).resolve()
     output_path = Path(sys.argv[3]).resolve()
-    cli_date = sys.argv[4].strip() if len(sys.argv) >= 5 and sys.argv[4].strip() else _infer_date_str([csv5, csv20])
+    cli_date = sys.argv[4].strip() if len(sys.argv) >= 5 and sys.argv[4].strip() else _infer_date_str([csv10, csv20])
 
-    if not csv5.exists():
-        print(json.dumps({"ok": False, "erro": f"Arquivo 5j n?o encontrado: {csv5}"}, ensure_ascii=False))
+    if not csv10.exists():
+        print(json.dumps({"ok": False, "erro": f"Arquivo 10j não encontrado: {csv10}"}, ensure_ascii=False))
         return
     if not csv20.exists():
         print(json.dumps({"ok": False, "erro": f"Arquivo 20j n?o encontrado: {csv20}"}, ensure_ascii=False))
@@ -2209,8 +2234,8 @@ def run_cli() -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     source_preview = pd.read_csv(
-        csv5,
-        sep=sniff_sep(csv5),
+        csv10,
+        sep=sniff_sep(csv10),
         encoding="utf-8",
         engine="python",
         nrows=1,
@@ -2218,9 +2243,11 @@ def run_cli() -> None:
     globals()["RUN_PROVENANCE"] = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source": "PackBall external CSV import",
-        "source_file_5": csv5.name,
+        "recent_profile": "10 games, all venues, all leagues, current season only",
+        "venue_profile": "20 games, home-at-home/away-at-away, all leagues, previous season allowed",
+        "source_file_10": csv10.name,
         "source_file_20": csv20.name,
-        "sha256_5": file_sha256(csv5),
+        "sha256_10": file_sha256(csv10),
         "sha256_20": file_sha256(csv20),
         "schema_hash": schema_sha256(source_preview.columns),
         "model_version": MODEL_VERSION,
@@ -2230,9 +2257,9 @@ def run_cli() -> None:
 
     with tempfile.TemporaryDirectory(prefix="asp_packball_model_") as tmp_name:
         tmp_dir = Path(tmp_name)
-        expected5 = tmp_dir / PACKBALL_FILE_5.format(date=cli_date)
+        expected10 = tmp_dir / PACKBALL_FILE_10.format(date=cli_date)
         expected20 = tmp_dir / PACKBALL_FILE_20.format(date=cli_date)
-        shutil.copy2(csv5, expected5)
+        shutil.copy2(csv10, expected10)
         shutil.copy2(csv20, expected20)
 
         globals()["date_str"] = cli_date
@@ -2246,7 +2273,7 @@ def run_cli() -> None:
         records = _to_records(lovable)
         snapshot = {
             **RUN_PROVENANCE,
-            "input_path_5": str(csv5),
+            "input_path_10": str(csv10),
             "input_path_20": str(csv20),
             "output_path": str(output_path),
             "first_goal_enabled": FIRST_GOAL_ENABLED,

@@ -134,7 +134,11 @@ function ModelosPreditivosPage() {
   const executarModelo = async () => {
     if (packballMode) {
       if (!packballFile5 || !packballFile20) {
-        toast.error("Selecione as planilhas PackBall de 5j e 20j.");
+        toast.error(
+          modelo === "ASP GoalMatrix"
+            ? "Selecione as planilhas PackBall de 10j gerais e 20j por mando."
+            : "Selecione as planilhas PackBall de 5j e 20j.",
+        );
         return;
       }
 
@@ -300,12 +304,20 @@ function ModelosPreditivosPage() {
             {packballMode ? (
               <>
                 <PackballFileInput
-                  label="Planilha PackBall 5j"
+                  label={
+                    modelo === "ASP GoalMatrix"
+                      ? "PackBall 10j gerais"
+                      : "Planilha PackBall 5j"
+                  }
                   file={packballFile5}
                   onFile={setPackballFile5}
                 />
                 <PackballFileInput
-                  label="Planilha PackBall 20j"
+                  label={
+                    modelo === "ASP GoalMatrix"
+                      ? "PackBall 20j casa/fora"
+                      : "Planilha PackBall 20j"
+                  }
                   file={packballFile20}
                   onFile={setPackballFile20}
                 />
