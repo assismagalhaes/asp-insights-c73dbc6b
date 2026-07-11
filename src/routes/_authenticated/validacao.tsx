@@ -159,7 +159,7 @@ function getEventKey(prognostico: Prognostico): string {
 function getMarketFamilyKey(prognostico: Prognostico): string {
   const mercado = normalizeGroupValue(getOpportunityMarketLabel(prognostico));
   if (
-    /moneyline|1x2|resultado final|vencedor|handicap|h[áa]ndicap|dupla chance|double chance/.test(
+    /moneyline|backmatrix|1x2|resultado final|vencedor|handicap|h[áa]ndicap|dupla chance|double chance/.test(
       mercado,
     )
   ) {

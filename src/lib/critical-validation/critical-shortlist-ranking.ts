@@ -313,7 +313,7 @@ export function calculateMarketRiskScore(prognostico: Prognostico): { score: num
   if (/ambas marcam|btts/.test(market)) return { score: 68, recognized: true };
   if (/handicap|spread|run line/.test(market)) return { score: lineAlternative ? 45 : 70, recognized: true };
   if (/over|under|total|gols|pontos|corridas|runs/.test(market)) return { score: lineAlternative ? 50 : 75, recognized: true };
-  if (/moneyline|vencedor|resultado|1x2|dupla chance|double chance/.test(market)) return { score: 85, recognized: true };
+  if (/moneyline|backmatrix|vencedor|resultado|1x2|dupla chance|double chance/.test(market)) return { score: 85, recognized: true };
   return { score: 40, recognized: false };
 }
 

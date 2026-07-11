@@ -1,0 +1,12 @@
+{
+  "markets": {
+    "moneyline": {
+      "active": false,
+      "out_of_sample": true,
+      "sample_size": 0,
+      "intercept": 0.0,
+      "slope": 1.0,
+      "status": "insufficient_walk_forward_sample"
+    }
+  }
+}

@@ -32,7 +32,7 @@ const PredictiveModelSchema = z.object({
   modelo: z.enum(["Futebol", "Baseball", "Basketball NBA", "Basketball WNBA"]),
 });
 
-const PackballModelSchema = z.enum(["ASP GoalMatrix", "ASP CornerMatrix"]);
+const PackballModelSchema = z.enum(["ASP GoalMatrix", "ASP CornerMatrix", "ASP BackMatrix"]);
 
 const PackballUploadSchema = z.object({
   modelo: PackballModelSchema,
@@ -463,6 +463,7 @@ export const executePackballPredictiveModel = createServerFn({ method: "POST" })
     const endpointByModel: Record<string, string> = {
       "ASP GoalMatrix": "/modelos/goalmatrix/executar",
       "ASP CornerMatrix": "/modelos/cornermatrix/executar",
+      "ASP BackMatrix": "/modelos/backmatrix/executar",
     };
     return (await scraperRequest(
       endpointByModel[data.modelo],

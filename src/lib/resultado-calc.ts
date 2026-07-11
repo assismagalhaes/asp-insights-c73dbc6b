@@ -180,7 +180,7 @@ export function calcularResultadoAuto(
     if (has(pick, "fora mais", "visitante mais")) return visitante > mandante ? "GREEN" : "RED";
   }
 
-  if (has(mercado, "resultado final", "moneyline")) {
+  if (has(mercado, "resultado final", "moneyline", "backmatrix")) {
     if (has(pick, "empate", "draw") || /\bx\b/.test(pick))
       return mandante === visitante ? "GREEN" : "RED";
     const lado = pickSide(prog);

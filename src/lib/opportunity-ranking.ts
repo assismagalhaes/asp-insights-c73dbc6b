@@ -914,7 +914,7 @@ function getMarketFamilyKey(prognostico: Prognostico): string {
   if (/overunder|over under|total|over\b|under\b|gols|pontos|corridas|runs/.test(mercado))
     return "totais";
   if (/dupla chance|duplachance|double chance|doublechance/.test(mercado)) return "dupla-chance";
-  if (/moneyline|1x2|resultado final|resultadofinal|vencedor/.test(mercado)) return "resultado";
+  if (/moneyline|backmatrix|1x2|resultado final|resultadofinal|vencedor/.test(mercado)) return "resultado";
   return `mercado:${normalizeKeyPart(getOpportunityMarketLabel(prognostico))}`;
 }
 

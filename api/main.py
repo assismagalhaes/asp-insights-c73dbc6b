@@ -1359,6 +1359,11 @@ PACKBALL_MODEL_CONFIG = {
         "script": "cornermatrix_runner_real.py",
         "output_prefix": "asp_cornermatrix",
     },
+    "ASP BackMatrix": {
+        "slug": "backmatrix",
+        "script": "backmatrix_runner_real.py",
+        "output_prefix": "asp_backmatrix",
+    },
 }
 
 
@@ -1368,6 +1373,8 @@ def normalize_packball_model(modelo: str) -> str:
         return "ASP GoalMatrix"
     if "corner" in normalized or "canto" in normalized:
         return "ASP CornerMatrix"
+    if "back" in normalized or "favorito" in normalized:
+        return "ASP BackMatrix"
     raise HTTPException(status_code=422, detail="Modelo PackBall nao suportado.")
 
 
@@ -1421,7 +1428,7 @@ async def upload_packball_model_files(
     if not re.fullmatch(r"\d{2}-\d{2}-\d{4}", selected_date):
         raise HTTPException(status_code=422, detail="Data deve estar no formato DD-MM-YYYY.")
 
-    recent_window = 10 if model_name in {"ASP GoalMatrix", "ASP CornerMatrix"} else 5
+    recent_window = 10 if model_name in {"ASP GoalMatrix", "ASP CornerMatrix", "ASP BackMatrix"} else 5
     file5_path = target_dir / f"packball_{recent_window}.csv"
     file20_path = target_dir / "packball_20.csv"
     size5 = await save_uploaded_packball_file(arquivo_5, file5_path)
@@ -1447,11 +1454,11 @@ async def upload_packball_model_files(
         "janela_recente": recent_window,
         "perfil_recente": (
             "10 jogos, todos os mandos e ligas, sem temporada anterior"
-            if model_name in {"ASP GoalMatrix", "ASP CornerMatrix"} else "5 jogos"
+            if model_name in {"ASP GoalMatrix", "ASP CornerMatrix", "ASP BackMatrix"} else "5 jogos"
         ),
         "perfil_20": (
             "20 jogos, mandante em casa e visitante fora, todas as ligas, com temporada anterior"
-            if model_name in {"ASP GoalMatrix", "ASP CornerMatrix"} else "20 jogos"
+            if model_name in {"ASP GoalMatrix", "ASP CornerMatrix", "ASP BackMatrix"} else "20 jogos"
         ),
         "created_at": datetime.now().isoformat(),
     }
@@ -1501,7 +1508,7 @@ def executar_modelo_packball(
         str(output_path),
         str(meta.get("date_str") or ""),
     ]
-    if expected_model in {"ASP GoalMatrix", "ASP CornerMatrix"}:
+    if expected_model in {"ASP GoalMatrix", "ASP CornerMatrix", "ASP BackMatrix"}:
         command.append(run_mode)
 
     resultado = subprocess.run(
@@ -1541,13 +1548,14 @@ def executar_modelo_packball(
         "input_id": input_id,
         "job_id": input_id,
         "modelo": model_name,
-        "run_mode": run_mode if expected_model in {"ASP GoalMatrix", "ASP CornerMatrix"} else "prognostico",
+        "run_mode": run_mode if expected_model in {"ASP GoalMatrix", "ASP CornerMatrix", "ASP BackMatrix"} else "prognostico",
         "csv_coleta": None,
         "arquivo_saida": f"{config['output_prefix']}_{input_id}.csv",
         "arquivo_contexto": resposta_script.get("arquivo_contexto"),
         "arquivo_snapshot": resposta_script.get("arquivo_snapshot"),
         "provenance": resposta_script.get("provenance"),
         "total_prognosticos": resposta_script.get("total_prognosticos", 0),
+        "diagnostico_funil": resposta_script.get("diagnostico_funil"),
         "contexto_modelo": resposta_script.get("contexto_modelo", ""),
         "dados_tecnicos": resposta_script.get("dados_tecnicos", ""),
         "prognosticos": resposta_script.get("prognosticos", []),
@@ -1570,6 +1578,14 @@ def executar_modelo_cornermatrix(
     authorization: str | None = Header(default=None)
 ):
     return executar_modelo_packball(payload.input_id, "ASP CornerMatrix", authorization, payload.run_mode)
+
+
+@app.post("/modelos/backmatrix/executar")
+def executar_modelo_backmatrix(
+    payload: ExecutarPackballModeloRequest,
+    authorization: str | None = Header(default=None)
+):
+    return executar_modelo_packball(payload.input_id, "ASP BackMatrix", authorization, payload.run_mode)
 
 # ============================================================
 # ROTAS - MODELOS BASEBALL - BASE HISTÓRICA

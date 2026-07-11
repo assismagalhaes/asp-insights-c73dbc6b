@@ -47,7 +47,8 @@ type ModeloDisponivel =
   | "Basketball NBA"
   | "Basketball WNBA"
   | "ASP GoalMatrix"
-  | "ASP CornerMatrix";
+  | "ASP CornerMatrix"
+  | "ASP BackMatrix";
 
 type PackballRunMode = "prognostico" | "backtest";
 
@@ -302,6 +303,7 @@ function ModelosPreditivosPage() {
                   </SelectItem>
                   <SelectItem value="ASP GoalMatrix">ASP GoalMatrix</SelectItem>
                   <SelectItem value="ASP CornerMatrix">ASP CornerMatrix</SelectItem>
+                  <SelectItem value="ASP BackMatrix">ASP BackMatrix</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -318,7 +320,7 @@ function ModelosPreditivosPage() {
                 />
                 <PackballFileInput
                   label={
-                    modelo === "ASP GoalMatrix"
+                    modelo === "ASP GoalMatrix" || modelo === "ASP BackMatrix"
                       ? "PackBall 20j casa/fora"
                       : "Planilha PackBall 20j"
                   }
@@ -559,8 +561,8 @@ function Info({ label, value }: { label: string; value: string | number }) {
 
 function isPackballModel(
   modelo: ModeloDisponivel,
-): modelo is "ASP GoalMatrix" | "ASP CornerMatrix" {
-  return modelo === "ASP GoalMatrix" || modelo === "ASP CornerMatrix";
+): modelo is "ASP GoalMatrix" | "ASP CornerMatrix" | "ASP BackMatrix" {
+  return modelo === "ASP GoalMatrix" || modelo === "ASP CornerMatrix" || modelo === "ASP BackMatrix";
 }
 
 function inferPackballDate(...names: string[]) {
