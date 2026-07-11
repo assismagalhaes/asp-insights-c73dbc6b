@@ -33,12 +33,14 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
   const create = useCreateResultado();
   const [placar, setPlacar] = useState("");
   const [manual, setManual] = useState<Resultado | null>(null);
+  const [racePrimeiro, setRacePrimeiro] = useState<"casa" | "fora" | null>(null);
   const [siblings, setSiblings] = useState<Prognostico[]>([]);
 
   useEffect(() => {
     if (!open || !prognostico) return;
     setPlacar("");
     setManual(null);
+    setRacePrimeiro(null);
     setSiblings([]);
 
     (async () => {
@@ -69,10 +71,23 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
   }, [prognostico, open]);
 
   const parsed = useMemo(() => parsePlacar(placar), [placar]);
+  const race = useMemo(
+    () => (prognostico ? detectRacePick(prognostico) : null),
+    [prognostico],
+  );
+  const raceAmbiguo = useMemo(() => {
+    if (!race || !parsed) return false;
+    return parsed.mandante >= race.alvo && parsed.visitante >= race.alvo;
+  }, [race, parsed]);
   const auto = useMemo(() => {
     if (!prognostico || !parsed) return null;
-    return calcularResultadoAuto(prognostico, parsed);
-  }, [prognostico, parsed]);
+    const base = calcularResultadoAuto(prognostico, parsed);
+    if (base) return base;
+    if (raceAmbiguo && race && racePrimeiro) {
+      return racePrimeiro === race.lado ? "GREEN" : "RED";
+    }
+    return null;
+  }, [prognostico, parsed, raceAmbiguo, race, racePrimeiro]);
 
   const resultadoFinal: Resultado | null = manual ?? (auto as Resultado | null);
 
