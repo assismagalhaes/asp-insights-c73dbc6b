@@ -86,6 +86,28 @@ function pickSide(
   return null;
 }
 
+export interface RacePickInfo {
+  alvo: number;
+  lado: "casa" | "fora";
+}
+
+/** Detecta pick do tipo "Casa Race 5 Cantos" / "Fora Race 5 Cantos". */
+export function detectRacePick(
+  prog: Pick<Prognostico, "pick" | "mandante" | "visitante"> &
+    Partial<Pick<Prognostico, "jogo" | "mercado">>,
+): RacePickInfo | null {
+  const pick = norm(prog.pick);
+  if (!/\brace\b/.test(pick) && !/\bcorrida\b/.test(pick)) return null;
+  const m = pick.match(/(?:race|corrida)\s+(?:de\s+)?(\d+)/);
+  if (!m) return null;
+  const alvo = parseInt(m[1], 10);
+  if (!Number.isFinite(alvo) || alvo <= 0) return null;
+  const lado = pickSide(prog);
+  if (lado !== "casa" && lado !== "fora") return null;
+  return { alvo, lado };
+}
+
+
 export function calcularResultadoAuto(
   prog: Pick<Prognostico, "mercado" | "pick" | "linha" | "mandante" | "visitante"> &
     Partial<Pick<Prognostico, "jogo">>,
