@@ -28,6 +28,7 @@ import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } fr
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
+import { Route as ApiPublicHooksSyncCriticalValidationTelegramAlertsRouteImport } from './routes/api/public/hooks/sync-critical-validation-telegram-alerts'
 import { Route as ApiPublicHooksSendCriticalValidationTelegramAlertsRouteImport } from './routes/api/public/hooks/send-critical-validation-telegram-alerts'
 
 const McpRoute = McpRouteImport.update({
@@ -132,6 +133,12 @@ const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
   path: '/.lovable/oauth/consent',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHooksSyncCriticalValidationTelegramAlertsRoute =
+  ApiPublicHooksSyncCriticalValidationTelegramAlertsRouteImport.update({
+    id: '/api/public/hooks/sync-critical-validation-telegram-alerts',
+    path: '/api/public/hooks/sync-critical-validation-telegram-alerts',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksSendCriticalValidationTelegramAlertsRoute =
   ApiPublicHooksSendCriticalValidationTelegramAlertsRouteImport.update({
     id: '/api/public/hooks/send-critical-validation-telegram-alerts',
@@ -159,6 +166,7 @@ export interface FileRoutesByFullPath {
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/public/hooks/send-critical-validation-telegram-alerts': typeof ApiPublicHooksSendCriticalValidationTelegramAlertsRoute
+  '/api/public/hooks/sync-critical-validation-telegram-alerts': typeof ApiPublicHooksSyncCriticalValidationTelegramAlertsRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
@@ -180,6 +188,7 @@ export interface FileRoutesByTo {
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/public/hooks/send-critical-validation-telegram-alerts': typeof ApiPublicHooksSendCriticalValidationTelegramAlertsRoute
+  '/api/public/hooks/sync-critical-validation-telegram-alerts': typeof ApiPublicHooksSyncCriticalValidationTelegramAlertsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -203,6 +212,7 @@ export interface FileRoutesById {
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/public/hooks/send-critical-validation-telegram-alerts': typeof ApiPublicHooksSendCriticalValidationTelegramAlertsRoute
+  '/api/public/hooks/sync-critical-validation-telegram-alerts': typeof ApiPublicHooksSyncCriticalValidationTelegramAlertsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -226,6 +236,7 @@ export interface FileRouteTypes {
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/api/public/hooks/send-critical-validation-telegram-alerts'
+    | '/api/public/hooks/sync-critical-validation-telegram-alerts'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
@@ -247,6 +258,7 @@ export interface FileRouteTypes {
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/api/public/hooks/send-critical-validation-telegram-alerts'
+    | '/api/public/hooks/sync-critical-validation-telegram-alerts'
   id:
     | '__root__'
     | '/_authenticated'
@@ -269,6 +281,7 @@ export interface FileRouteTypes {
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/api/public/hooks/send-critical-validation-telegram-alerts'
+    | '/api/public/hooks/sync-critical-validation-telegram-alerts'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -280,6 +293,7 @@ export interface RootRouteChildren {
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
   ApiPublicHooksSendCriticalValidationTelegramAlertsRoute: typeof ApiPublicHooksSendCriticalValidationTelegramAlertsRoute
+  ApiPublicHooksSyncCriticalValidationTelegramAlertsRoute: typeof ApiPublicHooksSyncCriticalValidationTelegramAlertsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -417,6 +431,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DotlovableOauthConsentRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/sync-critical-validation-telegram-alerts': {
+      id: '/api/public/hooks/sync-critical-validation-telegram-alerts'
+      path: '/api/public/hooks/sync-critical-validation-telegram-alerts'
+      fullPath: '/api/public/hooks/sync-critical-validation-telegram-alerts'
+      preLoaderRoute: typeof ApiPublicHooksSyncCriticalValidationTelegramAlertsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/send-critical-validation-telegram-alerts': {
       id: '/api/public/hooks/send-critical-validation-telegram-alerts'
       path: '/api/public/hooks/send-critical-validation-telegram-alerts'
@@ -471,6 +492,8 @@ const rootRouteChildren: RootRouteChildren = {
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
   ApiPublicHooksSendCriticalValidationTelegramAlertsRoute:
     ApiPublicHooksSendCriticalValidationTelegramAlertsRoute,
+  ApiPublicHooksSyncCriticalValidationTelegramAlertsRoute:
+    ApiPublicHooksSyncCriticalValidationTelegramAlertsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
