@@ -18,7 +18,7 @@ import {
   type Resultado,
 } from "@/lib/db";
 import { lucroUnidades, stakeAnalitica } from "@/lib/metrics";
-import { parsePlacar, calcularResultadoAuto, extrairLinha } from "@/lib/resultado-calc";
+import { parsePlacar, calcularResultadoAuto, extrairLinha, detectRacePick } from "@/lib/resultado-calc";
 import { supabase } from "@/lib/supabase-public";
 import { toast } from "sonner";
 
@@ -33,12 +33,14 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
   const create = useCreateResultado();
   const [placar, setPlacar] = useState("");
   const [manual, setManual] = useState<Resultado | null>(null);
+  const [racePrimeiro, setRacePrimeiro] = useState<"casa" | "fora" | null>(null);
   const [siblings, setSiblings] = useState<Prognostico[]>([]);
 
   useEffect(() => {
     if (!open || !prognostico) return;
     setPlacar("");
     setManual(null);
+    setRacePrimeiro(null);
     setSiblings([]);
 
     (async () => {
@@ -69,10 +71,23 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
   }, [prognostico, open]);
 
   const parsed = useMemo(() => parsePlacar(placar), [placar]);
+  const race = useMemo(
+    () => (prognostico ? detectRacePick(prognostico) : null),
+    [prognostico],
+  );
+  const raceAmbiguo = useMemo(() => {
+    if (!race || !parsed) return false;
+    return parsed.mandante >= race.alvo && parsed.visitante >= race.alvo;
+  }, [race, parsed]);
   const auto = useMemo(() => {
     if (!prognostico || !parsed) return null;
-    return calcularResultadoAuto(prognostico, parsed);
-  }, [prognostico, parsed]);
+    const base = calcularResultadoAuto(prognostico, parsed);
+    if (base) return base;
+    if (raceAmbiguo && race && racePrimeiro) {
+      return racePrimeiro === race.lado ? "GREEN" : "RED";
+    }
+    return null;
+  }, [prognostico, parsed, raceAmbiguo, race, racePrimeiro]);
 
   const resultadoFinal: Resultado | null = manual ?? (auto as Resultado | null);
 
@@ -146,6 +161,7 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
             onChange={(e) => {
               setPlacar(e.target.value);
               setManual(null);
+              setRacePrimeiro(null);
             }}
             placeholder="ex: 1x7"
             autoFocus
@@ -208,6 +224,34 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
             )}
           </div>
         )}
+
+        {race && raceAmbiguo && (
+          <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm space-y-2">
+            <div className="text-xs">
+              Ambos os times alcançaram <b>{race.alvo}</b> cantos. Selecione manualmente quem
+              chegou primeiro:
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={racePrimeiro === "casa" ? "default" : "outline"}
+                onClick={() => setRacePrimeiro("casa")}
+              >
+                Casa alcançou primeiro
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={racePrimeiro === "fora" ? "default" : "outline"}
+                onClick={() => setRacePrimeiro("fora")}
+              >
+                Fora alcançou primeiro
+              </Button>
+            </div>
+          </div>
+        )}
+
 
         <div className="flex gap-2">
           <Button

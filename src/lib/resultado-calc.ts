@@ -86,6 +86,28 @@ function pickSide(
   return null;
 }
 
+export interface RacePickInfo {
+  alvo: number;
+  lado: "casa" | "fora";
+}
+
+/** Detecta pick do tipo "Casa Race 5 Cantos" / "Fora Race 5 Cantos". */
+export function detectRacePick(
+  prog: Pick<Prognostico, "pick" | "mandante" | "visitante"> &
+    Partial<Pick<Prognostico, "jogo" | "mercado">>,
+): RacePickInfo | null {
+  const pick = norm(prog.pick);
+  if (!/\brace\b/.test(pick) && !/\bcorrida\b/.test(pick)) return null;
+  const m = pick.match(/(?:race|corrida)\s+(?:de\s+)?(\d+)/);
+  if (!m) return null;
+  const alvo = parseInt(m[1], 10);
+  if (!Number.isFinite(alvo) || alvo <= 0) return null;
+  const lado = pickSide(prog);
+  if (lado !== "casa" && lado !== "fora") return null;
+  return { alvo, lado };
+}
+
+
 export function calcularResultadoAuto(
   prog: Pick<Prognostico, "mercado" | "pick" | "linha" | "mandante" | "visitante"> &
     Partial<Pick<Prognostico, "jogo">>,
@@ -143,6 +165,17 @@ export function calcularResultadoAuto(
   }
 
   if (has(mercado, "cornermatrix") || has(mercado, "escanteios", "cantos")) {
+    // Race X Cantos/Corridas: pick "Casa Race N Cantos" ou "Fora Race N Cantos"
+    const race = detectRacePick(prog);
+    if (race) {
+      const { alvo, lado } = race;
+      const pickSideVal = lado === "casa" ? mandante : visitante;
+      const otherSideVal = lado === "casa" ? visitante : mandante;
+      if (pickSideVal < alvo) return "RED";
+      if (otherSideVal < alvo) return "GREEN";
+      // Ambos alcançaram o alvo: precisa entrada manual de quem chegou primeiro
+      return null;
+    }
     if (has(pick, "casa mais", "mandante mais")) return mandante > visitante ? "GREEN" : "RED";
     if (has(pick, "fora mais", "visitante mais")) return visitante > mandante ? "GREEN" : "RED";
   }
