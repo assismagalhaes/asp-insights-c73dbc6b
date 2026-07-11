@@ -15,7 +15,7 @@ from typing import Any
 
 HIST_DIR = Path(os.getenv("BASEBALL_HIST_DIR", "/home/ubuntu/jupyter/dados_baseball"))
 
-MODEL_VERSION = "MLB_V2_0"
+MODEL_VERSION = "MLB_V2_0_1_HISTORY_DEDUP"
 BASEBALL_MLB_HANDICAP_MODEL_VERSION = "MLB_V2_1_HANDICAP_NB_SHADOW"
 HANDICAP_ENABLED_MLB_V1_1 = False
 HANDICAP_CONTROLLED_ACTIVATION_MLB_V1_1 = False
@@ -502,7 +502,12 @@ def sort_and_filter_history_rows(
 ) -> list[dict[str, str]]:
     cutoff = parse_history_date(cutoff_date, year) if cutoff_date else None
     materialized: list[tuple[datetime | None, int, dict[str, str]]] = []
+    seen_rows: set[tuple[tuple[str, str], ...]] = set()
     for index, row in enumerate(rows):
+        fingerprint = tuple((str(key), clean(value)) for key, value in row.items())
+        if fingerprint in seen_rows:
+            continue
+        seen_rows.add(fingerprint)
         row_date = parse_history_date(get_row_value(row, "Date"), year)
         if cutoff is not None and (row_date is None or row_date >= cutoff):
             continue

@@ -55,7 +55,7 @@ def margin_stats(
 
 class BaseballRunnerV11Tests(unittest.TestCase):
     def test_model_version_and_handicap_flag_are_set(self) -> None:
-        self.assertEqual(runner.MODEL_VERSION, "MLB_V2_0")
+        self.assertEqual(runner.MODEL_VERSION, "MLB_V2_0_1_HISTORY_DEDUP")
         self.assertFalse(runner.HANDICAP_ENABLED_MLB_V1_1)
         self.assertFalse(runner.HANDICAP_CONTROLLED_ACTIVATION_MLB_V1_1)
         self.assertTrue(runner.HANDICAP_SHADOW_ENABLED)
@@ -335,8 +335,8 @@ class BaseballRunnerV11Tests(unittest.TestCase):
 
         self.assertEqual(len(picks), 1)
         self.assertEqual(picks[0]["mercado"], "Moneyline")
-        self.assertEqual(picks[0]["modelo_versao"], "MLB_V2_0")
-        self.assertIn("modelo_versao=MLB_V2_0", picks[0]["observacoes"])
+        self.assertEqual(picks[0]["modelo_versao"], "MLB_V2_0_1_HISTORY_DEDUP")
+        self.assertIn("modelo_versao=MLB_V2_0_1_HISTORY_DEDUP", picks[0]["observacoes"])
 
     def test_moneyline_uses_median_odd_for_market_probability_and_best_odd_for_ev(self) -> None:
         picks: list[dict[str, object]] = []
@@ -406,6 +406,19 @@ class BaseballRunnerV11Tests(unittest.TestCase):
 
         self.assertEqual(len(filtered), 1)
         self.assertEqual(filtered[0]["Date"], "2026-07-09")
+
+    def test_history_filter_removes_exact_duplicates_and_keeps_doubleheaders(self) -> None:
+        rows = [
+            {"Gm#": "93", "Date": "Thursday Jul 9", "Tm": "MIL", "Opp": "STL", "R": "8", "RA": "4"},
+            {"Gm#": "93", "Date": "Thursday Jul 9", "Tm": "MIL", "Opp": "STL", "R": "8", "RA": "4"},
+            {"Gm#": "94", "Date": "Friday Jul 10 (1)", "Tm": "MIL", "Opp": "CHC", "R": "3", "RA": "2"},
+            {"Gm#": "95", "Date": "Friday Jul 10 (2)", "Tm": "MIL", "Opp": "CHC", "R": "3", "RA": "2"},
+        ]
+
+        filtered = runner.sort_and_filter_history_rows(rows, 2026, "2026-07-11")
+
+        self.assertEqual(len(filtered), 3)
+        self.assertEqual([row["Gm#"] for row in filtered], ["93", "94", "95"])
 
     def test_market_selection_keeps_principal_and_two_correlated_alternatives(self) -> None:
         picks = [
