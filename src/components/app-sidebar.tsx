@@ -3,6 +3,7 @@ import {
   BrainCircuit,
   Cpu,
   Database,
+  DownloadCloud,
   History,
   LayoutDashboard,
   ListChecks,
