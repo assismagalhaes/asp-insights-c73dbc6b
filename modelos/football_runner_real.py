@@ -1167,6 +1167,17 @@ def _inferir_times_linha(row: pd.Series) -> tuple[str, str]:
     return mandante, visitante
 
 
+def _cabecalho_confronto_contexto(bloco: str) -> str:
+    linhas = str(bloco or "").splitlines()
+    for indice, linha in enumerate(linhas):
+        if _comparable_context_text(linha) != "confronto":
+            continue
+        for candidata in linhas[indice + 1:]:
+            if candidata.strip():
+                return candidata.strip()
+    return ""
+
+
 def selecionar_contexto_do_prognostico(row: pd.Series, contexto_modelo: str) -> str:
     blocos = dividir_contexto_por_confronto(contexto_modelo)
     if not blocos:
@@ -1178,11 +1189,11 @@ def selecionar_contexto_do_prognostico(row: pd.Series, contexto_modelo: str) -> 
 
     if mandante_norm and visitante_norm:
         for bloco in blocos:
-            bloco_norm = _comparable_context_text(bloco)
-            if mandante_norm in bloco_norm and visitante_norm in bloco_norm:
+            cabecalho_norm = _comparable_context_text(_cabecalho_confronto_contexto(bloco))
+            if mandante_norm in cabecalho_norm and visitante_norm in cabecalho_norm:
                 return bloco
 
-    return blocos[0] if len(blocos) == 1 else ""
+    return ""
 
 
 def carregar_modulo_modelo_real():

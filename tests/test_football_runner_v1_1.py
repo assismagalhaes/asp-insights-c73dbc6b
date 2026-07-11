@@ -162,6 +162,40 @@ RPI Third FC
 
         self.assertEqual(selected, "")
 
+    def test_context_match_ignores_team_names_inside_other_match_history(self):
+        contexto = """Confronto:
+Shanghai Shenhua (2o) vs Beijing Guoan (5o) | (CHN - Super League)
+--- ULTIMOS 5 JOGOS NO LOCAL ---
+Shanghai Shenhua vs Shenzhen Xinpengcheng
+Beijing Guoan vs Qingdao West Coast
+
+Confronto:
+Shenzhen Xinpengcheng (15o) vs Qingdao West Coast (7o) | (CHN - Super League)
+--- DADOS TECNICOS ---
+RPI Shenzhen Xinpengcheng
+"""
+        row = output_row(
+            jogo="Shenzhen Xinpengcheng vs Qingdao West Coast",
+            mandante="Shenzhen Xinpengcheng",
+            visitante="Qingdao West Coast",
+        )
+
+        selected = runner.selecionar_contexto_do_prognostico(row, contexto)
+
+        self.assertIn("Shenzhen Xinpengcheng (15o) vs Qingdao West Coast (7o)", selected)
+        self.assertNotIn("Shanghai Shenhua", selected)
+
+    def test_single_mismatched_context_fails_closed(self):
+        contexto = """Confronto:
+Other FC vs Rival FC | (Brazil - Serie A)
+--- DADOS TECNICOS ---
+RPI Other FC
+"""
+
+        selected = runner.selecionar_contexto_do_prognostico(output_row(), contexto)
+
+        self.assertEqual(selected, "")
+
     def test_total_uses_exact_line_pair_without_market_blending(self):
         row = output_row(
             mercado="Total de Gols",
