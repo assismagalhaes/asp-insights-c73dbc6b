@@ -90,7 +90,7 @@ export function AppSidebar() {
               </span>
             </div>
           )}
-          <SidebarTrigger className="ml-auto shrink-0" />
+          
         </div>
       </SidebarHeader>
 
