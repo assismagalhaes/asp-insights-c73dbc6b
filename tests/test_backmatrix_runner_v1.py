@@ -33,8 +33,17 @@ class BackMatrixRunnerV1Tests(unittest.TestCase):
         self.assertEqual(runner.favorite_side_from_code(2), "Visitante")
         self.assertEqual(runner.favorite_class_from_code(3), "SUPERFAVORITO_CASA")
         self.assertEqual(runner.favorite_class_from_code(4), "SUPERFAVORITO_VISITANTE")
-        self.assertEqual(runner.favorite_class_from_code(5), "SEM_FAVORITO_CLARO")
+        self.assertEqual(runner.favorite_side_from_code(5, 2.15, 2.45), "Casa")
+        self.assertEqual(runner.favorite_side_from_code(5, 2.55, 2.20), "Visitante")
+        self.assertEqual(runner.favorite_class_from_code(5, 2.15, 2.45), "LEVE_FAVORITO_CASA")
+        self.assertEqual(runner.favorite_class_from_code(5, 2.55, 2.20), "LEVE_FAVORITO_VISITANTE")
         self.assertIsNone(runner.favorite_side_from_code(5))
+        self.assertIsNone(runner.favorite_publication_policy("SEM_SINAL_PACKBALL"))
+
+    def test_favorite_classes_have_separate_publication_policies(self) -> None:
+        self.assertEqual(runner.favorite_publication_policy("SUPERFAVORITO_CASA"), (1.05, 1.30, 80.0, 3.0))
+        self.assertEqual(runner.favorite_publication_policy("FAVORITO_VISITANTE"), (1.30, 2.00, 57.0, 4.0))
+        self.assertEqual(runner.favorite_publication_policy("LEVE_FAVORITO_CASA"), (2.00, 2.80, 45.0, 5.0))
 
     def test_no_vig_three_way_probabilities_sum_to_one_hundred(self) -> None:
         frame = pd.DataFrame([{"Odd Casa": 1.80, "Odd Empate": 3.60, "Odd Visitante": 4.50}])

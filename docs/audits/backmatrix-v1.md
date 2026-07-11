@@ -10,7 +10,7 @@ Back a clear home or away favorite only when the offered price remains favorable
 - Structural file: exactly 20 home-at-home / away-at-away matches per team, all leagues, allowing the previous season.
 - Forecast mode accepts `NS` (`NF` is normalized to `NS`); diagnostic backtest mode accepts `FT`.
 - The 83-column order, input hashes, generation timestamp and filenames are persisted per run.
-- PackBall favorite codes observed in the real feed are: `1` home favorite, `2` away favorite, `3` strong home favorite, `4` strong away favorite and `5` no clear favorite.
+- PackBall favorite codes are: `1` home favorite, `2` away favorite, `3` super home favorite, `4` super away favorite and `5` slight favorite. For code `5`, the side is derived from the lower valid odd. Empty values mean no PackBall favorite signal and are rejected.
 
 ## Probability model
 
@@ -24,12 +24,13 @@ Recent form receives 35-45% and the 20-match venue profile receives 55-65%. Comp
 
 ## Publication controls
 
-- Favorite decimal odd from 1.30 to 2.00.
-- Minimum favorite probability of 57%.
-- Base edge of 4%, increased when CV or component agreement is weaker.
+- Super favorite: odd from 1.05 to 1.30, minimum probability 80% and base edge 3%.
+- Standard favorite: odd from 1.30 to 2.00, minimum probability 57% and base edge 4%.
+- Slight favorite: odd from 2.00 to 2.80, minimum probability 45% and base edge 5%.
+- Each base edge is increased when CV or component agreement is weaker.
 - CV scored-goal floor of 40% per team and 47.5% on average.
 - At least 0.20 decimal-odd separation from the opposing team.
-- PackBall code `5`, invalid paired odds and a side disagreement are rejected.
+- Missing PackBall signal, invalid paired odds and a side disagreement are rejected.
 - Fractional Kelly is 10%, capped at 1.00u per game; strong market conflict is capped at 0.25u and marked as reserve.
 
 ## Backtest limitation
@@ -37,6 +38,8 @@ Recent form receives 35-45% and the 20-match venue profile receives 55-65%. Comp
 Historical `FT` rows from a current export are diagnostic only because their features may have been refreshed after kickoff. Official calibration requires immutable pre-kickoff snapshots. After labeling `outcome`, run:
 
 On the supplied files, 112 settled standard favorites with valid paired odds had a 58.0% win rate. The uncalibrated v1 score improved diagnostic ranking AUC from 0.540 for market no-vig to 0.580, but remained underconfident and did not improve Brier Score (0.2434 versus 0.2430). These figures justify keeping market as the dominant component and prohibit activating calibration from this retrospective export.
+
+Code `5` slight favorites won 24 of 43 settled non-draw matches (55.8%) at a median favorite odd of 2.255 in the supplied export. This is supporting evidence for a separate conservative publication band, not calibration evidence, because the same post-kickoff refresh caveat applies.
 
 After labeling genuine pre-kickoff snapshots, run:
 

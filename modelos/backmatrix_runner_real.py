@@ -19,7 +19,7 @@ import pandas as pd
 
 
 MODEL_NAME = "ASP BackMatrix"
-MODEL_VERSION = "v1.0"
+MODEL_VERSION = "v1.1"
 PACKBALL_FILE_10 = "PackBall Custom ASP_BackMatrix_10 {date}.csv"
 PACKBALL_FILE_20 = "PackBall Custom ASP_BackMatrix_20 {date}.csv"
 
@@ -49,6 +49,14 @@ MIN_ODD = 1.30
 MAX_ODD = 2.00
 MIN_PROBABILITY = 57.0
 MIN_EDGE = 4.0
+SUPER_MIN_ODD = 1.05
+SUPER_MAX_ODD = 1.30
+SUPER_MIN_PROBABILITY = 80.0
+SUPER_MIN_EDGE = 3.0
+LIGHT_MIN_ODD = 2.00
+LIGHT_MAX_ODD = 2.80
+LIGHT_MIN_PROBABILITY = 45.0
+LIGHT_MIN_EDGE = 5.0
 MIN_CV_INDIVIDUAL = 40.0
 MIN_CV_AVERAGE = 47.5
 MAX_MARKET_OVERROUND = 0.18
@@ -363,7 +371,7 @@ def finalize_probabilities(base: pd.DataFrame) -> pd.DataFrame:
     return base
 
 
-def favorite_side_from_code(value) -> str | None:
+def favorite_side_from_code(value, home_odd=None, away_odd=None) -> str | None:
     try:
         code = int(float(value))
     except (TypeError, ValueError):
@@ -372,21 +380,45 @@ def favorite_side_from_code(value) -> str | None:
         return "Casa"
     if code in {2, 4}:
         return "Visitante"
+    if code == 5:
+        try:
+            home_odd = float(home_odd)
+            away_odd = float(away_odd)
+        except (TypeError, ValueError):
+            return None
+        if not (np.isfinite(home_odd) and np.isfinite(away_odd)) or home_odd == away_odd:
+            return None
+        return "Casa" if home_odd < away_odd else "Visitante"
     return None
 
 
-def favorite_class_from_code(value) -> str:
+def favorite_class_from_code(value, home_odd=None, away_odd=None) -> str:
     try:
         code = int(float(value))
     except (TypeError, ValueError):
         return "SEM_SINAL_PACKBALL"
-    return {
+    favorite_class = {
         1: "FAVORITO_CASA",
         2: "FAVORITO_VISITANTE",
         3: "SUPERFAVORITO_CASA",
         4: "SUPERFAVORITO_VISITANTE",
-        5: "SEM_FAVORITO_CLARO",
-    }.get(code, "CODIGO_DESCONHECIDO")
+    }.get(code)
+    if favorite_class:
+        return favorite_class
+    if code == 5:
+        side = favorite_side_from_code(code, home_odd, away_odd)
+        return f"LEVE_FAVORITO_{side.upper()}" if side else "LEVE_FAVORITO_SEM_LADO"
+    return "CODIGO_DESCONHECIDO"
+
+
+def favorite_publication_policy(favorite_class: str) -> tuple[float, float, float, float] | None:
+    if favorite_class.startswith("SUPERFAVORITO_"):
+        return SUPER_MIN_ODD, SUPER_MAX_ODD, SUPER_MIN_PROBABILITY, SUPER_MIN_EDGE
+    if favorite_class.startswith("FAVORITO_"):
+        return MIN_ODD, MAX_ODD, MIN_PROBABILITY, MIN_EDGE
+    if favorite_class.startswith("LEVE_FAVORITO_") and favorite_class != "LEVE_FAVORITO_SEM_LADO":
+        return LIGHT_MIN_ODD, LIGHT_MAX_ODD, LIGHT_MIN_PROBABILITY, LIGHT_MIN_EDGE
+    return None
 
 
 def calibrate_moneyline_probability(probability_pct: float) -> tuple[float, str]:
@@ -439,16 +471,19 @@ def _build_prediction(row: pd.Series) -> dict | None:
     opponent_side = "Visitante" if side == "Casa" else "Casa"
     odd = float(row[f"Odd {side}"])
     opponent_odd = float(row[f"Odd {opponent_side}"])
-    if not (MIN_ODD <= odd <= MAX_ODD):
-        return None
     if opponent_odd - odd < MIN_FAVORITE_ODDS_GAP:
         return None
 
-    packball_class = favorite_class_from_code(row.get("Favoritismo PackBall"))
-    packball_side = favorite_side_from_code(row.get("Favoritismo PackBall"))
-    if packball_class == "SEM_FAVORITO_CLARO":
+    packball_value = row.get("Favoritismo PackBall")
+    packball_class = favorite_class_from_code(packball_value, home_odd, away_odd)
+    packball_side = favorite_side_from_code(packball_value, home_odd, away_odd)
+    policy = favorite_publication_policy(packball_class)
+    if policy is None or packball_side is None:
         return None
-    if packball_side is not None and packball_side != side:
+    if packball_side != side:
+        return None
+    min_odd, max_odd, min_probability, base_edge = policy
+    if not (min_odd <= odd <= max_odd):
         return None
 
     cv_home = float(row.get("CV Casa"))
@@ -461,11 +496,11 @@ def _build_prediction(row: pd.Series) -> dict | None:
 
     probability_pre_calibration = float(row[f"Prob Final {side}"])
     probability, calibration_status = calibrate_moneyline_probability(probability_pre_calibration)
-    if probability < MIN_PROBABILITY:
+    if probability < min_probability:
         return None
     edge = (odd * probability / 100.0 - 1.0) * 100.0
     spread = float(row[f"Spread {side}"])
-    required_edge = MIN_EDGE + min(2.0, max(0.0, 55.0 - cv_average) * 0.08 + max(0.0, spread - 15.0) * 0.05)
+    required_edge = base_edge + min(2.0, max(0.0, 55.0 - cv_average) * 0.08 + max(0.0, spread - 15.0) * 0.05)
     if edge < required_edge:
         return None
 
@@ -610,13 +645,16 @@ def build_diagnostic_funnel(base: pd.DataFrame) -> tuple[dict, str]:
         counts["odds_pareadas"] += 1
         side = "Casa" if float(row["Odd Casa"]) < float(row["Odd Visitante"]) else "Visitante"
         opponent = "Visitante" if side == "Casa" else "Casa"
-        packball_side = favorite_side_from_code(row.get("Favoritismo PackBall"))
-        packball_class = favorite_class_from_code(row.get("Favoritismo PackBall"))
-        if packball_class not in {"FAVORITO_CASA", "FAVORITO_VISITANTE"} or packball_side != side:
+        packball_value = row.get("Favoritismo PackBall")
+        packball_side = favorite_side_from_code(packball_value, row["Odd Casa"], row["Odd Visitante"])
+        packball_class = favorite_class_from_code(packball_value, row["Odd Casa"], row["Odd Visitante"])
+        policy = favorite_publication_policy(packball_class)
+        if policy is None or packball_side != side:
             continue
         counts["favorito_packball_valido"] += 1
         odd = float(row[f"Odd {side}"])
-        if not (MIN_ODD <= odd <= MAX_ODD) or float(row[f"Odd {opponent}"]) - odd < MIN_FAVORITE_ODDS_GAP:
+        min_odd, max_odd, min_probability, base_edge = policy
+        if not (min_odd <= odd <= max_odd) or float(row[f"Odd {opponent}"]) - odd < MIN_FAVORITE_ODDS_GAP:
             continue
         counts["faixa_odd_e_gap"] += 1
         cv_home, cv_away = float(row["CV Casa"]), float(row["CV Visitante"])
@@ -627,17 +665,18 @@ def build_diagnostic_funnel(base: pd.DataFrame) -> tuple[dict, str]:
         probability, _ = calibrate_moneyline_probability(float(row[f"Prob Final {side}"]))
         edge = odd * probability - 100.0
         spread = float(row[f"Spread {side}"])
-        required_edge = MIN_EDGE + min(2.0, max(0.0, 55.0 - cv_average) * 0.08 + max(0.0, spread - 15.0) * 0.05)
+        required_edge = base_edge + min(2.0, max(0.0, 55.0 - cv_average) * 0.08 + max(0.0, spread - 15.0) * 0.05)
         candidates.append({
             "jogo": f"{row['Time Casa']} vs {row['Time Visitante']}",
             "lado": side,
+            "classe_packball": packball_class,
             "odd": round(odd, 2),
             "probabilidade": round(probability, 2),
             "edge": round(edge, 2),
             "edge_exigido": round(required_edge, 2),
             "cv_medio": round(cv_average, 2),
         })
-        if probability < MIN_PROBABILITY:
+        if probability < min_probability:
             continue
         counts["probabilidade_aprovada"] += 1
         if edge < required_edge:
@@ -653,7 +692,7 @@ def build_diagnostic_funnel(base: pd.DataFrame) -> tuple[dict, str]:
         lines.append("Melhores candidatos antes dos cortes finais:")
         for item in candidates[:8]:
             lines.append(
-                f"- {item['jogo']} | {item['lado']} | odd {item['odd']:.2f} | "
+                f"- {item['jogo']} | {item['lado']} | {item['classe_packball']} | odd {item['odd']:.2f} | "
                 f"prob {item['probabilidade']:.2f}% | edge {item['edge']:.2f}% "
                 f"(mín. {item['edge_exigido']:.2f}%) | CV médio {item['cv_medio']:.2f}%"
             )
