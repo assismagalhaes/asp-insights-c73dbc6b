@@ -4,7 +4,12 @@ import numpy as np
 import logging
 import math
 import csv
+import hashlib
+import json
+import os
+from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 PACKBALL_FILE_5 = "PackBall Custom over_gols_ft_5 {date}.csv"
 PACKBALL_FILE_20 = "PackBall Custom over_gols_ft_20 {date}.csv"
@@ -32,7 +37,7 @@ output_dir = Path("Prognostico")
 
 # Nome comercial do modelo para identificação no Lovable.
 MODEL_NAME = "ASP GoalMatrix"
-MODEL_VERSION = "v1.0"
+MODEL_VERSION = "v2.0"
 
 # Modo de execução:
 #   prognostico = apenas jogos NS
@@ -51,6 +56,31 @@ w_hist, w_sim, w_imp = 0.40, 0.50, 0.10
 
 # Pesos específicos para Primeiro a Marcar: mercado mais volátil.
 w_hist_first, w_sim_first, w_imp_first = 0.35, 0.55, 0.10
+
+FIRST_GOAL_ENABLED = False
+MIN_EDGE_OU = 4.0
+MIN_EDGE_BTTS = 5.0
+COMPONENT_DISAGREEMENT_THRESHOLD = 12.0
+STRONG_MARKET_CONFLICT_THRESHOLD = 20.0
+DISAGREEMENT_HAIRCUT_STRENGTH = 0.25
+DISAGREEMENT_HAIRCUT_MAX_PP = 5.0
+
+RECENT_WEIGHT_MIN = 0.25
+RECENT_WEIGHT_MAX = 0.50
+RECENT_WEIGHT_BASE = 0.35
+RECENT_DIVERGENCE_START = 0.30
+RECENT_DIVERGENCE_RANGE = 1.20
+RECENT_DIVERGENCE_MAX_BOOST = 0.10
+
+KELLY_FRACTION = 0.125
+MAX_PICK_UNITS = 1.0
+MAX_MARKET_UNITS = 1.5
+MAX_GAME_UNITS = 2.0
+MAX_CORRELATED_LINES = 3
+
+MIN_OOS_CALIBRATION_SAMPLE = 100
+CALIBRATION_PATH = Path(os.getenv("GOALMATRIX_CALIBRATION_PATH", Path(__file__).with_name("goalmatrix_calibration.json")))
+RUN_PROVENANCE: dict[str, object] = {}
 
 ths_ft = [1.5, 2.5, 3.5, 4.5]
 n_sims = 10_000
@@ -180,6 +210,19 @@ cols_normalizados = [
 # ------------------------------------------------------------
 # UTILITÁRIOS I/O + NORMALIZAÇÃO
 # ------------------------------------------------------------
+SOURCE_HEADERS = [
+    "Country ", "Short", "League ", "Hour", "Status", "Home Team", "Result Home",
+    "Result Visitor", "Visitor Team", "Odds", "Odds.1", "Odds.2", "Odds.3", "Odds.4",
+    "Odds.5", "Odds.6", "Odds.7", "Odds.8", "Odds.9", "Odds.10", "Odds.11", "Odds.12",
+    "Odds.13", "Odds.14", "Global", "Casa", "Fora", "Casa.1", "Fora.1", "Global.1",
+    "Global.2", "Global.3", "Global.4", "Casa.2", "Fora.2", "Casa.3", "Fora.3",
+    "Casa.4", "Fora.4", "Casa.5", "Fora.5", "Casa.6", "Fora.6", "Global.5",
+    "Casa.7", "Fora.7", "Casa.8", "Fora.8", "Casa.9", "Fora.9", "Casa.10",
+    "Fora.10", "Casa.11", "Fora.11", "Casa.12", "Fora.12", "Casa.13", "Fora.13",
+    "Casa.14", "Fora.14", "Casa.15", "Fora.15", "Casa.16", "Fora.16",
+]
+
+
 def sniff_sep(path: Path) -> str:
     with open(path, "r", encoding="utf-8", errors="ignore") as f:
         sample = f.read(4096)
@@ -209,6 +252,37 @@ def load_gols_data(date_str: str, base_dir: Path) -> tuple[pd.DataFrame, pd.Data
         logging.info(f"{label} jogos lido com sep='{sep}': {path.name} -> {df.shape}")
         dfs[label] = df
     return dfs["5"], dfs["20"]
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def schema_sha256(columns) -> str:
+    payload = json.dumps([str(column) for column in columns], ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def validate_source_schema(df: pd.DataFrame, label: str) -> None:
+    actual = [str(column) for column in df.columns]
+    if actual != SOURCE_HEADERS:
+        mismatch = next(
+            (
+                index
+                for index, (expected, received) in enumerate(zip(SOURCE_HEADERS, actual))
+                if expected != received
+            ),
+            min(len(actual), len(SOURCE_HEADERS)),
+        )
+        expected = SOURCE_HEADERS[mismatch] if mismatch < len(SOURCE_HEADERS) else "<missing>"
+        received = actual[mismatch] if mismatch < len(actual) else "<missing>"
+        raise ValueError(
+            f"GOALMATRIX_SCHEMA_DRIFT:{label}:index={mismatch}:expected={expected!r}:received={received!r}"
+        )
 
 
 def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -379,6 +453,13 @@ def merge_5_20(df5: pd.DataFrame, df20: pd.DataFrame) -> pd.DataFrame:
 # ------------------------------------------------------------
 # PESOS DINÂMICOS 5/20 via CV + divergência recente
 # ------------------------------------------------------------
+def _previous15_from_windows(recent5: pd.Series, aggregate20: pd.Series) -> pd.Series:
+    recent = recent5.astype(float)
+    aggregate = aggregate20.astype(float)
+    previous = (20.0 * aggregate - 5.0 * recent) / 15.0
+    return previous.where(np.isfinite(previous), aggregate)
+
+
 def build_dynamic_weights(merged: pd.DataFrame) -> pd.DataFrame:
     """
     No PackBall usado aqui: CV maior = maior consistência.
@@ -405,30 +486,33 @@ def build_dynamic_weights(merged: pd.DataFrame) -> pd.DataFrame:
     merged["_cv_idx_away_20"] = cv_idx_away_20
     merged["_cv_game"] = (cv_idx_home_20 + cv_idx_away_20) / 2.0
 
-    # Peso base do 20j:
-    #   CV 50 -> 50%
-    #   CV 70 -> 58%
-    #   CV 90 -> 66%
-    #   limite final: 45% a 68%
-    w20_base = 0.30 + 0.0040 * merged["_cv_game"]
-
-    # Divergência média entre os dados recentes (5j) e estruturais (20j).
-    # Quanto maior a diferença, maior a chance de mudança recente de padrão.
-    delta_form = (
-        (merged["Média Gols Marcados Casa_5"] - merged["Média Gols Marcados Casa_20"]).abs() +
-        (merged["Média Gols Sofridos Casa_5"] - merged["Média Gols Sofridos Casa_20"]).abs() +
-        (merged["Média Gols Marcados Visitante_5"] - merged["Média Gols Marcados Visitante_20"]).abs() +
-        (merged["Média Gols Sofridos Visitante_5"] - merged["Média Gols Sofridos Visitante_20"]).abs()
-    ) / 4.0
+    component_names = (
+        "Média Gols Marcados Casa",
+        "Média Gols Sofridos Casa",
+        "Média Gols Marcados Visitante",
+        "Média Gols Sofridos Visitante",
+    )
+    deltas = []
+    for name in component_names:
+        previous15 = _previous15_from_windows(merged[f"{name}_5"], merged[f"{name}_20"])
+        merged[f"_previous15_{name}"] = previous15
+        deltas.append((merged[f"{name}_5"].astype(float) - previous15).abs())
+    delta_form = sum(deltas) / float(len(deltas))
 
     merged["_delta_form_5v20"] = delta_form.round(3)
 
-    # Só reduz o peso do 20j quando a diferença média passa de 0.30 gol.
-    # Penalidade máxima: 8 pontos percentuais.
-    recency_boost = ((delta_form - 0.30) / 1.20).clip(lower=0.0, upper=0.08)
-
-    merged["_w20"] = (w20_base - recency_boost).clip(lower=0.45, upper=0.68)
-    merged["_w5"] = 1.0 - merged["_w20"]
+    recency_boost = (
+        ((delta_form - RECENT_DIVERGENCE_START) / RECENT_DIVERGENCE_RANGE)
+        .clip(lower=0.0, upper=1.0)
+        * RECENT_DIVERGENCE_MAX_BOOST
+    )
+    consistency_adjustment = ((50.0 - merged["_cv_game"].astype(float)) / 100.0).clip(-0.05, 0.05)
+    merged["_w_recent5"] = (
+        RECENT_WEIGHT_BASE + recency_boost + consistency_adjustment
+    ).clip(lower=RECENT_WEIGHT_MIN, upper=RECENT_WEIGHT_MAX)
+    merged["_w_previous15"] = 1.0 - merged["_w_recent5"]
+    merged["_w5"] = merged["_w_recent5"]
+    merged["_w20"] = merged["_w_previous15"]
     return merged
 
 
@@ -443,23 +527,32 @@ def blend(merged: pd.DataFrame, col_base: str) -> pd.Series:
     if c5 not in merged.columns or c20 not in merged.columns:
         raise KeyError(f"Colunas esperadas não encontradas para blend: {c5} / {c20}")
 
-    if ("_w5" not in merged.columns) or ("_w20" not in merged.columns):
-        w5 = pd.Series(0.50, index=merged.index, dtype=float)
-        w20 = pd.Series(0.50, index=merged.index, dtype=float)
+    if col_base.startswith("CV "):
+        return merged[c20].astype(float)
+
+    if ("_w_recent5" not in merged.columns) or ("_w_previous15" not in merged.columns):
+        w5 = pd.Series(RECENT_WEIGHT_BASE, index=merged.index, dtype=float)
+        w15 = 1.0 - w5
     else:
-        w5 = merged["_w5"].astype(float)
-        w20 = merged["_w20"].astype(float)
+        w5 = merged["_w_recent5"].astype(float)
+        w15 = merged["_w_previous15"].astype(float)
 
     x5 = merged[c5].astype(float)
     x20 = merged[c20].astype(float)
+    x15 = _previous15_from_windows(x5, x20)
+
+    if "Ocorrência" in col_base or col_base.startswith("H2H "):
+        x15 = x15.clip(lower=0.0, upper=100.0)
+    elif "Gols" in col_base or "Expectativa" in col_base:
+        x15 = x15.clip(lower=0.0)
 
     valid5 = x5.notna()
-    valid20 = x20.notna()
+    valid15 = x15.notna()
 
-    den = valid5.astype(float) * w5 + valid20.astype(float) * w20
+    den = valid5.astype(float) * w5 + valid15.astype(float) * w15
     num = (
         x5.fillna(0.0) * w5 * valid5.astype(float) +
-        x20.fillna(0.0) * w20 * valid20.astype(float)
+        x15.fillna(0.0) * w15 * valid15.astype(float)
     )
 
     out = pd.Series(np.nan, index=merged.index, dtype=float)
@@ -545,6 +638,100 @@ def calibrate_multiclass(probs: pd.DataFrame, shrink: float = 0.85) -> pd.DataFr
     return out
 
 
+def load_goalmatrix_calibration() -> dict:
+    if not CALIBRATION_PATH.exists():
+        return {}
+    try:
+        payload = json.loads(CALIBRATION_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def apply_oos_calibration(market: str, probability_pct: pd.Series) -> tuple[pd.Series, dict]:
+    config = load_goalmatrix_calibration().get("markets", {}).get(market, {})
+    sample_size = int(config.get("sample_size") or 0)
+    active = bool(config.get("active")) and bool(config.get("out_of_sample"))
+    if not active or sample_size < MIN_OOS_CALIBRATION_SAMPLE:
+        return probability_pct.astype(float), {
+            "status": "identity_insufficient_oos_sample",
+            "sample_size": sample_size,
+        }
+    intercept = float(config.get("intercept", 0.0))
+    slope = float(config.get("slope", 1.0))
+    p = (probability_pct.astype(float) / 100.0).clip(1e-6, 1.0 - 1e-6)
+    logit = np.log(p / (1.0 - p))
+    calibrated = 1.0 / (1.0 + np.exp(-(intercept + slope * logit)))
+    return (calibrated * 100.0).clip(0.0, 100.0), {
+        "status": "platt_logit_oos",
+        "sample_size": sample_size,
+        "intercept": intercept,
+        "slope": slope,
+    }
+
+
+def apply_component_disagreement_haircut(
+    probability_pct: pd.Series,
+    components: list[pd.Series],
+    market_probability_pct: pd.Series,
+) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series]:
+    matrix = np.vstack([component.astype(float).values for component in components])
+    spread = pd.Series(np.nanmax(matrix, axis=0) - np.nanmin(matrix, axis=0), index=probability_pct.index)
+    requested = (
+        (spread - COMPONENT_DISAGREEMENT_THRESHOLD).clip(lower=0.0)
+        * DISAGREEMENT_HAIRCUT_STRENGTH
+    ).clip(upper=DISAGREEMENT_HAIRCUT_MAX_PP)
+    delta = probability_pct.astype(float) - market_probability_pct.astype(float)
+    distance = delta.abs()
+    haircut = pd.concat([requested, distance], axis=1).min(axis=1)
+    direction = pd.Series(np.sign(delta), index=probability_pct.index)
+    adjusted = (probability_pct.astype(float) - direction * haircut).clip(0.0, 100.0)
+    conflict = spread >= STRONG_MARKET_CONFLICT_THRESHOLD
+    return adjusted, haircut, spread, conflict
+
+
+def finalize_two_way_probabilities(
+    hist_a: pd.Series,
+    hist_b: pd.Series,
+    sim_a: pd.Series,
+    sim_b: pd.Series,
+    market_a: pd.Series,
+    market_b: pd.Series,
+    weights: list[float],
+    shrink: float,
+    market_key: str,
+) -> dict[str, object]:
+    paired = (
+        np.isfinite(market_a.astype(float)) & np.isfinite(market_b.astype(float))
+    )
+    raw_a = weighted_mix_pct([hist_a, sim_a, market_a], weights)
+    raw_b = weighted_mix_pct([hist_b, sim_b, market_b], weights)
+    total = raw_a + raw_b
+    valid_total = np.isfinite(total) & (total > 0) & paired
+    normalized_a = pd.Series(np.nan, index=hist_a.index, dtype=float)
+    normalized_a.loc[valid_total] = raw_a.loc[valid_total] / total.loc[valid_total] * 100.0
+    heuristic_a = calibrate(normalized_a, shrink=shrink)
+    oos_a, calibration = apply_oos_calibration(market_key, heuristic_a)
+    final_a, haircut, spread, conflict = apply_component_disagreement_haircut(
+        oos_a,
+        [hist_a, sim_a, market_a],
+        market_a,
+    )
+    final_a = final_a.where(valid_total)
+    final_b = (100.0 - final_a).where(valid_total)
+    return {
+        "a": final_a.round(2),
+        "b": final_b.round(2),
+        "raw_a": normalized_a.round(2),
+        "pre_haircut_a": oos_a.round(2),
+        "haircut": haircut.round(2),
+        "spread": spread.round(2),
+        "conflict": conflict.fillna(False),
+        "paired": pd.Series(paired, index=hist_a.index),
+        "calibration": calibration,
+    }
+
+
 def _is_value_pick(
     prob,
     odd,
@@ -552,6 +739,7 @@ def _is_value_pick(
     min_odd: float = MIN_ODD,
     max_odd: float = MAX_ODD,
     buffer: float = VALUE_BUFFER,
+    min_edge: float = 0.0,
 ) -> bool:
     try:
         if pd.isna(prob) or pd.isna(odd):
@@ -571,7 +759,8 @@ def _is_value_pick(
         return False
 
     odd_valor = 100.0 / prob
-    return odd >= odd_valor * float(buffer)
+    edge = (odd * prob / 100.0 - 1.0) * 100.0
+    return odd >= odd_valor * float(buffer) and edge >= float(min_edge)
 
 
 def _passes_cv_filter(row: pd.Series, min_cv: float) -> bool:
@@ -587,20 +776,20 @@ def _passes_cv_filter(row: pd.Series, min_cv: float) -> bool:
     return (cv_home >= float(min_cv)) and (cv_away >= float(min_cv))
 
 
-def _market_thresholds(mercado: str, pick: str = "") -> tuple[float, float]:
-    """Retorna (probabilidade mínima, CV mínimo) por mercado/pick."""
+def _market_thresholds(mercado: str, pick: str = "") -> tuple[float, float, float]:
+    """Return minimum probability, consistency and edge by market."""
     mercado = str(mercado).strip().lower()
     pick = str(pick).strip().lower()
 
     if mercado == "over/under gols":
-        return MIN_PROB_OU, MIN_CV_OU
+        return MIN_PROB_OU, MIN_CV_OU, MIN_EDGE_OU
     if mercado == "btts":
-        return MIN_PROB_BTTS, MIN_CV_BTTS
+        return MIN_PROB_BTTS, MIN_CV_BTTS, MIN_EDGE_BTTS
     if mercado == "primeiro a marcar":
         if pick == "sem gol":
-            return MIN_PROB_SEM_GOL, MIN_CV_SEM_GOL
-        return MIN_PROB_FIRST, MIN_CV_FIRST
-    return MIN_PROB, MIN_CV_MARKED
+            return MIN_PROB_SEM_GOL, MIN_CV_SEM_GOL, MIN_EDGE_BTTS
+        return MIN_PROB_FIRST, MIN_CV_FIRST, MIN_EDGE_BTTS
+    return MIN_PROB, MIN_CV_MARKED, MIN_EDGE_OU
 
 
 def apply_value_filter(
@@ -609,12 +798,15 @@ def apply_value_filter(
     odd_col: str,
     min_prob: float = MIN_PROB,
     min_cv: float | None = None,
+    min_edge: float = 0.0,
 ) -> pd.DataFrame:
     """Aplica filtro de valor, faixa de odd, probabilidade mínima e CV mínimo do mercado."""
     base = base.copy()
 
     def _row_ok(r: pd.Series) -> bool:
-        value_ok = _is_value_pick(r.get(prob_col), r.get(odd_col), min_prob=min_prob)
+        value_ok = _is_value_pick(
+            r.get(prob_col), r.get(odd_col), min_prob=min_prob, min_edge=min_edge
+        )
         if not value_ok:
             return False
         if min_cv is None:
@@ -730,7 +922,7 @@ def add_first_goal_cost_indicators(base: pd.DataFrame, sim_ng_pct: pd.Series) ->
 # ------------------------------------------------------------
 def simulate_poisson_gamma_bivariate(lam_home: np.ndarray,
                                      lam_away: np.ndarray,
-                                     alpha: float,
+                                     alpha,
                                      n_sims: int,
                                      seed: int = 42) -> tuple[np.ndarray, np.ndarray]:
     lam_home = np.asarray(lam_home, dtype=float)
@@ -742,13 +934,18 @@ def simulate_poisson_gamma_bivariate(lam_home: np.ndarray,
     rng = np.random.default_rng(seed)
     n_games = lam_home.shape[0]
 
-    if not np.isfinite(alpha) or alpha <= 0:
+    alpha_values = np.asarray(alpha, dtype=float)
+    if alpha_values.ndim == 0:
+        alpha_values = np.full(n_games, float(alpha_values), dtype=float)
+    alpha_values = np.broadcast_to(alpha_values, (n_games,)).astype(float)
+    if not np.isfinite(alpha_values).any() or np.nanmax(alpha_values) <= 0:
         home = rng.poisson(lam_home[:, None], size=(n_games, n_sims))
         away = rng.poisson(lam_away[:, None], size=(n_games, n_sims))
         return home, away
 
-    k = 1.0 / alpha
-    g = rng.gamma(shape=k, scale=1.0 / k, size=(n_games, n_sims))  # mean=1
+    safe_alpha = np.where(np.isfinite(alpha_values) & (alpha_values > 0), alpha_values, 1e-9)
+    k = (1.0 / safe_alpha)[:, None]
+    g = rng.gamma(shape=k, scale=1.0 / k, size=(n_games, n_sims))
     home = rng.poisson(lam_home[:, None] * g)
     away = rng.poisson(lam_away[:, None] * g)
     return home, away
@@ -789,6 +986,71 @@ def estimate_share_home_from_averages(merged: pd.DataFrame, mu_home_for: pd.Seri
     return sh
 
 
+def build_league_season_baselines(merged: pd.DataFrame) -> pd.DataFrame:
+    out = merged.copy()
+    out["_season"] = pd.to_datetime(out["Data/Hora"], errors="coerce").dt.year.fillna(0).astype(int)
+    config = load_goalmatrix_calibration().get("league_baselines", {})
+    totals = []
+    shares = []
+    statuses = []
+    for _, row in out.iterrows():
+        country = str(row.get("Pais") or "")
+        league = str(row.get("Liga") or "")
+        candidate_keys = (
+            "|".join(str(row.get(column) or "") for column in LEAGUE_KEYS),
+            f"{country} - {league}",
+            league,
+        )
+        item = next((config[key] for key in candidate_keys if isinstance(config, dict) and key in config), {})
+        sample_size = int(item.get("sample_size") or 0)
+        active = bool(item.get("active")) and bool(item.get("out_of_sample")) and sample_size >= 50
+        source_total = float(row.get("Média Gols Liga_20")) if pd.notna(row.get("Média Gols Liga_20")) else L_TOTAL_DEFAULT
+        source_total = float(np.clip(source_total, L_TOTAL_CLIP[0], L_TOTAL_CLIP[1]))
+        if active:
+            reliability = sample_size / (sample_size + 100.0)
+            total = reliability * float(item.get("total_mean", source_total)) + (1.0 - reliability) * source_total
+            share = reliability * float(item.get("home_share", DEFAULT_SHARE_HOME)) + (1.0 - reliability) * DEFAULT_SHARE_HOME
+            statuses.append("league_oos_shrunk")
+        else:
+            total = 0.75 * source_total + 0.25 * L_TOTAL_DEFAULT
+            share = DEFAULT_SHARE_HOME
+            statuses.append("external_league20_plus_global_prior")
+        totals.append(float(np.clip(total, L_TOTAL_CLIP[0], L_TOTAL_CLIP[1])))
+        shares.append(float(np.clip(share, SHARE_HOME_CLIP[0], SHARE_HOME_CLIP[1])))
+    out["_L_total"] = totals
+    out["_share_home"] = shares
+    out["_league_baseline_status"] = statuses
+    return out
+
+
+def league_alpha_series(merged: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+    config = load_goalmatrix_calibration().get("league_alpha", {})
+    values = []
+    statuses = []
+    for _, row in merged.iterrows():
+        country = str(row.get("Pais") or "")
+        league = str(row.get("Liga") or "")
+        candidate_keys = (
+            "|".join(str(row.get(column) or "") for column in LEAGUE_KEYS),
+            f"{country} - {league}",
+            league,
+        )
+        item = {}
+        if isinstance(config, dict):
+            item = next((config[key] for key in candidate_keys if key in config), {})
+        sample_size = int(item.get("sample_size") or 0)
+        active = bool(item.get("active")) and bool(item.get("out_of_sample")) and sample_size >= 50
+        if active:
+            observed = float(item.get("alpha", ALPHA_DEFAULT))
+            shrink = sample_size / (sample_size + 100.0)
+            values.append(float(np.clip(shrink * observed + (1.0 - shrink) * ALPHA_DEFAULT, 0.0, 0.50)))
+            statuses.append("league_oos_shrunk")
+        else:
+            values.append(ALPHA_DEFAULT)
+            statuses.append("global_prior_insufficient_oos")
+    return pd.Series(values, index=merged.index), pd.Series(statuses, index=merged.index)
+
+
 def build_lambdas_force_model(
     merged: pd.DataFrame,
     mu_home_for: pd.Series,
@@ -797,15 +1059,8 @@ def build_lambdas_force_model(
     mu_away_against: pd.Series,
 ) -> tuple[pd.Series, pd.Series, pd.DataFrame]:
     eps = 1e-6
-    merged2 = merged.copy()
-
-    merged2["_share_home"] = estimate_share_home_from_averages(merged2, mu_home_for, mu_away_for)
-
-    L_total = merged2["Média Gols Liga_5"].astype(float)
-    fallback = merged2["Expectativa de Gols_5"].astype(float)
-    L_total = L_total.where(np.isfinite(L_total) & (L_total > 0), fallback)
-    L_total = L_total.where(np.isfinite(L_total) & (L_total > 0), np.nan)
-    L_total = L_total.fillna(L_TOTAL_DEFAULT).clip(lower=L_TOTAL_CLIP[0], upper=L_TOTAL_CLIP[1])
+    merged2 = build_league_season_baselines(merged)
+    L_total = merged2["_L_total"].astype(float)
 
     L_home = (L_total * merged2["_share_home"]).clip(lower=eps)
     L_away = (L_total * (1.0 - merged2["_share_home"])).clip(lower=eps)
@@ -833,7 +1088,6 @@ def build_lambdas_force_model(
     lam_home = (L_home * (A_home * D_away) ** LAMBDA_POWER).clip(lower=LAMBDA_CLIP[0], upper=LAMBDA_CLIP[1]).fillna(0.0)
     lam_away = (L_away * (A_away * D_home) ** LAMBDA_POWER).clip(lower=LAMBDA_CLIP[0], upper=LAMBDA_CLIP[1]).fillna(0.0)
 
-    merged2["_L_total"] = L_total
     merged2["_L_home"] = L_home
     merged2["_L_away"] = L_away
     return lam_home, lam_away, merged2
@@ -1030,9 +1284,76 @@ def _country_league(row: pd.Series) -> str:
         return f"{pais} - {liga}"
     return liga or pais
 
+
+def _pick_probability_diagnostics(row: pd.Series, mercado: str, pick: str, linha) -> dict:
+    if mercado == "Over/Under Gols" and linha not in (None, ""):
+        key = f"{float(linha)}"
+        is_over = pick == "Over"
+        hist_over = float(row.get(f"OU {key} Hist Over"))
+        sim_over = float(row.get(f"OU {key} Sim Over"))
+        vig_over = float(row.get(f"OU {key} NoVig Over"))
+        raw_over = float(row.get(f"OU {key} Prob Raw Over"))
+        pre_over = float(row.get(f"OU {key} Prob PreHaircut Over"))
+        return {
+            "market_type": "OU",
+            "selection_side": pick.upper(),
+            "prob_hist": hist_over if is_over else 100.0 - hist_over,
+            "prob_sim": sim_over if is_over else 100.0 - sim_over,
+            "prob_no_vig": vig_over if is_over else 100.0 - vig_over,
+            "prob_raw": raw_over if is_over else 100.0 - raw_over,
+            "prob_pre_haircut": pre_over if is_over else 100.0 - pre_over,
+            "haircut_pp": float(row.get(f"OU {key} Haircut")),
+            "component_spread_pp": float(row.get(f"OU {key} Spread")),
+            "market_conflict_status": row.get(f"OU {key} Conflict"),
+            "calibration_status": row.get(f"OU {key} Calibration"),
+        }
+    if mercado == "BTTS":
+        is_yes = pick == "BTTS Sim"
+        hist_yes = float(row.get("BTTS Hist Sim"))
+        sim_yes = float(row.get("BTTS Sim Model"))
+        vig_yes = float(row.get("BTTS NoVig Sim"))
+        raw_yes = float(row.get("BTTS Prob Raw Sim"))
+        pre_yes = float(row.get("BTTS Prob PreHaircut Sim"))
+        return {
+            "market_type": "BTTS",
+            "selection_side": "SIM" if is_yes else "NAO",
+            "prob_hist": hist_yes if is_yes else 100.0 - hist_yes,
+            "prob_sim": sim_yes if is_yes else 100.0 - sim_yes,
+            "prob_no_vig": vig_yes if is_yes else 100.0 - vig_yes,
+            "prob_raw": raw_yes if is_yes else 100.0 - raw_yes,
+            "prob_pre_haircut": pre_yes if is_yes else 100.0 - pre_yes,
+            "haircut_pp": float(row.get("BTTS Haircut")),
+            "component_spread_pp": float(row.get("BTTS Spread")),
+            "market_conflict_status": row.get("BTTS Conflict"),
+            "calibration_status": row.get("BTTS Calibration"),
+        }
+    return {"market_type": mercado, "selection_side": pick}
+
+
+def _diagnostic_text(row: pd.Series, diagnostics: dict) -> str:
+    return (
+        f"modelo_versao={MODEL_VERSION}; market_type={diagnostics.get('market_type')}; "
+        f"prob_hist={_fmt_obs_num(diagnostics.get('prob_hist'), 2)}; "
+        f"prob_sim={_fmt_obs_num(diagnostics.get('prob_sim'), 2)}; "
+        f"prob_no_vig={_fmt_obs_num(diagnostics.get('prob_no_vig'), 2)}; "
+        f"prob_raw={_fmt_obs_num(diagnostics.get('prob_raw'), 2)}; "
+        f"prob_pre_haircut={_fmt_obs_num(diagnostics.get('prob_pre_haircut'), 2)}; "
+        f"haircut_pp={_fmt_obs_num(diagnostics.get('haircut_pp'), 2)}; "
+        f"component_spread_pp={_fmt_obs_num(diagnostics.get('component_spread_pp'), 2)}; "
+        f"market_conflict_status={diagnostics.get('market_conflict_status') or 'ALINHADO'}; "
+        f"calibration_status={diagnostics.get('calibration_status') or 'identity'}; "
+        f"w_recent5={_fmt_obs_num(row.get('w5'), 3)}; "
+        f"w_previous15={_fmt_obs_num(row.get('w15 anterior'), 3)}; "
+        f"league_baseline_status={row.get('League Baseline Status')}; "
+        f"alpha={_fmt_obs_num(row.get('Alpha Liga'), 4)}; alpha_status={row.get('Alpha Status')}; "
+        f"input_hash_5={RUN_PROVENANCE.get('sha256_5', '-')}; "
+        f"input_hash_20={RUN_PROVENANCE.get('sha256_20', '-')}; "
+        f"schema_hash={RUN_PROVENANCE.get('schema_hash', '-')}"
+    )
+
 def _add_lovable_row(rows: list[dict], row: pd.Series, mercado: str, pick: str, linha, prob, odd) -> None:
-    min_prob, min_cv = _market_thresholds(mercado, pick)
-    if not _is_value_pick(prob, odd, min_prob=min_prob):
+    min_prob, min_cv, min_edge = _market_thresholds(mercado, pick)
+    if not _is_value_pick(prob, odd, min_prob=min_prob, min_edge=min_edge):
         return
     if not _passes_cv_filter(row, min_cv=min_cv):
         return
@@ -1041,6 +1362,10 @@ def _add_lovable_row(rows: list[dict], row: pd.Series, mercado: str, pick: str, 
     odd = float(odd)
     odd_valor = 100.0 / prob
     edge = ((odd * prob / 100.0) - 1.0) * 100.0
+    diagnostics = _pick_probability_diagnostics(row, mercado, pick, linha)
+    diagnostic_text = _diagnostic_text(row, diagnostics)
+    technical_context = _technical_context(row, mercado=mercado, pick=pick, linha=linha)
+    technical_context = f"{technical_context}\n--- MODELO ---\n{diagnostic_text}"
 
     dth = row.get("Data/Hora")
     data = dth.strftime("%d/%m/%Y") if pd.notna(dth) else ""
@@ -1063,11 +1388,103 @@ def _add_lovable_row(rows: list[dict], row: pd.Series, mercado: str, pick: str, 
         "odd_valor": round(odd_valor, 2),
         "probabilidade_final": round(prob, 2),
         "edge": round(edge, 2),
-        "observacoes": _fmt_obs(row, mercado=mercado, pick=pick, linha=linha),
-        "dados_tecnicos": _technical_context(row, mercado=mercado, pick=pick, linha=linha),
-        "contexto_adicional": _technical_context(row, mercado=mercado, pick=pick, linha=linha),
-        "contexto_modelo": _technical_context(row, mercado=mercado, pick=pick, linha=linha),
+        "modelo_versao": MODEL_VERSION,
+        "market_type": diagnostics.get("market_type"),
+        "selection_side": diagnostics.get("selection_side"),
+        "market_conflict_status": diagnostics.get("market_conflict_status") or "ALINHADO",
+        "prob_hist": round(float(diagnostics.get("prob_hist")), 2),
+        "prob_sim": round(float(diagnostics.get("prob_sim")), 2),
+        "prob_no_vig": round(float(diagnostics.get("prob_no_vig")), 2),
+        "prob_raw": round(float(diagnostics.get("prob_raw")), 2),
+        "prob_pre_haircut": round(float(diagnostics.get("prob_pre_haircut")), 2),
+        "haircut_pp": round(float(diagnostics.get("haircut_pp")), 2),
+        "component_spread_pp": round(float(diagnostics.get("component_spread_pp")), 2),
+        "calibration_status": diagnostics.get("calibration_status"),
+        "observacoes": _fmt_obs(row, mercado=mercado, pick=pick, linha=linha) + " | " + diagnostic_text,
+        "dados_tecnicos": technical_context,
+        "contexto_adicional": technical_context,
+        "contexto_modelo": technical_context,
     })
+
+
+def kelly_stake_units(probability_pct, odd, *, conflict: bool = False) -> float:
+    try:
+        probability = float(probability_pct) / 100.0
+        decimal_odd = float(odd)
+    except (TypeError, ValueError):
+        return 0.0
+    if not (0.0 < probability < 1.0) or decimal_odd <= 1.0:
+        return 0.0
+    b = decimal_odd - 1.0
+    full_kelly = max(0.0, (b * probability - (1.0 - probability)) / b)
+    units = min(MAX_PICK_UNITS, full_kelly * KELLY_FRACTION * 10.0)
+    if conflict:
+        units = min(units, 0.25)
+    return math.floor(units * 4.0 + 1e-9) / 4.0
+
+
+def limit_correlated_picks(rows: list[dict]) -> list[dict]:
+    grouped: dict[tuple[str, str], list[dict]] = {}
+    for row in rows:
+        grouped.setdefault((str(row.get("jogo")), str(row.get("market_type"))), []).append(row)
+    selected: list[dict] = []
+    for (_game, market_type), group in grouped.items():
+        ranked = sorted(group, key=lambda item: float(item.get("edge") or 0.0), reverse=True)
+        if not ranked:
+            continue
+        if market_type == "OU":
+            principal = ranked[0]
+            same_side = [item for item in ranked if item.get("selection_side") == principal.get("selection_side")]
+            principal_line = float(principal.get("linha"))
+            same_side.sort(
+                key=lambda item: (
+                    0 if item is principal else 1,
+                    abs(float(item.get("linha")) - principal_line),
+                    -float(item.get("edge") or 0.0),
+                )
+            )
+            chosen = same_side[:MAX_CORRELATED_LINES]
+        else:
+            chosen = ranked[:1]
+        for index, item in enumerate(chosen):
+            if item.get("market_conflict_status") == "CONFLITO_FORTE_COM_MERCADO":
+                item["selection_role"] = "RESERVA_CONFLITO_MERCADO"
+            else:
+                item["selection_role"] = "PRINCIPAL" if index == 0 else "ALTERNATIVA"
+        selected.extend(chosen)
+    return selected
+
+
+def apply_exposure_caps(rows: list[dict]) -> list[dict]:
+    game_used: dict[str, float] = {}
+    market_used: dict[tuple[str, str], float] = {}
+    kept: list[dict] = []
+    ordered = sorted(
+        rows,
+        key=lambda item: (
+            item.get("selection_role") == "RESERVA_CONFLITO_MERCADO",
+            item.get("selection_role") != "PRINCIPAL",
+            -float(item.get("edge") or 0.0),
+        ),
+    )
+    for row in ordered:
+        game = str(row.get("jogo") or "")
+        market = str(row.get("market_type") or "")
+        conflict = row.get("market_conflict_status") == "CONFLITO_FORTE_COM_MERCADO"
+        requested = kelly_stake_units(row.get("probabilidade_final"), row.get("odd_ofertada"), conflict=conflict)
+        available = min(
+            MAX_GAME_UNITS - game_used.get(game, 0.0),
+            MAX_MARKET_UNITS - market_used.get((game, market), 0.0),
+            MAX_PICK_UNITS,
+        )
+        allocated = math.floor(max(0.0, min(requested, available)) * 4.0 + 1e-9) / 4.0
+        if allocated < 0.25:
+            continue
+        row["stake"] = f"{allocated:.2f}".rstrip("0").rstrip(".") + "u"
+        game_used[game] = game_used.get(game, 0.0) + allocated
+        market_used[(game, market)] = market_used.get((game, market), 0.0) + allocated
+        kept.append(row)
+    return kept
 
 
 def build_lovable_export(base: pd.DataFrame) -> pd.DataFrame:
@@ -1094,14 +1511,20 @@ def build_lovable_export(base: pd.DataFrame) -> pd.DataFrame:
         _add_lovable_row(rows, row, "BTTS", "BTTS Sim", "", row.get("BTTS Sim prob"), row.get("Odd BTTS Sim"))
         _add_lovable_row(rows, row, "BTTS", "BTTS Não", "", row.get("BTTS Não prob"), row.get("Odd BTTS Não"))
 
-        _add_lovable_row(rows, row, "Primeiro a Marcar", "Casa", "", row.get("Casa 1º a Marcar prob"), row.get("Odd Casa 1º a Marcar"))
-        _add_lovable_row(rows, row, "Primeiro a Marcar", "Visitante", "", row.get("Visitante 1º a Marcar prob"), row.get("Odd Visitante 1º a Marcar"))
-        _add_lovable_row(rows, row, "Primeiro a Marcar", "Sem Gol", "", row.get("Sem Gol prob"), row.get("Odd Sem Gol"))
+        if FIRST_GOAL_ENABLED:
+            _add_lovable_row(rows, row, "Primeiro a Marcar", "Casa", "", row.get("Casa 1º a Marcar prob"), row.get("Odd Casa 1º a Marcar"))
+            _add_lovable_row(rows, row, "Primeiro a Marcar", "Visitante", "", row.get("Visitante 1º a Marcar prob"), row.get("Odd Visitante 1º a Marcar"))
+            _add_lovable_row(rows, row, "Primeiro a Marcar", "Sem Gol", "", row.get("Sem Gol prob"), row.get("Odd Sem Gol"))
+
+    rows = apply_exposure_caps(limit_correlated_picks(rows))
 
     cols = [
         "data", "hora", "esporte", "liga", "jogo", "mandante", "visitante",
         "mercado", "pick", "linha", "odd_ofertada", "odd_valor",
-        "probabilidade_final", "edge", "observacoes", "dados_tecnicos", "contexto_adicional", "contexto_modelo",
+        "probabilidade_final", "edge", "stake", "modelo_versao", "market_type", "selection_side",
+        "selection_role", "market_conflict_status", "prob_hist", "prob_sim", "prob_no_vig",
+        "prob_raw", "prob_pre_haircut", "haircut_pp", "component_spread_pp", "calibration_status",
+        "observacoes", "dados_tecnicos", "contexto_adicional", "contexto_modelo",
     ]
     out = pd.DataFrame(rows, columns=cols)
     if not out.empty:
@@ -1117,6 +1540,10 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
 
     # 1) Ler e normalizar (5 + 20)
     df5_raw, df20_raw = load_gols_data(date_str, base_dir)
+    validate_source_schema(df5_raw, "5j")
+    validate_source_schema(df20_raw, "20j")
+    if list(df5_raw.columns) != list(df20_raw.columns):
+        raise ValueError("GOALMATRIX_SCHEMA_MISMATCH:5j_vs_20j")
     df5 = coerce_numeric(normalize_columns(df5_raw))
     df20 = coerce_numeric(normalize_columns(df20_raw))
 
@@ -1137,7 +1564,7 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
     logging.info(f"merged (5+20) shape: {merged.shape}")
 
     # Campos invariantes: mantém _5
-    for _c in ("Expectativa de Gols", "Média Gols Liga"):
+    for _c in ("Expectativa de Gols",):
         c20 = f"{_c}_20"
         if c20 in merged.columns:
             merged.drop(columns=[c20], inplace=True)
@@ -1159,14 +1586,18 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
         mu_away_against=mu_away_conceded,
     )
 
-    alpha = ALPHA_DEFAULT
-    logging.info(f"α fixo (Poisson-Gamma): {alpha:.4f}")
+    alpha, alpha_status = league_alpha_series(merged)
+    logging.info(
+        "Alpha Poisson-Gamma: mean=%.4f statuses=%s",
+        float(alpha.mean()) if len(alpha) else ALPHA_DEFAULT,
+        alpha_status.value_counts().to_dict(),
+    )
 
     # 6) Simular gols
     sim_home_ft, sim_away_ft = simulate_poisson_gamma_bivariate(
         lambda_home.values,
         lambda_away.values,
-        alpha=alpha,
+        alpha=alpha.values,
         n_sims=n_sims,
         seed=SIM_SEED,
     )
@@ -1199,11 +1630,13 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
         "Colocação Time Casa": merged["Colocação Time Casa_5"],
         "Colocação Time Visitante": merged["Colocação Time Visitante_5"],
 
-        "w5": merged["_w5"].round(3),
-        "w20": merged["_w20"].round(3),
+        "w5": merged["_w_recent5"].round(3),
+        "w15 anterior": merged["_w_previous15"].round(3),
+        "w20": merged["_w_previous15"].round(3),
         "CV Game": merged["_cv_game"].round(2),
 
         "Share Home": merged["_share_home"].round(3),
+        "League Baseline Status": merged["_league_baseline_status"],
         "Gamma Home": merged["_gamma_home"].round(3),
         "Gamma Away": merged["_gamma_away"].round(3),
 
@@ -1223,6 +1656,8 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
         "Lambda Casa": lambda_home.round(3),
         "Lambda Visitante": lambda_away.round(3),
         "Lambda Total": (lambda_home + lambda_away).round(3),
+        "Alpha Liga": alpha.round(4),
+        "Alpha Status": alpha_status,
 
         "Occ BTTS Sim Avg": occ_btts_sim_avg.round(2),
         "Occ BTTS Não Avg": occ_btts_nao_avg.round(2),
@@ -1305,19 +1740,12 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
         imp_o = pd.Series(imp_o * 100.0, index=base.index)
         imp_u = pd.Series(imp_u * 100.0, index=base.index)
 
-        prob_o_raw = weighted_mix_pct([hist_o, sim_o, imp_o], [w_hist, w_sim, w_imp])
-        prob_u_raw = weighted_mix_pct([hist_u, sim_u, imp_u], [w_hist, w_sim, w_imp])
-
-        tot = prob_o_raw + prob_u_raw
-        tot_ok = np.isfinite(tot) & (tot > 0)
-
-        prob_o = pd.Series(np.nan, index=base.index)
-        prob_u = pd.Series(np.nan, index=base.index)
-        prob_o.loc[tot_ok] = (prob_o_raw.loc[tot_ok] / tot.loc[tot_ok] * 100.0)
-        prob_u.loc[tot_ok] = (prob_u_raw.loc[tot_ok] / tot.loc[tot_ok] * 100.0)
-
-        prob_o = calibrate(prob_o.round(2), shrink=SHRINK_OU)
-        prob_u = (100.0 - prob_o).round(2)
+        controls = finalize_two_way_probabilities(
+            hist_o, hist_u, sim_o, sim_u, imp_o, imp_u,
+            [w_hist, w_sim, w_imp], SHRINK_OU, "ou",
+        )
+        prob_o = controls["a"]
+        prob_u = controls["b"]
 
         prob_o_col = f"Over {t} Gols prob"
         prob_u_col = f"Under {t} Gols prob"
@@ -1325,11 +1753,20 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
         base[odd_o_col] = odd_o
         base[prob_u_col] = prob_u
         base[odd_u_col] = odd_u
+        base[f"OU {t} Hist Over"] = hist_o.round(2)
+        base[f"OU {t} Sim Over"] = sim_o.round(2)
+        base[f"OU {t} NoVig Over"] = imp_o.round(2)
+        base[f"OU {t} Prob Raw Over"] = controls["raw_a"]
+        base[f"OU {t} Prob PreHaircut Over"] = controls["pre_haircut_a"]
+        base[f"OU {t} Haircut"] = controls["haircut"]
+        base[f"OU {t} Spread"] = controls["spread"]
+        base[f"OU {t} Conflict"] = np.where(controls["conflict"], "CONFLITO_FORTE_COM_MERCADO", "ALINHADO")
+        base[f"OU {t} Calibration"] = str(controls["calibration"].get("status"))
 
-        base = apply_value_filter(base, prob_o_col, odd_o_col, min_prob=MIN_PROB_OU, min_cv=MIN_CV_OU)
+        base = apply_value_filter(base, prob_o_col, odd_o_col, min_prob=MIN_PROB_OU, min_cv=MIN_CV_OU, min_edge=MIN_EDGE_OU)
         base = add_ou_goal_cost_and_filter(base, prob_o_col, odd_o_col, t, "Over")
 
-        base = apply_value_filter(base, prob_u_col, odd_u_col, min_prob=MIN_PROB_OU, min_cv=MIN_CV_OU)
+        base = apply_value_filter(base, prob_u_col, odd_u_col, min_prob=MIN_PROB_OU, min_cv=MIN_CV_OU, min_edge=MIN_EDGE_OU)
         base = add_ou_goal_cost_and_filter(base, prob_u_col, odd_u_col, t, "Under")
 
     # ------------------------------------------------------------
@@ -1348,29 +1785,31 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
     imp_sim = pd.Series(imp_sim * 100.0, index=base.index)
     imp_nao = pd.Series(imp_nao * 100.0, index=base.index)
 
-    prob_sim_raw = weighted_mix_pct([hist_btts_sim, sim_btts_sim, imp_sim], [w_hist, w_sim, w_imp])
-    prob_nao_raw = weighted_mix_pct([hist_btts_nao, sim_btts_nao, imp_nao], [w_hist, w_sim, w_imp])
-
-    tot = prob_sim_raw + prob_nao_raw
-    tot_ok = np.isfinite(tot) & (tot > 0)
-
-    prob_sim = pd.Series(np.nan, index=base.index)
-    prob_nao = pd.Series(np.nan, index=base.index)
-    prob_sim.loc[tot_ok] = (prob_sim_raw.loc[tot_ok] / tot.loc[tot_ok] * 100.0)
-    prob_nao.loc[tot_ok] = (prob_nao_raw.loc[tot_ok] / tot.loc[tot_ok] * 100.0)
-
-    prob_sim = calibrate(prob_sim.round(2), shrink=SHRINK_BTTS)
-    prob_nao = (100.0 - prob_sim).round(2)
+    btts_controls = finalize_two_way_probabilities(
+        hist_btts_sim, hist_btts_nao, sim_btts_sim, sim_btts_nao, imp_sim, imp_nao,
+        [w_hist, w_sim, w_imp], SHRINK_BTTS, "btts",
+    )
+    prob_sim = btts_controls["a"]
+    prob_nao = btts_controls["b"]
 
     base["BTTS Sim prob"] = prob_sim
     base["Odd BTTS Sim"] = odd_sim
     base["BTTS Não prob"] = prob_nao
     base["Odd BTTS Não"] = odd_nao
+    base["BTTS Hist Sim"] = hist_btts_sim.round(2)
+    base["BTTS Sim Model"] = sim_btts_sim.round(2)
+    base["BTTS NoVig Sim"] = imp_sim.round(2)
+    base["BTTS Prob Raw Sim"] = btts_controls["raw_a"]
+    base["BTTS Prob PreHaircut Sim"] = btts_controls["pre_haircut_a"]
+    base["BTTS Haircut"] = btts_controls["haircut"]
+    base["BTTS Spread"] = btts_controls["spread"]
+    base["BTTS Conflict"] = np.where(btts_controls["conflict"], "CONFLITO_FORTE_COM_MERCADO", "ALINHADO")
+    base["BTTS Calibration"] = str(btts_controls["calibration"].get("status"))
 
     base = add_btts_cost_indicators(base)
 
-    base = apply_value_filter(base, "BTTS Sim prob", "Odd BTTS Sim", min_prob=MIN_PROB_BTTS, min_cv=MIN_CV_BTTS)
-    base = apply_value_filter(base, "BTTS Não prob", "Odd BTTS Não", min_prob=MIN_PROB_BTTS, min_cv=MIN_CV_BTTS)
+    base = apply_value_filter(base, "BTTS Sim prob", "Odd BTTS Sim", min_prob=MIN_PROB_BTTS, min_cv=MIN_CV_BTTS, min_edge=MIN_EDGE_BTTS)
+    base = apply_value_filter(base, "BTTS Não prob", "Odd BTTS Não", min_prob=MIN_PROB_BTTS, min_cv=MIN_CV_BTTS, min_edge=MIN_EDGE_BTTS)
 
     # ------------------------------------------------------------
     # 10) Primeiro a Marcar (Casa/Visitante/Sem Gol) 3-way
@@ -1430,6 +1869,14 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
     base = apply_value_filter(base, "Casa 1º a Marcar prob", "Odd Casa 1º a Marcar", min_prob=MIN_PROB_FIRST, min_cv=MIN_CV_FIRST)
     base = apply_value_filter(base, "Visitante 1º a Marcar prob", "Odd Visitante 1º a Marcar", min_prob=MIN_PROB_FIRST, min_cv=MIN_CV_FIRST)
     base = apply_value_filter(base, "Sem Gol prob", "Odd Sem Gol", min_prob=MIN_PROB_SEM_GOL, min_cv=MIN_CV_SEM_GOL)
+    if not FIRST_GOAL_ENABLED:
+        first_goal_columns = [
+            "Casa 1º a Marcar prob", "Odd Casa 1º a Marcar",
+            "Visitante 1º a Marcar prob", "Odd Visitante 1º a Marcar",
+            "Sem Gol prob", "Odd Sem Gol",
+        ]
+        base.loc[:, first_goal_columns] = np.nan
+        logging.info("Primeiro a Marcar desativado: aguardando eventos historicos mutuamente exclusivos.")
 
     # ------------------------------------------------------------
     # 11) Filtros finais de qualidade
@@ -1699,6 +2146,39 @@ def _to_records(lovable: pd.DataFrame) -> list[dict]:
     return records
 
 
+def build_walk_forward_snapshot_rows(records: list[dict]) -> list[dict]:
+    prediction_at = str(RUN_PROVENANCE.get("generated_at") or datetime.now(timezone.utc).isoformat())
+    local_timezone = ZoneInfo("America/Sao_Paulo")
+    output = []
+    for record in records:
+        kickoff_local = pd.to_datetime(
+            f"{record.get('data', '')} {record.get('hora', '')}",
+            dayfirst=True,
+            errors="coerce",
+        )
+        kickoff = None
+        if pd.notna(kickoff_local):
+            kickoff = kickoff_local.to_pydatetime().replace(tzinfo=local_timezone).astimezone(timezone.utc).isoformat()
+        game_key = "|".join(
+            str(record.get(key) or "") for key in ("data", "hora", "liga", "jogo")
+        )
+        output.append({
+            "prediction_at": prediction_at,
+            "kickoff": kickoff,
+            "game_id": hashlib.sha256(game_key.encode("utf-8")).hexdigest()[:24],
+            "league": record.get("liga"),
+            "market_type": str(record.get("market_type") or "").lower(),
+            "pick": record.get("pick"),
+            "line": record.get("linha"),
+            "probability": (float(record.get("probabilidade_final")) / 100.0) if record.get("probabilidade_final") is not None else None,
+            "odd": record.get("odd_ofertada"),
+            "outcome": None,
+            "home_goals": None,
+            "away_goals": None,
+        })
+    return output
+
+
 def run_cli() -> None:
     import contextlib
     import json
@@ -1728,6 +2208,26 @@ def run_cli() -> None:
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    source_preview = pd.read_csv(
+        csv5,
+        sep=sniff_sep(csv5),
+        encoding="utf-8",
+        engine="python",
+        nrows=1,
+    )
+    globals()["RUN_PROVENANCE"] = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "source": "PackBall external CSV import",
+        "source_file_5": csv5.name,
+        "source_file_20": csv20.name,
+        "sha256_5": file_sha256(csv5),
+        "sha256_20": file_sha256(csv20),
+        "schema_hash": schema_sha256(source_preview.columns),
+        "model_version": MODEL_VERSION,
+        "prediction_date": cli_date,
+        "kickoff_timezone": "America/Sao_Paulo",
+    }
+
     with tempfile.TemporaryDirectory(prefix="asp_packball_model_") as tmp_name:
         tmp_dir = Path(tmp_name)
         expected5 = tmp_dir / PACKBALL_FILE_5.format(date=cli_date)
@@ -1744,6 +2244,21 @@ def run_cli() -> None:
 
         lovable.to_csv(output_path, index=False, encoding="utf-8-sig")
         records = _to_records(lovable)
+        snapshot = {
+            **RUN_PROVENANCE,
+            "input_path_5": str(csv5),
+            "input_path_20": str(csv20),
+            "output_path": str(output_path),
+            "first_goal_enabled": FIRST_GOAL_ENABLED,
+            "calibration_path": str(CALIBRATION_PATH),
+            "predictions": records,
+            "walk_forward_rows": build_walk_forward_snapshot_rows(records),
+        }
+        snapshot_path = output_path.with_suffix(".snapshot.json")
+        snapshot_path.write_text(
+            json.dumps(_clean_json(snapshot), ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
         context_lines = [
             f"{MODEL_NAME} - PackBall {cli_date}",
             f"Jogos processados: {len(base)}",
@@ -1759,6 +2274,8 @@ def run_cli() -> None:
             "modelo": MODEL_NAME,
             "arquivo_saida": str(output_path),
             "arquivo_contexto": None,
+            "arquivo_snapshot": str(snapshot_path),
+            "provenance": RUN_PROVENANCE,
             "total_prognosticos": len(records),
             "contexto_modelo": "\n".join(line for line in context_lines if line),
             "dados_tecnicos": "\n\n".join(str(r.get("dados_tecnicos") or "") for r in records[:20] if r.get("dados_tecnicos")),

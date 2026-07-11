@@ -1,0 +1,27 @@
+# GoalMatrix v2 walk-forward
+
+Every production run writes an immutable `*.snapshot.json` beside the prediction CSV. The snapshot contains input hashes, source schema hash, generation time, kickoff time, model version and one `walk_forward_rows` record per prediction.
+
+## Labeling contract
+
+After events settle, append these fields to the snapshot rows without changing the original prediction fields:
+
+- `outcome`: `1` for a winning selection and `0` for a losing selection.
+- `home_goals`: final home score.
+- `away_goals`: final away score.
+
+Combine labeled rows into a CSV with at least:
+
+`prediction_at,kickoff,game_id,league,market_type,probability,outcome,home_goals,away_goals`
+
+Predictions with `prediction_at >= kickoff` are rejected as leakage.
+
+## Calibration
+
+Run:
+
+```bash
+python modelos/goalmatrix_validation.py labeled_snapshots.csv modelos/goalmatrix_calibration.json
+```
+
+O/U and BTTS are calibrated independently. Platt calibration activates only with at least 100 chronological observations and an out-of-sample Brier Score improvement. League overdispersion activates with at least 50 unique settled games and is shrunk toward the global prior in production.

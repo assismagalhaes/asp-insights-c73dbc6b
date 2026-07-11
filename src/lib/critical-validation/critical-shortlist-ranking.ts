@@ -390,7 +390,7 @@ export function detectCriticalShortlistRiskFlags(prognostico: Prognostico, now =
   pushIf(
     flags,
     /CONFLITO_FORTE_COM_MERCADO/i.test(text),
-    "wnba_market_conflict_strong",
+    "model_market_conflict_strong",
     "high",
     "Modelo WNBA diverge fortemente da linha de mercado; manter como reserva ate validacao contextual.",
   );
@@ -503,7 +503,7 @@ export function classifyCriticalShortlistCandidate(
   prognostico?: Prognostico,
 ): CriticalShortlistStatus {
   if (flags.some((flag) => flag.severity === "hard_block")) return "BLOQUEADA";
-  if (flags.some((flag) => flag.code === "wnba_market_conflict_strong")) return "RESERVA";
+  if (flags.some((flag) => flag.code === "model_market_conflict_strong")) return "RESERVA";
   const hasValue = prognostico ? calculateValueScore(prognostico).effectiveEdge ?? 0 : 1;
   const hasProbabilityMargin = prognostico ? calculateProbabilityMarginScore(prognostico).margin ?? 0 : 1;
   if (score >= 70 && confidence >= 55 && hasValue > 0 && hasProbabilityMargin > 0) return "CANDIDATA";

@@ -5,6 +5,7 @@ from pathlib import Path
 from uuid import uuid4
 from datetime import datetime
 import inspect
+import hashlib
 import json
 import time
 import os
@@ -1111,6 +1112,12 @@ def executar_modelo_futebol(
         "csv_coleta": str(csv_coleta_path),
         "arquivo_saida": f"prognosticos_futebol_{job_id}.csv",
         "arquivo_contexto": resposta_script.get("arquivo_contexto"),
+        "arquivo_snapshot": resposta_script.get("arquivo_snapshot"),
+        "provenance": resposta_script.get("provenance") or {
+            "sha256_5": meta.get("sha256_5"),
+            "sha256_20": meta.get("sha256_20"),
+            "created_at": meta.get("created_at"),
+        },
         "total_prognosticos": resposta_script.get("total_prognosticos", 0),
         "contexto_modelo": resposta_script.get("contexto_modelo", ""),
         "dados_tecnicos": resposta_script.get("dados_tecnicos", ""),
@@ -1386,6 +1393,14 @@ async def save_uploaded_packball_file(file: UploadFile, target: Path) -> int:
     return len(content)
 
 
+def packball_file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 @app.post("/modelos/packball/upload")
 async def upload_packball_model_files(
     modelo: str = Form(...),
@@ -1421,6 +1436,8 @@ async def upload_packball_model_files(
         "nome_original_20": arquivo_20.filename,
         "tamanho_5": size5,
         "tamanho_20": size20,
+        "sha256_5": packball_file_sha256(file5_path),
+        "sha256_20": packball_file_sha256(file20_path),
         "created_at": datetime.now().isoformat(),
     }
     save_json(target_dir / "meta.json", meta)
