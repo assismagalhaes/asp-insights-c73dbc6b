@@ -187,10 +187,10 @@ function extractJobId(payload: unknown): string {
   return String(value);
 }
 
-async function scraperRequest(path: string, init?: RequestInit) {
+async function scraperRequest(path: string, init?: RequestInit, timeoutMs = 45000) {
   const { baseUrl, apiKey } = getScraperConfig();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 45000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(`${baseUrl}${path}`, {
       ...init,
@@ -417,10 +417,14 @@ export const executePredictiveModel = createServerFn({ method: "POST" })
     };
     const path = endpointByModel[data.modelo];
     try {
-      const payload = await scraperRequest(path, {
-        method: "POST",
-        body: JSON.stringify({ job_id: data.job_id }),
-      });
+      const payload = await scraperRequest(
+        path,
+        {
+          method: "POST",
+          body: JSON.stringify({ job_id: data.job_id }),
+        },
+        300000,
+      );
       return payload as JsonValue;
     } catch (e) {
       const message = (e as Error).message;
@@ -459,10 +463,14 @@ export const executePackballPredictiveModel = createServerFn({ method: "POST" })
       "ASP GoalMatrix": "/modelos/goalmatrix/executar",
       "ASP CornerMatrix": "/modelos/cornermatrix/executar",
     };
-    return (await scraperRequest(endpointByModel[data.modelo], {
-      method: "POST",
-      body: JSON.stringify({ input_id: data.input_id }),
-    })) as JsonValue;
+    return (await scraperRequest(
+      endpointByModel[data.modelo],
+      {
+        method: "POST",
+        body: JSON.stringify({ input_id: data.input_id }),
+      },
+      300000,
+    )) as JsonValue;
   });
 
 export const getBaseballYears = createServerFn({ method: "POST" })
