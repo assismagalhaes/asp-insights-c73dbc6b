@@ -18,7 +18,7 @@ import {
   type Resultado,
 } from "@/lib/db";
 import { lucroUnidades, stakeAnalitica } from "@/lib/metrics";
-import { parsePlacar, calcularResultadoAuto, extrairLinha } from "@/lib/resultado-calc";
+import { parsePlacar, calcularResultadoAuto, extrairLinha, detectRacePick } from "@/lib/resultado-calc";
 import { supabase } from "@/lib/supabase-public";
 import { toast } from "sonner";
 
