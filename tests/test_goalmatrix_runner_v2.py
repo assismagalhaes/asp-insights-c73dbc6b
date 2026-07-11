@@ -75,12 +75,23 @@ class GoalMatrixRunnerV2Tests(unittest.TestCase):
         result = runner.build_dynamic_weights(pd.DataFrame([row]))
         self.assertAlmostEqual(result.loc[0, "_feature_reliability"], 0.5)
 
-    def test_filter_keeps_partial_sample_above_minimum(self) -> None:
-        frame = pd.DataFrame([{
-            "Status": "NS", "Número Jogos Coletados Casa": 7,
-            "Número Jogos Coletados Visitante": 6,
-        }])
-        self.assertEqual(len(runner.filter_by_status_and_games(frame, ("NS",), min_games=5)), 1)
+    def test_filter_requires_exact_window_for_both_teams(self) -> None:
+        frame = pd.DataFrame([
+            {"Status": "NS", "Número Jogos Coletados Casa": 10, "Número Jogos Coletados Visitante": 10},
+            {"Status": "NS", "Número Jogos Coletados Casa": 10, "Número Jogos Coletados Visitante": 9},
+        ])
+        result = runner.filter_by_status_and_games(frame, ("NS",), expected_games=10)
+        self.assertEqual(len(result), 1)
+
+    def test_nf_is_normalized_to_not_started_and_ft_is_backtest_only(self) -> None:
+        frame = pd.DataFrame([
+            {"Status": "NF", "Número Jogos Coletados Casa": 10, "Número Jogos Coletados Visitante": 10},
+            {"Status": "FT", "Número Jogos Coletados Casa": 10, "Número Jogos Coletados Visitante": 10},
+        ])
+        forecast = runner.filter_by_status_and_games(frame, ("NS",), expected_games=10)
+        backtest = runner.filter_by_status_and_games(frame, ("FT",), expected_games=10)
+        self.assertEqual(forecast["Status"].tolist(), ["NS"])
+        self.assertEqual(backtest["Status"].tolist(), ["FT"])
 
     def test_window_profile_rejects_old_five_game_feed(self) -> None:
         frame = pd.DataFrame({
@@ -190,8 +201,8 @@ class GoalMatrixRunnerV2Tests(unittest.TestCase):
         ten_n = runner.coerce_numeric(runner.normalize_columns(ten))
         twenty_n = runner.coerce_numeric(runner.normalize_columns(twenty))
         merged = runner.merge_10_20(
-            runner.filter_by_status_and_games(ten_n, ("NS",), min_games=runner.MIN_RECENT_GAMES),
-            runner.filter_by_status_and_games(twenty_n, ("NS",), min_games=runner.MIN_VENUE_GAMES),
+            runner.filter_by_status_and_games(ten_n, ("NS",), expected_games=runner.RECENT_WINDOW_GAMES),
+            runner.filter_by_status_and_games(twenty_n, ("NS",), expected_games=runner.VENUE_WINDOW_GAMES),
         )
         self.assertEqual(len(merged), 1)
 

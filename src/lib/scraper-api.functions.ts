@@ -53,6 +53,7 @@ const PackballUploadSchema = z.object({
 const PackballExecuteSchema = z.object({
   modelo: PackballModelSchema,
   input_id: z.string().min(1),
+  run_mode: z.enum(["prognostico", "backtest"]).optional().default("prognostico"),
 });
 
 const EmptySchema = z.object({}).optional().default({});
@@ -467,7 +468,7 @@ export const executePackballPredictiveModel = createServerFn({ method: "POST" })
       endpointByModel[data.modelo],
       {
         method: "POST",
-        body: JSON.stringify({ input_id: data.input_id }),
+        body: JSON.stringify({ input_id: data.input_id, run_mode: data.run_mode }),
       },
       300000,
     )) as JsonValue;

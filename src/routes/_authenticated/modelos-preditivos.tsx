@@ -49,6 +49,8 @@ type ModeloDisponivel =
   | "ASP GoalMatrix"
   | "ASP CornerMatrix";
 
+type PackballRunMode = "prognostico" | "backtest";
+
 interface ModeloPrognostico {
   data: string;
   hora: string | null;
@@ -103,6 +105,7 @@ function ModelosPreditivosPage() {
   const [resultado, setResultado] = useState<ModeloResultado | null>(null);
   const [packballFile5, setPackballFile5] = useState<File | null>(null);
   const [packballFile20, setPackballFile20] = useState<File | null>(null);
+  const [packballRunMode, setPackballRunMode] = useState<PackballRunMode>("prognostico");
 
   const { data: coletas = [] } = useQuery({
     queryKey: ["coletas-odds"],
@@ -155,7 +158,7 @@ function ModelosPreditivosPage() {
         });
         const inputId = extractInputId(uploadResponse);
         const response = await executePackballPredictiveModel({
-          data: { modelo, input_id: inputId },
+          data: { modelo, input_id: inputId, run_mode: packballRunMode },
         });
         const parsed = normalizeModelResponse(response);
         setResultado(parsed);
@@ -266,7 +269,9 @@ function ModelosPreditivosPage() {
           <div
             className={
               packballMode
-                ? "grid gap-3 md:grid-cols-[240px_1fr_1fr_auto] md:items-end"
+                ? modelo === "ASP GoalMatrix"
+                  ? "grid gap-3 md:grid-cols-[220px_1fr_1fr_180px_auto] md:items-end"
+                  : "grid gap-3 md:grid-cols-[240px_1fr_1fr_auto] md:items-end"
                 : "grid gap-3 md:grid-cols-[240px_1.5fr_auto] md:items-end"
             }
           >
@@ -280,6 +285,7 @@ function ModelosPreditivosPage() {
                   setResultado(null);
                   setPackballFile5(null);
                   setPackballFile20(null);
+                  setPackballRunMode("prognostico");
                 }}
               >
                 <SelectTrigger>
@@ -321,6 +327,23 @@ function ModelosPreditivosPage() {
                   file={packballFile20}
                   onFile={setPackballFile20}
                 />
+                {modelo === "ASP GoalMatrix" ? (
+                  <div>
+                    <label className="text-sm font-medium">Execução</label>
+                    <Select
+                      value={packballRunMode}
+                      onValueChange={(value) => setPackballRunMode(value as PackballRunMode)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="prognostico">Prognóstico (NS)</SelectItem>
+                        <SelectItem value="backtest">Backtest (FT)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
               </>
             ) : (
               <div>

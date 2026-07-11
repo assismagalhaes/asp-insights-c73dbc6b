@@ -37,7 +37,7 @@ output_dir = Path("Prognostico")
 
 # Nome comercial do modelo para identificação no Lovable.
 MODEL_NAME = "ASP GoalMatrix"
-MODEL_VERSION = "v2.1"
+MODEL_VERSION = "v2.2"
 
 # Modo de execução:
 #   prognostico = apenas jogos NS
@@ -73,8 +73,6 @@ RECENT_DIVERGENCE_RANGE = 1.20
 RECENT_DIVERGENCE_MAX_BOOST = 0.10
 RECENT_WINDOW_GAMES = 10
 VENUE_WINDOW_GAMES = 20
-MIN_RECENT_GAMES = 2
-MIN_VENUE_GAMES = 5
 
 KELLY_FRACTION = 0.125
 MAX_PICK_UNITS = 1.0
@@ -370,16 +368,16 @@ def sanity_check_ranges(df: pd.DataFrame, label: str = "") -> None:
             logging.warning(f"[{label}] {c}: {bad.sum()} CV fora de [0,100]. Possível coluna desalinhada.")
 
 
-def filter_by_status_and_games(df: pd.DataFrame, statuses=("NS",), min_games: int = 5) -> pd.DataFrame:
+def filter_by_status_and_games(df: pd.DataFrame, statuses=("NS",), expected_games: int = 10) -> pd.DataFrame:
     """
     - Trata Status: FT_PEN -> FT
     - Mantém apenas os status definidos pelo RUN_MODE
-    - Mantém apenas equipes com ao menos min_games; cobertura parcial vira shrinkage.
+    - Exige a quantidade exata para os dois times, preservando o contrato da planilha.
     """
     df = df.copy()
 
     st = df["Status"].astype(str).str.strip().str.upper()
-    st = st.replace({"FT_PEN": "FT"})
+    st = st.replace({"FT_PEN": "FT", "NF": "NS"})
     df["Status"] = st
 
     df = df[df["Status"].isin(list(statuses))].copy()
@@ -388,8 +386,8 @@ def filter_by_status_and_games(df: pd.DataFrame, statuses=("NS",), min_games: in
     df["Número Jogos Coletados Visitante"] = pd.to_numeric(df["Número Jogos Coletados Visitante"], errors="coerce")
 
     df = df[
-        (df["Número Jogos Coletados Casa"] >= min_games) &
-        (df["Número Jogos Coletados Visitante"] >= min_games)
+        (df["Número Jogos Coletados Casa"] == expected_games) &
+        (df["Número Jogos Coletados Visitante"] == expected_games)
     ].copy()
     return df
 
@@ -1577,8 +1575,8 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
     sanity_check_ranges(df20, "df20")
 
     # 2) Filtrar conforme RUN_MODE
-    df10_f = filter_by_status_and_games(df10, STATUSES, min_games=MIN_RECENT_GAMES)
-    df20_f = filter_by_status_and_games(df20, STATUSES, min_games=MIN_VENUE_GAMES)
+    df10_f = filter_by_status_and_games(df10, STATUSES, expected_games=RECENT_WINDOW_GAMES)
+    df20_f = filter_by_status_and_games(df20, STATUSES, expected_games=VENUE_WINDOW_GAMES)
     logging.info(f"RUN_MODE={RUN_MODE} | STATUS={STATUSES}")
     logging.info(f"df10_filtrado: {df10_f.shape} | df20_filtrado: {df20_f.shape}")
 
@@ -2214,7 +2212,7 @@ def run_cli() -> None:
     if len(sys.argv) < 4:
         payload = {
             "ok": False,
-            "erro": "Uso: python runner.py CSV_10 CSV_20 OUTPUT_CSV [DD-MM-YYYY]",
+            "erro": "Uso: python runner.py CSV_10 CSV_20 OUTPUT_CSV [DD-MM-YYYY] [prognostico|backtest]",
         }
         print(json.dumps(payload, ensure_ascii=False))
         return
@@ -2223,6 +2221,12 @@ def run_cli() -> None:
     csv20 = Path(sys.argv[2]).resolve()
     output_path = Path(sys.argv[3]).resolve()
     cli_date = sys.argv[4].strip() if len(sys.argv) >= 5 and sys.argv[4].strip() else _infer_date_str([csv10, csv20])
+    cli_run_mode = sys.argv[5].strip().lower() if len(sys.argv) >= 6 else "prognostico"
+    if cli_run_mode not in {"prognostico", "backtest"}:
+        print(json.dumps({"ok": False, "erro": f"RUN_MODE inválido: {cli_run_mode}"}, ensure_ascii=False))
+        return
+    globals()["RUN_MODE"] = cli_run_mode
+    globals()["STATUSES"] = STATUSES_BY_MODE[cli_run_mode]
 
     if not csv10.exists():
         print(json.dumps({"ok": False, "erro": f"Arquivo 10j não encontrado: {csv10}"}, ensure_ascii=False))
@@ -2252,6 +2256,7 @@ def run_cli() -> None:
         "schema_hash": schema_sha256(source_preview.columns),
         "model_version": MODEL_VERSION,
         "prediction_date": cli_date,
+        "run_mode": cli_run_mode,
         "kickoff_timezone": "America/Sao_Paulo",
     }
 

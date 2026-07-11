@@ -13,7 +13,7 @@ import sys
 import pandas as pd
 import csv
 import shutil
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 
 from fastapi import HTTPException, Query
 from pydantic import BaseModel
@@ -1020,6 +1020,7 @@ class ExecutarModeloRequest(BaseModel):
 
 class ExecutarPackballModeloRequest(BaseModel):
     input_id: str
+    run_mode: Literal["prognostico", "backtest"] = "prognostico"
 
 
 @app.post("/modelos/futebol/executar")
@@ -1459,7 +1460,12 @@ async def upload_packball_model_files(
     return limpar_json_nan({"ok": True, **meta})
 
 
-def executar_modelo_packball(input_id: str, expected_model: str, authorization: str | None):
+def executar_modelo_packball(
+    input_id: str,
+    expected_model: str,
+    authorization: str | None,
+    run_mode: str = "prognostico",
+):
     verificar_token(authorization)
 
     target_dir = packball_input_dir(input_id)
@@ -1487,15 +1493,19 @@ def executar_modelo_packball(input_id: str, expected_model: str, authorization: 
 
     import subprocess
 
+    command = [
+        sys.executable,
+        str(script_modelo),
+        str(file5_path),
+        str(file20_path),
+        str(output_path),
+        str(meta.get("date_str") or ""),
+    ]
+    if expected_model == "ASP GoalMatrix":
+        command.append(run_mode)
+
     resultado = subprocess.run(
-        [
-            sys.executable,
-            str(script_modelo),
-            str(file5_path),
-            str(file20_path),
-            str(output_path),
-            str(meta.get("date_str") or ""),
-        ],
+        command,
         capture_output=True,
         text=True,
         timeout=180,
@@ -1531,6 +1541,7 @@ def executar_modelo_packball(input_id: str, expected_model: str, authorization: 
         "input_id": input_id,
         "job_id": input_id,
         "modelo": model_name,
+        "run_mode": run_mode if expected_model == "ASP GoalMatrix" else "prognostico",
         "csv_coleta": None,
         "arquivo_saida": f"{config['output_prefix']}_{input_id}.csv",
         "arquivo_contexto": resposta_script.get("arquivo_contexto"),
@@ -1550,7 +1561,7 @@ def executar_modelo_goalmatrix(
     payload: ExecutarPackballModeloRequest,
     authorization: str | None = Header(default=None)
 ):
-    return executar_modelo_packball(payload.input_id, "ASP GoalMatrix", authorization)
+    return executar_modelo_packball(payload.input_id, "ASP GoalMatrix", authorization, payload.run_mode)
 
 
 @app.post("/modelos/cornermatrix/executar")
