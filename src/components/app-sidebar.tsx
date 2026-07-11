@@ -45,7 +45,7 @@ const navigationGroups = [
   {
     label: "Dados e modelos",
     items: [
-      { title: "Coleta de Odds", url: "/coleta-dados", icon: Database },
+      { title: "Coleta de Odds", url: "/coleta-dados", icon: DownloadCloud },
       { title: "Base de Dados", url: "/base-dados", icon: Database },
       { title: "Modelos Preditivos", url: "/modelos-preditivos", icon: Cpu },
       { title: "Aprendizado da IA", url: "/aprendizado-ia", icon: BrainCircuit },
