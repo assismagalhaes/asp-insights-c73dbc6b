@@ -463,10 +463,14 @@ export const executePackballPredictiveModel = createServerFn({ method: "POST" })
       "ASP GoalMatrix": "/modelos/goalmatrix/executar",
       "ASP CornerMatrix": "/modelos/cornermatrix/executar",
     };
-    return (await scraperRequest(endpointByModel[data.modelo], {
-      method: "POST",
-      body: JSON.stringify({ input_id: data.input_id }),
-    })) as JsonValue;
+    return (await scraperRequest(
+      endpointByModel[data.modelo],
+      {
+        method: "POST",
+        body: JSON.stringify({ input_id: data.input_id }),
+      },
+      300000,
+    )) as JsonValue;
   });
 
 export const getBaseballYears = createServerFn({ method: "POST" })
