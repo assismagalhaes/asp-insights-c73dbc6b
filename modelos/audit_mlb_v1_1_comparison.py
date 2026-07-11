@@ -22,7 +22,7 @@ from modelos import baseball_runner_real as v11
 from modelos import baseball_runner_real_v1_backup as v1
 
 
-REPORT_NAME = "mlb_v1_vs_v1_1_comparativo.csv"
+REPORT_NAME = "mlb_v1_vs_v2_walk_forward_comparativo.csv"
 
 
 def _norm(value: Any) -> str:
@@ -327,10 +327,10 @@ def build_temp_history(results: list[dict[str, Any]], root: Path) -> Path:
 
 
 def run_runner(module: Any, odds_paths: list[Path], history_dir: Path, results: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    module.HIST_DIR = history_dir
     result_index = build_result_index(results)
     predictions: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
+    cutoff_history_cache: dict[str, Path] = {}
 
     for odds_path in odds_paths:
         try:
@@ -339,19 +339,54 @@ def run_runner(module: Any, odds_paths: list[Path], history_dir: Path, results: 
             errors.append({"arquivo": str(odds_path), "erro": str(exc)})
             continue
         season = module.infer_season(games)
-        stats_cache: dict[str, Any] = {}
+        stats_cache: dict[tuple[str, str], Any] = {}
         for game in games:
             result = result_index.get(result_key(game.get("data"), game.get("home"), game.get("away")))
             if result is None:
                 errors.append({"arquivo": str(odds_path), "jogo": game.get("jogo"), "erro": "resultado_nao_encontrado"})
                 continue
             try:
+                cutoff_date = str(game.get("data") or "")[:10]
+                cutoff_history = cutoff_history_cache.get(cutoff_date)
+                if cutoff_history is None:
+                    cutoff_results = [
+                        row for row in results if str(row.get("date") or "")[:10] < cutoff_date
+                    ]
+                    cutoff_history = build_temp_history(
+                        cutoff_results,
+                        history_dir / f"cutoff_{cutoff_date.replace('-', '')}",
+                    )
+                    cutoff_history_cache[cutoff_date] = cutoff_history
+                module.HIST_DIR = cutoff_history
+                if hasattr(module, "_load_league_average_runs_cached"):
+                    module._load_league_average_runs_cached.cache_clear()
                 home_sigla = module.team_sigla(game["home"])
                 away_sigla = module.team_sigla(game["away"])
-                home_stats = stats_cache.setdefault(home_sigla, module.load_team_stats(home_sigla, season))
-                away_stats = stats_cache.setdefault(away_sigla, module.load_team_stats(away_sigla, season))
+                cache_prefix = str(cutoff_history)
+                if module is v11:
+                    home_stats = stats_cache.setdefault(
+                        (cache_prefix, home_sigla),
+                        module.load_team_stats(home_sigla, season, cutoff_date=cutoff_date),
+                    )
+                    away_stats = stats_cache.setdefault(
+                        (cache_prefix, away_sigla),
+                        module.load_team_stats(away_sigla, season, cutoff_date=cutoff_date),
+                    )
+                else:
+                    home_stats = stats_cache.setdefault(
+                        (cache_prefix, home_sigla), module.load_team_stats(home_sigla, season)
+                    )
+                    away_stats = stats_cache.setdefault(
+                        (cache_prefix, away_sigla), module.load_team_stats(away_sigla, season)
+                    )
                 context = module.build_game_context(game, home_stats, away_stats, season)
-                picks = module.generate_game_picks(game, home_stats, away_stats, context)
+                if module is v11:
+                    league_runs = module.load_league_average_runs(season, cutoff_date)
+                    picks = module.generate_game_picks(
+                        game, home_stats, away_stats, context, league_runs=league_runs
+                    )
+                else:
+                    picks = module.generate_game_picks(game, home_stats, away_stats, context)
             except Exception as exc:  # noqa: BLE001
                 errors.append({"arquivo": str(odds_path), "jogo": game.get("jogo"), "erro": str(exc)})
                 continue
@@ -407,7 +442,7 @@ def comparison_rows(v1_rows: list[dict[str, Any]], v11_rows: list[dict[str, Any]
     v1_handicap = len(_market_rows(v1_rows, "Handicap Asiático")) + len(_market_rows(v1_rows, "Handicap Asiatico"))
     output = [
         _summary_row("MLB_V1_BACKUP", "Todos", v1_rows),
-        _summary_row("MLB_V1_1", "Todos", v11_rows, skipped_overconfidence=v1_high_prob, skipped_handicap=v1_handicap),
+        _summary_row(v11.MODEL_VERSION, "Todos", v11_rows, skipped_overconfidence=v1_high_prob, skipped_handicap=v1_handicap),
     ]
     for market in ("Moneyline", "Total de Corridas", "Handicap Asiático"):
         before = _market_rows(v1_rows, market)
@@ -415,13 +450,135 @@ def comparison_rows(v1_rows: list[dict[str, Any]], v11_rows: list[dict[str, Any]
         output.append(_summary_row("MLB_V1_BACKUP", market, before))
         output.append(
             _summary_row(
-                "MLB_V1_1",
+                v11.MODEL_VERSION,
                 market,
                 after,
                 skipped_overconfidence=sum(1 for row in before if _float(row.get("probabilidade_final")) >= 70.0),
                 skipped_handicap=len(before) if "handicap" in _norm(market) else 0,
             )
         )
+    return output
+
+
+def _calibration_market_key(value: Any) -> str:
+    normalized = _norm(value)
+    if "moneyline" in normalized:
+        return "moneyline"
+    if "total" in normalized:
+        return "totals"
+    if "handicap" in normalized:
+        return "handicap"
+    return normalized.replace(" ", "_")
+
+
+def _fit_platt_logit(rows: list[dict[str, Any]]) -> tuple[float, float]:
+    intercept = 0.0
+    slope = 1.0
+    regularization = 0.10
+    for _iteration in range(60):
+        gradient_intercept = -regularization * intercept
+        gradient_slope = -regularization * (slope - 1.0)
+        h00 = regularization
+        h01 = 0.0
+        h11 = regularization
+        for row in rows:
+            raw = min(max(_float(row.get("probabilidade_v2")), 1e-6), 1 - 1e-6)
+            feature = math.log(raw / (1 - raw))
+            outcome = 1.0 if row.get("resultado_real") == "GREEN" else 0.0
+            linear = intercept + slope * feature
+            predicted = 1.0 / (1.0 + math.exp(-max(-30.0, min(30.0, linear))))
+            residual = outcome - predicted
+            variance = predicted * (1 - predicted)
+            gradient_intercept += residual
+            gradient_slope += residual * feature
+            h00 += variance
+            h01 += variance * feature
+            h11 += variance * feature * feature
+        determinant = h00 * h11 - h01 * h01
+        if determinant <= 1e-12:
+            break
+        delta_intercept = (gradient_intercept * h11 - gradient_slope * h01) / determinant
+        delta_slope = (gradient_slope * h00 - gradient_intercept * h01) / determinant
+        intercept += delta_intercept
+        slope += delta_slope
+        if max(abs(delta_intercept), abs(delta_slope)) < 1e-8:
+            break
+    return intercept, slope
+
+
+def _apply_platt(probability: float, intercept: float, slope: float) -> float:
+    clipped = min(max(probability, 1e-6), 1 - 1e-6)
+    feature = math.log(clipped / (1 - clipped))
+    linear = max(-30.0, min(30.0, intercept + slope * feature))
+    return 1.0 / (1.0 + math.exp(-linear))
+
+
+def _rows_log_loss(rows: list[dict[str, Any]], intercept: float = 0.0, slope: float = 1.0) -> float:
+    probabilities = [
+        _apply_platt(_float(row.get("probabilidade_v2")), intercept, slope) for row in rows
+    ]
+    outcomes = [1 if row.get("resultado_real") == "GREEN" else 0 for row in rows]
+    return _log_loss(probabilities, outcomes)
+
+
+def build_oos_calibration_candidate(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    output: dict[str, Any] = {}
+    markets = sorted({_calibration_market_key(row.get("mercado")) for row in rows})
+    for market in markets:
+        market_rows = sorted(
+            [
+                row
+                for row in rows
+                if _calibration_market_key(row.get("mercado")) == market
+                and row.get("resultado_real") in {"GREEN", "RED"}
+            ],
+            key=lambda row: (str(row.get("data") or ""), str(row.get("jogo") or "")),
+        )
+        split_index = int(len(market_rows) * 0.70)
+        train = market_rows[:split_index]
+        validation = market_rows[split_index:]
+        config: dict[str, Any] = {
+            "active": False,
+            "out_of_sample": True,
+            "sample_size": len(market_rows),
+            "train_size": len(train),
+            "validation_size": len(validation),
+            "intercept": 0.0,
+            "slope": 1.0,
+            "status": "insufficient_walk_forward_sample",
+        }
+        if len(train) >= 100 and len(validation) >= 40:
+            intercept, slope = _fit_platt_logit(train)
+            raw_log_loss = _rows_log_loss(validation)
+            calibrated_log_loss = _rows_log_loss(validation, intercept, slope)
+            improved = calibrated_log_loss + 0.002 < raw_log_loss and 0.20 <= slope <= 2.50
+            config.update(
+                {
+                    "active": improved,
+                    "intercept": intercept,
+                    "slope": slope,
+                    "validation_log_loss_raw": raw_log_loss,
+                    "validation_log_loss_calibrated": calibrated_log_loss,
+                    "status": "validated_oos" if improved else "rejected_no_oos_improvement",
+                }
+            )
+        output[market] = config
+    for market in ("moneyline", "totals", "handicap"):
+        output.setdefault(
+            market,
+            {
+                "active": False,
+                "out_of_sample": True,
+                "sample_size": 0,
+                "train_size": 0,
+                "validation_size": 0,
+                "intercept": 0.0,
+                "slope": 1.0,
+                "status": "insufficient_walk_forward_sample",
+            },
+        )
+    output["handicap"]["active"] = False
+    output["handicap"]["status"] = "operationally_disabled"
     return output
 
 
@@ -439,20 +596,33 @@ def run_comparison(*, odds_dir: str | Path, results_path: str | Path, out_dir: s
     results = load_results(results_path)
     out = Path(out_dir)
     with tempfile.TemporaryDirectory() as tmp:
-        history_dir = build_temp_history(results, Path(tmp) / "dados_baseball")
+        history_dir = Path(tmp) / "dados_baseball_walk_forward"
         v1_rows, v1_errors = run_runner(v1, odds_paths, history_dir, results)
         v11_rows, v11_errors = run_runner(v11, odds_paths, history_dir, results)
 
     rows = comparison_rows(v1_rows, v11_rows)
     report_path = out / REPORT_NAME
     write_csv(report_path, rows)
+    predictions_path = out / "mlb_v2_walk_forward_predictions.csv"
+    write_csv(predictions_path, v11_rows)
+    errors_path = out / "mlb_v2_walk_forward_errors.csv"
+    write_csv(errors_path, v11_errors)
+    calibration_path = out / "mlb_v2_calibration_candidate.json"
+    calibration_path.parent.mkdir(parents=True, exist_ok=True)
+    calibration_path.write_text(
+        json.dumps(build_oos_calibration_candidate(v11_rows), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     return {
         "ok": True,
         "report": str(report_path),
+        "predictions_report": str(predictions_path),
+        "calibration_candidate": str(calibration_path),
+        "errors_report": str(errors_path),
         "v1_picks": len(v1_rows),
-        "v1_1_picks": len(v11_rows),
+        "v2_picks": len(v11_rows),
         "v1_errors": len(v1_errors),
-        "v1_1_errors": len(v11_errors),
+        "v2_errors": len(v11_errors),
     }
 
 

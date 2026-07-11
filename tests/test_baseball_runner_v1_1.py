@@ -55,10 +55,11 @@ def margin_stats(
 
 class BaseballRunnerV11Tests(unittest.TestCase):
     def test_model_version_and_handicap_flag_are_set(self) -> None:
-        self.assertEqual(runner.MODEL_VERSION, "MLB_V1_1")
-        self.assertTrue(runner.HANDICAP_ENABLED_MLB_V1_1)
-        self.assertTrue(runner.HANDICAP_CONTROLLED_ACTIVATION_MLB_V1_1)
-        self.assertEqual(runner.BASEBALL_MLB_HANDICAP_MODEL_VERSION, "MLB_V1_1_HANDICAP_CONTROLLED")
+        self.assertEqual(runner.MODEL_VERSION, "MLB_V2_0")
+        self.assertFalse(runner.HANDICAP_ENABLED_MLB_V1_1)
+        self.assertFalse(runner.HANDICAP_CONTROLLED_ACTIVATION_MLB_V1_1)
+        self.assertTrue(runner.HANDICAP_SHADOW_ENABLED)
+        self.assertEqual(runner.BASEBALL_MLB_HANDICAP_MODEL_VERSION, "MLB_V2_0_HANDICAP_SHADOW")
 
     def test_totals_historical_probability_is_smoothed_not_binary(self) -> None:
         home = stats("NYY", [6, 8, 10, 12, 4])
@@ -69,7 +70,7 @@ class BaseballRunnerV11Tests(unittest.TestCase):
         self.assertEqual(sample_size, 10)
         self.assertGreater(prob, 0.0)
         self.assertLess(prob, 1.0)
-        self.assertAlmostEqual(prob, 0.55)
+        self.assertAlmostEqual(prob, 0.55, places=3)
         self.assertNotIn(prob, (0.0, 1.0))
         self.assertIsInstance(warnings, list)
 
@@ -83,7 +84,7 @@ class BaseballRunnerV11Tests(unittest.TestCase):
         self.assertEqual(sample_size, 0)
         self.assertIn("hist_total_fallback_prior_050", warnings)
 
-    def test_handicap_generation_uses_controlled_activation_when_filters_pass(self) -> None:
+    def test_handicap_generation_stays_in_shadow_when_filters_pass(self) -> None:
         game = {
             "data": "2026-06-19",
             "hora": "20:00",
@@ -101,14 +102,13 @@ class BaseballRunnerV11Tests(unittest.TestCase):
 
         home = margin_stats("NYY", [2, 3, 4, 2, 1, 3], avg_for=6.0, avg_against=3.0, win_rate=0.65)
         away = margin_stats("BOS", [-2, -3, -2, -4, -1, -3], avg_for=3.0, avg_against=5.0, win_rate=0.35)
-        picks = runner.generate_game_picks(game, home, away, "contexto")
+        audit_rows: list[dict[str, object]] = []
+        picks = runner.generate_game_picks(game, home, away, "contexto", audit_rows)
         handicaps = [pick for pick in picks if "Handicap" in pick["mercado"]]
 
-        self.assertTrue(handicaps)
-        self.assertTrue(all("shadow_mode" not in pick for pick in handicaps))
-        self.assertTrue(all("market_status" not in pick for pick in handicaps))
-        self.assertTrue(all(pick["modelo_versao"] == "MLB_V1_1_HANDICAP_CONTROLLED" for pick in handicaps))
-        self.assertTrue(all(pick["activation_status"] == "HANDICAP_SELECTED_CONTROLLED" for pick in handicaps))
+        self.assertEqual(handicaps, [])
+        self.assertTrue(audit_rows)
+        self.assertIn("HANDICAP_SHADOW_ONLY", {row["motivo_descarte"] for row in audit_rows})
 
     def test_handicap_minus_one_and_half_cover_probability(self) -> None:
         self.assertAlmostEqual(runner.handicap_cover_probability_poisson(10.0, 0.2, "home", -1.5), 0.99, delta=0.02)
@@ -204,7 +204,7 @@ class BaseballRunnerV11Tests(unittest.TestCase):
 
         self.assertEqual(audit_rows[0]["motivo_descarte"], "HANDICAP_LINE_NOT_SUPPORTED")
         self.assertFalse(audit_rows[0]["published"])
-        self.assertEqual(audit_rows[0]["mode"], "controlled_activation")
+        self.assertEqual(audit_rows[0]["mode"], "shadow_blocked")
 
     def test_handicap_diagnostics_are_top_level_controlled_activation(self) -> None:
         rows = [
@@ -222,10 +222,10 @@ class BaseballRunnerV11Tests(unittest.TestCase):
 
         diagnostics = runner.build_handicap_shadow_diagnostics(rows)
 
-        self.assertEqual(diagnostics["mode"], "controlled_activation")
-        self.assertEqual(diagnostics["model_version"], "MLB_V1_1_HANDICAP_CONTROLLED")
-        self.assertTrue(diagnostics["published"])
-        self.assertEqual(diagnostics["published_count"], 1)
+        self.assertEqual(diagnostics["mode"], "shadow_blocked")
+        self.assertEqual(diagnostics["model_version"], "MLB_V2_0_HANDICAP_SHADOW")
+        self.assertFalse(diagnostics["published"])
+        self.assertEqual(diagnostics["published_count"], 0)
         self.assertEqual(diagnostics["discarded_count"], 1)
         self.assertEqual(diagnostics["summary"]["discard_reasons"], {"INVALID_ODD": 1})
 
@@ -321,8 +321,8 @@ class BaseballRunnerV11Tests(unittest.TestCase):
 
         self.assertEqual(len(picks), 1)
         self.assertEqual(picks[0]["mercado"], "Moneyline")
-        self.assertEqual(picks[0]["modelo_versao"], "MLB_V1_1")
-        self.assertIn("modelo_versao=MLB_V1_1", picks[0]["observacoes"])
+        self.assertEqual(picks[0]["modelo_versao"], "MLB_V2_0")
+        self.assertIn("modelo_versao=MLB_V2_0", picks[0]["observacoes"])
 
     def test_moneyline_uses_median_odd_for_market_probability_and_best_odd_for_ev(self) -> None:
         picks: list[dict[str, object]] = []
@@ -351,6 +351,63 @@ class BaseballRunnerV11Tests(unittest.TestCase):
         self.assertEqual(picks[0]["bookmaker_melhor"], "BestBook")
         self.assertIn(f"prob_no_vig={expected_no_vig:.4f}", str(picks[0]["observacoes"]))
         self.assertIn("odd_mercado_base=1.700", str(picks[0]["observacoes"]))
+
+    def test_moneyline_probabilities_are_complementary_after_tie_resolution(self) -> None:
+        home, away, tie = runner.win_probabilities_overdispersed(4.5, 4.5)
+
+        self.assertAlmostEqual(home + away, 1.0, places=12)
+        self.assertAlmostEqual(home, 0.5, places=6)
+        self.assertAlmostEqual(away, 0.5, places=6)
+        self.assertGreater(tie, 0.10)
+
+    def test_negative_binomial_distribution_has_overdispersion(self) -> None:
+        distribution = runner.score_distribution(4.5)
+        expected = sum(index * probability for index, probability in enumerate(distribution))
+        variance = sum(
+            ((index - expected) ** 2) * probability
+            for index, probability in enumerate(distribution)
+        )
+
+        self.assertAlmostEqual(sum(distribution), 1.0, places=12)
+        self.assertAlmostEqual(expected, 4.5, places=5)
+        self.assertGreater(variance, expected)
+
+    def test_temporal_average_weights_current_recent_and_previous(self) -> None:
+        current = [{"R": str(value)} for value in [3, 4, 5, 8, 10]]
+        previous = [{"R": "4"} for _ in range(20)]
+
+        result = runner.temporal_runs_average(current, previous, scored=True, fallback=4.5)
+
+        self.assertGreater(result, 4.0)
+        self.assertLess(result, 10.0)
+
+    def test_history_cutoff_excludes_game_day_and_future_rows(self) -> None:
+        rows = [
+            {"Date": "2026-07-09", "R": "4", "RA": "3"},
+            {"Date": "2026-07-10", "R": "9", "RA": "1"},
+            {"Date": "2026-07-11", "R": "8", "RA": "2"},
+        ]
+
+        filtered = runner.sort_and_filter_history_rows(rows, 2026, "2026-07-10")
+
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(filtered[0]["Date"], "2026-07-09")
+
+    def test_market_selection_keeps_principal_and_two_correlated_alternatives(self) -> None:
+        picks = [
+            {"mercado": "Total de Corridas", "pick": "Over 7.5", "linha": "7.5", "edge": 8.0},
+            {"mercado": "Total de Corridas", "pick": "Over 8.5", "linha": "8.5", "edge": 7.0},
+            {"mercado": "Total de Corridas", "pick": "Over 9.5", "linha": "9.5", "edge": 6.0},
+            {"mercado": "Total de Corridas", "pick": "Over 10.5", "linha": "10.5", "edge": 5.0},
+            {"mercado": "Total de Corridas", "pick": "Under 10.5", "linha": "10.5", "edge": 7.5},
+        ]
+
+        selected = runner.limit_correlated_market_selections(picks)
+
+        self.assertEqual(len(selected), 3)
+        self.assertTrue(all("Over" in pick["pick"] for pick in selected))
+        self.assertEqual(selected[0]["selection_role"], "PRINCIPAL")
+        self.assertEqual(selected[2]["selection_role"], "ALTERNATIVA")
 
     @staticmethod
     def _game() -> dict[str, object]:

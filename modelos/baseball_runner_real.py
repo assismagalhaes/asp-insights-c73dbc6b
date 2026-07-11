@@ -9,22 +9,38 @@ import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 HIST_DIR = Path(os.getenv("BASEBALL_HIST_DIR", "/home/ubuntu/jupyter/dados_baseball"))
 
-MODEL_VERSION = "MLB_V1_1"
-BASEBALL_MLB_HANDICAP_MODEL_VERSION = "MLB_V1_1_HANDICAP_CONTROLLED"
-HANDICAP_ENABLED_MLB_V1_1 = True
-HANDICAP_CONTROLLED_ACTIVATION_MLB_V1_1 = True
+MODEL_VERSION = "MLB_V2_0"
+BASEBALL_MLB_HANDICAP_MODEL_VERSION = "MLB_V2_0_HANDICAP_SHADOW"
+HANDICAP_ENABLED_MLB_V1_1 = False
+HANDICAP_CONTROLLED_ACTIVATION_MLB_V1_1 = False
+HANDICAP_SHADOW_ENABLED = True
 HANDICAP_SELECTED_CONTROLLED = "HANDICAP_SELECTED_CONTROLLED"
 HISTORICAL_PRIOR = 0.50
 HISTORICAL_PRIOR_STRENGTH = 10.0
 OVERCONFIDENCE_PROB_CUTOFF = 0.70
 
-PROB_ML_WEIGHTS = {"vit": 0.30, "sim": 0.40, "vig": 0.30}
-PROB_OU_WEIGHTS = {"hist": 0.30, "sim": 0.40, "vig": 0.30}
+TEMPORAL_WEIGHTS = {"current": 0.55, "recent": 0.30, "previous": 0.15}
+RECENT_GAMES_WINDOW = 15
+RECENT_HALF_LIFE_GAMES = 7.0
+MLB_LEAGUE_RUNS_PRIOR = 4.50
+LEAGUE_PRIOR_STRENGTH = 20.0
+HOME_RUN_FACTOR = 1.025
+AWAY_RUN_FACTOR = 0.975
+RUNS_OVERDISPERSION = 0.08
+MAX_DISTRIBUTION_RUNS = 40
+MIN_EDGE_MONEYLINE = 5.0
+MIN_EDGE_TOTALS = 4.0
+MAX_MARKET_SELECTIONS_PER_GAME = 3
+CALIBRATION_PATH = Path(os.getenv("MLB_CALIBRATION_PATH", Path(__file__).with_name("mlb_calibration.json")))
+
+PROB_ML_WEIGHTS = {"vit": 0.15, "sim": 0.35, "vig": 0.50}
+PROB_OU_WEIGHTS = {"hist": 0.20, "sim": 0.30, "vig": 0.50}
 PROB_HC_WEIGHTS = {"hist": 0.25, "sim": 0.45, "vig": 0.30}
 HANDICAP_WEIGHTS = PROB_HC_WEIGHTS
 HANDICAP_ALLOWED_LINES = {-2.5, -1.5, 1.5, 2.5}
@@ -93,6 +109,11 @@ class TeamStats:
     current_rows: list[dict[str, str]]
     previous_rows: list[dict[str, str]]
     all_rows: list[dict[str, str]]
+    temporal_for: float | None = None
+    temporal_against: float | None = None
+    current_games: int = 0
+    previous_games: int = 0
+    cutoff_date: str | None = None
 
 
 def main() -> None:
@@ -122,7 +143,7 @@ def main() -> None:
             return
 
         season = infer_season(games)
-        stats_cache: dict[str, TeamStats] = {}
+        stats_cache: dict[tuple[str, str], TeamStats] = {}
         prognosticos: list[dict[str, Any]] = []
         context_parts: list[str] = []
         handicap_audit_rows: list[dict[str, Any]] = []
@@ -135,11 +156,26 @@ def main() -> None:
             if not home_sigla or not away_sigla:
                 raise RuntimeError(f"Não foi possível mapear times MLB: {home} vs {away}")
 
-            home_stats = stats_cache.setdefault(home_sigla, load_team_stats(home_sigla, season))
-            away_stats = stats_cache.setdefault(away_sigla, load_team_stats(away_sigla, season))
+            cutoff_date = normalize_date(game.get("data"))
+            home_stats = stats_cache.setdefault(
+                (home_sigla, cutoff_date), load_team_stats(home_sigla, season, cutoff_date=cutoff_date)
+            )
+            away_stats = stats_cache.setdefault(
+                (away_sigla, cutoff_date), load_team_stats(away_sigla, season, cutoff_date=cutoff_date)
+            )
+            league_runs = load_league_average_runs(season, cutoff_date)
             game_context = build_game_context(game, home_stats, away_stats, season)
             context_parts.append(game_context)
-            prognosticos.extend(generate_game_picks(game, home_stats, away_stats, game_context, handicap_audit_rows))
+            prognosticos.extend(
+                generate_game_picks(
+                    game,
+                    home_stats,
+                    away_stats,
+                    game_context,
+                    handicap_audit_rows,
+                    league_runs=league_runs,
+                )
+            )
 
         write_output_csv(output_path, prognosticos)
         write_handicap_audit_csv(HANDICAP_AUDIT_PATH, handicap_audit_rows)
@@ -379,7 +415,7 @@ def localizar_arquivo_historico(ano: int, sigla: str) -> Path:
     )
 
 
-def load_team_stats(sigla: str, season: int) -> TeamStats:
+def load_team_stats(sigla: str, season: int, cutoff_date: str | None = None) -> TeamStats:
     rows: list[dict[str, str]] = []
     rows_by_year: dict[int, list[dict[str, str]]] = {}
     missing: list[str] = []
@@ -395,7 +431,11 @@ def load_team_stats(sigla: str, season: int) -> TeamStats:
         found_files.append(str(path))
 
         with path.open("r", encoding="utf-8-sig", newline="") as fh:
-            year_rows = list(csv.DictReader(fh))
+            year_rows = sort_and_filter_history_rows(
+                list(csv.DictReader(fh)),
+                year,
+                cutoff_date if year == season else None,
+            )
             rows_by_year[year] = year_rows
             rows.extend(year_rows)
 
@@ -429,8 +469,12 @@ def load_team_stats(sigla: str, season: int) -> TeamStats:
         wins += 1 if won else 0
         streak = streak + 1 if won and streak >= 0 else 1 if won else streak - 1 if streak <= 0 else -1
 
-    last5_for = scored[-5:] or scored
-    last5_against = allowed[-5:] or allowed
+    current_rows = rows_by_year.get(season, [])
+    previous_rows = rows_by_year.get(season - 1, [])
+    last5_for = [value for value in (extract_runs(row, True) for row in current_rows[-5:]) if value is not None] or scored[-5:] or scored
+    last5_against = [value for value in (extract_runs(row, False) for row in current_rows[-5:]) if value is not None] or allowed[-5:] or allowed
+    temporal_for = temporal_runs_average(current_rows, previous_rows, scored=True, fallback=mean(scored))
+    temporal_against = temporal_runs_average(current_rows, previous_rows, scored=False, fallback=mean(allowed))
     return TeamStats(
         sigla=sigla,
         games=len(scored),
@@ -440,10 +484,248 @@ def load_team_stats(sigla: str, season: int) -> TeamStats:
         last5_for=mean(last5_for),
         last5_against=mean(last5_against),
         streak=streak,
-        current_rows=rows_by_year.get(season, []),
-        previous_rows=rows_by_year.get(season - 1, []),
+        current_rows=current_rows,
+        previous_rows=previous_rows,
         all_rows=rows,
+        temporal_for=temporal_for,
+        temporal_against=temporal_against,
+        current_games=len(current_rows),
+        previous_games=len(previous_rows),
+        cutoff_date=cutoff_date,
     )
+
+
+def sort_and_filter_history_rows(
+    rows: list[dict[str, str]],
+    year: int,
+    cutoff_date: str | None,
+) -> list[dict[str, str]]:
+    cutoff = parse_history_date(cutoff_date, year) if cutoff_date else None
+    materialized: list[tuple[datetime | None, int, dict[str, str]]] = []
+    for index, row in enumerate(rows):
+        row_date = parse_history_date(get_row_value(row, "Date"), year)
+        if cutoff is not None and (row_date is None or row_date >= cutoff):
+            continue
+        materialized.append((row_date, index, row))
+    materialized.sort(key=lambda item: (item[0] or datetime(year, 1, 1), item[1]))
+    return [row for _date, _index, row in materialized]
+
+
+def parse_history_date(value: Any, year: int) -> datetime | None:
+    text = clean(value).replace(",", " ")
+    text = re.sub(r"\s+\(\d+\)$", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    if not text:
+        return None
+    for fmt in (
+        "%Y-%m-%d",
+        "%d/%m/%Y",
+        "%m/%d/%Y",
+        "%A %b %d %Y",
+        "%A %B %d %Y",
+        "%b %d %Y",
+        "%B %d %Y",
+        "%A %b %d",
+        "%A %B %d",
+        "%a %b %d",
+        "%b %d",
+        "%B %d",
+    ):
+        try:
+            parsed = datetime.strptime(text, fmt)
+            return parsed if "%Y" in fmt else parsed.replace(year=year)
+        except ValueError:
+            continue
+    return None
+
+
+def exponential_recent_average(values: list[float], half_life: float = RECENT_HALF_LIFE_GAMES) -> float:
+    if not values:
+        return 0.0
+    decay = math.log(2.0) / max(1.0, half_life)
+    weights = [math.exp(-decay * age) for age in range(len(values) - 1, -1, -1)]
+    return sum(value * weight for value, weight in zip(values, weights)) / sum(weights)
+
+
+def temporal_runs_average(
+    current_rows: list[dict[str, str]],
+    previous_rows: list[dict[str, str]],
+    *,
+    scored: bool,
+    fallback: float,
+) -> float:
+    current = [value for value in (extract_runs(row, scored) for row in current_rows) if value is not None]
+    previous = [value for value in (extract_runs(row, scored) for row in previous_rows) if value is not None]
+    recent = current[-RECENT_GAMES_WINDOW:]
+    components = {
+        "current": mean(current) if current else None,
+        "recent": exponential_recent_average(recent) if recent else None,
+        "previous": mean(previous) if previous else None,
+    }
+    available_weight = sum(
+        TEMPORAL_WEIGHTS[key] for key, value in components.items() if value is not None
+    )
+    if available_weight <= 0:
+        return fallback
+    return sum(
+        float(value) * TEMPORAL_WEIGHTS[key]
+        for key, value in components.items()
+        if value is not None
+    ) / available_weight
+
+
+def load_league_average_runs(season: int, cutoff_date: str | None = None) -> float:
+    return _load_league_average_runs_cached(str(HIST_DIR), season, cutoff_date or "")
+
+
+@lru_cache(maxsize=64)
+def _load_league_average_runs_cached(hist_dir: str, season: int, cutoff_date: str) -> float:
+    global HIST_DIR
+    original_hist_dir = HIST_DIR
+    HIST_DIR = Path(hist_dir)
+    current_values: list[float] = []
+    previous_values: list[float] = []
+    try:
+        for sigla in sorted(set(MLB_TEAMS.values())):
+            for year, target in ((season, current_values), (season - 1, previous_values)):
+                try:
+                    path = localizar_arquivo_historico(year, sigla)
+                except Exception:
+                    continue
+                with path.open("r", encoding="utf-8-sig", newline="") as fh:
+                    rows = sort_and_filter_history_rows(
+                        list(csv.DictReader(fh)),
+                        year,
+                        cutoff_date if year == season and cutoff_date else None,
+                    )
+                target.extend(
+                    value for value in (extract_runs(row, True) for row in rows) if value is not None
+                )
+    finally:
+        HIST_DIR = original_hist_dir
+
+    prior = mean(previous_values) if previous_values else MLB_LEAGUE_RUNS_PRIOR
+    if not current_values:
+        return prior
+    return (
+        len(current_values) * mean(current_values) + LEAGUE_PRIOR_STRENGTH * prior
+    ) / (len(current_values) + LEAGUE_PRIOR_STRENGTH)
+
+
+def calculate_expected_runs(
+    home: TeamStats,
+    away: TeamStats,
+    league_runs: float,
+) -> tuple[float, float, dict[str, float]]:
+    league_runs = max(2.5, min(7.0, league_runs or MLB_LEAGUE_RUNS_PRIOR))
+    home_for = home.temporal_for if home.temporal_for is not None else home.avg_for
+    home_against = home.temporal_against if home.temporal_against is not None else home.avg_against
+    away_for = away.temporal_for if away.temporal_for is not None else away.avg_for
+    away_against = away.temporal_against if away.temporal_against is not None else away.avg_against
+
+    def factor(value: float) -> float:
+        return max(0.60, min(1.50, value / league_runs))
+
+    home_attack = factor(home_for)
+    away_attack = factor(away_for)
+    home_defense = factor(home_against)
+    away_defense = factor(away_against)
+    expected_home = league_runs * (home_attack**0.55) * (away_defense**0.45) * HOME_RUN_FACTOR
+    expected_away = league_runs * (away_attack**0.55) * (home_defense**0.45) * AWAY_RUN_FACTOR
+    expected_home = max(0.2, min(12.0, expected_home))
+    expected_away = max(0.2, min(12.0, expected_away))
+    return expected_home, expected_away, {
+        "league_runs": league_runs,
+        "home_temporal_for": home_for,
+        "home_temporal_against": home_against,
+        "away_temporal_for": away_for,
+        "away_temporal_against": away_against,
+        "home_attack_factor": home_attack,
+        "away_attack_factor": away_attack,
+        "home_defense_factor": home_defense,
+        "away_defense_factor": away_defense,
+        "expected_home": expected_home,
+        "expected_away": expected_away,
+        "overdispersion": RUNS_OVERDISPERSION,
+    }
+
+
+@lru_cache(maxsize=1)
+def load_probability_calibration() -> dict[str, Any]:
+    if not CALIBRATION_PATH.exists():
+        return {}
+    try:
+        with CALIBRATION_PATH.open("r", encoding="utf-8") as fh:
+            payload = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def apply_market_calibration(market: str, probability: float) -> tuple[float, dict[str, Any]]:
+    config = load_probability_calibration().get(normalize_key(market), {})
+    active = bool(config.get("active"))
+    out_of_sample = bool(config.get("out_of_sample"))
+    sample_size = int(config.get("sample_size") or 0)
+    if not active or not out_of_sample or sample_size < 100:
+        return probability, {
+            "status": "identity_insufficient_oos_sample",
+            "sample_size": sample_size,
+        }
+    intercept = float(config.get("intercept", 0.0))
+    slope = float(config.get("slope", 1.0))
+    clipped = max(1e-6, min(1 - 1e-6, probability))
+    logit = math.log(clipped / (1 - clipped))
+    calibrated = 1 / (1 + math.exp(-(intercept + slope * logit)))
+    return max(0.01, min(0.99, calibrated)), {
+        "status": "platt_logit_oos",
+        "sample_size": sample_size,
+        "intercept": intercept,
+        "slope": slope,
+    }
+
+
+def selection_thesis_key(pick: dict[str, Any]) -> str:
+    market = normalize_key(pick.get("mercado"))
+    selection = clean(pick.get("pick"))
+    if "total" in market:
+        return "over" if "over" in selection.lower() else "under"
+    if "handicap" in market:
+        line = clean(pick.get("linha"))
+        return normalize_key(selection[: -len(line)] if line and selection.endswith(line) else selection)
+    return normalize_key(selection)
+
+
+def limit_correlated_market_selections(
+    picks: list[dict[str, Any]],
+    limit: int = MAX_MARKET_SELECTIONS_PER_GAME,
+) -> list[dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for pick in picks:
+        grouped[normalize_key(pick.get("mercado"))].append(pick)
+
+    selected: list[dict[str, Any]] = []
+    for market_picks in grouped.values():
+        ranked = sorted(
+            market_picks,
+            key=lambda item: (
+                float(item.get("edge") or 0.0),
+                float(item.get("probabilidade_final") or 0.0),
+            ),
+            reverse=True,
+        )
+        if not ranked:
+            continue
+        primary = ranked[0]
+        thesis = selection_thesis_key(primary)
+        correlated = [item for item in ranked[1:] if selection_thesis_key(item) == thesis]
+        chosen = [primary, *correlated[: max(0, limit - 1)]]
+        for index, item in enumerate(chosen, start=1):
+            item["selection_rank"] = index
+            item["selection_role"] = "PRINCIPAL" if index == 1 else "ALTERNATIVA"
+            item["selection_group"] = thesis
+        selected.extend(chosen)
+    return selected
 
 
 def generate_game_picks(
@@ -452,24 +734,44 @@ def generate_game_picks(
     away: TeamStats,
     game_context: str,
     handicap_audit_rows: list[dict[str, Any]] | None = None,
+    league_runs: float | None = None,
 ) -> list[dict[str, Any]]:
-    expected_home = max(0.2, (home.avg_for * 0.55) + (away.avg_against * 0.45))
-    expected_away = max(0.2, (away.avg_for * 0.55) + (home.avg_against * 0.45))
-    total_expected = expected_home + expected_away
-    diff = expected_home - expected_away
+    league_runs = league_runs or MLB_LEAGUE_RUNS_PRIOR
+    expected_home, expected_away, lambda_diagnostics = calculate_expected_runs(
+        home, away, league_runs
+    )
     picks: list[dict[str, Any]] = []
 
-    home_win_sim = win_probability_poisson(expected_home, expected_away)
-    away_win_sim = 1 - home_win_sim
-    add_moneyline_pick(picks, game, home, away, "home", home_win_sim, game_context)
-    add_moneyline_pick(picks, game, home, away, "away", away_win_sim, game_context)
+    home_win_sim, away_win_sim, tie_regulation = win_probabilities_overdispersed(
+        expected_home, expected_away
+    )
+    add_moneyline_pick(
+        picks,
+        game,
+        home,
+        away,
+        "home",
+        home_win_sim,
+        game_context,
+        lambda_diagnostics={**lambda_diagnostics, "tie_regulation": tie_regulation},
+    )
+    add_moneyline_pick(
+        picks,
+        game,
+        home,
+        away,
+        "away",
+        away_win_sim,
+        game_context,
+        lambda_diagnostics={**lambda_diagnostics, "tie_regulation": tie_regulation},
+    )
 
     for line_key, odds in game["totals"].items():
         line = parse_float(line_key.replace("_", "."))
         if line is None:
             continue
-        over_sim = 1 - poisson_cdf(math.floor(line), total_expected)
-        under_sim = poisson_cdf(math.floor(line), total_expected)
+        over_sim = total_runs_probability_overdispersed(expected_home, expected_away, line, "over")
+        under_sim = total_runs_probability_overdispersed(expected_home, expected_away, line, "under")
         hist_over, over_sample, over_warnings = historical_total_probability(home, away, line, "over")
         hist_under, under_sample, under_warnings = historical_total_probability(home, away, line, "under")
         add_total_pick(
@@ -484,6 +786,7 @@ def generate_game_picks(
             game_context,
             over_sample,
             over_warnings,
+            lambda_diagnostics,
         )
         add_total_pick(
             picks,
@@ -497,10 +800,11 @@ def generate_game_picks(
             game_context,
             under_sample,
             under_warnings,
+            lambda_diagnostics,
         )
 
-    if not HANDICAP_ENABLED_MLB_V1_1:
-        return picks
+    if not HANDICAP_ENABLED_MLB_V1_1 and not HANDICAP_SHADOW_ENABLED:
+        return limit_correlated_market_selections(picks)
     for candidate in iter_handicap_candidates(game):
         add_handicap_pick(
             picks,
@@ -520,7 +824,7 @@ def generate_game_picks(
             bookmaker_melhor=candidate.get("bookmaker_melhor"),
         )
 
-    return picks
+    return limit_correlated_market_selections(picks)
 
 
 def add_moneyline_pick(
@@ -531,6 +835,7 @@ def add_moneyline_pick(
     side: str,
     sim_prob: float,
     game_context: str,
+    lambda_diagnostics: dict[str, float] | None = None,
 ) -> None:
     quote = game["moneyline"].get(side)
     odd = quote_offered(quote)
@@ -543,8 +848,10 @@ def add_moneyline_pick(
     market_odd = quote_consensus(quote) or odd
     other_market_odd = quote_consensus(other_quote) or other_odd
     vig_prob = no_vig_probability(market_odd, other_market_odd)
-    hist_prob = home.win_rate if side == "home" else away.win_rate
-    prob = weighted({"vit": hist_prob, "sim": sim_prob, "vig": vig_prob}, PROB_ML_WEIGHTS)
+    hist_home = matchup_win_probability(home.win_rate, home.games, away.win_rate, away.games)
+    hist_prob = hist_home if side == "home" else 1.0 - hist_home
+    raw_prob = weighted({"vit": hist_prob, "sim": sim_prob, "vig": vig_prob}, PROB_ML_WEIGHTS)
+    prob, calibration = apply_market_calibration("moneyline", raw_prob)
     team = game["home"] if side == "home" else game["away"]
     append_if_ev(
         picks,
@@ -566,7 +873,11 @@ def add_moneyline_pick(
             "bookmaker_melhor": quote_bookmaker(quote),
             "sample_size_hist": (home.games if side == "home" else away.games),
             "warnings": [],
+            "prob_raw": raw_prob,
+            "calibration": calibration,
+            "lambda_diagnostics": lambda_diagnostics or {},
         },
+        min_edge=MIN_EDGE_MONEYLINE,
     )
 
 
@@ -582,6 +893,7 @@ def add_total_pick(
     game_context: str,
     sample_size_hist: int,
     warnings: list[str],
+    lambda_diagnostics: dict[str, float] | None = None,
 ) -> None:
     quote = odd
     other_quote = other_odd
@@ -594,7 +906,8 @@ def add_total_pick(
     market_odd = quote_consensus(quote) or odd
     other_market_odd = quote_consensus(other_quote) or other_odd
     vig_prob = no_vig_probability(market_odd, other_market_odd)
-    prob = weighted({"hist": hist_prob, "sim": sim_prob, "vig": vig_prob}, PROB_OU_WEIGHTS)
+    raw_prob = weighted({"hist": hist_prob, "sim": sim_prob, "vig": vig_prob}, PROB_OU_WEIGHTS)
+    prob, calibration = apply_market_calibration("totals", raw_prob)
     append_if_ev(
         picks,
         game,
@@ -615,7 +928,11 @@ def add_total_pick(
             "bookmaker_melhor": quote_bookmaker(quote),
             "sample_size_hist": sample_size_hist,
             "warnings": warnings,
+            "prob_raw": raw_prob,
+            "calibration": calibration,
+            "lambda_diagnostics": lambda_diagnostics or {},
         },
+        min_edge=MIN_EDGE_TOTALS,
     )
 
 
@@ -704,10 +1021,14 @@ def add_handicap_pick(
     other_market_odd: float | None = None,
     bookmaker_melhor: str = "",
 ) -> None:
-    if not HANDICAP_ENABLED_MLB_V1_1:
+    if not HANDICAP_ENABLED_MLB_V1_1 and not HANDICAP_SHADOW_ENABLED:
         return
 
-    warnings = ["handicap_mlb_v1_1_controlled_activation"]
+    warnings = [
+        "handicap_mlb_v2_operationally_disabled"
+        if not HANDICAP_ENABLED_MLB_V1_1
+        else "handicap_mlb_v2_controlled_activation"
+    ]
     team_name = game["home"] if side == "home" else game["away"]
     team_stats = home if side == "home" else away
     expected_margin = expected_home - expected_away if side == "home" else expected_away - expected_home
@@ -741,7 +1062,7 @@ def add_handicap_pick(
             {
                 **base_audit,
                 "model_version": BASEBALL_MLB_HANDICAP_MODEL_VERSION,
-                "mode": "controlled_activation",
+                "mode": "controlled_activation" if HANDICAP_ENABLED_MLB_V1_1 else "shadow_blocked",
                 "published": passed,
                 "activation_status": activation_status,
                 "prob_hist": "",
@@ -814,6 +1135,9 @@ def add_handicap_pick(
         return
     if edge < HANDICAP_MIN_EDGE:
         audit("HANDICAP_EDGE_BELOW_MIN", extra=common_audit)
+        return
+    if not HANDICAP_ENABLED_MLB_V1_1:
+        audit("HANDICAP_SHADOW_ONLY", extra=common_audit)
         return
 
     technical = build_handicap_technical_context(
@@ -903,6 +1227,8 @@ def append_if_ev(
         return False
     diagnostics = diagnostics or {}
     warnings = diagnostics.get("warnings") or []
+    calibration = diagnostics.get("calibration") or {}
+    lambda_diagnostics = diagnostics.get("lambda_diagnostics") or {}
     market_odd = parse_float(diagnostics.get("odd_consenso"))
     best_odd = parse_float(diagnostics.get("odd_melhor")) or odd
     bookmaker_melhor = clean(diagnostics.get("bookmaker_melhor"))
@@ -910,13 +1236,20 @@ def append_if_ev(
         f" modelo_versao={MODEL_VERSION}; prob_hist={float(diagnostics.get('prob_hist', 0.0)):.4f};"
         f" prob_sim={float(diagnostics.get('prob_sim', 0.0)):.4f};"
         f" prob_no_vig={float(diagnostics.get('prob_no_vig', 0.0)):.4f};"
+        f" prob_raw={float(diagnostics.get('prob_raw', prob)):.4f};"
         f" odd_mercado_base={(market_odd or odd):.3f};"
         f" prob_final={prob:.4f}; sample_size_hist={int(diagnostics.get('sample_size_hist') or 0)};"
+        f" calibracao={clean(calibration.get('status')) or 'identity'};"
+        f" lambda_home={float(lambda_diagnostics.get('expected_home', 0.0)):.3f};"
+        f" lambda_away={float(lambda_diagnostics.get('expected_away', 0.0)):.3f};"
+        f" media_liga={float(lambda_diagnostics.get('league_runs', 0.0)):.3f};"
         f" warnings={','.join(str(item) for item in warnings) if warnings else 'nenhum'}."
     )
     observacoes = (
         f"Modelo Baseball MLB. {extra}. Odd ofertada {odd:.3f}; odd valor {odd_valor:.3f}; "
-        f"odd mercado base {(market_odd or odd):.3f}; probabilidade final {prob * 100:.2f}%; edge {edge:.2f}%.{debug_text}"
+        f"odd mercado base {(market_odd or odd):.3f}; probabilidade pre-IA {prob * 100:.2f}%; edge {edge:.2f}%. "
+        "Starter, bullpen, parque e clima nao incorporados; validar no Preview/IA sem dupla contagem."
+        f"{debug_text}"
     )
     picks.append(
         {
@@ -940,6 +1273,14 @@ def append_if_ev(
             "odd_valor": round(odd_valor, 3),
             "probabilidade": round(prob * 100, 2),
             "probabilidade_final": round(prob * 100, 2),
+            "probabilidade_pre_ia": round(prob * 100, 2),
+            "probabilidade_estagio": "PRE_IA",
+            "starter_incorporado": False,
+            "bullpen_incorporado": False,
+            "park_factor_incorporado": False,
+            "weather_incorporado": False,
+            "requer_preview_ia": True,
+            "calibration_status": clean(calibration.get("status")) or "identity",
             "edge": round(edge, 2),
             "stake": 0.5,
             "dados_tecnicos": f"{game_context}\n{observacoes}",
@@ -954,8 +1295,10 @@ def append_if_ev(
 
 
 def build_game_context(game: dict[str, Any], home: TeamStats, away: TeamStats, season: int) -> str:
-    expected_home = (home.avg_for * 0.55) + (away.avg_against * 0.45)
-    expected_away = (away.avg_for * 0.55) + (home.avg_against * 0.45)
+    league_runs = load_league_average_runs(season, normalize_date(game.get("data")))
+    expected_home, expected_away, lambda_diagnostics = calculate_expected_runs(
+        home, away, league_runs
+    )
     total_expected = expected_home + expected_away
     delta_rpi = home.win_rate - away.win_rate
     home_record = season_record(home.current_rows)
@@ -964,8 +1307,11 @@ def build_game_context(game: dict[str, Any], home: TeamStats, away: TeamStats, s
     away_rank = latest_value(away.current_rows, "Rank") or "-"
     home_division = MLB_TEAM_DIVISION.get(home.sigla, "MLB")
     away_division = MLB_TEAM_DIVISION.get(away.sigla, "MLB")
-    home_win_prob = win_probability_poisson(expected_home, expected_away) * 100
-    away_win_prob = 100 - home_win_prob
+    home_win_base, away_win_base, tie_regulation = win_probabilities_overdispersed(
+        expected_home, expected_away
+    )
+    home_win_prob = home_win_base * 100
+    away_win_prob = away_win_base * 100
     home_diff = home.avg_for - home.avg_against
     away_diff = away.avg_for - away.avg_against
     insight = "Confronto equilibrado"
@@ -987,6 +1333,7 @@ def build_game_context(game: dict[str, Any], home: TeamStats, away: TeamStats, s
             "--- Probabilidade de Vitória ---",
             f"{game['home']}: {home_win_prob:.1f}%",
             f"{game['away']}: {away_win_prob:.1f}%",
+            f"Empate apos 9 entradas antes do condicionamento: {tie_regulation * 100:.1f}%",
             f"--- H2H ({season} + {season - 1}) ---",
             build_h2h_section(game, home, away, season),
             "",
@@ -1006,6 +1353,10 @@ def build_game_context(game: dict[str, Any], home: TeamStats, away: TeamStats, s
             "Médias e Expectativas de Corridas",
             f"   {game['home']}: Marcadas = {home.avg_for:.2f} | Sofridas = {home.avg_against:.2f}",
             f"   {game['away']}: Marcadas = {away.avg_for:.2f} | Sofridas = {away.avg_against:.2f}",
+            f"   Media temporal {game['home']}: Marcadas = {float(home.temporal_for or home.avg_for):.2f} | Sofridas = {float(home.temporal_against or home.avg_against):.2f}",
+            f"   Media temporal {game['away']}: Marcadas = {float(away.temporal_for or away.avg_for):.2f} | Sofridas = {float(away.temporal_against or away.avg_against):.2f}",
+            f"   Media da liga usada = {lambda_diagnostics['league_runs']:.3f}",
+            f"   Distribuicao = Negative Binomial | Sobredispersao = {RUNS_OVERDISPERSION:.3f}",
             f"   Expectativa de Total de Corridas = {total_expected:.2f} | Min = {max(0.0, total_expected - 6.5):.1f} | Max = {total_expected + 6.5:.1f}",
             "",
             "Diferencial de Corridas:",
@@ -1022,36 +1373,92 @@ def apply_shrinkage(prob_observed: float, n: int, prior: float = HISTORICAL_PRIO
     return ((n * prob_observed) + (prior_strength * prior)) / (n + prior_strength)
 
 
+def matchup_win_probability(
+    home_win_rate: float,
+    home_games: int,
+    away_win_rate: float,
+    away_games: int,
+) -> float:
+    home_strength = apply_shrinkage(home_win_rate, home_games)
+    away_strength = apply_shrinkage(away_win_rate, away_games)
+    denominator = home_strength + away_strength - (2 * home_strength * away_strength)
+    if denominator <= 0:
+        return 0.5
+    probability = (home_strength - home_strength * away_strength) / denominator
+    return max(0.01, min(0.99, probability))
+
+
+def temporal_event_rate(
+    current_rows: list[dict[str, str]],
+    previous_rows: list[dict[str, str]],
+    event: Any,
+) -> tuple[float, int]:
+    def values_for(rows: list[dict[str, str]]) -> list[float]:
+        values: list[float] = []
+        for row in rows:
+            outcome = event(row)
+            if outcome is None:
+                continue
+            values.append(1.0 if outcome else 0.0)
+        return values
+
+    current_values = values_for(current_rows)
+    previous_values = values_for(previous_rows)
+    recent_values = current_values[-RECENT_GAMES_WINDOW:]
+    components = {
+        "current": mean(current_values) if current_values else None,
+        "recent": exponential_recent_average(recent_values) if recent_values else None,
+        "previous": mean(previous_values) if previous_values else None,
+    }
+    available_weight = sum(
+        TEMPORAL_WEIGHTS[key] for key, value in components.items() if value is not None
+    )
+    if available_weight <= 0:
+        return HISTORICAL_PRIOR, 0
+    observed = sum(
+        float(value) * TEMPORAL_WEIGHTS[key]
+        for key, value in components.items()
+        if value is not None
+    ) / available_weight
+    sample_size = len(current_values) + len(previous_values)
+    return observed, sample_size
+
+
 def historical_total_probability(home: TeamStats, away: TeamStats, line: float, side: str) -> tuple[float, int, list[str]]:
-    totals: list[float] = []
-    for row in [*home.all_rows, *away.all_rows]:
+    def total_for_row(row: dict[str, str]) -> float | None:
         runs_for = extract_runs(row, True)
         runs_against = extract_runs(row, False)
         if runs_for is None or runs_against is None:
-            continue
-        totals.append(runs_for + runs_against)
+            return None
+        return runs_for + runs_against
 
-    sample_size = len(totals)
     warnings: list[str] = []
+    normalized_side = normalize_key(side)
+    if normalized_side not in {"over", "under"}:
+        warnings.append("hist_total_side_invalido_prior_050")
+        return HISTORICAL_PRIOR, 0, warnings
+
+    def event(row: dict[str, str]) -> bool | None:
+        total = total_for_row(row)
+        if total is None:
+            return None
+        return total > line if normalized_side == "over" else total < line
+
+    home_prob, home_sample = temporal_event_rate(home.current_rows, home.previous_rows, event)
+    away_prob, away_sample = temporal_event_rate(away.current_rows, away.previous_rows, event)
+    sample_size = home_sample + away_sample
     if sample_size == 0:
         warnings.append("hist_total_fallback_prior_050")
         return HISTORICAL_PRIOR, 0, warnings
-
-    normalized_side = normalize_key(side)
-    if normalized_side == "over":
-        hits = sum(1 for total in totals if total > line)
-    elif normalized_side == "under":
-        hits = sum(1 for total in totals if total < line)
-    else:
-        warnings.append("hist_total_side_invalido_prior_050")
-        return HISTORICAL_PRIOR, sample_size, warnings
-
-    prob_raw = hits / sample_size
+    hist_observed = (
+        (home_prob * home_sample) + (away_prob * away_sample)
+    ) / sample_size
+    hist_prob = apply_shrinkage(hist_observed, sample_size)
     if sample_size < 10:
         warnings.append("hist_total_amostra_baixa_shrinkage")
     elif sample_size >= 20:
         warnings.append("hist_total_amostra_confiavel")
-    return apply_shrinkage(prob_raw, sample_size), sample_size, warnings
+    return hist_prob, sample_size, warnings
 
 
 def is_allowed_handicap_line(line: float) -> bool:
@@ -1078,9 +1485,26 @@ def historical_handicap_cover_rate(
 
     sample_size = covers + losses
     cover_rate_raw = covers / sample_size if sample_size else prior
-    cover_rate_shrunk = apply_shrinkage(cover_rate_raw, sample_size, prior=prior, prior_strength=prior_strength)
+
+    def covered(row: dict[str, str]) -> bool | None:
+        runs_for = extract_runs(row, True)
+        runs_against = extract_runs(row, False)
+        if runs_for is None or runs_against is None:
+            return None
+        return runs_for - runs_against + line > 0
+
+    temporal_rate_raw, temporal_sample = temporal_event_rate(
+        team.current_rows, team.previous_rows, covered
+    )
+    temporal_observed = temporal_rate_raw if temporal_sample else cover_rate_raw
+    cover_rate_shrunk = apply_shrinkage(
+        temporal_observed,
+        temporal_sample or sample_size,
+        prior=prior,
+        prior_strength=prior_strength,
+    )
     return {
-        "sample_size_hist": sample_size,
+        "sample_size_hist": temporal_sample or sample_size,
         "covers": covers,
         "losses": losses,
         "cover_rate_raw": cover_rate_raw,
@@ -1303,6 +1727,10 @@ def write_output_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "bookmaker_melhor",
         "odd_valor",
         "probabilidade_final",
+        "probabilidade_pre_ia",
+        "probabilidade_estagio",
+        "selection_role",
+        "selection_rank",
         "edge",
         "observacoes",
     ]
@@ -1354,7 +1782,11 @@ def write_handicap_audit_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 
 
 def build_handicap_shadow_diagnostics(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    published = [row for row in rows if bool(row.get("passou_filtros"))]
+    published = (
+        [row for row in rows if bool(row.get("passou_filtros"))]
+        if HANDICAP_ENABLED_MLB_V1_1
+        else []
+    )
     discarded = [row for row in rows if not bool(row.get("passou_filtros"))]
     discard_reasons: dict[str, int] = defaultdict(int)
     for row in discarded:
@@ -1363,7 +1795,7 @@ def build_handicap_shadow_diagnostics(rows: list[dict[str, Any]]) -> dict[str, A
 
     return {
         "enabled": HANDICAP_ENABLED_MLB_V1_1,
-        "mode": "controlled_activation",
+        "mode": "controlled_activation" if HANDICAP_ENABLED_MLB_V1_1 else "shadow_blocked",
         "model_version": BASEBALL_MLB_HANDICAP_MODEL_VERSION,
         "published": bool(published),
         "published_count": len(published),
@@ -1374,6 +1806,7 @@ def build_handicap_shadow_diagnostics(rows: list[dict[str, Any]]) -> dict[str, A
             "discarded_count": len(discarded),
             "discard_reasons": dict(discard_reasons),
             "controlled_activation": HANDICAP_CONTROLLED_ACTIVATION_MLB_V1_1,
+            "shadow_enabled": HANDICAP_SHADOW_ENABLED,
             "selected_reason": HANDICAP_SELECTED_CONTROLLED,
         },
     }
@@ -1495,14 +1928,87 @@ def poisson_cdf(k: int, lam: float) -> float:
     return sum(poisson_pmf(i, lam) for i in range(max(0, k) + 1))
 
 
-def win_probability_poisson(home_lam: float, away_lam: float, max_runs: int = 20) -> float:
-    prob = 0.0
-    for home_runs in range(max_runs + 1):
-        p_home = poisson_pmf(home_runs, home_lam)
-        for away_runs in range(max_runs + 1):
+def negative_binomial_pmf(k: int, mean_value: float, dispersion: float = RUNS_OVERDISPERSION) -> float:
+    if k < 0 or mean_value <= 0:
+        return 0.0
+    if dispersion <= 1e-12:
+        return poisson_pmf(k, mean_value)
+    size = 1.0 / dispersion
+    success_probability = size / (size + mean_value)
+    log_probability = (
+        math.lgamma(k + size)
+        - math.lgamma(size)
+        - math.lgamma(k + 1)
+        + size * math.log(success_probability)
+        + k * math.log1p(-success_probability)
+    )
+    return math.exp(log_probability)
+
+
+def score_distribution(
+    mean_value: float,
+    dispersion: float = RUNS_OVERDISPERSION,
+    max_runs: int = MAX_DISTRIBUTION_RUNS,
+) -> list[float]:
+    probabilities = [negative_binomial_pmf(k, mean_value, dispersion) for k in range(max_runs + 1)]
+    mass = sum(probabilities)
+    if mass <= 0:
+        return [1.0, *([0.0] * max_runs)]
+    return [probability / mass for probability in probabilities]
+
+
+def win_probabilities_overdispersed(
+    home_lam: float,
+    away_lam: float,
+    dispersion: float = RUNS_OVERDISPERSION,
+) -> tuple[float, float, float]:
+    home_distribution = score_distribution(home_lam, dispersion)
+    away_distribution = score_distribution(away_lam, dispersion)
+    home_win = 0.0
+    away_win = 0.0
+    tie = 0.0
+    for home_runs, p_home in enumerate(home_distribution):
+        for away_runs, p_away in enumerate(away_distribution):
+            score_probability = p_home * p_away
             if home_runs > away_runs:
-                prob += p_home * poisson_pmf(away_runs, away_lam)
-    return max(0.01, min(0.99, prob))
+                home_win += score_probability
+            elif away_runs > home_runs:
+                away_win += score_probability
+            else:
+                tie += score_probability
+    decided = home_win + away_win
+    if decided <= 0:
+        return 0.5, 0.5, tie
+    return home_win / decided, away_win / decided, tie
+
+
+def total_runs_probability_overdispersed(
+    home_lam: float,
+    away_lam: float,
+    line: float,
+    side: str,
+    dispersion: float = RUNS_OVERDISPERSION,
+) -> float:
+    normalized_side = normalize_key(side)
+    home_distribution = score_distribution(home_lam, dispersion)
+    away_distribution = score_distribution(away_lam, dispersion)
+    probability = 0.0
+    for home_runs, p_home in enumerate(home_distribution):
+        for away_runs, p_away in enumerate(away_distribution):
+            total = home_runs + away_runs
+            if normalized_side == "over" and total > line:
+                probability += p_home * p_away
+            elif normalized_side == "under" and total < line:
+                probability += p_home * p_away
+    return max(0.01, min(0.99, probability))
+
+
+def win_probability_poisson(home_lam: float, away_lam: float, max_runs: int = 20) -> float:
+    del max_runs
+    home_win, _away_win, _tie = win_probabilities_overdispersed(
+        home_lam, away_lam, dispersion=0.0
+    )
+    return home_win
 
 
 def handicap_cover_probability_poisson(expected_home: float, expected_away: float, side: str, line: float, max_runs: int = 20) -> float:
@@ -1510,11 +2016,13 @@ def handicap_cover_probability_poisson(expected_home: float, expected_away: floa
     if normalized_side not in {"home", "away"}:
         raise ValueError("side deve ser 'home' ou 'away'")
 
+    del max_runs
+    home_distribution = score_distribution(expected_home, RUNS_OVERDISPERSION)
+    away_distribution = score_distribution(expected_away, RUNS_OVERDISPERSION)
     prob = 0.0
-    for home_runs in range(max_runs + 1):
-        p_home = poisson_pmf(home_runs, expected_home)
-        for away_runs in range(max_runs + 1):
-            score_prob = p_home * poisson_pmf(away_runs, expected_away)
+    for home_runs, p_home in enumerate(home_distribution):
+        for away_runs, p_away in enumerate(away_distribution):
+            score_prob = p_home * p_away
             margin = home_runs - away_runs if normalized_side == "home" else away_runs - home_runs
             if margin + line > 0:
                 prob += score_prob
@@ -1522,12 +2030,14 @@ def handicap_cover_probability_poisson(expected_home: float, expected_away: floa
 
 
 def handicap_probability(team_lam: float, opponent_lam: float, line: float, max_runs: int = 20) -> float:
+    del max_runs
+    team_distribution = score_distribution(team_lam, RUNS_OVERDISPERSION)
+    opponent_distribution = score_distribution(opponent_lam, RUNS_OVERDISPERSION)
     prob = 0.0
-    for team_runs in range(max_runs + 1):
-        p_team = poisson_pmf(team_runs, team_lam)
-        for opp_runs in range(max_runs + 1):
+    for team_runs, p_team in enumerate(team_distribution):
+        for opp_runs, p_opponent in enumerate(opponent_distribution):
             if team_runs + line > opp_runs:
-                prob += p_team * poisson_pmf(opp_runs, opponent_lam)
+                prob += p_team * p_opponent
     return max(0.01, min(0.99, prob))
 
 
