@@ -225,6 +225,34 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
           </div>
         )}
 
+        {race && raceAmbiguo && (
+          <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm space-y-2">
+            <div className="text-xs">
+              Ambos os times alcançaram <b>{race.alvo}</b> cantos. Selecione manualmente quem
+              chegou primeiro:
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={racePrimeiro === "casa" ? "default" : "outline"}
+                onClick={() => setRacePrimeiro("casa")}
+              >
+                Casa alcançou primeiro
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={racePrimeiro === "fora" ? "default" : "outline"}
+                onClick={() => setRacePrimeiro("fora")}
+              >
+                Fora alcançou primeiro
+              </Button>
+            </div>
+          </div>
+        )}
+
+
         <div className="flex gap-2">
           <Button
             type="button"
