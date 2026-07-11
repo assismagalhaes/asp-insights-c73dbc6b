@@ -80,6 +80,17 @@ class BasketballWnbaV11Tests(unittest.TestCase):
         self.assertLess(small, large)
         self.assertGreater(small_haircut, large_haircut)
 
+    def test_component_disagreement_haircut_moves_probability_toward_market(self) -> None:
+        adjusted, diagnostics = runner.wnba_component_disagreement_haircut(
+            0.65,
+            {"hist": 0.60, "sim": 0.80, "vig": 0.49},
+            0.49,
+        )
+
+        self.assertAlmostEqual(adjusted, 0.61, places=4)
+        self.assertEqual(diagnostics["status"], "haircut_applied")
+        self.assertAlmostEqual(diagnostics["component_spread"], 0.31, places=4)
+
     def test_correlated_market_limit_keeps_principal_and_two_alternatives(self) -> None:
         rows = [
             {
@@ -114,6 +125,21 @@ class BasketballWnbaV11Tests(unittest.TestCase):
         ]
         selected = runner.apply_wnba_exposure_caps(rows)
         self.assertLessEqual(sum(runner.parse_units(row["stake"]) for row in selected), runner.WNBA_MAX_MARKET_UNITS)
+
+    def test_strong_market_conflict_caps_pick_at_quarter_unit(self) -> None:
+        rows = [{
+            "jogo": "A vs B",
+            "mercado": "Handicap Asiatico",
+            "pick": "B +9.5",
+            "probabilidade_final": 64.0,
+            "edge": 25.0,
+            "odd_ofertada": 2.0,
+            "_strong_market_conflict": True,
+        }]
+
+        selected = runner.apply_wnba_exposure_caps(rows)
+
+        self.assertEqual(selected[0]["stake"], "0.25u")
 
     def test_data_access_prefers_merged_and_applies_as_of_cutoff(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -444,6 +470,46 @@ class BasketballWnbaV11Tests(unittest.TestCase):
         minus = runner.wnba_simulate_matchup(module, row, res, "TOR", "PHO", handicap_line=-4.5, handicap_side="away", lines=[160.5])
 
         self.assertGreater(plus["handicap_cover_probability"], minus["handicap_cover_probability"])
+
+    def test_wnba_simulation_blends_market_spread_without_changing_total(self) -> None:
+        module = FakeWnbaModule([
+            {"pontos_time": 80, "pontos_adversario": 80},
+            {"pontos_time": 82, "pontos_adversario": 82},
+        ])
+        row = pd.Series({
+            "date": "2026-07-03",
+            "time": "20:00",
+            "odds_Asian_handicap_FT_including_OT_Linha1_HANDICAP": -10.5,
+            "odds_Asian_handicap_FT_including_OT_Linha1_1_MEDIANA": 1.91,
+            "odds_Asian_handicap_FT_including_OT_Linha1_Opp_HANDICAP": 10.5,
+            "odds_Asian_handicap_FT_including_OT_Linha1_Opp_Odd_MEDIANA": 1.91,
+        })
+        res = {"ou": {162.5: {"odd_off_over": 1.91, "odd_off_under": 1.91}}}
+
+        simulation = runner.wnba_simulate_matchup(module, row, res, "TOR", "PHO", lines=[162.5])
+
+        self.assertEqual(simulation["market_margin_anchor"], 10.5)
+        expected_margin = (
+            (1 - runner.WNBA_HANDICAP_MARKET_ANCHOR_WEIGHT) * simulation["model_margin_expected"]
+            + runner.WNBA_HANDICAP_MARKET_ANCHOR_WEIGHT * 10.5
+        )
+        self.assertAlmostEqual(simulation["calibrated_margin_expected"], expected_margin)
+        self.assertAlmostEqual(
+            simulation["home_expected"] + simulation["away_expected"],
+            simulation["calibrated_total_expected"],
+        )
+
+    def test_active_margin_context_replaces_legacy_delta(self) -> None:
+        text = runner.replace_wnba_legacy_margin_context(
+            "RPI A 0.5 x B 0.4; Delta pontos +17.66; Pace 80",
+            "A",
+            "B",
+            {"average_margin": 6.33, "home_expected": 89.5, "away_expected": 83.17},
+        )
+
+        self.assertNotIn("Delta pontos", text)
+        self.assertIn("Margem ativa V2.1 A +6.33", text)
+        self.assertIn("Pontos esperados V2.1 A 89.50 x B 83.17", text)
 
     def test_long_csv_to_wide_preserves_median_best_and_bookmaker_columns(self) -> None:
         rows = [

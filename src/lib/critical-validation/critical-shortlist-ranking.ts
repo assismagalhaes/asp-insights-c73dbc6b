@@ -387,6 +387,13 @@ export function detectCriticalShortlistRiskFlags(prognostico: Prognostico, now =
     "medium",
     "Edge muito alto exige revisao para evitar distorcao.",
   );
+  pushIf(
+    flags,
+    /CONFLITO_FORTE_COM_MERCADO/i.test(text),
+    "wnba_market_conflict_strong",
+    "high",
+    "Modelo WNBA diverge fortemente da linha de mercado; manter como reserva ate validacao contextual.",
+  );
   pushIf(flags, !isFiniteNumber(prognostico.probabilidade_final), "probability_missing", "hard_block", "Probabilidade ausente.");
   pushIf(
     flags,
@@ -496,6 +503,7 @@ export function classifyCriticalShortlistCandidate(
   prognostico?: Prognostico,
 ): CriticalShortlistStatus {
   if (flags.some((flag) => flag.severity === "hard_block")) return "BLOQUEADA";
+  if (flags.some((flag) => flag.code === "wnba_market_conflict_strong")) return "RESERVA";
   const hasValue = prognostico ? calculateValueScore(prognostico).effectiveEdge ?? 0 : 1;
   const hasProbabilityMargin = prognostico ? calculateProbabilityMarginScore(prognostico).margin ?? 0 : 1;
   if (score >= 70 && confidence >= 55 && hasValue > 0 && hasProbabilityMargin > 0) return "CANDIDATA";
