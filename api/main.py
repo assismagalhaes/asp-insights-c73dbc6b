@@ -27,11 +27,13 @@ from scraper_flashscore import executar_scraper_real
 try:
     from api.scraping_params import normalize_scraping_params
     from api.scraping_debug import ScraperDebugContext, is_debug_enabled, log_raw_debug
+    from api.model_provenance import single_input_model_provenance
     from scrapers.oddsagora_normalizer import normalize_oddsagora_raw
     from scrapers.oddsagora_scraper import executar_scraper_oddsagora
 except ModuleNotFoundError:
     from scraping_params import normalize_scraping_params
     from scraping_debug import ScraperDebugContext, is_debug_enabled, log_raw_debug
+    from model_provenance import single_input_model_provenance
     from oddsagora_normalizer import normalize_oddsagora_raw
     from oddsagora_scraper import executar_scraper_oddsagora
 
@@ -1114,11 +1116,12 @@ def executar_modelo_futebol(
         "arquivo_saida": f"prognosticos_futebol_{job_id}.csv",
         "arquivo_contexto": resposta_script.get("arquivo_contexto"),
         "arquivo_snapshot": resposta_script.get("arquivo_snapshot"),
-        "provenance": resposta_script.get("provenance") or {
-            "sha256_5": meta.get("sha256_5"),
-            "sha256_20": meta.get("sha256_20"),
-            "created_at": meta.get("created_at"),
-        },
+        "provenance": single_input_model_provenance(
+            resposta_script,
+            raw_path=path,
+            input_path=csv_coleta_path,
+            job_id=job_id,
+        ),
         "total_prognosticos": resposta_script.get("total_prognosticos", 0),
         "contexto_modelo": resposta_script.get("contexto_modelo", ""),
         "dados_tecnicos": resposta_script.get("dados_tecnicos", ""),
