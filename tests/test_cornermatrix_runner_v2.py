@@ -138,6 +138,10 @@ class CornerMatrixRunnerV2Tests(unittest.TestCase):
     def test_kelly_converts_bankroll_fraction_to_units(self) -> None:
         self.assertEqual(runner.kelly_stake_units(59.13, 1.92), 0.75)
 
+    def test_candidate_filter_does_not_treat_reference_odd_as_executable(self) -> None:
+        self.assertTrue(runner._is_candidate_pick(60.0, 1.55, min_prob=56.0))
+        self.assertFalse(runner._is_value_pick(60.0, 1.55, min_prob=56.0, min_edge=5.0))
+
     def test_correlated_limit_keeps_at_most_three_ou_lines(self) -> None:
         rows = [
             {"jogo": "A vs B", "market_type": "OU", "selection_side": "OVER", "linha": line, "edge": edge, "market_conflict_status": "ALINHADO"}
@@ -145,7 +149,11 @@ class CornerMatrixRunnerV2Tests(unittest.TestCase):
         ]
         selected = runner.limit_correlated_picks(rows)
         self.assertEqual(len(selected), 3)
-        self.assertEqual(selected[0]["selection_role"], "PRINCIPAL")
+        self.assertEqual(selected[0]["selection_role"], "CANDIDATO_CORNER_PRINCIPAL")
+
+    def test_reference_candidates_start_without_stake(self) -> None:
+        rows = runner.apply_exposure_caps([{"jogo": "A vs B", "edge": -4.0, "stake": 1.0}])
+        self.assertEqual(rows[0]["stake"], 0.0)
 
     def test_snapshot_rows_are_walk_forward_ready(self) -> None:
         previous = dict(runner.RUN_PROVENANCE)

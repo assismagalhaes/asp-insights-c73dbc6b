@@ -37,7 +37,7 @@ output_dir = Path("Prognostico")
 
 # Nome comercial do modelo para identificação no Lovable.
 MODEL_NAME = "ASP GoalMatrix"
-MODEL_VERSION = "v2.4"
+MODEL_VERSION = "v2.5"
 
 # Modo de execução:
 #   prognostico = apenas jogos NS
@@ -795,6 +795,21 @@ def _is_value_pick(
     return odd >= odd_valor * float(buffer) and edge >= float(min_edge)
 
 
+def _is_candidate_pick(
+    prob,
+    odd,
+    min_prob: float = MIN_PROB,
+    min_odd: float = MIN_ODD,
+    max_odd: float = MAX_ODD,
+) -> bool:
+    try:
+        prob = float(prob)
+        odd = float(odd)
+    except (TypeError, ValueError):
+        return False
+    return np.isfinite(prob) and np.isfinite(odd) and prob >= min_prob and min_odd <= odd <= max_odd
+
+
 def _passes_cv_filter(
     row: pd.Series,
     min_cv: float,
@@ -848,9 +863,7 @@ def apply_value_filter(
     base = base.copy()
 
     def _row_ok(r: pd.Series) -> bool:
-        value_ok = _is_value_pick(
-            r.get(prob_col), r.get(odd_col), min_prob=min_prob, min_edge=min_edge
-        )
+        value_ok = _is_candidate_pick(r.get(prob_col), r.get(odd_col), min_prob=min_prob)
         if not value_ok:
             return False
         if min_cv is None:
@@ -1427,7 +1440,7 @@ def _diagnostic_text(row: pd.Series, diagnostics: dict) -> str:
 
 def _add_lovable_row(rows: list[dict], row: pd.Series, mercado: str, pick: str, linha, prob, odd) -> None:
     min_prob, min_cv, min_edge = _market_thresholds(mercado, pick)
-    if not _is_value_pick(prob, odd, min_prob=min_prob, min_edge=min_edge):
+    if not _is_candidate_pick(prob, odd, min_prob=min_prob):
         return
     market_key = str(mercado).strip().lower()
     if market_key == "over/under gols":
@@ -1453,10 +1466,17 @@ def _add_lovable_row(rows: list[dict], row: pd.Series, mercado: str, pick: str, 
     cv_away = float(row.get(cv_fields[1]))
     odd_valor = 100.0 / prob
     edge = ((odd * prob / 100.0) - 1.0) * 100.0
+    minimum_executable_odd = odd_valor * (1.0 + min_edge / 100.0)
     diagnostics = _pick_probability_diagnostics(row, mercado, pick, linha)
     diagnostic_text = _diagnostic_text(row, diagnostics)
     technical_context = _technical_context(row, mercado=mercado, pick=pick, linha=linha)
-    technical_context = f"{technical_context}\n--- MODELO ---\n{diagnostic_text}"
+    technical_context = (
+        f"{technical_context}\n--- MODELO ---\n{diagnostic_text}\n"
+        "Status operacional: CANDIDATO_GOAL - exige odd executavel na Validacao Critica.\n"
+        "Odds PackBall sao referencia media de 1 a 5 casas; quantidade de casas nao disponivel.\n"
+        f"Edge referencial: {edge:.2f}% | Edge exigido: {min_edge:.2f}% | "
+        f"Odd minima publicacao: {minimum_executable_odd:.3f}"
+    )
 
     dth = row.get("Data/Hora")
     data = dth.strftime("%d/%m/%Y") if pd.notna(dth) else ""
@@ -1479,6 +1499,13 @@ def _add_lovable_row(rows: list[dict], row: pd.Series, mercado: str, pick: str, 
         "odd_valor": round(odd_valor, 2),
         "probabilidade_final": round(prob, 2),
         "edge": round(edge, 2),
+        "edge_referencial": round(edge, 2),
+        "required_edge": round(min_edge, 2),
+        "odd_minima_publicacao": round(minimum_executable_odd, 3),
+        "requires_executable_odd": True,
+        "odd_mercado_base": round(odd, 2),
+        "odd_mediana": None,
+        "stake": 0.0,
         "cv_index_home": round(cv_home, 2),
         "cv_index_away": round(cv_away, 2),
         "cv_index_average": round((cv_home + cv_away) / 2.0, 2),
@@ -1494,10 +1521,17 @@ def _add_lovable_row(rows: list[dict], row: pd.Series, mercado: str, pick: str, 
         "haircut_pp": round(float(diagnostics.get("haircut_pp")), 2),
         "component_spread_pp": round(float(diagnostics.get("component_spread_pp")), 2),
         "calibration_status": diagnostics.get("calibration_status"),
-        "observacoes": _fmt_obs(row, mercado=mercado, pick=pick, linha=linha) + " | " + diagnostic_text,
+        "observacoes": (
+            _fmt_obs(row, mercado=mercado, pick=pick, linha=linha)
+            + " | "
+            + diagnostic_text
+            + f"; Edge referencial: {edge:.2f}%; Edge exigido: {min_edge:.2f}%; "
+            + f"Odd minima publicacao: {minimum_executable_odd:.3f}"
+        ),
         "dados_tecnicos": technical_context,
         "contexto_adicional": technical_context,
         "contexto_modelo": technical_context,
+        "parecer_validacao": "AGUARDAR_ODD_EXECUTAVEL",
     })
 
 
@@ -1523,7 +1557,14 @@ def limit_correlated_picks(rows: list[dict]) -> list[dict]:
         grouped.setdefault((str(row.get("jogo")), str(row.get("market_type"))), []).append(row)
     selected: list[dict] = []
     for (_game, market_type), group in grouped.items():
-        ranked = sorted(group, key=lambda item: float(item.get("edge") or 0.0), reverse=True)
+        ranked = sorted(
+            group,
+            key=lambda item: (
+                float(item.get("probabilidade_final") or 0.0),
+                float(item.get("edge_referencial") or item.get("edge") or 0.0),
+            ),
+            reverse=True,
+        )
         if not ranked:
             continue
         if market_type == "OU":
@@ -1542,43 +1583,17 @@ def limit_correlated_picks(rows: list[dict]) -> list[dict]:
             chosen = ranked[:1]
         for index, item in enumerate(chosen):
             if item.get("market_conflict_status") == "CONFLITO_FORTE_COM_MERCADO":
-                item["selection_role"] = "RESERVA_CONFLITO_MERCADO"
+                item["selection_role"] = "CANDIDATO_GOAL_CONFLITO"
             else:
-                item["selection_role"] = "PRINCIPAL" if index == 0 else "ALTERNATIVA"
+                item["selection_role"] = "CANDIDATO_GOAL_PRINCIPAL" if index == 0 else "CANDIDATO_GOAL_ALTERNATIVA"
         selected.extend(chosen)
     return selected
 
 
 def apply_exposure_caps(rows: list[dict]) -> list[dict]:
-    game_used: dict[str, float] = {}
-    market_used: dict[tuple[str, str], float] = {}
-    kept: list[dict] = []
-    ordered = sorted(
-        rows,
-        key=lambda item: (
-            item.get("selection_role") == "RESERVA_CONFLITO_MERCADO",
-            item.get("selection_role") != "PRINCIPAL",
-            -float(item.get("edge") or 0.0),
-        ),
-    )
-    for row in ordered:
-        game = str(row.get("jogo") or "")
-        market = str(row.get("market_type") or "")
-        conflict = row.get("market_conflict_status") == "CONFLITO_FORTE_COM_MERCADO"
-        requested = kelly_stake_units(row.get("probabilidade_final"), row.get("odd_ofertada"), conflict=conflict)
-        available = min(
-            MAX_GAME_UNITS - game_used.get(game, 0.0),
-            MAX_MARKET_UNITS - market_used.get((game, market), 0.0),
-            MAX_PICK_UNITS,
-        )
-        allocated = math.floor(max(0.0, min(requested, available)) * 4.0 + 1e-9) / 4.0
-        if allocated < 0.25:
-            continue
-        row["stake"] = f"{allocated:.2f}".rstrip("0").rstrip(".") + "u"
-        game_used[game] = game_used.get(game, 0.0) + allocated
-        market_used[(game, market)] = market_used.get((game, market), 0.0) + allocated
-        kept.append(row)
-    return kept
+    for row in rows:
+        row["stake"] = 0.0
+    return rows
 
 
 def build_lovable_export(base: pd.DataFrame) -> pd.DataFrame:
@@ -1615,11 +1630,13 @@ def build_lovable_export(base: pd.DataFrame) -> pd.DataFrame:
     cols = [
         "data", "hora", "esporte", "liga", "jogo", "mandante", "visitante",
         "mercado", "pick", "linha", "odd_ofertada", "odd_valor",
-        "probabilidade_final", "edge", "cv_index_home", "cv_index_away", "cv_index_average",
-        "stake", "modelo_versao", "market_type", "selection_side",
+        "probabilidade_final", "edge", "edge_referencial", "required_edge", "odd_minima_publicacao",
+        "requires_executable_odd", "odd_mercado_base", "odd_mediana", "stake",
+        "cv_index_home", "cv_index_away", "cv_index_average",
+        "modelo_versao", "market_type", "selection_side",
         "selection_role", "market_conflict_status", "prob_hist", "prob_sim", "prob_no_vig",
         "prob_raw", "prob_pre_haircut", "haircut_pp", "component_spread_pp", "calibration_status",
-        "observacoes", "dados_tecnicos", "contexto_adicional", "contexto_modelo",
+        "observacoes", "dados_tecnicos", "contexto_adicional", "contexto_modelo", "parecer_validacao",
     ]
     out = pd.DataFrame(rows, columns=cols)
     if not out.empty:
@@ -2262,11 +2279,11 @@ def _to_records(lovable: pd.DataFrame) -> list[dict]:
         obs = str(row.get("observacoes") or "").strip()
         row["odd"] = row.get("odd_ofertada")
         row["probabilidade"] = row.get("probabilidade_final")
-        row["stake"] = row.get("stake") or 0.5
+        row["stake"] = 0.0
         row["dados_tecnicos"] = row.get("dados_tecnicos") or obs or None
         row["contexto_adicional"] = row.get("contexto_adicional") or row.get("dados_tecnicos") or obs or None
         row["contexto_modelo"] = row.get("contexto_modelo") or row.get("dados_tecnicos") or obs or None
-        row["parecer_validacao"] = row.get("parecer_validacao") or "AGUARDAR_VALIDACAO"
+        row["parecer_validacao"] = "AGUARDAR_ODD_EXECUTAVEL"
         records.append(_clean_json(row))
     return records
 
@@ -2349,6 +2366,7 @@ def run_cli() -> None:
     globals()["RUN_PROVENANCE"] = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source": "PackBall external CSV import",
+        "market_odds_profile": "average odds from 1 to 5 bookmakers; bookmaker count unavailable per match",
         "recent_profile": "10 games, all venues, all leagues, current season only",
         "venue_profile": "20 games, home-at-home/away-at-away, all leagues, previous season allowed",
         "source_file_10": csv10.name,

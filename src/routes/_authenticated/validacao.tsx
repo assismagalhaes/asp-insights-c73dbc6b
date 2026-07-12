@@ -63,10 +63,10 @@ import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
-  calculateBackMatrixKelly,
-  getBackMatrixValidationRequirements,
-  isBackMatrixPrognostico,
-} from "@/lib/backmatrix-validation";
+  calculatePackballKelly,
+  getPackballValidationRequirements,
+  isPackballMatrixPrognostico,
+} from "@/lib/packball-validation";
 import {
   buildPreAiShortlist,
   calculatePreliminaryOpportunityScore,
@@ -344,14 +344,14 @@ function getOnlineAlertas(parecer: string): string[] {
 }
 
 function autoCheck(p: Prognostico, edgeFinal: number | null, executableOdd: number | null) {
-  const backMatrix = getBackMatrixValidationRequirements(p);
-  if (backMatrix) {
+  const packball = getPackballValidationRequirements(p);
+  if (packball) {
     if (!(executableOdd && executableOdd > 1))
       return { auto: "ALERTA" as const, reason: "Informe a odd executavel antes da analise" };
-    if (edgeFinal == null || edgeFinal < backMatrix.requiredEdge)
+    if (edgeFinal == null || edgeFinal < packball.requiredEdge)
       return {
         auto: "PULAR" as const,
-        reason: `Odd executavel abaixo do edge minimo de ${backMatrix.requiredEdge.toFixed(2)}%`,
+        reason: `Odd executavel abaixo do edge minimo de ${packball.requiredEdge.toFixed(2)}%`,
       };
     return { auto: "DESTAQUE" as const, reason: "Odd executavel aprovada para validacao" };
   }
@@ -564,7 +564,7 @@ function Validacao() {
   const getOddAjustadaNum = (p: Prognostico): number | null => {
     const raw = oddsAj[p.id];
     if (raw !== undefined && raw !== "") return Number(raw);
-    if (isBackMatrixPrognostico(p)) return p.odd_ajustada ?? null;
+    if (isPackballMatrixPrognostico(p)) return p.odd_ajustada ?? null;
     return p.odd_ajustada ?? p.odd_ofertada;
   };
 
@@ -593,16 +593,16 @@ function Validacao() {
 
   const rodarIA = async (g: ValidationGroup, modo: "local" | "online") => {
     const p = g.opcoes[0];
-    const backMatrix = getBackMatrixValidationRequirements(p);
+    const packball = getPackballValidationRequirements(p);
     const executableOdd = getOddAjustadaNum(p);
     const executableEdge = getEdgeAjustado(p);
-    if (backMatrix && (!(executableOdd && executableOdd > 1) || executableEdge == null)) {
-      toast.error("Informe a odd executavel do BackMatrix antes de rodar a IA.");
+    if (packball && (!(executableOdd && executableOdd > 1) || executableEdge == null)) {
+      toast.error(`Informe a odd executavel do ${packball.modelName} antes de rodar a IA.`);
       return;
     }
-    if (backMatrix && executableEdge! < backMatrix.requiredEdge) {
+    if (packball && executableEdge! < packball.requiredEdge) {
       toast.error(
-        `A odd executavel precisa gerar edge minimo de ${backMatrix.requiredEdge.toFixed(2)}%.`,
+        `A odd executavel precisa gerar edge minimo de ${packball.requiredEdge.toFixed(2)}%.`,
       );
       return;
     }
@@ -826,26 +826,22 @@ function Validacao() {
       return;
     }
     if (decisao === "CONFIRMA" && selected) {
-      const backMatrix = getBackMatrixValidationRequirements(selected);
-      if (backMatrix) {
+      const packball = getPackballValidationRequirements(selected);
+      if (packball) {
         const explicitOdd = getOddAjustadaNum(selected);
         const adjustedEdge = getEdgeAjustado(selected);
         if (!(explicitOdd && explicitOdd > 1)) {
-          toast.error("Informe a odd executavel do BackMatrix antes de confirmar.");
+          toast.error(`Informe a odd executavel do ${packball.modelName} antes de confirmar.`);
           return;
         }
-        if (adjustedEdge == null || adjustedEdge < backMatrix.requiredEdge) {
+        if (adjustedEdge == null || adjustedEdge < packball.requiredEdge) {
           toast.error(
-            `Odd insuficiente: o BackMatrix exige edge minimo de ${backMatrix.requiredEdge.toFixed(2)}% ` +
-              `(odd minima ${backMatrix.minimumExecutableOdd.toFixed(2)}).`,
+            `Odd insuficiente: o ${packball.modelName} exige edge minimo de ${packball.requiredEdge.toFixed(2)}% ` +
+              `(odd minima ${packball.minimumExecutableOdd.toFixed(2)}).`,
           );
           return;
         }
-        const kelly = calculateBackMatrixKelly(
-          selected.probabilidade_final,
-          explicitOdd,
-          backMatrix.strongMarketConflict,
-        );
+        const kelly = calculatePackballKelly(selected.probabilidade_final, explicitOdd, packball);
         if (kelly < 0.25) {
           toast.error("A odd executavel nao produz Kelly conservador minimo de 0.25u.");
           return;
@@ -872,16 +868,12 @@ function Validacao() {
       const contextoAnalise = getContextoGrupo(g).trim();
       const ia = iaResults[g.key];
       const retained = decisao === "CONFIRMA" ? selected! : getBestPularOption(g);
-      const retainedBackMatrix = getBackMatrixValidationRequirements(retained);
+      const retainedPackball = getPackballValidationRequirements(retained);
       const retainedOdd = getOddAjustadaNum(retained);
       const retainedStake =
         decisao === "CONFIRMA"
-          ? retainedBackMatrix && retainedOdd
-            ? calculateBackMatrixKelly(
-                retained.probabilidade_final,
-                retainedOdd,
-                retainedBackMatrix.strongMarketConflict,
-              )
+          ? retainedPackball && retainedOdd
+            ? calculatePackballKelly(retained.probabilidade_final, retainedOdd, retainedPackball)
             : Number(stakes[retained.id] ?? retained.stake ?? 0)
           : 1;
       const parecerBase = parecer || "Grupo recusado na validação crítica agrupada.";
@@ -1012,14 +1004,10 @@ function Validacao() {
           const p = getSelectedOption(g) ?? g.opcoes[0];
           const oddAj = getOddAjustadaNum(p);
           const edgeAj = getEdgeAjustado(p);
-          const backMatrixRequirements = getBackMatrixValidationRequirements(p);
-          const backMatrixKelly =
-            backMatrixRequirements && oddAj
-              ? calculateBackMatrixKelly(
-                  p.probabilidade_final,
-                  oddAj,
-                  backMatrixRequirements.strongMarketConflict,
-                )
+          const packballRequirements = getPackballValidationRequirements(p);
+          const packballKelly =
+            packballRequirements && oddAj
+              ? calculatePackballKelly(p.probabilidade_final, oddAj, packballRequirements)
               : 0;
           const check = autoCheck(p, edgeAj, oddAj);
           const marketLabel = getOpportunityMarketLabel(p);
@@ -1132,7 +1120,9 @@ function Validacao() {
                           </div>
                           <div className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-6">
                             <span>
-                              {isBackMatrixPrognostico(opcao) ? "Odd referencia:" : "Odd ofertada:"}{" "}
+                              {isPackballMatrixPrognostico(opcao)
+                                ? "Odd referencia:"
+                                : "Odd ofertada:"}{" "}
                               <strong className="font-mono">{opcao.odd_ofertada.toFixed(2)}</strong>
                             </span>
                             <span>
@@ -1178,7 +1168,7 @@ function Validacao() {
                     Dados do prognóstico
                   </div>
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                    {backMatrixRequirements ? "Odd executavel:" : "Odd em uso:"}{" "}
+                    {packballRequirements ? "Odd executavel:" : "Odd em uso:"}{" "}
                     <span className="font-mono font-semibold text-foreground">
                       {oddAj != null ? oddAj.toFixed(2) : "aguardando"}
                     </span>
@@ -1192,7 +1182,7 @@ function Validacao() {
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-8">
                   <Metric
-                    label={backMatrixRequirements ? "Odd referencia PackBall" : "Odd ofertada"}
+                    label={packballRequirements ? "Odd referencia PackBall" : "Odd ofertada"}
                     value={p.odd_ofertada.toFixed(2)}
                   />
                   <div>
@@ -1207,7 +1197,7 @@ function Validacao() {
                         oddsAj[p.id] ??
                         (p.odd_ajustada != null
                           ? p.odd_ajustada
-                          : backMatrixRequirements
+                          : packballRequirements
                             ? ""
                             : p.odd_ofertada)
                       }
@@ -1245,17 +1235,17 @@ function Validacao() {
                   />
                 </div>
 
-                {backMatrixRequirements && (
+                {packballRequirements && (
                   <div className="grid gap-2 rounded-md border border-primary/30 bg-primary/5 p-3 sm:grid-cols-3">
                     <Metric
                       label="Odd minima para publicar"
-                      value={backMatrixRequirements.minimumExecutableOdd.toFixed(2)}
+                      value={packballRequirements.minimumExecutableOdd.toFixed(2)}
                     />
                     <Metric
                       label="Edge minimo"
-                      value={`${backMatrixRequirements.requiredEdge.toFixed(2)}%`}
+                      value={`${packballRequirements.requiredEdge.toFixed(2)}%`}
                     />
-                    <Metric label="Kelly conservador" value={`${backMatrixKelly.toFixed(2)}u`} />
+                    <Metric label="Kelly conservador" value={`${packballKelly.toFixed(2)}u`} />
                   </div>
                 )}
 
@@ -1506,9 +1496,9 @@ function Validacao() {
                     <Label className="text-xs uppercase tracking-wider text-muted-foreground">
                       Stake confirmada (u)
                     </Label>
-                    {backMatrixRequirements ? (
+                    {packballRequirements ? (
                       <Input
-                        value={`${backMatrixKelly.toFixed(2)}u`}
+                        value={`${packballKelly.toFixed(2)}u`}
                         readOnly
                         className="font-mono font-semibold"
                       />

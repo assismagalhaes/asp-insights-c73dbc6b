@@ -4,6 +4,8 @@ GoalMatrix v2.3 corrects fractional Kelly conversion to bankroll percentage unit
 
 GoalMatrix v2.4 adds market-specific consistency gates. O/U uses 60% total-goal consistency and 40% scored-goal consistency, requiring 45% per team and 50% on average. BTTS uses 30% total-goal consistency and 70% scored-goal consistency, requiring 50% per team and 55% on average. The BTTS probability floor is 54%, while its 5% minimum edge remains unchanged.
 
+GoalMatrix v2.5 separates PackBall reference odds from executable bookmaker odds. PackBall odds can average one to five bookmakers and remain useful for paired no-vig context, but no longer assign stake or block a probability/CV-qualified candidate by reference edge. Qualified rows become `CANDIDATO_GOAL` with stake zero. Critical Validation requires an executable odd for the exact side and line, then recalculates edge and 12.5% fractional Kelly. O/U still requires 4% adjusted edge and BTTS requires 5% before confirmation or publication.
+
 ## Input contract (v2.1)
 
 - Recent signal: 10 matches across all venues and leagues, excluding the previous season.

@@ -28,6 +28,15 @@
 - O/U exports at most one principal line and two correlated alternatives on the same side; directional markets export one selection per market.
 - Stakes use conservative fractional Kelly converted to bankroll percentage units, with per-pick, per-market and per-game caps.
 
+## Executable-odd workflow (v2.3)
+
+- PackBall odds can average one to five bookmakers and are stored as reference market odds.
+- Passing probability, CV, paired-odds and corner-cost controls creates a `CANDIDATO_CORNER` with stake zero, even when reference edge is insufficient.
+- Critical Validation requires an executable odd for the exact side and line.
+- Adjusted edge and 12.5% fractional Kelly are recalculated only from that executable odd.
+- Confirmation and publication remain blocked below 5% adjusted edge for O/U or 6% for More Corners/Race.
+- The limit of one principal line plus two correlated alternatives remains active before validation.
+
 ## Walk-forward
 
 Each prediction CSV receives an adjacent immutable snapshot. After results settle, label `outcome`, `home_corners` and `away_corners`, then run:

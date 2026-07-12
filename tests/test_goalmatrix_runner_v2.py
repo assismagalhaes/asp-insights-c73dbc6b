@@ -106,6 +106,10 @@ class GoalMatrixRunnerV2Tests(unittest.TestCase):
     def test_btts_probability_floor_is_compatible_with_edge_gate(self) -> None:
         self.assertEqual(runner.MIN_PROB_BTTS, 54)
 
+    def test_candidate_filter_does_not_treat_reference_odd_as_executable(self) -> None:
+        self.assertTrue(runner._is_candidate_pick(60.0, 1.50, min_prob=55.0))
+        self.assertFalse(runner._is_value_pick(60.0, 1.50, min_prob=55.0, min_edge=4.0))
+
     def test_partial_samples_reduce_feature_reliability(self) -> None:
         row = {
             "CV Média Gols Casa_20": 60.0,
@@ -204,8 +208,12 @@ class GoalMatrixRunnerV2Tests(unittest.TestCase):
         ]
         selected = runner.limit_correlated_picks(rows)
         self.assertEqual(len(selected), 3)
-        self.assertEqual(selected[0]["selection_role"], "PRINCIPAL")
+        self.assertEqual(selected[0]["selection_role"], "CANDIDATO_GOAL_PRINCIPAL")
         self.assertTrue(all(row["selection_side"] == "UNDER" for row in selected))
+
+    def test_reference_candidates_start_without_stake(self) -> None:
+        rows = runner.apply_exposure_caps([{"jogo": "A vs B", "edge": -5.0, "stake": 1.0}])
+        self.assertEqual(rows[0]["stake"], 0.0)
 
     def test_first_goal_is_operationally_disabled(self) -> None:
         self.assertFalse(runner.FIRST_GOAL_ENABLED)

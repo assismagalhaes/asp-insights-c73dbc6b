@@ -469,8 +469,8 @@ function ModelosPreditivosPage() {
                     <TableCell>{p.mercado}</TableCell>
                     <TableCell>{p.pick}</TableCell>
                     <TableCell>
-                      {p.selection_role === "CANDIDATO_BACK" ? (
-                        <Badge variant="outline">CANDIDATO BACK</Badge>
+                      {p.selection_role?.startsWith("CANDIDATO_") ? (
+                        <Badge variant="outline">{p.selection_role.replaceAll("_", " ")}</Badge>
                       ) : (
                         (p.selection_role ?? "-")
                       )}
