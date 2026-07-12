@@ -44,7 +44,7 @@ output_dir = Path("Prognostico")
 # Nome comercial do modelo para identificação no Lovable.
 # Mantém o campo 'mercado' como nome do modelo, igual ao ASP GoalMatrix.
 MODEL_NAME = "ASP CornerMatrix"
-MODEL_VERSION = "v2.3"
+MODEL_VERSION = "v2.4"
 
 # Modo de execução:
 #   prognostico = apenas jogos NS
@@ -90,6 +90,7 @@ MIN_EDGE_MAIS = 6.0
 MIN_EDGE_RACE = 6.0
 
 COMPONENT_DISAGREEMENT_THRESHOLD = 15.0
+COMPONENT_UNCERTAINTY_THRESHOLD = 12.0
 STRONG_MARKET_CONFLICT_THRESHOLD = 22.0
 DISAGREEMENT_HAIRCUT_STRENGTH = 0.25
 DISAGREEMENT_HAIRCUT_MAX_PP = 6.0
@@ -140,6 +141,8 @@ SHRINK_RACE = 0.86
 
 KELLY_FRACTION = 0.10
 MAX_PICK_UNITS = 0.75
+UNCERTAINTY_MAX_UNITS = 0.50
+CONFLICT_MAX_UNITS = 0.25
 MAX_MARKET_UNITS = 1.25
 MAX_GAME_UNITS = 1.50
 MAX_CORRELATED_LINES = 3
@@ -669,12 +672,32 @@ def load_cornermatrix_calibration() -> dict:
     return payload if isinstance(payload, dict) else {}
 
 
-def apply_oos_calibration(market: str, probability_pct: pd.Series) -> tuple[pd.Series, dict]:
-    config = load_cornermatrix_calibration().get("markets", {}).get(market, {})
+def apply_oos_calibration(
+    market: str,
+    probability_pct: pd.Series,
+    *,
+    fallback_market: str | None = None,
+) -> tuple[pd.Series, dict]:
+    markets = load_cornermatrix_calibration().get("markets", {})
+    config = markets.get(market, {})
+    calibration_key = market
+    primary_sample = int(config.get("sample_size") or 0)
+    primary_active = bool(config.get("active")) and bool(config.get("out_of_sample"))
+    if fallback_market and (not primary_active or primary_sample < MIN_OOS_CALIBRATION_SAMPLE):
+        fallback = markets.get(fallback_market, {})
+        fallback_sample = int(fallback.get("sample_size") or 0)
+        fallback_active = bool(fallback.get("active")) and bool(fallback.get("out_of_sample"))
+        if fallback_active and fallback_sample >= MIN_OOS_CALIBRATION_SAMPLE:
+            config = fallback
+            calibration_key = fallback_market
     sample_size = int(config.get("sample_size") or 0)
     active = bool(config.get("active")) and bool(config.get("out_of_sample"))
     if not active or sample_size < MIN_OOS_CALIBRATION_SAMPLE:
-        return probability_pct.astype(float), {"status": "identity_insufficient_oos_sample", "sample_size": sample_size}
+        return probability_pct.astype(float), {
+            "status": "identity_insufficient_oos_sample",
+            "sample_size": sample_size,
+            "calibration_key": calibration_key,
+        }
     intercept = float(config.get("intercept", 0.0))
     slope = float(config.get("slope", 1.0))
     p = (probability_pct.astype(float) / 100.0).clip(1e-6, 1.0 - 1e-6)
@@ -682,7 +705,7 @@ def apply_oos_calibration(market: str, probability_pct: pd.Series) -> tuple[pd.S
     calibrated = 1.0 / (1.0 + np.exp(-(intercept + slope * logit)))
     return calibrated * 100.0, {
         "status": "platt_logit_oos", "sample_size": sample_size,
-        "intercept": intercept, "slope": slope,
+        "intercept": intercept, "slope": slope, "calibration_key": calibration_key,
     }
 
 
@@ -707,6 +730,8 @@ def finalize_two_way_probabilities(
     sim_a: pd.Series, sim_b: pd.Series,
     market_a: pd.Series, market_b: pd.Series,
     weights: list[float], shrink: float, market_key: str,
+    market_key_b: str | None = None,
+    fallback_market: str | None = None,
 ) -> dict[str, object]:
     paired = np.isfinite(market_a.astype(float)) & np.isfinite(market_b.astype(float))
     raw_a = weighted_mix_pct([hist_a, sim_a, market_a], weights)
@@ -716,7 +741,16 @@ def finalize_two_way_probabilities(
     normalized_a = pd.Series(np.nan, index=hist_a.index, dtype=float)
     normalized_a.loc[valid] = raw_a.loc[valid] / total.loc[valid] * 100.0
     heuristic_a = calibrate(normalized_a, shrink=shrink)
-    calibrated_a, calibration = apply_oos_calibration(market_key, heuristic_a)
+    calibrated_a, calibration_a = apply_oos_calibration(
+        market_key, heuristic_a, fallback_market=fallback_market
+    )
+    calibration_b = calibration_a
+    if market_key_b:
+        calibrated_b, calibration_b = apply_oos_calibration(
+            market_key_b, 100.0 - heuristic_a, fallback_market=fallback_market
+        )
+        calibrated_total = calibrated_a + calibrated_b
+        calibrated_a = (calibrated_a / calibrated_total * 100.0).where(calibrated_total > 0)
     final_a, haircut, spread, conflict = apply_component_disagreement_haircut(
         calibrated_a, [hist_a, sim_a, market_a], market_a
     )
@@ -726,7 +760,11 @@ def finalize_two_way_probabilities(
         "raw_a": normalized_a.round(2), "pre_haircut_a": calibrated_a.round(2),
         "haircut": haircut.round(2), "spread": spread.round(2),
         "conflict": conflict.fillna(False), "paired": pd.Series(paired, index=hist_a.index),
-        "calibration": calibration,
+        "calibration": {
+            **calibration_a,
+            "status_b": calibration_b.get("status"),
+            "calibration_key_b": calibration_b.get("calibration_key"),
+        },
     }
 
 
@@ -1295,7 +1333,7 @@ def _pick_probability_diagnostics(row: pd.Series, mercado: str, pick: str, linha
         no_vig_a = float(row.get(f"{prefix} NoVig Over"))
         raw_a = float(row.get(f"{prefix} Prob Raw Over"))
         pre_a = float(row.get(f"{prefix} Prob PreHaircut Over"))
-        return {
+        result = {
             "market_type": "OU", "selection_side": "OVER" if side_a else "UNDER",
             "prob_hist": hist_a if side_a else 100.0 - hist_a,
             "prob_sim": sim_a if side_a else 100.0 - sim_a,
@@ -1303,11 +1341,15 @@ def _pick_probability_diagnostics(row: pd.Series, mercado: str, pick: str, linha
             "prob_raw": raw_a if side_a else 100.0 - raw_a,
             "prob_pre_haircut": pre_a if side_a else 100.0 - pre_a,
             "haircut_pp": row.get(f"{prefix} Haircut"), "component_spread_pp": row.get(f"{prefix} Spread"),
-            "market_conflict_status": row.get(f"{prefix} Conflict"), "calibration_status": row.get(f"{prefix} Calibration"),
+            "market_conflict_status": row.get(f"{prefix} Conflict"),
+            "calibration_status": row.get(f"{prefix} Calibration {'Over' if side_a else 'Under'}"),
+            "calibration_key": row.get(f"{prefix} Calibration Key {'Over' if side_a else 'Under'}"),
         }
+        result["paired_odds_status"] = "ODDS_PAREADAS_VALIDAS" if np.isfinite(no_vig_a) else "SEM_ODDS_PAREADAS"
+        return result
     if mercado_norm == "mais cantos":
         side_a = pick_norm == "casa"
-        return {
+        result = {
             "market_type": "MAIS_CANTOS", "selection_side": "CASA" if side_a else "VISITANTE",
             "prob_hist": row.get("Mais Hist Casa") if side_a else 100.0 - float(row.get("Mais Hist Casa")),
             "prob_sim": row.get("Mais Sim Casa") if side_a else 100.0 - float(row.get("Mais Sim Casa")),
@@ -1317,9 +1359,11 @@ def _pick_probability_diagnostics(row: pd.Series, mercado: str, pick: str, linha
             "haircut_pp": row.get("Mais Haircut"), "component_spread_pp": row.get("Mais Spread"),
             "market_conflict_status": row.get("Mais Conflict"), "calibration_status": row.get("Mais Calibration"),
         }
+        result["paired_odds_status"] = "ODDS_PAREADAS_VALIDAS" if np.isfinite(float(result["prob_no_vig"])) else "SEM_ODDS_PAREADAS"
+        return result
     k = int(float(linha))
     side_a = pick_norm.startswith("casa")
-    return {
+    result = {
         "market_type": f"RACE_{k}", "selection_side": "CASA" if side_a else "VISITANTE",
         "prob_hist": row.get(f"Race {k} Hist Casa") if side_a else 100.0 - float(row.get(f"Race {k} Hist Casa")),
         "prob_sim": row.get(f"Race {k} Sim Casa") if side_a else 100.0 - float(row.get(f"Race {k} Sim Casa")),
@@ -1329,6 +1373,22 @@ def _pick_probability_diagnostics(row: pd.Series, mercado: str, pick: str, linha
         "haircut_pp": row.get(f"Race {k} Haircut"), "component_spread_pp": row.get(f"Race {k} Spread"),
         "market_conflict_status": row.get(f"Race {k} Conflict"), "calibration_status": row.get(f"Race {k} Calibration"),
     }
+    result["paired_odds_status"] = "ODDS_PAREADAS_VALIDAS" if np.isfinite(float(result["prob_no_vig"])) else "SEM_ODDS_PAREADAS"
+    return result
+
+
+def _component_conflict_status(spread) -> str:
+    try:
+        value = float(spread)
+    except (TypeError, ValueError):
+        return "COMPONENTES_INDETERMINADOS"
+    if not np.isfinite(value):
+        return "COMPONENTES_INDETERMINADOS"
+    if value >= STRONG_MARKET_CONFLICT_THRESHOLD:
+        return "CONFLITO_FORTE_ENTRE_COMPONENTES"
+    if value >= COMPONENT_UNCERTAINTY_THRESHOLD:
+        return "COMPONENTES_DIVERGENTES"
+    return "COMPONENTES_ALINHADOS"
 
 
 def _diagnostic_text(row: pd.Series, diagnostics: dict) -> str:
@@ -1338,7 +1398,10 @@ def _diagnostic_text(row: pd.Series, diagnostics: dict) -> str:
         f"prob_no_vig={_fmt_obs_num(diagnostics.get('prob_no_vig'), 2)}; prob_raw={_fmt_obs_num(diagnostics.get('prob_raw'), 2)}; "
         f"prob_pre_haircut={_fmt_obs_num(diagnostics.get('prob_pre_haircut'), 2)}; haircut_pp={_fmt_obs_num(diagnostics.get('haircut_pp'), 2)}; "
         f"component_spread_pp={_fmt_obs_num(diagnostics.get('component_spread_pp'), 2)}; "
-        f"market_conflict_status={diagnostics.get('market_conflict_status')}; calibration_status={diagnostics.get('calibration_status')}; "
+        f"component_conflict_status={diagnostics.get('component_conflict_status')}; "
+        f"market_conflict_status={diagnostics.get('market_conflict_status')}; "
+        f"paired_odds_status={diagnostics.get('paired_odds_status')}; calibration_status={diagnostics.get('calibration_status')}; "
+        f"calibration_key={diagnostics.get('calibration_key')}; "
         f"w10={_fmt_obs_num(row.get('w10'), 3)}; w20={_fmt_obs_num(row.get('w20'), 3)}; "
         f"league_baseline_status={row.get('League Baseline Status')}; alpha={_fmt_obs_num(row.get('Alpha Liga'), 4)}; "
         f"alpha_status={row.get('Alpha Status')}; cv_scale_10={RUN_PROVENANCE.get('cv_scale_10', '-')}; "
@@ -1371,6 +1434,7 @@ def _add_lovable_row(rows: list[dict], row: pd.Series, mercado: str, pick: str, 
     edge = ((odd * prob / 100.0) - 1.0) * 100.0
     minimum_executable_odd = odd_valor * (1.0 + min_edge / 100.0)
     diagnostics = _pick_probability_diagnostics(row, mercado, pick, linha)
+    diagnostics["component_conflict_status"] = _component_conflict_status(diagnostics.get("component_spread_pp"))
     diagnostic_text = _diagnostic_text(row, diagnostics)
     technical_context = _technical_context(row, mercado=mercado, pick=pick, linha=linha)
     technical_context = (
@@ -1412,12 +1476,16 @@ def _add_lovable_row(rows: list[dict], row: pd.Series, mercado: str, pick: str, 
         "modelo_versao": MODEL_VERSION,
         "market_type": diagnostics.get("market_type"), "selection_side": diagnostics.get("selection_side"),
         "market_conflict_status": diagnostics.get("market_conflict_status") or "ALINHADO",
+        "component_conflict_status": diagnostics.get("component_conflict_status"),
+        "paired_odds_status": diagnostics.get("paired_odds_status"),
         "prob_hist": round(float(diagnostics.get("prob_hist")), 2), "prob_sim": round(float(diagnostics.get("prob_sim")), 2),
         "prob_no_vig": round(float(diagnostics.get("prob_no_vig")), 2), "prob_raw": round(float(diagnostics.get("prob_raw")), 2),
         "prob_pre_haircut": round(float(diagnostics.get("prob_pre_haircut")), 2),
         "haircut_pp": round(float(diagnostics.get("haircut_pp")), 2),
         "component_spread_pp": round(float(diagnostics.get("component_spread_pp")), 2),
         "calibration_status": diagnostics.get("calibration_status"),
+        "calibration_key": diagnostics.get("calibration_key"),
+        "price_status": "AGUARDANDO_ODD_EXECUTAVEL",
         "observacoes": (
             _fmt_obs(row, mercado=mercado, pick=pick, linha=linha)
             + " | "
@@ -1430,7 +1498,26 @@ def _add_lovable_row(rows: list[dict], row: pd.Series, mercado: str, pick: str, 
     })
 
 
-def kelly_stake_units(probability_pct, odd, *, conflict: bool = False) -> float:
+def classify_executable_price(probability_pct, odd, required_edge: float) -> tuple[str, float | None]:
+    try:
+        probability = float(probability_pct) / 100.0
+        executable_odd = float(odd)
+    except (TypeError, ValueError):
+        return "AGUARDANDO_ODD_EXECUTAVEL", None
+    if not (0.0 < probability < 1.0) or executable_odd <= 1.0:
+        return "AGUARDANDO_ODD_EXECUTAVEL", None
+    edge = (executable_odd * probability - 1.0) * 100.0
+    return ("ODD_APROVADA" if edge >= float(required_edge) else "SEM_VALOR"), edge
+
+
+def kelly_stake_units(
+    probability_pct,
+    odd,
+    *,
+    conflict: bool = False,
+    component_spread_pp: float | None = None,
+    calibration_status: str | None = None,
+) -> float:
     try:
         probability = float(probability_pct) / 100.0
         decimal_odd = float(odd)
@@ -1442,7 +1529,16 @@ def kelly_stake_units(probability_pct, odd, *, conflict: bool = False) -> float:
     full_kelly = max(0.0, (b * probability - (1.0 - probability)) / b)
     units = min(MAX_PICK_UNITS, full_kelly * KELLY_FRACTION * 100.0)
     if conflict:
-        units = min(units, 0.25)
+        units = min(units, CONFLICT_MAX_UNITS)
+    else:
+        try:
+            spread = float(component_spread_pp)
+        except (TypeError, ValueError):
+            spread = 0.0
+        if spread >= COMPONENT_UNCERTAINTY_THRESHOLD:
+            units = min(units, UNCERTAINTY_MAX_UNITS)
+        elif "insufficient_oos" in str(calibration_status or "").lower():
+            units = min(units, MAX_PICK_UNITS)
     return math.floor(units * 4.0 + 1e-9) / 4.0
 
 
@@ -1519,9 +1615,10 @@ def build_lovable_export(base: pd.DataFrame) -> pd.DataFrame:
         "probabilidade_final", "edge", "edge_referencial", "required_edge", "odd_minima_publicacao",
         "requires_executable_odd", "odd_mercado_base", "odd_mediana", "stake",
         "modelo_versao", "market_type", "selection_side",
-        "selection_role", "market_conflict_status", "prob_hist", "prob_sim", "prob_no_vig",
-        "prob_raw", "prob_pre_haircut", "haircut_pp", "component_spread_pp", "calibration_status",
-        "observacoes", "dados_tecnicos", "contexto_adicional", "contexto_modelo", "parecer_validacao",
+        "selection_role", "market_conflict_status", "component_conflict_status", "paired_odds_status",
+        "prob_hist", "prob_sim", "prob_no_vig",
+        "prob_raw", "prob_pre_haircut", "haircut_pp", "component_spread_pp", "calibration_status", "calibration_key",
+        "price_status", "observacoes", "dados_tecnicos", "contexto_adicional", "contexto_modelo", "parecer_validacao",
     ]
     out = pd.DataFrame(rows, columns=cols)
     if not out.empty:
@@ -1717,7 +1814,10 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
 
         finalized = finalize_two_way_probabilities(
             hist_o, hist_u, sim_o, sim_u, imp_o, imp_u,
-            [w_hist, w_sim, w_imp], SHRINK_OU, "ou",
+            [w_hist, w_sim, w_imp], SHRINK_OU,
+            f"ou_over_{str(t).replace('.', '_')}",
+            market_key_b=f"ou_under_{str(t).replace('.', '_')}",
+            fallback_market="ou",
         )
         prob_o = finalized["a"]
         prob_u = finalized["b"]
@@ -1739,7 +1839,10 @@ def main() -> tuple[pd.DataFrame, pd.DataFrame]:
         base[f"OU {t} Haircut"] = finalized["haircut"]
         base[f"OU {t} Spread"] = finalized["spread"]
         base[f"OU {t} Conflict"] = np.where(finalized["conflict"], "CONFLITO_FORTE_COM_MERCADO", "ALINHADO")
-        base[f"OU {t} Calibration"] = finalized["calibration"]["status"]
+        base[f"OU {t} Calibration Over"] = finalized["calibration"]["status"]
+        base[f"OU {t} Calibration Under"] = finalized["calibration"]["status_b"]
+        base[f"OU {t} Calibration Key Over"] = finalized["calibration"].get("calibration_key")
+        base[f"OU {t} Calibration Key Under"] = finalized["calibration"].get("calibration_key_b")
 
         base = apply_value_filter(
             base, prob_o_col, odd_o_col,

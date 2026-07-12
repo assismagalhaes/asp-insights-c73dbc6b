@@ -1005,7 +1005,10 @@ function Validacao() {
           const p = getSelectedOption(g) ?? g.opcoes[0];
           const oddAj = getOddAjustadaNum(p);
           const edgeAj = getEdgeAjustado(p);
-          const packballRequirements = getPackballValidationRequirements(p);
+          const packballRequirements = getPackballValidationRequirements({
+            ...p,
+            odd_ajustada: oddAj,
+          });
           const packballKelly =
             packballRequirements && oddAj
               ? calculatePackballKelly(p.probabilidade_final, oddAj, packballRequirements)
@@ -1237,7 +1240,7 @@ function Validacao() {
                 </div>
 
                 {packballRequirements && (
-                  <div className="grid gap-2 rounded-md border border-primary/30 bg-primary/5 p-3 sm:grid-cols-2 xl:grid-cols-5">
+                  <div className="grid gap-2 rounded-md border border-primary/30 bg-primary/5 p-3 sm:grid-cols-2 xl:grid-cols-6">
                     <Metric
                       label="Odd minima para publicar"
                       value={packballRequirements.minimumExecutableOdd.toFixed(2)}
@@ -1247,13 +1250,17 @@ function Validacao() {
                       value={`${packballRequirements.requiredEdge.toFixed(2)}%`}
                     />
                     <Metric
-                      label="Viabilidade referencia"
-                      value={packballRequirements.priceFeasibility.replaceAll("_", " ")}
+                      label="Status do preco"
+                      value={packballRequirements.operationalPriceStatus.replaceAll("_", " ")}
                     />
                     <Metric label="Kelly conservador" value={`${packballKelly.toFixed(2)}u`} />
                     <Metric
                       label="Teto por incerteza"
                       value={`${packballRequirements.maxStake.toFixed(2)}u`}
+                    />
+                    <Metric
+                      label="Conflito dos componentes"
+                      value={packballRequirements.componentConflictStatus.replaceAll("_", " ")}
                     />
                   </div>
                 )}

@@ -28,13 +28,17 @@
 - O/U exports at most one principal line and two correlated alternatives on the same side; directional markets export one selection per market.
 - Stakes use conservative fractional Kelly converted to bankroll percentage units, with per-pick, per-market and per-game caps.
 
-## Executable-odd workflow (v2.3)
+## Executable-odd workflow (v2.4)
 
 - PackBall odds can average one to five bookmakers and are stored as reference market odds.
 - Passing probability, CV, paired-odds and corner-cost controls creates a `CANDIDATO_CORNER` with stake zero, even when reference edge is insufficient.
 - Critical Validation requires an executable odd for the exact side and line.
+- Operational price status is explicit: `AGUARDANDO_ODD_EXECUTAVEL`, `ODD_APROVADA` or `SEM_VALOR`.
 - Adjusted edge and 12.5% fractional Kelly are recalculated only from that executable odd.
 - Confirmation and publication remain blocked below 5% adjusted edge for O/U or 6% for More Corners/Race.
+- CornerMatrix stake is capped at 0.75u while OOS calibration is insufficient, 0.50u from 12 pp component spread and 0.25u under strong conflict.
+- Component conflict, market conflict and paired-odds validity are exported as separate diagnostics.
+- Reference, validation and closing prices are stored in `prognostico_odds_historico`; `prognosticos_clv` exposes the latest validation-to-close CLV.
 - The limit of one principal line plus two correlated alternatives remains active before validation.
 
 ## Walk-forward
@@ -45,4 +49,4 @@ Each prediction CSV receives an adjacent immutable snapshot. After results settl
 python modelos/cornermatrix_validation.py labeled_corner_snapshots.csv modelos/cornermatrix_calibration.json
 ```
 
-Platt calibration is fitted separately for O/U, More Corners, Race 3 and Race 5. It activates only with at least 100 chronological observations and improved validation Brier Score. League alpha and baseline require at least 50 unique settled games.
+Platt calibration is fitted separately for O/U, More Corners, Race 3 and Race 5. O/U also receives side-and-line keys (`ou_over_8_5`, `ou_under_8_5`, and equivalents), with fallback to the aggregate O/U calibration. It activates only with at least 100 chronological observations and improved validation Brier Score. League alpha and baseline require at least 50 unique settled games.

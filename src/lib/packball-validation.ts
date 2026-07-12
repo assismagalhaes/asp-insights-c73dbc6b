@@ -3,12 +3,20 @@ import type { Prognostico } from "@/lib/db";
 const PACKBALL_MAX_STAKE = 1;
 const PACKBALL_CONFLICT_MAX_STAKE = 0.25;
 const GOALMATRIX_UNCERTAINTY_MAX_STAKE = 0.5;
+const CORNERMATRIX_NORMAL_MAX_STAKE = 0.75;
+const CORNERMATRIX_DIVERGENCE_MAX_STAKE = 0.5;
+const CORNERMATRIX_DIVERGENCE_THRESHOLD = 12;
 
 export type PackballPriceFeasibility =
   | "ODD_APROVADA"
   | "AGUARDAR_ODD"
   | "ODD_POUCO_PROVAVEL"
   | "SEM_PRECO";
+
+export type PackballOperationalPriceStatus =
+  | "AGUARDANDO_ODD_EXECUTAVEL"
+  | "ODD_APROVADA"
+  | "SEM_VALOR";
 
 type PackballFields = Pick<
   Prognostico,
@@ -35,6 +43,10 @@ export type PackballValidationRequirements = {
   calibrationInsufficient: boolean;
   priceGapPct: number;
   priceFeasibility: PackballPriceFeasibility;
+  operationalPriceStatus: PackballOperationalPriceStatus;
+  executableOdd: number | null;
+  executableEdge: number | null;
+  componentConflictStatus: "ALINHADO" | "DIVERGENTE" | "CONFLITO_FORTE";
   maxStake: number;
 };
 
@@ -119,13 +131,37 @@ export function getPackballValidationRequirements(
     parseNumber(text, /Odd minima publicacao:\s*([0-9]+(?:[.,][0-9]+)?)/i) ??
     fairOdd * (1 + requiredEdge / 100);
   const priceGapPct = (minimumExecutableOdd / referenceOdd - 1) * 100;
+  const executableOdd = hasPackballExecutableOdd(prognostico)
+    ? Number(prognostico.odd_ajustada)
+    : null;
+  const executableEdge =
+    executableOdd == null
+      ? null
+      : ((executableOdd * Number(prognostico.probabilidade_final)) / 100 - 1) * 100;
+  const operationalPriceStatus: PackballOperationalPriceStatus =
+    executableOdd == null
+      ? "AGUARDANDO_ODD_EXECUTAVEL"
+      : (executableEdge ?? Number.NEGATIVE_INFINITY) >= requiredEdge
+        ? "ODD_APROVADA"
+        : "SEM_VALOR";
+  const componentConflictStatus = strongMarketConflict
+    ? "CONFLITO_FORTE"
+    : modelName === "ASP CornerMatrix" && (spread ?? 0) >= CORNERMATRIX_DIVERGENCE_THRESHOLD
+      ? "DIVERGENTE"
+      : "ALINHADO";
   const goalMatrixUncertainty =
     modelName === "ASP GoalMatrix" && (calibrationInsufficient || (spread ?? 0) >= 15);
+  const cornerMatrixUncertainty =
+    modelName === "ASP CornerMatrix" && (spread ?? 0) >= CORNERMATRIX_DIVERGENCE_THRESHOLD;
   const maxStake = strongMarketConflict
     ? PACKBALL_CONFLICT_MAX_STAKE
     : goalMatrixUncertainty
       ? GOALMATRIX_UNCERTAINTY_MAX_STAKE
-      : PACKBALL_MAX_STAKE;
+      : cornerMatrixUncertainty
+        ? CORNERMATRIX_DIVERGENCE_MAX_STAKE
+        : modelName === "ASP CornerMatrix"
+          ? CORNERMATRIX_NORMAL_MAX_STAKE
+          : PACKBALL_MAX_STAKE;
   return {
     modelName,
     requiredEdge,
@@ -137,6 +173,10 @@ export function getPackballValidationRequirements(
     calibrationInsufficient,
     priceGapPct,
     priceFeasibility: classifyPackballPriceFeasibility(priceGapPct),
+    operationalPriceStatus,
+    executableOdd,
+    executableEdge,
+    componentConflictStatus,
     maxStake,
   };
 }

@@ -1510,6 +1510,47 @@ export type Database = {
           },
         ]
       }
+      prognostico_odds_historico: {
+        Row: {
+          edge: number | null
+          id: string
+          odd: number
+          origem: string
+          probabilidade_final: number | null
+          prognostico_id: string
+          registrado_em: string
+          tipo: string
+        }
+        Insert: {
+          edge?: number | null
+          id?: string
+          odd: number
+          origem: string
+          probabilidade_final?: number | null
+          prognostico_id: string
+          registrado_em?: string
+          tipo: string
+        }
+        Update: {
+          edge?: number | null
+          id?: string
+          odd?: number
+          origem?: string
+          probabilidade_final?: number | null
+          prognostico_id?: string
+          registrado_em?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prognostico_odds_historico_prognostico_id_fkey"
+            columns: ["prognostico_id"]
+            isOneToOne: false
+            referencedRelation: "prognosticos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       resultados: {
         Row: {
           created_at: string
@@ -1756,7 +1797,20 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      prognosticos_clv: {
+        Row: {
+          clv: number | null
+          data: string | null
+          fechamento_registrado_em: string | null
+          jogo: string | null
+          mercado: string | null
+          odd_fechamento: number | null
+          odd_validacao: number | null
+          prognostico_id: string | null
+          validada_em: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       has_role: {

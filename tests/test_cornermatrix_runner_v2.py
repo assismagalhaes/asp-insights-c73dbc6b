@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -138,6 +141,27 @@ class CornerMatrixRunnerV2Tests(unittest.TestCase):
     def test_kelly_converts_bankroll_fraction_to_units(self) -> None:
         self.assertEqual(runner.kelly_stake_units(59.13, 1.92), 0.75)
 
+    def test_component_divergence_caps_kelly_at_half_unit(self) -> None:
+        self.assertEqual(
+            runner.kelly_stake_units(65.0, 1.90, component_spread_pp=12.0),
+            0.5,
+        )
+
+    def test_executable_price_has_explicit_operational_status(self) -> None:
+        waiting, edge = runner.classify_executable_price(60.0, None, 5.0)
+        approved, approved_edge = runner.classify_executable_price(60.0, 1.75, 5.0)
+        rejected, rejected_edge = runner.classify_executable_price(60.0, 1.65, 5.0)
+        self.assertEqual((waiting, edge), ("AGUARDANDO_ODD_EXECUTAVEL", None))
+        self.assertEqual(approved, "ODD_APROVADA")
+        self.assertAlmostEqual(approved_edge, 5.0)
+        self.assertEqual(rejected, "SEM_VALOR")
+        self.assertAlmostEqual(rejected_edge, -1.0)
+
+    def test_component_conflict_status_is_separate_from_price(self) -> None:
+        self.assertEqual(runner._component_conflict_status(8.0), "COMPONENTES_ALINHADOS")
+        self.assertEqual(runner._component_conflict_status(12.0), "COMPONENTES_DIVERGENTES")
+        self.assertEqual(runner._component_conflict_status(22.0), "CONFLITO_FORTE_ENTRE_COMPONENTES")
+
     def test_candidate_filter_does_not_treat_reference_odd_as_executable(self) -> None:
         self.assertTrue(runner._is_candidate_pick(60.0, 1.55, min_prob=56.0))
         self.assertFalse(runner._is_value_pick(60.0, 1.55, min_prob=56.0, min_edge=5.0))
@@ -203,8 +227,56 @@ class CornerMatrixRunnerV2Tests(unittest.TestCase):
             for market in validation.MARKETS for day in range(1, 21)
         ])
         payload = validation.build_calibration_payload(frame)
-        self.assertEqual(set(payload["markets"]), set(validation.MARKETS))
+        self.assertTrue(set(validation.MARKETS).issubset(payload["markets"]))
+        self.assertIn("ou_over_8_5", payload["markets"])
+        self.assertIn("ou_under_8_5", payload["markets"])
         self.assertTrue(all(not item["active"] for item in payload["markets"].values()))
+
+    def test_ou_calibration_counts_side_and_line_separately(self) -> None:
+        frame = pd.DataFrame([
+            {
+                "prediction_at": "2026-01-01T10:00:00Z",
+                "kickoff": "2026-01-01T12:00:00Z",
+                "league": "Test", "market_type": "ou", "pick": "Over Cantos",
+                "line": 8.5, "probability": 0.60, "outcome": 1,
+            },
+            {
+                "prediction_at": "2026-01-02T10:00:00Z",
+                "kickoff": "2026-01-02T12:00:00Z",
+                "league": "Test", "market_type": "ou", "pick": "Under Cantos",
+                "line": 8.5, "probability": 0.58, "outcome": 0,
+            },
+        ])
+        payload = validation.build_calibration_payload(frame)
+        self.assertEqual(payload["markets"]["ou_over_8_5"]["sample_size"], 1)
+        self.assertEqual(payload["markets"]["ou_under_8_5"]["sample_size"], 1)
+
+    def test_granular_calibration_falls_back_to_active_aggregate(self) -> None:
+        previous_path = runner.CALIBRATION_PATH
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "calibration.json"
+                path.write_text(json.dumps({
+                    "markets": {
+                        "ou_over_8_5": {
+                            "active": False, "out_of_sample": True, "sample_size": 20,
+                            "intercept": 0.0, "slope": 1.0,
+                        },
+                        "ou": {
+                            "active": True, "out_of_sample": True, "sample_size": 120,
+                            "intercept": 0.0, "slope": 1.0,
+                        },
+                    }
+                }), encoding="utf-8")
+                runner.CALIBRATION_PATH = path
+                calibrated, metadata = runner.apply_oos_calibration(
+                    "ou_over_8_5", pd.Series([60.0]), fallback_market="ou"
+                )
+                self.assertAlmostEqual(calibrated.iloc[0], 60.0)
+                self.assertEqual(metadata["calibration_key"], "ou")
+                self.assertEqual(metadata["status"], "platt_logit_oos")
+        finally:
+            runner.CALIBRATION_PATH = previous_path
 
 
 if __name__ == "__main__":
