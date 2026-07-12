@@ -78,6 +78,8 @@ interface ModeloPrognostico {
   required_edge?: number | null;
   edge_referencial?: number | null;
   odd_minima_publicacao?: number | null;
+  price_feasibility_status?: string | null;
+  price_gap_pct?: number | null;
   requires_executable_odd?: boolean;
   observacoes?: string | null;
   dados_tecnicos?: string | null;
@@ -469,11 +471,18 @@ function ModelosPreditivosPage() {
                     <TableCell>{p.mercado}</TableCell>
                     <TableCell>{p.pick}</TableCell>
                     <TableCell>
-                      {p.selection_role?.startsWith("CANDIDATO_") ? (
-                        <Badge variant="outline">{p.selection_role.replaceAll("_", " ")}</Badge>
-                      ) : (
-                        (p.selection_role ?? "-")
-                      )}
+                      <div className="flex flex-col items-start gap-1">
+                        {p.selection_role?.startsWith("CANDIDATO_") ? (
+                          <Badge variant="outline">{p.selection_role.replaceAll("_", " ")}</Badge>
+                        ) : (
+                          (p.selection_role ?? "-")
+                        )}
+                        {p.price_feasibility_status && (
+                          <Badge variant="secondary">
+                            {p.price_feasibility_status.replaceAll("_", " ")}
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="font-mono text-xs">{p.linha ?? "-"}</TableCell>
                     <TableCell className="text-right font-mono">
@@ -644,6 +653,10 @@ function mapModeloPrognostico(row: Record<string, unknown>): ModeloPrognostico {
     required_edge: toNumber(row.required_edge),
     edge_referencial: toNumber(row.edge_referencial ?? row.edge),
     odd_minima_publicacao: toNumber(row.odd_minima_publicacao),
+    price_feasibility_status: row.price_feasibility_status
+      ? String(row.price_feasibility_status)
+      : null,
+    price_gap_pct: toNumber(row.price_gap_pct),
     requires_executable_odd: Boolean(row.requires_executable_odd),
     observacoes: row.observacoes ? String(row.observacoes) : null,
     dados_tecnicos: row.dados_tecnicos ? String(row.dados_tecnicos) : null,

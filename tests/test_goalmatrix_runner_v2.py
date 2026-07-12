@@ -215,6 +215,12 @@ class GoalMatrixRunnerV2Tests(unittest.TestCase):
         rows = runner.apply_exposure_caps([{"jogo": "A vs B", "edge": -5.0, "stake": 1.0}])
         self.assertEqual(rows[0]["stake"], 0.0)
 
+    def test_price_feasibility_uses_relative_gap_to_minimum_odd(self) -> None:
+        self.assertEqual(runner.classify_price_feasibility(1.75, 1.70)[0], "ODD_APROVADA")
+        self.assertEqual(runner.classify_price_feasibility(1.70, 1.74)[0], "AGUARDAR_ODD")
+        self.assertEqual(runner.classify_price_feasibility(1.70, 1.80)[0], "ODD_POUCO_PROVAVEL")
+        self.assertEqual(runner.classify_price_feasibility(1.50, 1.65)[0], "SEM_PRECO")
+
     def test_first_goal_is_operationally_disabled(self) -> None:
         self.assertFalse(runner.FIRST_GOAL_ENABLED)
 

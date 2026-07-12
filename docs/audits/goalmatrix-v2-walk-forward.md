@@ -6,6 +6,8 @@ GoalMatrix v2.4 adds market-specific consistency gates. O/U uses 60% total-goal 
 
 GoalMatrix v2.5 separates PackBall reference odds from executable bookmaker odds. PackBall odds can average one to five bookmakers and remain useful for paired no-vig context, but no longer assign stake or block a probability/CV-qualified candidate by reference edge. Qualified rows become `CANDIDATO_GOAL` with stake zero. Critical Validation requires an executable odd for the exact side and line, then recalculates edge and 12.5% fractional Kelly. O/U still requires 4% adjusted edge and BTTS requires 5% before confirmation or publication.
 
+GoalMatrix v2.6 adds relative price-feasibility classes (`ODD_APROVADA`, `AGUARDAR_ODD`, `ODD_POUCO_PROVAVEL`, and `SEM_PRECO`) so the Pre-AI shortlist prioritizes candidates whose minimum executable odd is realistically close to the PackBall reference. An entered executable odd below the market edge floor becomes a hard block. Fractional Kelly remains unchanged, but GoalMatrix stake is capped at 0.50u while OOS calibration is insufficient or component spread is between 15 and 20 percentage points; strong market conflict remains capped at 0.25u.
+
 ## Input contract (v2.1)
 
 - Recent signal: 10 matches across all venues and leagues, excluding the previous season.

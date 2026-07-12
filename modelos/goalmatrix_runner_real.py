@@ -37,7 +37,7 @@ output_dir = Path("Prognostico")
 
 # Nome comercial do modelo para identificação no Lovable.
 MODEL_NAME = "ASP GoalMatrix"
-MODEL_VERSION = "v2.5"
+MODEL_VERSION = "v2.6"
 
 # Modo de execução:
 #   prognostico = apenas jogos NS
@@ -810,6 +810,19 @@ def _is_candidate_pick(
     return np.isfinite(prob) and np.isfinite(odd) and prob >= min_prob and min_odd <= odd <= max_odd
 
 
+def classify_price_feasibility(reference_odd: float, minimum_executable_odd: float) -> tuple[str, float]:
+    gap_pct = ((float(minimum_executable_odd) / float(reference_odd)) - 1.0) * 100.0
+    if gap_pct <= 0.0:
+        status = "ODD_APROVADA"
+    elif gap_pct <= 3.0:
+        status = "AGUARDAR_ODD"
+    elif gap_pct <= 8.0:
+        status = "ODD_POUCO_PROVAVEL"
+    else:
+        status = "SEM_PRECO"
+    return status, gap_pct
+
+
 def _passes_cv_filter(
     row: pd.Series,
     min_cv: float,
@@ -1467,6 +1480,10 @@ def _add_lovable_row(rows: list[dict], row: pd.Series, mercado: str, pick: str, 
     odd_valor = 100.0 / prob
     edge = ((odd * prob / 100.0) - 1.0) * 100.0
     minimum_executable_odd = odd_valor * (1.0 + min_edge / 100.0)
+    price_feasibility_status, price_gap_pct = classify_price_feasibility(
+        odd,
+        minimum_executable_odd,
+    )
     diagnostics = _pick_probability_diagnostics(row, mercado, pick, linha)
     diagnostic_text = _diagnostic_text(row, diagnostics)
     technical_context = _technical_context(row, mercado=mercado, pick=pick, linha=linha)
@@ -1475,7 +1492,8 @@ def _add_lovable_row(rows: list[dict], row: pd.Series, mercado: str, pick: str, 
         "Status operacional: CANDIDATO_GOAL - exige odd executavel na Validacao Critica.\n"
         "Odds PackBall sao referencia media de 1 a 5 casas; quantidade de casas nao disponivel.\n"
         f"Edge referencial: {edge:.2f}% | Edge exigido: {min_edge:.2f}% | "
-        f"Odd minima publicacao: {minimum_executable_odd:.3f}"
+        f"Odd minima publicacao: {minimum_executable_odd:.3f} | "
+        f"Viabilidade preco: {price_feasibility_status} | Gap preco: {price_gap_pct:.2f}%"
     )
 
     dth = row.get("Data/Hora")
@@ -1502,6 +1520,8 @@ def _add_lovable_row(rows: list[dict], row: pd.Series, mercado: str, pick: str, 
         "edge_referencial": round(edge, 2),
         "required_edge": round(min_edge, 2),
         "odd_minima_publicacao": round(minimum_executable_odd, 3),
+        "price_feasibility_status": price_feasibility_status,
+        "price_gap_pct": round(price_gap_pct, 2),
         "requires_executable_odd": True,
         "odd_mercado_base": round(odd, 2),
         "odd_mediana": None,
@@ -1526,7 +1546,8 @@ def _add_lovable_row(rows: list[dict], row: pd.Series, mercado: str, pick: str, 
             + " | "
             + diagnostic_text
             + f"; Edge referencial: {edge:.2f}%; Edge exigido: {min_edge:.2f}%; "
-            + f"Odd minima publicacao: {minimum_executable_odd:.3f}"
+            + f"Odd minima publicacao: {minimum_executable_odd:.3f}; "
+            + f"Viabilidade preco: {price_feasibility_status}; Gap preco: {price_gap_pct:.2f}%"
         ),
         "dados_tecnicos": technical_context,
         "contexto_adicional": technical_context,
@@ -1631,7 +1652,8 @@ def build_lovable_export(base: pd.DataFrame) -> pd.DataFrame:
         "data", "hora", "esporte", "liga", "jogo", "mandante", "visitante",
         "mercado", "pick", "linha", "odd_ofertada", "odd_valor",
         "probabilidade_final", "edge", "edge_referencial", "required_edge", "odd_minima_publicacao",
-        "requires_executable_odd", "odd_mercado_base", "odd_mediana", "stake",
+        "price_feasibility_status", "price_gap_pct", "requires_executable_odd",
+        "odd_mercado_base", "odd_mediana", "stake",
         "cv_index_home", "cv_index_away", "cv_index_average",
         "modelo_versao", "market_type", "selection_side",
         "selection_role", "market_conflict_status", "prob_hist", "prob_sim", "prob_no_vig",

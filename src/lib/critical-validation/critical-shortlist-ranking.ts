@@ -1,5 +1,6 @@
 import type { Prognostico } from "@/lib/db";
 import {
+  getPackballValidationRequirements,
   hasPackballExecutableOdd,
   isPackballMatrixPrognostico,
 } from "@/lib/packball-validation";
@@ -236,13 +237,27 @@ export function calculateValueScore(prognostico: Prognostico): {
       ? (operationalOdd / prognostico.odd_valor - 1) * 100
       : null;
   const calculatedEdge = isFiniteNumber(valueGap) ? valueGap : null;
-  const effectiveEdge =
-    isFiniteNumber(prognostico.edge_ajustado)
+  const executablePackballOdd = hasPackballExecutableOdd(prognostico);
+  const effectiveEdge = executablePackballOdd
+    ? isFiniteNumber(prognostico.edge_ajustado)
+      ? prognostico.edge_ajustado
+      : calculatedEdge
+    : isFiniteNumber(prognostico.edge_ajustado)
       ? prognostico.edge_ajustado
       : isFiniteNumber(prognostico.edge)
         ? prognostico.edge
         : calculatedEdge;
-  if (packballAwaitingOdd) return { score: 55, effectiveEdge, valueGap };
+  if (packballAwaitingOdd) {
+    const feasibility = getPackballValidationRequirements(prognostico)?.priceFeasibility;
+    const score = feasibility === "ODD_APROVADA"
+      ? 75
+      : feasibility === "AGUARDAR_ODD"
+        ? 65
+        : feasibility === "ODD_POUCO_PROVAVEL"
+          ? 45
+          : 20;
+    return { score, effectiveEdge, valueGap };
+  }
   if (!isFiniteNumber(effectiveEdge) || effectiveEdge <= 0) return { score: 0, effectiveEdge, valueGap };
   if (effectiveEdge <= 3) return { score: round((effectiveEdge / 3) * 30, 1), effectiveEdge, valueGap };
   if (effectiveEdge <= 6) return { score: round(30 + ((effectiveEdge - 3) / 3) * 25, 1), effectiveEdge, valueGap };
@@ -269,7 +284,9 @@ export function calculateProbabilityMarginScore(prognostico: Prognostico): {
 }
 
 export function calculateOddsOperationalScore(prognostico: Prognostico): number {
-  const odd = prognostico.odd_ofertada;
+  const odd = hasPackballExecutableOdd(prognostico)
+    ? Number(prognostico.odd_ajustada)
+    : prognostico.odd_ofertada;
   if (!isPositiveFinite(odd)) return 0;
   if (odd >= 1.70 && odd <= 1.95) return 100;
   if (odd >= 1.96 && odd <= 2.00) return 90;
@@ -370,6 +387,12 @@ export function detectCriticalShortlistRiskFlags(prognostico: Prognostico, now =
   const text = combinedContext(prognostico);
   const packballAwaitingOdd =
     isPackballMatrixPrognostico(prognostico) && !hasPackballExecutableOdd(prognostico);
+  const packballMatrix = isPackballMatrixPrognostico(prognostico);
+  const packballRequirements = getPackballValidationRequirements(prognostico);
+  const packballExecutableEdge =
+    packballRequirements && hasPackballExecutableOdd(prognostico)
+      ? Number(prognostico.odd_ajustada) * Number(prognostico.probabilidade_final) - 100
+      : null;
 
   pushIf(flags, !prognostico.pick, "pick_missing", "hard_block", "Pick ausente.");
   pushIf(flags, !prognostico.mercado, "market_missing", "hard_block", "Mercado ausente.");
@@ -377,7 +400,7 @@ export function detectCriticalShortlistRiskFlags(prognostico: Prognostico, now =
   pushIf(flags, timing.minutesToStart != null && timing.minutesToStart <= 0, "event_already_started", "hard_block", "Evento ja iniciado.");
   pushIf(
     flags,
-    !packballAwaitingOdd && isPositiveFinite(prognostico.odd_valor) && prognostico.odd_ofertada <= prognostico.odd_valor,
+    !packballMatrix && isPositiveFinite(prognostico.odd_valor) && prognostico.odd_ofertada <= prognostico.odd_valor,
     "odd_not_above_fair_odd",
     "hard_block",
     "Odd ofertada nao supera a odd de valor esperada pelo modelo.",
@@ -385,14 +408,14 @@ export function detectCriticalShortlistRiskFlags(prognostico: Prognostico, now =
   pushIf(flags, !isPositiveFinite(prognostico.odd_valor), "fair_odd_missing", "medium", "Odd de valor ausente.");
   pushIf(
     flags,
-    !packballAwaitingOdd && isPositiveFinite(prognostico.odd_ofertada) && (prognostico.odd_ofertada < 1.5 || prognostico.odd_ofertada > 2),
+    !packballMatrix && isPositiveFinite(prognostico.odd_ofertada) && (prognostico.odd_ofertada < 1.5 || prognostico.odd_ofertada > 2),
     "odd_outside_model_filter_range",
     "medium",
     "Odd fora da faixa esperada do filtro preditivo inicial.",
   );
   pushIf(
     flags,
-    !packballAwaitingOdd && isPositiveFinite(prognostico.odd_valor) && isPositiveFinite(prognostico.odd_ofertada) &&
+    !packballMatrix && isPositiveFinite(prognostico.odd_valor) && isPositiveFinite(prognostico.odd_ofertada) &&
       (prognostico.odd_ofertada < 1.5 || prognostico.odd_ofertada > 2 || prognostico.odd_ofertada <= prognostico.odd_valor),
     "value_filter_inconsistency",
     "high",
@@ -400,13 +423,36 @@ export function detectCriticalShortlistRiskFlags(prognostico: Prognostico, now =
   );
   pushIf(flags, !isFiniteNumber(value.effectiveEdge), "edge_missing", "high", "Edge ausente.");
   pushIf(flags, !packballAwaitingOdd && isFiniteNumber(value.effectiveEdge) && value.effectiveEdge <= 0, "edge_not_positive", "hard_block", "Edge nao positivo.");
-  pushIf(flags, !packballAwaitingOdd && !isFiniteNumber(prognostico.edge_ajustado), "edge_adjusted_missing", "medium", "Edge ajustado ausente.");
+  pushIf(flags, !packballMatrix && !isFiniteNumber(prognostico.edge_ajustado), "edge_adjusted_missing", "medium", "Edge ajustado ausente.");
   pushIf(
     flags,
     packballAwaitingOdd,
     "packball_executable_odd_required",
     "medium",
     "Modelo PackBall candidato: informe odd executavel antes da confirmacao.",
+  );
+  pushIf(
+    flags,
+    packballAwaitingOdd && packballRequirements?.priceFeasibility === "ODD_POUCO_PROVAVEL",
+    "packball_price_unlikely",
+    "medium",
+    "Odd minima esta entre 3% e 8% acima da referencia; manter em monitoramento.",
+  );
+  pushIf(
+    flags,
+    packballAwaitingOdd && packballRequirements?.priceFeasibility === "SEM_PRECO",
+    "packball_no_feasible_price",
+    "high",
+    "Odd minima supera a referencia em mais de 8%; manter como reserva de preco.",
+  );
+  pushIf(
+    flags,
+    packballExecutableEdge != null &&
+      packballRequirements != null &&
+      packballExecutableEdge < packballRequirements.requiredEdge,
+    "packball_executable_edge_below_min",
+    "hard_block",
+    `Odd executavel gera edge de ${packballExecutableEdge?.toFixed(2)}%, abaixo do minimo de ${packballRequirements?.requiredEdge.toFixed(2)}%.`,
   );
   pushIf(
     flags,
@@ -534,7 +580,12 @@ export function classifyCriticalShortlistCandidate(
   if (flags.some((flag) => flag.code === "model_market_conflict_strong")) return "RESERVA";
   const packballAwaitingOdd = prognostico &&
     isPackballMatrixPrognostico(prognostico) && !hasPackballExecutableOdd(prognostico);
-  if (packballAwaitingOdd) return score >= 55 && confidence >= 45 ? "CANDIDATA" : "MONITORAR";
+  if (packballAwaitingOdd) {
+    const feasibility = getPackballValidationRequirements(prognostico)?.priceFeasibility;
+    if (feasibility === "SEM_PRECO") return "RESERVA";
+    if (feasibility === "ODD_POUCO_PROVAVEL") return "MONITORAR";
+    return score >= 55 && confidence >= 45 ? "CANDIDATA" : "MONITORAR";
+  }
   const hasValue = prognostico ? calculateValueScore(prognostico).effectiveEdge ?? 0 : 1;
   const hasProbabilityMargin = prognostico ? calculateProbabilityMarginScore(prognostico).margin ?? 0 : 1;
   if (score >= 70 && confidence >= 55 && hasValue > 0 && hasProbabilityMargin > 0) return "CANDIDATA";

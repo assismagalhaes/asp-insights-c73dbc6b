@@ -2,6 +2,13 @@ import type { Prognostico } from "@/lib/db";
 
 const PACKBALL_MAX_STAKE = 1;
 const PACKBALL_CONFLICT_MAX_STAKE = 0.25;
+const GOALMATRIX_UNCERTAINTY_MAX_STAKE = 0.5;
+
+export type PackballPriceFeasibility =
+  | "ODD_APROVADA"
+  | "AGUARDAR_ODD"
+  | "ODD_POUCO_PROVAVEL"
+  | "SEM_PRECO";
 
 type PackballFields = Pick<
   Prognostico,
@@ -24,6 +31,11 @@ export type PackballValidationRequirements = {
   referenceOdd: number;
   strongMarketConflict: boolean;
   kellyFraction: number;
+  componentSpread: number | null;
+  calibrationInsufficient: boolean;
+  priceGapPct: number;
+  priceFeasibility: PackballPriceFeasibility;
+  maxStake: number;
 };
 
 function combinedText(prognostico: Partial<PackballFields>): string {
@@ -76,6 +88,13 @@ export function hasPackballExecutableOdd(prognostico: Partial<PackballFields>): 
   );
 }
 
+export function classifyPackballPriceFeasibility(priceGapPct: number): PackballPriceFeasibility {
+  if (priceGapPct <= 0) return "ODD_APROVADA";
+  if (priceGapPct <= 3) return "AGUARDAR_ODD";
+  if (priceGapPct <= 8) return "ODD_POUCO_PROVAVEL";
+  return "SEM_PRECO";
+}
+
 export function getPackballValidationRequirements(
   prognostico: Partial<PackballFields>,
 ): PackballValidationRequirements | null {
@@ -93,28 +112,45 @@ export function getPackballValidationRequirements(
     /(?:Spread componentes|component_spread_pp)\s*[:=]\s*([0-9]+(?:[.,][0-9]+)?)/i,
   );
   const strongConflictThreshold = modelName === "ASP GoalMatrix" ? 20 : 22;
+  const strongMarketConflict =
+    /CONFLITO_FORTE_COM_MERCADO/i.test(text) || (spread ?? 0) >= strongConflictThreshold;
+  const calibrationInsufficient = /identity_insufficient_oos_sample|insufficient_oos/i.test(text);
+  const minimumExecutableOdd =
+    parseNumber(text, /Odd minima publicacao:\s*([0-9]+(?:[.,][0-9]+)?)/i) ??
+    fairOdd * (1 + requiredEdge / 100);
+  const priceGapPct = (minimumExecutableOdd / referenceOdd - 1) * 100;
+  const goalMatrixUncertainty =
+    modelName === "ASP GoalMatrix" && (calibrationInsufficient || (spread ?? 0) >= 15);
+  const maxStake = strongMarketConflict
+    ? PACKBALL_CONFLICT_MAX_STAKE
+    : goalMatrixUncertainty
+      ? GOALMATRIX_UNCERTAINTY_MAX_STAKE
+      : PACKBALL_MAX_STAKE;
   return {
     modelName,
     requiredEdge,
-    minimumExecutableOdd: fairOdd * (1 + requiredEdge / 100),
+    minimumExecutableOdd,
     referenceOdd,
-    strongMarketConflict:
-      /CONFLITO_FORTE_COM_MERCADO/i.test(text) || (spread ?? 0) >= strongConflictThreshold,
+    strongMarketConflict,
     kellyFraction: modelName === "ASP BackMatrix" ? 0.1 : 0.125,
+    componentSpread: spread,
+    calibrationInsufficient,
+    priceGapPct,
+    priceFeasibility: classifyPackballPriceFeasibility(priceGapPct),
+    maxStake,
   };
 }
 
 export function calculatePackballKelly(
   probabilityPct: number,
   executableOdd: number,
-  requirements: Pick<PackballValidationRequirements, "kellyFraction" | "strongMarketConflict">,
+  requirements: Pick<PackballValidationRequirements, "kellyFraction" | "maxStake">,
 ): number {
   const probability = Number(probabilityPct) / 100;
   const odd = Number(executableOdd);
   if (!(probability > 0 && probability < 1) || !(odd > 1)) return 0;
   const b = odd - 1;
   const fullKelly = Math.max(0, (b * probability - (1 - probability)) / b);
-  const cap = requirements.strongMarketConflict ? PACKBALL_CONFLICT_MAX_STAKE : PACKBALL_MAX_STAKE;
-  const units = Math.min(cap, fullKelly * requirements.kellyFraction * 100);
+  const units = Math.min(requirements.maxStake, fullKelly * requirements.kellyFraction * 100);
   return Math.floor((units + 1e-9) * 4) / 4;
 }

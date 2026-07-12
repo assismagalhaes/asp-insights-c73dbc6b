@@ -357,7 +357,8 @@ function autoCheck(p: Prognostico, edgeFinal: number | null, executableOdd: numb
   }
   if (p.odd_ofertada < p.odd_valor)
     return { auto: "PULAR" as const, reason: "Odd ofertada menor que odd de valor" };
-  if (edgeFinal < 0) return { auto: "PULAR" as const, reason: "Edge negativo" };
+  if (edgeFinal != null && edgeFinal < 0)
+    return { auto: "PULAR" as const, reason: "Edge negativo" };
   if (p.probabilidade_final < 55)
     return { auto: "ALERTA" as const, reason: "Probabilidade inferior a 55%" };
   if (p.probabilidade_final > 60)
@@ -1236,7 +1237,7 @@ function Validacao() {
                 </div>
 
                 {packballRequirements && (
-                  <div className="grid gap-2 rounded-md border border-primary/30 bg-primary/5 p-3 sm:grid-cols-3">
+                  <div className="grid gap-2 rounded-md border border-primary/30 bg-primary/5 p-3 sm:grid-cols-2 xl:grid-cols-5">
                     <Metric
                       label="Odd minima para publicar"
                       value={packballRequirements.minimumExecutableOdd.toFixed(2)}
@@ -1245,7 +1246,15 @@ function Validacao() {
                       label="Edge minimo"
                       value={`${packballRequirements.requiredEdge.toFixed(2)}%`}
                     />
+                    <Metric
+                      label="Viabilidade referencia"
+                      value={packballRequirements.priceFeasibility.replaceAll("_", " ")}
+                    />
                     <Metric label="Kelly conservador" value={`${packballKelly.toFixed(2)}u`} />
+                    <Metric
+                      label="Teto por incerteza"
+                      value={`${packballRequirements.maxStake.toFixed(2)}u`}
+                    />
                   </div>
                 )}
 
