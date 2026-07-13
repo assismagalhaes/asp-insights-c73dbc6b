@@ -169,7 +169,13 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Registrar resultado — {prognostico.jogo}</DialogTitle>
+          <DialogTitle>
+            {prognostico.resultado === "GREEN" || prognostico.resultado === "RED"
+              ? "Editar resultado"
+              : "Registrar resultado"}{" "}
+            — {prognostico.jogo}
+          </DialogTitle>
+
         </DialogHeader>
         <div className="text-xs text-muted-foreground">
           {linhaInfo ? `Linha ${linhaInfo} · ` : ""}Odd usada {oddEfetiva.toFixed(2)}
