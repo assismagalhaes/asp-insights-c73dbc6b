@@ -42,10 +42,10 @@ export const Route = createFileRoute("/_authenticated/modelos-preditivos")({
 });
 
 type ModeloDisponivel =
-  | "Futebol"
-  | "Baseball"
-  | "Basketball NBA"
-  | "Basketball WNBA"
+  | "ASP MatchMatrix"
+  | "ASP Diamond"
+  | "ASP Court"
+  | "ASP Court W"
   | "ASP GoalMatrix"
   | "ASP CornerMatrix"
   | "ASP BackMatrix";
@@ -107,7 +107,7 @@ interface ModeloResultado {
 function ModelosPreditivosPage() {
   const qc = useQueryClient();
   const [selectedColetaId, setSelectedColetaId] = useState("");
-  const [modelo, setModelo] = useState<ModeloDisponivel>("Futebol");
+  const [modelo, setModelo] = useState<ModeloDisponivel>("ASP MatchMatrix");
   const [running, setRunning] = useState(false);
   const [sending, setSending] = useState(false);
   const [resultado, setResultado] = useState<ModeloResultado | null>(null);
@@ -125,12 +125,12 @@ function ModelosPreditivosPage() {
     const coletasConcluidas = coletas.filter(
       (coleta) => coleta.status === "CONCLUIDA" && coleta.job_id,
     );
-    if (modelo === "Baseball") return coletasConcluidas.filter(isBaseballColeta);
-    if (modelo === "Basketball NBA")
+    if (modelo === "ASP Diamond") return coletasConcluidas.filter(isBaseballColeta);
+    if (modelo === "ASP Court")
       return coletasConcluidas.filter((coleta) => isBasketballColeta(coleta, "NBA"));
-    if (modelo === "Basketball WNBA")
+    if (modelo === "ASP Court W")
       return coletasConcluidas.filter((coleta) => isBasketballColeta(coleta, "WNBA"));
-    if (modelo === "Futebol")
+    if (modelo === "ASP MatchMatrix")
       return coletasConcluidas.filter((coleta) => !coleta.esporte || isFootballColeta(coleta));
     return coletasConcluidas;
   }, [coletas, modelo]);
@@ -189,16 +189,16 @@ function ModelosPreditivosPage() {
       return;
     }
 
-    if (modelo === "Baseball" && !isBaseballColeta(coletaSelecionada)) {
-      toast.error("Selecione uma coleta Baseball/MLB para executar o modelo Baseball.");
+    if (modelo === "ASP Diamond" && !isBaseballColeta(coletaSelecionada)) {
+      toast.error("Selecione uma coleta Baseball/MLB para executar o ASP Diamond.");
       return;
     }
-    if (modelo === "Basketball NBA" && !isBasketballColeta(coletaSelecionada, "NBA")) {
-      toast.error("Selecione uma coleta Basketball/NBA para executar o modelo NBA.");
+    if (modelo === "ASP Court" && !isBasketballColeta(coletaSelecionada, "NBA")) {
+      toast.error("Selecione uma coleta Basketball/NBA para executar o ASP Court.");
       return;
     }
-    if (modelo === "Basketball WNBA" && !isBasketballColeta(coletaSelecionada, "WNBA")) {
-      toast.error("Selecione uma coleta Basketball/WNBA para executar o modelo WNBA.");
+    if (modelo === "ASP Court W" && !isBasketballColeta(coletaSelecionada, "WNBA")) {
+      toast.error("Selecione uma coleta Basketball/WNBA para executar o ASP Court W.");
       return;
     }
 
@@ -298,19 +298,19 @@ function ModelosPreditivosPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Futebol">Futebol</SelectItem>
-                  <SelectItem value="Basketball NBA">Basketball NBA</SelectItem>
-                  <SelectItem value="Basketball WNBA">Basketball WNBA</SelectItem>
-                  <SelectItem value="Baseball">Baseball</SelectItem>
+                  <SelectItem value="ASP MatchMatrix">ASP MatchMatrix</SelectItem>
+                  <SelectItem value="ASP GoalMatrix">ASP GoalMatrix</SelectItem>
+                  <SelectItem value="ASP CornerMatrix">ASP CornerMatrix</SelectItem>
+                  <SelectItem value="ASP BackMatrix">ASP BackMatrix</SelectItem>
+                  <SelectItem value="ASP Diamond">ASP Diamond</SelectItem>
+                  <SelectItem value="ASP Court">ASP Court</SelectItem>
+                  <SelectItem value="ASP Court W">ASP Court W</SelectItem>
                   <SelectItem value="Hockey" disabled>
                     Hockey
                   </SelectItem>
                   <SelectItem value="American Football" disabled>
                     American Football
                   </SelectItem>
-                  <SelectItem value="ASP GoalMatrix">ASP GoalMatrix</SelectItem>
-                  <SelectItem value="ASP CornerMatrix">ASP CornerMatrix</SelectItem>
-                  <SelectItem value="ASP BackMatrix">ASP BackMatrix</SelectItem>
                 </SelectContent>
               </Select>
             </div>

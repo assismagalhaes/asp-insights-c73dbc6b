@@ -24,6 +24,7 @@ BASE_DIR = Path(os.environ.get("ASP_SCRAPER_BASE_DIR", "/home/ubuntu/asp-scraper
 MODELOS_DIR = BASE_DIR / "modelos"
 REAL_MODEL_PATH = MODELOS_DIR / "prognosticos_football_real.py"
 
+MODEL_NAME = "ASP MatchMatrix"
 MODEL_VERSION = "FOOTBALL_V1_3"
 FOOTBALL_STAT_AUDIT_VERSION = "FOOTBALL_V1_3_A"
 HANDICAP_ENABLED_FOOTBALL_V1_1 = True
@@ -1384,6 +1385,7 @@ if __name__ == "__main__":
 
         resposta = {
             "ok": True,
+            "modelo": MODEL_NAME,
             "total_prognosticos": len(prognosticos),
             "arquivo_saida": str(caminho_saida),
             "arquivo_contexto": str(caminho_contexto),

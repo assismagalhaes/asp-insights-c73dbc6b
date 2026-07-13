@@ -29,7 +29,7 @@ const JobIdSchema = z.object({
 
 const PredictiveModelSchema = z.object({
   job_id: z.string().min(1),
-  modelo: z.enum(["Futebol", "Baseball", "Basketball NBA", "Basketball WNBA"]),
+  modelo: z.enum(["ASP MatchMatrix", "ASP Diamond", "ASP Court", "ASP Court W"]),
 });
 
 const PackballModelSchema = z.enum(["ASP GoalMatrix", "ASP CornerMatrix", "ASP BackMatrix"]);
@@ -411,10 +411,10 @@ export const executePredictiveModel = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => PredictiveModelSchema.parse(input))
   .handler(async ({ data }) => {
     const endpointByModel: Record<string, string> = {
-      Futebol: "/modelos/futebol/executar",
-      Baseball: "/modelos/baseball/executar",
-      "Basketball NBA": "/modelos/basketball/nba/executar",
-      "Basketball WNBA": "/modelos/basketball/wnba/executar",
+      "ASP MatchMatrix": "/modelos/futebol/executar",
+      "ASP Diamond": "/modelos/baseball/executar",
+      "ASP Court": "/modelos/basketball/nba/executar",
+      "ASP Court W": "/modelos/basketball/wnba/executar",
     };
     const path = endpointByModel[data.modelo];
     try {

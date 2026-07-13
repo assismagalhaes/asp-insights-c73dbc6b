@@ -15,6 +15,7 @@ from typing import Any
 
 HIST_DIR = Path(os.getenv("BASEBALL_HIST_DIR", "/home/ubuntu/jupyter/dados_baseball"))
 
+MODEL_NAME = "ASP Diamond"
 MODEL_VERSION = "MLB_V2_1_TEMPORAL_UNCERTAINTY"
 BASEBALL_MLB_HANDICAP_MODEL_VERSION = "MLB_V2_2_HANDICAP_NB_SHADOW"
 HANDICAP_ENABLED_MLB_V1_1 = False
@@ -133,7 +134,7 @@ def main() -> None:
             emit(
                 {
                     "ok": True,
-                    "modelo": "Baseball",
+                    "modelo": MODEL_NAME,
                     "arquivo_saida": str(output_path),
                     "arquivo_contexto": None,
                     "total_prognosticos": 0,
@@ -187,7 +188,7 @@ def main() -> None:
         emit(
             {
                 "ok": True,
-                "modelo": "Baseball",
+                "modelo": MODEL_NAME,
                 "arquivo_saida": str(output_path),
                 "arquivo_contexto": None,
                 "total_prognosticos": len(prognosticos),
@@ -1313,7 +1314,7 @@ def append_if_ev(
         f" warnings={','.join(str(item) for item in warnings) if warnings else 'nenhum'}."
     )
     observacoes = (
-        f"Modelo Baseball MLB. {extra}. Odd ofertada {odd:.3f}; odd valor {odd_valor:.3f}; "
+        f"{MODEL_NAME} MLB. {extra}. Odd ofertada {odd:.3f}; odd valor {odd_valor:.3f}; "
         f"odd mercado base {(market_odd or odd):.3f}; probabilidade pre-IA {prob * 100:.2f}%; edge {edge:.2f}%. "
         "Starter, bullpen, parque e clima nao incorporados; validar no Preview/IA sem dupla contagem."
         f"{debug_text}"

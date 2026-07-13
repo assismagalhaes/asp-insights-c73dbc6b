@@ -26,6 +26,10 @@ NOTEBOOKS = {
     'NBA': JUPYTER_DIR / 'prognosticos_basketball_nba.ipynb',
     'WNBA': JUPYTER_DIR / 'prognosticos_basketball_wnba.ipynb',
 }
+MODEL_NAMES = {
+    'NBA': 'ASP Court',
+    'WNBA': 'ASP Court W',
+}
 
 MIN_ODD_EXPORT = 1.25
 MAX_ODD_EXPORT = 2.00
@@ -147,7 +151,7 @@ def main() -> None:
 
         result_payload = {
             'ok': True,
-            'modelo': f'Basketball {league}',
+            'modelo': model_name(league),
             'arquivo_saida': str(output_path),
             'arquivo_contexto': None,
             'total_prognosticos': len(rows),
@@ -168,6 +172,10 @@ def normalize_league(value: str) -> str:
     if league in {'NBA', 'WNBA'}:
         return league
     raise RuntimeError('Liga Basketball inválida. Use NBA ou WNBA.')
+
+
+def model_name(league: str) -> str:
+    return MODEL_NAMES[normalize_league(league)]
 
 
 def build_wnba_handicap_shadow_from_csv(csv_coleta_path: Path) -> dict[str, Any]:
@@ -2219,7 +2227,7 @@ def write_output_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 
 
 def empty_result(league: str, output_path: Path, message: str) -> dict[str, Any]:
-    return {'ok': True, 'modelo': f'Basketball {league}', 'arquivo_saida': str(output_path), 'arquivo_contexto': None, 'total_prognosticos': 0, 'contexto_modelo': message, 'dados_tecnicos': message, 'mensagem': message, 'prognosticos': []}
+    return {'ok': True, 'modelo': model_name(league), 'arquivo_saida': str(output_path), 'arquivo_contexto': None, 'total_prognosticos': 0, 'contexto_modelo': message, 'dados_tecnicos': message, 'mensagem': message, 'prognosticos': []}
 
 
 def emit(payload: dict[str, Any]) -> None:
@@ -2391,7 +2399,8 @@ def stake_sugerida(prob: float | None, edge: float | None, odd: float | None = N
 
 
 def build_parecer(row: dict[str, Any]) -> str:
-    return f"EV+ pelo modelo Basketball: probabilidade {to_float(row.get('probabilidade_final')) or 0:.2f}%, odd valor {to_float(row.get('odd_valor')) or 0:.2f}, odd ofertada {to_float(row.get('odd_ofertada')) or 0:.2f}, edge {to_float(row.get('edge')) or 0:.2f}%."
+    league = 'WNBA' if 'WNBA' in str(row.get('liga') or '').upper() else 'NBA'
+    return f"EV+ pelo {model_name(league)}: probabilidade {to_float(row.get('probabilidade_final')) or 0:.2f}%, odd valor {to_float(row.get('odd_valor')) or 0:.2f}, odd ofertada {to_float(row.get('odd_ofertada')) or 0:.2f}, edge {to_float(row.get('edge')) or 0:.2f}%."
 
 
 def observacoes(module: Any, res: dict, home: str, away: str) -> str:

@@ -28,12 +28,14 @@ try:
     from api.scraping_params import normalize_scraping_params
     from api.scraping_debug import ScraperDebugContext, is_debug_enabled, log_raw_debug
     from api.model_provenance import single_input_model_provenance
+    from api.model_names import MODEL_NAME_BASEBALL, MODEL_NAME_FOOTBALL, basketball_model_name
     from scrapers.oddsagora_normalizer import normalize_oddsagora_raw
     from scrapers.oddsagora_scraper import executar_scraper_oddsagora
 except ModuleNotFoundError:
     from scraping_params import normalize_scraping_params
     from scraping_debug import ScraperDebugContext, is_debug_enabled, log_raw_debug
     from model_provenance import single_input_model_provenance
+    from model_names import MODEL_NAME_BASEBALL, MODEL_NAME_FOOTBALL, basketball_model_name
     from oddsagora_normalizer import normalize_oddsagora_raw
     from oddsagora_scraper import executar_scraper_oddsagora
 
@@ -1111,7 +1113,7 @@ def executar_modelo_futebol(
     resposta_final = {
         "ok": True,
         "job_id": job_id,
-        "modelo": "Futebol",
+        "modelo": MODEL_NAME_FOOTBALL,
         "csv_coleta": str(csv_coleta_path),
         "arquivo_saida": f"prognosticos_futebol_{job_id}.csv",
         "arquivo_contexto": resposta_script.get("arquivo_contexto"),
@@ -1215,7 +1217,7 @@ def executar_modelo_baseball(
     resposta_final = {
         "ok": True,
         "job_id": job_id,
-        "modelo": "Baseball",
+        "modelo": MODEL_NAME_BASEBALL,
         "csv_coleta": str(csv_coleta_path),
         "arquivo_saida": f"prognosticos_baseball_{job_id}.csv",
         "arquivo_contexto": resposta_script.get("arquivo_contexto"),
@@ -1305,7 +1307,7 @@ def _executar_modelo_basketball(job_id: str, liga: str):
     resposta_final = {
         "ok": True,
         "job_id": job_id,
-        "modelo": f"Basketball {liga}",
+        "modelo": basketball_model_name(liga),
         "csv_coleta": str(csv_coleta_path),
         "arquivo_saida": output_path.name,
         "arquivo_contexto": resposta_script.get("arquivo_contexto"),
