@@ -44,6 +44,20 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
     setSiblings([]);
 
     (async () => {
+      // 1) Load current resultado for this prognostico (edit mode)
+      const { data: own } = await supabase
+        .from("resultados")
+        .select("placar_final, resultado, created_at")
+        .eq("prognostico_id", prognostico.id)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      const ownLast = (own ?? [])[0] as { placar_final: string | null; resultado: Resultado } | undefined;
+      if (ownLast?.placar_final) setPlacar(ownLast.placar_final);
+      if (ownLast && (ownLast.resultado === "GREEN" || ownLast.resultado === "RED")) {
+        setManual(ownLast.resultado);
+      }
+
+      // 2) Suggest placar from sibling prognosticos of same match
       let q = supabase
         .from("prognosticos")
         .select("*, resultados(placar_final, created_at)")
@@ -57,18 +71,21 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
         Prognostico & { resultados?: Array<{ placar_final: string | null; created_at: string }> }
       >;
       setSiblings(list);
-      for (const s of list) {
-        const rs = s.resultados ?? [];
-        if (rs.length) {
-          const last = [...rs].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0];
-          if (last.placar_final) {
-            setPlacar(last.placar_final);
-            break;
+      if (!ownLast?.placar_final) {
+        for (const s of list) {
+          const rs = s.resultados ?? [];
+          if (rs.length) {
+            const last = [...rs].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0];
+            if (last.placar_final) {
+              setPlacar(last.placar_final);
+              break;
+            }
           }
         }
       }
     })();
   }, [prognostico, open]);
+
 
   const parsed = useMemo(() => parsePlacar(placar), [placar]);
   const race = useMemo(
