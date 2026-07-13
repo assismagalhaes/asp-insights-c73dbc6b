@@ -130,6 +130,15 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
       return;
     }
     try {
+      // Edit mode: remove existing resultados for this prognostico before inserting the new one
+      const isEdit = prognostico.resultado === "GREEN" || prognostico.resultado === "RED";
+      if (isEdit) {
+        const { error: delErr } = await supabase
+          .from("resultados")
+          .delete()
+          .eq("prognostico_id", prognostico.id);
+        if (delErr) throw delErr;
+      }
       await create.mutateAsync({
         prognostico_id: prognostico.id,
         resultado: resultadoFinal,
@@ -138,6 +147,7 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
         lucro_prejuizo: calcLucro(resultadoFinal, stakeResultado, oddEfetiva),
         data_resultado: todayBR(),
       });
+
 
       if (placar && siblings.some((s) => s.resultado === "PENDENTE")) {
         toast.info(
