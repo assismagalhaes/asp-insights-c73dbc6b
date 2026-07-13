@@ -681,16 +681,15 @@ function Prognosticos() {
                           >
                             <Copy className="h-4 w-4" />
                           </Button>
-                          {p.resultado === "PENDENTE" && (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              title="Registrar resultado"
-                              onClick={() => setResultadoFor(p)}
-                            >
-                              <Trophy className="h-4 w-4 text-warning" />
-                            </Button>
-                          )}
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            title={p.resultado === "PENDENTE" ? "Registrar resultado" : "Editar resultado / placar"}
+                            onClick={() => setResultadoFor(p)}
+                          >
+                            <Trophy className={`h-4 w-4 ${p.resultado === "PENDENTE" ? "text-warning" : "text-muted-foreground"}`} />
+                          </Button>
+
                           <Button
                             size="icon"
                             variant="ghost"
