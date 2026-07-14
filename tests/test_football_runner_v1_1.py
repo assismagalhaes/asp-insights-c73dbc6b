@@ -86,6 +86,10 @@ def output_row_with_core_debug(**overrides):
         "base; core_lambda_home=1.4321; core_lambda_away=1.1234; "
         "league_avg_home_goals=1.5000; league_avg_away_goals=1.1000; "
         "sample_home=24; sample_away=23; sample_league=180; "
+        "source_data_cutoff=2026-07-05; source_data_age_days=9; "
+        "home_venue_last_date=2026-05-24; home_venue_gap_days=51; "
+        "away_venue_last_date=2026-05-30; away_venue_gap_days=45; "
+        "recent_overall_weight_home=0.2500; recent_overall_weight_away=0.2500; "
         "shrinkage_k=dynamic_by_league_weights; score_matrix_max_goals=10; "
         "score_matrix_tail_mass=0.00012000; score_matrix_probability_sum=0.99988000; "
         "nbd_enabled=False; overdispersion_ratio=1.2200"
@@ -95,7 +99,7 @@ def output_row_with_core_debug(**overrides):
 
 class FootballRunnerV11Test(unittest.TestCase):
     def test_model_version_is_set(self):
-        self.assertEqual(runner.MODEL_VERSION, "FOOTBALL_V1_3")
+        self.assertEqual(runner.MODEL_VERSION, "FOOTBALL_V1_4")
 
     def test_no_vig_three_way_sums_to_one(self):
         probs = runner.no_vig_probability_three(2.0, 3.0, 4.0)
@@ -108,8 +112,8 @@ class FootballRunnerV11Test(unittest.TestCase):
         selected, discarded = runner._evaluate_row_v1_1(output_row(), wide_row())
         self.assertIsNone(discarded)
         self.assertIsNotNone(selected)
-        self.assertEqual(selected["modelo_versao"], "FOOTBALL_V1_3")
-        self.assertIn("modelo_versao=FOOTBALL_V1_3", selected["observacoes"])
+        self.assertEqual(selected["modelo_versao"], "FOOTBALL_V1_4")
+        self.assertIn("modelo_versao=FOOTBALL_V1_4", selected["observacoes"])
 
     def test_core_lambda_debug_is_exposed_when_available(self):
         selected, discarded = runner._evaluate_row_v1_1(output_row_with_core_debug(), wide_row())
@@ -196,7 +200,7 @@ RPI Other FC
 
         self.assertEqual(selected, "")
 
-    def test_readable_context_reports_stale_source_data_without_raw_log(self):
+    def test_readable_context_separates_fresh_source_from_old_venue_sample(self):
         technical = """Confronto:
 Home FC vs Away FC
 Data/Horario: 14/07/2026
@@ -217,8 +221,21 @@ Data/Horario: 14/07/2026
         self.assertEqual(selected["dados_tecnicos"], technical.strip())
         self.assertNotIn("modelo_versao=", selected["dados_tecnicos"])
         self.assertIn("[RESUMO MATEMATICO DO MODELO]", selected["contexto_modelo"])
-        self.assertIn("idade: 45 dias", selected["contexto_modelo"])
-        self.assertIn("STALE_TECHNICAL_DATA_30D", selected["contexto_modelo"])
+        self.assertIn("Corte real da fonte: 2026-07-05 | idade: 9 dias", selected["contexto_modelo"])
+        self.assertIn("VENUE_SAMPLE_GAP_30D", selected["contexto_modelo"])
+        self.assertNotIn("SOURCE_BASE_STALE_30D", selected["contexto_modelo"])
+
+    def test_source_staleness_requires_explicit_source_cutoff_metadata(self):
+        row = output_row_with_core_debug(data="14/07/2026")
+        row["observacoes"] = str(row["observacoes"]).replace(
+            "source_data_cutoff=2026-07-05; source_data_age_days=9",
+            "source_data_cutoff=2026-05-30; source_data_age_days=45",
+        )
+
+        selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
+
+        self.assertIsNone(discarded)
+        self.assertIn("SOURCE_BASE_STALE_30D", selected["contexto_modelo"])
 
     def test_total_uses_exact_line_pair_without_market_blending(self):
         row = output_row(
@@ -542,7 +559,7 @@ Data/Horario: 14/07/2026
         selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
 
         self.assertIsNone(discarded)
-        self.assertIn("warnings=LOW_SAMPLE", selected["observacoes"])
+        self.assertIn("LOW_SAMPLE", selected["observacoes"])
 
     def test_poisson_overdispersion_requires_higher_edge(self):
         row = output_row_with_core_debug(

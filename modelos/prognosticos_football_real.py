@@ -108,6 +108,12 @@ MAX_HISTORY_WEIGHT_HANDICAP = float(_WEIGHT_CONFIG.get("asian_handicap", 0.20))
 HISTORY_RELIABILITY_K = float(_MODEL_CONFIG.get("history_reliability_k", 20.0))
 LAMBDA_PRIOR_STRENGTH = float(_MODEL_CONFIG.get("lambda_prior_strength", 10.0))
 FORM_HALF_LIFE_DAYS = float(_MODEL_CONFIG.get("form_half_life_days", 180.0))
+OVERALL_RECENT_GOALS_WEIGHT = float(
+    os.environ.get("FOOTBALL_OVERALL_RECENT_GOALS_WEIGHT", "0.25")
+)
+OVERALL_RECENT_HALF_LIFE_DAYS = float(
+    os.environ.get("FOOTBALL_OVERALL_RECENT_HALF_LIFE_DAYS", "45")
+)
 GOAL_DISTRIBUTION_METHOD = os.environ.get("FOOTBALL_GOAL_DISTRIBUTION", "poisson").strip().lower()
 if GOAL_DISTRIBUTION_METHOD not in {"poisson", "auto", "nbinom"}:
     GOAL_DISTRIBUTION_METHOD = "poisson"
@@ -956,6 +962,61 @@ def get_last_games_football(base: pd.DataFrame, team: str, venue: str, n: int = 
     df_loc = df_loc.sort_values(by="Date", ascending=True, kind="mergesort")
     return df_loc.tail(n)
 
+
+def get_last_games_overall(base: pd.DataFrame, team: str, n: int = 5) -> pd.DataFrame:
+    df = base.copy()
+    if "Date" not in df.columns:
+        raise KeyError("Coluna de data nao encontrada: precisa ter 'Date'.")
+    mask = (df["HomeTeam"] == team) | (df["AwayTeam"] == team)
+    return df.loc[mask].sort_values("Date", kind="mergesort").tail(n)
+
+
+def summarize_recent_team_goals(
+    matches: pd.DataFrame,
+    team: str,
+    reference_date,
+) -> dict[str, float | int | None]:
+    if matches.empty:
+        return {"gf": None, "ga": None, "sample": 0}
+
+    frame = matches.copy()
+    is_home = frame["HomeTeam"] == team
+    frame["GF"] = np.where(is_home, frame["FTHG"], frame["FTAG"])
+    frame["GA"] = np.where(is_home, frame["FTAG"], frame["FTHG"])
+    dates = pd.to_datetime(frame["Date"], errors="coerce")
+    reference = pd.to_datetime(reference_date, errors="coerce")
+    if pd.notna(reference) and dates.notna().any():
+        age_days = (reference.normalize() - dates.dt.normalize()).dt.days.clip(lower=0)
+        weights = np.exp(
+            -np.log(2.0)
+            * age_days.fillna(OVERALL_RECENT_HALF_LIFE_DAYS)
+            / max(OVERALL_RECENT_HALF_LIFE_DAYS, 1.0)
+        )
+    else:
+        weights = pd.Series(np.ones(len(frame)), index=frame.index)
+
+    valid = frame[["GF", "GA"]].notna().all(axis=1) & weights.notna()
+    if not valid.any():
+        return {"gf": None, "ga": None, "sample": 0}
+    return {
+        "gf": float(np.average(frame.loc[valid, "GF"], weights=weights.loc[valid])),
+        "ga": float(np.average(frame.loc[valid, "GA"], weights=weights.loc[valid])),
+        "sample": int(valid.sum()),
+    }
+
+
+def blend_venue_with_recent(
+    venue_value: float,
+    recent_value: float | None,
+    recent_sample: int,
+    max_recent_weight: float = OVERALL_RECENT_GOALS_WEIGHT,
+) -> tuple[float, float]:
+    if recent_value is None or not np.isfinite(recent_value) or recent_sample <= 0:
+        return float(venue_value), 0.0
+    weight = float(np.clip(max_recent_weight, 0.0, 0.40)) * min(recent_sample / 5.0, 1.0)
+    blended = (1.0 - weight) * float(venue_value) + weight * float(recent_value)
+    return float(blended), weight
+
 # -------------------------------------------------------
 # Estatísticas, RPI e Poisson/NdB (auto por superdispersão)
 # -------------------------------------------------------
@@ -1636,6 +1697,26 @@ def analyze_match(
 
     last5_home = get_last_games_football(base_liga, home_team, "home", n=5)
     last5_away = get_last_games_football(base_liga, away_team, "away", n=5)
+    last5_home_overall = get_last_games_overall(base_liga, home_team, n=5)
+    last5_away_overall = get_last_games_overall(base_liga, away_team, n=5)
+
+    def _latest_date(frame: pd.DataFrame):
+        if frame.empty or "Date" not in frame.columns:
+            return pd.NaT
+        return pd.to_datetime(frame["Date"], errors="coerce").max()
+
+    def _age_days(value) -> int | None:
+        parsed = pd.to_datetime(value, errors="coerce")
+        if pd.isna(parsed):
+            return None
+        return max(0, int((dt_kick.normalize() - parsed.normalize()).days))
+
+    source_data_cutoff = _latest_date(base_liga)
+    home_venue_last_date = _latest_date(last5_home)
+    away_venue_last_date = _latest_date(last5_away)
+    source_data_age_days = _age_days(source_data_cutoff)
+    home_venue_gap_days = _age_days(home_venue_last_date)
+    away_venue_gap_days = _age_days(away_venue_last_date)
 
     df_h2h, h2h_stats = gerar_h2h_football(base_liga, home_team, away_team)
 
@@ -1718,8 +1799,25 @@ def analyze_match(
         logging.warning(msg)
         raise ValueError(msg)
 
-    gf1, ga1 = s1["Gols Marcados (média) (Final)"], s1["Gols Sofridos (média) (Final)"]
-    gf2, ga2 = s2["Gols Marcados (média) (Final)"], s2["Gols Sofridos (média) (Final)"]
+    gf1_venue = s1["Gols Marcados (média) (Final)"]
+    ga1_venue = s1["Gols Sofridos (média) (Final)"]
+    gf2_venue = s2["Gols Marcados (média) (Final)"]
+    ga2_venue = s2["Gols Sofridos (média) (Final)"]
+
+    recent_home = summarize_recent_team_goals(last5_home_overall, home_team, dt_kick)
+    recent_away = summarize_recent_team_goals(last5_away_overall, away_team, dt_kick)
+    gf1, recent_weight_home = blend_venue_with_recent(
+        gf1_venue, recent_home["gf"], int(recent_home["sample"])
+    )
+    ga1, _ = blend_venue_with_recent(
+        ga1_venue, recent_home["ga"], int(recent_home["sample"])
+    )
+    gf2, recent_weight_away = blend_venue_with_recent(
+        gf2_venue, recent_away["gf"], int(recent_away["sample"])
+    )
+    ga2, _ = blend_venue_with_recent(
+        ga2_venue, recent_away["ga"], int(recent_away["sample"])
+    )
 
     base_liga_prior = base_liga.copy()
     if "Date" in base_liga_prior.columns:
@@ -1942,6 +2040,16 @@ def analyze_match(
         "Diff_Gols_Home": round(gf1-ga1, 2), "Diff_Gols_Away": round(gf2-ga2, 2), "Delta_Diff_Gols": delta_diff_gols,
         "Media_GF_Home": gf1, "Media_GA_Home": ga1,
         "Media_GF_Away": gf2, "Media_GA_Away": ga2,
+        "Venue_GF_Home": gf1_venue, "Venue_GA_Home": ga1_venue,
+        "Venue_GF_Away": gf2_venue, "Venue_GA_Away": ga2_venue,
+        "Recent_Overall_GF_Home": recent_home["gf"],
+        "Recent_Overall_GA_Home": recent_home["ga"],
+        "Recent_Overall_GF_Away": recent_away["gf"],
+        "Recent_Overall_GA_Away": recent_away["ga"],
+        "Recent_Overall_Sample_Home": recent_home["sample"],
+        "Recent_Overall_Sample_Away": recent_away["sample"],
+        "Recent_Overall_Weight_Home": recent_weight_home,
+        "Recent_Overall_Weight_Away": recent_weight_away,
         "Media_Total_Gols": round(m_c+m_f, 2),
         "Lambda_Home_Raw": round(m_c_raw, 4),
         "Lambda_Away_Raw": round(m_f_raw, 4),
@@ -1952,6 +2060,12 @@ def analyze_match(
         "Sample_Home": sample_home,
         "Sample_Away": sample_away,
         "Sample_League": sample_league,
+        "Source_Data_Cutoff": source_data_cutoff,
+        "Source_Data_Age_Days": source_data_age_days,
+        "Home_Venue_Last_Date": home_venue_last_date,
+        "Home_Venue_Gap_Days": home_venue_gap_days,
+        "Away_Venue_Last_Date": away_venue_last_date,
+        "Away_Venue_Gap_Days": away_venue_gap_days,
         "Shrinkage_Applied": True,
         "Shrinkage_K": LAMBDA_PRIOR_STRENGTH,
         "Prior_Home": round(prior_home, 4),
@@ -1993,6 +2107,8 @@ def analyze_match(
         "Top5_Placares": tp,
         "Warnings": warnings_list,
         "last5_home": last5_home, "last5_away": last5_away,
+        "last5_home_overall": last5_home_overall,
+        "last5_away_overall": last5_away_overall,
         "H2H_df": df_h2h, "H2H_stats": h2h_stats,
         "TotalGoals_PMF": total_goals_pmf,
         "Range_Gols_Usado": range_used,
@@ -2066,6 +2182,11 @@ def safe_float(value, default=np.nan) -> float:
         return float(value)
     except Exception:
         return default
+
+
+def audit_date(value) -> str:
+    parsed = pd.to_datetime(value, errors="coerce")
+    return "" if pd.isna(parsed) else parsed.strftime("%Y-%m-%d")
 
 
 def _split_date_time_values(date_value, time_value='') -> tuple[str, str]:
@@ -2167,6 +2288,22 @@ def montar_observacoes_lovable(res: dict) -> str:
         f"sample_home={int(safe_float(res.get('Sample_Home'), 0))}",
         f"sample_away={int(safe_float(res.get('Sample_Away'), 0))}",
         f"sample_league={int(safe_float(res.get('Sample_League'), 0))}",
+        f"source_data_cutoff={audit_date(res.get('Source_Data_Cutoff'))}",
+        f"source_data_age_days={res.get('Source_Data_Age_Days', '')}",
+        f"home_venue_last_date={audit_date(res.get('Home_Venue_Last_Date'))}",
+        f"home_venue_gap_days={res.get('Home_Venue_Gap_Days', '')}",
+        f"away_venue_last_date={audit_date(res.get('Away_Venue_Last_Date'))}",
+        f"away_venue_gap_days={res.get('Away_Venue_Gap_Days', '')}",
+        f"venue_gf_home={safe_float(res.get('Venue_GF_Home'), 0):.4f}",
+        f"venue_ga_home={safe_float(res.get('Venue_GA_Home'), 0):.4f}",
+        f"venue_gf_away={safe_float(res.get('Venue_GF_Away'), 0):.4f}",
+        f"venue_ga_away={safe_float(res.get('Venue_GA_Away'), 0):.4f}",
+        f"recent_overall_gf_home={safe_float(res.get('Recent_Overall_GF_Home'), 0):.4f}",
+        f"recent_overall_ga_home={safe_float(res.get('Recent_Overall_GA_Home'), 0):.4f}",
+        f"recent_overall_gf_away={safe_float(res.get('Recent_Overall_GF_Away'), 0):.4f}",
+        f"recent_overall_ga_away={safe_float(res.get('Recent_Overall_GA_Away'), 0):.4f}",
+        f"recent_overall_weight_home={safe_float(res.get('Recent_Overall_Weight_Home'), 0):.4f}",
+        f"recent_overall_weight_away={safe_float(res.get('Recent_Overall_Weight_Away'), 0):.4f}",
         f"shrinkage_k={res.get('Shrinkage_K', 'N/D')}",
         f"score_matrix_max_goals={res.get('Score_Matrix_Max_Goals', 'N/D')}",
         f"score_matrix_tail_mass={safe_float(res.get('Score_Matrix_Tail_Mass'), 0):.8f}",
@@ -2387,6 +2524,28 @@ def print_analysis(res: dict, standings: pd.DataFrame):
     print(f"Data/Horário: {date_fmt} / {res.get('Kickoff','')}")
     print(f"Rodada Atual: {res.get('Rodada_Atual', 'N/D')}\n")
 
+    print("--- ATUALIZACAO E COBERTURA DOS DADOS ---")
+    print(
+        "Fonte da liga: "
+        f"ultimo jogo concluido {audit_date(res.get('Source_Data_Cutoff')) or 'N/D'} | "
+        f"idade {res.get('Source_Data_Age_Days', 'N/D')} dias"
+    )
+    print(
+        f"Recorte {res['Home']} em casa: "
+        f"ultimo jogo {audit_date(res.get('Home_Venue_Last_Date')) or 'N/D'} | "
+        f"lacuna {res.get('Home_Venue_Gap_Days', 'N/D')} dias"
+    )
+    print(
+        f"Recorte {res['Away']} fora: "
+        f"ultimo jogo {audit_date(res.get('Away_Venue_Last_Date')) or 'N/D'} | "
+        f"lacuna {res.get('Away_Venue_Gap_Days', 'N/D')} dias"
+    )
+    print(
+        "Peso da forma geral recente nas medias de gols: "
+        f"{res.get('Recent_Overall_Weight_Home', 0) * 100:.0f}% casa | "
+        f"{res.get('Recent_Overall_Weight_Away', 0) * 100:.0f}% visitante\n"
+    )
+
     print("--- H2H (temporada atual + passada) ---")
     df_h2h = res.get("H2H_df", pd.DataFrame())
     stats  = res.get("H2H_stats", {})
@@ -2430,6 +2589,25 @@ def print_analysis(res: dict, standings: pd.DataFrame):
                     f"Médias H2H (geral): {res['Home']}= {stats['avg_goals_home']:.2f} | "
                     f"{res['Away']}= {stats['avg_goals_away']:.2f} | Total= {stats['avg_total']:.2f}\n"
                 )
+
+    print("--- ULTIMOS 5 JOGOS GERAIS ---")
+    for team_key, frame_key in (
+        ("Home", "last5_home_overall"),
+        ("Away", "last5_away_overall"),
+    ):
+        team = res[team_key]
+        print(f"{team}: (casa e fora)")
+        for _, r in res.get(frame_key, pd.DataFrame()).iterrows():
+            date_obj = r["Date"]
+            date_str = date_obj.strftime("%d/%m/%Y") if pd.notna(date_obj) else ""
+            is_home = r["HomeTeam"] == team
+            opp = r["AwayTeam"] if is_home else r["HomeTeam"]
+            gf = r["FTHG"] if is_home else r["FTAG"]
+            ga = r["FTAG"] if is_home else r["FTHG"]
+            wl = "W" if gf > ga else ("D" if gf == ga else "L")
+            local = "casa" if is_home else "fora"
+            print(f"  {date_str} ({local}) vs {opp} - {wl} ({gf}-{ga}) | Total Gols = {gf + ga}")
+        print("")
 
     print("--- ÚLTIMOS 5 JOGOS NO LOCAL ---")
     print(f"{res['Home']}: (últimos 5 em casa)")
@@ -2478,6 +2656,14 @@ def print_analysis(res: dict, standings: pd.DataFrame):
 
     print(f"   {res['Home']} – Marcados: {res['Media_GF_Home']:.2f} | Sofridos: {res['Media_GA_Home']:.2f}")
     print(f"   {res['Away']} – Marcados: {res['Media_GF_Away']:.2f} | Sofridos: {res['Media_GA_Away']:.2f}")
+    print(
+        f"   Componentes {res['Home']}: local {res['Venue_GF_Home']:.2f}/{res['Venue_GA_Home']:.2f} | "
+        f"geral recente {res['Recent_Overall_GF_Home']:.2f}/{res['Recent_Overall_GA_Home']:.2f}"
+    )
+    print(
+        f"   Componentes {res['Away']}: local {res['Venue_GF_Away']:.2f}/{res['Venue_GA_Away']:.2f} | "
+        f"geral recente {res['Recent_Overall_GF_Away']:.2f}/{res['Recent_Overall_GA_Away']:.2f}"
+    )
     print(f"   Expectativas de Gols: {lambda_total:.2f} | Min: {lower} | Máx: {upper}\n")
 
     print("Diferencial de Gols:")

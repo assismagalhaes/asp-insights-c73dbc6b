@@ -30,8 +30,8 @@ MODELOS_DIR = BASE_DIR / "modelos"
 REAL_MODEL_PATH = MODELOS_DIR / "prognosticos_football_real.py"
 
 MODEL_NAME = "ASP MatchMatrix"
-MODEL_VERSION = "FOOTBALL_V1_3"
-FOOTBALL_STAT_AUDIT_VERSION = "FOOTBALL_V1_3_A"
+MODEL_VERSION = "FOOTBALL_V1_4"
+FOOTBALL_STAT_AUDIT_VERSION = "FOOTBALL_V1_4_A"
 HANDICAP_ENABLED_FOOTBALL_V1_1 = True
 HANDICAP_ASIAN_ENABLED_FOOTBALL_V1_1 = True
 HANDICAP_EUROPEAN_ENABLED_FOOTBALL_V1_1 = False
@@ -51,7 +51,8 @@ MARKET_DIVERGENCE_HAIRCUT_THRESHOLD = 0.12
 MARKET_DIVERGENCE_REVIEW_THRESHOLD = 0.15
 MARKET_DIVERGENCE_STRONG_THRESHOLD = 0.20
 MARKET_DIVERGENCE_HAIRCUT_SHARE = 0.25
-STALE_TECHNICAL_DATA_DAYS = 30
+SOURCE_BASE_STALE_DAYS = 30
+VENUE_SAMPLE_GAP_DAYS = 30
 PRIOR_PROBABILITY = 0.50
 PRIOR_STRENGTH = 10.0
 SHRINKAGE_K_FOOTBALL_V1_1 = 10.0
@@ -505,6 +506,22 @@ def _extract_core_stat_debug(row: pd.Series) -> dict:
         "sample_home": _extract_note_value(observacoes, "sample_home"),
         "sample_away": _extract_note_value(observacoes, "sample_away"),
         "sample_league": _extract_note_value(observacoes, "sample_league"),
+        "source_data_cutoff": _extract_note_value(observacoes, "source_data_cutoff"),
+        "source_data_age_days": _extract_note_value(observacoes, "source_data_age_days"),
+        "home_venue_last_date": _extract_note_value(observacoes, "home_venue_last_date"),
+        "home_venue_gap_days": _extract_note_value(observacoes, "home_venue_gap_days"),
+        "away_venue_last_date": _extract_note_value(observacoes, "away_venue_last_date"),
+        "away_venue_gap_days": _extract_note_value(observacoes, "away_venue_gap_days"),
+        "venue_gf_home": _extract_note_value(observacoes, "venue_gf_home"),
+        "venue_ga_home": _extract_note_value(observacoes, "venue_ga_home"),
+        "venue_gf_away": _extract_note_value(observacoes, "venue_gf_away"),
+        "venue_ga_away": _extract_note_value(observacoes, "venue_ga_away"),
+        "recent_overall_gf_home": _extract_note_value(observacoes, "recent_overall_gf_home"),
+        "recent_overall_ga_home": _extract_note_value(observacoes, "recent_overall_ga_home"),
+        "recent_overall_gf_away": _extract_note_value(observacoes, "recent_overall_gf_away"),
+        "recent_overall_ga_away": _extract_note_value(observacoes, "recent_overall_ga_away"),
+        "recent_overall_weight_home": _extract_note_value(observacoes, "recent_overall_weight_home"),
+        "recent_overall_weight_away": _extract_note_value(observacoes, "recent_overall_weight_away"),
         "shrinkage_k": _extract_note_value(observacoes, "shrinkage_k"),
         "score_matrix_max_goals": _extract_note_value(observacoes, "score_matrix_max_goals"),
         "score_matrix_tail_mass": _extract_note_value(observacoes, "score_matrix_tail_mass"),
@@ -528,6 +545,22 @@ def _build_v1_1_note(debug: dict) -> str:
         "sample_home",
         "sample_away",
         "sample_league",
+        "source_data_cutoff",
+        "source_data_age_days",
+        "home_venue_last_date",
+        "home_venue_gap_days",
+        "away_venue_last_date",
+        "away_venue_gap_days",
+        "venue_gf_home",
+        "venue_ga_home",
+        "venue_gf_away",
+        "venue_ga_away",
+        "recent_overall_gf_home",
+        "recent_overall_ga_home",
+        "recent_overall_gf_away",
+        "recent_overall_ga_away",
+        "recent_overall_weight_home",
+        "recent_overall_weight_away",
         "poisson_enabled",
         "nbd_evaluated",
         "nbd_enabled",
@@ -554,8 +587,6 @@ def _build_v1_1_note(debug: dict) -> str:
         "edge_formula",
         "min_edge_required",
         "sample_size",
-        "source_data_cutoff",
-        "data_age_days",
         "prior",
         "prior_strength",
         "shrinkage_aplicado",
@@ -612,31 +643,6 @@ def _market_conflict_control(prob_original: float, prob_no_vig: float | None) ->
     }
 
 
-def _parse_event_date(value):
-    parsed = pd.to_datetime(value, errors="coerce", dayfirst=True)
-    return None if pd.isna(parsed) else parsed.normalize()
-
-
-def _technical_data_age(row: pd.Series) -> tuple[str | None, int | None]:
-    event_date = _parse_event_date(row.get("data"))
-    context = str(row.get("dados_tecnicos") or "")
-    if event_date is None or not context:
-        return None, None
-
-    dates = []
-    for line in context.splitlines():
-        if line.strip().lower().startswith("data/hor"):
-            continue
-        for day, month, year in re.findall(r"\b(\d{2})[/-](\d{2})[/-](\d{4})\b", line):
-            parsed = _parse_event_date(f"{day}/{month}/{year}")
-            if parsed is not None and parsed <= event_date:
-                dates.append(parsed)
-    if not dates:
-        return None, None
-    cutoff = max(dates)
-    return cutoff.strftime("%Y-%m-%d"), int((event_date - cutoff).days)
-
-
 def _build_readable_model_context(debug: dict) -> str:
     def fmt_probability(value):
         number = _to_float(value)
@@ -675,7 +681,22 @@ def _build_readable_model_context(debug: dict) -> str:
     ]
     if debug.get("source_data_cutoff"):
         lines.append(
-            f"Corte dos dados tecnicos: {debug['source_data_cutoff']} | idade: {debug.get('data_age_days')} dias"
+            f"Corte real da fonte: {debug['source_data_cutoff']} | "
+            f"idade: {debug.get('source_data_age_days')} dias"
+        )
+    if debug.get("home_venue_last_date") or debug.get("away_venue_last_date"):
+        lines.append(
+            "Recortes por mando: "
+            f"casa ate {debug.get('home_venue_last_date', '-')} "
+            f"({debug.get('home_venue_gap_days', '-')} dias) | "
+            f"fora ate {debug.get('away_venue_last_date', '-')} "
+            f"({debug.get('away_venue_gap_days', '-')} dias)"
+        )
+    if debug.get("recent_overall_weight_home") or debug.get("recent_overall_weight_away"):
+        lines.append(
+            "Forma geral recente incorporada: "
+            f"casa {fmt_probability(debug.get('recent_overall_weight_home'))} | "
+            f"visitante {fmt_probability(debug.get('recent_overall_weight_away'))}"
         )
     if debug.get("warnings"):
         lines.append(f"Alertas: {debug['warnings']}")
@@ -760,11 +781,17 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
     }
     core_debug = {k: v for k, v in _extract_core_stat_debug(row).items() if v not in (None, "")}
     debug.update(core_debug)
-    source_data_cutoff, data_age_days = _technical_data_age(row)
-    debug["source_data_cutoff"] = source_data_cutoff
-    debug["data_age_days"] = data_age_days
-    if data_age_days is not None and data_age_days > STALE_TECHNICAL_DATA_DAYS:
-        warnings.append("STALE_TECHNICAL_DATA_30D")
+    source_age_days = _to_float(core_debug.get("source_data_age_days"))
+    home_venue_gap_days = _to_float(core_debug.get("home_venue_gap_days"))
+    away_venue_gap_days = _to_float(core_debug.get("away_venue_gap_days"))
+    if source_age_days is not None and source_age_days > SOURCE_BASE_STALE_DAYS:
+        warnings.append("SOURCE_BASE_STALE_30D")
+    venue_gaps = [
+        value for value in (home_venue_gap_days, away_venue_gap_days)
+        if value is not None
+    ]
+    if venue_gaps and max(venue_gaps) > VENUE_SAMPLE_GAP_DAYS:
+        warnings.append("VENUE_SAMPLE_GAP_30D")
     core_samples = [
         _to_float(core_debug.get("sample_home")),
         _to_float(core_debug.get("sample_away")),

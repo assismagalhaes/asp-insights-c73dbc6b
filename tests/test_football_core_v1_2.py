@@ -74,6 +74,35 @@ class FootballCoreV12Test(unittest.TestCase):
         self.assertLess(result["lambda_home"], result["raw_home"])
         self.assertGreater(result["lambda_home"], 0)
 
+    def test_recent_overall_form_normalizes_home_and_away_games(self):
+        matches = pd.DataFrame([
+            {"Date": "2026-07-01", "HomeTeam": "A", "AwayTeam": "B", "FTHG": 3, "FTAG": 1},
+            {"Date": "2026-07-08", "HomeTeam": "C", "AwayTeam": "A", "FTHG": 2, "FTAG": 2},
+        ])
+        matches["Date"] = pd.to_datetime(matches["Date"])
+
+        summary = core.summarize_recent_team_goals(matches, "A", "2026-07-14")
+
+        self.assertEqual(summary["sample"], 2)
+        self.assertGreater(summary["gf"], summary["ga"])
+
+    def test_recent_overall_form_has_conservative_capped_weight(self):
+        blended, weight = core.blend_venue_with_recent(
+            venue_value=1.0,
+            recent_value=3.0,
+            recent_sample=5,
+        )
+        self.assertAlmostEqual(weight, 0.25)
+        self.assertAlmostEqual(blended, 1.5)
+
+        partial, partial_weight = core.blend_venue_with_recent(
+            venue_value=1.0,
+            recent_value=3.0,
+            recent_sample=2,
+        )
+        self.assertAlmostEqual(partial_weight, 0.10)
+        self.assertAlmostEqual(partial, 1.2)
+
     def test_team_metrics_apply_exponential_time_decay(self):
         current = pd.DataFrame([
             {"Date": pd.Timestamp("2025-01-01"), "HomeTeam": "A", "AwayTeam": "B", "FTHG": 0, "FTAG": 1, "FTR": "A"},
