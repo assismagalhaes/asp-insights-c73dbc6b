@@ -31,13 +31,13 @@ def wide_row(**overrides):
         "odds_OverUnder_Full_Time_2_5_Over": 1.95,
         "odds_OverUnder_Full_Time_2_5_Under": 1.95,
         "odds_Asian_handicap_Full_Time_Linha1_HANDICAP": 0.5,
-        "odds_Asian_handicap_Full_Time_Linha1_1": 1.95,
+        "odds_Asian_handicap_Full_Time_Linha1_1": 1.45,
         "odds_Asian_handicap_Full_Time_Linha1_Opp_HANDICAP": -0.5,
-        "odds_Asian_handicap_Full_Time_Linha1_Opp_Odd": 1.95,
+        "odds_Asian_handicap_Full_Time_Linha1_Opp_Odd": 2.65,
         "odds_Asian_handicap_Full_Time_Linha2_HANDICAP": -0.5,
-        "odds_Asian_handicap_Full_Time_Linha2_1": 1.95,
+        "odds_Asian_handicap_Full_Time_Linha2_1": 1.45,
         "odds_Asian_handicap_Full_Time_Linha2_Opp_HANDICAP": 0.5,
-        "odds_Asian_handicap_Full_Time_Linha2_Opp_Odd": 1.95,
+        "odds_Asian_handicap_Full_Time_Linha2_Opp_Odd": 2.65,
         "odds_Asian_handicap_Full_Time_Linha3_HANDICAP": 0.0,
         "odds_Asian_handicap_Full_Time_Linha3_1": 2.05,
         "odds_Asian_handicap_Full_Time_Linha3_Opp_HANDICAP": 0.0,
@@ -68,9 +68,9 @@ def output_row(**overrides):
         "pick": "Home FC para vencer",
         "linha": "",
         "odd_ofertada": 2.00,
-        "odd_valor": 1.47,
-        "probabilidade_final": 68.0,
-        "edge": 36.0,
+        "odd_valor": 1.82,
+        "probabilidade_final": 55.0,
+        "edge": 10.0,
         "observacoes": "base",
         "dados_tecnicos": "tecnico",
         "contexto_modelo": "contexto",
@@ -196,19 +196,43 @@ RPI Other FC
 
         self.assertEqual(selected, "")
 
+    def test_readable_context_reports_stale_source_data_without_raw_log(self):
+        technical = """Confronto:
+Home FC vs Away FC
+Data/Horario: 14/07/2026
+--- ULTIMOS 5 JOGOS NO LOCAL ---
+30/05/2026 vs Rival FC - W (2-0)
+"""
+        row = output_row_with_core_debug(
+            data="14/07/2026",
+            odd_ofertada=1.95,
+            probabilidade_final=55.0,
+            dados_tecnicos=technical,
+            contexto_modelo=technical,
+        )
+
+        selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
+
+        self.assertIsNone(discarded)
+        self.assertEqual(selected["dados_tecnicos"], technical.strip())
+        self.assertNotIn("modelo_versao=", selected["dados_tecnicos"])
+        self.assertIn("[RESUMO MATEMATICO DO MODELO]", selected["contexto_modelo"])
+        self.assertIn("idade: 45 dias", selected["contexto_modelo"])
+        self.assertIn("STALE_TECHNICAL_DATA_30D", selected["contexto_modelo"])
+
     def test_total_uses_exact_line_pair_without_market_blending(self):
         row = output_row(
             mercado="Total de Gols",
             pick="Over 2.5 gols",
             linha=2.5,
             odd_ofertada=1.95,
-            probabilidade_final=70.0,
+            probabilidade_final=60.0,
         )
         selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
         self.assertIsNone(discarded)
         self.assertIsNotNone(selected)
         self.assertNotIn("NEUTRAL_FALLBACK_NO_HISTORY", selected["observacoes"])
-        self.assertEqual(float(selected["probabilidade_final"]), 70.0)
+        self.assertEqual(float(selected["probabilidade_final"]), 60.0)
 
     def test_total_uses_median_odd_for_market_probability_and_best_odd_for_ev(self):
         row = output_row(
@@ -246,11 +270,17 @@ RPI Other FC
             odd_ofertada=1.95,
             probabilidade_final=65.0,
         )
-        selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
+        selected, discarded = runner._evaluate_row_v1_1(
+            row,
+            wide_row(
+                odds_Both_teams_to_score_Full_Time_YES=1.60,
+                odds_Both_teams_to_score_Full_Time_NO=2.40,
+            ),
+        )
         self.assertIsNone(discarded)
         self.assertIsNotNone(selected)
         self.assertEqual(selected["probabilidade_final"], 65.0)
-        self.assertIn("prob_no_vig=0.5", selected["observacoes"])
+        self.assertIn("prob_no_vig=0.6", selected["observacoes"])
 
     def test_total_quarter_line_is_rejected(self):
         row = output_row(mercado="Total de Gols", pick="Over 2.25 gols", linha=2.25)
@@ -263,7 +293,7 @@ RPI Other FC
             mercado="Dupla Chance",
             pick="1X",
             odd_ofertada=1.90,
-            probabilidade_final=95.0,
+            probabilidade_final=85.0,
         )
         selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
         self.assertIsNone(discarded)
@@ -280,7 +310,13 @@ RPI Other FC
         )
         row["observacoes"] = row["observacoes"].replace("sample_home=24", "sample_home=8")
 
-        selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
+        selected, discarded = runner._evaluate_row_v1_1(
+            row,
+            wide_row(
+                odds_OverUnder_Full_Time_2_5_Over=3.60,
+                odds_OverUnder_Full_Time_2_5_Under=1.40,
+            ),
+        )
 
         self.assertIsNone(selected)
         self.assertEqual(
@@ -384,6 +420,59 @@ RPI Other FC
         self.assertIsNone(selected)
         self.assertEqual(discarded["motivo_descarte_v1_1"], "HANDICAP_NO_PAIRED_ODDS")
 
+    def test_handicap_pair_is_found_beyond_legacy_slot_nineteen(self):
+        row = output_row(
+            mercado="Handicap Asiatico", pick="Away FC +2.5", linha=2.5,
+            odd_ofertada=1.40, probabilidade_final=74.0,
+        )
+        wide = wide_row(
+            odds_Asian_handicap_Full_Time_Linha26_HANDICAP=-2.5,
+            odds_Asian_handicap_Full_Time_Linha26_1=3.50,
+            odds_Asian_handicap_Full_Time_Linha26_1_MEDIANA=3.50,
+            odds_Asian_handicap_Full_Time_Linha26_Opp_HANDICAP=2.5,
+            odds_Asian_handicap_Full_Time_Linha26_Opp_Odd=1.40,
+            odds_Asian_handicap_Full_Time_Linha26_Opp_Odd_MEDIANA=1.40,
+        )
+
+        selected, discarded = runner._evaluate_row_v1_1(row, wide)
+
+        self.assertIsNone(discarded)
+        self.assertIsNotNone(selected)
+        self.assertEqual(selected["odd_mediana"], 1.40)
+
+    def test_market_divergence_between_twelve_and_fifteen_points_gets_haircut(self):
+        row = output_row(
+            mercado="Total de Gols", pick="Over 2.5 gols", linha=2.5,
+            odd_ofertada=1.80, probabilidade_final=63.0,
+        )
+        selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
+
+        self.assertIsNone(discarded)
+        self.assertIsNotNone(selected)
+        self.assertEqual(selected["market_conflict_status"], "DIVERGENTE_COM_HAIRCUT")
+        self.assertAlmostEqual(selected["probabilidade_final"], 59.75, places=2)
+        self.assertIn("haircut_pp=3.25", selected["observacoes"])
+
+    def test_market_divergence_above_fifteen_points_requires_review(self):
+        row = output_row(
+            mercado="Total de Gols", pick="Over 2.5 gols", linha=2.5,
+            odd_ofertada=1.80, probabilidade_final=68.0,
+        )
+        selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
+
+        self.assertIsNone(selected)
+        self.assertEqual(discarded["motivo_descarte_v1_1"], "MARKET_CONFLICT_REVIEW_REQUIRED")
+
+    def test_market_divergence_above_twenty_points_is_strong_conflict(self):
+        row = output_row(
+            mercado="Total de Gols", pick="Over 2.5 gols", linha=2.5,
+            odd_ofertada=1.80, probabilidade_final=71.0,
+        )
+        selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
+
+        self.assertIsNone(selected)
+        self.assertEqual(discarded["motivo_descarte_v1_1"], "CONFLITO_FORTE_COM_MERCADO")
+
     def test_handicap_ev_with_push_uses_net_return_formula(self):
         ev = runner.calculate_handicap_ev(prob_win=0.45, prob_push=0.10, offered_odd=2.10)
         expected = 0.45 * (2.10 - 1.0) - 0.45
@@ -468,7 +557,13 @@ RPI Other FC
             "overdispersion_ratio=1.4700",
         )
 
-        selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
+        selected, discarded = runner._evaluate_row_v1_1(
+            row,
+            wide_row(
+                odds_OverUnder_Full_Time_2_5_Over=1.50,
+                odds_OverUnder_Full_Time_2_5_Under=2.25,
+            ),
+        )
 
         self.assertIsNone(selected)
         self.assertEqual(discarded["motivo_descarte_v1_1"], "OVERDISPERSION_REQUIRES_HIGHER_EDGE")
@@ -529,6 +624,7 @@ RPI Other FC
 
         self.assertEqual(len(selected), 2)
         self.assertEqual(discarded.iloc[0]["motivo_descarte_v1_1"], "MATCH_SELECTION_LIMIT")
+        self.assertEqual(set(selected["selection_role"]), {"PRINCIPAL", "ALTERNATIVA"})
 
     def test_adapter_skips_market_row_marked_inconsistent(self):
         base = {
@@ -652,6 +748,33 @@ RPI Other FC
         self.assertEqual(float(converted["odds_Asian_handicap_Full_Time_Linha1_HANDICAP"]), 1.5)
         self.assertEqual(float(converted["odds_Asian_handicap_Full_Time_Linha1_Opp_HANDICAP"]), -1.5)
         self.assertEqual(float(converted["odds_Asian_handicap_Full_Time_Linha1_Opp_Odd_MEDIANA"]), 2.28)
+
+    def test_adapter_deduplicates_repeated_handicap_lines(self):
+        base = {
+            "data": "14/07/2026", "hora": "08:35", "esporte": "Football",
+            "liga": "China - Super League", "country": "China",
+            "jogo": "Home FC vs Away FC", "mandante": "Home FC", "visitante": "Away FC",
+            "mercado": "Handicap Asiatico", "bookmaker": "book", "fonte": "source",
+        }
+        rows = []
+        for _ in range(6):
+            rows.extend([
+                {**base, "pick": "Home FC -1.5", "linha": -1.5, "odd": 2.13, "odd_mediana": 2.05},
+                {**base, "pick": "Away FC +1.5", "linha": 1.5, "odd": 1.72, "odd_mediana": 1.63},
+            ])
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_path = Path(tmp) / "coleta.csv"
+            wide_path = Path(tmp) / "wide.csv"
+            pd.DataFrame(rows).to_csv(csv_path, index=False)
+            wide = football_adapter.converter_csv_longo_para_wide(csv_path, wide_path)
+
+        pair_columns = [
+            column
+            for column in wide.columns
+            if column.endswith("_HANDICAP") and "_Opp_" not in column
+        ]
+        self.assertEqual(pair_columns, ["odds_Asian_handicap_Full_Time_Linha1_HANDICAP"])
+        self.assertIn("Handicaps duplicados consolidados", wide.iloc[0]["adapter_warnings"])
 
     def test_adapter_preserves_median_and_best_odds_columns(self):
         with tempfile.TemporaryDirectory() as tmp:

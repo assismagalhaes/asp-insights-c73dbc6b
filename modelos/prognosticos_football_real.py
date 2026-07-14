@@ -2229,28 +2229,40 @@ def montar_linhas_lovable(res: dict, ev_only: bool = True) -> list[dict]:
         prob_loss=None,
         opcao_1x2='',
     ):
-        if ev_only:
-            if not _is_ev_plus(odd_ofertada, odd_valor):
+        try:
+            odd_numeric = float(odd_ofertada)
+            fair_numeric = float(odd_valor)
+            probability_numeric = float(probabilidade_final) / 100.0
+            if (
+                not np.isfinite(odd_numeric)
+                or not np.isfinite(fair_numeric)
+                or not np.isfinite(probability_numeric)
+                or odd_numeric <= 1
+                or fair_numeric <= 0
+                or not 0 < probability_numeric < 1
+            ):
                 return
-        else:
-            try:
-                if not np.isfinite(float(odd_ofertada)) or not np.isfinite(float(odd_valor)) or float(odd_ofertada) <= 1 or float(odd_valor) <= 0:
-                    return
-            except (TypeError, ValueError):
-                return
+        except (TypeError, ValueError):
+            return
         if prob_win is not None and prob_loss is not None:
             edge = asian_expected_value(prob_win, prob_loss, odd_ofertada) * 100.0
         else:
-            edge = _edge_percent(odd_ofertada, odd_valor)
+            edge = (odd_numeric * probability_numeric - 1.0) * 100.0
+        if ev_only and (
+            odd_numeric <= MIN_ODD_EXPORT
+            or odd_numeric > MAX_ODD_EXPORT
+            or edge <= 0
+        ):
+            return
         linhas.append({
             **base_common,
             'mercado': mercado,
             'opcao_1x2': opcao_1x2,
             'pick': pick,
             'linha': '' if linha is None or pd.isna(linha) else linha,
-            'odd_ofertada': round(float(odd_ofertada), 2),
-            'odd_valor': round(float(odd_valor), 2),
-            'probabilidade_final': round(float(probabilidade_final), 2),
+            'odd_ofertada': round(odd_numeric, 2),
+            'odd_valor': round(fair_numeric, 2),
+            'probabilidade_final': round(probability_numeric * 100.0, 2),
             'edge': round(edge, 2),
             'prob_win': '' if prob_win is None else round(float(prob_win), 8),
             'prob_push': '' if prob_push is None else round(float(prob_push), 8),
@@ -2360,7 +2372,7 @@ def print_analysis(res: dict, standings: pd.DataFrame):
     print("Confronto:")
     print(f"{' vs '.join(classific)} | ({res['League']})")
 
-    print("--- Probabilidades MOneyline ---")
+    print("--- Probabilidades Moneyline ---")
     print(f"{res['Home']}: {res['Prob_Casa']:.2f}%")
     print(f"Empate: {res['Prob_Empate']:.2f}%")
     print(f"{res['Away']}: {res['Prob_Fora']:.2f}%\n")

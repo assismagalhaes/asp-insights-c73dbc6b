@@ -178,6 +178,30 @@ def set_odd_columns(row, base_col: str, item) -> None:
 
 
 def adicionar_handicaps_asiaticos(row, handicap_items, jogo):
+    deduplicated = {}
+    for item in handicap_items:
+        key = (item["side"], round(float(item["line"]), 4))
+        current = deduplicated.get(key)
+        if current is None:
+            deduplicated[key] = {**item, "_median_values": [item["odd_mediana"]]}
+            continue
+        current["_median_values"].append(item["odd_mediana"])
+        if float(item["odd"]) > float(current["odd"]):
+            median_values = current["_median_values"]
+            deduplicated[key] = {**item, "_median_values": median_values}
+
+    if len(deduplicated) < len(handicap_items):
+        ADAPTER_WARNINGS.append(
+            f"Handicaps duplicados consolidados no adapter: {jogo} | "
+            f"originais={len(handicap_items)} | unicos={len(deduplicated)}"
+        )
+
+    handicap_items = []
+    for item in deduplicated.values():
+        median_values = [float(value) for value in item.pop("_median_values") if value is not None]
+        if median_values:
+            item["odd_mediana"] = float(pd.Series(median_values).median())
+        handicap_items.append(item)
     handicap_index = 1
     used = set()
 

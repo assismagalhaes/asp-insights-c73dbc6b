@@ -47,6 +47,11 @@ OVERDISPERSION_THRESHOLD_FOOTBALL_V1_3 = 1.25
 OVERDISPERSION_MIN_EDGE_FOOTBALL_V1_3 = 0.05
 DOUBLE_CHANCE_COMPLEMENT_MIN_SUM = 0.95
 MAX_SELECTIONS_PER_MATCH_FOOTBALL_V1_3 = 2
+MARKET_DIVERGENCE_HAIRCUT_THRESHOLD = 0.12
+MARKET_DIVERGENCE_REVIEW_THRESHOLD = 0.15
+MARKET_DIVERGENCE_STRONG_THRESHOLD = 0.20
+MARKET_DIVERGENCE_HAIRCUT_SHARE = 0.25
+STALE_TECHNICAL_DATA_DAYS = 30
 PRIOR_PROBABILITY = 0.50
 PRIOR_STRENGTH = 10.0
 SHRINKAGE_K_FOOTBALL_V1_1 = 10.0
@@ -400,8 +405,17 @@ def _pick_side_handicap(row: pd.Series) -> str | None:
     return None
 
 
+def _available_asian_handicap_indices(wide_row) -> list[int]:
+    indices = set()
+    for column in wide_row.index:
+        match = re.match(r"odds_Asian_handicap_Full_Time_Linha(\d+)_HANDICAP$", str(column))
+        if match:
+            indices.add(int(match.group(1)))
+    return sorted(indices)
+
+
 def _find_asian_handicap_pair(wide_row, line: float, side: str):
-    for idx in range(1, 20):
+    for idx in _available_asian_handicap_indices(wide_row):
         home_line_col = f"odds_Asian_handicap_Full_Time_Linha{idx}_HANDICAP"
         home_odd_col = f"odds_Asian_handicap_Full_Time_Linha{idx}_1"
         away_line_col = f"odds_Asian_handicap_Full_Time_Linha{idx}_Opp_HANDICAP"
@@ -442,7 +456,7 @@ def _bookmaker_melhor(wide_row, base_col: str) -> str:
 
 
 def _find_asian_handicap_market_pair(wide_row, line: float, side: str):
-    for idx in range(1, 20):
+    for idx in _available_asian_handicap_indices(wide_row):
         home_line_col = f"odds_Asian_handicap_Full_Time_Linha{idx}_HANDICAP"
         home_odd_col = f"odds_Asian_handicap_Full_Time_Linha{idx}_1"
         away_line_col = f"odds_Asian_handicap_Full_Time_Linha{idx}_Opp_HANDICAP"
@@ -526,6 +540,9 @@ def _build_v1_1_note(debug: dict) -> str:
         "prob_original",
         "prob_hist",
         "prob_no_vig",
+        "market_divergence_pp",
+        "market_conflict_status",
+        "haircut_pp",
         "prob_final",
         "odd_justa",
         "odd_ofertada",
@@ -537,6 +554,8 @@ def _build_v1_1_note(debug: dict) -> str:
         "edge_formula",
         "min_edge_required",
         "sample_size",
+        "source_data_cutoff",
+        "data_age_days",
         "prior",
         "prior_strength",
         "shrinkage_aplicado",
@@ -546,6 +565,121 @@ def _build_v1_1_note(debug: dict) -> str:
     ):
         _append_reason(parts, key, debug.get(key))
     return " | ".join(parts)
+
+
+def _market_conflict_control(prob_original: float, prob_no_vig: float | None) -> dict:
+    if prob_no_vig is None:
+        return {
+            "probability": prob_original,
+            "divergence": None,
+            "haircut": 0.0,
+            "status": "SEM_ODDS_PAREADAS",
+            "discard_reason": None,
+        }
+
+    divergence = abs(prob_original - prob_no_vig)
+    if divergence > MARKET_DIVERGENCE_STRONG_THRESHOLD:
+        return {
+            "probability": prob_original,
+            "divergence": divergence,
+            "haircut": 0.0,
+            "status": "CONFLITO_FORTE_COM_MERCADO",
+            "discard_reason": "CONFLITO_FORTE_COM_MERCADO",
+        }
+    if divergence > MARKET_DIVERGENCE_REVIEW_THRESHOLD:
+        return {
+            "probability": prob_original,
+            "divergence": divergence,
+            "haircut": 0.0,
+            "status": "REVISAO_OBRIGATORIA_MERCADO",
+            "discard_reason": "MARKET_CONFLICT_REVIEW_REQUIRED",
+        }
+    if divergence >= MARKET_DIVERGENCE_HAIRCUT_THRESHOLD:
+        adjusted = prob_no_vig + (prob_original - prob_no_vig) * (1.0 - MARKET_DIVERGENCE_HAIRCUT_SHARE)
+        return {
+            "probability": adjusted,
+            "divergence": divergence,
+            "haircut": abs(prob_original - adjusted),
+            "status": "DIVERGENTE_COM_HAIRCUT",
+            "discard_reason": None,
+        }
+    return {
+        "probability": prob_original,
+        "divergence": divergence,
+        "haircut": 0.0,
+        "status": "ALINHADO",
+        "discard_reason": None,
+    }
+
+
+def _parse_event_date(value):
+    parsed = pd.to_datetime(value, errors="coerce", dayfirst=True)
+    return None if pd.isna(parsed) else parsed.normalize()
+
+
+def _technical_data_age(row: pd.Series) -> tuple[str | None, int | None]:
+    event_date = _parse_event_date(row.get("data"))
+    context = str(row.get("dados_tecnicos") or "")
+    if event_date is None or not context:
+        return None, None
+
+    dates = []
+    for line in context.splitlines():
+        if line.strip().lower().startswith("data/hor"):
+            continue
+        for day, month, year in re.findall(r"\b(\d{2})[/-](\d{2})[/-](\d{4})\b", line):
+            parsed = _parse_event_date(f"{day}/{month}/{year}")
+            if parsed is not None and parsed <= event_date:
+                dates.append(parsed)
+    if not dates:
+        return None, None
+    cutoff = max(dates)
+    return cutoff.strftime("%Y-%m-%d"), int((event_date - cutoff).days)
+
+
+def _build_readable_model_context(debug: dict) -> str:
+    def fmt_probability(value):
+        number = _to_float(value)
+        return "-" if number is None else f"{number * 100.0:.2f}%"
+
+    def fmt_number(value, digits=2):
+        number = _to_float(value)
+        return "-" if number is None else f"{number:.{digits}f}"
+
+    lines = [
+        "[RESUMO MATEMATICO DO MODELO]",
+        f"Versao: {MODEL_VERSION}",
+        (
+            "Lambdas finais: "
+            f"casa {fmt_number(debug.get('lambda_home_final'), 3)} | "
+            f"visitante {fmt_number(debug.get('lambda_away_final'), 3)}"
+        ),
+        (
+            "Amostra: "
+            f"casa {debug.get('sample_home', '-')} | visitante {debug.get('sample_away', '-')} | "
+            f"liga {debug.get('sample_league', '-')}"
+        ),
+        (
+            f"Probabilidade do modelo: {fmt_probability(debug.get('prob_original'))} | "
+            f"no-vig: {fmt_probability(debug.get('prob_no_vig'))} | "
+            f"final: {fmt_probability(debug.get('prob_final'))}"
+        ),
+        (
+            f"Divergencia com mercado: {fmt_number(debug.get('market_divergence_pp'))} p.p. | "
+            f"status: {debug.get('market_conflict_status', '-')}"
+        ),
+        (
+            f"Odd justa: {fmt_number(debug.get('odd_justa'))} | ofertada: {fmt_number(debug.get('odd_ofertada'))} | "
+            f"mediana: {fmt_number(debug.get('odd_mediana'))} | edge: {fmt_probability(debug.get('edge'))}"
+        ),
+    ]
+    if debug.get("source_data_cutoff"):
+        lines.append(
+            f"Corte dos dados tecnicos: {debug['source_data_cutoff']} | idade: {debug.get('data_age_days')} dias"
+        )
+    if debug.get("warnings"):
+        lines.append(f"Alertas: {debug['warnings']}")
+    return "\n".join(lines)
 
 
 def _blend_conservative(prob_original: float, prob_no_vig: float, prob_hist: float = PRIOR_PROBABILITY) -> float:
@@ -626,6 +760,11 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
     }
     core_debug = {k: v for k, v in _extract_core_stat_debug(row).items() if v not in (None, "")}
     debug.update(core_debug)
+    source_data_cutoff, data_age_days = _technical_data_age(row)
+    debug["source_data_cutoff"] = source_data_cutoff
+    debug["data_age_days"] = data_age_days
+    if data_age_days is not None and data_age_days > STALE_TECHNICAL_DATA_DAYS:
+        warnings.append("STALE_TECHNICAL_DATA_30D")
     core_samples = [
         _to_float(core_debug.get("sample_home")),
         _to_float(core_debug.get("sample_away")),
@@ -806,11 +945,28 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
     debug["bookmaker_melhor"] = bookmaker_melhor
 
     if discard_reason is None:
-        prob_final = original_prob
+        market_control = _market_conflict_control(original_prob, prob_no_vig)
+        prob_final = market_control["probability"]
+        market_conflict_reason = market_control["discard_reason"]
+        debug["market_divergence_pp"] = (
+            None
+            if market_control["divergence"] is None
+            else round(market_control["divergence"] * 100.0, 2)
+        )
+        debug["market_conflict_status"] = market_control["status"]
+        debug["haircut_pp"] = round(market_control["haircut"] * 100.0, 2)
+        if market_control["status"] != "ALINHADO":
+            warnings.append(market_control["status"])
+
         if market_type == "handicap":
             prob_win = handicap_settlement_values["win"]
             prob_push = handicap_settlement_values["push"]
             prob_loss = handicap_settlement_values["loss"]
+            original_equivalent = asian_equivalent_probability(prob_win, prob_loss)
+            if market_control["haircut"] > 0:
+                decisive_mass = prob_win + prob_loss
+                prob_win = decisive_mass * prob_final
+                prob_loss = decisive_mass * (1.0 - prob_final)
             prob_final = asian_equivalent_probability(prob_win, prob_loss)
             fair_odd = asian_fair_odd(prob_win, prob_loss)
             edge_decimal = asian_expected_value(prob_win, prob_loss, offered_odd)
@@ -836,6 +992,8 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
 
         if offered_odd < MIN_ODD_FOOTBALL_V1_1 or offered_odd > MAX_ODD_FOOTBALL_V1_1:
             discard_reason = "ODD_OUT_OF_RANGE"
+        elif market_conflict_reason:
+            discard_reason = market_conflict_reason
         else:
             overconfidence_reason = _overconfidence_decision(market_type, row, prob_final_pct, warnings)
             if overconfidence_reason:
@@ -858,10 +1016,12 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
                 selected["odd_melhor"] = offered_odd
                 selected["bookmaker_melhor"] = bookmaker_melhor
                 selected["edge"] = round(edge_decimal * 100.0, 2)
-                note = _build_v1_1_note({**debug, "warnings": ",".join(warnings)})
+                debug["warnings"] = ",".join(warnings)
+                note = _build_v1_1_note(debug)
                 selected["observacoes"] = "; ".join([str(selected.get("observacoes") or "").strip(), note]).strip("; ")
-                selected["dados_tecnicos"] = "; ".join([str(selected.get("dados_tecnicos") or "").strip(), note]).strip("; ")
-                selected["contexto_modelo"] = "; ".join([str(selected.get("contexto_modelo") or "").strip(), note]).strip("; ")
+                selected["dados_tecnicos"] = str(selected.get("dados_tecnicos") or "").strip()
+                selected["contexto_modelo"] = _build_readable_model_context(debug)
+                selected["market_conflict_status"] = market_control["status"]
                 selected["modelo_versao"] = MODEL_VERSION
                 return selected, None
 
@@ -1001,6 +1161,19 @@ def _apply_operational_controls(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Data
         discarded_rows.append(row)
 
     selected = work.drop(index=list(drop_reasons)).copy()
+    if not selected.empty:
+        selected["selection_role"] = "ALTERNATIVA"
+        for _, indices in selected.groupby(selected.apply(_game_group_key, axis=1)).groups.items():
+            ranked = sorted(
+                list(indices),
+                key=lambda idx: (
+                    _operational_utility(selected.loc[idx]),
+                    _to_float(selected.loc[idx].get("edge"), 0.0),
+                ),
+                reverse=True,
+            )
+            if ranked:
+                selected.loc[ranked[0], "selection_role"] = "PRINCIPAL"
     return selected.reset_index(drop=True), pd.DataFrame(discarded_rows)
 
 
@@ -1331,6 +1504,8 @@ def executar_modelo_real(caminho_csv_longo, caminho_saida):
         "prob_win",
         "prob_push",
         "prob_loss",
+        "selection_role",
+        "market_conflict_status",
         "observacoes",
     ]
 

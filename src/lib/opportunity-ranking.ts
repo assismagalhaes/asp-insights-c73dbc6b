@@ -297,7 +297,10 @@ export async function enrichOpportunityRankingItemPreview({
 }: EnrichOpportunityRankingItemPreviewInput): Promise<OpportunityRankingItem> {
   const preview = buildMatchupPreviewEnrichment(prognostico, rawPreviewText, source);
   if (preview.status !== "loaded") {
-    throw new Error("Cole o Matchups/Preview antes de enriquecer a oportunidade.");
+    const validationErrors = asStringArray(preview.metadata.validation_errors);
+    throw new Error(
+      validationErrors[0] ?? "Cole o Matchups/Preview antes de enriquecer a oportunidade.",
+    );
   }
 
   const { data: currentItem, error: currentError } = await supabase
@@ -352,7 +355,28 @@ export function buildMatchupPreviewEnrichment(
       })
     : null;
 
-  const warnings = parsedContext?.data_quality?.warnings ?? [];
+  const genericValidation = isMlb
+    ? { errors: [] as string[], warnings: [] as string[] }
+    : validateGenericMatchupPreview(prognostico, raw);
+  if (genericValidation.errors.length) {
+    return {
+      context: "",
+      status: "error",
+      metadata: {
+        source,
+        parser: "generic_preview_text",
+        enriched_at: new Date().toISOString(),
+        raw_length: raw.length,
+        validation_errors: genericValidation.errors,
+        warnings: genericValidation.warnings,
+      },
+    };
+  }
+
+  const warnings = [
+    ...(parsedContext?.data_quality?.warnings ?? []),
+    ...genericValidation.warnings,
+  ];
   const missingFields = parsedContext?.data_quality?.missing_fields ?? [];
   const context = [
     "[MATCHUPS / PREVIEW ENRIQUECIDO]",
@@ -364,14 +388,11 @@ export function buildMatchupPreviewEnrichment(
     `Esporte/Liga: ${prognostico.esporte} / ${prognostico.liga}`,
     `Data/Hora: ${prognostico.data}${prognostico.hora ? ` ${prognostico.hora}` : ""}`,
     "",
-    "[PROGNOSTICO]",
-    `Mercado: ${getOpportunityMarketLabel(prognostico)}`,
-    `Pick: ${getOpportunityPickLabel(prognostico)}`,
-    `Origem: ${getOpportunitySourceLabel(prognostico)}`,
-    `Odd ofertada: ${formatNumber(prognostico.odd_ofertada)}`,
-    `Odd valor: ${formatNumber(prognostico.odd_valor)}`,
-    `Probabilidade: ${formatNumber(prognostico.probabilidade_final)}%`,
-    `Edge: ${formatNumber(getEdgeEfetivo(prognostico))}%`,
+    "[VALIDACAO DO PREVIEW]",
+    "Confronto confirmado para as duas equipes.",
+    ...(genericValidation.warnings.length
+      ? genericValidation.warnings.map((warning) => `Alerta: ${warning}`)
+      : ["Data e liga consistentes com os metadados disponiveis."]),
     "",
     ...(parsedContext
       ? [
@@ -406,6 +427,7 @@ export function buildMatchupPreviewEnrichment(
       raw_length: raw.length,
       confidence: parsedContext?.data_quality?.confidence ?? null,
       warnings,
+      validation_errors: [],
       missing_fields: missingFields,
       parsed_context: parsedContext,
     },
@@ -862,6 +884,93 @@ function buildPreliminaryReasonsFromCritical(
     reasons.push(`Campos a revisar antes da IA: ${critical.missingFields.join(", ")}.`);
   }
   return reasons;
+}
+
+export function validateGenericMatchupPreview(
+  prognostico: Prognostico,
+  rawPreviewText: string,
+): { errors: string[]; warnings: string[] } {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const normalizedRaw = normalizePreviewComparable(rawPreviewText);
+  const home = prognostico.mandante?.trim() || prognostico.jogo.split(/\s+vs\s+/i)[0]?.trim();
+  const away = prognostico.visitante?.trim() || prognostico.jogo.split(/\s+vs\s+/i)[1]?.trim();
+
+  if (!home || !previewContainsTeam(normalizedRaw, home)) {
+    errors.push(`Preview rejeitado: o mandante "${home || "nao identificado"}" nao foi encontrado.`);
+  }
+  if (!away || !previewContainsTeam(normalizedRaw, away)) {
+    errors.push(`Preview rejeitado: o visitante "${away || "nao identificado"}" nao foi encontrado.`);
+  }
+
+  const lines = rawPreviewText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const dateLines = lines.filter(
+    (line, index) => index < 8 || /\b(data|date|horario|horário|kickoff|inicio|início)\b/i.test(line),
+  );
+  const previewDates = new Set(dateLines.flatMap(extractCanonicalDates));
+  const eventDate = canonicalDate(prognostico.data);
+  if (previewDates.size && eventDate && !previewDates.has(eventDate)) {
+    errors.push(
+      `Preview rejeitado: a data informada nao corresponde ao evento ${eventDate}.`,
+    );
+  } else if (!previewDates.size) {
+    warnings.push("Data do evento nao identificada no texto colado.");
+  }
+
+  const leagueLines = lines.filter((line) => /\b(liga|league|competicao|competição|competition)\b/i.test(line));
+  if (leagueLines.length) {
+    const leagueText = normalizePreviewComparable(leagueLines.join(" "));
+    const leagueTokens = significantPreviewTokens(prognostico.liga).filter(
+      (token) => !["league", "liga", "serie", "division", "football", "futebol"].includes(token),
+    );
+    if (leagueTokens.length && !leagueTokens.some((token) => leagueText.includes(token))) {
+      errors.push(`Preview rejeitado: a liga informada nao corresponde a "${prognostico.liga}".`);
+    }
+  } else {
+    warnings.push("Liga do evento nao identificada no texto colado.");
+  }
+
+  return { errors, warnings };
+}
+
+function normalizePreviewComparable(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function significantPreviewTokens(value: unknown): string[] {
+  const ignored = new Set(["fc", "cf", "sc", "ac", "ec", "afc", "club", "clube", "de", "da", "do"]);
+  return normalizePreviewComparable(value)
+    .split(" ")
+    .filter((token) => token.length >= 3 && !ignored.has(token));
+}
+
+function previewContainsTeam(normalizedRaw: string, team: string): boolean {
+  const normalizedTeam = normalizePreviewComparable(team);
+  if (normalizedTeam && normalizedRaw.includes(normalizedTeam)) return true;
+  const tokens = significantPreviewTokens(team);
+  if (!tokens.length) return false;
+  const matches = tokens.filter((token) => normalizedRaw.includes(token)).length;
+  return matches >= Math.max(1, Math.ceil(tokens.length * 0.75));
+}
+
+function canonicalDate(value: unknown): string | null {
+  const raw = String(value ?? "").trim();
+  let match = raw.match(/\b(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})\b/);
+  if (match) return `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
+  match = raw.match(/\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})\b/);
+  if (match) return `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`;
+  return null;
+}
+
+function extractCanonicalDates(value: string): string[] {
+  const matches = value.match(/\b(?:\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.]\d{4})\b/g) ?? [];
+  return matches.map(canonicalDate).filter((date): date is string => Boolean(date));
 }
 
 function isMlbPrognostico(prognostico: Prognostico): boolean {

@@ -221,14 +221,14 @@ export function calcEdge(probabilidadePct: number, odd: number): number {
   return Number((((probabilidadePct / 100) * odd - 1) * 100).toFixed(2));
 }
 
-/** Dados técnicos efetivos: contexto_modelo, dados_tecnicos ou observacoes legadas. */
+/** Dados técnicos efetivos: contexto humano, resumo do modelo ou observações legadas. */
 export function getDadosTecnicos(
   p: Pick<Prognostico, "dados_tecnicos" | "observacoes"> &
     Partial<Pick<Prognostico, "contexto_modelo">>,
 ): string | null {
   return (
-    (p.contexto_modelo && p.contexto_modelo.trim()) ||
     (p.dados_tecnicos && p.dados_tecnicos.trim()) ||
+    (p.contexto_modelo && p.contexto_modelo.trim()) ||
     (p.observacoes && p.observacoes.trim()) ||
     null
   );

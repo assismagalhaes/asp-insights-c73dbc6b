@@ -531,9 +531,17 @@ function Validacao() {
       });
       const previewContext = updated.matchup_preview_context?.trim();
       if (previewContext) {
+        const eventKey = item.event_key;
+        const eventOptions = prognosticos.filter((option) => getEventKey(option) === eventKey);
+        for (const option of eventOptions) {
+          const persistedContext = mergeMatchupPreviewContext(
+            getDadosTecnicos(option)?.trim() ?? "",
+            previewContext,
+          );
+          await updateProg.mutateAsync({ id: option.id, dados_tecnicos: persistedContext });
+        }
         setContextos((prev) => {
           const next = { ...prev };
-          const eventKey = item.event_key;
           const group = grupos.find((g) => g.eventKey === eventKey);
           const base = prev[eventKey] ?? (group ? getContextoInicialGrupo(group) : "");
           const merged = mergeMatchupPreviewContext(base, previewContext);
