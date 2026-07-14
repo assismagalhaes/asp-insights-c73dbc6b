@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { standardizePredictionContract } from "@/lib/market-contract";
 import { supabase } from "@/lib/supabase-public";
 
 export type Status =
@@ -377,7 +378,7 @@ async function createAiFeedbackForResultado(
       liga: p.liga,
       mercado: p.mercado,
       pick: p.pick,
-      linha: p.linha,
+      linha: null,
       jogo: p.jogo,
       decisao_ia_sugerida: decisaoIa,
       stake_ia_sugerida: a.stake_sugerida,
@@ -503,12 +504,15 @@ function extractOddsContext(row: Record<string, unknown>) {
 
 const mapPrognostico = (r: Record<string, unknown>): Prognostico => {
   const oddsContext = extractOddsContext(r);
+  const contract = standardizePredictionContract(r, String(r.origem_modelo ?? ""));
   const oddMercadoBase =
     numOrNull(r.odd_mercado_base) ?? oddsContext.marketBase ?? oddsContext.median;
   const oddMediana = numOrNull(r.odd_mediana) ?? oddsContext.median ?? oddMercadoBase;
   return {
     ...(r as unknown as Prognostico),
-    mercado: normalizeMercadoPadrao(String(r.mercado ?? ""), String(r.esporte ?? "")),
+    mercado: contract.mercado,
+    pick: contract.pick,
+    linha: null,
     odd_ofertada: num(r.odd_ofertada),
     odd_ajustada: numOrNull(r.odd_ajustada),
     odd_mediana: oddMediana,
@@ -772,16 +776,20 @@ export const ESPORTES_DEFAULT = [
 
 export const MERCADOS_DEFAULT = [
   "Moneyline",
-  "Resultado da Partida",
-  "Total de Gols",
-  "Total de Pontos",
-  "Total de Corridas",
-  "Handicap Asiático",
-  "Ambas Marcam",
   "Dupla Chance",
-  "Total de Escanteios",
-  "ASP GoalMatrix",
-  "ASP CornerMatrix",
+  "Over Gols",
+  "Under Gols",
+  "Ambas Marcam Sim",
+  "Ambas Marcam Não",
+  "Handicap Asiático",
+  "Over Cantos",
+  "Under Cantos",
+  "Race Cantos",
+  "Mais Cantos",
+  "Over Corridas",
+  "Under Corridas",
+  "Over Pontos",
+  "Under Pontos",
   "ASP BackMatrix",
 ];
 
@@ -796,22 +804,28 @@ export function normalizeMercadoPadrao(mercado: string, esporte?: string | null)
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
 
-  if (/asp\s*goals?matrix|goals?matrix/.test(normalized)) return "ASP GoalMatrix";
-  if (/asp\s*corners?matrix|corners?matrix/.test(normalized)) return "ASP CornerMatrix";
   if (/asp\s*backmatrix|backmatrix/.test(normalized)) return "ASP BackMatrix";
-  if (/resultado final|1x2|resultado da partida/.test(normalized)) return "Resultado da Partida";
-  if (/ambas marcam|btts/.test(normalized)) return "Ambas Marcam";
+  if (/resultado final|1x2|resultado da partida/.test(normalized)) return "Moneyline";
+  if (/ambas marcam.*(nao|no)|btts.*(nao|no)/.test(normalized))
+    return "Ambas Marcam Não";
+  if (/ambas marcam|btts/.test(normalized)) return "Ambas Marcam Sim";
   if (/dupla chance|double chance/.test(normalized)) return "Dupla Chance";
   if (/handicap|spread|run line/.test(normalized)) return "Handicap Asiático";
   if (/moneyline|home\/away|home away/.test(normalized)) return "Moneyline";
-  if (/over\/under pontos|total de pontos|pontos/.test(normalized)) return "Total de Pontos";
-  if (/over\/under corridas|total de corridas|corridas|runs/.test(normalized))
-    return "Total de Corridas";
-  if (/over\/under gols|total de gols|gols|goals/.test(normalized)) return "Total de Gols";
+  if (/under.*cantos/.test(normalized)) return "Under Cantos";
+  if (/over.*cantos/.test(normalized)) return "Over Cantos";
+  if (/race.*cantos/.test(normalized)) return "Race Cantos";
+  if (/mais.*cantos/.test(normalized)) return "Mais Cantos";
+  if (/under.*pontos/.test(normalized)) return "Under Pontos";
+  if (/over.*pontos/.test(normalized)) return "Over Pontos";
+  if (/under.*(corridas|runs)/.test(normalized)) return "Under Corridas";
+  if (/over.*(corridas|runs)/.test(normalized)) return "Over Corridas";
+  if (/under.*(gols|goals)/.test(normalized)) return "Under Gols";
+  if (/over.*(gols|goals)/.test(normalized)) return "Over Gols";
   if (/over\/under|total/.test(normalized)) {
-    if (sport.includes("baseball")) return "Total de Corridas";
-    if (sport.includes("basketball")) return "Total de Pontos";
-    return "Total de Gols";
+    if (sport.includes("baseball")) return "Over Corridas";
+    if (sport.includes("basketball")) return "Over Pontos";
+    return "Over Gols";
   }
   return raw;
 }
@@ -938,9 +952,6 @@ export function gerarTipTexto(
     comentarios?: string | null;
   },
 ): string {
-  const linha = (p.linha ?? "").trim();
-  const pickLower = (p.pick ?? "").toLowerCase();
-  const linhaForaDoPick = linha && linha !== "-" && !pickLower.includes(linha.toLowerCase());
   const oddFinal = getOddEfetiva(p);
   const edgeFinal = getEdgeEfetivo(p);
   const parecerLegado = [
@@ -956,7 +967,6 @@ export function gerarTipTexto(
     return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
   };
   const hora = p.hora ? p.hora.slice(0, 5) : "-";
-  const pickComLinha = `${p.pick}${linhaForaDoPick ? ` ${linha}` : ""}`;
   if (extras?.modo === "resumo") return parecer;
 
   return `🔥 ASP INSIGHTS - PICK CONFIRMADA
@@ -967,7 +977,7 @@ export function gerarTipTexto(
 📊 Esporte: ${p.esporte}
 
 🎯 Mercado: ${p.mercado}
-✅ Pick: ${pickComLinha}
+✅ Pick: ${p.pick}
 📈 Odd: ${oddFinal.toFixed(2)}${p.odd_ajustada != null ? ` (original: ${p.odd_ofertada.toFixed(2)})` : ""}
 📉 Odd de Valor: ${p.odd_valor.toFixed(2)}
 📊 Probabilidade: ${p.probabilidade_final.toFixed(1)}%

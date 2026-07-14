@@ -20,7 +20,7 @@ export default defineTool({
     let query = supabase
       .from("prognosticos")
       .select(
-        "id, data, hora, esporte, liga, jogo, mercado, linha, odd_ofertada, edge, edge_ajustado, lucro_prejuizo, created_at",
+        "id, data, hora, esporte, liga, jogo, mercado, pick, odd_ofertada, edge, edge_ajustado, lucro_prejuizo, created_at",
       )
       .order("created_at", { ascending: false })
       .limit(limit);

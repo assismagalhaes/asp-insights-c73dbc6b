@@ -25,12 +25,12 @@ import {
   useUpdatePrognostico,
   useLigas,
   useUpsertLiga,
-  normalizeMercadoPadrao,
   type Prognostico,
   type PrognosticoInput,
   type Liga,
 } from "@/lib/db";
 import { toast } from "sonner";
+import { standardizePredictionContract } from "@/lib/market-contract";
 
 interface Props {
   open: boolean;
@@ -49,9 +49,9 @@ const empty: PrognosticoInput = {
   jogo: "",
   mandante: "",
   visitante: "",
-  mercado: "Resultado da Partida",
+  mercado: "Moneyline",
   pick: "",
-  linha: "-",
+  linha: null,
   odd_ofertada: 0,
   odd_valor: 0,
   probabilidade_final: 0,
@@ -95,6 +95,7 @@ export function PrognosticoDialog({
   useEffect(() => {
     if (!open) return;
     if (prognostico) {
+      const standard = standardizePredictionContract(prognostico);
       setForm({
         data: prognostico.data,
         hora: prognostico.hora,
@@ -103,9 +104,9 @@ export function PrognosticoDialog({
         jogo: prognostico.jogo,
         mandante: prognostico.mandante,
         visitante: prognostico.visitante,
-        mercado: normalizeMercadoPadrao(prognostico.mercado, prognostico.esporte),
-        pick: prognostico.pick,
-        linha: prognostico.linha,
+        mercado: standard.mercado,
+        pick: standard.pick,
+        linha: null,
         odd_ofertada: prognostico.odd_ofertada,
         odd_valor: prognostico.odd_valor,
         probabilidade_final: prognostico.probabilidade_final,
@@ -118,6 +119,7 @@ export function PrognosticoDialog({
         edge_ajustado: prognostico.edge_ajustado,
       });
     } else if (template) {
+      const standard = standardizePredictionContract(template);
       setForm({
         data: todayBR(),
         hora: template.hora,
@@ -126,9 +128,9 @@ export function PrognosticoDialog({
         jogo: template.jogo,
         mandante: template.mandante,
         visitante: template.visitante,
-        mercado: normalizeMercadoPadrao(template.mercado, template.esporte),
-        pick: template.pick,
-        linha: template.linha,
+        mercado: standard.mercado,
+        pick: standard.pick,
+        linha: null,
         odd_ofertada: template.odd_ofertada,
         odd_valor: template.odd_valor,
         probabilidade_final: template.probabilidade_final,
@@ -164,11 +166,13 @@ export function PrognosticoDialog({
         toast.error("Jogo e Pick são obrigatórios.");
         return;
       }
+      const standard = standardizePredictionContract(form);
+      const payload = { ...form, mercado: standard.mercado, pick: standard.pick, linha: null };
       if (prognostico) {
-        await update.mutateAsync({ id: prognostico.id, ...form });
+        await update.mutateAsync({ id: prognostico.id, ...payload });
         toast.success("Prognóstico atualizado");
       } else {
-        await create.mutateAsync(form);
+        await create.mutateAsync(payload);
         toast.success("Prognóstico criado");
       }
       onOpenChange(false);
@@ -300,9 +304,6 @@ export function PrognosticoDialog({
           <Field label="Pick">
             <Input value={form.pick} onChange={(e) => set("pick", e.target.value)} />
           </Field>
-          <Field label="Linha">
-            <Input value={form.linha ?? ""} onChange={(e) => set("linha", e.target.value)} />
-          </Field>
           <Field label="Odd Ofertada">
             <Input
               type="number"
@@ -367,7 +368,7 @@ export function PrognosticoDialog({
             </Label>
             <Textarea
               rows={4}
-              placeholder="Cole aqui o contexto usado na análise: H2H, últimos jogos, projeções, odds, linhas, splits e informações adicionais."
+              placeholder="Cole aqui o contexto usado na análise: H2H, últimos jogos, projeções, odds, picks, splits e informações adicionais."
               value={form.dados_tecnicos ?? form.observacoes ?? ""}
               onChange={(e) => set("dados_tecnicos", e.target.value || null)}
             />

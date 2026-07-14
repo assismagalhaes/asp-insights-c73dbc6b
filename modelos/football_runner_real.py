@@ -19,6 +19,11 @@ from football_probability import (
     asian_handicap_settlement,
 )
 
+try:
+    from market_contract import standardize_prediction_dataframe
+except ImportError:
+    from modelos.market_contract import standardize_prediction_dataframe
+
 
 BASE_DIR = Path(os.environ.get("ASP_SCRAPER_BASE_DIR", "/home/ubuntu/asp-scraper-api"))
 MODELOS_DIR = BASE_DIR / "modelos"
@@ -1352,6 +1357,10 @@ def executar_modelo_real(caminho_csv_longo, caminho_saida):
             "arquivo_contexto",
             "modelo_versao",
         ])
+
+    # A linha continua disponivel durante os calculos e controles, mas o
+    # contrato publico entrega apenas mercado e pick padronizados.
+    df_saida = standardize_prediction_dataframe(df_saida, MODEL_NAME)
 
     descartes_path = caminho_saida.with_name(f"{caminho_saida.stem}_descartes_v1_1.csv")
     LAST_V1_1_DISCARDED.to_csv(descartes_path, index=False, encoding="utf-8-sig")

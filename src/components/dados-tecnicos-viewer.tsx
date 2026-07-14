@@ -31,7 +31,6 @@ interface Props {
     | "jogo"
     | "mercado"
     | "pick"
-    | "linha"
     | "odd_ofertada"
     | "odd_ajustada"
     | "odd_valor"
@@ -86,8 +85,7 @@ export function DadosTecnicosViewer({ prognostico, variant = "icon", className }
                 <TabsTrigger value="ia">IA</TabsTrigger>
               </TabsList>
               <TabsContent value="dados" className="mt-3 space-y-3">
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                  <Info label="Linha" value={prognostico.linha || "-"} />
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   <Info label="Odd usada" value={oddEfetiva.toFixed(2)} />
                   <Info label="Odd valor" value={prognostico.odd_valor.toFixed(2)} />
                   <Info label="Edge usado" value={`${edgeEfetivo.toFixed(2)}%`} />

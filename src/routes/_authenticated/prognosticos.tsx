@@ -27,7 +27,6 @@ import { StatusBadge, ResultBadge } from "@/components/status-badge";
 import { LeagueFilter } from "@/components/league-filter";
 import { PeriodFilter } from "@/components/period-filter";
 import { rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
-import { shouldShowLinha } from "@/lib/date-br";
 import {
   usePrognosticos,
   useDeletePrognostico,
@@ -70,7 +69,6 @@ type SortKey =
   | "jogo"
   | "mercado"
   | "pick"
-  | "linha"
   | "odd_ofertada"
   | "odd_valor"
   | "probabilidade_final"
@@ -112,7 +110,6 @@ function Prognosticos() {
   const [fValidacao, setFValidacao] = useState("all");
   const [fResultado, setFResultado] = useState("all");
   const [fTopFinal, setFTopFinal] = useState("all");
-  const [fLinha, setFLinha] = useState("");
   const [periodo, setPeriodo] = useState<PeriodoFiltro>("tudo");
   const [customIni, setCustomIni] = useState("");
   const [customFim, setCustomFim] = useState("");
@@ -139,12 +136,6 @@ function Prognosticos() {
       if (fResultado !== "all" && p.resultado !== fResultado) return false;
       if (fTopFinal === "yes" && !p.is_top_final) return false;
       if (fTopFinal === "no" && p.is_top_final) return false;
-      if (fLinha.trim()) {
-        const q = fLinha.trim().toLowerCase();
-        const inLinha = (p.linha ?? "").toString().toLowerCase().includes(q);
-        const inPick = (p.pick ?? "").toLowerCase().includes(q);
-        if (!inLinha && !inPick) return false;
-      }
       return true;
     });
     arr.sort((a, b) => {
@@ -179,7 +170,6 @@ function Prognosticos() {
     fValidacao,
     fResultado,
     fTopFinal,
-    fLinha,
   ]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
@@ -191,7 +181,7 @@ function Prognosticos() {
 
   useEffect(() => {
     setPage(1);
-  }, [ini, fim, fEsporte, fLiga, fMercado, fValidacao, fResultado, fLinha, pageSize]);
+  }, [ini, fim, fEsporte, fLiga, fMercado, fValidacao, fResultado, pageSize]);
 
   const allSelected = paginated.length > 0 && paginated.every((p) => selected.has(p.id));
   const someSelected = selected.size > 0 && !allSelected;
@@ -362,12 +352,6 @@ function Prognosticos() {
               ))}
             </SelectContent>
           </Select>
-          <Input
-            className="h-10"
-            placeholder="Linha (ex: 2.5, +1.5)"
-            value={fLinha}
-            onChange={(e) => setFLinha(e.target.value)}
-          />
           <Select value={fValidacao} onValueChange={setFValidacao}>
             <SelectTrigger>
               <SelectValue placeholder="Validação" />
@@ -499,14 +483,6 @@ function Prognosticos() {
                     onClick={toggleSort}
                   />
                   <SortableTh
-                    label="Linha"
-                    k="linha"
-                    align="left"
-                    sortKey={sortKey}
-                    sortDir={sortDir}
-                    onClick={toggleSort}
-                  />
-                  <SortableTh
                     label="Odd Of."
                     k="odd_ofertada"
                     align="right"
@@ -572,7 +548,7 @@ function Prognosticos() {
                 {isLoading && (
                   <tr>
                     <td
-                      colSpan={19}
+                      colSpan={18}
                       className="px-4 py-8 text-center text-sm text-muted-foreground"
                     >
                       Carregando...
@@ -582,7 +558,7 @@ function Prognosticos() {
                 {!isLoading && sorted.length === 0 && (
                   <tr>
                     <td
-                      colSpan={19}
+                      colSpan={18}
                       className="px-4 py-8 text-center text-sm text-muted-foreground"
                     >
                       Nenhum prognóstico cadastrado.
@@ -619,9 +595,6 @@ function Prognosticos() {
                         {p.mercado}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">{p.pick}</td>
-                      <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-muted-foreground">
-                        {shouldShowLinha(p.pick, p.linha) ? p.linha : "-"}
-                      </td>
                       <td className="px-3 py-2 text-right font-mono">
                         {oddEfetiva.toFixed(2)}
                         {p.odd_ajustada != null && (

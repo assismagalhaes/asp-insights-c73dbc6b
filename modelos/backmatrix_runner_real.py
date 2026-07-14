@@ -71,7 +71,7 @@ RUN_PROVENANCE: dict[str, object] = {}
 
 PREDICTION_COLUMNS = [
     "data", "hora", "esporte", "liga", "jogo", "mandante", "visitante", "mercado", "pick",
-    "linha", "odd_ofertada", "odd_valor", "probabilidade_final", "edge", "stake", "modelo_versao",
+    "odd_ofertada", "odd_valor", "probabilidade_final", "edge", "stake", "modelo_versao",
     "market_type", "selection_side", "selection_role", "market_conflict_status", "favorite_class",
     "prob_market_no_vig", "prob_poisson", "prob_empirical", "prob_raw", "prob_pre_calibration",
     "calibration_status", "haircut_pp", "component_spread_pp", "cv_home", "cv_away", "cv_average",

@@ -18,7 +18,7 @@ import {
   type Resultado,
 } from "@/lib/db";
 import { lucroUnidades, stakeAnalitica } from "@/lib/metrics";
-import { parsePlacar, calcularResultadoAuto, extrairLinha, detectRacePick } from "@/lib/resultado-calc";
+import { parsePlacar, calcularResultadoAuto, detectRacePick } from "@/lib/resultado-calc";
 import { supabase } from "@/lib/supabase-public";
 import { toast } from "sonner";
 
@@ -108,13 +108,6 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
 
   const resultadoFinal: Resultado | null = manual ?? (auto as Resultado | null);
 
-  const linhaInfo = useMemo(() => {
-    if (!prognostico) return null;
-    if (prognostico.linha) return String(prognostico.linha);
-    const e = extrairLinha(prognostico.pick ?? "");
-    return e != null ? String(e) : null;
-  }, [prognostico]);
-
   if (!prognostico) return null;
 
   const oddEfetiva = getOddEfetiva(prognostico);
@@ -177,9 +170,7 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
           </DialogTitle>
 
         </DialogHeader>
-        <div className="text-xs text-muted-foreground">
-          {linhaInfo ? `Linha ${linhaInfo} · ` : ""}Odd usada {oddEfetiva.toFixed(2)}
-        </div>
+        <div className="text-xs text-muted-foreground">Odd usada {oddEfetiva.toFixed(2)}</div>
         <div className="text-xs text-muted-foreground">
           {prognostico.mercado} · {prognostico.pick} · Stake {stakeResultado.toFixed(1)}u · Unidade
           R$ {valorUnidade.toFixed(2)}
@@ -220,11 +211,6 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
             <div className="text-xs">
               <span className="text-muted-foreground">Pick:</span> {prognostico.pick}
             </div>
-            {linhaInfo && (
-              <div className="text-xs">
-                <span className="text-muted-foreground">Linha:</span> {linhaInfo}
-              </div>
-            )}
             <div className="pt-1">
               <span className="text-muted-foreground text-xs">Resultado calculado: </span>
               {resultadoFinal ? (

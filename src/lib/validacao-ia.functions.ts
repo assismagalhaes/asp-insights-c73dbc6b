@@ -3,12 +3,11 @@ import { requireSupabaseAuth } from "@/lib/auth-middleware-public";
 import { generateText } from "ai";
 import { z } from "zod";
 
-export const PROMPT_VERSAO = "validacao-critica-v10-local-sem-gate-online";
+export const PROMPT_VERSAO = "validacao-critica-v11-mercado-pick";
 
 const CorrelatedPickSchema = z.object({
   mercado: z.string(),
   pick: z.string(),
-  linha: z.string().nullable().optional(),
   odd_original: z.number(),
   odd_ajustada: z.number().nullable().optional(),
   odd_mediana: z.number().nullable().optional(),
@@ -24,7 +23,6 @@ const GroupOptionSchema = z.object({
   prognostico_id: z.string(),
   mercado: z.string().optional(),
   pick: z.string(),
-  linha: z.string().nullable().optional(),
   odd_original: z.number(),
   odd_ajustada: z.number().nullable().optional(),
   odd_mediana: z.number().nullable().optional(),
@@ -46,7 +44,6 @@ const InputSchema = z.object({
     jogo: z.string(),
     mercado: z.string(),
     pick: z.string(),
-    linha: z.string().nullable().optional(),
     odd_original: z.number(),
     odd_ajustada: z.number().nullable().optional(),
     odd_mediana: z.number().nullable().optional(),
@@ -100,12 +97,12 @@ Regras:
 - Não buscar dados online.
 - Não inventar informações externas.
 - Analisar apenas os dados fornecidos.
-- MODO IA LOCAL: use exclusivamente dados internos/localmente disponíveis no payload: prognóstico, dados técnicos manuais/importados, odds, linha, probabilidade, edge, mercado, esporte, liga, opções concorrentes e calibração/histórico interno.
+- MODO IA LOCAL: use exclusivamente dados internos/localmente disponíveis no payload: prognóstico, dados técnicos manuais/importados, odds, pick, probabilidade, edge, mercado, esporte, liga, opções concorrentes e calibração/histórico interno.
 - MODO IA LOCAL: é proibido usar, inferir, exigir ou penalizar por notícias online, pesquisa web, odds externas em tempo real, lesões buscadas online, escalações online, lineups online, clima online ou qualquer contexto externo que não esteja explicitamente colado nos dados técnicos manuais.
 - MODO IA LOCAL: não mencione ausência de notícias, lesões, escalações, lineups, pitchers/starters, bullpens pesquisados, goalies, QB status, clima, odds movement, fontes externas ou contexto online como motivo de PULAR/reduzir stake, salvo quando o próprio contexto manual afirmar explicitamente que essa informação foi analisada e invalida a tese.
 - MODO IA LOCAL: dados externos ausentes devem ser classificados apenas como "limitação da análise local", "dado não informado" ou "não aplicável ao modo local". Nunca marque o gate de informação crítica como reprovado apenas porque pitchers, lineups, escalações, lesões, clima, notícias, goalies, QB status ou odds movement não foram fornecidos.
-- MODO IA LOCAL: a decisão final deve ser baseada na coerência dos dados fornecidos: expectativa projetada, linha, odd, probabilidade, edge, H2H, forma recente, médias, consistência, divergência entre indicadores, histórico interno e risco estatístico.
-- Avaliar coerência técnica, matchup, forma, projeções, linha, odd, risco e contexto colado pelo usuário.
+- MODO IA LOCAL: a decisão final deve ser baseada na coerência dos dados fornecidos: expectativa projetada, pick, odd, probabilidade, edge, H2H, forma recente, médias, consistência, divergência entre indicadores, histórico interno e risco estatístico.
+- Avaliar coerência técnica, matchup, forma, projeções, pick, odd, risco e contexto colado pelo usuário.
 - Se houver bom argumento, mas risco estrutural relevante, a decisão padrão deve ser PULAR.
 - Regra de stake: 1.0u NÃO é padrão automático.
   - PULAR: use quando houver risco relevante nos dados fornecidos, tese fraca, contexto interno insuficiente para sustentar a entrada, pick redundante, contexto contraditório ou risco estatístico/técnico alto. Não use PULAR apenas por ausência de dados externos pesquisáveis.
@@ -124,15 +121,15 @@ Regras para grupo de opções concorrentes:
 - Sua tarefa não é recalcular EV. Sua tarefa é comparar as opções disponíveis e decidir se existe uma opção tecnicamente superior para confirmação.
 - Escolha no máximo uma opção do grupo. Nunca confirme mais de uma opção.
 - Não escolha automaticamente a maior probabilidade, o maior edge ou a maior odd.
-- Compare linha, odd, probabilidade, edge, contexto técnico, risco e coerência do mercado.
-- Moneyline/1X2, Handicap e Dupla Chance podem representar a mesma tese de resultado/proteção. Compare proteção da linha, risco/retorno e exposição duplicada, e escolha somente uma entrada principal quando forem correlatas.
+- Compare pick, odd, probabilidade, edge, contexto técnico, risco e coerência do mercado.
+- Moneyline, Handicap e Dupla Chance podem representar a mesma tese de resultado/proteção. Compare proteção da pick, risco/retorno e exposição duplicada, e escolha somente uma entrada principal quando forem correlatas.
 - Se nenhuma opção tiver sustentação técnica suficiente, retorne PULAR.
 - Se houver risco estrutural relevante, prefira PULAR.
 
 Gates obrigatórios:
-- Gate 1 — Coerência técnica: tese precisa estar coerente com mercado, pick, linha, probabilidade, edge ajustado/original, contexto informado, esporte e liga. Conflito técnico relevante = PULAR.
-- Gate 2 — Risco estrutural interno: risco estrutural alto identificado nos dados fornecidos = PULAR. Exemplos válidos no modo local: conflito forte entre projeção e H2H/forma recente, edge fraco ou negativo, odd sem valor, linha incompatível com a projeção, amostra inconsistente, baixa consistência do modelo, indicadores internos contraditórios, exposição duplicada/correlata.
-- Gate 3 — Informação crítica no modo local: não reprove por ausência de informação externa pesquisável. Se faltar pitcher, lineup, escalação, lesão, clima, goalie, QB status, bullpen pesquisado, notícias ou odds movement, escreva "não aplicável ao modo local / dado externo não informado" e avalie apenas como limitação. Reprove este gate somente quando faltar dado interno essencial para interpretar o próprio prognóstico, como mercado, pick, linha, odd, probabilidade, edge ou contexto técnico mínimo.
+- Gate 1 — Coerência técnica: tese precisa estar coerente com mercado, pick, probabilidade, edge ajustado/original, contexto informado, esporte e liga. Conflito técnico relevante = PULAR.
+- Gate 2 — Risco estrutural interno: risco estrutural alto identificado nos dados fornecidos = PULAR. Exemplos válidos no modo local: conflito forte entre projeção e H2H/forma recente, edge fraco ou negativo, odd sem valor, pick incompatível com a projeção, amostra inconsistente, baixa consistência do modelo, indicadores internos contraditórios, exposição duplicada/correlata.
+- Gate 3 — Informação crítica no modo local: não reprove por ausência de informação externa pesquisável. Se faltar pitcher, lineup, escalação, lesão, clima, goalie, QB status, bullpen pesquisado, notícias ou odds movement, escreva "não aplicável ao modo local / dado externo não informado" e avalie apenas como limitação. Reprove este gate somente quando faltar dado interno essencial para interpretar o próprio prognóstico, como mercado, pick, odd, probabilidade, edge ou contexto técnico mínimo.
 - Gate 4 — Contexto interno/manual: aprove quando a tese for sustentada pelos dados internos e pelo contexto manual disponível. Não reprove por ausência de fonte online, notícia, escalação, lesão ou confirmação externa; esses fatores pertencem apenas ao modo IA Local + Pesquisa, salvo se estiverem explicitamente colados no contexto manual.
 - Gate 5 — Risco > benefício: se houver 2 ou mais riscos relevantes, PULAR.
 - Gate 6 — Duplicidade/correlação: se houver outras picks do mesmo jogo e mesmo grupo de mercado, trate como opções concorrentes. Você deve escolher no máximo uma opção para CONFIRMAR ou recomendar PULAR o grupo inteiro. Nunca sugira confirmar mais de uma opção do grupo.
@@ -143,7 +140,6 @@ A) Entrada avaliada
 Jogo:
 Mercado:
 Pick:
-Linha:
 Odd:
 Probabilidade:
 Edge:
@@ -177,10 +173,10 @@ G) Decisão final
 Decisão: CONFIRMAR | PULAR
 decisao_grupo: CONFIRMA | PULAR
 prognostico_id_escolhido: id exato da opção escolhida ou null
-pick_escolhida: pick e linha da opção escolhida ou null
+pick_escolhida: pick da opção escolhida ou null
 stake_confirmada: 0.5 | 1.0 | 1.5 | 0
 Stake sugerida: 0.5u | 1.0u | 1.5u, apenas se CONFIRMAR
-justificativa_linha:
+justificativa_pick:
 riscos:
 condicao_invalidacao:
 Justificativa final objetiva:
@@ -251,7 +247,7 @@ export const analisarValidacao = createServerFn({ method: "POST" })
           .map((c, index) => {
             const odd = c.odd_ajustada ?? c.odd_original;
             const edge = c.edge_ajustado ?? c.edge_original;
-            return `${index + 1}. ID: ${c.prognostico_id} | Mercado: ${c.mercado ?? p.mercado} | Pick: ${c.pick} | Linha: ${c.linha ?? "-"} | Odd ofertada: ${c.odd_original.toFixed(3)} | Odd usada: ${odd.toFixed(3)} | Odd mediana: ${formatNullableOdd(c.odd_mediana)} | Odd mercado base: ${formatNullableOdd(c.odd_mercado_base)} | Odd melhor: ${formatNullableOdd(c.odd_melhor)} | Bookmaker melhor: ${c.bookmaker_melhor ?? "-"} | Odd valor: ${c.odd_valor.toFixed(3)} | Prob: ${c.probabilidade.toFixed(2)}% | Edge: ${edge.toFixed(2)}%`;
+            return `${index + 1}. ID: ${c.prognostico_id} | Mercado: ${c.mercado ?? p.mercado} | Pick: ${c.pick} | Odd ofertada: ${c.odd_original.toFixed(3)} | Odd usada: ${odd.toFixed(3)} | Odd mediana: ${formatNullableOdd(c.odd_mediana)} | Odd mercado base: ${formatNullableOdd(c.odd_mercado_base)} | Odd melhor: ${formatNullableOdd(c.odd_melhor)} | Bookmaker melhor: ${c.bookmaker_melhor ?? "-"} | Odd valor: ${c.odd_valor.toFixed(3)} | Prob: ${c.probabilidade.toFixed(2)}% | Edge: ${edge.toFixed(2)}%`;
           })
           .join("\n")
       : "(nenhuma lista explicita de opcoes do grupo foi informada)";
@@ -261,7 +257,7 @@ export const analisarValidacao = createServerFn({ method: "POST" })
           .map((c, index) => {
             const odd = c.odd_ajustada ?? c.odd_original;
             const edge = c.edge_ajustado ?? c.edge_original;
-            return `${index + 1}. Mercado: ${c.mercado} | Pick: ${c.pick} | Linha: ${c.linha ?? "-"} | Odd ofertada: ${c.odd_original.toFixed(3)} | Odd usada: ${odd.toFixed(3)} | Odd mediana: ${formatNullableOdd(c.odd_mediana)} | Odd mercado base: ${formatNullableOdd(c.odd_mercado_base)} | Odd melhor: ${formatNullableOdd(c.odd_melhor)} | Bookmaker melhor: ${c.bookmaker_melhor ?? "-"} | Prob: ${c.probabilidade_final.toFixed(2)}% | Edge: ${edge.toFixed(2)}%`;
+            return `${index + 1}. Mercado: ${c.mercado} | Pick: ${c.pick} | Odd ofertada: ${c.odd_original.toFixed(3)} | Odd usada: ${odd.toFixed(3)} | Odd mediana: ${formatNullableOdd(c.odd_mediana)} | Odd mercado base: ${formatNullableOdd(c.odd_mercado_base)} | Odd melhor: ${formatNullableOdd(c.odd_melhor)} | Bookmaker melhor: ${c.bookmaker_melhor ?? "-"} | Prob: ${c.probabilidade_final.toFixed(2)}% | Edge: ${edge.toFixed(2)}%`;
           })
           .join("\n")
       : "(nenhuma outra pick pendente do mesmo jogo informada)";
@@ -274,7 +270,6 @@ Liga: ${p.liga}
 Jogo: ${p.jogo}
 Mercado: ${p.mercado}
 Pick: ${p.pick}
-Linha: ${p.linha ?? "-"}
 Odd ofertada: ${p.odd_original.toFixed(3)}
 Odd ajustada: ${p.odd_ajustada != null ? p.odd_ajustada.toFixed(3) : "—"}
 Odd em uso para análise: ${oddFinal.toFixed(3)}
@@ -305,7 +300,7 @@ INSTRUÇÃO DE AUDITORIA:
 Toda análise de valor (edge, EV, comparação com odd justa e comentários no parecer) DEVE usar exclusivamente a "Odd em uso para análise" (que já reflete a odd ajustada quando existe). Não cite a "Odd ofertada" original como base para a decisão; ela é apenas referência histórica do modelo. Se mencionar odd no parecer, use a odd em uso.
 Antes de sugerir CONFIRMA, procure motivos concretos nos dados fornecidos para PULAR. Se a tese contra a entrada for relevante com base nos dados internos, sugira PULAR. Não confirme apenas porque a entrada veio como EV+. Não trate ausência de informação externa pesquisável como motivo principal para PULAR no modo IA Local.
 Não use 1.0u como stake padrão. Se houver qualquer dúvida entre 1.0u e 0.5u, use 0.5u. Se houver dúvida entre 0.5u e PULAR, use PULAR.
-Se houver opcoes concorrentes listadas acima, compare mercado, linhas, odds, probabilidade, edge, protecao da linha e risco/retorno. A resposta deve indicar a melhor opcao para CONFIRMAR ou recomendar PULAR o grupo inteiro. Nunca confirme mais de uma opcao do mesmo jogo e mesma familia de mercado.
+Se houver opcoes concorrentes listadas acima, compare mercado, picks, odds, probabilidade, edge, proteção e risco/retorno. A resposta deve indicar a melhor opcao para CONFIRMAR ou recomendar PULAR o grupo inteiro. Nunca confirme mais de uma opcao do mesmo jogo e mesma familia de mercado.
 Nao use a opcao selecionada na interface como preferencia. Ela serve apenas para ajuste de odd; sua decisao deve comparar todas as opcoes concorrentes.
 Se sugerir CONFIRMA, devolva obrigatoriamente o campo prognostico_id_escolhido com um ID exato da lista OPÇÕES CONCORRENTES. Se sugerir PULAR, use prognostico_id_escolhido: null.
 ${aspScreenerInstrucao}

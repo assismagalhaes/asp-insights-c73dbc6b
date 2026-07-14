@@ -8,7 +8,6 @@ export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v8-grupo-correlato
 const CorrelatedPickSchema = z.object({
   mercado: z.string(),
   pick: z.string(),
-  linha: z.string().nullable().optional(),
   odd_original: z.number(),
   odd_ajustada: z.number().nullable().optional(),
   odd_mediana: z.number().nullable().optional(),
@@ -24,7 +23,6 @@ const GroupOptionSchema = z.object({
   prognostico_id: z.string(),
   mercado: z.string().optional(),
   pick: z.string(),
-  linha: z.string().nullable().optional(),
   odd_original: z.number(),
   odd_ajustada: z.number().nullable().optional(),
   odd_mediana: z.number().nullable().optional(),
@@ -46,7 +44,6 @@ const InputSchema = z.object({
     jogo: z.string(),
     mercado: z.string(),
     pick: z.string(),
-    linha: z.string().nullable().optional(),
     odd_original: z.number(),
     odd_ajustada: z.number().nullable().optional(),
     odd_mediana: z.number().nullable().optional(),
@@ -126,7 +123,7 @@ Você é um auditor sênior de risco em apostas esportivas com acesso a duas fer
 
 Política de pesquisa (use as ferramentas de forma proativa, mas eficiente):
 1. Você deve usar o checklist específico do esporte informado no payload. Não faça apenas busca genérica por notícias.
-2. Busque fatores que podem confirmar ou invalidar a tese conforme esporte, liga, mercado, pick e linha.
+2. Busque fatores que podem confirmar ou invalidar a tese conforme esporte, liga, mercado e pick.
 3. Faça no máximo 5 buscas e no máximo 3 scrapes. Evite scrape se o resultado de busca já trouxer informação suficiente.
 4. Priorize fontes confiáveis: sites oficiais de ligas/times, injury reports oficiais, páginas reconhecidas de lineups, previews de veículos esportivos confiáveis e clima de fonte meteorológica confiável.
 5. Evite usar como fonte principal: fórum aleatório, postagem sem contexto, site de baixa qualidade, conteúdo sem data, notícia antiga sem relação com o jogo.
@@ -149,9 +146,9 @@ Regras analíticas:
 - Sempre escreva uma seção chamada "Tese contra a entrada".
 - Use os gates objetivos de decisão. A IA só pode sugerir CONFIRMA se todos os gates obrigatórios forem aprovados.
 - Não reavaliar se a entrada é EV+ (já foi filtrada).
-- Não recalcular EV, não otimizar linha e não substituir os dados do modelo Python/contexto manual.
+- Não recalcular EV, não substituir a pick e não substituir os dados do modelo Python/contexto manual.
 - A IA apenas sugere decisão. A decisão final continua humana.
-- Avaliar coerência técnica, matchup, forma, projeções, linha, odd, risco e notícias encontradas.
+- Avaliar coerência técnica, matchup, forma, projeções, pick, odd, risco e notícias encontradas.
 - Se informação crítica estiver ausente/incerta, sinalize claramente.
 - Se a informação crítica for muito determinante para a aposta, sugira PULAR.
 - Se a informação crítica exigir confirmação mas não invalidar totalmente a tese, destaque de forma visível: "AGUARDAR CONFIRMAÇÃO: ..." e use no máximo 0.5u.
@@ -173,13 +170,13 @@ Regras para grupo de opções concorrentes:
 - Sua tarefa não é recalcular EV. Sua tarefa é comparar as opções disponíveis e decidir se existe uma opção tecnicamente superior para confirmação.
 - Escolha no máximo uma opção do grupo. Nunca confirme mais de uma opção.
 - Não escolha automaticamente a maior probabilidade, o maior edge ou a maior odd.
-- Compare linha, odd, probabilidade, edge, contexto técnico, pesquisa online, risco e coerência do mercado.
-- Moneyline/1X2, Handicap e Dupla Chance podem representar a mesma tese de resultado/proteção. Compare proteção da linha, risco/retorno e exposição duplicada, e escolha somente uma entrada principal quando forem correlatas.
+- Compare pick, odd, probabilidade, edge, contexto técnico, pesquisa online, risco e coerência do mercado.
+- Moneyline, Handicap e Dupla Chance podem representar a mesma tese de resultado/proteção. Compare proteção da pick, risco/retorno e exposição duplicada, e escolha somente uma entrada principal quando forem correlatas.
 - Se nenhuma opção tiver sustentação técnica suficiente, retorne PULAR.
 - Se houver risco estrutural relevante, prefira PULAR.
 
 Gates obrigatórios:
-- Gate 1 — Coerência técnica: tese precisa estar coerente com mercado, pick, linha, probabilidade, edge ajustado/original, contexto informado, esporte e liga. Conflito técnico relevante = PULAR.
+- Gate 1 — Coerência técnica: tese precisa estar coerente com mercado, pick, probabilidade, edge ajustado/original, contexto informado, esporte e liga. Conflito técnico relevante = PULAR.
 - Gate 2 — Risco estrutural: risco estrutural alto = PULAR. Exemplos: MLB starter incerto/bullpen desgastado/lineup alternativo; NBA/WNBA estrela questionável/rotação incerta/back-to-back forte; NHL goalie não confirmado em pick sensível; NFL QB questionável/clima forte/desfalques OL/defesa; Futebol escalação rodada/mata-mata incerto/desfalques-chave.
 - Gate 3 — Informação crítica ausente: se informação crítica necessária não estiver disponível = PULAR; no máximo CONFIRMA 0.5u apenas se a informação ausente não for determinante.
 - Gate 4 — Fonte online fraca: se fontes forem antigas, genéricas ou não confirmarem o ponto crítico, sinalize e tenda para PULAR.
@@ -204,7 +201,6 @@ A) Entrada avaliada
 Jogo:
 Mercado:
 Pick:
-Linha:
 Odd:
 Probabilidade:
 Edge:
@@ -239,10 +235,10 @@ G) Decisão final
 Decisão: CONFIRMAR | PULAR
 decisao_grupo: CONFIRMA | PULAR
 prognostico_id_escolhido: id exato da opção escolhida ou null
-pick_escolhida: pick e linha da opção escolhida ou null
+pick_escolhida: pick da opção escolhida ou null
 stake_confirmada: 0.5 | 1.0 | 1.5 | 0
 Stake sugerida: 0.5u | 1.0u | 1.5u, apenas se CONFIRMAR
-justificativa_linha:
+justificativa_pick:
 riscos:
 condicao_invalidacao:
 Justificativa final objetiva:
@@ -312,7 +308,7 @@ export const analisarValidacaoOnline = createServerFn({ method: "POST" })
           .map((c, index) => {
             const odd = c.odd_ajustada ?? c.odd_original;
             const edge = c.edge_ajustado ?? c.edge_original;
-            return `${index + 1}. ID: ${c.prognostico_id} | Mercado: ${c.mercado ?? p.mercado} | Pick: ${c.pick} | Linha: ${c.linha ?? "-"} | Odd ofertada: ${c.odd_original.toFixed(3)} | Odd usada: ${odd.toFixed(3)} | Odd mediana: ${formatNullableOdd(c.odd_mediana)} | Odd mercado base: ${formatNullableOdd(c.odd_mercado_base)} | Odd melhor: ${formatNullableOdd(c.odd_melhor)} | Bookmaker melhor: ${c.bookmaker_melhor ?? "-"} | Odd valor: ${c.odd_valor.toFixed(3)} | Prob: ${c.probabilidade.toFixed(2)}% | Edge: ${edge.toFixed(2)}%`;
+            return `${index + 1}. ID: ${c.prognostico_id} | Mercado: ${c.mercado ?? p.mercado} | Pick: ${c.pick} | Odd ofertada: ${c.odd_original.toFixed(3)} | Odd usada: ${odd.toFixed(3)} | Odd mediana: ${formatNullableOdd(c.odd_mediana)} | Odd mercado base: ${formatNullableOdd(c.odd_mercado_base)} | Odd melhor: ${formatNullableOdd(c.odd_melhor)} | Bookmaker melhor: ${c.bookmaker_melhor ?? "-"} | Odd valor: ${c.odd_valor.toFixed(3)} | Prob: ${c.probabilidade.toFixed(2)}% | Edge: ${edge.toFixed(2)}%`;
           })
           .join("\n")
       : "(nenhuma lista explicita de opcoes do grupo foi informada)";
@@ -322,7 +318,7 @@ export const analisarValidacaoOnline = createServerFn({ method: "POST" })
           .map((c, index) => {
             const odd = c.odd_ajustada ?? c.odd_original;
             const edge = c.edge_ajustado ?? c.edge_original;
-            return `${index + 1}. Mercado: ${c.mercado} | Pick: ${c.pick} | Linha: ${c.linha ?? "-"} | Odd ofertada: ${c.odd_original.toFixed(3)} | Odd usada: ${odd.toFixed(3)} | Odd mediana: ${formatNullableOdd(c.odd_mediana)} | Odd mercado base: ${formatNullableOdd(c.odd_mercado_base)} | Odd melhor: ${formatNullableOdd(c.odd_melhor)} | Bookmaker melhor: ${c.bookmaker_melhor ?? "-"} | Prob: ${c.probabilidade_final.toFixed(2)}% | Edge: ${edge.toFixed(2)}%`;
+            return `${index + 1}. Mercado: ${c.mercado} | Pick: ${c.pick} | Odd ofertada: ${c.odd_original.toFixed(3)} | Odd usada: ${odd.toFixed(3)} | Odd mediana: ${formatNullableOdd(c.odd_mediana)} | Odd mercado base: ${formatNullableOdd(c.odd_mercado_base)} | Odd melhor: ${formatNullableOdd(c.odd_melhor)} | Bookmaker melhor: ${c.bookmaker_melhor ?? "-"} | Prob: ${c.probabilidade_final.toFixed(2)}% | Edge: ${edge.toFixed(2)}%`;
           })
           .join("\n")
       : "(nenhuma outra pick pendente do mesmo jogo informada)";
@@ -335,7 +331,6 @@ Liga: ${p.liga}
 Jogo: ${p.jogo}
 Mercado: ${p.mercado}
 Pick: ${p.pick}
-Linha: ${p.linha ?? "-"}
 Odd ofertada: ${p.odd_original.toFixed(3)}
 Odd ajustada: ${p.odd_ajustada != null ? p.odd_ajustada.toFixed(3) : "—"}
 Odd em uso: ${oddFinal.toFixed(3)}
@@ -368,10 +363,10 @@ ${checklistEsporte}
 
 Instrução reforçada:
 Toda análise de valor (edge, EV, comparação com odd justa e comentários no parecer) DEVE usar exclusivamente a "Odd em uso" (que já reflete a odd ajustada quando existe). Não cite a "Odd ofertada" original como base para a decisão; ela é apenas referência histórica do modelo. Se mencionar odd no parecer, use a odd em uso.
-Você deve usar o checklist específico do esporte. Não faça apenas busca genérica por notícias. Busque os fatores que realmente podem confirmar ou invalidar a tese da aposta conforme esporte, liga, mercado, pick e linha. Quando não encontrar uma informação crítica, diga claramente que ela não foi encontrada. Não invente dados. Diferencie fatos confirmados, informações ausentes e inferências.
+Você deve usar o checklist específico do esporte. Não faça apenas busca genérica por notícias. Busque os fatores que realmente podem confirmar ou invalidar a tese da aposta conforme esporte, liga, mercado e pick. Quando não encontrar uma informação crítica, diga claramente que ela não foi encontrada. Não invente dados. Diferencie fatos confirmados, informações ausentes e inferências.
 Antes de sugerir CONFIRMA, procure motivos concretos para PULAR. Se a tese contra a entrada for relevante ou houver informação crítica ausente/incerta, sugira PULAR. Não confirme apenas porque a entrada veio como EV+.
 Não use 1.0u como stake padrão. Se houver qualquer dúvida entre 1.0u e 0.5u, use 0.5u. Se houver dúvida entre 0.5u e PULAR, use PULAR.
-Se houver outras opções listadas acima, compare mercado, linhas, odds, probabilidade, edge, proteção da linha e risco/retorno. A resposta deve indicar a melhor opção para CONFIRMAR ou recomendar PULAR o grupo inteiro. Nunca confirme mais de uma opção do mesmo jogo e mesma família de mercado.
+Se houver outras opções listadas acima, compare mercado, picks, odds, probabilidade, edge, proteção e risco/retorno. A resposta deve indicar a melhor opção para CONFIRMAR ou recomendar PULAR o grupo inteiro. Nunca confirme mais de uma opção do mesmo jogo e mesma família de mercado.
 Não use a opção selecionada na interface como preferência. Ela serve apenas para ajuste de odd; sua decisão deve comparar todas as opções concorrentes.
 Se sugerir CONFIRMA, devolva obrigatoriamente o campo prognostico_id_escolhido com um ID exato da lista OPÇÕES CONCORRENTES. Se sugerir PULAR, use prognostico_id_escolhido: null.
 

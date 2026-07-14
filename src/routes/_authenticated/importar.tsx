@@ -38,6 +38,7 @@ import { toast } from "sonner";
 import { normalizeEsporteLiga } from "@/lib/db";
 import { parseBrazilianDate, formatBR } from "@/lib/date-br";
 import { ScraperApiDialog } from "@/components/scraper-api-dialog";
+import { standardizePredictionContract } from "@/lib/market-contract";
 
 export const Route = createFileRoute("/_authenticated/importar")({
   component: ImportarPage,
@@ -53,7 +54,6 @@ const TARGET_FIELDS = [
   "visitante",
   "mercado",
   "pick",
-  "linha",
   "odd_ofertada",
   "odd_valor",
   "probabilidade_final",
@@ -87,7 +87,6 @@ const ALIASES: Record<Field, string[]> = {
   visitante: ["visitante", "away", "fora", "time_fora"],
   mercado: ["mercado", "market", "tipo_aposta"],
   pick: ["pick", "selecao", "seleção", "selection", "aposta"],
-  linha: ["linha", "line", "handicap"],
   odd_ofertada: ["odd_ofertada", "odd", "odds", "odd_oferecida", "preco"],
   odd_valor: ["odd_valor", "fair_odd", "odd_justa", "valor_odd"],
   probabilidade_final: [
@@ -316,11 +315,11 @@ function ImportarPage() {
 
     const { data } = await supabase
       .from("prognosticos")
-      .select("data,esporte,jogo,mercado,pick,linha");
+      .select("data,esporte,jogo,mercado,pick");
     const set = new Set<string>();
     (data ?? []).forEach((r: Record<string, unknown>) => {
       set.add(
-        [r.data, r.esporte, r.jogo, r.mercado, r.pick, r.linha ?? ""]
+        [r.data, r.esporte, r.jogo, r.mercado, r.pick]
           .map((x) =>
             String(x ?? "")
               .toLowerCase()
@@ -385,9 +384,14 @@ function ImportarPage() {
 
       if (!mandante || !visitante) warnings.push("Sem mandante/visitante");
 
-      const linha =
-        values.linha == null || values.linha === "" ? null : String(values.linha).trim();
-      const key = [data, normESL.esporte, jogo, mercado, pick, linha ?? ""]
+      const standard = standardizePredictionContract({
+        mercado,
+        pick,
+        esporte: normESL.esporte,
+        mandante,
+        visitante,
+      });
+      const key = [data, normESL.esporte, jogo, standard.mercado, standard.pick]
         .map((x) =>
           String(x ?? "")
             .toLowerCase()
@@ -406,9 +410,9 @@ function ImportarPage() {
           jogo,
           mandante: mandante || null,
           visitante: visitante || null,
-          mercado,
-          pick,
-          linha,
+          mercado: standard.mercado,
+          pick: standard.pick,
+          linha: null,
           odd_ofertada: oddOf,
           odd_valor: oddV,
           probabilidade_final: prob,
@@ -579,7 +583,6 @@ function ImportarPage() {
       "visitante",
       "mercado",
       "pick",
-      "linha",
       "odd_ofertada",
       "odd_valor",
       "probabilidade_final",
@@ -594,9 +597,8 @@ function ImportarPage() {
       "Flamengo x Palmeiras",
       "Flamengo",
       "Palmeiras",
-      "Resultado Final",
-      "Flamengo",
-      "",
+      "Moneyline",
+      "Moneyline Casa",
       "2.10",
       "1.95",
       "55",
@@ -640,11 +642,11 @@ function ImportarPage() {
               setMapping(autoMap(hdrs));
               const { data } = await supabase
                 .from("prognosticos")
-                .select("data,esporte,jogo,mercado,pick,linha");
+                .select("data,esporte,jogo,mercado,pick");
               const set = new Set<string>();
               (data ?? []).forEach((r: Record<string, unknown>) => {
                 set.add(
-                  [r.data, r.esporte, r.jogo, r.mercado, r.pick, r.linha ?? ""]
+                  [r.data, r.esporte, r.jogo, r.mercado, r.pick]
                     .map((x) =>
                       String(x ?? "")
                         .toLowerCase()

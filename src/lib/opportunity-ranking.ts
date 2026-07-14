@@ -10,6 +10,7 @@ import {
 import { parseBaseballReferenceMatchupText } from "@/lib/mlb/baseballReferenceMatchupParser";
 import { supabase } from "@/lib/supabase-public";
 import type { Json } from "@/integrations/supabase/types";
+import { standardizePredictionContract } from "@/lib/market-contract";
 import {
   calculateCriticalShortlistConfidence,
   calculateCriticalShortlistScore,
@@ -68,7 +69,6 @@ export interface RankedOpportunityAlternative {
   prognostico_id: string;
   mercado: string;
   pick: string;
-  linha: string | null;
   odd_ofertada: number;
   edge: number;
   opportunity_score_pre: number;
@@ -122,12 +122,12 @@ export function isFinalExecutableStatus(status: OpportunityRankingStatus): boole
   return status === "TOP_FINAL";
 }
 
-export function getOpportunityMarketLabel(prognostico: Pick<Prognostico, "mercado" | "pick">) {
-  return prognostico.mercado;
+export function getOpportunityMarketLabel(prognostico: Prognostico) {
+  return standardizePredictionContract(prognostico).mercado;
 }
 
-export function getOpportunityPickLabel(prognostico: Pick<Prognostico, "mercado" | "pick">) {
-  return prognostico.pick;
+export function getOpportunityPickLabel(prognostico: Prognostico) {
+  return standardizePredictionContract(prognostico).pick;
 }
 
 export function getOpportunitySourceLabel(
@@ -366,7 +366,7 @@ export function buildMatchupPreviewEnrichment(
     "",
     "[PROGNOSTICO]",
     `Mercado: ${getOpportunityMarketLabel(prognostico)}`,
-    `Pick: ${getOpportunityPickLabel(prognostico)}${prognostico.linha ? ` ${prognostico.linha}` : ""}`,
+    `Pick: ${getOpportunityPickLabel(prognostico)}`,
     `Origem: ${getOpportunitySourceLabel(prognostico)}`,
     `Odd ofertada: ${formatNumber(prognostico.odd_ofertada)}`,
     `Odd valor: ${formatNumber(prognostico.odd_valor)}`,
@@ -811,7 +811,7 @@ function buildThesisRepresentative(
       ...best.reasons,
       ...(alternatives.length
         ? [
-            `${alternatives.length} linha(s) correlacionada(s) agrupada(s) como alternativas desta tese.`,
+            `${alternatives.length} opção(ões) correlacionada(s) agrupada(s) como alternativas desta tese.`,
           ]
         : []),
     ],
@@ -825,7 +825,6 @@ function candidateToAlternative(
     prognostico_id: candidate.prognostico.id,
     mercado: getOpportunityMarketLabel(candidate.prognostico),
     pick: getOpportunityPickLabel(candidate.prognostico),
-    linha: candidate.prognostico.linha,
     odd_ofertada: getOddEfetiva(candidate.prognostico),
     edge: getEdgeEfetivo(candidate.prognostico),
     opportunity_score_pre: candidate.opportunity_score_pre,
@@ -921,7 +920,6 @@ function getMarketFamilyKey(prognostico: Prognostico): string {
 function getSelectionSideKey(prognostico: Prognostico): string {
   const marketFamily = getMarketFamilyKey(prognostico);
   const pick = normalizeKeyPart(getOpportunityPickLabel(prognostico));
-  const line = normalizeKeyPart(prognostico.linha);
   const pickWithoutNumbers = pick
     .replace(/[+-]?\d+(?:[.,]\d+)?/g, " ")
     .replace(/\bmeio\b|\bhalf\b/g, " ")
@@ -934,7 +932,7 @@ function getSelectionSideKey(prognostico: Prognostico): string {
   }
 
   if (marketFamily === "handicap-spread") {
-    return pickWithoutNumbers || line || "handicap-side";
+    return pickWithoutNumbers || "handicap-side";
   }
 
   if (marketFamily === "resultado" || marketFamily === "dupla-chance") {
@@ -942,10 +940,10 @@ function getSelectionSideKey(prognostico: Prognostico): string {
   }
 
   if (marketFamily === "escanteios" || marketFamily === "player-props") {
-    return pickWithoutNumbers || line || marketFamily;
+    return pickWithoutNumbers || marketFamily;
   }
 
-  return `${pickWithoutNumbers}|${line}`.replace(/\|$/, "") || "default-side";
+  return pickWithoutNumbers || "default-side";
 }
 
 function normalizeKeyPart(value: unknown): string {

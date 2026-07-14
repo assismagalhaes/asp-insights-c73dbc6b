@@ -169,7 +169,7 @@ function AprendizadoIaPage() {
         liga: p.liga,
         mercado: p.mercado,
         pick: p.pick,
-        linha: p.linha,
+        linha: null,
         jogo: p.jogo,
         decisao_ia_sugerida: decisaoIa,
         stake_ia_sugerida: validacao?.stake_ia_sugerida ?? null,

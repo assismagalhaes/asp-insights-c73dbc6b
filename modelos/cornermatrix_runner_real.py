@@ -11,6 +11,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+try:
+    from market_contract import standardize_prediction_dataframe
+except ImportError:
+    from modelos.market_contract import standardize_prediction_dataframe
+
 PACKBALL_FILE_10 = "PackBall Custom cantos_10 {date}.csv"
 PACKBALL_FILE_20 = "PackBall Custom cantos_20 {date}.csv"
 
@@ -1623,7 +1628,7 @@ def build_lovable_export(base: pd.DataFrame) -> pd.DataFrame:
     out = pd.DataFrame(rows, columns=cols)
     if not out.empty:
         out = out.sort_values(["data", "hora", "liga", "jogo", "mercado", "linha", "pick"]).reset_index(drop=True)
-    return out
+    return standardize_prediction_dataframe(out, MODEL_NAME)
 
 # ------------------------------------------------------------
 # PIPELINE PRINCIPAL

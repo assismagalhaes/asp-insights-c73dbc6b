@@ -50,7 +50,6 @@ export function buildCriticalValidationTelegramMessage(input: CriticalAlertMessa
   const time = input.event_time || "-";
   const market = input.market || "-";
   const pick = input.pick || "-";
-  const line = input.line ? ` ${input.line}` : "";
   const odd = input.odd != null ? Number(input.odd).toFixed(2) : "-";
   const minutes = input.minutes_before;
 
@@ -69,7 +68,7 @@ export function buildCriticalValidationTelegramMessage(input: CriticalAlertMessa
     `🏆 Liga: ${escapeHtml(league)}`,
     `🕒 Início: ${escapeHtml(time)}`,
     `📌 Mercado: ${escapeHtml(market)}`,
-    `🎯 Pick pendente: ${escapeHtml(pick + line)}`,
+    `🎯 Pick pendente: ${escapeHtml(pick)}`,
     `📈 Odd: ${odd}`,
     "",
     `Status: pendente na Validação Crítica.`,

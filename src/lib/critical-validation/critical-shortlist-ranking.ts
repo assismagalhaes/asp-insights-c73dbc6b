@@ -210,7 +210,7 @@ export function calculateCriticalShortlistConfidence(
   if ((probability.margin ?? 0) >= 5) score += 8;
   if (odds >= 90) score += 5;
   if (hasSource) score += 5;
-  if (prognostico.mercado && prognostico.pick && (prognostico.linha || !marketUsuallyNeedsLine(prognostico))) score += 5;
+  if (prognostico.mercado && prognostico.pick && hasNumericPickWhenRequired(prognostico)) score += 5;
   if (!data.hasUsefulContext) score -= 8;
   if (!isFiniteNumber(prognostico.edge_ajustado) && !packballAwaitingOdd) score -= 8;
   if (packballAwaitingOdd) score += 5;
@@ -313,7 +313,7 @@ export function calculateDataReadinessScore(prognostico: Prognostico): {
   const sourceIntegrityScore = calculateSourceIntegrityScore(prognostico);
   if (!prognostico.mercado) missingFields.push("mercado");
   if (!prognostico.pick) missingFields.push("pick");
-  if (marketUsuallyNeedsLine(prognostico) && !prognostico.linha) missingFields.push("linha");
+  if (!hasNumericPickWhenRequired(prognostico)) missingFields.push("limiar numérico no pick");
   if (!textHasUsefulContent(text)) missingFields.push("contexto tecnico");
   missingFields.push(...critical.missingFields);
   const score = round(
@@ -340,7 +340,7 @@ export function calculateDataReadinessScore(prognostico: Prognostico): {
 
 export function calculateMarketRiskScore(prognostico: Prognostico): { score: number; recognized: boolean } {
   const market = normalized(`${prognostico.mercado} ${prognostico.pick}`);
-  const lineAlternative = isAlternativeLine(prognostico);
+  const lineAlternative = isAlternativePick(prognostico);
   if (/player prop|props|jogador|pontos jogador|rebotes|assistencias|pra\b/.test(market)) {
     return { score: lineAlternative ? 30 : 45, recognized: true };
   }
@@ -466,7 +466,7 @@ export function detectCriticalShortlistRiskFlags(prognostico: Prognostico, now =
     /CONFLITO_FORTE_COM_MERCADO/i.test(text),
     "model_market_conflict_strong",
     "high",
-    "Modelo WNBA diverge fortemente da linha de mercado; manter como reserva ate validacao contextual.",
+    "Modelo WNBA diverge fortemente da pick de mercado; manter como reserva ate validacao contextual.",
   );
   pushIf(flags, !isFiniteNumber(prognostico.probabilidade_final), "probability_missing", "hard_block", "Probabilidade ausente.");
   pushIf(
@@ -488,7 +488,7 @@ export function detectCriticalShortlistRiskFlags(prognostico: Prognostico, now =
   pushIf(flags, data.missingFields.length > 0, "critical_fields_missing", "medium", "Campos criticos ausentes ou incompletos.");
   pushIf(flags, !market.recognized, "market_not_recognized", "medium", "Mercado pouco reconhecido.");
   pushIf(flags, isVolatileMarket(prognostico), "volatile_market", "medium", "Mercado estruturalmente volatil.");
-  pushIf(flags, isAlternativeLine(prognostico), "alternative_line", "high", "Linha alternativa ou distante exige mais contexto.");
+  pushIf(flags, isAlternativePick(prognostico), "alternative_pick", "high", "Pick alternativa ou distante exige mais contexto.");
   pushIf(
     flags,
     market.score <= 62 && !textHasUsefulContent(text),
@@ -750,7 +750,7 @@ function detectMarketCriticalSignals(prognostico: Prognostico, text: string): { 
   };
   require(Boolean(prognostico.mercado), "mercado");
   require(Boolean(prognostico.pick), "pick");
-  require(!marketUsuallyNeedsLine(prognostico) || Boolean(prognostico.linha), "linha");
+  require(hasNumericPickWhenRequired(prognostico), "limiar numérico no pick");
   require(isPositiveFinite(prognostico.odd_ofertada), "odd");
   require(isFiniteNumber(prognostico.probabilidade_final) && isFiniteNumber(prognostico.edge), "probabilidade/edge");
   require(textHasUsefulContent(text), "contexto tecnico");
@@ -791,7 +791,7 @@ function countStructuredSignals(prognostico: Prognostico, text: string): number 
     isFiniteNumber(prognostico.edge) || /edge|ev|valor esperado/i.test(text),
     Boolean(prognostico.mercado),
     Boolean(prognostico.pick),
-    Boolean(prognostico.linha) || !marketUsuallyNeedsLine(prognostico),
+    hasNumericPickWhenRequired(prognostico),
     Boolean(prognostico.data || prognostico.hora),
     /media|average|record|last|ultimos|h2h|forma|starter|lineup|bullpen|escanteio|corner|pace|ritmo|posse|possessions|net rating|ortg|drtg|usage|minutes|minutos|rotation|rotacao|injury|lesao|rest|descanso|b2b/i.test(text),
     /modelo|model|payload|json|origem|source|amostra|sample|historico/i.test(text),
@@ -837,13 +837,17 @@ function isVolatileMarket(prognostico: Prognostico): boolean {
   return /escanteio|corner|race|primeiro|first|cartao|cards|player prop|props|jogador|rebotes|assistencias|pra\b/.test(market);
 }
 
-function isAlternativeLine(prognostico: Prognostico): boolean {
-  const text = normalized(`${prognostico.mercado} ${prognostico.pick} ${prognostico.linha ?? ""} ${combinedContext(prognostico)}`);
-  return /alternativa|alternate|alt line|linha distante/.test(text);
+function isAlternativePick(prognostico: Prognostico): boolean {
+  const text = normalized(`${prognostico.mercado} ${prognostico.pick} ${combinedContext(prognostico)}`);
+  return /alternativa|alternate|alt pick|pick distante|alt line|linha distante/.test(text);
 }
 
 function marketUsuallyNeedsLine(prognostico: Prognostico): boolean {
   return /total|over|under|handicap|spread|escanteio|corner|cartao|cards/i.test(`${prognostico.mercado} ${prognostico.pick}`);
+}
+
+function hasNumericPickWhenRequired(prognostico: Prognostico): boolean {
+  return !marketUsuallyNeedsLine(prognostico) || /[+-]?\d+(?:[.,]\d+)?/.test(prognostico.pick);
 }
 
 function isMlbTotals(prognostico: Prognostico): boolean {

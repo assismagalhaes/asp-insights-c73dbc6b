@@ -13,6 +13,11 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+try:
+    from market_contract import standardize_prediction_rows
+except ImportError:
+    from modelos.market_contract import standardize_prediction_rows
+
 HIST_DIR = Path(os.getenv("BASEBALL_HIST_DIR", "/home/ubuntu/jupyter/dados_baseball"))
 
 MODEL_NAME = "ASP Diamond"
@@ -181,6 +186,7 @@ def main() -> None:
                 )
             )
 
+        prognosticos = standardize_prediction_rows(prognosticos, MODEL_NAME)
         write_output_csv(output_path, prognosticos)
         write_handicap_audit_csv(HANDICAP_AUDIT_PATH, handicap_audit_rows)
         handicap_shadow_diagnostics = build_handicap_shadow_diagnostics(handicap_audit_rows)
@@ -1786,7 +1792,6 @@ def write_output_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "visitante",
         "mercado",
         "pick",
-        "linha",
         "modelo_versao",
         "odd_ofertada",
         "odd_mediana",

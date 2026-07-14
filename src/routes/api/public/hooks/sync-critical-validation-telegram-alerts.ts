@@ -66,7 +66,7 @@ export const Route = createFileRoute("/api/public/hooks/sync-critical-validation
         const { data: pendentes, error: perr } = await supabase
           .from("prognosticos")
           .select(
-            "id,data,hora,esporte,liga,jogo,mandante,visitante,mercado,pick,linha,odd_ofertada,odd_ajustada",
+            "id,data,hora,esporte,liga,jogo,mandante,visitante,mercado,pick,odd_ofertada,odd_ajustada",
           )
           .eq("status_validacao", "PENDENTE")
           .eq("resultado", "PENDENTE");
@@ -126,7 +126,7 @@ export const Route = createFileRoute("/api/public/hooks/sync-critical-validation
                 matchup,
                 market: p.mercado,
                 pick: p.pick,
-                line: p.linha,
+                line: null,
                 odd: p.odd_ajustada ?? p.odd_ofertada,
                 status: "pending",
                 alert_minutes_before: DEFAULT_ALERT_MINUTES,

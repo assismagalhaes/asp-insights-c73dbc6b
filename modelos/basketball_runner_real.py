@@ -20,6 +20,8 @@ PROJECT_DIR = Path(__file__).resolve().parents[1]
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
+from modelos.market_contract import standardize_prediction_rows
+
 BASE_DIR = Path('/home/ubuntu/asp-scraper-api')
 JUPYTER_DIR = Path('/home/ubuntu/jupyter')
 NOTEBOOKS = {
@@ -137,6 +139,7 @@ def main() -> None:
         if league == 'WNBA':
             rows = apply_wnba_exposure_caps(rows)
         rows = normalize_rows(rows, league)
+        rows = standardize_prediction_rows(rows, model_name(league))
         handicap_shadow_diagnostics = None
         if league == 'WNBA':
             rows.sort(key=lambda r: (r.get('data') or '', r.get('hora') or '', r.get('jogo') or '', r.get('mercado') or '', -float(r.get('edge') or 0)))
@@ -2219,7 +2222,7 @@ def normalize_rows(rows: list[dict[str, Any]], league: str) -> list[dict[str, An
 
 def write_output_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    cols = ['data','hora','esporte','liga','jogo','mandante','visitante','mercado','pick','linha','odd','odd_ofertada','odd_mediana','odd_mercado_base','odd_melhor','bookmaker_melhor','odd_valor','probabilidade','probabilidade_final','edge','stake','selection_role','market_conflict_status','observacoes','dados_tecnicos','contexto_adicional','parecer_validacao']
+    cols = ['data','hora','esporte','liga','jogo','mandante','visitante','mercado','pick','odd','odd_ofertada','odd_mediana','odd_mercado_base','odd_melhor','bookmaker_melhor','odd_valor','probabilidade','probabilidade_final','edge','stake','selection_role','market_conflict_status','observacoes','dados_tecnicos','contexto_adicional','parecer_validacao']
     with path.open('w', encoding='utf-8-sig', newline='') as fh:
         writer = csv.DictWriter(fh, fieldnames=cols, extrasaction='ignore')
         writer.writeheader()

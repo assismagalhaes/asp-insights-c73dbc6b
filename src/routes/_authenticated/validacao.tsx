@@ -59,7 +59,7 @@ import {
 import { analisarValidacao } from "@/lib/validacao-ia.functions";
 import { analisarValidacaoOnline } from "@/lib/validacao-ia-online.functions";
 import { getAiCalibrationSummary } from "@/lib/ai-learning";
-import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
+import { formatBR, formatHora } from "@/lib/date-br";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -222,8 +222,8 @@ function groupPendentes(prognosticos: Prognostico[]): ValidationGroup[] {
   return Array.from(map.values()).map((group) => ({
     ...group,
     opcoes: group.opcoes.slice().sort((a, b) => {
-      const pa = `${getOpportunityPickLabel(a)} ${a.linha ?? ""}`;
-      const pb = `${getOpportunityPickLabel(b)} ${b.linha ?? ""}`;
+      const pa = getOpportunityPickLabel(a);
+      const pb = getOpportunityPickLabel(b);
       return `${getOpportunityMarketLabel(a)} ${pa}`.localeCompare(
         `${getOpportunityMarketLabel(b)} ${pb}`,
       );
@@ -267,7 +267,7 @@ function findAiChosenOption(g: ValidationGroup, ia: IAResult): Prognostico | nul
 
   return (
     g.opcoes.find((p) => {
-      const optionLabel = normalizeAiChoice(`${getOpportunityPickLabel(p)} ${p.linha ?? ""}`);
+      const optionLabel = normalizeAiChoice(getOpportunityPickLabel(p));
       const optionPick = normalizeAiChoice(getOpportunityPickLabel(p));
       return optionLabel === pick || optionPick === pick || optionLabel.includes(pick);
     }) ?? null
@@ -297,7 +297,7 @@ function formatIaParecerForDisplay(parecer: string): string {
     .map((line) =>
       line
         .replace(/^\s*"?pick_escolhida"?\s*:/i, "Pick escolhida:")
-        .replace(/^\s*"?justificativa_linha"?\s*:/i, "Justificativa da linha escolhida:")
+        .replace(/^\s*"?justificativa_(?:linha|pick)"?\s*:/i, "Justificativa da pick escolhida:")
         .replace(/^\s*"?riscos"?\s*:/i, "Principais riscos:")
         .replace(/^\s*"?condicao_invalidacao"?\s*:/i, "Condição de invalidação:")
         .replace(/\bCONFIRMA\b/g, "CONFIRMAR")
@@ -386,7 +386,7 @@ function Validacao() {
   const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
   const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
 
-  // estado por linha e por grupo
+  // estado por opção e por grupo
   const [oddsAj, setOddsAj] = useState<Record<string, string>>({});
   const [stakes, setStakes] = useState<Record<string, string>>({});
   const [pareceres, setPareceres] = useState<Record<string, string>>({});
@@ -618,7 +618,6 @@ function Validacao() {
         mercado: getOpportunityMarketLabel(option),
         pick: getOpportunityPickLabel(option),
         origem: getOpportunitySourceLabel(option),
-        linha: option.linha,
         odd_original: option.odd_ofertada,
         odd_ajustada: getOddAjustadaNum(option),
         odd_mediana: option.odd_mediana ?? null,
@@ -636,7 +635,6 @@ function Validacao() {
           mercado: getOpportunityMarketLabel(other),
           pick: getOpportunityPickLabel(other),
           origem: getOpportunitySourceLabel(other),
-          linha: other.linha,
           odd_original: other.odd_ofertada,
           odd_ajustada: getOddAjustadaNum(other),
           odd_mediana: other.odd_mediana ?? null,
@@ -657,7 +655,6 @@ function Validacao() {
           mercado: getOpportunityMarketLabel(p),
           pick: getOpportunityPickLabel(p),
           origem: getOpportunitySourceLabel(p),
-          linha: p.linha,
           odd_original: p.odd_ofertada,
           odd_ajustada: oddAj,
           odd_mediana: p.odd_mediana ?? null,
@@ -725,7 +722,7 @@ function Validacao() {
         liga: snapshotOption.liga,
         mercado: getOpportunityMarketLabel(snapshotOption),
         pick: getOpportunityPickLabel(snapshotOption),
-        linha: snapshotOption.linha,
+        linha: null,
         jogo: snapshotOption.jogo,
         data_evento: snapshotOption.data,
         hora_evento: snapshotOption.hora,
@@ -900,8 +897,8 @@ function Validacao() {
       }
       toast.success(
         decisao === "CONFIRMA"
-          ? "Grupo validado: opção confirmada e linhas concorrentes removidas"
-          : "Grupo pulado: melhor registro mantido e linhas concorrentes removidas",
+          ? "Grupo validado: opção confirmada e opções concorrentes removidas"
+          : "Grupo pulado: melhor registro mantido e opções concorrentes removidas",
       );
     } catch (e) {
       toast.error((e as Error).message);
@@ -1017,7 +1014,6 @@ function Validacao() {
           const marketLabel = getOpportunityMarketLabel(p);
           const pickLabel = getOpportunityPickLabel(p);
           const sourceLabel = getOpportunitySourceLabel(p);
-          const mostrarLinha = shouldShowLinha(pickLabel, p.linha);
           const contextoAnalise = getContextoGrupo(g);
           const parecerCurrent = pareceres[g.key] ?? "";
           const ia = iaResults[g.key];
@@ -1103,11 +1099,6 @@ function Validacao() {
                               {opcaoMarketLabel}
                             </span>
                             <span className="font-semibold">{opcaoPickLabel}</span>
-                            {shouldShowLinha(opcaoPickLabel, opcao.linha) && (
-                              <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-                                {opcao.linha}
-                              </span>
-                            )}
                             {opcaoCheck && (
                               <span
                                 className={cn(
@@ -1182,7 +1173,6 @@ function Validacao() {
                   <KV label="Mercado" value={marketLabel} />
                   <KV label="Pick" value={pickLabel} />
                   <KV label="Origem" value={sourceLabel} />
-                  {mostrarLinha && <KV label="Linha" value={p.linha ?? "-"} />}
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-8">
                   <Metric
@@ -1297,7 +1287,7 @@ function Validacao() {
                 </Label>
                 <Textarea
                   rows={6}
-                  placeholder="Cole dados internos do prognóstico: H2H, últimos jogos, projeções, odds, linhas, splits, dados técnicos do modelo ou observações manuais. IA Local usará somente este contexto e os dados internos."
+                  placeholder="Cole dados internos do prognóstico: H2H, últimos jogos, projeções, odds, picks, splits, dados técnicos do modelo ou observações manuais. IA Local usará somente este contexto e os dados internos."
                   value={contextoAnalise}
                   onChange={(e) => setContextoGrupo(g, e.target.value)}
                 />
@@ -1848,12 +1838,6 @@ function PreAiShortlistPanel({
                   <td className="px-3 py-2">{getOpportunityMarketLabel(candidate.prognostico)}</td>
                   <td className="px-3 py-2">
                     {getOpportunityPickLabel(candidate.prognostico)}
-                    {shouldShowLinha(
-                      getOpportunityPickLabel(candidate.prognostico),
-                      candidate.prognostico.linha,
-                    )
-                      ? ` ${candidate.prognostico.linha ?? ""}`
-                      : ""}
                   </td>
                   <td className="px-3 py-2 text-muted-foreground">
                     {formatCandidateAlternativesSummary(candidate)}
@@ -1926,7 +1910,7 @@ function formatSavedAlternativesSummary(
 ): string {
   const alternatives = getSavedAlternatives(item);
   if (!alternatives.length) return "";
-  return `Linhas alternativas agrupadas: ${alternatives.slice(0, 4).map(formatAlternativeLabel).join(" / ")}`;
+  return `Opções alternativas agrupadas: ${alternatives.slice(0, 4).map(formatAlternativeLabel).join(" / ")}`;
 }
 
 function getSavedAlternatives(
@@ -1945,8 +1929,7 @@ function isRankedOpportunityAlternative(value: unknown): value is RankedOpportun
 }
 
 function formatAlternativeLabel(alternative: RankedOpportunityAlternative): string {
-  const line = alternative.linha ? ` ${alternative.linha}` : "";
-  return `${alternative.pick}${line} (${alternative.opportunity_score_pre.toFixed(1)})`;
+  return `${alternative.pick} (${alternative.opportunity_score_pre.toFixed(1)})`;
 }
 
 function formatPreviewStatus(status: string): string {

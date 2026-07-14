@@ -26,7 +26,7 @@ import {
   stakeAnalitica,
   type PeriodoFiltro,
 } from "@/lib/metrics";
-import { formatBR, formatHora, shouldShowLinha, todayBR } from "@/lib/date-br";
+import { formatBR, formatHora, todayBR } from "@/lib/date-br";
 import { DadosTecnicosViewer } from "@/components/dados-tecnicos-viewer";
 
 export const Route = createFileRoute("/_authenticated/historico")({
@@ -180,7 +180,6 @@ function Historico() {
                 <th className="px-3 py-2 text-left">Placar</th>
                 <th className="px-3 py-2 text-left">Mercado</th>
                 <th className="px-3 py-2 text-left">Pick</th>
-                <th className="px-3 py-2 text-left">Linha</th>
                 <th className="px-3 py-2 text-right font-mono">Odd</th>
                 <th className="px-3 py-2 text-right font-mono">Stake</th>
                 <th className="px-3 py-2 text-left">Validação</th>
@@ -204,9 +203,6 @@ function Historico() {
                   <td className="px-3 py-2 font-mono text-xs">{p.placar_final ?? "-"}</td>
                   <td className="px-3 py-2 text-muted-foreground">{p.mercado}</td>
                   <td className="px-3 py-2">{p.pick}</td>
-                  <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
-                    {shouldShowLinha(p.pick, p.linha) ? p.linha : "-"}
-                  </td>
                   <td className="px-3 py-2 text-right font-mono">{p.odd_ofertada.toFixed(2)}</td>
                   <td className="px-3 py-2 text-right font-mono">
                     {stakeAnalitica(p).toFixed(1)}u
@@ -229,7 +225,7 @@ function Historico() {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={15} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={14} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     Nenhum prognóstico encontrado com os filtros aplicados.
                   </td>
                 </tr>
@@ -255,7 +251,6 @@ function toHistoricoCsv(rows: Prognostico[]): string {
     { label: "placar_final", value: (p) => p.placar_final },
     { label: "mercado", value: (p) => p.mercado },
     { label: "pick", value: (p) => p.pick },
-    { label: "linha", value: (p) => p.linha },
     { label: "odd_ofertada", value: (p) => p.odd_ofertada },
     { label: "odd_ajustada", value: (p) => p.odd_ajustada },
     { label: "odd_valor", value: (p) => p.odd_valor },

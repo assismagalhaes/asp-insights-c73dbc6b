@@ -34,8 +34,9 @@ import {
   uploadPackballModelFiles,
 } from "@/lib/scraper-api.functions";
 import { supabase } from "@/lib/supabase-public";
-import { normalizeEsporteLiga, normalizeMercadoPadrao } from "@/lib/db";
+import { normalizeEsporteLiga } from "@/lib/db";
 import { parseBrazilianDate, formatDateTimeBR } from "@/lib/date-br";
+import { standardizePredictionContract } from "@/lib/market-contract";
 
 export const Route = createFileRoute("/_authenticated/modelos-preditivos")({
   component: ModelosPreditivosPage,
@@ -446,7 +447,6 @@ function ModelosPreditivosPage() {
                   <TableHead>Mercado</TableHead>
                   <TableHead>Pick</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Linha</TableHead>
                   <TableHead className="text-right">Odd</TableHead>
                   <TableHead className="text-right">Odd ofertada</TableHead>
                   <TableHead className="text-right">Odd valor</TableHead>
@@ -484,7 +484,6 @@ function ModelosPreditivosPage() {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="font-mono text-xs">{p.linha ?? "-"}</TableCell>
                     <TableCell className="text-right font-mono">
                       {formatOptionalNum(p.odd)}
                     </TableCell>
@@ -506,7 +505,7 @@ function ModelosPreditivosPage() {
                 ))}
                 {!prognosticos.length && (
                   <TableRow>
-                    <TableCell colSpan={18} className="py-12 text-center text-muted-foreground">
+                    <TableCell colSpan={17} className="py-12 text-center text-muted-foreground">
                       {resultado
                         ? "Nenhuma oportunidade EV+ encontrada para esta coleta."
                         : "Nenhum modelo executado ainda."}
@@ -538,7 +537,7 @@ function ColetaResumo({ coleta }: { coleta: ColetaOdds }) {
       <Info label="Coleta" value={formatDateTimeBR(coleta.created_at)} />
       <Info label="Esporte" value={coleta.esporte ?? "-"} />
       <Info label="Ligas" value={formatColetaLigas(coleta)} />
-      <Info label="Linhas" value={coleta.total_odds ?? 0} />
+      <Info label="Cotações" value={coleta.total_odds ?? 0} />
     </div>
   );
 }
@@ -604,8 +603,9 @@ function extractInputId(response: unknown) {
 function normalizeModelResponse(response: unknown): ModeloResultado {
   const root = isRecord(response) ? response : {};
   const data = isRecord(root.data) ? root.data : isRecord(root.result) ? root.result : root;
+  const modelName = data.modelo ? String(data.modelo) : undefined;
   const prognosticos = Array.isArray(data.prognosticos)
-    ? data.prognosticos.filter(isRecord).map(mapModeloPrognostico)
+    ? data.prognosticos.filter(isRecord).map((row) => mapModeloPrognostico(row, modelName))
     : [];
   return {
     ok: Boolean(data.ok ?? true),
@@ -623,7 +623,23 @@ function normalizeModelResponse(response: unknown): ModeloResultado {
   };
 }
 
-function mapModeloPrognostico(row: Record<string, unknown>): ModeloPrognostico {
+function mapModeloPrognostico(
+  row: Record<string, unknown>,
+  modelName?: string,
+): ModeloPrognostico {
+  const standard = standardizePredictionContract(
+    {
+      mercado: String(row.mercado ?? ""),
+      pick: String(row.pick ?? ""),
+      linha: row.linha == null ? null : String(row.linha),
+      esporte: String(row.esporte ?? ""),
+      mandante: row.mandante ? String(row.mandante) : null,
+      visitante: row.visitante ? String(row.visitante) : null,
+      selection_side: row.selection_side ? String(row.selection_side) : null,
+      opcao_1x2: row.opcao_1x2 ? String(row.opcao_1x2) : null,
+    },
+    modelName,
+  );
   return {
     data: String(row.data ?? ""),
     hora: row.hora ? String(row.hora) : null,
@@ -632,9 +648,9 @@ function mapModeloPrognostico(row: Record<string, unknown>): ModeloPrognostico {
     jogo: String(row.jogo ?? ""),
     mandante: row.mandante ? String(row.mandante) : null,
     visitante: row.visitante ? String(row.visitante) : null,
-    mercado: String(row.mercado ?? ""),
-    pick: String(row.pick ?? ""),
-    linha: row.linha == null || row.linha === "" ? null : String(row.linha),
+    mercado: standard.mercado,
+    pick: standard.pick,
+    linha: null,
     odd: toNumber(row.odd),
     odd_ofertada: toNumber(row.odd_ofertada) ?? toNumber(row.odd) ?? 0,
     odd_mediana: toNumber(row.odd_mediana ?? row.odd_median),
@@ -685,6 +701,15 @@ function toPrognosticoInsert(p: ModeloPrognostico, resultado: ModeloResultado | 
     ]
       .filter(Boolean)
       .join("\n\n") || null;
+  const standard = standardizePredictionContract(
+    {
+      ...p,
+      mandante,
+      visitante,
+      esporte: norm.esporte || p.esporte,
+    },
+    resultado?.modelo,
+  );
   return {
     data: parseModelDate(p.data) ?? p.data,
     hora: p.hora,
@@ -693,9 +718,9 @@ function toPrognosticoInsert(p: ModeloPrognostico, resultado: ModeloResultado | 
     jogo: p.jogo,
     mandante,
     visitante,
-    mercado: normalizeMercadoPadrao(p.mercado, norm.esporte || p.esporte),
-    pick: p.pick,
-    linha: p.linha,
+    mercado: standard.mercado,
+    pick: standard.pick,
+    linha: null,
     odd_ofertada: p.odd_ofertada,
     odd_mediana: p.odd_mediana ?? p.odd_mercado_base ?? null,
     odd_mercado_base: p.odd_mercado_base ?? p.odd_mediana ?? null,

@@ -36,7 +36,7 @@ import {
 import { LeagueFilter } from "@/components/league-filter";
 import { PeriodFilter } from "@/components/period-filter";
 import { rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
-import { formatBR, formatHora, shouldShowLinha } from "@/lib/date-br";
+import { formatBR, formatHora } from "@/lib/date-br";
 import { toast } from "sonner";
 import { DadosTecnicosViewer } from "@/components/dados-tecnicos-viewer";
 
@@ -209,7 +209,6 @@ function PublicacaoPage() {
                   <th className="px-3 py-2 text-left">Jogo</th>
                   <th className="px-3 py-2 text-left">Mercado</th>
                   <th className="px-3 py-2 text-left">Pick</th>
-                  <th className="px-3 py-2 text-left">Linha</th>
                   <th className="px-3 py-2 text-right font-mono">Odd</th>
                   <th className="px-3 py-2 text-right font-mono">Stake</th>
                   <th className="px-3 py-2 text-left">Validação</th>
@@ -220,7 +219,7 @@ function PublicacaoPage() {
                 {elegiveis.length === 0 && (
                   <tr>
                     <td
-                      colSpan={13}
+                      colSpan={12}
                       className="px-4 py-8 text-center text-sm text-muted-foreground"
                     >
                       Nenhum prognóstico aguardando publicação.
@@ -229,7 +228,6 @@ function PublicacaoPage() {
                 )}
                 {elegiveis.map((p) => {
                   const canSelect = podePublicar(p);
-                  const mostrarLinha = shouldShowLinha(p.pick, p.linha);
                   return (
                     <tr key={p.id} className="border-t border-border hover:bg-muted/30">
                       <td className="px-3 py-2">
@@ -260,9 +258,6 @@ function PublicacaoPage() {
                         {p.mercado}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">{p.pick}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
-                        {mostrarLinha ? p.linha : "—"}
-                      </td>
                       <td className="px-3 py-2 text-right font-mono">
                         {p.odd_ofertada.toFixed(2)}
                       </td>

@@ -173,7 +173,7 @@ export async function getSimilarAiHistory(
     return emptySimilarSummary();
   }
 
-  const targetLine = numberFromLine(prognostico.linha);
+  const targetLine = numberFromLine(prognostico.pick);
   const sourceRows = mergeFeedbackRows(
     (data ?? []) as FeedbackIaResultado[],
     await getHistoricalFeedbackRows(300),
@@ -182,7 +182,7 @@ export async function getSimilarAiHistory(
     if (row.esporte !== prognostico.esporte || row.mercado !== prognostico.mercado) return false;
     if (prognostico.liga && row.liga && row.liga !== prognostico.liga) return false;
     if (!isSimilarPick(row.pick, prognostico.pick)) return false;
-    const rowLine = numberFromLine(row.linha);
+    const rowLine = numberFromLine(row.pick) ?? numberFromLine(row.linha);
     if (targetLine == null || rowLine == null) return true;
     return Math.abs(targetLine - rowLine) <= 0.5;
   });
@@ -273,7 +273,7 @@ async function getHistoricalFeedbackRows(limit: number): Promise<FeedbackIaResul
         liga: p.liga,
         mercado: p.mercado,
         pick: p.pick,
-        linha: p.linha,
+        linha: null,
         jogo: p.jogo,
         decisao_ia_sugerida: decisaoIa,
         stake_ia_sugerida: validacao?.stake_ia_sugerida ?? null,

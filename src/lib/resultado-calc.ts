@@ -27,14 +27,8 @@ export function extrairLinha(texto: string): number | null {
   return Number.isFinite(v) ? v : null;
 }
 
-function linhaDoProg(p: Pick<Prognostico, "linha" | "pick">): number | null {
-  const fromPick = extrairLinha(p.pick ?? "");
-  if (fromPick != null) return fromPick;
-  if (p.linha) {
-    const v = parseFloat(String(p.linha).replace(",", "."));
-    if (Number.isFinite(v)) return v;
-  }
-  return null;
+function linhaDoProg(p: Pick<Prognostico, "pick">): number | null {
+  return extrairLinha(p.pick ?? "");
 }
 
 const has = (s: string, ...tokens: string[]) => tokens.some((t) => s.includes(t));
@@ -109,7 +103,7 @@ export function detectRacePick(
 
 
 export function calcularResultadoAuto(
-  prog: Pick<Prognostico, "mercado" | "pick" | "linha" | "mandante" | "visitante"> &
+  prog: Pick<Prognostico, "mercado" | "pick" | "mandante" | "visitante"> &
     Partial<Pick<Prognostico, "jogo">>,
   placar: PlacarParsed,
 ): ResultadoCalc | null {
@@ -176,8 +170,10 @@ export function calcularResultadoAuto(
       // Ambos alcançaram o alvo: precisa entrada manual de quem chegou primeiro
       return null;
     }
-    if (has(pick, "casa mais", "mandante mais")) return mandante > visitante ? "GREEN" : "RED";
-    if (has(pick, "fora mais", "visitante mais")) return visitante > mandante ? "GREEN" : "RED";
+    if (has(pick, "casa mais", "mandante mais", "mais cantos casa", "mais cantos mandante"))
+      return mandante > visitante ? "GREEN" : "RED";
+    if (has(pick, "fora mais", "visitante mais", "mais cantos fora", "mais cantos visitante"))
+      return visitante > mandante ? "GREEN" : "RED";
   }
 
   if (has(mercado, "resultado final", "moneyline", "backmatrix")) {
