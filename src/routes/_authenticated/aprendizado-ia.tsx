@@ -196,7 +196,7 @@ function AprendizadoIaPage() {
       });
     }
 
-    return rows;
+    return dedupeLearningRows(rows);
   }, [feedback, historico]);
 
   const mercados = useMemo(() => {
@@ -275,15 +275,27 @@ function AprendizadoIaPage() {
   const confirmadasRed = feedbackConfirmadasIa.filter((f) => getOutcome(f) === "RED").length;
   const puladasGreen = feedbackPuladasIa.filter((f) => getOutcome(f) === "GREEN").length;
   const puladasRed = feedbackPuladasIa.filter((f) => getOutcome(f) === "RED").length;
-  const lucroUnidadesIa = feedbackConfirmadasIa.reduce((sum, f) => sum + getFinancialUnits(f), 0);
-  const stakeConfirmadaIa = feedbackConfirmadasIa.reduce(
-    (sum, f) => sum + Number(f.stake_humana_final ?? f.stake_ia_sugerida ?? 0),
+  const lucroTeoricoIa = feedbackConfirmadasIa.reduce((sum, f) => sum + getTheoreticalUnits(f), 0);
+  const stakeTeoricaIa = feedbackConfirmadasIa.reduce(
+    (sum, f) => sum + Number(f.stake_ia_sugerida ?? f.stake_humana_final ?? 0),
+    0,
+  );
+  const confirmadasConcordantes = feedbackConfirmadasIa.filter(
+    (f) =>
+      normalizeAiDecision(f.decisao_humana_final) === "CONFIRMAR" && f.conta_bankroll !== false,
+  );
+  const lucroFinanceiroConcordante = confirmadasConcordantes.reduce(
+    (sum, f) => sum + getFinancialUnits(f),
+    0,
+  );
+  const stakeFinanceiraConcordante = confirmadasConcordantes.reduce(
+    (sum, f) => sum + Number(f.stake_humana_final ?? 0),
     0,
   );
   const divergencias = filteredFeedback.filter((f) => f.divergencia_ia_humano).length;
 
   const stats = {
-    total: filteredFeedback.length,
+    total: rowsComDecisaoIa.length,
     local:
       filteredFeedback.filter((row) => row.modo_ia === "local").length ||
       filteredAnalises.filter((a) => a.modo_ia === "local").length,
@@ -304,16 +316,21 @@ function AprendizadoIaPage() {
     confirmarIncorreto: confirmadasRed,
     pularCorreto: puladasRed,
     pularIncorreto: puladasGreen,
-    roiConfirmadasIa: stakeConfirmadaIa > 0 ? (lucroUnidadesIa / stakeConfirmadaIa) * 100 : 0,
-    lucroUnidades: lucroUnidadesIa,
-    lucroReal: lucroUnidadesIa * valorUnidade,
+    roiTeoricoIa: stakeTeoricaIa > 0 ? (lucroTeoricoIa / stakeTeoricaIa) * 100 : 0,
+    roiFinanceiroConcordante:
+      stakeFinanceiraConcordante > 0
+        ? (lucroFinanceiroConcordante / stakeFinanceiraConcordante) * 100
+        : 0,
+    lucroTeoricoIa,
+    lucroFinanceiroConcordante,
+    lucroRealConcordante: lucroFinanceiroConcordante * valorUnidade,
     divergencias,
   };
 
   const acertoPorEsporte = rateBy(filteredFeedback, "esporte");
   const acertoPorMercado = rateBy(filteredFeedback, "mercado");
-  const lucroPorEsporte = sumFinancialBy(feedbackConfirmadasIa, "esporte");
-  const lucroPorMercado = sumFinancialBy(feedbackConfirmadasIa, "mercado");
+  const lucroPorEsporte = sumFinancialBy(confirmadasConcordantes, "esporte");
+  const lucroPorMercado = sumFinancialBy(confirmadasConcordantes, "mercado");
   const modoComparativo = rateBy(filteredFeedback, "modo_ia");
   const tagsRed = tagsByRed(filteredFeedback);
   const hasData = filteredAnalises.length > 0 || filteredFeedback.length > 0;
@@ -425,7 +442,7 @@ function AprendizadoIaPage() {
           icon={Target}
         />
         <StatCard
-          label="Acerto geral IA"
+          label="Acerto decisório IA"
           value={`${stats.taxaAcerto.toFixed(1)}%`}
           icon={TrendingUp}
         />
@@ -435,10 +452,16 @@ function AprendizadoIaPage() {
           icon={Target}
         />
         <StatCard
-          label="ROI confirmadas IA"
-          value={`${stats.roiConfirmadasIa.toFixed(1)}%`}
+          label="ROI teórico confirmações IA"
+          value={`${stats.roiTeoricoIa.toFixed(1)}%`}
           icon={TrendingUp}
-          trend={stats.roiConfirmadasIa >= 0 ? "up" : "down"}
+          trend={stats.roiTeoricoIa >= 0 ? "up" : "down"}
+        />
+        <StatCard
+          label="ROI financeiro IA + humano"
+          value={`${stats.roiFinanceiroConcordante.toFixed(1)}%`}
+          icon={TrendingUp}
+          trend={stats.roiFinanceiroConcordante >= 0 ? "up" : "down"}
         />
         <StatCard
           label="Puladas IA GREEN/RED"
@@ -470,16 +493,16 @@ function AprendizadoIaPage() {
           trend={stats.confirmarIncorreto > 0 ? "down" : "neutral"}
         />
         <StatCard
-          label="Lucro real IA"
-          value={`R$ ${stats.lucroReal.toFixed(2)}`}
+          label="Lucro real IA + humano"
+          value={`R$ ${stats.lucroRealConcordante.toFixed(2)}`}
           icon={Scale}
-          trend={stats.lucroReal >= 0 ? "up" : "down"}
+          trend={stats.lucroRealConcordante >= 0 ? "up" : "down"}
         />
         <StatCard
-          label="Lucro (u) IA"
-          value={`${stats.lucroUnidades.toFixed(2)}u`}
+          label="Lucro teórico IA"
+          value={`${stats.lucroTeoricoIa.toFixed(2)}u`}
           icon={Scale}
-          trend={stats.lucroUnidades >= 0 ? "up" : "down"}
+          trend={stats.lucroTeoricoIa >= 0 ? "up" : "down"}
         />
         <StatCard
           label="Divergências IA x humano"
@@ -492,13 +515,13 @@ function AprendizadoIaPage() {
         <ChartCard title="Acerto da IA por esporte (%)" rows={acertoPorEsporte} suffix="%" />
         <ChartCard title="Acerto da IA por mercado (%)" rows={acertoPorMercado} suffix="%" />
         <ChartCard
-          title="Resultado oficial por esporte das confirmadas IA (u)"
+          title="Resultado financeiro IA + humano por esporte (u)"
           rows={lucroPorEsporte}
           suffix="u"
           diverging
         />
         <ChartCard
-          title="Resultado oficial por mercado das confirmadas IA (u)"
+          title="Resultado financeiro IA + humano por mercado (u)"
           rows={lucroPorMercado}
           suffix="u"
           diverging
@@ -684,6 +707,10 @@ function getFinancialUnits(row: LearningRow): number {
   );
 }
 
+function getTheoreticalUnits(row: LearningRow): number {
+  return Number(row.lucro_teorico_unidades ?? row.lucro_unidades ?? 0);
+}
+
 function normalizeOutcome(resultado: string | null | undefined): "GREEN" | "RED" | null {
   const value = String(resultado ?? "")
     .toUpperCase()
@@ -700,6 +727,19 @@ function latestByCreatedAt<T extends { created_at?: string | null }>(rows: T[]):
       String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")),
     )[0] ?? null
   );
+}
+
+function dedupeLearningRows(rows: LearningRow[]): LearningRow[] {
+  const sorted = [...rows].sort((a, b) =>
+    String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")),
+  );
+  const seen = new Set<string>();
+  return sorted.filter((row) => {
+    const key = row.prognostico_id ?? row.analise_ia_id;
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function decisionHit(

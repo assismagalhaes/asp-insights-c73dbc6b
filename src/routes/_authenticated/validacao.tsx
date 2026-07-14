@@ -712,7 +712,8 @@ function Validacao() {
       if (chosenByIa && r.stake_sugerida && STAKES.includes(r.stake_sugerida.toFixed(1))) {
         setStakes((s) => ({ ...s, [chosenByIa.id]: r.stake_sugerida!.toFixed(1) }));
       }
-      const snapshotOption = chosenByIa ?? p;
+      const snapshotOption =
+        chosenByIa ?? (r.decisao_sugerida === "PULAR" ? getBestPularOption(g) : p);
       const snapshotOdd = getOddAjustadaNum(snapshotOption);
       const snapshotEdge = getEdgeAjustado(snapshotOption);
       await saveAnaliseIaSnapshot({
@@ -729,7 +730,7 @@ function Validacao() {
         odd_usada: snapshotOdd ?? snapshotOption.odd_ofertada,
         probabilidade_final: snapshotOption.probabilidade_final,
         edge_usado: snapshotEdge ?? snapshotOption.edge,
-        contexto_analisado: contextoAnalise,
+        contexto_analisado: `[CONTEXTO ATUAL]\n${contextoAnalise || "Sem contexto adicional."}\n\n[MEMORIA OPERACIONAL]\n${calibracao.texto}`,
         parecer_ia: rWithAviso.parecer,
         decisao_sugerida: rWithAviso.decisao_sugerida,
         stake_sugerida: rWithAviso.stake_sugerida,
@@ -889,7 +890,7 @@ function Validacao() {
         decisao === "CONFIRMA" ? "CONFIRMA" : "PULAR",
         parecerBase,
         contextoAnalise,
-        decisao === "CONFIRMA" ? ia : undefined,
+        ia,
         retainedStake,
       );
       for (const option of g.opcoes.filter((option) => option.id !== retained.id)) {
@@ -1836,9 +1837,7 @@ function PreAiShortlistPanel({
                     </div>
                   </td>
                   <td className="px-3 py-2">{getOpportunityMarketLabel(candidate.prognostico)}</td>
-                  <td className="px-3 py-2">
-                    {getOpportunityPickLabel(candidate.prognostico)}
-                  </td>
+                  <td className="px-3 py-2">{getOpportunityPickLabel(candidate.prognostico)}</td>
                   <td className="px-3 py-2 text-muted-foreground">
                     {formatCandidateAlternativesSummary(candidate)}
                   </td>

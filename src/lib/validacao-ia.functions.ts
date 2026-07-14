@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/lib/auth-middleware-public";
 import { generateText } from "ai";
 import { z } from "zod";
 
-export const PROMPT_VERSAO = "validacao-critica-v11-mercado-pick";
+export const PROMPT_VERSAO = "validacao-critica-v12-memoria-operacional";
 
 const CorrelatedPickSchema = z.object({
   mercado: z.string(),
@@ -112,6 +112,9 @@ Regras:
   - Quando estiver em dúvida entre 1.0u e 0.5u, use 0.5u.
   - Quando estiver em dúvida entre 0.5u e PULAR, use PULAR.
 - Use a calibração interna ASP Insights apenas como apoio. Não trate histórico curto como verdade estatística.
+- Considere somente a coorte realmente semelhante indicada na memória. Não generalize desempenho global para uma liga, lado ou faixa de pick diferente.
+- Se a confiabilidade da memória for BAIXA ou SEM_AMOSTRA, não altere decisão nem stake por causa dela.
+- A memória nunca substitui os gates técnicos e não autoriza confirmar uma entrada reprovada pelos dados atuais.
 - Se a calibração informar taxa recente de confirmação acima de 85%, reforce a auditoria de risco e procure motivos reais para PULAR.
 - Não use a calibração para confirmar automaticamente. Ela é um sinal auxiliar, inferior aos dados do prognóstico, contexto e gates de risco.
 

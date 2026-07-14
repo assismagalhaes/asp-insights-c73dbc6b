@@ -38,6 +38,8 @@ export interface SimilarAiHistorySummary {
 
 export interface AiCalibrationSummary {
   total: number;
+  total_semelhantes: number;
+  confiabilidade: "SEM_AMOSTRA" | "BAIXA" | "MODERADA" | "ALTA";
   taxa_confirmacao: number;
   taxa_pular: number;
   acerto_confirmacoes: number;
@@ -47,21 +49,99 @@ export interface AiCalibrationSummary {
   texto: string;
 }
 
+type LearningTarget = Pick<
+  Prognostico,
+  "id" | "data" | "hora" | "esporte" | "liga" | "mercado" | "pick"
+>;
+
+type HistoricalPrognostico = Prognostico & {
+  resultados?: Array<{
+    resultado: string;
+    lucro_prejuizo: number | null;
+    created_at: string;
+    data_resultado: string | null;
+  }>;
+  validacoes?: Array<Partial<Validacao>>;
+};
+
 function numberFromLine(line: string | null | undefined): number | null {
   if (!line) return null;
   const match = line.replace(",", ".").match(/[+-]?\d+(?:\.\d+)?/);
   return match ? Number(match[0]) : null;
 }
 
+function normalized(value: string | null | undefined) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function pickSignature(value: string | null | undefined) {
+  const pick = normalized(value);
+  if (/\b1x\b/.test(pick)) return "double:1x";
+  if (/\bx2\b/.test(pick)) return "double:x2";
+  if (/\b12\b/.test(pick)) return "double:12";
+
+  const direction = /\bunder\b/.test(pick) ? "under" : /\bover\b/.test(pick) ? "over" : "";
+  const side = /\b(casa|mandante|home)\b/.test(pick)
+    ? "home"
+    : /\b(visitante|fora|away)\b/.test(pick)
+      ? "away"
+      : /\b(empate|draw)\b/.test(pick)
+        ? "draw"
+        : "";
+  const btts = /\b(btts|ambas)\b/.test(pick)
+    ? /\b(nao|no)\b/.test(pick)
+      ? "btts:no"
+      : "btts:yes"
+    : "";
+  return [direction, side, btts].filter(Boolean).join(":");
+}
+
 function isSimilarPick(a: string | null | undefined, b: string | null | undefined) {
-  const aa = (a ?? "").toLowerCase();
-  const bb = (b ?? "").toLowerCase();
-  if (!aa || !bb) return true;
-  return (
-    aa.includes(bb) ||
-    bb.includes(aa) ||
-    aa.split(/\s+/).some((part) => part.length > 3 && bb.includes(part))
-  );
+  const signatureA = pickSignature(a);
+  const signatureB = pickSignature(b);
+  return Boolean(signatureA && signatureB && signatureA === signatureB);
+}
+
+function lineTolerance(prognostico: Pick<Prognostico, "esporte" | "mercado">) {
+  const context = normalized(`${prognostico.esporte} ${prognostico.mercado}`);
+  if (/basketball|nba|wnba/.test(context)) return /handicap/.test(context) ? 2.5 : 5;
+  return 0.5;
+}
+
+function resolvedAt(row: FeedbackIaResultado) {
+  const timestamp = Date.parse(String(row.created_at ?? ""));
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function targetCutoff(prognostico?: LearningTarget) {
+  if (!prognostico?.data) return Number.POSITIVE_INFINITY;
+  const timestamp = Date.parse(`${prognostico.data}T${prognostico.hora || "23:59:59"}-03:00`);
+  return Number.isFinite(timestamp) ? timestamp : Number.POSITIVE_INFINITY;
+}
+
+function dedupeByPrediction(rows: FeedbackIaResultado[]) {
+  const sorted = [...rows].sort((a, b) => resolvedAt(b) - resolvedAt(a));
+  const seen = new Set<string>();
+  return sorted.filter((row) => {
+    const key = row.prognostico_id || row.id;
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function conservativeRate(successes: number, total: number, prior = 0.5, strength = 8) {
+  return total ? ((successes + prior * strength) / (total + strength)) * 100 : 0;
+}
+
+function sampleReliability(total: number): AiCalibrationSummary["confiabilidade"] {
+  if (!total) return "SEM_AMOSTRA";
+  if (total < 10) return "BAIXA";
+  if (total < 30) return "MODERADA";
+  return "ALTA";
 }
 
 function topTags(rows: FeedbackIaResultado[]) {
@@ -89,72 +169,95 @@ function topSituations(rows: FeedbackIaResultado[]) {
 }
 
 export async function getAiCalibrationSummary(
-  prognostico?: Pick<Prognostico, "esporte" | "mercado">,
+  prognostico?: LearningTarget,
 ): Promise<AiCalibrationSummary> {
   const { data, error } = await aiDb
     .from("feedback_ia_resultados")
     .select("*")
     .order("created_at", { ascending: false })
-    .limit(100);
+    .limit(300);
 
-  if (error) {
-    console.warn("[Aprendizado IA] Calibração indisponível:", error.message);
-    return emptyCalibrationSummary();
-  }
-
-  const rows = mergeFeedbackRows(
-    (data ?? []) as FeedbackIaResultado[],
-    await getHistoricalFeedbackRows(100),
+  if (error) console.warn("[Aprendizado IA] Memória persistente indisponível:", error.message);
+  const persistedRows = error ? [] : ((data ?? []) as FeedbackIaResultado[]);
+  const cutoff = targetCutoff(prognostico);
+  const rows = dedupeByPrediction(
+    mergeFeedbackRows(persistedRows, await getHistoricalFeedbackRows(500)),
+  ).filter(
+    (row) =>
+      row.prognostico_id !== prognostico?.id &&
+      resolvedAt(row) < cutoff &&
+      (getOutcome(row) === "GREEN" || getOutcome(row) === "RED"),
   );
-  const resolved = rows.filter((row) => getOutcome(row) === "GREEN" || getOutcome(row) === "RED");
-  const confirmed = resolved.filter(
+  const decided = rows.filter((row) => normalizeDecision(row.decisao_ia_sugerida) != null);
+  if (!decided.length) return emptyCalibrationSummary();
+
+  const confirmed = decided.filter(
     (row) => normalizeDecision(row.decisao_ia_sugerida) === "CONFIRMAR",
   );
-  const skipped = resolved.filter((row) => normalizeDecision(row.decisao_ia_sugerida) === "PULAR");
+  const skipped = decided.filter((row) => normalizeDecision(row.decisao_ia_sugerida) === "PULAR");
   const confirmedGreen = confirmed.filter((row) => getOutcome(row) === "GREEN").length;
   const skippedRed = skipped.filter((row) => getOutcome(row) === "RED").length;
-  const redRows = resolved.filter((row) => getOutcome(row) === "RED");
+  const redRows = decided.filter((row) => getOutcome(row) === "RED");
   const confirmedRed = confirmed.filter((row) => getOutcome(row) === "RED");
-  const sameSport = prognostico?.esporte
-    ? resolved.filter((row) => row.esporte === prognostico.esporte)
+  const sameSportMarket = prognostico
+    ? decided.filter(
+        (row) =>
+          normalized(row.esporte) === normalized(prognostico.esporte) &&
+          normalized(row.mercado) === normalized(prognostico.mercado),
+      )
     : [];
-  const sameMarket = prognostico?.mercado
-    ? resolved.filter((row) => row.mercado === prognostico.mercado)
+  const similar = prognostico
+    ? sameSportMarket.filter((row) => {
+        if (prognostico.liga && row.liga && normalized(row.liga) !== normalized(prognostico.liga))
+          return false;
+        if (!isSimilarPick(row.pick, prognostico.pick)) return false;
+        const targetLine = numberFromLine(prognostico.pick);
+        const rowLine = numberFromLine(row.pick) ?? numberFromLine(row.linha);
+        return (
+          targetLine == null ||
+          rowLine == null ||
+          Math.abs(targetLine - rowLine) <= lineTolerance(prognostico)
+        );
+      })
     : [];
-  const taxaConfirmacao = resolved.length ? (confirmed.length / resolved.length) * 100 : 0;
-  const taxaPular = resolved.length ? (skipped.length / resolved.length) * 100 : 0;
-  const acertoConfirmacoes = confirmed.length ? (confirmedGreen / confirmed.length) * 100 : 0;
-  const acertoPulos = skipped.length ? (skippedRed / skipped.length) * 100 : 0;
+  const similarGreens = similar.filter((row) => getOutcome(row) === "GREEN").length;
+  const taxaConfirmacao = (confirmed.length / decided.length) * 100;
+  const taxaPular = (skipped.length / decided.length) * 100;
+  const acertoConfirmacoes = conservativeRate(confirmedGreen, confirmed.length);
+  const acertoPulos = conservativeRate(skippedRed, skipped.length);
+  const similarRate = conservativeRate(similarGreens, similar.length);
   const tags = topTags(redRows);
   const situacoes = topSituations(confirmedRed);
-  const sportLine = sameSport.length
-    ? `- Mesmo esporte (${prognostico?.esporte}): ${sameSport.length} casos, ${greenRedText(sameSport)}.`
-    : "- Mesmo esporte: amostra insuficiente ou inexistente.";
-  const marketLine = sameMarket.length
-    ? `- Mesmo mercado (${prognostico?.mercado}): ${sameMarket.length} casos, ${greenRedText(sameMarket)}.`
-    : "- Mesmo mercado: amostra insuficiente ou inexistente.";
+  const cohortLine = sameSportMarket.length
+    ? `- Coorte esporte + mercado (${prognostico?.esporte} / ${prognostico?.mercado}): ${sameSportMarket.length} casos, ${greenRedText(sameSportMarket)}.`
+    : "- Coorte esporte + mercado: amostra inexistente.";
+  const similarLine = similar.length
+    ? `- Casos realmente semelhantes (liga, lado/direção e faixa da pick): n=${similar.length}, ${greenRedText(similar)}, taxa conservadora ${similarRate.toFixed(1)}%, confiabilidade ${sampleReliability(similar.length)}.`
+    : "- Casos realmente semelhantes: amostra inexistente.";
   const highConfirmationWarning =
-    resolved.length >= 10 && taxaConfirmacao > 85
+    decided.length >= 10 && taxaConfirmacao > 85
       ? "\nAtenção: a taxa recente de confirmação está muito alta. Reforce a auditoria de risco e procure motivos reais para PULAR."
       : "";
 
   return {
-    total: resolved.length,
+    total: decided.length,
+    total_semelhantes: similar.length,
+    confiabilidade: sampleReliability(similar.length),
     taxa_confirmacao: taxaConfirmacao,
     taxa_pular: taxaPular,
     acerto_confirmacoes: acertoConfirmacoes,
     acerto_pulos_teoricos: acertoPulos,
     principais_tags_red: tags,
     confirmadas_red: situacoes,
-    texto: `Calibração interna ASP Insights:
-- Nas últimas ${resolved.length} análises resolvidas, a IA confirmou ${taxaConfirmacao.toFixed(1)}% e pulou ${taxaPular.toFixed(1)}%.
-- Confirmações tiveram ${acertoConfirmacoes.toFixed(1)}% de GREEN.
-- Picks puladas resolvidas teoricamente tiveram ${acertoPulos.toFixed(1)}% de RED.
-${sportLine}
-${marketLine}
+    texto: `Memória operacional ASP Insights (somente casos resolvidos antes deste evento):
+- Base deduplicada: ${decided.length} prognósticos com decisão da IA; confirmação ${taxaConfirmacao.toFixed(1)}%, pulo ${taxaPular.toFixed(1)}%.
+- Confirmações: n=${confirmed.length}, taxa de GREEN conservadora ${acertoConfirmacoes.toFixed(1)}%.
+- Pulos: n=${skipped.length}, taxa conservadora de RED evitado ${acertoPulos.toFixed(1)}%.
+${cohortLine}
+${similarLine}
 - Principais riscos associados a RED: ${tags.length ? tags.join(", ") : "sem dados suficientes"}.
 - Situações em que IA confirmou e deu RED: ${situacoes.length ? situacoes.join("; ") : "sem dados suficientes"}.
-- Use isso apenas como apoio. Não use com menos de 10 amostras semelhantes.${highConfirmationWarning}`,
+- Use como apoio de calibração, nunca como gatilho automático. Ignore conclusões direcionais com menos de 10 casos semelhantes.${highConfirmationWarning}`,
   };
 }
 
@@ -166,41 +269,49 @@ export async function getSimilarAiHistory(
     .select("*")
     .eq("esporte", prognostico.esporte)
     .eq("mercado", prognostico.mercado);
-
   const { data, error } = prognostico.liga ? await query.eq("liga", prognostico.liga) : await query;
-  if (error) {
-    console.warn("[Aprendizado IA] Histórico semelhante indisponível:", error.message);
-    return emptySimilarSummary();
-  }
+  if (error) console.warn("[Aprendizado IA] Histórico persistente indisponível:", error.message);
 
   const targetLine = numberFromLine(prognostico.pick);
-  const sourceRows = mergeFeedbackRows(
-    (data ?? []) as FeedbackIaResultado[],
-    await getHistoricalFeedbackRows(300),
+  const sourceRows = dedupeByPrediction(
+    mergeFeedbackRows(
+      error ? [] : ((data ?? []) as FeedbackIaResultado[]),
+      await getHistoricalFeedbackRows(500),
+    ),
   );
   const rows = sourceRows.filter((row) => {
-    if (row.esporte !== prognostico.esporte || row.mercado !== prognostico.mercado) return false;
-    if (prognostico.liga && row.liga && row.liga !== prognostico.liga) return false;
+    if (row.prognostico_id === prognostico.id || resolvedAt(row) >= targetCutoff(prognostico))
+      return false;
+    if (
+      normalized(row.esporte) !== normalized(prognostico.esporte) ||
+      normalized(row.mercado) !== normalized(prognostico.mercado)
+    )
+      return false;
+    if (prognostico.liga && row.liga && normalized(row.liga) !== normalized(prognostico.liga))
+      return false;
     if (!isSimilarPick(row.pick, prognostico.pick)) return false;
     const rowLine = numberFromLine(row.pick) ?? numberFromLine(row.linha);
-    if (targetLine == null || rowLine == null) return true;
-    return Math.abs(targetLine - rowLine) <= 0.5;
+    return (
+      targetLine == null ||
+      rowLine == null ||
+      Math.abs(targetLine - rowLine) <= lineTolerance(prognostico)
+    );
   });
 
-  const greens = rows.filter((r) => getOutcome(r) === "GREEN").length;
-  const reds = rows.filter((r) => getOutcome(r) === "RED").length;
+  const greens = rows.filter((row) => getOutcome(row) === "GREEN").length;
+  const reds = rows.filter((row) => getOutcome(row) === "RED").length;
   const lucro = rows.reduce(
-    (sum, r) => sum + Number(r.lucro_teorico_unidades ?? r.lucro_unidades ?? 0),
+    (sum, row) => sum + Number(row.lucro_teorico_unidades ?? row.lucro_unidades ?? 0),
     0,
   );
   const stake = rows.reduce(
-    (sum, r) => sum + Math.abs(Number(r.stake_humana_final ?? r.stake_ia_sugerida ?? 0)),
+    (sum, row) => sum + Math.abs(Number(row.stake_ia_sugerida ?? row.stake_humana_final ?? 0)),
     0,
   );
   const roi = stake > 0 ? (lucro / stake) * 100 : 0;
   const winRate = greens + reds > 0 ? (greens / (greens + reds)) * 100 : 0;
-  const redRows = rows.filter((r) => getOutcome(r) === "RED");
-  const greenRows = rows.filter((r) => getOutcome(r) === "GREEN");
+  const redRows = rows.filter((row) => getOutcome(row) === "RED");
+  const greenRows = rows.filter((row) => getOutcome(row) === "GREEN");
 
   return {
     total: rows.length,
@@ -216,7 +327,7 @@ export async function getSimilarAiHistory(
     conclusao:
       rows.length < 10
         ? "Histórico interno insuficiente para conclusão estatística."
-        : `Histórico semelhante com ${rows.length} casos, ${winRate.toFixed(1)}% de acerto e ${lucro.toFixed(2)}u.`,
+        : `Histórico semelhante com ${rows.length} casos, ${winRate.toFixed(1)}% de acerto observado e ${lucro.toFixed(2)}u teóricas.`,
   };
 }
 
@@ -232,21 +343,12 @@ function mergeFeedbackRows(
   return [...primary, ...historical.filter((row) => !ids.has(row.prognostico_id))];
 }
 
-type HistoricalPrognostico = Prognostico & {
-  resultados?: Array<{
-    resultado: string;
-    lucro_prejuizo: number | null;
-    created_at: string;
-    data_resultado: string | null;
-  }>;
-  validacoes?: Array<Partial<Validacao>>;
-};
-
 async function getHistoricalFeedbackRows(limit: number): Promise<FeedbackIaResultado[]> {
   const { data, error } = await supabase
     .from("prognosticos")
     .select("*, resultados(resultado, lucro_prejuizo, data_resultado, created_at), validacoes(*)")
     .in("resultado", ["GREEN", "RED", "WIN", "WINS", "LOSS", "LOSSES"])
+    .order("updated_at", { ascending: false })
     .limit(limit);
 
   if (error) {
@@ -333,20 +435,19 @@ function decisionHit(
 }
 
 function extractTags(text: string | null | undefined): string[] {
-  const value = String(text ?? "").toLowerCase();
+  const value = normalized(text);
   const tags: string[] = [];
   const checks: Array<[string, RegExp]> = [
-    ["info_ausente", /não encontrado|nao encontrado|ausente|incert|não confirmad|nao confirmad/],
+    ["info_ausente", /nao encontrado|ausente|incert|nao confirmad/],
     [
       "risco_estrutural",
-      /risco estrutural|lineup|escalação|escalacao|rotação|rotacao|desfalque|lesão|lesao|questionável|questionavel/,
+      /risco estrutural|lineup|escalacao|rotacao|desfalque|lesao|questionavel|bullpen|starter/,
     ],
-    [
-      "fonte_fraca",
-      /fonte insuficiente|fonte fraca|sem fonte|desatualizad|notícia antiga|noticia antiga/,
-    ],
-    ["duplicidade", /duplicidade|correlaç|correlac|redundan/],
-    ["volatilidade", /volátil|volatil|variância|variancia|mercado volátil|mercado volatil/],
+    ["fonte_fraca", /fonte insuficiente|fonte fraca|sem fonte|desatualizad|noticia antiga/],
+    ["duplicidade", /duplicidade|correlac|redundan/],
+    ["volatilidade", /volatil|variancia|amostra pequena|baixa consistencia/],
+    ["conflito_modelo_mercado", /conflito forte|divergencia.*mercado|conflito.*mercado/],
+    ["preco_insuficiente", /odd insuficiente|edge fraco|edge negativo|sem valor/],
     ["clima", /clima|vento|chuva|temperatura|weather/],
   ];
   for (const [tag, pattern] of checks) {
@@ -356,11 +457,7 @@ function extractTags(text: string | null | undefined): string[] {
 }
 
 function normalizeDecision(decision: string | null | undefined): "CONFIRMAR" | "PULAR" | null {
-  if (!decision) return null;
-  const d = decision.toUpperCase();
-  if (d.includes("PULAR") || d.includes("PASS") || d.includes("AGUARDAR")) return "PULAR";
-  if (d.includes("CONFIRMA")) return "CONFIRMAR";
-  return null;
+  return normalizeAiDecision(decision);
 }
 
 function greenRedText(rows: FeedbackIaResultado[]) {
@@ -372,31 +469,17 @@ function greenRedText(rows: FeedbackIaResultado[]) {
 function emptyCalibrationSummary(): AiCalibrationSummary {
   return {
     total: 0,
+    total_semelhantes: 0,
+    confiabilidade: "SEM_AMOSTRA",
     taxa_confirmacao: 0,
     taxa_pular: 0,
     acerto_confirmacoes: 0,
     acerto_pulos_teoricos: 0,
     principais_tags_red: [],
     confirmadas_red: [],
-    texto: `Calibração interna ASP Insights:
-- Histórico interno insuficiente para conclusão estatística.
-- Use isso apenas como apoio. Não use com menos de 10 amostras semelhantes.`,
-  };
-}
-
-function emptySimilarSummary(): SimilarAiHistorySummary {
-  return {
-    total: 0,
-    greens: 0,
-    reds: 0,
-    win_rate: 0,
-    lucro_unidades: 0,
-    roi: 0,
-    yield: 0,
-    principais_tags_risco: [],
-    principais_padroes_red: [],
-    principais_padroes_green: [],
-    conclusao: "Histórico interno insuficiente para conclusão estatística.",
+    texto: `Memória operacional ASP Insights:
+- Histórico com decisão da IA e resultado resolvido indisponível.
+- Não use o aprendizado como sinal até existir amostra válida.`,
   };
 }
 

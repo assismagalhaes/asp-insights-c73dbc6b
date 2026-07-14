@@ -287,7 +287,15 @@ export function extractRiskTags(text: string | null | undefined): string[] {
       /fonte insuficiente|fonte fraca|sem fonte|desatualizad|notícia antiga|noticia antiga/,
     ],
     ["duplicidade", /duplicidade|correlaç|correlac|redundan/],
-    ["volatilidade", /volátil|volatil|variância|variancia|mercado volátil|mercado volatil/],
+    [
+      "volatilidade",
+      /volátil|volatil|variância|variancia|mercado volátil|mercado volatil|amostra pequena|baixa consistência|baixa consistencia/,
+    ],
+    [
+      "conflito_modelo_mercado",
+      /conflito forte|divergência.*mercado|divergencia.*mercado|conflito.*mercado/,
+    ],
+    ["preco_insuficiente", /odd insuficiente|edge fraco|edge negativo|sem valor/],
     ["clima", /clima|vento|chuva|temperatura|weather/],
   ];
   for (const [tag, pattern] of checks) {
@@ -335,7 +343,6 @@ async function createAiFeedbackForResultado(
   }
 
   const p = mapPrognostico(prognostico as Record<string, unknown>);
-  const contaBankroll = p.status_validacao === "CONFIRMA";
 
   const { data: validacao } = await supabase
     .from("validacoes")
@@ -360,6 +367,7 @@ async function createAiFeedbackForResultado(
   const decisaoHumana = normalizeAiDecision(
     (validacao as Validacao | null)?.decisao ?? p.status_validacao,
   );
+  const contaBankroll = decisaoHumana === "CONFIRMAR";
   const stakeHumana = Number((validacao as Validacao | null)?.stake_confirmada ?? p.stake ?? 0);
   const oddUsada = getOddEfetiva(p);
   const edgeUsado = getEdgeEfetivo(p);
@@ -806,8 +814,7 @@ export function normalizeMercadoPadrao(mercado: string, esporte?: string | null)
 
   if (/asp\s*backmatrix|backmatrix/.test(normalized)) return "ASP BackMatrix";
   if (/resultado final|1x2|resultado da partida/.test(normalized)) return "Moneyline";
-  if (/ambas marcam.*(nao|no)|btts.*(nao|no)/.test(normalized))
-    return "Ambas Marcam Não";
+  if (/ambas marcam.*(nao|no)|btts.*(nao|no)/.test(normalized)) return "Ambas Marcam Não";
   if (/ambas marcam|btts/.test(normalized)) return "Ambas Marcam Sim";
   if (/dupla chance|double chance/.test(normalized)) return "Dupla Chance";
   if (/handicap|spread|run line/.test(normalized)) return "Handicap Asiático";
