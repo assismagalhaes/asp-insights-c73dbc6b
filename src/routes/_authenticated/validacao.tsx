@@ -388,6 +388,9 @@ function Validacao() {
 
   // estado por opção e por grupo
   const [oddsAj, setOddsAj] = useState<Record<string, string>>({});
+  const [oddSaveStatus, setOddSaveStatus] = useState<Record<string, "saving" | "saved" | "error">>(
+    {},
+  );
   const [stakes, setStakes] = useState<Record<string, string>>({});
   const [pareceres, setPareceres] = useState<Record<string, string>>({});
   const [contextos, setContextos] = useState<Record<string, string>>({});
@@ -573,6 +576,47 @@ function Validacao() {
     const odd = getOddAjustadaNum(p);
     if (odd == null || !odd) return p.edge_ajustado;
     return calcEdge(p.probabilidade_final, odd);
+  };
+
+  const persistirOddAjustada = async (p: Prognostico) => {
+    const raw = oddsAj[p.id];
+    if (raw === undefined) return;
+
+    const trimmed = raw.trim();
+    const odd = trimmed === "" ? null : Number(trimmed);
+    if (odd != null && (!Number.isFinite(odd) || odd <= 1)) {
+      setOddSaveStatus((prev) => ({ ...prev, [p.id]: "error" }));
+      toast.error("Informe uma odd ajustada válida, maior que 1.00.");
+      return;
+    }
+
+    const edgeAjustado = odd == null ? null : calcEdge(p.probabilidade_final, odd);
+    const currentOdd = p.odd_ajustada ?? null;
+    const currentEdge = p.edge_ajustado ?? null;
+    const sameOdd = currentOdd === odd;
+    const sameEdge =
+      currentEdge === edgeAjustado ||
+      (currentEdge != null &&
+        edgeAjustado != null &&
+        Math.abs(currentEdge - edgeAjustado) < 0.0001);
+    if (sameOdd && sameEdge) {
+      setOddSaveStatus((prev) => ({ ...prev, [p.id]: "saved" }));
+      return;
+    }
+
+    setOddSaveStatus((prev) => ({ ...prev, [p.id]: "saving" }));
+    try {
+      await updateProg.mutateAsync({
+        id: p.id,
+        odd_ajustada: odd,
+        edge_ajustado: edgeAjustado,
+      });
+      setOddsAj((prev) => ({ ...prev, [p.id]: odd == null ? "" : odd.toFixed(2) }));
+      setOddSaveStatus((prev) => ({ ...prev, [p.id]: "saved" }));
+    } catch (error) {
+      setOddSaveStatus((prev) => ({ ...prev, [p.id]: "error" }));
+      toast.error((error as Error).message || "Não foi possível salvar a odd ajustada.");
+    }
   };
 
   const getSelectedOption = (g: ValidationGroup): Prognostico | null => {
@@ -1181,12 +1225,30 @@ function Validacao() {
                     value={p.odd_ofertada.toFixed(2)}
                   />
                   <div>
-                    <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      Odd ajustada
-                    </Label>
+                    <div className="flex items-center justify-between gap-2">
+                      <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Odd ajustada
+                      </Label>
+                      <span
+                        className={`text-[10px] ${
+                          oddSaveStatus[p.id] === "error"
+                            ? "text-destructive"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {oddSaveStatus[p.id] === "saving"
+                          ? "Salvando..."
+                          : oddSaveStatus[p.id] === "saved"
+                            ? "Salva"
+                            : oddSaveStatus[p.id] === "error"
+                              ? "Erro"
+                              : ""}
+                      </span>
+                    </div>
                     <Input
                       type="number"
                       step="0.01"
+                      min="1.01"
                       placeholder={p.odd_ofertada.toFixed(2)}
                       value={
                         oddsAj[p.id] ??
@@ -1196,7 +1258,22 @@ function Validacao() {
                             ? ""
                             : p.odd_ofertada)
                       }
-                      onChange={(e) => setOddsAj({ ...oddsAj, [p.id]: e.target.value })}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setOddsAj((prev) => ({ ...prev, [p.id]: value }));
+                        setOddSaveStatus((prev) => {
+                          const next = { ...prev };
+                          delete next[p.id];
+                          return next;
+                        });
+                      }}
+                      onBlur={() => void persistirOddAjustada(p)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          e.currentTarget.blur();
+                        }
+                      }}
                       className="mt-1 h-[51px] rounded-md border-border bg-background/50 font-mono text-base font-bold"
                     />
                   </div>
