@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.sync_ai_learning_feedback() FROM PUBLIC, anon, authenticated;
