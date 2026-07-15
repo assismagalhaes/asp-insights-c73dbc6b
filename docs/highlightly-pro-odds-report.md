@@ -1,0 +1,453 @@
+# Relatório de odds Highlightly PRO
+
+Amostra real coletada em 14/07/2026. Contagens representam seleções de odds, não partidas únicas.
+
+| Esporte | Partidas | Ofertas | Seleções | Bookmakers | Mercados exatos | Odds inválidas | Faixa observada |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| football | 5 | 4249 | 6781 | 52 | 135 | 16 | 1.00–1001.00 |
+| mlb | 5 | 1352 | 2704 | 35 | 50 | 0 | 1.01–17.00 |
+| wnba | 3 | 2499 | 5045 | 38 | 140 | 0 | 1.02–23.00 |
+
+## football
+
+### Famílias de mercado
+
+- `Total Goals`: 2464 seleções
+- `Correct Score`: 1925 seleções
+- `Handicap/Spread`: 1278 seleções
+- `Full Time Result`: 561 seleções
+- `Both Teams To Score`: 202 seleções
+- `Odd or Even`: 182 seleções
+- `Total Corners`: 98 seleções
+- `First Team To Score`: 63 seleções
+- `Clean Sheet`: 8 seleções
+
+### Bookmakers por volume de seleções (top 20)
+
+- `1Bet`: 341
+- `Megapari`: 326
+- `1xBet`: 326
+- `22Bet`: 326
+- `BetVictor`: 298
+- `Parimatch`: 296
+- `DraftKings`: 254
+- `Marathonbet`: 234
+- `TonyBet`: 223
+- `Vbet Sport`: 211
+- `bet365`: 198
+- `888sport`: 193
+- `LeoVegas Sport`: 186
+- `Unibet`: 186
+- `Novibet`: 183
+- `Ladbrokes`: 175
+- `BetUK`: 168
+- `Goldenbet`: 151
+- `Mystake`: 151
+- `Freshbet`: 151
+
+### Mercados exatos
+
+- `Full Time Result`: 561
+- `Total Goals 2.5`: 254
+- `Total Goals 3.5`: 252
+- `Total Goals 4.5`: 210
+- `Both Teams To Score`: 202
+- `Total Goals 1.5`: 186
+- `Odd or Even`: 182
+- `Asian Handicap -0.5/+0.5`: 162
+- `Total Goals 3`: 158
+- `Total Goals 2`: 130
+- `Asian Handicap -1/+1`: 128
+- `Asian Handicap -1.5/+1.5`: 122
+- `Total Goals 4`: 122
+- `Total Goals 0.5`: 114
+- `Asian Handicap -0.75/+0.75`: 114
+- `Total Goals 5.5`: 112
+- `Asian Handicap -0.25/+0.25`: 102
+- `Total Goals 3.25`: 96
+- `Asian Handicap -1.25/+1.25`: 88
+- `Total Goals 2.75`: 82
+- `Total Goals 1`: 78
+- `Total Goals 2.25`: 78
+- `Total Goals 3.75`: 76
+- `Total Goals 1.75`: 74
+- `Asian Handicap +0.5/-0.5`: 70
+- `Asian Handicap 0`: 68
+- `Asian Handicap -1.75/+1.75`: 68
+- `Total Goals 4.25`: 68
+- `Total Goals 5`: 66
+- `Asian Handicap +0.25/-0.25`: 64
+- `First Team To Score`: 63
+- `Correct Score 3 : 2`: 60
+- `Correct Score 0 : 1`: 59
+- `Correct Score 1 : 2`: 58
+- `Correct Score 2 : 2`: 58
+- `Correct Score 2 : 3`: 58
+- `Correct Score 3 : 1`: 58
+- `Correct Score 0 : 2`: 57
+- `Correct Score 0 : 3`: 57
+- `Correct Score 1 : 0`: 57
+- `Correct Score 1 : 1`: 57
+- `Correct Score 1 : 3`: 57
+- `Correct Score 2 : 1`: 57
+- `Correct Score 2 : 0`: 56
+- `Correct Score 3 : 0`: 56
+- `Correct Score 3 : 3`: 56
+- `Correct Score 4 : 2`: 56
+- `Correct Score 0 : 0`: 55
+- `Correct Score 4 : 1`: 54
+- `Correct Score 4 : 0`: 53
+- `Correct Score 5 : 0`: 50
+- `Asian Handicap +0.75/-0.75`: 50
+- `Total Goals 6.5`: 50
+- `Correct Score 1 : 4`: 49
+- `Correct Score 0 : 4`: 48
+- `Correct Score 5 : 1`: 47
+- `Total Goals 1.25`: 46
+- `Correct Score 2 : 4`: 46
+- `Correct Score 4 : 3`: 46
+- `Correct Score 5 : 2`: 44
+- `Asian Handicap -2/+2`: 44
+- `Total Goals 4.75`: 44
+- `Correct Score 3 : 4`: 40
+- `Total Goals 6`: 40
+- `Total Goals 5.25`: 36
+- `Correct Score 1 : 5`: 34
+- `Correct Score 6 : 0`: 34
+- `Asian Handicap -2.5/+2.5`: 34
+- `Asian Handicap -2.25/+2.25`: 34
+- `Correct Score 4 : 4`: 33
+- `Correct Score 6 : 1`: 32
+- `Correct Score 2 : 5`: 31
+- `Total Goals 0.75`: 28
+- `Correct Score 0 : 5`: 28
+- `Asian Handicap +1/-1`: 26
+- `Asian Handicap +1.5/-1.5`: 26
+- `Correct Score 6 : 2`: 26
+- `Correct Score 5 : 3`: 26
+- `Total Goals 7.5`: 24
+- `Correct Score 3 : 5`: 22
+- `Total Corners 9.5`: 20
+- `Total Corners 10.5`: 18
+- `Correct Score 7 : 0`: 18
+- `Correct Score 7 : 1`: 18
+- `Asian Handicap +1.25/-1.25`: 18
+- `Total Corners 11.5`: 16
+- `Correct Score 5 : 4`: 16
+- `Correct Score 6 : 3`: 16
+- `Correct Score 2 : 6`: 15
+- `Correct Score 4 : 5`: 15
+- `Total Corners 8.5`: 14
+- `Correct Score 1 : 6`: 14
+- `Asian Handicap -3.5/+3.5`: 14
+- `Asian Handicap +1.75/-1.75`: 14
+- `Correct Score 7 : 2`: 13
+- `Correct Score 0 : 6`: 12
+- `Total Goals 8.5`: 12
+- `Asian Handicap -3/+3`: 12
+- `Total Goals 5.75`: 12
+- `Total Corners 7.5`: 10
+- `Total Goals 6.25`: 10
+- `Correct Score 1 : 7`: 9
+- `Clean Sheet`: 8
+- `Asian Handicap -2.75/+2.75`: 8
+- `Correct Score 0 : 7`: 7
+- `Correct Score 8 : 0`: 7
+- `Correct Score 3 : 6`: 7
+- `Total Corners 12.5`: 6
+- `Total Corners 13.5`: 6
+- `Asian Handicap +2/-2`: 6
+- `Asian Handicap +2.5/-2.5`: 6
+- `Total Goals 9.5`: 6
+- `Correct Score 5 : 5`: 5
+- `Total Corners 9`: 4
+- `Correct Score 2 : 7`: 4
+- `Correct Score 8 : 1`: 4
+- `Correct Score 0 : 8`: 3
+- `Correct Score 0 : 9`: 3
+- `Correct Score 9 : 0`: 3
+- `Correct Score 10 : 0`: 3
+- `Correct Score 0 : 10`: 2
+- `Correct Score 4 : 6`: 2
+- `Correct Score 5 : 6`: 2
+- `Correct Score 7 : 3`: 2
+- `Correct Score 10 : 1`: 2
+- `Total Corners 10`: 2
+- `Total Corners 6.5`: 2
+- `Correct Score 3 : 7`: 1
+- `Correct Score 4 : 7`: 1
+- `Correct Score 6 : 4`: 1
+- `Correct Score 7 : 4`: 1
+- `Correct Score 6 : 6`: 1
+- `Correct Score 7 : 6`: 1
+- `Correct Score 8 : 3`: 1
+- `Correct Score 10 : 3`: 1
+
+## mlb
+
+### Famílias de mercado
+
+- `Total`: 1636 seleções
+- `Handicap/Spread`: 718 seleções
+- `Moneyline`: 250 seleções
+- `Odd or Even`: 100 seleções
+
+### Bookmakers por volume de seleções (top 20)
+
+- `DraftKings`: 360
+- `Ladbrokes`: 316
+- `Coral`: 316
+- `Jackbit`: 130
+- `Goldenbet`: 130
+- `Freshbet`: 130
+- `Mystake`: 130
+- `bet365`: 128
+- `LeoVegas Sport`: 128
+- `Unibet`: 126
+- `BetUK`: 126
+- `William Hill`: 124
+- `Stake.com`: 122
+- `Marathonbet`: 92
+- `Betsson`: 78
+- `GG.BET`: 40
+- `10bet`: 28
+- `Interwetten`: 20
+- `FanDuel`: 20
+- `Betway`: 10
+
+### Mercados exatos
+
+- `Home/Away`: 250
+- `Over/Under 8.5`: 160
+- `Over/Under 9.5`: 156
+- `Over/Under 8`: 132
+- `Over/Under 9`: 132
+- `Over/Under 7.5`: 130
+- `Asian Handicap +1.5/-1.5`: 114
+- `Over/Under 10`: 106
+- `Over/Under 7`: 102
+- `Over/Under 10.5`: 102
+- `Odd or Even`: 100
+- `Over/Under 6.5`: 88
+- `Asian Handicap -1.5/+1.5`: 86
+- `Asian Handicap +2.5/-2.5`: 84
+- `Over/Under 11`: 68
+- `Asian Handicap -2.5/+2.5`: 64
+- `Over/Under 11.5`: 60
+- `Over/Under 5.5`: 58
+- `Over/Under 6`: 52
+- `Asian Handicap +3.5/-3.5`: 52
+- `Over/Under 12.5`: 44
+- `Over/Under 12`: 42
+- `Asian Handicap +1/-1`: 42
+- `Asian Handicap +2/-2`: 42
+- `Asian Handicap +3/-3`: 42
+- `Asian Handicap -3.5/+3.5`: 34
+- `Asian Handicap +4.5/-4.5`: 30
+- `Over/Under 4.5`: 28
+- `Over/Under 13`: 28
+- `Over/Under 5`: 26
+- `Over/Under 13.5`: 26
+- `Asian Handicap -2/+2`: 26
+- `Asian Handicap -1/+1`: 26
+- `Over/Under 4`: 20
+- `Over/Under 14`: 20
+- `Asian Handicap -3/+3`: 18
+- `Over/Under 3.5`: 16
+- `Asian Handicap -4.5/+4.5`: 14
+- `Over/Under 2.5`: 12
+- `Over/Under 3`: 12
+- `Asian Handicap -4/+4`: 10
+- `Over/Under 14.5`: 8
+- `Over/Under 15`: 8
+- `Asian Handicap +4/-4`: 8
+- `Asian Handicap +5/-5`: 8
+- `Asian Handicap -5.5/+5.5`: 6
+- `Asian Handicap +5.5/-5.5`: 6
+- `Asian Handicap -6.5/+6.5`: 2
+- `Asian Handicap -6/+6`: 2
+- `Asian Handicap -5/+5`: 2
+
+## wnba
+
+### Famílias de mercado
+
+- `Total Points`: 3014 seleções
+- `Handicap/Spread`: 1600 seleções
+- `Moneyline`: 208 seleções
+- `3-Way Moneyline`: 141 seleções
+- `Odd or Even`: 82 seleções
+
+### Bookmakers por volume de seleções (top 20)
+
+- `22Bet`: 357
+- `Megapari`: 357
+- `1xBet`: 357
+- `Betano`: 294
+- `DraftKings`: 272
+- `TonyBet`: 197
+- `Ivibet`: 197
+- `20Bet`: 197
+- `Stake.com`: 190
+- `Coral`: 167
+- `Vbet Sport`: 165
+- `Ladbrokes`: 163
+- `Marathonbet`: 155
+- `Sportingbet`: 152
+- `1Bet`: 150
+- `BetUK`: 148
+- `LeoVegas Sport`: 148
+- `Unibet`: 148
+- `Casumo Sport`: 142
+- `Bwin`: 140
+
+### Mercados exatos
+
+- `Moneyline`: 208
+- `Total Points 168.5`: 152
+- `Total Points 170.5`: 152
+- `Total Points 169.5`: 150
+- `Total Points 171.5`: 146
+- `3-Way Moneyline`: 141
+- `Total Points 167.5`: 138
+- `Total Points 172.5`: 138
+- `Total Points 166.5`: 126
+- `Total Points 173.5`: 122
+- `Total Points 165.5`: 118
+- `Total Points 164.5`: 116
+- `Total Points 174.5`: 108
+- `Total Points 163.5`: 106
+- `Total Points 175.5`: 104
+- `Total Points 162.5`: 88
+- `Total Points 176.5`: 86
+- `Odd or Even`: 82
+- `Total Points 177.5`: 74
+- `Total Points 161.5`: 70
+- `Spread +1.5/-1.5`: 70
+- `Spread +2.5/-2.5`: 68
+- `Spread -1.5/+1.5`: 64
+- `Spread +3.5/-3.5`: 64
+- `Spread -2.5/+2.5`: 62
+- `Spread -4.5/+4.5`: 58
+- `Spread -3.5/+3.5`: 58
+- `Total Points 178.5`: 58
+- `Spread -6.5/+6.5`: 56
+- `Total Points 160.5`: 56
+- `Total Points 179.5`: 56
+- `Spread -7.5/+7.5`: 52
+- `Total Points 159.5`: 50
+- `Total Points 180.5`: 50
+- `Spread -8.5/+8.5`: 50
+- `Spread -5.5/+5.5`: 48
+- `Spread +4.5/-4.5`: 48
+- `Spread +5.5/-5.5`: 48
+- `Total Points 158.5`: 48
+- `Total Points 169`: 48
+- `Total Points 170`: 48
+- `Total Points 171`: 46
+- `Spread -10.5/+10.5`: 46
+- `Spread -9.5/+9.5`: 44
+- `Spread -11.5/+11.5`: 44
+- `Total Points 167`: 42
+- `Total Points 168`: 42
+- `Total Points 181.5`: 42
+- `Spread -13.5/+13.5`: 42
+- `Total Points 172`: 40
+- `Spread -12.5/+12.5`: 40
+- `Total Points 173`: 38
+- `Spread -14.5/+14.5`: 36
+- `Total Points 182.5`: 36
+- `Spread +6.5/-6.5`: 34
+- `Total Points 157.5`: 32
+- `Spread +7.5/-7.5`: 30
+- `Total Points 166`: 28
+- `Spread +1/-1`: 28
+- `Spread -16.5/+16.5`: 28
+- `Spread -15.5/+15.5`: 28
+- `Total Points 174`: 28
+- `Spread -1/+1`: 26
+- `Spread +2/-2`: 26
+- `Total Points 165`: 24
+- `Spread -2/+2`: 24
+- `Spread +3/-3`: 24
+- `Total Points 156.5`: 24
+- `Spread -17.5/+17.5`: 22
+- `Spread +4/-4`: 20
+- `Spread +8.5/-8.5`: 20
+- `Spread -4/+4`: 18
+- `Spread -3/+3`: 18
+- `Spread +9.5/-9.5`: 18
+- `Spread -18.5/+18.5`: 18
+- `Total Points 164`: 16
+- `Total Points 155.5`: 16
+- `Total Points 183.5`: 16
+- `Spread -19.5/+19.5`: 16
+- `Spread -13/+13`: 14
+- `Spread -12/+12`: 14
+- `Spread +5/-5`: 12
+- `Spread -15/+15`: 12
+- `Spread -14/+14`: 12
+- `Spread -11/+11`: 12
+- `Spread -10/+10`: 12
+- `Total Points 175`: 12
+- `Total Points 176`: 12
+- `Total Points 177`: 12
+- `Total Points 153.5`: 10
+- `Total Points 154.5`: 10
+- `Spread -20.5/+20.5`: 10
+- `Total Points 184.5`: 10
+- `Total Points 185.5`: 10
+- `Spread -6/+6`: 8
+- `Spread -5/+5`: 8
+- `Total Points 163`: 8
+- `Spread -9/+9`: 8
+- `Spread -8/+8`: 8
+- `Spread -16/+16`: 6
+- `Spread -7/+7`: 6
+- `Spread 0`: 6
+- `Spread +10.5/-10.5`: 4
+- `Spread +11.5/-11.5`: 4
+- `Spread +12.5/-12.5`: 4
+- `Spread -23.5/+23.5`: 4
+- `Spread -22.5/+22.5`: 4
+- `Spread -21.5/+21.5`: 4
+- `Total Points 150.5`: 4
+- `Total Points 151.5`: 4
+- `Total Points 152.5`: 4
+- `Total Points 186.5`: 4
+- `Total Points 187.5`: 4
+- `Total Points 188.5`: 4
+- `Total Points 189.5`: 4
+- `Total Points 190.5`: 4
+- `Total Points 191.5`: 4
+- `Total Points 192.5`: 4
+- `Spread -0.5/+0.5`: 2
+- `Spread +0.5/-0.5`: 2
+- `Spread +13.5/-13.5`: 2
+- `Total Points 147.5`: 2
+- `Total Points 148.5`: 2
+- `Total Points 149.5`: 2
+- `Spread -35.5/+35.5`: 2
+- `Spread -34.5/+34.5`: 2
+- `Spread -33.5/+33.5`: 2
+- `Spread -32.5/+32.5`: 2
+- `Spread -31.5/+31.5`: 2
+- `Spread -30.5/+30.5`: 2
+- `Spread -29.5/+29.5`: 2
+- `Spread -28.5/+28.5`: 2
+- `Spread -27.5/+27.5`: 2
+- `Spread -26.5/+26.5`: 2
+- `Spread -25.5/+25.5`: 2
+- `Spread -24.5/+24.5`: 2
+- `Spread +6/-6`: 2
+- `Total Points 193.5`: 2
+- `Total Points 194.5`: 2
+- `Total Points 195.5`: 2
+
+## Conclusões para o ASP Insights
+
+- O PRO libera odds e retorna limite de 7.500 requisições/dia.
+- A amostra contém apenas `prematch`; odds live precisam ser medidas durante jogos em andamento.
+- Cotações decimais `<= 1.00` devem ser rejeitadas ou colocadas em quarentena.
+- A lista diária pode não conter metadados de todos os `matchId` presentes em odds; o coletor deve buscar a partida por ID e paginar completamente.
+- O inventário JSON preserva todos os mercados exatos e bookmakers observados para integração e comparação futura.

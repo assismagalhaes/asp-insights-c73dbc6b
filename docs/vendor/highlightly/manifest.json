@@ -1,0 +1,15 @@
+{
+  "provider": "highlightly",
+  "title": "All Sports API Documentation",
+  "version": "6.13.2",
+  "file": "openapi-6.13.2.json",
+  "bytes": 1170538,
+  "sha256": "1981d47f1289fe7a0851267728f1e12dce3aa37ad1baa2dae143e26c43719ea6",
+  "scope_v1": [
+    "football",
+    "baseball",
+    "basketball"
+  ],
+  "operation_count_v1": 64,
+  "immutable": true
+}

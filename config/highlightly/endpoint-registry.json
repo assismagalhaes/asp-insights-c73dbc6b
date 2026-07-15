@@ -1,0 +1,2876 @@
+{
+  "provider": "highlightly",
+  "contract_version": "6.13.2",
+  "contract_sha256": "1981d47f1289fe7a0851267728f1e12dce3aa37ad1baa2dae143e26c43719ea6",
+  "base_url": "https://sports.highlightly.net",
+  "sports": [
+    "football",
+    "baseball",
+    "basketball"
+  ],
+  "feature_flag": {
+    "name": "highlightly_analysis_enabled",
+    "default": false
+  },
+  "quota": {
+    "daily_limit": 7500,
+    "scheduled": 4500,
+    "postmatch_backfill": 1500,
+    "retry": 750,
+    "reserve": 750
+  },
+  "operations": [
+    {
+      "key": "baseball.BaseballBookmakersController_getBookmakers",
+      "sport": "baseball",
+      "method": "GET",
+      "path": "/baseball/bookmakers",
+      "operation_id": "BaseballBookmakersController_getBookmakers",
+      "summary": "Get all bookmakers",
+      "resource": "bookmakers",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 20,
+          "minimum": 0,
+          "maximum": 100
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 0,
+          "minimum": 0
+        }
+      ],
+      "paginated": true,
+      "priority": 2,
+      "cadence_policy": "weekly",
+      "freshness_sla": "8d",
+      "normalizer": "baseball.bookmakers",
+      "target_tables": [
+        "sports_bookmakers"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_30d_latest_normalized_indefinite"
+    },
+    {
+      "key": "baseball.BaseballBookmakersController_getBookmakerById",
+      "sport": "baseball",
+      "method": "GET",
+      "path": "/baseball/bookmakers/{id}",
+      "operation_id": "BaseballBookmakersController_getBookmakerById",
+      "summary": "Get bookmaker by id",
+      "resource": "bookmakers",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 2,
+      "cadence_policy": "weekly",
+      "freshness_sla": "8d",
+      "normalizer": "baseball.bookmakers",
+      "target_tables": [
+        "sports_bookmakers"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_30d_latest_normalized_indefinite"
+    },
+    {
+      "key": "baseball.BaseballBoxScoresController_getBoxScores",
+      "sport": "baseball",
+      "method": "GET",
+      "path": "/baseball/box-scores/{id}",
+      "operation_id": "BaseballBoxScoresController_getBoxScores",
+      "summary": "Retrieve player box score for specified match id",
+      "resource": "box_scores",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 1,
+      "cadence_policy": "final_15m_2h_24h",
+      "freshness_sla": "26h_postmatch",
+      "normalizer": "baseball.box_scores",
+      "target_tables": [
+        "sports_player_box_scores"
+      ],
+      "evidence": "confirmed",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "baseball.BaseballHead2HeadController_getHead2HeadData",
+      "sport": "baseball",
+      "method": "GET",
+      "path": "/baseball/head-2-head",
+      "operation_id": "BaseballHead2HeadController_getHead2HeadData",
+      "summary": "Get head 2 head games",
+      "resource": "head_to_head",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "teamIdOne",
+          "in": "query",
+          "required": true,
+          "type": "number"
+        },
+        {
+          "name": "teamIdTwo",
+          "in": "query",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 3,
+      "cadence_policy": "on_demand_ttl_24h",
+      "freshness_sla": "on_demand",
+      "normalizer": "baseball.head_to_head",
+      "target_tables": [
+        "sports_matches"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "baseball.HighlightsController_getHighlights",
+      "sport": "baseball",
+      "method": "GET",
+      "path": "/baseball/highlights",
+      "operation_id": "HighlightsController_getHighlights",
+      "summary": "Get all highlights",
+      "resource": "highlights",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "leagueName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "date",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "timezone",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "default": "Etc/UTC"
+        },
+        {
+          "name": "season",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "matchId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "homeTeamId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "awayTeamId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "homeTeamName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "awayTeamName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "homeTeamAbbreviation",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "awayTeamAbbreviation",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "homeTeamDisplayName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "awayTeamDisplayName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 40,
+          "minimum": 0,
+          "maximum": 40
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 0,
+          "minimum": 0
+        }
+      ],
+      "paginated": true,
+      "priority": 3,
+      "cadence_policy": "postmatch_30m_6h",
+      "freshness_sla": "8h",
+      "normalizer": "baseball.highlights",
+      "target_tables": [
+        "sports_highlights"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "metadata_365d_no_media_copy"
+    },
+    {
+      "key": "baseball.HighlightsController_getGeoRestrictions",
+      "sport": "baseball",
+      "method": "GET",
+      "path": "/baseball/highlights/geo-restrictions/{id}",
+      "operation_id": "HighlightsController_getGeoRestrictions",
+      "summary": "Get geo restrictions for highlight",
+      "resource": "highlight_geo_restrictions",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 4,
+      "cadence_policy": "on_demand",
+      "freshness_sla": "on_demand",
+      "normalizer": "baseball.highlight_geo_restrictions",
+      "target_tables": [
+        "sports_highlights"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "metadata_365d_no_media_copy"
+    },
+    {
+      "key": "baseball.HighlightsController_getHighlightById",
+      "sport": "baseball",
+      "method": "GET",
+      "path": "/baseball/highlights/{id}",
+      "operation_id": "HighlightsController_getHighlightById",
+      "summary": "Get highlight by id",
+      "resource": "highlights",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 3,
+      "cadence_policy": "postmatch_30m_6h",
+      "freshness_sla": "8h",
+      "normalizer": "baseball.highlights",
+      "target_tables": [
+        "sports_highlights"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "metadata_365d_no_media_copy"
+    },
+    {
+      "key": "baseball.BaseballLastFiveGamesController_getLastFiveGames",
+      "sport": "baseball",
+      "method": "GET",
+      "path": "/baseball/last-five-games",
+      "operation_id": "BaseballLastFiveGamesController_getLastFiveGames",
+      "summary": "Get last five finished games for a specific team id",
+      "resource": "last_five_games",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "teamId",
+          "in": "query",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 3,
+      "cadence_policy": "on_demand_ttl_6h",
+      "freshness_sla": "on_demand",
+      "normalizer": "baseball.last_five_games",
+      "target_tables": [
+        "sports_matches"
+      ],
+      "evidence": "confirmed",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "baseball.BaseballLineupsController_getLineups",
+      "sport": "baseball",
+      "method": "GET",
+      "path": "/baseball/lineups/{matchId}",
+      "operation_id": "BaseballLineupsController_getLineups",
+      "summary": "Get linups by match id",
+      "resource": "lineups",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "matchId",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 0,
+      "cadence_policy": "t24h_t2h_t30m_kickoff",
+      "freshness_sla": "30m_prematch",
+      "normalizer": "baseball.lineups",
+      "target_tables": [
+        "sports_lineups",
+        "sports_lineup_players"
+      ],
+      "evidence": "confirmed",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "baseball.BaseballMatchController_getMatches",
+      "sport": "baseball",
+      "method": "GET",
+      "path": "/baseball/matches",
+      "operation_id": "BaseballMatchController_getMatches",
+      "summary": "Get all matches",
+      "resource": "matches",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "league",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "date",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "timezone",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "default": "Etc/UTC"
+        },
+        {
+          "name": "season",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "homeTeamId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "awayTeamId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "homeTeamName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "awayTeamName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "homeTeamAbbreviation",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "awayTeamAbbreviation",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "homeTeamDisplayName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "awayTeamDisplayName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 100,
+          "minimum": 0,
+          "maximum": 100
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 0,
+          "minimum": 0
+        }
+      ],
+      "paginated": true,
+      "priority": 0,
+      "cadence_policy": "adaptive_match_window",
+      "freshness_sla": "10m_game_day",
+      "normalizer": "baseball.matches",
+      "target_tables": [
+        "sports_matches"
+      ],
+      "evidence": "confirmed",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "baseball.BaseballMatchController_getMatchById",
+      "sport": "baseball",
+      "method": "GET",
+      "path": "/baseball/matches/{id}",
+      "operation_id": "BaseballMatchController_getMatchById",
+      "summary": "Get match by id",
+      "resource": "matches",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 0,
+      "cadence_policy": "adaptive_match_window",
+      "freshness_sla": "10m_game_day",
+      "normalizer": "baseball.matches",
+      "target_tables": [
+        "sports_matches"
+      ],
+      "evidence": "confirmed",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "baseball.BaseballOddsController_getOddsV2",
+      "sport": "baseball",
+      "method": "GET",
+      "path": "/baseball/odds",
+      "operation_id": "BaseballOddsController_getOddsV2",
+      "summary": "Get all odds",
+      "resource": "odds",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "oddsType",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "leagueName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "timezone",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "default": "Etc/UTC"
+        },
+        {
+          "name": "bookmakerId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 5,
+          "minimum": 0,
+          "maximum": 5
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 0,
+          "minimum": 0
+        },
+        {
+          "name": "matchId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "bookmakerName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "date",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "paginated": true,
+      "priority": 0,
+      "cadence_policy": "adaptive_odds_window",
+      "freshness_sla": "20m_prematch_12m_live",
+      "normalizer": "baseball.odds",
+      "target_tables": [
+        "sports_odds_current",
+        "sports_odds_history"
+      ],
+      "evidence": "confirmed_pro",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_90d_normalized_indefinite"
+    },
+    {
+      "key": "baseball.BaseballPlayersController_getPlayers",
+      "sport": "baseball",
+      "method": "GET",
+      "path": "/baseball/players",
+      "operation_id": "BaseballPlayersController_getPlayers",
+      "summary": "Get all players",
+      "resource": "players",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 0,
+          "minimum": 0
+        }
+      ],
+      "paginated": true,
+      "priority": 3,
+      "cadence_policy": "weekly_and_on_demand",
+      "freshness_sla": "8d",
+      "normalizer": "baseball.players",
+      "target_tables": [
+        "sports_players"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_30d_latest_normalized_indefinite"
+    },
+    {
+      "key": "baseball.BaseballPlayersController_getPlayerSummaryById",
+      "sport": "baseball",
+      "method": "GET",
+      "path": "/baseball/players/{id}",
+      "operation_id": "BaseballPlayersController_getPlayerSummaryById",
+      "summary": "Get player summary by player id",
+      "resource": "players",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 3,
+      "cadence_policy": "weekly_and_on_demand",
+      "freshness_sla": "8d",
+      "normalizer": "baseball.players",
+      "target_tables": [
+        "sports_players"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_30d_latest_normalized_indefinite"
+    },
+    {
+      "key": "baseball.BaseballPlayersController_getPlayerStatisticsById",
+      "sport": "baseball",
+      "method": "GET",
+      "path": "/baseball/players/{id}/statistics",
+      "operation_id": "BaseballPlayersController_getPlayerStatisticsById",
+      "summary": "Get player statistics by player id",
+      "resource": "player_statistics",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 2,
+      "cadence_policy": "weekly_and_on_demand",
+      "freshness_sla": "8d",
+      "normalizer": "baseball.player_statistics",
+      "target_tables": [
+        "sports_player_stats"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "baseball.BaseballStandingsController_getStandings",
+      "sport": "baseball",
+      "method": "GET",
+      "path": "/baseball/standings",
+      "operation_id": "BaseballStandingsController_getStandings",
+      "summary": "Get standings",
+      "resource": "standings",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "leagueType",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 10,
+          "minimum": 0,
+          "maximum": 10
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 0,
+          "minimum": 0
+        },
+        {
+          "name": "leagueName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "abbreviation",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "year",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        }
+      ],
+      "paginated": true,
+      "priority": 1,
+      "cadence_policy": "daily_post_round",
+      "freshness_sla": "36h",
+      "normalizer": "baseball.standings",
+      "target_tables": [
+        "sports_standings_snapshots"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "baseball.BaseballMatchStatisticsController_getStatistics",
+      "sport": "baseball",
+      "method": "GET",
+      "path": "/baseball/statistics/{id}",
+      "operation_id": "BaseballMatchStatisticsController_getStatistics",
+      "summary": "Returns detailed match statistics for given id",
+      "resource": "match_statistics",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 1,
+      "cadence_policy": "final_15m_2h_24h",
+      "freshness_sla": "26h_postmatch",
+      "normalizer": "baseball.match_statistics",
+      "target_tables": [
+        "sports_match_team_stats"
+      ],
+      "evidence": "confirmed",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "baseball.TeamController_getTeams",
+      "sport": "baseball",
+      "method": "GET",
+      "path": "/baseball/teams",
+      "operation_id": "TeamController_getTeams",
+      "summary": "Get all teams",
+      "resource": "teams",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "league",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "displayName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "abbreviation",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "paginated": false,
+      "priority": 2,
+      "cadence_policy": "daily",
+      "freshness_sla": "36h",
+      "normalizer": "baseball.teams",
+      "target_tables": [
+        "sports_teams"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_30d_latest_normalized_indefinite"
+    },
+    {
+      "key": "baseball.TeamController_getTeamStats",
+      "sport": "baseball",
+      "method": "GET",
+      "path": "/baseball/teams/statistics/{id}",
+      "operation_id": "TeamController_getTeamStats",
+      "summary": "Get team statistics",
+      "resource": "team_statistics",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        },
+        {
+          "name": "fromDate",
+          "in": "query",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "timezone",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "default": "Etc/UTC"
+        }
+      ],
+      "paginated": false,
+      "priority": 1,
+      "cadence_policy": "daily",
+      "freshness_sla": "36h",
+      "normalizer": "baseball.team_statistics",
+      "target_tables": [
+        "sports_team_season_stats"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "baseball.TeamController_getTeamById",
+      "sport": "baseball",
+      "method": "GET",
+      "path": "/baseball/teams/{id}",
+      "operation_id": "TeamController_getTeamById",
+      "summary": "Get team by team id",
+      "resource": "teams",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 2,
+      "cadence_policy": "daily",
+      "freshness_sla": "36h",
+      "normalizer": "baseball.teams",
+      "target_tables": [
+        "sports_teams"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_30d_latest_normalized_indefinite"
+    },
+    {
+      "key": "basketball.BasketballBookmakersController_getBookmakers",
+      "sport": "basketball",
+      "method": "GET",
+      "path": "/basketball/bookmakers",
+      "operation_id": "BasketballBookmakersController_getBookmakers",
+      "summary": "Get all bookmakers",
+      "resource": "bookmakers",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 20,
+          "minimum": 0,
+          "maximum": 100
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 0,
+          "minimum": 0
+        }
+      ],
+      "paginated": true,
+      "priority": 2,
+      "cadence_policy": "weekly",
+      "freshness_sla": "8d",
+      "normalizer": "basketball.bookmakers",
+      "target_tables": [
+        "sports_bookmakers"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_30d_latest_normalized_indefinite"
+    },
+    {
+      "key": "basketball.BasketballBookmakersController_getBookmakerById",
+      "sport": "basketball",
+      "method": "GET",
+      "path": "/basketball/bookmakers/{id}",
+      "operation_id": "BasketballBookmakersController_getBookmakerById",
+      "summary": "Get bookmaker by id",
+      "resource": "bookmakers",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 2,
+      "cadence_policy": "weekly",
+      "freshness_sla": "8d",
+      "normalizer": "basketball.bookmakers",
+      "target_tables": [
+        "sports_bookmakers"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_30d_latest_normalized_indefinite"
+    },
+    {
+      "key": "basketball.CountriesController_getAllCountries",
+      "sport": "basketball",
+      "method": "GET",
+      "path": "/basketball/countries",
+      "operation_id": "CountriesController_getAllCountries",
+      "summary": "Get all countries",
+      "resource": "countries",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "paginated": false,
+      "priority": 3,
+      "cadence_policy": "weekly",
+      "freshness_sla": "8d",
+      "normalizer": "basketball.countries",
+      "target_tables": [
+        "sports_countries"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_30d_latest_normalized_indefinite"
+    },
+    {
+      "key": "basketball.CountriesController_getCountryByCountryCode",
+      "sport": "basketball",
+      "method": "GET",
+      "path": "/basketball/countries/{countryCode}",
+      "operation_id": "CountriesController_getCountryByCountryCode",
+      "summary": "Get country by country code",
+      "resource": "countries",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "countryCode",
+          "in": "path",
+          "required": true,
+          "type": "string"
+        }
+      ],
+      "paginated": false,
+      "priority": 3,
+      "cadence_policy": "weekly",
+      "freshness_sla": "8d",
+      "normalizer": "basketball.countries",
+      "target_tables": [
+        "sports_countries"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_30d_latest_normalized_indefinite"
+    },
+    {
+      "key": "basketball.BasketballHead2HeadController_getHead2HeadData",
+      "sport": "basketball",
+      "method": "GET",
+      "path": "/basketball/head-2-head",
+      "operation_id": "BasketballHead2HeadController_getHead2HeadData",
+      "summary": "Get head 2 head games",
+      "resource": "head_to_head",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "teamIdOne",
+          "in": "query",
+          "required": true,
+          "type": "number"
+        },
+        {
+          "name": "teamIdTwo",
+          "in": "query",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 3,
+      "cadence_policy": "on_demand_ttl_24h",
+      "freshness_sla": "on_demand",
+      "normalizer": "basketball.head_to_head",
+      "target_tables": [
+        "sports_matches"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "basketball.HighlightsController_getHighlights",
+      "sport": "basketball",
+      "method": "GET",
+      "path": "/basketball/highlights",
+      "operation_id": "HighlightsController_getHighlights",
+      "summary": "Get all highlights",
+      "resource": "highlights",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "countryCode",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "countryName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "leagueName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "leagueId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "date",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "timezone",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "default": "Etc/UTC"
+        },
+        {
+          "name": "season",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "matchId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "homeTeamId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "awayTeamId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "homeTeamName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "awayTeamName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 40,
+          "minimum": 0,
+          "maximum": 40
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 0,
+          "minimum": 0
+        }
+      ],
+      "paginated": true,
+      "priority": 3,
+      "cadence_policy": "postmatch_30m_6h",
+      "freshness_sla": "8h",
+      "normalizer": "basketball.highlights",
+      "target_tables": [
+        "sports_highlights"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "metadata_365d_no_media_copy"
+    },
+    {
+      "key": "basketball.HighlightsController_getGeoRestrictions",
+      "sport": "basketball",
+      "method": "GET",
+      "path": "/basketball/highlights/geo-restrictions/{id}",
+      "operation_id": "HighlightsController_getGeoRestrictions",
+      "summary": "Get geo restrictions for highlight",
+      "resource": "highlight_geo_restrictions",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 4,
+      "cadence_policy": "on_demand",
+      "freshness_sla": "on_demand",
+      "normalizer": "basketball.highlight_geo_restrictions",
+      "target_tables": [
+        "sports_highlights"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "metadata_365d_no_media_copy"
+    },
+    {
+      "key": "basketball.HighlightsController_getHighlightById",
+      "sport": "basketball",
+      "method": "GET",
+      "path": "/basketball/highlights/{id}",
+      "operation_id": "HighlightsController_getHighlightById",
+      "summary": "Get highlight by id",
+      "resource": "highlights",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 3,
+      "cadence_policy": "postmatch_30m_6h",
+      "freshness_sla": "8h",
+      "normalizer": "basketball.highlights",
+      "target_tables": [
+        "sports_highlights"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "metadata_365d_no_media_copy"
+    },
+    {
+      "key": "basketball.BasketballLastFiveGamesController_getLastFiveGames",
+      "sport": "basketball",
+      "method": "GET",
+      "path": "/basketball/last-five-games",
+      "operation_id": "BasketballLastFiveGamesController_getLastFiveGames",
+      "summary": "Get last five finished games for a specific team id",
+      "resource": "last_five_games",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "teamId",
+          "in": "query",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 3,
+      "cadence_policy": "on_demand_ttl_6h",
+      "freshness_sla": "on_demand",
+      "normalizer": "basketball.last_five_games",
+      "target_tables": [
+        "sports_matches"
+      ],
+      "evidence": "confirmed",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "basketball.LeaguesController_getLeagues",
+      "sport": "basketball",
+      "method": "GET",
+      "path": "/basketball/leagues",
+      "operation_id": "LeaguesController_getLeagues",
+      "summary": "Get all leagues",
+      "resource": "leagues",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 100,
+          "minimum": 0,
+          "maximum": 100
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 0,
+          "minimum": 0
+        },
+        {
+          "name": "season",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "minimum": 0
+        },
+        {
+          "name": "leagueName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "countryCode",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "countryName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "paginated": true,
+      "priority": 2,
+      "cadence_policy": "daily",
+      "freshness_sla": "36h",
+      "normalizer": "basketball.leagues",
+      "target_tables": [
+        "sports_competitions"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_30d_latest_normalized_indefinite"
+    },
+    {
+      "key": "basketball.LeaguesController_getLeagueById",
+      "sport": "basketball",
+      "method": "GET",
+      "path": "/basketball/leagues/{id}",
+      "operation_id": "LeaguesController_getLeagueById",
+      "summary": "Get league by id",
+      "resource": "leagues",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 2,
+      "cadence_policy": "daily",
+      "freshness_sla": "36h",
+      "normalizer": "basketball.leagues",
+      "target_tables": [
+        "sports_competitions"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_30d_latest_normalized_indefinite"
+    },
+    {
+      "key": "basketball.MatchesController_getMatches",
+      "sport": "basketball",
+      "method": "GET",
+      "path": "/basketball/matches",
+      "operation_id": "MatchesController_getMatches",
+      "summary": "Get all matches",
+      "resource": "matches",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "leagueName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "leagueId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "date",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "timezone",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "default": "Etc/UTC"
+        },
+        {
+          "name": "season",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "homeTeamId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "awayTeamId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "homeTeamName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "awayTeamName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "countryCode",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "countryName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 100,
+          "minimum": 0,
+          "maximum": 100
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 0,
+          "minimum": 0
+        }
+      ],
+      "paginated": true,
+      "priority": 0,
+      "cadence_policy": "adaptive_match_window",
+      "freshness_sla": "10m_game_day",
+      "normalizer": "basketball.matches",
+      "target_tables": [
+        "sports_matches"
+      ],
+      "evidence": "confirmed",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "basketball.MatchesController_getMatchById",
+      "sport": "basketball",
+      "method": "GET",
+      "path": "/basketball/matches/{id}",
+      "operation_id": "MatchesController_getMatchById",
+      "summary": "Get match by id",
+      "resource": "matches",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 0,
+      "cadence_policy": "adaptive_match_window",
+      "freshness_sla": "10m_game_day",
+      "normalizer": "basketball.matches",
+      "target_tables": [
+        "sports_matches"
+      ],
+      "evidence": "confirmed",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "basketball.BasketballOddsController_getOddsV2",
+      "sport": "basketball",
+      "method": "GET",
+      "path": "/basketball/odds",
+      "operation_id": "BasketballOddsController_getOddsV2",
+      "summary": "Get all odds",
+      "resource": "odds",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "oddsType",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "leagueId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "leagueName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "timezone",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "default": "Etc/UTC"
+        },
+        {
+          "name": "bookmakerId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 5,
+          "minimum": 0,
+          "maximum": 5
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 0,
+          "minimum": 0
+        },
+        {
+          "name": "matchId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "bookmakerName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "date",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "paginated": true,
+      "priority": 0,
+      "cadence_policy": "adaptive_odds_window",
+      "freshness_sla": "20m_prematch_12m_live",
+      "normalizer": "basketball.odds",
+      "target_tables": [
+        "sports_odds_current",
+        "sports_odds_history"
+      ],
+      "evidence": "confirmed_pro",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_90d_normalized_indefinite"
+    },
+    {
+      "key": "basketball.BasketballStandingsController_getStandings",
+      "sport": "basketball",
+      "method": "GET",
+      "path": "/basketball/standings",
+      "operation_id": "BasketballStandingsController_getStandings",
+      "summary": "Get standings",
+      "resource": "standings",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "leagueId",
+          "in": "query",
+          "required": true,
+          "type": "number"
+        },
+        {
+          "name": "season",
+          "in": "query",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 1,
+      "cadence_policy": "daily_post_round",
+      "freshness_sla": "36h",
+      "normalizer": "basketball.standings",
+      "target_tables": [
+        "sports_standings_snapshots"
+      ],
+      "evidence": "confirmed_quality_issue",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "basketball.BasketballStatisticsController_getStatistics",
+      "sport": "basketball",
+      "method": "GET",
+      "path": "/basketball/statistics/{matchId}",
+      "operation_id": "BasketballStatisticsController_getStatistics",
+      "summary": "Get match statistics by match id",
+      "resource": "match_statistics",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "matchId",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 1,
+      "cadence_policy": "final_15m_2h_24h",
+      "freshness_sla": "26h_postmatch",
+      "normalizer": "basketball.match_statistics",
+      "target_tables": [
+        "sports_match_team_stats"
+      ],
+      "evidence": "confirmed",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "basketball.TeamsController_getTeams",
+      "sport": "basketball",
+      "method": "GET",
+      "path": "/basketball/teams",
+      "operation_id": "TeamsController_getTeams",
+      "summary": "Get all teams",
+      "resource": "teams",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 500
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 0,
+          "minimum": 0
+        },
+        {
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "paginated": true,
+      "priority": 2,
+      "cadence_policy": "daily",
+      "freshness_sla": "36h",
+      "normalizer": "basketball.teams",
+      "target_tables": [
+        "sports_teams"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_30d_latest_normalized_indefinite"
+    },
+    {
+      "key": "basketball.TeamsController_getTeamStatistics",
+      "sport": "basketball",
+      "method": "GET",
+      "path": "/basketball/teams/statistics/{id}",
+      "operation_id": "TeamsController_getTeamStatistics",
+      "summary": "Get team statistics",
+      "resource": "team_statistics",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        },
+        {
+          "name": "fromDate",
+          "in": "query",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "timezone",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "default": "Etc/UTC"
+        }
+      ],
+      "paginated": false,
+      "priority": 1,
+      "cadence_policy": "daily",
+      "freshness_sla": "36h",
+      "normalizer": "basketball.team_statistics",
+      "target_tables": [
+        "sports_team_season_stats"
+      ],
+      "evidence": "confirmed",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "basketball.TeamsController_getTeamById",
+      "sport": "basketball",
+      "method": "GET",
+      "path": "/basketball/teams/{id}",
+      "operation_id": "TeamsController_getTeamById",
+      "summary": "Get team by team id",
+      "resource": "teams",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 2,
+      "cadence_policy": "daily",
+      "freshness_sla": "36h",
+      "normalizer": "basketball.teams",
+      "target_tables": [
+        "sports_teams"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_30d_latest_normalized_indefinite"
+    },
+    {
+      "key": "football.FootballBookmakersController_getBookmakers",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/bookmakers",
+      "operation_id": "FootballBookmakersController_getBookmakers",
+      "summary": "Get all bookmakers",
+      "resource": "bookmakers",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 20,
+          "minimum": 0,
+          "maximum": 100
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 0,
+          "minimum": 0
+        }
+      ],
+      "paginated": true,
+      "priority": 2,
+      "cadence_policy": "weekly",
+      "freshness_sla": "8d",
+      "normalizer": "football.bookmakers",
+      "target_tables": [
+        "sports_bookmakers"
+      ],
+      "evidence": "confirmed",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_30d_latest_normalized_indefinite"
+    },
+    {
+      "key": "football.FootballBookmakersController_getBookmakerById",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/bookmakers/{id}",
+      "operation_id": "FootballBookmakersController_getBookmakerById",
+      "summary": "Get bookmaker by id",
+      "resource": "bookmakers",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 2,
+      "cadence_policy": "weekly",
+      "freshness_sla": "8d",
+      "normalizer": "football.bookmakers",
+      "target_tables": [
+        "sports_bookmakers"
+      ],
+      "evidence": "confirmed",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_30d_latest_normalized_indefinite"
+    },
+    {
+      "key": "football.FootballPlayerBoxScoreController_getPlayerBoxScores",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/box-score/{matchId}",
+      "operation_id": "FootballPlayerBoxScoreController_getPlayerBoxScores",
+      "summary": "Retrieve box scores for specified match id.",
+      "resource": "box_scores",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "matchId",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 1,
+      "cadence_policy": "final_15m_2h_24h",
+      "freshness_sla": "26h_postmatch",
+      "normalizer": "football.box_scores",
+      "target_tables": [
+        "sports_player_box_scores"
+      ],
+      "evidence": "confirmed",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "football.CountriesController_getAllCountries",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/countries",
+      "operation_id": "CountriesController_getAllCountries",
+      "summary": "Get all countries",
+      "resource": "countries",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "paginated": false,
+      "priority": 3,
+      "cadence_policy": "weekly",
+      "freshness_sla": "8d",
+      "normalizer": "football.countries",
+      "target_tables": [
+        "sports_countries"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_30d_latest_normalized_indefinite"
+    },
+    {
+      "key": "football.CountriesController_getCountryByCountryCode",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/countries/{countryCode}",
+      "operation_id": "CountriesController_getCountryByCountryCode",
+      "summary": "Get country by country code",
+      "resource": "countries",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "countryCode",
+          "in": "path",
+          "required": true,
+          "type": "string"
+        }
+      ],
+      "paginated": false,
+      "priority": 3,
+      "cadence_policy": "weekly",
+      "freshness_sla": "8d",
+      "normalizer": "football.countries",
+      "target_tables": [
+        "sports_countries"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_30d_latest_normalized_indefinite"
+    },
+    {
+      "key": "football.FootballLiveEventsController_getLiveEvents",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/events/{id}",
+      "operation_id": "FootballLiveEventsController_getLiveEvents",
+      "summary": "Get live events by match id",
+      "resource": "events",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 0,
+      "cadence_policy": "active_match_only",
+      "freshness_sla": "provider_live_cadence",
+      "normalizer": "football.events",
+      "target_tables": [
+        "sports_match_events"
+      ],
+      "evidence": "confirmed",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "football.FootballHead2HeadController_getHead2HeadData",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/head-2-head",
+      "operation_id": "FootballHead2HeadController_getHead2HeadData",
+      "summary": "Get head 2 head games",
+      "resource": "head_to_head",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "teamIdOne",
+          "in": "query",
+          "required": true,
+          "type": "number"
+        },
+        {
+          "name": "teamIdTwo",
+          "in": "query",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 3,
+      "cadence_policy": "on_demand_ttl_24h",
+      "freshness_sla": "on_demand",
+      "normalizer": "football.head_to_head",
+      "target_tables": [
+        "sports_matches"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "football.HighlightsController_getHighlights",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/highlights",
+      "operation_id": "HighlightsController_getHighlights",
+      "summary": "Get all highlights",
+      "resource": "highlights",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "countryCode",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "countryName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "leagueName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "leagueId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "date",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "timezone",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "default": "Etc/UTC"
+        },
+        {
+          "name": "season",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "matchId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "homeTeamId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "awayTeamId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "homeTeamName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "awayTeamName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 40,
+          "minimum": 0,
+          "maximum": 40
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 0,
+          "minimum": 0
+        }
+      ],
+      "paginated": true,
+      "priority": 3,
+      "cadence_policy": "postmatch_30m_6h",
+      "freshness_sla": "8h",
+      "normalizer": "football.highlights",
+      "target_tables": [
+        "sports_highlights"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "metadata_365d_no_media_copy"
+    },
+    {
+      "key": "football.HighlightsController_getGeoRestrictions",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/highlights/geo-restrictions/{id}",
+      "operation_id": "HighlightsController_getGeoRestrictions",
+      "summary": "Get geo restrictions for highlight",
+      "resource": "highlight_geo_restrictions",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 4,
+      "cadence_policy": "on_demand",
+      "freshness_sla": "on_demand",
+      "normalizer": "football.highlight_geo_restrictions",
+      "target_tables": [
+        "sports_highlights"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "metadata_365d_no_media_copy"
+    },
+    {
+      "key": "football.HighlightsController_getHighlightById",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/highlights/{id}",
+      "operation_id": "HighlightsController_getHighlightById",
+      "summary": "Get highlight by id",
+      "resource": "highlights",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 3,
+      "cadence_policy": "postmatch_30m_6h",
+      "freshness_sla": "8h",
+      "normalizer": "football.highlights",
+      "target_tables": [
+        "sports_highlights"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "metadata_365d_no_media_copy"
+    },
+    {
+      "key": "football.FootballLastFiveGamesController_getLastFiveGames",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/last-five-games",
+      "operation_id": "FootballLastFiveGamesController_getLastFiveGames",
+      "summary": "Get last five finished games for a specific team id",
+      "resource": "last_five_games",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "teamId",
+          "in": "query",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 3,
+      "cadence_policy": "on_demand_ttl_6h",
+      "freshness_sla": "on_demand",
+      "normalizer": "football.last_five_games",
+      "target_tables": [
+        "sports_matches"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "football.LeaguesController_getLeagues",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/leagues",
+      "operation_id": "LeaguesController_getLeagues",
+      "summary": "Get all leagues",
+      "resource": "leagues",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 100,
+          "minimum": 0,
+          "maximum": 100
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 0,
+          "minimum": 0
+        },
+        {
+          "name": "season",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "minimum": 0
+        },
+        {
+          "name": "leagueName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "countryCode",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "countryName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "paginated": true,
+      "priority": 2,
+      "cadence_policy": "daily",
+      "freshness_sla": "36h",
+      "normalizer": "football.leagues",
+      "target_tables": [
+        "sports_competitions"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_30d_latest_normalized_indefinite"
+    },
+    {
+      "key": "football.LeaguesController_getLeagueById",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/leagues/{id}",
+      "operation_id": "LeaguesController_getLeagueById",
+      "summary": "Get league by id",
+      "resource": "leagues",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 2,
+      "cadence_policy": "daily",
+      "freshness_sla": "36h",
+      "normalizer": "football.leagues",
+      "target_tables": [
+        "sports_competitions"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_30d_latest_normalized_indefinite"
+    },
+    {
+      "key": "football.FootballLineupsController_getLineups",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/lineups/{matchId}",
+      "operation_id": "FootballLineupsController_getLineups",
+      "summary": "Get linups by match id",
+      "resource": "lineups",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "matchId",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 0,
+      "cadence_policy": "t24h_t2h_t30m_kickoff",
+      "freshness_sla": "30m_prematch",
+      "normalizer": "football.lineups",
+      "target_tables": [
+        "sports_lineups",
+        "sports_lineup_players"
+      ],
+      "evidence": "confirmed",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "football.MatchesController_getMatches",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/matches",
+      "operation_id": "MatchesController_getMatches",
+      "summary": "Get all matches",
+      "resource": "matches",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "leagueName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "leagueId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "date",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "timezone",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "default": "Etc/UTC"
+        },
+        {
+          "name": "season",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "homeTeamId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "awayTeamId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "homeTeamName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "awayTeamName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "countryCode",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "countryName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 100,
+          "minimum": 0,
+          "maximum": 100
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 0,
+          "minimum": 0
+        }
+      ],
+      "paginated": true,
+      "priority": 0,
+      "cadence_policy": "adaptive_match_window",
+      "freshness_sla": "10m_game_day",
+      "normalizer": "football.matches",
+      "target_tables": [
+        "sports_matches"
+      ],
+      "evidence": "confirmed",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "football.MatchesController_getMatchById",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/matches/{id}",
+      "operation_id": "MatchesController_getMatchById",
+      "summary": "Get match by id",
+      "resource": "matches",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 0,
+      "cadence_policy": "adaptive_match_window",
+      "freshness_sla": "10m_game_day",
+      "normalizer": "football.matches",
+      "target_tables": [
+        "sports_matches"
+      ],
+      "evidence": "confirmed",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "football.FootballOddsController_getOddsV2",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/odds",
+      "operation_id": "FootballOddsController_getOddsV2",
+      "summary": "Get all odds",
+      "resource": "odds",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "oddsType",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "leagueId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "leagueName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "timezone",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "default": "Etc/UTC"
+        },
+        {
+          "name": "bookmakerId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 5,
+          "minimum": 0,
+          "maximum": 5
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 0,
+          "minimum": 0
+        },
+        {
+          "name": "matchId",
+          "in": "query",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "name": "bookmakerName",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "date",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "paginated": true,
+      "priority": 0,
+      "cadence_policy": "adaptive_odds_window",
+      "freshness_sla": "20m_prematch_12m_live",
+      "normalizer": "football.odds",
+      "target_tables": [
+        "sports_odds_current",
+        "sports_odds_history"
+      ],
+      "evidence": "confirmed_pro",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_90d_normalized_indefinite"
+    },
+    {
+      "key": "football.PlayersController_getPlayers",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/players",
+      "operation_id": "PlayersController_getPlayers",
+      "summary": "Get all players",
+      "resource": "players",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 0,
+          "minimum": 0
+        }
+      ],
+      "paginated": true,
+      "priority": 3,
+      "cadence_policy": "weekly_and_on_demand",
+      "freshness_sla": "8d",
+      "normalizer": "football.players",
+      "target_tables": [
+        "sports_players"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_30d_latest_normalized_indefinite"
+    },
+    {
+      "key": "football.PlayersController_getPlayerSummaryById",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/players/{id}",
+      "operation_id": "PlayersController_getPlayerSummaryById",
+      "summary": "Get player summary by player id",
+      "resource": "players",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 3,
+      "cadence_policy": "weekly_and_on_demand",
+      "freshness_sla": "8d",
+      "normalizer": "football.players",
+      "target_tables": [
+        "sports_players"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_30d_latest_normalized_indefinite"
+    },
+    {
+      "key": "football.PlayersController_getPlayerStatisticsById",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/players/{id}/statistics",
+      "operation_id": "PlayersController_getPlayerStatisticsById",
+      "summary": "Get player statistics by player id",
+      "resource": "player_statistics",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 2,
+      "cadence_policy": "weekly_and_on_demand",
+      "freshness_sla": "8d",
+      "normalizer": "football.player_statistics",
+      "target_tables": [
+        "sports_player_stats"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "football.FootballStandingsController_getStandings",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/standings",
+      "operation_id": "FootballStandingsController_getStandings",
+      "summary": "Get standings",
+      "resource": "standings",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "leagueId",
+          "in": "query",
+          "required": true,
+          "type": "number"
+        },
+        {
+          "name": "season",
+          "in": "query",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 1,
+      "cadence_policy": "daily_post_round",
+      "freshness_sla": "36h",
+      "normalizer": "football.standings",
+      "target_tables": [
+        "sports_standings_snapshots"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "football.FootballStatisticsController_getStatistics",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/statistics/{matchId}",
+      "operation_id": "FootballStatisticsController_getStatistics",
+      "summary": "Get match statistics by match id",
+      "resource": "match_statistics",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "matchId",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 1,
+      "cadence_policy": "final_15m_2h_24h",
+      "freshness_sla": "26h_postmatch",
+      "normalizer": "football.match_statistics",
+      "target_tables": [
+        "sports_match_team_stats"
+      ],
+      "evidence": "confirmed",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "football.TeamsController_getTeams",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/teams",
+      "operation_id": "TeamsController_getTeams",
+      "summary": "Get all teams",
+      "resource": "teams",
+      "mode": "collection",
+      "parameters": [
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 500
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "default": 0,
+          "minimum": 0
+        },
+        {
+          "name": "name",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "type",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "paginated": true,
+      "priority": 2,
+      "cadence_policy": "daily",
+      "freshness_sla": "36h",
+      "normalizer": "football.teams",
+      "target_tables": [
+        "sports_teams"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_30d_latest_normalized_indefinite"
+    },
+    {
+      "key": "football.TeamsController_teamStatistics",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/teams/statistics/{id}",
+      "operation_id": "TeamsController_teamStatistics",
+      "summary": "Get team statistics",
+      "resource": "team_statistics",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        },
+        {
+          "name": "fromDate",
+          "in": "query",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "timezone",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "default": "Etc/UTC"
+        }
+      ],
+      "paginated": false,
+      "priority": 1,
+      "cadence_policy": "daily",
+      "freshness_sla": "36h",
+      "normalizer": "football.team_statistics",
+      "target_tables": [
+        "sports_team_season_stats"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_365d_normalized_indefinite"
+    },
+    {
+      "key": "football.TeamsController_getTeamById",
+      "sport": "football",
+      "method": "GET",
+      "path": "/football/teams/{id}",
+      "operation_id": "TeamsController_getTeamById",
+      "summary": "Get team by team id",
+      "resource": "teams",
+      "mode": "detail",
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "paginated": false,
+      "priority": 2,
+      "cadence_policy": "daily",
+      "freshness_sla": "36h",
+      "normalizer": "football.teams",
+      "target_tables": [
+        "sports_teams"
+      ],
+      "evidence": "documented",
+      "enabled_in_v1": true,
+      "raw_retention_class": "raw_30d_latest_normalized_indefinite"
+    }
+  ]
+}

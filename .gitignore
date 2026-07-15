@@ -29,6 +29,7 @@ outputs/jobs/*
 outputs/raw/*
 outputs/normalized/*
 outputs/exports/*
+outputs/highlightly/*
 model_outputs/*
 !outputs/jobs/.gitkeep
 !outputs/raw/.gitkeep
