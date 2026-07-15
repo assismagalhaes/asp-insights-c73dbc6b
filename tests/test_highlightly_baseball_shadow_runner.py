@@ -28,7 +28,7 @@ class HighlightlyBaseballShadowRunnerTests(unittest.TestCase):
         validate_shadow,
     ):
         repository = Mock()
-        repository_factory.return_value = repository
+        repository_factory.from_environment.return_value = repository
         repository.ingestion_context.side_effect = [self._context(), self._context()]
         worker_factory.return_value.run_once.side_effect = [
             WorkerResult(status="succeeded", job_id="job-1", run_id="run-1"),
@@ -60,7 +60,7 @@ class HighlightlyBaseballShadowRunnerTests(unittest.TestCase):
         assert_empty_queue,
     ):
         repository = Mock()
-        repository_factory.return_value = repository
+        repository_factory.from_environment.return_value = repository
         repository.ingestion_context.return_value = self._context()
         worker_factory.return_value.run_once.side_effect = RuntimeError("unexpected")
 

@@ -99,11 +99,9 @@ class HighlightlyWorker:
     @classmethod
     def from_environment(cls, *, worker_id: str) -> "HighlightlyWorker":
         api_key = os.environ.get("HIGHLIGHTLY_API_KEY", "")
-        supabase_url = os.environ.get("SUPABASE_URL", "")
-        service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
         return cls(
             HighlightlyClient(api_key, base_url=os.environ.get("HIGHLIGHTLY_BASE_URL", "https://sports.highlightly.net")),
-            HighlightlyRepository(supabase_url, service_key),
+            HighlightlyRepository.from_environment(),
             worker_id=worker_id,
             enabled=_truthy(os.environ.get("HIGHLIGHTLY_ANALYSIS_ENABLED")),
         )

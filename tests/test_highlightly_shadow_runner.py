@@ -20,7 +20,7 @@ class HighlightlyShadowRunnerTests(unittest.TestCase):
         validate_shadow,
     ):
         repository = Mock()
-        repository_factory.return_value = repository
+        repository_factory.from_environment.return_value = repository
         context_disabled = {
             "provider": {"id": "provider-1", "enabled": False, "contract_version": "6.13.2"},
             "sport": {"id": "sport-1"},
@@ -67,7 +67,7 @@ class HighlightlyShadowRunnerTests(unittest.TestCase):
         validate_shadow,
     ):
         repository = Mock()
-        repository_factory.return_value = repository
+        repository_factory.from_environment.return_value = repository
         context_disabled = {
             "provider": {"id": "provider-1", "enabled": False, "contract_version": "6.13.2"},
             "sport": {"id": "sport-1"},
@@ -103,7 +103,7 @@ class HighlightlyShadowRunnerTests(unittest.TestCase):
         assert_empty_queue,
     ):
         repository = Mock()
-        repository_factory.return_value = repository
+        repository_factory.from_environment.return_value = repository
         repository.ingestion_context.return_value = {
             "provider": {"id": "provider-1", "enabled": False, "contract_version": "6.13.2"},
             "sport": {"id": "sport-1"},

@@ -147,10 +147,7 @@ def main() -> int:
     if args.max_jobs < 1 or args.max_jobs > 200:
         parser.error("--max-jobs must be between 1 and 200")
 
-    repository = HighlightlyRepository(
-        os.environ.get("SUPABASE_URL", ""),
-        os.environ.get("SUPABASE_SERVICE_ROLE_KEY", ""),
-    )
+    repository = HighlightlyRepository.from_environment()
     client = HighlightlyClient(
         os.environ.get("HIGHLIGHTLY_API_KEY", ""),
         base_url=os.environ.get("HIGHLIGHTLY_BASE_URL", "https://sports.highlightly.net"),

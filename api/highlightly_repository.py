@@ -11,10 +11,14 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import gzip
 import hashlib
+import hmac
 import json
+import os
 import re
+import secrets
+import time
 from typing import Any, Mapping, Sequence
-from urllib.parse import quote, urlencode
+from urllib.parse import quote, urlencode, urlparse
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -29,6 +33,8 @@ RAW_BUCKET_FILE_SIZE_LIMIT = 26_214_400
 RAW_BUCKET_MIME_TYPES = ("application/json", "application/gzip", "application/x-gzip")
 _SECRET_KEYS = re.compile(r"(api[-_]?key|authorization|token|secret|password)", re.IGNORECASE)
 _PATH_TOKEN = re.compile(r"[^a-zA-Z0-9._-]+")
+_BRIDGE_NONCE = re.compile(r"^[0-9a-f]{32}$")
+BRIDGE_PROTOCOL_VERSION = "v1"
 
 
 class HighlightlyRepositoryError(RuntimeError):
@@ -109,15 +115,144 @@ class HighlightlyRepository:
         *,
         timeout: float = 30.0,
         session: Any = None,
+        bridge_url: str = "",
+        bridge_secret: str = "",
     ):
-        if not supabase_url.strip():
-            raise ValueError("Supabase URL must not be empty")
-        if not service_role_key.strip():
-            raise ValueError("Supabase service role key must not be empty")
+        bridge_url = bridge_url.strip().rstrip("/")
+        bridge_secret = bridge_secret.strip()
+        if bool(bridge_url) is not bool(bridge_secret):
+            raise ValueError("Highlightly bridge URL and secret must be configured together")
+        if bridge_url:
+            parsed_bridge = urlparse(bridge_url)
+            if not parsed_bridge.hostname or parsed_bridge.username or parsed_bridge.password:
+                raise ValueError("Highlightly bridge URL is invalid")
+            if parsed_bridge.query or parsed_bridge.fragment:
+                raise ValueError("Highlightly bridge URL must not contain a query or fragment")
+            if parsed_bridge.scheme != "https" and parsed_bridge.hostname not in {"127.0.0.1", "localhost"}:
+                raise ValueError("Highlightly bridge URL must use HTTPS")
+            if len(bridge_secret) < 32:
+                raise ValueError("Highlightly bridge secret must contain at least 32 characters")
+        elif not supabase_url.strip() or not service_role_key.strip():
+            raise ValueError("Supabase URL and service role key are required when the bridge is disabled")
         self.supabase_url = supabase_url.rstrip("/")
         self.service_role_key = service_role_key.strip()
+        self.bridge_url = bridge_url
+        self.bridge_secret = bridge_secret
         self.timeout = timeout
         self.session = session or (requests.Session() if requests is not None else _UrllibSession())
+
+    @classmethod
+    def from_environment(cls, *, timeout: float = 30.0, session: Any = None) -> "HighlightlyRepository":
+        return cls(
+            os.environ.get("SUPABASE_URL", ""),
+            os.environ.get("SUPABASE_SERVICE_ROLE_KEY", ""),
+            timeout=timeout,
+            session=session,
+            bridge_url=os.environ.get("HIGHLIGHTLY_INGEST_BRIDGE_URL", ""),
+            bridge_secret=os.environ.get("HIGHLIGHTLY_INGEST_BRIDGE_SECRET", ""),
+        )
+
+    @staticmethod
+    def _bridge_signature_input(
+        timestamp: str,
+        nonce: str,
+        method: str,
+        path: str,
+        forward_headers: Mapping[str, str],
+        body: bytes,
+    ) -> bytes:
+        digest = hashlib.sha256(body).hexdigest()
+        canonical_headers = tuple(
+            f"{name}:{forward_headers.get(name, '')}"
+            for name in ("content-type", "prefer", "x-upsert")
+        )
+        return "\n".join(
+            (
+                BRIDGE_PROTOCOL_VERSION,
+                timestamp,
+                nonce,
+                method.upper(),
+                path,
+                *canonical_headers,
+                digest,
+            )
+        ).encode("utf-8")
+
+    def _perform_request(
+        self,
+        method: str,
+        path: str,
+        *,
+        json_body: Any = None,
+        data: bytes | None = None,
+        headers: Mapping[str, str] | None = None,
+    ) -> Any:
+        forward_headers = {
+            str(key).lower(): str(value)
+            for key, value in (headers or {}).items()
+        }
+        if self.bridge_url:
+            if json_body is not None and data is not None:
+                raise ValueError("json_body and data are mutually exclusive")
+            if json_body is not None:
+                body = json.dumps(
+                    json_body,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+                forward_headers.setdefault("content-type", "application/json")
+            else:
+                body = data or b""
+            timestamp = str(int(time.time()))
+            nonce = secrets.token_hex(16)
+            if not _BRIDGE_NONCE.fullmatch(nonce):  # defensive invariant
+                raise RuntimeError("Could not create a valid bridge nonce")
+            signature = hmac.new(
+                self.bridge_secret.encode("utf-8"),
+                self._bridge_signature_input(
+                    timestamp,
+                    nonce,
+                    method,
+                    path,
+                    forward_headers,
+                    body,
+                ),
+                hashlib.sha256,
+            ).hexdigest()
+            bridge_headers = {
+                "content-type": "application/octet-stream",
+                "x-highlightly-bridge-version": BRIDGE_PROTOCOL_VERSION,
+                "x-highlightly-timestamp": timestamp,
+                "x-highlightly-nonce": nonce,
+                "x-highlightly-signature": signature,
+                "x-highlightly-forward-method": method.upper(),
+                "x-highlightly-forward-path": path,
+            }
+            for name in ("content-type", "prefer", "x-upsert"):
+                value = forward_headers.get(name)
+                if value:
+                    bridge_headers[f"x-highlightly-forward-{name}"] = value
+            return self.session.request(
+                "POST",
+                self.bridge_url,
+                data=body,
+                headers=bridge_headers,
+                timeout=self.timeout,
+            )
+
+        request_headers = {
+            "apikey": self.service_role_key,
+            "authorization": f"Bearer {self.service_role_key}",
+        }
+        request_headers.update(forward_headers)
+        return self.session.request(
+            method,
+            f"{self.supabase_url}{path}",
+            json=json_body,
+            data=data,
+            headers=request_headers,
+            timeout=self.timeout,
+        )
 
     def _request(
         self,
@@ -129,19 +264,13 @@ class HighlightlyRepository:
         headers: Mapping[str, str] | None = None,
         expected: Sequence[int] = (200,),
     ) -> Any:
-        request_headers = {
-            "apikey": self.service_role_key,
-            "authorization": f"Bearer {self.service_role_key}",
-        }
-        request_headers.update(headers or {})
         try:
-            response = self.session.request(
+            response = self._perform_request(
                 method,
-                f"{self.supabase_url}{path}",
-                json=json_body,
+                path,
+                json_body=json_body,
                 data=data,
-                headers=request_headers,
-                timeout=self.timeout,
+                headers=headers,
             )
         except Exception as exc:
             raise HighlightlyRepositoryError(f"Could not reach Supabase: {exc}") from exc
@@ -574,14 +703,9 @@ class HighlightlyRepository:
     def load_raw_payload(self, raw_object: Mapping[str, Any]) -> Any:
         bucket = str(raw_object.get("storage_bucket") or RAW_BUCKET)
         path = str(raw_object["storage_path"])
-        response = self.session.request(
+        response = self._perform_request(
             "GET",
-            f"{self.supabase_url}/storage/v1/object/{quote(bucket, safe='')}/{quote(path, safe='/')}",
-            headers={
-                "apikey": self.service_role_key,
-                "authorization": f"Bearer {self.service_role_key}",
-            },
-            timeout=self.timeout,
+            f"/storage/v1/object/{quote(bucket, safe='')}/{quote(path, safe='/')}",
         )
         if response.status_code != 200:
             raise HighlightlyRepositoryError(

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
-
 from api.highlightly_repository import HighlightlyRepository
 
 
@@ -18,10 +16,7 @@ def main() -> int:
     parser.add_argument("--fanout", action="store_true", help="Queue every related match analysis endpoint after match discovery")
     args = parser.parse_args()
 
-    repository = HighlightlyRepository(
-        os.environ.get("SUPABASE_URL", ""),
-        os.environ.get("SUPABASE_SERVICE_ROLE_KEY", ""),
-    )
+    repository = HighlightlyRepository.from_environment()
     job = repository.enqueue_job(
         endpoint_key=ENDPOINT,
         sport="football",

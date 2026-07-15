@@ -1,7 +1,10 @@
 import gzip
 import hashlib
+import hmac
 import json
+import os
 import unittest
+from unittest.mock import patch
 
 from api.highlightly_repository import (
     HighlightlyRepository,
@@ -32,6 +35,82 @@ class _Session:
 
 
 class HighlightlyRepositoryTests(unittest.TestCase):
+    def test_bridge_signs_and_forwards_without_service_role_key(self):
+        session = _Session([_Response(200, [{"id": "team-1"}])])
+        secret = "bridge-secret-with-at-least-32-characters"
+        repository = HighlightlyRepository(
+            "",
+            "",
+            session=session,
+            bridge_url="https://app.example.com/api/public/hooks/highlightly-ingest",
+            bridge_secret=secret,
+        )
+
+        with patch("api.highlightly_repository.time.time", return_value=1_784_150_000), patch(
+            "api.highlightly_repository.secrets.token_hex",
+            return_value="0123456789abcdef0123456789abcdef",
+        ):
+            saved = repository.upsert_rows(
+                "sports_teams",
+                [{"id": "team-1"}],
+                on_conflict="id",
+            )
+
+        self.assertEqual(saved, [{"id": "team-1"}])
+        method, url, kwargs = session.calls[0]
+        self.assertEqual(method, "POST")
+        self.assertEqual(url, "https://app.example.com/api/public/hooks/highlightly-ingest")
+        body = b'[{"id":"team-1"}]'
+        self.assertEqual(kwargs["data"], body)
+        headers = kwargs["headers"]
+        self.assertNotIn("apikey", headers)
+        self.assertNotIn("authorization", headers)
+        self.assertEqual(headers["x-highlightly-forward-method"], "POST")
+        self.assertEqual(
+            headers["x-highlightly-forward-path"],
+            "/rest/v1/sports_teams?on_conflict=id",
+        )
+        forward_headers = {
+            "content-type": "application/json",
+            "prefer": "resolution=merge-duplicates,return=representation",
+        }
+        signature_input = repository._bridge_signature_input(
+            "1784150000",
+            "0123456789abcdef0123456789abcdef",
+            "POST",
+            "/rest/v1/sports_teams?on_conflict=id",
+            forward_headers,
+            body,
+        )
+        expected = hmac.new(secret.encode(), signature_input, hashlib.sha256).hexdigest()
+        self.assertEqual(headers["x-highlightly-signature"], expected)
+        self.assertEqual(
+            headers["x-highlightly-forward-prefer"],
+            "resolution=merge-duplicates,return=representation",
+        )
+
+    def test_from_environment_accepts_bridge_only_configuration(self):
+        environment = {
+            "HIGHLIGHTLY_INGEST_BRIDGE_URL": "https://app.example.com/api/public/hooks/highlightly-ingest",
+            "HIGHLIGHTLY_INGEST_BRIDGE_SECRET": "a" * 32,
+        }
+        with patch.dict(os.environ, environment, clear=True):
+            repository = HighlightlyRepository.from_environment(session=_Session([]))
+        self.assertEqual(repository.supabase_url, "")
+        self.assertEqual(repository.service_role_key, "")
+        self.assertEqual(repository.bridge_secret, "a" * 32)
+
+    def test_bridge_rejects_partial_or_insecure_configuration(self):
+        with self.assertRaises(ValueError):
+            HighlightlyRepository("", "", bridge_url="https://app.example.com/hook")
+        with self.assertRaises(ValueError):
+            HighlightlyRepository(
+                "",
+                "",
+                bridge_url="http://app.example.com/hook",
+                bridge_secret="a" * 32,
+            )
+
     def test_redacts_credentials_recursively(self):
         clean = redact_secrets(
             {"query": {"teamId": 7}, "headers": {"x-api-key": "secret", "Authorization": "Bearer secret"}}

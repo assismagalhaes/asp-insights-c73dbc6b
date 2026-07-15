@@ -30,6 +30,7 @@ import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as ApiPublicHooksSyncCriticalValidationTelegramAlertsRouteImport } from './routes/api/public/hooks/sync-critical-validation-telegram-alerts'
 import { Route as ApiPublicHooksSendCriticalValidationTelegramAlertsRouteImport } from './routes/api/public/hooks/send-critical-validation-telegram-alerts'
+import { Route as ApiPublicHooksHighlightlyIngestRouteImport } from './routes/api/public/hooks/highlightly-ingest'
 
 const McpRoute = McpRouteImport.update({
   id: '/mcp',
@@ -145,6 +146,12 @@ const ApiPublicHooksSendCriticalValidationTelegramAlertsRoute =
     path: '/api/public/hooks/send-critical-validation-telegram-alerts',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksHighlightlyIngestRoute =
+  ApiPublicHooksHighlightlyIngestRouteImport.update({
+    id: '/api/public/hooks/highlightly-ingest',
+    path: '/api/public/hooks/highlightly-ingest',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
@@ -165,6 +172,7 @@ export interface FileRoutesByFullPath {
   '/validacao': typeof AuthenticatedValidacaoRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
+  '/api/public/hooks/highlightly-ingest': typeof ApiPublicHooksHighlightlyIngestRoute
   '/api/public/hooks/send-critical-validation-telegram-alerts': typeof ApiPublicHooksSendCriticalValidationTelegramAlertsRoute
   '/api/public/hooks/sync-critical-validation-telegram-alerts': typeof ApiPublicHooksSyncCriticalValidationTelegramAlertsRoute
 }
@@ -187,6 +195,7 @@ export interface FileRoutesByTo {
   '/': typeof AuthenticatedIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
+  '/api/public/hooks/highlightly-ingest': typeof ApiPublicHooksHighlightlyIngestRoute
   '/api/public/hooks/send-critical-validation-telegram-alerts': typeof ApiPublicHooksSendCriticalValidationTelegramAlertsRoute
   '/api/public/hooks/sync-critical-validation-telegram-alerts': typeof ApiPublicHooksSyncCriticalValidationTelegramAlertsRoute
 }
@@ -211,6 +220,7 @@ export interface FileRoutesById {
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
+  '/api/public/hooks/highlightly-ingest': typeof ApiPublicHooksHighlightlyIngestRoute
   '/api/public/hooks/send-critical-validation-telegram-alerts': typeof ApiPublicHooksSendCriticalValidationTelegramAlertsRoute
   '/api/public/hooks/sync-critical-validation-telegram-alerts': typeof ApiPublicHooksSyncCriticalValidationTelegramAlertsRoute
 }
@@ -235,6 +245,7 @@ export interface FileRouteTypes {
     | '/validacao'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
+    | '/api/public/hooks/highlightly-ingest'
     | '/api/public/hooks/send-critical-validation-telegram-alerts'
     | '/api/public/hooks/sync-critical-validation-telegram-alerts'
   fileRoutesByTo: FileRoutesByTo
@@ -257,6 +268,7 @@ export interface FileRouteTypes {
     | '/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
+    | '/api/public/hooks/highlightly-ingest'
     | '/api/public/hooks/send-critical-validation-telegram-alerts'
     | '/api/public/hooks/sync-critical-validation-telegram-alerts'
   id:
@@ -280,6 +292,7 @@ export interface FileRouteTypes {
     | '/_authenticated/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
+    | '/api/public/hooks/highlightly-ingest'
     | '/api/public/hooks/send-critical-validation-telegram-alerts'
     | '/api/public/hooks/sync-critical-validation-telegram-alerts'
   fileRoutesById: FileRoutesById
@@ -292,6 +305,7 @@ export interface RootRouteChildren {
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
+  ApiPublicHooksHighlightlyIngestRoute: typeof ApiPublicHooksHighlightlyIngestRoute
   ApiPublicHooksSendCriticalValidationTelegramAlertsRoute: typeof ApiPublicHooksSendCriticalValidationTelegramAlertsRoute
   ApiPublicHooksSyncCriticalValidationTelegramAlertsRoute: typeof ApiPublicHooksSyncCriticalValidationTelegramAlertsRoute
 }
@@ -445,6 +459,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksSendCriticalValidationTelegramAlertsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/highlightly-ingest': {
+      id: '/api/public/hooks/highlightly-ingest'
+      path: '/api/public/hooks/highlightly-ingest'
+      fullPath: '/api/public/hooks/highlightly-ingest'
+      preLoaderRoute: typeof ApiPublicHooksHighlightlyIngestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -490,6 +511,7 @@ const rootRouteChildren: RootRouteChildren = {
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
+  ApiPublicHooksHighlightlyIngestRoute: ApiPublicHooksHighlightlyIngestRoute,
   ApiPublicHooksSendCriticalValidationTelegramAlertsRoute:
     ApiPublicHooksSendCriticalValidationTelegramAlertsRoute,
   ApiPublicHooksSyncCriticalValidationTelegramAlertsRoute:
