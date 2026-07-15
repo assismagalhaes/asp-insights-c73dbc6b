@@ -1114,6 +1114,30 @@ export type Database = {
           },
         ]
       }
+      hl_ingestion_bridge_nonces: {
+        Row: {
+          expires_at: string
+          nonce: string
+          request_hash: string
+          signed_at: string
+          used_at: string
+        }
+        Insert: {
+          expires_at: string
+          nonce: string
+          request_hash: string
+          signed_at: string
+          used_at?: string
+        }
+        Update: {
+          expires_at?: string
+          nonce?: string
+          request_hash?: string
+          signed_at?: string
+          used_at?: string
+        }
+        Relationships: []
+      }
       hl_ingestion_jobs: {
         Row: {
           attempts: number
@@ -4917,6 +4941,15 @@ export type Database = {
       }
     }
     Functions: {
+      claim_highlightly_ingestion_bridge_nonce: {
+        Args: {
+          p_expires_at: string
+          p_nonce: string
+          p_request_hash: string
+          p_signed_at: string
+        }
+        Returns: boolean
+      }
       claim_highlightly_ingestion_job: {
         Args: { p_lock_seconds?: number; p_worker_id: string }
         Returns: {
