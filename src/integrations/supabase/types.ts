@@ -2410,6 +2410,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "sports_competitions_country_id_fkey"
+            columns: ["country_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["country_id"]
+          },
+          {
             foreignKeyName: "sports_competitions_sport_id_fkey"
             columns: ["sport_id"]
             isOneToOne: false
@@ -2448,6 +2455,430 @@ export type Database = {
         }
         Relationships: []
       }
+      sports_highlights: {
+        Row: {
+          category: string | null
+          channel_name: string | null
+          content_url: string
+          created_at: string
+          description: string | null
+          embed_url: string | null
+          external_id: string
+          geo_restrictions: Json
+          highlight_type: string | null
+          id: string
+          match_id: string | null
+          metadata: Json
+          preview_url: string | null
+          provider_id: string
+          source_name: string | null
+          source_raw_object_id: string | null
+          sport_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          channel_name?: string | null
+          content_url: string
+          created_at?: string
+          description?: string | null
+          embed_url?: string | null
+          external_id: string
+          geo_restrictions?: Json
+          highlight_type?: string | null
+          id?: string
+          match_id?: string | null
+          metadata?: Json
+          preview_url?: string | null
+          provider_id: string
+          source_name?: string | null
+          source_raw_object_id?: string | null
+          sport_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          channel_name?: string | null
+          content_url?: string
+          created_at?: string
+          description?: string | null
+          embed_url?: string | null
+          external_id?: string
+          geo_restrictions?: Json
+          highlight_type?: string | null
+          id?: string
+          match_id?: string | null
+          metadata?: Json
+          preview_url?: string | null
+          provider_id?: string
+          source_name?: string | null
+          source_raw_object_id?: string | null
+          sport_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_highlights_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "sports_highlights_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_highlights_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "sports_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_highlights_source_raw_object_id_fkey"
+            columns: ["source_raw_object_id"]
+            isOneToOne: false
+            referencedRelation: "hl_raw_objects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_highlights_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sports_lineup_players: {
+        Row: {
+          created_at: string
+          formation_order: number | null
+          formation_row: number | null
+          id: string
+          lineup_id: string
+          metadata: Json
+          player_id: string
+          position: string | null
+          role: string
+          shirt_number: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          formation_order?: number | null
+          formation_row?: number | null
+          id?: string
+          lineup_id: string
+          metadata?: Json
+          player_id: string
+          position?: string | null
+          role?: string
+          shirt_number?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          formation_order?: number | null
+          formation_row?: number | null
+          id?: string
+          lineup_id?: string
+          metadata?: Json
+          player_id?: string
+          position?: string | null
+          role?: string
+          shirt_number?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_lineup_players_lineup_id_fkey"
+            columns: ["lineup_id"]
+            isOneToOne: false
+            referencedRelation: "sports_lineups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_lineup_players_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "sports_players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sports_lineups: {
+        Row: {
+          coach_name: string | null
+          created_at: string
+          formation: string | null
+          id: string
+          is_confirmed: boolean
+          match_id: string
+          metadata: Json
+          published_at: string | null
+          source_raw_object_id: string | null
+          team_id: string
+          updated_at: string
+          version_key: string
+        }
+        Insert: {
+          coach_name?: string | null
+          created_at?: string
+          formation?: string | null
+          id?: string
+          is_confirmed?: boolean
+          match_id: string
+          metadata?: Json
+          published_at?: string | null
+          source_raw_object_id?: string | null
+          team_id: string
+          updated_at?: string
+          version_key: string
+        }
+        Update: {
+          coach_name?: string | null
+          created_at?: string
+          formation?: string | null
+          id?: string
+          is_confirmed?: boolean
+          match_id?: string
+          metadata?: Json
+          published_at?: string | null
+          source_raw_object_id?: string | null
+          team_id?: string
+          updated_at?: string
+          version_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_lineups_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "sports_lineups_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_lineups_source_raw_object_id_fkey"
+            columns: ["source_raw_object_id"]
+            isOneToOne: false
+            referencedRelation: "hl_raw_objects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_lineups_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["away_team_id"]
+          },
+          {
+            foreignKeyName: "sports_lineups_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["home_team_id"]
+          },
+          {
+            foreignKeyName: "sports_lineups_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sports_market_definitions: {
+        Row: {
+          canonical_family: string
+          created_at: string
+          display_name: string
+          id: string
+          is_active: boolean
+          metadata: Json
+          odds_type: string
+          provider_id: string
+          provider_market_key: string
+          settlement_rule: string | null
+          sport_id: string
+          updated_at: string
+        }
+        Insert: {
+          canonical_family: string
+          created_at?: string
+          display_name: string
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          odds_type?: string
+          provider_id: string
+          provider_market_key: string
+          settlement_rule?: string | null
+          sport_id: string
+          updated_at?: string
+        }
+        Update: {
+          canonical_family?: string
+          created_at?: string
+          display_name?: string
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          odds_type?: string
+          provider_id?: string
+          provider_market_key?: string
+          settlement_rule?: string | null
+          sport_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_market_definitions_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "sports_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_market_definitions_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sports_match_events: {
+        Row: {
+          clock_display: string | null
+          collected_at: string
+          created_at: string
+          elapsed_seconds: number | null
+          event_type: string
+          id: string
+          match_id: string
+          metadata: Json
+          occurred_at: string | null
+          period_key: string
+          player_id: string | null
+          related_player_id: string | null
+          score_data: Json
+          sequence_key: string
+          source_raw_object_id: string | null
+          team_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          clock_display?: string | null
+          collected_at?: string
+          created_at?: string
+          elapsed_seconds?: number | null
+          event_type: string
+          id?: string
+          match_id: string
+          metadata?: Json
+          occurred_at?: string | null
+          period_key?: string
+          player_id?: string | null
+          related_player_id?: string | null
+          score_data?: Json
+          sequence_key: string
+          source_raw_object_id?: string | null
+          team_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          clock_display?: string | null
+          collected_at?: string
+          created_at?: string
+          elapsed_seconds?: number | null
+          event_type?: string
+          id?: string
+          match_id?: string
+          metadata?: Json
+          occurred_at?: string | null
+          period_key?: string
+          player_id?: string | null
+          related_player_id?: string | null
+          score_data?: Json
+          sequence_key?: string
+          source_raw_object_id?: string | null
+          team_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_match_events_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "sports_match_events_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_match_events_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "sports_players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_match_events_related_player_id_fkey"
+            columns: ["related_player_id"]
+            isOneToOne: false
+            referencedRelation: "sports_players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_match_events_source_raw_object_id_fkey"
+            columns: ["source_raw_object_id"]
+            isOneToOne: false
+            referencedRelation: "hl_raw_objects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_match_events_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["away_team_id"]
+          },
+          {
+            foreignKeyName: "sports_match_events_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["home_team_id"]
+          },
+          {
+            foreignKeyName: "sports_match_events_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sports_match_participants: {
         Row: {
           created_at: string
@@ -2484,8 +2915,29 @@ export type Database = {
             foreignKeyName: "sports_match_participants_match_id_fkey"
             columns: ["match_id"]
             isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "sports_match_participants_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
             referencedRelation: "sports_matches"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_match_participants_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["away_team_id"]
+          },
+          {
+            foreignKeyName: "sports_match_participants_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["home_team_id"]
           },
           {
             foreignKeyName: "sports_match_participants_team_id_fkey"
@@ -2535,11 +2987,133 @@ export type Database = {
             foreignKeyName: "sports_match_period_scores_match_id_fkey"
             columns: ["match_id"]
             isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "sports_match_period_scores_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
             referencedRelation: "sports_matches"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "sports_match_period_scores_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["away_team_id"]
+          },
+          {
+            foreignKeyName: "sports_match_period_scores_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["home_team_id"]
+          },
+          {
+            foreignKeyName: "sports_match_period_scores_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sports_match_team_stats: {
+        Row: {
+          boolean_value: boolean | null
+          collected_at: string
+          created_at: string
+          id: string
+          json_value: Json | null
+          match_id: string
+          metric_definition_id: string
+          numeric_value: number | null
+          period_key: string
+          source_raw_object_id: string | null
+          split_key: string
+          team_id: string
+          text_value: string | null
+          updated_at: string
+        }
+        Insert: {
+          boolean_value?: boolean | null
+          collected_at?: string
+          created_at?: string
+          id?: string
+          json_value?: Json | null
+          match_id: string
+          metric_definition_id: string
+          numeric_value?: number | null
+          period_key?: string
+          source_raw_object_id?: string | null
+          split_key?: string
+          team_id: string
+          text_value?: string | null
+          updated_at?: string
+        }
+        Update: {
+          boolean_value?: boolean | null
+          collected_at?: string
+          created_at?: string
+          id?: string
+          json_value?: Json | null
+          match_id?: string
+          metric_definition_id?: string
+          numeric_value?: number | null
+          period_key?: string
+          source_raw_object_id?: string | null
+          split_key?: string
+          team_id?: string
+          text_value?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_match_team_stats_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "sports_match_team_stats_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_match_team_stats_metric_definition_id_fkey"
+            columns: ["metric_definition_id"]
+            isOneToOne: false
+            referencedRelation: "hl_metric_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_match_team_stats_source_raw_object_id_fkey"
+            columns: ["source_raw_object_id"]
+            isOneToOne: false
+            referencedRelation: "hl_raw_objects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_match_team_stats_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["away_team_id"]
+          },
+          {
+            foreignKeyName: "sports_match_team_stats_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["home_team_id"]
+          },
+          {
+            foreignKeyName: "sports_match_team_stats_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "sports_teams"
@@ -2608,6 +3182,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "sports_matches_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["competition_id"]
+          },
+          {
+            foreignKeyName: "sports_matches_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["season_id"]
+          },
+          {
             foreignKeyName: "sports_matches_season_id_fkey"
             columns: ["season_id"]
             isOneToOne: false
@@ -2619,6 +3207,532 @@ export type Database = {
             columns: ["sport_id"]
             isOneToOne: false
             referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sports_odds_consensus: {
+        Row: {
+          best_odds: number
+          bookmaker_count: number
+          bookmaker_ids: string[]
+          created_at: string
+          id: string
+          iqr: number
+          is_live: boolean
+          line_key: string
+          line_value: number | null
+          market_definition_id: string
+          match_id: string
+          median_odds: number
+          minimum_odds: number
+          selection_key: string
+          selection_name: string
+          snapshot_at: string
+        }
+        Insert: {
+          best_odds: number
+          bookmaker_count: number
+          bookmaker_ids?: string[]
+          created_at?: string
+          id?: string
+          iqr?: number
+          is_live?: boolean
+          line_key?: string
+          line_value?: number | null
+          market_definition_id: string
+          match_id: string
+          median_odds: number
+          minimum_odds: number
+          selection_key: string
+          selection_name: string
+          snapshot_at: string
+        }
+        Update: {
+          best_odds?: number
+          bookmaker_count?: number
+          bookmaker_ids?: string[]
+          created_at?: string
+          id?: string
+          iqr?: number
+          is_live?: boolean
+          line_key?: string
+          line_value?: number | null
+          market_definition_id?: string
+          match_id?: string
+          median_odds?: number
+          minimum_odds?: number
+          selection_key?: string
+          selection_name?: string
+          snapshot_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_odds_consensus_market_definition_id_fkey"
+            columns: ["market_definition_id"]
+            isOneToOne: false
+            referencedRelation: "sports_market_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_odds_consensus_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "sports_odds_consensus_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sports_odds_current: {
+        Row: {
+          bookmaker_id: string
+          created_at: string
+          decimal_odds: number
+          first_seen_at: string
+          id: string
+          is_live: boolean
+          last_seen_at: string
+          line_key: string
+          line_value: number | null
+          market_definition_id: string
+          match_id: string
+          provider_updated_at: string | null
+          quote_status: string
+          selection_key: string
+          selection_name: string
+          source_raw_object_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          bookmaker_id: string
+          created_at?: string
+          decimal_odds: number
+          first_seen_at?: string
+          id?: string
+          is_live?: boolean
+          last_seen_at?: string
+          line_key?: string
+          line_value?: number | null
+          market_definition_id: string
+          match_id: string
+          provider_updated_at?: string | null
+          quote_status?: string
+          selection_key: string
+          selection_name: string
+          source_raw_object_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bookmaker_id?: string
+          created_at?: string
+          decimal_odds?: number
+          first_seen_at?: string
+          id?: string
+          is_live?: boolean
+          last_seen_at?: string
+          line_key?: string
+          line_value?: number | null
+          market_definition_id?: string
+          match_id?: string
+          provider_updated_at?: string | null
+          quote_status?: string
+          selection_key?: string
+          selection_name?: string
+          source_raw_object_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_odds_current_bookmaker_id_fkey"
+            columns: ["bookmaker_id"]
+            isOneToOne: false
+            referencedRelation: "sports_bookmakers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_odds_current_market_definition_id_fkey"
+            columns: ["market_definition_id"]
+            isOneToOne: false
+            referencedRelation: "sports_market_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_odds_current_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "sports_odds_current_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_odds_current_source_raw_object_id_fkey"
+            columns: ["source_raw_object_id"]
+            isOneToOne: false
+            referencedRelation: "hl_raw_objects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sports_odds_history: {
+        Row: {
+          bookmaker_id: string
+          captured_at: string
+          change_kind: string
+          created_at: string
+          current_quote_id: string
+          decimal_odds: number
+          id: string
+          is_live: boolean
+          line_key: string
+          line_value: number | null
+          market_definition_id: string
+          match_id: string
+          previous_decimal_odds: number | null
+          previous_quote_status: string | null
+          provider_updated_at: string | null
+          quote_fingerprint: string
+          quote_status: string
+          selection_key: string
+          selection_name: string
+          source_raw_object_id: string | null
+        }
+        Insert: {
+          bookmaker_id: string
+          captured_at?: string
+          change_kind: string
+          created_at?: string
+          current_quote_id: string
+          decimal_odds: number
+          id?: string
+          is_live?: boolean
+          line_key?: string
+          line_value?: number | null
+          market_definition_id: string
+          match_id: string
+          previous_decimal_odds?: number | null
+          previous_quote_status?: string | null
+          provider_updated_at?: string | null
+          quote_fingerprint: string
+          quote_status: string
+          selection_key: string
+          selection_name: string
+          source_raw_object_id?: string | null
+        }
+        Update: {
+          bookmaker_id?: string
+          captured_at?: string
+          change_kind?: string
+          created_at?: string
+          current_quote_id?: string
+          decimal_odds?: number
+          id?: string
+          is_live?: boolean
+          line_key?: string
+          line_value?: number | null
+          market_definition_id?: string
+          match_id?: string
+          previous_decimal_odds?: number | null
+          previous_quote_status?: string | null
+          provider_updated_at?: string | null
+          quote_fingerprint?: string
+          quote_status?: string
+          selection_key?: string
+          selection_name?: string
+          source_raw_object_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_odds_history_bookmaker_id_fkey"
+            columns: ["bookmaker_id"]
+            isOneToOne: false
+            referencedRelation: "sports_bookmakers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_odds_history_current_quote_id_fkey"
+            columns: ["current_quote_id"]
+            isOneToOne: false
+            referencedRelation: "sports_odds_current"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_odds_history_market_definition_id_fkey"
+            columns: ["market_definition_id"]
+            isOneToOne: false
+            referencedRelation: "sports_market_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_odds_history_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "sports_odds_history_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_odds_history_source_raw_object_id_fkey"
+            columns: ["source_raw_object_id"]
+            isOneToOne: false
+            referencedRelation: "hl_raw_objects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sports_player_box_scores: {
+        Row: {
+          boolean_value: boolean | null
+          collected_at: string
+          created_at: string
+          id: string
+          json_value: Json | null
+          match_id: string
+          metric_definition_id: string
+          numeric_value: number | null
+          period_key: string
+          player_id: string
+          source_raw_object_id: string | null
+          team_id: string
+          text_value: string | null
+          updated_at: string
+        }
+        Insert: {
+          boolean_value?: boolean | null
+          collected_at?: string
+          created_at?: string
+          id?: string
+          json_value?: Json | null
+          match_id: string
+          metric_definition_id: string
+          numeric_value?: number | null
+          period_key?: string
+          player_id: string
+          source_raw_object_id?: string | null
+          team_id: string
+          text_value?: string | null
+          updated_at?: string
+        }
+        Update: {
+          boolean_value?: boolean | null
+          collected_at?: string
+          created_at?: string
+          id?: string
+          json_value?: Json | null
+          match_id?: string
+          metric_definition_id?: string
+          numeric_value?: number | null
+          period_key?: string
+          player_id?: string
+          source_raw_object_id?: string | null
+          team_id?: string
+          text_value?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_player_box_scores_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "sports_player_box_scores_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_player_box_scores_metric_definition_id_fkey"
+            columns: ["metric_definition_id"]
+            isOneToOne: false
+            referencedRelation: "hl_metric_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_player_box_scores_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "sports_players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_player_box_scores_source_raw_object_id_fkey"
+            columns: ["source_raw_object_id"]
+            isOneToOne: false
+            referencedRelation: "hl_raw_objects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_player_box_scores_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["away_team_id"]
+          },
+          {
+            foreignKeyName: "sports_player_box_scores_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["home_team_id"]
+          },
+          {
+            foreignKeyName: "sports_player_box_scores_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sports_player_stats: {
+        Row: {
+          boolean_value: boolean | null
+          collected_at: string
+          competition_id: string | null
+          created_at: string
+          id: string
+          json_value: Json | null
+          metric_definition_id: string
+          numeric_value: number | null
+          period_key: string
+          player_id: string
+          scope_key: string
+          season_id: string | null
+          source_raw_object_id: string | null
+          split_key: string
+          team_id: string | null
+          text_value: string | null
+          updated_at: string
+        }
+        Insert: {
+          boolean_value?: boolean | null
+          collected_at?: string
+          competition_id?: string | null
+          created_at?: string
+          id?: string
+          json_value?: Json | null
+          metric_definition_id: string
+          numeric_value?: number | null
+          period_key?: string
+          player_id: string
+          scope_key: string
+          season_id?: string | null
+          source_raw_object_id?: string | null
+          split_key?: string
+          team_id?: string | null
+          text_value?: string | null
+          updated_at?: string
+        }
+        Update: {
+          boolean_value?: boolean | null
+          collected_at?: string
+          competition_id?: string | null
+          created_at?: string
+          id?: string
+          json_value?: Json | null
+          metric_definition_id?: string
+          numeric_value?: number | null
+          period_key?: string
+          player_id?: string
+          scope_key?: string
+          season_id?: string | null
+          source_raw_object_id?: string | null
+          split_key?: string
+          team_id?: string | null
+          text_value?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_player_stats_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "sports_competitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_player_stats_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["competition_id"]
+          },
+          {
+            foreignKeyName: "sports_player_stats_metric_definition_id_fkey"
+            columns: ["metric_definition_id"]
+            isOneToOne: false
+            referencedRelation: "hl_metric_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_player_stats_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "sports_players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_player_stats_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["season_id"]
+          },
+          {
+            foreignKeyName: "sports_player_stats_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "sports_seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_player_stats_source_raw_object_id_fkey"
+            columns: ["source_raw_object_id"]
+            isOneToOne: false
+            referencedRelation: "hl_raw_objects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_player_stats_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["away_team_id"]
+          },
+          {
+            foreignKeyName: "sports_player_stats_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["home_team_id"]
+          },
+          {
+            foreignKeyName: "sports_player_stats_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_teams"
             referencedColumns: ["id"]
           },
         ]
@@ -2673,6 +3787,20 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "sports_players_current_team_id_fkey"
+            columns: ["current_team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["away_team_id"]
+          },
+          {
+            foreignKeyName: "sports_players_current_team_id_fkey"
+            columns: ["current_team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["home_team_id"]
+          },
           {
             foreignKeyName: "sports_players_current_team_id_fkey"
             columns: ["current_team_id"]
@@ -2824,6 +3952,269 @@ export type Database = {
             referencedRelation: "sports_competitions"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "sports_seasons_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["competition_id"]
+          },
+        ]
+      }
+      sports_standings_snapshots: {
+        Row: {
+          competition_id: string
+          conceded: number | null
+          created_at: string
+          draws: number | null
+          form: string | null
+          goal_difference: number | null
+          group_key: string
+          id: string
+          losses: number | null
+          metadata: Json
+          played: number | null
+          points: number
+          quality_status: string
+          rank: number
+          scored: number | null
+          season_id: string
+          snapshot_at: string
+          source_raw_object_id: string | null
+          split_data: Json
+          team_id: string
+          wins: number | null
+        }
+        Insert: {
+          competition_id: string
+          conceded?: number | null
+          created_at?: string
+          draws?: number | null
+          form?: string | null
+          goal_difference?: number | null
+          group_key?: string
+          id?: string
+          losses?: number | null
+          metadata?: Json
+          played?: number | null
+          points?: number
+          quality_status?: string
+          rank: number
+          scored?: number | null
+          season_id: string
+          snapshot_at: string
+          source_raw_object_id?: string | null
+          split_data?: Json
+          team_id: string
+          wins?: number | null
+        }
+        Update: {
+          competition_id?: string
+          conceded?: number | null
+          created_at?: string
+          draws?: number | null
+          form?: string | null
+          goal_difference?: number | null
+          group_key?: string
+          id?: string
+          losses?: number | null
+          metadata?: Json
+          played?: number | null
+          points?: number
+          quality_status?: string
+          rank?: number
+          scored?: number | null
+          season_id?: string
+          snapshot_at?: string
+          source_raw_object_id?: string | null
+          split_data?: Json
+          team_id?: string
+          wins?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_standings_snapshots_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "sports_competitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_standings_snapshots_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["competition_id"]
+          },
+          {
+            foreignKeyName: "sports_standings_snapshots_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["season_id"]
+          },
+          {
+            foreignKeyName: "sports_standings_snapshots_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "sports_seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_standings_snapshots_source_raw_object_id_fkey"
+            columns: ["source_raw_object_id"]
+            isOneToOne: false
+            referencedRelation: "hl_raw_objects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_standings_snapshots_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["away_team_id"]
+          },
+          {
+            foreignKeyName: "sports_standings_snapshots_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["home_team_id"]
+          },
+          {
+            foreignKeyName: "sports_standings_snapshots_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sports_team_season_stats: {
+        Row: {
+          boolean_value: boolean | null
+          collected_at: string
+          competition_id: string | null
+          created_at: string
+          id: string
+          json_value: Json | null
+          metric_definition_id: string
+          numeric_value: number | null
+          period_key: string
+          scope_key: string
+          season_id: string | null
+          source_raw_object_id: string | null
+          split_key: string
+          team_id: string
+          text_value: string | null
+          updated_at: string
+          window_from: string | null
+          window_to: string | null
+        }
+        Insert: {
+          boolean_value?: boolean | null
+          collected_at?: string
+          competition_id?: string | null
+          created_at?: string
+          id?: string
+          json_value?: Json | null
+          metric_definition_id: string
+          numeric_value?: number | null
+          period_key?: string
+          scope_key: string
+          season_id?: string | null
+          source_raw_object_id?: string | null
+          split_key?: string
+          team_id: string
+          text_value?: string | null
+          updated_at?: string
+          window_from?: string | null
+          window_to?: string | null
+        }
+        Update: {
+          boolean_value?: boolean | null
+          collected_at?: string
+          competition_id?: string | null
+          created_at?: string
+          id?: string
+          json_value?: Json | null
+          metric_definition_id?: string
+          numeric_value?: number | null
+          period_key?: string
+          scope_key?: string
+          season_id?: string | null
+          source_raw_object_id?: string | null
+          split_key?: string
+          team_id?: string
+          text_value?: string | null
+          updated_at?: string
+          window_from?: string | null
+          window_to?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_team_season_stats_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "sports_competitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_team_season_stats_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["competition_id"]
+          },
+          {
+            foreignKeyName: "sports_team_season_stats_metric_definition_id_fkey"
+            columns: ["metric_definition_id"]
+            isOneToOne: false
+            referencedRelation: "hl_metric_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_team_season_stats_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["season_id"]
+          },
+          {
+            foreignKeyName: "sports_team_season_stats_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "sports_seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_team_season_stats_source_raw_object_id_fkey"
+            columns: ["source_raw_object_id"]
+            isOneToOne: false
+            referencedRelation: "hl_raw_objects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_team_season_stats_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["away_team_id"]
+          },
+          {
+            foreignKeyName: "sports_team_season_stats_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["home_team_id"]
+          },
+          {
+            foreignKeyName: "sports_team_season_stats_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_teams"
+            referencedColumns: ["id"]
+          },
         ]
       }
       sports_teams: {
@@ -2873,6 +4264,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sports_countries"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_teams_country_id_fkey"
+            columns: ["country_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["country_id"]
           },
           {
             foreignKeyName: "sports_teams_sport_id_fkey"
@@ -3109,6 +4507,38 @@ export type Database = {
         }
         Relationships: []
       }
+      sports_football_match_summary_v: {
+        Row: {
+          away_score_data: Json | null
+          away_team_id: string | null
+          away_team_logo_url: string | null
+          away_team_name: string | null
+          competition_id: string | null
+          competition_logo_url: string | null
+          competition_name: string | null
+          competition_short_name: string | null
+          country_code: string | null
+          country_flag_url: string | null
+          country_id: string | null
+          country_name: string | null
+          home_score_data: Json | null
+          home_team_id: string | null
+          home_team_logo_url: string | null
+          home_team_name: string | null
+          kickoff_at: string | null
+          match_id: string | null
+          provider_status: string | null
+          round_name: string | null
+          score_data: Json | null
+          season_id: string | null
+          season_label: string | null
+          state_data: Json | null
+          status: string | null
+          updated_at: string | null
+          venue_name: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       claim_highlightly_ingestion_job: {
@@ -3224,12 +4654,127 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_football_daily_matches: {
+        Args: {
+          p_cursor_kickoff?: string
+          p_cursor_match_id?: string
+          p_from: string
+          p_limit?: number
+          p_to: string
+        }
+        Returns: {
+          away_score_data: Json | null
+          away_team_id: string | null
+          away_team_logo_url: string | null
+          away_team_name: string | null
+          competition_id: string | null
+          competition_logo_url: string | null
+          competition_name: string | null
+          competition_short_name: string | null
+          country_code: string | null
+          country_flag_url: string | null
+          country_id: string | null
+          country_name: string | null
+          home_score_data: Json | null
+          home_team_id: string | null
+          home_team_logo_url: string | null
+          home_team_name: string | null
+          kickoff_at: string | null
+          match_id: string | null
+          provider_status: string | null
+          round_name: string | null
+          score_data: Json | null
+          season_id: string | null
+          season_label: string | null
+          state_data: Json | null
+          status: string | null
+          updated_at: string | null
+          venue_name: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "sports_football_match_summary_v"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_football_match_detail: { Args: { p_match_id: string }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
         Returns: boolean
+      }
+      upsert_sports_odds_quote: {
+        Args: {
+          p_bookmaker_id: string
+          p_collected_at?: string
+          p_decimal_odds: number
+          p_is_live: boolean
+          p_line_key: string
+          p_line_value: number
+          p_market_definition_id: string
+          p_match_id: string
+          p_provider_updated_at?: string
+          p_quote_status: string
+          p_selection_key: string
+          p_selection_name: string
+          p_source_raw_object_id?: string
+        }
+        Returns: {
+          bookmaker_id: string
+          created_at: string
+          decimal_odds: number
+          first_seen_at: string
+          id: string
+          is_live: boolean
+          last_seen_at: string
+          line_key: string
+          line_value: number | null
+          market_definition_id: string
+          match_id: string
+          provider_updated_at: string | null
+          quote_status: string
+          selection_key: string
+          selection_name: string
+          source_raw_object_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "sports_odds_current"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      upsert_sports_odds_quotes: {
+        Args: { p_quotes: Json }
+        Returns: {
+          bookmaker_id: string
+          created_at: string
+          decimal_odds: number
+          first_seen_at: string
+          id: string
+          is_live: boolean
+          last_seen_at: string
+          line_key: string
+          line_value: number | null
+          market_definition_id: string
+          match_id: string
+          provider_updated_at: string | null
+          quote_status: string
+          selection_key: string
+          selection_name: string
+          source_raw_object_id: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "sports_odds_current"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
     }
     Enums: {
