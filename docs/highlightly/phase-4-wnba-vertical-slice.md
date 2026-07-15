@@ -1,6 +1,6 @@
 # Highlightly Fase 4 — vertical WNBA
 
-Estado em 15/07/2026: implementação local concluída; migration e shadow operacional aguardam publicação/aplicação. O provider `highlightly` e `HIGHLIGHTLY_ANALYSIS_ENABLED` devem permanecer desligados fora da janela controlada de shadow.
+Estado em 15/07/2026: implementação, migration, smoke e shadow operacional concluídos. O provider `highlightly` e `HIGHLIGHTLY_ANALYSIS_ENABLED` permanecem desligados fora da janela controlada de shadow; nenhum backfill foi iniciado.
 
 ## Escopo implementado
 
@@ -69,7 +69,7 @@ O smoke deve terminar em `ROLLBACK` sem exceções. Confirmar ainda:
 Somente depois da migration aplicada e com a fila Highlightly vazia:
 
 ```powershell
-sudo -u ubuntu bash -lc "cd /home/ubuntu/asp-insights-c73dbc6b && set -a && source /etc/asp-scraper-api.env && set +a && /home/ubuntu/asp-scraper-api/.venv/bin/python scripts/run_highlightly_basketball_shadow.py --match-id 421203234 --confirm-bounded-shadow"
+sudo /bin/bash -lc "set -a; source /etc/asp-scraper-api.env; set +a; cd /home/ubuntu/asp-insights-c73dbc6b; PYTHONDONTWRITEBYTECODE=1 /home/ubuntu/asp-scraper-api/.venv/bin/python -m scripts.run_highlightly_basketball_shadow --match-id 421203234 --confirm-bounded-shadow"
 ```
 
 O relatório deve mostrar `provider_restored_disabled=true`, a partida mapeada, dois participantes, placares por quarto, estatísticas e odds quando disponíveis. Para o payload de standings atualmente corrompido, `standings_guard_triggered=true` é o resultado correto.
@@ -77,7 +77,20 @@ O relatório deve mostrar `provider_restored_disabled=true`, a partida mapeada, 
 Se houver interrupção com jobs ainda no mesmo escopo:
 
 ```powershell
-sudo -u ubuntu bash -lc "cd /home/ubuntu/asp-insights-c73dbc6b && set -a && source /etc/asp-scraper-api.env && set +a && /home/ubuntu/asp-scraper-api/.venv/bin/python scripts/drain_highlightly_shadow_queue.py --sport basketball --scope <scope-exato> --max-jobs 100 --confirm-bounded-drain"
+sudo /bin/bash -lc "set -a; source /etc/asp-scraper-api.env; set +a; cd /home/ubuntu/asp-insights-c73dbc6b; PYTHONDONTWRITEBYTECODE=1 /home/ubuntu/asp-scraper-api/.venv/bin/python -m scripts.drain_highlightly_shadow_queue --sport basketball --scope <scope-exato> --max-jobs 100 --confirm-bounded-drain"
 ```
 
 Não iniciar backfill nesta fase.
+
+## Resultado operacional
+
+Shadow `wnba-shadow-20260715T215844Z-11acd413`, partida Highlightly `421203234`:
+
+- 10 jobs processados e fila ativa final igual a zero;
+- dois participantes e oito placares de quarto;
+- 42 métricas brutas mais 12 fatos derivados, totalizando 54 fatos por partida;
+- 1.000 odds atuais, 1.000 registros de histórico e 125 consensos;
+- um highlight;
+- provider restaurado para `false`.
+
+O único job `partial` foi o standings: as 30 posições retornaram a mesma identidade (`Panevezys Women`, ID 784). O guardrail emitiu `BASKETBALL_STANDINGS_CORRUPTED` como crítico, com `distinctTeams=1`, e não persistiu as posições. O segundo apontamento foi apenas `SCHEMA_FINGERPRINT_CHANGED` como warning. Esse resultado satisfaz o aceite de impedir standings corrompido de aparecer como válido.
