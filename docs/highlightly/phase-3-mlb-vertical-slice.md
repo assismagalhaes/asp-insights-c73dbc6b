@@ -179,6 +179,15 @@ A regra global foi atualizada para 2–7 bookmakers. Com duas, três ou quatro f
 
 Moneyline, Totais e Run Line recebem mediana, melhor odd, mínima e IQR quando houver de duas a sete fontes. Quanto maior `bookmaker_count`, maior a cobertura observada; nenhum preço é inventado quando existe somente uma fonte.
 
+### Recálculo após a regra 2–7
+
+Depois da aplicação da migration `20260715190000_lower_highlightly_consensus_minimum.sql`, os consensos das duas partidas já ingeridas foram recalculados apenas a partir de `sports_odds_current`, sem nova chamada à Highlightly:
+
+- All-Star Game: 20 consensos — 10 Run Lines, oito Totais e dois Moneylines; cobertura de 2–3 bookmakers por seleção/linha;
+- Dodgers × Diamondbacks: 38 consensos — 10 Run Lines, 24 Totais, dois Moneylines e dois Odd/Even;
+- Run Line principal `-1.5/+1.5` de Dodgers × Diamondbacks: quatro bookmakers, mediana `1.855` para Home `-1.5` e `1.91` para Away `+1.5`;
+- provider permaneceu `false`, fila ativa permaneceu zerada e o uso diário Highlightly não mudou (`239` antes e depois).
+
 ## Aceite operacional
 
 - PASS migrations e smoke no banco ativo;

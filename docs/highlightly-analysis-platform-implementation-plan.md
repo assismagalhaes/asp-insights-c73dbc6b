@@ -429,7 +429,7 @@ Aceite:
 - Moneyline, total e run line exibem odds e movimento;
 - a mediana é publicada quando a mesma seleção/linha possui 2–7 bookmakers preferidos, sempre acompanhada da quantidade de fontes.
 
-Estado em 15/07/2026: implementação, migrations e validação operacional concluídas. Dois shadows reais confirmaram 171 métricas por equipe, lineups/starting pitchers, eventos, box scores, histórico de odds e consenso de 5–6 fontes para Moneyline e Totais. A regra global foi posteriormente ajustada para publicar consenso com 2–7 bookmakers preferidos; assim, Run Line também recebe mediana quando houver ao menos duas fontes para a mesma seleção/linha. Provider e feature flag permanecem desligados; backfill ainda não foi iniciado. Ver `docs/highlightly/phase-3-mlb-vertical-slice.md`.
+Estado em 15/07/2026: implementação, migrations e validação operacional concluídas. Dois shadows reais confirmaram 171 métricas por equipe, lineups/starting pitchers, eventos, box scores e histórico de odds. A regra global foi ajustada para publicar consenso com 2–7 bookmakers preferidos e aplicada ao banco ativo. O recálculo sem consumo de cota gerou 20 consensos no All-Star Game e 38 em Dodgers × Diamondbacks, com 10 Run Lines em cada partida. Provider e feature flag permanecem desligados; backfill ainda não foi iniciado. Ver `docs/highlightly/phase-3-mlb-vertical-slice.md`.
 
 ### Fase 4 — WNBA
 
