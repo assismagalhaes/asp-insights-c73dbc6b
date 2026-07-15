@@ -64,6 +64,75 @@ class HighlightlyRepositoryTests(unittest.TestCase):
         repository = HighlightlyRepository("https://example.supabase.co", "service-secret", session=session)
         self.assertIsNone(repository.claim_job("worker-a"))
 
+    def test_ensure_raw_bucket_creates_missing_private_bucket(self):
+        session = _Session(
+            [
+                _Response(404, {"message": "not found"}),
+                _Response(200, {"name": "highlightly-raw"}),
+            ]
+        )
+        repository = HighlightlyRepository("https://example.supabase.co", "service-secret", session=session)
+
+        result = repository.ensure_raw_bucket()
+
+        self.assertTrue(result["created"])
+        method, url, kwargs = session.calls[1]
+        self.assertEqual(method, "POST")
+        self.assertTrue(url.endswith("/storage/v1/bucket"))
+        self.assertFalse(kwargs["json"]["public"])
+        self.assertEqual(kwargs["json"]["file_size_limit"], 26_214_400)
+        self.assertIn("application/gzip", kwargs["json"]["allowed_mime_types"])
+
+    def test_ensure_raw_bucket_reconciles_public_or_misconfigured_bucket(self):
+        session = _Session(
+            [
+                _Response(
+                    200,
+                    {
+                        "id": "highlightly-raw",
+                        "public": True,
+                        "file_size_limit": 100,
+                        "allowed_mime_types": ["application/json"],
+                    },
+                ),
+                _Response(200, {"message": "Successfully updated"}),
+            ]
+        )
+        repository = HighlightlyRepository("https://example.supabase.co", "service-secret", session=session)
+
+        result = repository.ensure_raw_bucket()
+
+        self.assertTrue(result["updated"])
+        method, url, kwargs = session.calls[1]
+        self.assertEqual(method, "PUT")
+        self.assertTrue(url.endswith("/storage/v1/bucket/highlightly-raw"))
+        self.assertFalse(kwargs["json"]["public"])
+
+    def test_ensure_raw_bucket_is_noop_when_configuration_matches(self):
+        session = _Session(
+            [
+                _Response(
+                    200,
+                    {
+                        "id": "highlightly-raw",
+                        "public": False,
+                        "file_size_limit": 26_214_400,
+                        "allowed_mime_types": [
+                            "application/x-gzip",
+                            "application/json",
+                            "application/gzip",
+                        ],
+                    },
+                )
+            ]
+        )
+        repository = HighlightlyRepository("https://example.supabase.co", "service-secret", session=session)
+
+        result = repository.ensure_raw_bucket()
+
+        self.assertEqual(result, {"created": False, "updated": False, "bucket": "highlightly-raw"})
+        self.assertEqual(len(session.calls), 1)
+
     def test_raw_payload_round_trip_is_gzipped_and_checksum_verified(self):
         payload = {"data": [{"id": 10, "name": "São Paulo"}]}
         canonical = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")

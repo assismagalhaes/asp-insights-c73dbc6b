@@ -4,9 +4,10 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CANONICAL = ROOT / "supabase" / "migrations" / "20260714230000_create_highlightly_canonical_foundation.sql"
-CONTROL = ROOT / "supabase" / "migrations" / "20260714231000_create_highlightly_ingestion_control.sql"
-FUNCTIONS = ROOT / "supabase" / "migrations" / "20260714232000_create_highlightly_ingestion_functions.sql"
+CANONICAL = ROOT / "supabase" / "migrations" / "20260715025742_b36aa56c-6997-44e5-b621-be2d9f17f35e.sql"
+CONTROL = ROOT / "supabase" / "migrations" / "20260715025933_9a7e5a0e-3b75-40ef-af71-2e3fac97b16a.sql"
+FUNCTIONS = ROOT / "supabase" / "migrations" / "20260715030012_eeaf5ecd-3809-4de1-91e1-e39f673e2a86.sql"
+BUCKET_PROVISIONER = ROOT / "scripts" / "ensure_highlightly_storage_bucket.py"
 
 
 class HighlightlyPhaseOneContractTests(unittest.TestCase):
@@ -95,10 +96,14 @@ class HighlightlyPhaseOneContractTests(unittest.TestCase):
         self.assertNotRegex(self.all_sql, r"GRANT\s+(?:SELECT|ALL).*\sTO\s+anon")
 
     def test_raw_bucket_is_private_and_has_no_client_write_policy(self):
+        provisioner = BUCKET_PROVISIONER.read_text(encoding="utf-8")
+        repository = (ROOT / "api" / "highlightly_repository.py").read_text(encoding="utf-8")
         self.assertIn("'highlightly-raw'", self.control)
-        self.assertRegex(self.control, r"'highlightly-raw',\s*'highlightly-raw',\s*false")
         self.assertIn("highlightly_raw_admin_read", self.control)
         self.assertNotRegex(self.control, r"CREATE POLICY highlightly_raw_.*(?:INSERT|UPDATE|DELETE)")
+        self.assertNotIn("INSERT INTO storage.buckets", self.control)
+        self.assertIn("ensure_raw_bucket", provisioner)
+        self.assertIn('"public": False', repository)
 
     def test_provider_and_rollout_are_seeded_disabled(self):
         self.assertIn("'highlightly', 'Highlightly'", self.canonical)

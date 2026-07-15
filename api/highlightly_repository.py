@@ -25,6 +25,8 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by the bundled test 
 
 
 RAW_BUCKET = "highlightly-raw"
+RAW_BUCKET_FILE_SIZE_LIMIT = 26_214_400
+RAW_BUCKET_MIME_TYPES = ("application/json", "application/gzip", "application/x-gzip")
 _SECRET_KEYS = re.compile(r"(api[-_]?key|authorization|token|secret|password)", re.IGNORECASE)
 _PATH_TOKEN = re.compile(r"[^a-zA-Z0-9._-]+")
 
@@ -166,6 +168,58 @@ class HighlightlyRepository:
             headers={"content-type": "application/json"},
             expected=(200,),
         )
+
+    def ensure_raw_bucket(self) -> dict[str, Any]:
+        """Create or reconcile the private raw bucket through the Storage API.
+
+        Lovable Cloud does not allow migrations to write directly to
+        ``storage.buckets``. Keeping this operation in the deployment client makes
+        bucket provisioning repeatable without coupling it to database internals.
+        """
+
+        path = f"/storage/v1/bucket/{quote(RAW_BUCKET, safe='')}"
+        try:
+            current = self._request("GET", path, expected=(200,))
+        except HighlightlyRepositoryError as exc:
+            if exc.status != 404:
+                raise
+            created = self._request(
+                "POST",
+                "/storage/v1/bucket",
+                json_body={
+                    "id": RAW_BUCKET,
+                    "name": RAW_BUCKET,
+                    "public": False,
+                    "file_size_limit": RAW_BUCKET_FILE_SIZE_LIMIT,
+                    "allowed_mime_types": list(RAW_BUCKET_MIME_TYPES),
+                },
+                headers={"content-type": "application/json"},
+                expected=(200, 201),
+            )
+            return {"created": True, "bucket": RAW_BUCKET, "response": created}
+
+        expected_mime_types = set(RAW_BUCKET_MIME_TYPES)
+        current_mime_types = set((current or {}).get("allowed_mime_types") or [])
+        needs_update = (
+            bool((current or {}).get("public"))
+            or (current or {}).get("file_size_limit") != RAW_BUCKET_FILE_SIZE_LIMIT
+            or current_mime_types != expected_mime_types
+        )
+        if needs_update:
+            updated = self._request(
+                "PUT",
+                path,
+                json_body={
+                    "public": False,
+                    "file_size_limit": RAW_BUCKET_FILE_SIZE_LIMIT,
+                    "allowed_mime_types": list(RAW_BUCKET_MIME_TYPES),
+                },
+                headers={"content-type": "application/json"},
+                expected=(200,),
+            )
+            return {"created": False, "updated": True, "bucket": RAW_BUCKET, "response": updated}
+
+        return {"created": False, "updated": False, "bucket": RAW_BUCKET}
 
     def enqueue_job(
         self,
