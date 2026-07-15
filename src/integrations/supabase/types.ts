@@ -3111,6 +3111,119 @@ export type Database = {
       }
     }
     Functions: {
+      claim_highlightly_ingestion_job: {
+        Args: { p_lock_seconds?: number; p_worker_id: string }
+        Returns: {
+          attempts: number
+          created_at: string
+          cursor_data: Json
+          dedupe_key: string
+          endpoint_key: string
+          finished_at: string | null
+          id: string
+          last_error: string | null
+          lock_expires_at: string | null
+          locked_at: string | null
+          max_attempts: number
+          priority: number
+          reprocess_raw_object_id: string | null
+          request_params: Json
+          resource: string
+          scheduled_at: string
+          sport: string
+          started_at: string | null
+          status: string
+          updated_at: string
+          worker_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "hl_ingestion_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      enqueue_highlightly_ingestion_job: {
+        Args: {
+          p_cursor_data?: Json
+          p_dedupe_key: string
+          p_endpoint_key: string
+          p_max_attempts?: number
+          p_priority?: number
+          p_reprocess_raw_object_id?: string
+          p_request_params?: Json
+          p_resource: string
+          p_scheduled_at?: string
+          p_sport: string
+        }
+        Returns: {
+          attempts: number
+          created_at: string
+          cursor_data: Json
+          dedupe_key: string
+          endpoint_key: string
+          finished_at: string | null
+          id: string
+          last_error: string | null
+          lock_expires_at: string | null
+          locked_at: string | null
+          max_attempts: number
+          priority: number
+          reprocess_raw_object_id: string | null
+          request_params: Json
+          resource: string
+          scheduled_at: string
+          sport: string
+          started_at: string | null
+          status: string
+          updated_at: string
+          worker_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "hl_ingestion_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      finish_highlightly_ingestion_job: {
+        Args: {
+          p_error?: string
+          p_job_id: string
+          p_outcome: string
+          p_retry_delay_seconds?: number
+          p_worker_id: string
+        }
+        Returns: {
+          attempts: number
+          created_at: string
+          cursor_data: Json
+          dedupe_key: string
+          endpoint_key: string
+          finished_at: string | null
+          id: string
+          last_error: string | null
+          lock_expires_at: string | null
+          locked_at: string | null
+          max_attempts: number
+          priority: number
+          reprocess_raw_object_id: string | null
+          request_params: Json
+          resource: string
+          scheduled_at: string
+          sport: string
+          started_at: string | null
+          status: string
+          updated_at: string
+          worker_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "hl_ingestion_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
