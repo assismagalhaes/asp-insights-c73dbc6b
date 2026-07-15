@@ -169,6 +169,153 @@ class HighlightlyRepository:
             expected=(200,),
         )
 
+    def select_rows(
+        self,
+        table: str,
+        *,
+        columns: str = "*",
+        filters: Mapping[str, Any] | None = None,
+        limit: int | None = None,
+        order: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Read service-role rows using the small PostgREST subset needed by workers."""
+
+        query: list[tuple[str, str]] = [("select", columns)]
+        for key, value in (filters or {}).items():
+            if isinstance(value, bool):
+                encoded = "true" if value else "false"
+            else:
+                encoded = str(value)
+            query.append((key, f"eq.{encoded}"))
+        if limit is not None:
+            query.append(("limit", str(limit)))
+        if order:
+            query.append(("order", order))
+        result = self._request(
+            "GET",
+            f"/rest/v1/{quote(table, safe='')}?{urlencode(query)}",
+            expected=(200,),
+        )
+        return [dict(row) for row in (result or [])]
+
+    def upsert_rows(
+        self,
+        table: str,
+        rows: Sequence[Mapping[str, Any]],
+        *,
+        on_conflict: str,
+        chunk_size: int = 500,
+    ) -> list[dict[str, Any]]:
+        """Idempotently persist bounded batches and return their canonical rows."""
+
+        if chunk_size < 1 or chunk_size > 1000:
+            raise ValueError("chunk_size must be between 1 and 1000")
+        saved: list[dict[str, Any]] = []
+        for start in range(0, len(rows), chunk_size):
+            chunk = [dict(row) for row in rows[start : start + chunk_size]]
+            query = urlencode({"on_conflict": on_conflict})
+            result = self._request(
+                "POST",
+                f"/rest/v1/{quote(table, safe='')}?{query}",
+                json_body=chunk,
+                headers={
+                    "content-type": "application/json",
+                    "prefer": "resolution=merge-duplicates,return=representation",
+                },
+                expected=(200, 201),
+            )
+            saved.extend(dict(row) for row in (result or []))
+        return saved
+
+    def patch_rows(
+        self,
+        table: str,
+        values: Mapping[str, Any],
+        *,
+        filters: Mapping[str, Any],
+    ) -> list[dict[str, Any]]:
+        query = urlencode([(key, f"eq.{value}") for key, value in filters.items()])
+        result = self._request(
+            "PATCH",
+            f"/rest/v1/{quote(table, safe='')}?{query}",
+            json_body=dict(values),
+            headers={"content-type": "application/json", "prefer": "return=representation"},
+            expected=(200,),
+        )
+        return [dict(row) for row in (result or [])]
+
+    def ingestion_context(self, sport: str) -> dict[str, Any]:
+        providers = self.select_rows(
+            "sports_providers",
+            columns="id,code,contract_version,enabled",
+            filters={"code": "highlightly"},
+            limit=1,
+        )
+        sports = self.select_rows(
+            "sports",
+            columns="id,code,enabled",
+            filters={"code": sport},
+            limit=1,
+        )
+        if not providers or not sports:
+            raise HighlightlyRepositoryError(f"Missing Highlightly provider or sport seed for {sport}")
+        bookmakers = self.select_rows(
+            "sports_bookmakers",
+            columns="id,name,normalized_name,is_preferred,is_active",
+            filters={"is_active": True},
+        )
+        return {
+            "provider": providers[0],
+            "sport": sports[0],
+            "bookmakers": bookmakers,
+        }
+
+    def daily_request_usage(self, provider_id: str, request_date: str) -> int:
+        rows = self.select_rows(
+            "hl_rate_limit_usage",
+            columns="requests_used",
+            filters={"provider_id": provider_id, "request_date": request_date},
+        )
+        return sum(int(row.get("requests_used") or 0) for row in rows)
+
+    def upsert_odds_quote(self, quote_row: Mapping[str, Any]) -> dict[str, Any]:
+        result = self.rpc("upsert_sports_odds_quote", quote_row)
+        if isinstance(result, list):
+            return dict(result[0]) if result else {}
+        return dict(result or {})
+
+    def upsert_odds_quotes(
+        self,
+        quote_rows: Sequence[Mapping[str, Any]],
+        *,
+        chunk_size: int = 500,
+    ) -> list[dict[str, Any]]:
+        if chunk_size < 1 or chunk_size > 1000:
+            raise ValueError("chunk_size must be between 1 and 1000")
+        saved: list[dict[str, Any]] = []
+        for start in range(0, len(quote_rows), chunk_size):
+            result = self.rpc(
+                "upsert_sports_odds_quotes",
+                {"p_quotes": [dict(row) for row in quote_rows[start : start + chunk_size]]},
+            )
+            saved.extend(dict(row) for row in (result or []))
+        return saved
+
+    def record_quality_issues(self, rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+        if not rows:
+            return []
+        return self.upsert_rows("hl_data_quality_issues", rows, on_conflict="id")
+
+    def mark_raw_normalized(self, raw_object_id: str, *, schema_fingerprint: str) -> None:
+        self.patch_rows(
+            "hl_raw_objects",
+            {
+                "schema_fingerprint": schema_fingerprint,
+                "normalized_at": datetime.now(timezone.utc).isoformat(),
+            },
+            filters={"id": raw_object_id},
+        )
+
     def ensure_raw_bucket(self) -> dict[str, Any]:
         """Create or reconcile the private raw bucket through the Storage API.
 

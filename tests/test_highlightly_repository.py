@@ -197,6 +197,33 @@ class HighlightlyRepositoryTests(unittest.TestCase):
         self.assertEqual(payload["p_dedupe_key"], "reprocess:raw-1:matches-v2")
         self.assertEqual(payload["p_reprocess_raw_object_id"], "raw-1")
 
+    def test_batch_upsert_is_chunked_and_uses_explicit_conflict_target(self):
+        session = _Session([
+            _Response(201, [{"id": "1"}, {"id": "2"}]),
+            _Response(201, [{"id": "3"}]),
+        ])
+        repository = HighlightlyRepository("https://example.supabase.co", "service-secret", session=session)
+        saved = repository.upsert_rows(
+            "sports_teams",
+            [{"id": "1"}, {"id": "2"}, {"id": "3"}],
+            on_conflict="id",
+            chunk_size=2,
+        )
+        self.assertEqual([row["id"] for row in saved], ["1", "2", "3"])
+        self.assertEqual(len(session.calls), 2)
+        self.assertIn("on_conflict=id", session.calls[0][1])
+        self.assertIn("resolution=merge-duplicates", session.calls[0][2]["headers"]["prefer"])
+
+    def test_bulk_odds_writer_uses_one_rpc_per_chunk(self):
+        session = _Session([_Response(200, [{"id": "q1"}, {"id": "q2"}])])
+        repository = HighlightlyRepository("https://example.supabase.co", "service-secret", session=session)
+        saved = repository.upsert_odds_quotes([{"p_selection_key": "home"}, {"p_selection_key": "away"}])
+        self.assertEqual(len(saved), 2)
+        method, url, kwargs = session.calls[0]
+        self.assertEqual(method, "POST")
+        self.assertTrue(url.endswith("/rest/v1/rpc/upsert_sports_odds_quotes"))
+        self.assertEqual(len(kwargs["json"]["p_quotes"]), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

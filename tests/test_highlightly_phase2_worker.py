@@ -1,0 +1,236 @@
+from datetime import datetime, timezone
+from types import SimpleNamespace
+import unittest
+from unittest.mock import Mock
+
+from api.highlightly.normalizers.common import NormalizationContext, schema_fingerprint, stable_id
+from api.highlightly.normalizers.football import SUPPORTED_NORMALIZERS, normalize_football
+from api.highlightly.registry import EndpointRegistry
+from api.highlightly.worker import HighlightlyWorker
+from api.highlightly_client import HighlightlyResponse
+
+
+PROVIDER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+SPORT_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+RAW_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+CAPTURED = "2026-07-15T10:00:00+00:00"
+
+
+def context(normalizer: str, params=None, bookmakers=None):
+    return NormalizationContext(
+        provider_id=PROVIDER_ID,
+        sport_id=SPORT_ID,
+        sport="football",
+        endpoint_key=f"test.{normalizer}",
+        normalizer=normalizer,
+        request_params=params or {},
+        raw_object_id=RAW_ID,
+        captured_at=CAPTURED,
+        bookmaker_ids=bookmakers or {"bet365": "dddddddd-dddd-4ddd-8ddd-dddddddddddd"},
+    )
+
+
+class HighlightlyPhaseTwoWorkerTests(unittest.TestCase):
+    def test_registry_resolves_path_and_keeps_only_documented_query_params(self):
+        registry = EndpointRegistry()
+        operation = registry.get("football.FootballLineupsController_getLineups", sport="football")
+        path, query = operation.request({"matchId": 42, "api_key": "must-not-leak"})
+        self.assertEqual(path, "/football/lineups/42")
+        self.assertEqual(query, {})
+        self.assertEqual(sum(item.sport == "football" for item in registry.operations.values()), 25)
+        football_normalizers = {item.normalizer for item in registry.operations.values() if item.sport == "football"}
+        self.assertTrue(football_normalizers.issubset(SUPPORTED_NORMALIZERS))
+
+    def test_match_normalizer_builds_canonical_graph_with_stable_ids(self):
+        payload = {
+            "data": [{
+                "id": 99,
+                "date": "2026-07-15T12:00:00Z",
+                "round": "Round 1",
+                "country": {"code": "BR", "name": "Brazil", "logo": "flag"},
+                "league": {"id": 7, "name": "League", "season": 2026},
+                "homeTeam": {"id": 1, "name": "Home"},
+                "awayTeam": {"id": 2, "name": "Away"},
+                "state": {"description": "Not started", "score": {"current": "0 - 0"}},
+            }]
+        }
+        first = normalize_football(payload, context("football.matches"))
+        second = normalize_football(payload, context("football.matches"))
+        self.assertEqual(first.rows, second.rows)
+        self.assertEqual(len(first.table_rows("sports_matches")), 1)
+        self.assertEqual(len(first.table_rows("sports_match_participants")), 2)
+        self.assertEqual(len(first.table_rows("sports_teams")), 2)
+        self.assertEqual(first.table_rows("sports_matches")[0]["status"], "scheduled")
+        self.assertEqual(first.table_rows("sports_matches")[0]["id"], stable_id(PROVIDER_ID, SPORT_ID, "match", 99))
+
+    def test_odds_normalizer_keeps_every_market_selection(self):
+        payload = {"data": [{"matchId": 99, "odds": [{
+            "bookmakerId": 2,
+            "bookmakerName": "bet365",
+            "type": "prematch",
+            "market": "Total Goals 2.5",
+            "values": [{"value": "Over", "odd": 1.91}, {"value": "Under", "odd": 1.97}],
+        }]}]}
+        batch = normalize_football(payload, context("football.odds"))
+        self.assertEqual(len(batch.table_rows("sports_market_definitions")), 1)
+        self.assertEqual(len(batch.odds_quotes), 2)
+        self.assertEqual({row["p_selection_key"] for row in batch.odds_quotes}, {"over", "under"})
+        self.assertEqual({row["p_line_key"] for row in batch.odds_quotes}, {"2.5"})
+        self.assertTrue(all(row["p_source_raw_object_id"] == RAW_ID for row in batch.odds_quotes))
+
+    def test_invalid_odds_are_rejected_without_poisoning_the_batch(self):
+        payload = {"matchId": 99, "odds": [{
+            "bookmakerId": 2,
+            "bookmakerName": "bet365",
+            "type": "prematch",
+            "market": "Full Time Result",
+            "values": [{"value": "Home", "odd": 2.1}, {"value": "Away", "odd": 1.0}],
+        }]}
+        batch = normalize_football(payload, context("football.odds"))
+        self.assertEqual(len(batch.odds_quotes), 1)
+        self.assertEqual(batch.rejected, 1)
+        self.assertEqual(batch.issues[0]["code"], "ODDS_QUOTE_INVALID")
+
+    def test_unknown_match_statistic_is_discovered_without_code_change(self):
+        payload = [{"team": {"id": 1, "name": "Home"}, "statistics": [
+            {"displayName": "Experimental Pressure Index", "value": 7.25}
+        ]}]
+        batch = normalize_football(payload, context("football.match_statistics", {"matchId": 99}))
+        definitions = batch.table_rows("hl_metric_definitions")
+        facts = batch.table_rows("sports_match_team_stats")
+        self.assertEqual(definitions[0]["canonical_key"], "experimental_pressure_index")
+        self.assertEqual(definitions[0]["status"], "needs_review")
+        self.assertEqual(facts[0]["numeric_value"], 7.25)
+
+    def test_corrupted_standings_are_quarantined(self):
+        standing = {
+            "team": {"id": 1, "name": "Repeated"},
+            "total": {"games": 2, "wins": 1, "draws": 0, "loses": 1, "scoredGoals": 2, "receivedGoals": 2},
+            "points": 3,
+        }
+        payload = {"league": {"id": 7, "name": "League", "season": 2026}, "groups": [{
+            "name": "Regular", "standings": [{**standing, "position": 1}, {**standing, "position": 2}]
+        }]}
+        batch = normalize_football(payload, context("football.standings"))
+        self.assertTrue(any(issue["code"] == "STANDINGS_SINGLE_TEAM_REPEATED" for issue in batch.issues))
+        self.assertTrue(all(row["quality_status"] == "quarantined" for row in batch.table_rows("sports_standings_snapshots")))
+
+    def test_schema_fingerprint_ignores_values_but_detects_shape(self):
+        self.assertEqual(schema_fingerprint({"data": [{"id": 1}]}), schema_fingerprint({"data": [{"id": 2}]}))
+        self.assertNotEqual(schema_fingerprint({"data": [{"id": 1}]}), schema_fingerprint({"data": [{"id": 1, "name": "x"}]}))
+
+    def test_disabled_worker_does_not_claim_a_job(self):
+        repository = Mock()
+        worker = HighlightlyWorker(Mock(), repository, worker_id="test-worker", enabled=False)
+        result = worker.run_once()
+        self.assertEqual(result.status, "disabled")
+        repository.claim_job.assert_not_called()
+
+    def test_pagination_enqueues_exactly_the_next_documented_offset(self):
+        repository = Mock()
+        worker = HighlightlyWorker(Mock(), repository, worker_id="test-worker", enabled=True)
+        operation = worker.registry.get("football.MatchesController_getMatches")
+        enqueued = worker._enqueue_next_page(
+            {"data": [{"id": 1}], "pagination": {"offset": 0, "limit": 100, "totalCount": 201}},
+            operation=operation,
+            request_params={"date": "2026-07-15", "offset": 0, "api_key": "not-forwarded-by-registry"},
+        )
+        self.assertTrue(enqueued)
+        request = repository.enqueue_job.call_args.kwargs
+        self.assertEqual(request["request_params"]["offset"], 100)
+        self.assertNotIn("api_key", request["request_params"])
+        self.assertTrue(request["dedupe_key"].startswith(f"page:{operation.key}:"))
+
+    def test_pagination_stops_at_total_count(self):
+        repository = Mock()
+        worker = HighlightlyWorker(Mock(), repository, worker_id="test-worker", enabled=True)
+        operation = worker.registry.get("football.MatchesController_getMatches")
+        self.assertFalse(worker._enqueue_next_page(
+            {"data": [], "pagination": {"offset": 200, "limit": 100, "totalCount": 201}},
+            operation=operation,
+            request_params={"offset": 200},
+        ))
+        repository.enqueue_job.assert_not_called()
+
+    def test_single_match_fanout_queues_all_analysis_domains(self):
+        repository = Mock()
+        worker = HighlightlyWorker(Mock(), repository, worker_id="test-worker", enabled=True)
+        count = worker._enqueue_football_match_fanout({
+            "id": 99,
+            "date": "2026-07-15T12:00:00Z",
+            "homeTeam": {"id": 1, "name": "Home"},
+            "awayTeam": {"id": 2, "name": "Away"},
+            "league": {"id": 7, "season": 2026},
+        })
+        self.assertEqual(count, 12)
+        keys = {call.kwargs["endpoint_key"] for call in repository.enqueue_job.call_args_list}
+        self.assertIn("football.FootballOddsController_getOddsV2", keys)
+        self.assertIn("football.FootballStatisticsController_getStatistics", keys)
+        self.assertIn("football.FootballLineupsController_getLineups", keys)
+        self.assertIn("football.FootballLiveEventsController_getLiveEvents", keys)
+        self.assertIn("football.FootballPlayerBoxScoreController_getPlayerBoxScores", keys)
+        self.assertIn("football.FootballStandingsController_getStandings", keys)
+        team_stats_calls = [
+            call.kwargs["request_params"]
+            for call in repository.enqueue_job.call_args_list
+            if call.kwargs["endpoint_key"] == "football.TeamsController_teamStatistics"
+        ]
+        self.assertTrue(all(params["fromDate"] == "2025-07-15" for params in team_stats_calls))
+
+    def test_box_score_fanout_queues_player_summary_and_statistics(self):
+        repository = Mock()
+        worker = HighlightlyWorker(Mock(), repository, worker_id="test-worker", enabled=True)
+        count = worker._enqueue_football_player_fanout([
+            {"team": {"id": 1}, "players": [{"id": 11}, {"id": 12}]},
+            {"team": {"id": 2}, "players": [{"id": 12}, {"id": 13}]},
+        ])
+        self.assertEqual(count, 6)
+        self.assertEqual(repository.enqueue_job.call_count, 6)
+
+    def test_worker_persists_raw_before_any_canonical_upsert(self):
+        repository = Mock()
+        repository.claim_job.return_value = {
+            "id": "job-1",
+            "endpoint_key": "football.MatchesController_getMatchById",
+            "sport": "football",
+            "priority": 0,
+            "request_params": {"id": 99},
+            "reprocess_raw_object_id": None,
+        }
+        repository.create_run.return_value = {"id": "run-1"}
+        repository.ingestion_context.return_value = {
+            "provider": {"id": PROVIDER_ID, "enabled": True, "contract_version": "6.13.2"},
+            "sport": {"id": SPORT_ID},
+            "bookmakers": [],
+        }
+        repository.daily_request_usage.return_value = 0
+        repository.store_raw_payload.return_value = SimpleNamespace(id=RAW_ID)
+        repository.select_rows.return_value = []
+        repository.upsert_rows.return_value = []
+        repository.record_quality_issues.return_value = []
+        client = Mock()
+        client.get.return_value = HighlightlyResponse(
+            status=200,
+            data={
+                "id": 99,
+                "date": "2026-07-15T12:00:00Z",
+                "country": {"code": "BR", "name": "Brazil"},
+                "league": {"id": 7, "name": "League", "season": 2026},
+                "homeTeam": {"id": 1, "name": "Home"},
+                "awayTeam": {"id": 2, "name": "Away"},
+                "state": {"description": "Not started", "score": {}},
+            },
+            rate_limit=7500,
+            rate_remaining=7499,
+            content_type="application/json",
+        )
+        worker = HighlightlyWorker(client, repository, worker_id="test-worker", enabled=True)
+        result = worker.run_once()
+        self.assertEqual(result.status, "succeeded")
+        calls = [call[0] for call in repository.method_calls]
+        self.assertLess(calls.index("store_raw_payload"), calls.index("upsert_rows"))
+        repository.finish_job.assert_called_once_with("job-1", "test-worker", "succeeded")
+
+
+if __name__ == "__main__":
+    unittest.main()
