@@ -33,6 +33,7 @@ def _active_jobs(repository: HighlightlyRepository, *, limit: int) -> list[dict]
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--scope", required=True, help="Exact shadow scope embedded in every dedupe key")
+    parser.add_argument("--sport", choices=("football", "baseball", "basketball"), default="baseball")
     parser.add_argument("--max-jobs", type=int, default=100)
     parser.add_argument("--confirm-bounded-drain", action="store_true", required=True)
     args = parser.parse_args()
@@ -40,7 +41,7 @@ def main() -> int:
         parser.error("--max-jobs must be between 1 and 200")
 
     repository = HighlightlyRepository.from_environment()
-    context = repository.ingestion_context("baseball")
+    context = repository.ingestion_context(args.sport)
     if context["provider"].get("enabled"):
         raise RuntimeError("Highlightly provider was already enabled; refusing a non-isolated drain")
 
@@ -69,9 +70,10 @@ def main() -> int:
         repository.set_provider_enabled("highlightly", False)
 
     active_after = _active_jobs(repository, limit=args.max_jobs)
-    provider_disabled = not bool(repository.ingestion_context("baseball")["provider"].get("enabled"))
+    provider_disabled = not bool(repository.ingestion_context(args.sport)["provider"].get("enabled"))
     report = {
         "scope": args.scope,
+        "sport": args.sport,
         "active_before": len(active_before),
         "processed": sum(row["status"] != "idle" for row in results),
         "statuses": dict(Counter(row["status"] for row in results)),

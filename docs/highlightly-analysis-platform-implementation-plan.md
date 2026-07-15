@@ -448,6 +448,8 @@ Aceite:
 - Pace, ORtg, DRtg, eFG%, TS% e Net Rating são reproduzíveis;
 - Moneyline, total e spread exibem consenso e movimento.
 
+Estado em 15/07/2026: implementação local da vertical concluída, incluindo as 19 operações Basketball, 21 métricas brutas, seis eficiências reproduzíveis, odds e read models admin-only. O guardrail rejeita integralmente o caso real de identidade repetida (`Panevezys Women`) antes de poluir times ou standings canônicos. Migration e shadow operacional ainda dependem de publicação/aplicação; provider e feature flag permanecem desligados. Ver `docs/highlightly/phase-4-wnba-vertical-slice.md`.
+
 ### Fase 5 — design de produto
 
 Duração estimada: 4–6 dias.

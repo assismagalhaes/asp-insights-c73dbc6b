@@ -41,6 +41,7 @@ class HighlightlyShadowDrainTests(unittest.TestCase):
         argv = [
             "drain_highlightly_shadow_queue",
             "--scope", "scope-1",
+            "--sport", "basketball",
             "--max-jobs", "10",
             "--confirm-bounded-drain",
         ]
@@ -49,6 +50,7 @@ class HighlightlyShadowDrainTests(unittest.TestCase):
             exit_code = drain.main()
 
         self.assertEqual(exit_code, 0)
+        self.assertEqual(repository.ingestion_context.call_args_list[0].args, ("basketball",))
         repository.set_provider_enabled.assert_any_call("highlightly", True)
         repository.set_provider_enabled.assert_any_call("highlightly", False)
         worker_factory.assert_called_once()

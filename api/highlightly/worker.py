@@ -5,13 +5,14 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import os
+import re
 import time
 from typing import Any, Mapping
 
 from api.highlightly_client import HighlightlyClient, HighlightlyError, HighlightlyResponse
 from api.highlightly_repository import HighlightlyRepository, HighlightlyRepositoryError
 
-from .normalizers import normalize_baseball, normalize_football
+from .normalizers import normalize_baseball, normalize_basketball, normalize_football
 from .normalizers.common import NormalizationContext, NormalizedBatch, schema_fingerprint, stable_id
 from .normalizers.common import items as payload_items
 from .registry import EndpointDefinition, EndpointRegistry
@@ -142,6 +143,8 @@ class HighlightlyWorker:
             return normalize_football(payload, context)
         if operation.sport == "baseball":
             return normalize_baseball(payload, context)
+        if operation.sport == "basketball":
+            return normalize_basketball(payload, context)
         raise ValueError(f"Normalizer runtime for {operation.sport} is not implemented")
 
     def _persist(self, batch: NormalizedBatch) -> int:
@@ -397,6 +400,72 @@ class HighlightlyWorker:
                 count += 1
         return count
 
+    def _enqueue_basketball_match_fanout(self, payload: Any, *, scope_nonce: str = "") -> int:
+        matches = payload_items(payload)
+        if len(matches) > 10:
+            raise ValueError("Shadow fan-out is limited to 10 matches per parent job")
+        count = 0
+        for match in matches:
+            match_id = match.get("id")
+            if match_id is None:
+                continue
+            match_scope = f"match:{match_id}:{scope_nonce}" if scope_nonce else f"match:{match_id}"
+            state = match.get("state") if isinstance(match.get("state"), Mapping) else {}
+            score = state.get("score") if isinstance(state.get("score"), Mapping) else {}
+            score_numbers = [int(value) for value in re.findall(r"\d+", str(score.get("current") or ""))[:2]]
+            statistics_params: dict[str, Any] = {"matchId": match_id}
+            if len(score_numbers) == 2:
+                statistics_params.update({"_home_score": score_numbers[0], "_away_score": score_numbers[1]})
+            home = match.get("homeTeam") if isinstance(match.get("homeTeam"), Mapping) else {}
+            away = match.get("awayTeam") if isinstance(match.get("awayTeam"), Mapping) else {}
+            if home.get("id") is not None and away.get("id") is not None:
+                statistics_params.update({"_home_team_id": home["id"], "_away_team_id": away["id"]})
+            detail_jobs = (
+                ("basketball.BasketballStatisticsController_getStatistics", statistics_params),
+                ("basketball.HighlightsController_getHighlights", {"matchId": match_id, "limit": 40, "offset": 0}),
+                ("basketball.BasketballOddsController_getOddsV2", {"matchId": match_id, "limit": 5, "offset": 0}),
+            )
+            for endpoint_key, params in detail_jobs:
+                self._enqueue_operation(endpoint_key, params, scope=match_scope)
+                count += 1
+
+            if home.get("id") is not None and away.get("id") is not None:
+                self._enqueue_operation(
+                    "basketball.BasketballHead2HeadController_getHead2HeadData",
+                    {"teamIdOne": home["id"], "teamIdTwo": away["id"]},
+                    scope=match_scope,
+                )
+                count += 1
+            match_date = str(match.get("date") or "")[:10]
+            try:
+                history_from = (datetime.fromisoformat(match_date) - timedelta(days=365)).date().isoformat()
+            except ValueError:
+                history_from = match_date or None
+            for team in (home, away):
+                if team.get("id") is None:
+                    continue
+                self._enqueue_operation(
+                    "basketball.BasketballLastFiveGamesController_getLastFiveGames",
+                    {"teamId": team["id"]},
+                    scope=match_scope,
+                )
+                count += 1
+                self._enqueue_operation(
+                    "basketball.TeamsController_getTeamStatistics",
+                    {"id": team["id"], "fromDate": history_from},
+                    scope=match_scope,
+                )
+                count += 1
+            league = match.get("league") if isinstance(match.get("league"), Mapping) else {}
+            if league.get("id") is not None and league.get("season") is not None:
+                self._enqueue_operation(
+                    "basketball.BasketballStandingsController_getStandings",
+                    {"leagueId": league["id"], "season": league["season"]},
+                    scope=match_scope,
+                )
+                count += 1
+        return count
+
     def _quality_rows(
         self,
         batch: NormalizedBatch,
@@ -557,6 +626,11 @@ class HighlightlyWorker:
                     )
                 if operation.normalizer == "baseball.box_scores" and _truthy(str(request_params.get("_fanout_players"))):
                     self._enqueue_baseball_player_fanout(
+                        payload,
+                        scope_nonce=str(request_params.get("_fanout_scope") or ""),
+                    )
+                if operation.normalizer == "basketball.matches" and _truthy(str(request_params.get("_fanout"))):
+                    self._enqueue_basketball_match_fanout(
                         payload,
                         scope_nonce=str(request_params.get("_fanout_scope") or ""),
                     )
