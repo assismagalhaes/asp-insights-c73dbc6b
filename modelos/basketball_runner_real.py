@@ -10,7 +10,7 @@ import random
 import re
 import sys
 import types
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -35,7 +35,7 @@ MODEL_NAMES = {
 
 MIN_ODD_EXPORT = 1.25
 MAX_ODD_EXPORT = 2.00
-BASKETBALL_WNBA_MODEL_VERSION = "BASKETBALL_WNBA_V2_1_MARKET_CONFLICT"
+BASKETBALL_WNBA_MODEL_VERSION = "BASKETBALL_WNBA_V2_2_ROBUST_GATES"
 BASKETBALL_WNBA_HANDICAP_MODEL_VERSION = BASKETBALL_WNBA_MODEL_VERSION
 WNBA_CURRENT_SEASON_YEAR = datetime.now().year
 WNBA_PREVIOUS_SEASON_YEAR = WNBA_CURRENT_SEASON_YEAR - 1
@@ -65,6 +65,14 @@ WNBA_MAX_PICK_UNITS = 1.0
 WNBA_MAX_MARKET_UNITS = 1.5
 WNBA_MAX_GAME_UNITS = 2.0
 WNBA_MAX_BEST_TO_MEDIAN_RATIO = 1.20
+WNBA_LOW_SAMPLE_MIN_EDGE = 5.0
+WNBA_LOW_SAMPLE_MIN_MEDIAN_EV = 1.0
+WNBA_STRENGTH_MARGIN_WEIGHT = float(os.getenv('WNBA_STRENGTH_MARGIN_WEIGHT', '0.0'))
+WNBA_STRENGTH_MARGIN_MAX_ADJUSTMENT = float(os.getenv('WNBA_STRENGTH_MARGIN_MAX_ADJUSTMENT', '4.0'))
+WNBA_MARGIN_CALIBRATION_PATH = Path(os.getenv(
+    'WNBA_MARGIN_CALIBRATION_PATH',
+    Path(__file__).with_name('wnba_margin_calibration.json'),
+))
 
 
 def main() -> None:
@@ -91,6 +99,7 @@ def main() -> None:
         rows: list[dict[str, Any]] = []
         contexts: list[str] = []
         errors: list[str] = []
+        walk_forward_rows: list[dict[str, Any]] = []
 
         linhas_ou = detect_ou_lines(games)
         hc_idxs = detect_hc_indexes(games)
@@ -108,7 +117,8 @@ def main() -> None:
                     res['H2H_df'], res['H2H_stats'] = module.gerar_h2h(home, away, periodos=(module.PERIODO_ATUAL, module.PERIODO_PASSADO))
 
                 context = capture_context(module, res, row, linhas_ou, hc_idxs)
-                contexts.append(context)
+                if league != 'WNBA':
+                    contexts.append(context)
                 if league == 'WNBA' and hasattr(module, 'montar_linhas_lovable'):
                     game_rows = module.montar_linhas_lovable(row, res)
                     game_rows = [
@@ -123,11 +133,17 @@ def main() -> None:
                     game_rows.extend(build_wnba_total_candidate_rows(module, row, res))
                     game_rows.extend(build_wnba_handicap_candidate_rows(module, row, res))
                     game_rows = apply_wnba_v1_1_controls(module, row, res, game_rows, lines=linhas_ou)
+                    walk_forward_rows.extend(res.get('_wnba_walk_forward_candidates') or [])
                 else:
                     game_rows = montar_linhas_nba(module, row, res)
                 for item in game_rows:
-                    item.setdefault('dados_tecnicos', context)
-                    item.setdefault('contexto_modelo', context)
+                    if league == 'WNBA':
+                        active_context = build_wnba_active_technical_context(item, res, home, away)
+                        item['dados_tecnicos'] = active_context
+                        item['contexto_modelo'] = active_context
+                    else:
+                        item.setdefault('dados_tecnicos', context)
+                        item.setdefault('contexto_modelo', context)
                     item.setdefault('parecer_validacao', build_parecer(item))
                     item.setdefault('odd', item.get('odd_ofertada'))
                     item.setdefault('probabilidade', item.get('probabilidade_final'))
@@ -145,7 +161,15 @@ def main() -> None:
             rows.sort(key=lambda r: (r.get('data') or '', r.get('hora') or '', r.get('jogo') or '', r.get('mercado') or '', -float(r.get('edge') or 0)))
             handicap_shadow_diagnostics = build_wnba_runtime_diagnostics(rows, errors)
         write_output_csv(output_path, rows)
-        contexto_modelo = '\n\n'.join(contexts[:20])
+        if league == 'WNBA':
+            active_contexts = list(dict.fromkeys(
+                str(row.get('contexto_modelo') or row.get('dados_tecnicos') or '').strip()
+                for row in rows
+                if str(row.get('contexto_modelo') or row.get('dados_tecnicos') or '').strip()
+            ))
+            contexto_modelo = '\n\n'.join(active_contexts[:20])
+        else:
+            contexto_modelo = '\n\n'.join(contexts[:20])
         msg = None
         if not rows:
             msg = 'Nenhuma oportunidade EV+ encontrada para os filtros atuais.'
@@ -165,6 +189,7 @@ def main() -> None:
         }
         if handicap_shadow_diagnostics is not None:
             result_payload['handicap_shadow_diagnostics'] = handicap_shadow_diagnostics
+            result_payload['walk_forward_rows'] = walk_forward_rows
         emit(result_payload)
     except Exception as exc:
         emit({'ok': False, 'erro': str(exc), 'detalhe': f'csv={csv_coleta_path} output={output_path} league={league}'})
@@ -855,6 +880,14 @@ def apply_wnba_v1_1_to_pick(module: Any, row: pd.Series, res: dict, item: dict[s
         item, handicap_debug = recalculated
         debug.update(handicap_debug)
 
+    item['_wnba_debug'] = dict(debug)
+    res.setdefault('_wnba_walk_forward_candidates', []).append(
+        build_wnba_walk_forward_candidate(item, debug, row, home, away)
+    )
+
+    if item.get('_strong_market_conflict'):
+        return mark_wnba_discard(item, "STRONG_MARKET_CONFLICT", keep=False)
+
     odd = to_float(item.get('odd_ofertada'))
     prob = to_float(item.get('probabilidade_final'))
     odd_valor = to_float(item.get('odd_valor'))
@@ -876,9 +909,9 @@ def apply_wnba_v1_1_to_pick(module: Any, row: pd.Series, res: dict, item: dict[s
         return mark_wnba_discard(item, "LOW_HANDICAP_HISTORY", keep=False)
     if odd <= odd_valor:
         return mark_wnba_discard(item, "NO_EV_AFTER_V1_1", keep=False)
-    minimum_edge = WNBA_MIN_EDGE_BY_MARKET[market_key]
-    if float(item.get('edge') or 0.0) < minimum_edge:
-        return mark_wnba_discard(item, f"EDGE_BELOW_{minimum_edge:.1f}", keep=False)
+    value_gate_reason = wnba_robust_value_gate_reason(item, market_key)
+    if value_gate_reason:
+        return mark_wnba_discard(item, value_gate_reason, keep=False)
     if not (odd > MIN_ODD_EXPORT and odd <= MAX_ODD_EXPORT):
         return mark_wnba_discard(item, "ODD_OUT_OF_RANGE", keep=False)
 
@@ -913,7 +946,8 @@ def recalculate_wnba_moneyline_pick(module: Any, row: pd.Series, res: dict, item
         float(weights.get('vig', 0.30)) * vig_prob
     )
     raw_prob = max(0.0, min(0.99, raw_prob))
-    prob, haircut = conservative_wnba_probability(raw_prob, hist['jogos_considerados'], 'moneyline')
+    effective_games = float(hist.get('jogos_efetivos') or hist['jogos_considerados'])
+    prob, haircut = conservative_wnba_probability(raw_prob, effective_games, 'moneyline')
     odd_valor = 1.0 / prob if prob else 0.0
     edge = odd * prob - 1.0
     selected_base_col = 'odds_HomeAway_FT_including_OT_1' if pick_side == 'home' else 'odds_HomeAway_FT_including_OT_2'
@@ -927,6 +961,9 @@ def recalculate_wnba_moneyline_pick(module: Any, row: pd.Series, res: dict, item
     item['odd_melhor'] = round(odd, 2)
     item['bookmaker_melhor'] = bookmaker_from_wide(row, selected_base_col) or item.get('bookmaker_melhor')
     item['_hist_games'] = hist['jogos_considerados']
+    item['_effective_hist_games'] = effective_games
+    item['_hist_warnings'] = list(hist['warnings'])
+    item['_median_ev'] = (market_odd * prob - 1.0) * 100.0
     debug = {
         'mercado': 'Moneyline',
         'side': pick_side,
@@ -943,10 +980,19 @@ def recalculate_wnba_moneyline_pick(module: Any, row: pd.Series, res: dict, item
         'vitorias_reais': hist['wins'],
         'derrotas_reais': hist['losses'],
         'jogos_considerados': hist['jogos_considerados'],
+        'jogos_efetivos': round(effective_games, 2),
+        'ev_odd_mediana': round(item['_median_ev'], 2),
         'simulacoes': simulation['simulations'],
         'vitorias_sim_home': simulation['home_wins'],
         'vitorias_sim_away': simulation['away_wins'],
         'total_calibrado': round(simulation['calibrated_total_expected'], 2),
+        'margem_placar_pre_forca': round(simulation['score_margin_expected'], 2),
+        'margem_referencia_forca': round(simulation['strength_margin_reference'], 2) if simulation['strength_margin_reference'] is not None else None,
+        'ajuste_margem_forca': round(simulation['strength_margin_adjustment'], 2),
+        'peso_margem_forca': round(simulation['strength_margin_weight'], 4),
+        'calibracao_margem_status': simulation['margin_calibration_status'],
+        'calibracao_margem_intercept': simulation['margin_calibration_intercept'],
+        'calibracao_margem_slope': simulation['margin_calibration_slope'],
         'margem_media_simulada': round(simulation['average_margin'], 2),
         'warnings': hist['warnings'],
     }
@@ -981,7 +1027,8 @@ def recalculate_wnba_handicap_pick(module: Any, row: pd.Series, res: dict, item:
         float(weights.get('vig', 0.30)) * no_vig
     )
     raw_prob = max(0.0, min(0.99, raw_prob))
-    sample_adjusted_prob, sample_haircut = conservative_wnba_probability(raw_prob, hist['jogos_considerados'], 'handicap')
+    effective_games = float(hist.get('jogos_efetivos') or hist['jogos_considerados'])
+    sample_adjusted_prob, sample_haircut = conservative_wnba_probability(raw_prob, effective_games, 'handicap')
     prob, disagreement = wnba_component_disagreement_haircut(sample_adjusted_prob, components, no_vig)
     disagreement_haircut = float(disagreement['haircut'])
     total_haircut = sample_haircut + disagreement_haircut
@@ -998,6 +1045,9 @@ def recalculate_wnba_handicap_pick(module: Any, row: pd.Series, res: dict, item:
     item['odd_melhor'] = round(odd, 2)
     item['bookmaker_melhor'] = (market_pair[2] if market_pair else '') or item.get('bookmaker_melhor')
     item['_hist_games'] = hist['jogos_considerados']
+    item['_effective_hist_games'] = effective_games
+    item['_hist_warnings'] = list(hist['warnings'])
+    item['_median_ev'] = (market_odd * prob - 1.0) * 100.0
     item['_selection_side'] = pick_side
     item['_market_anchor_line'] = wnba_handicap_anchor_for_side(row, pick_side)
     item['_strong_market_conflict'] = strong_market_conflict
@@ -1030,6 +1080,8 @@ def recalculate_wnba_handicap_pick(module: Any, row: pd.Series, res: dict, item:
         'falhas_reais': hist['losses'],
         'pushes': hist['pushes'],
         'jogos_considerados': hist['jogos_considerados'],
+        'jogos_efetivos': round(effective_games, 2),
+        'ev_odd_mediana': round(item['_median_ev'], 2),
         'simulacoes': simulation['simulations'],
         'coberturas_simuladas': simulation['handicap_wins'],
         'pushes_simulados': simulation['handicap_pushes'],
@@ -1037,6 +1089,13 @@ def recalculate_wnba_handicap_pick(module: Any, row: pd.Series, res: dict, item:
         'pontos_esperados_casa': round(simulation['home_expected'], 2),
         'pontos_esperados_visitante': round(simulation['away_expected'], 2),
         'margem_modelo_pre_mercado': round(simulation['model_margin_expected'], 2),
+        'margem_placar_pre_forca': round(simulation['score_margin_expected'], 2),
+        'margem_referencia_forca': round(simulation['strength_margin_reference'], 2) if simulation['strength_margin_reference'] is not None else None,
+        'ajuste_margem_forca': round(simulation['strength_margin_adjustment'], 2),
+        'peso_margem_forca': round(simulation['strength_margin_weight'], 4),
+        'calibracao_margem_status': simulation['margin_calibration_status'],
+        'calibracao_margem_intercept': simulation['margin_calibration_intercept'],
+        'calibracao_margem_slope': simulation['margin_calibration_slope'],
         'margem_ancora_mercado': round(simulation['market_margin_anchor'], 2) if simulation['market_margin_anchor'] is not None else None,
         'margem_calibrada': round(simulation['calibrated_margin_expected'], 2),
         'margem_media_simulada': round(simulation['average_margin'], 2),
@@ -1080,7 +1139,8 @@ def recalculate_wnba_total_pick(module: Any, row: pd.Series, res: dict, item: di
         float(weights.get('vig', 0.30)) * vig_prob
     )
     raw_prob = max(0.0, min(99.0, raw_prob))
-    conservative_prob, haircut = conservative_wnba_probability(raw_prob / 100.0, hist['jogos_considerados'], 'total')
+    effective_games = float(hist.get('jogos_efetivos') or hist['jogos_considerados'])
+    conservative_prob, haircut = conservative_wnba_probability(raw_prob / 100.0, effective_games, 'total')
     prob = conservative_prob * 100.0
     odd_valor = 100.0 / prob if prob else 0.0
     edge = (odd / odd_valor - 1.0) * 100.0 if odd_valor else 0.0
@@ -1094,6 +1154,9 @@ def recalculate_wnba_total_pick(module: Any, row: pd.Series, res: dict, item: di
     item['odd_melhor'] = round(odd, 2)
     item['bookmaker_melhor'] = bookmaker_from_wide(row, selected_col) or item.get('bookmaker_melhor')
     item['_hist_games'] = hist['jogos_considerados']
+    item['_effective_hist_games'] = effective_games
+    item['_hist_warnings'] = list(hist['warnings'])
+    item['_median_ev'] = (market_odd * conservative_prob - 1.0) * 100.0
     item['_selection_side'] = side
     item['_market_anchor_line'] = simulation['market_anchor_line']
     debug = {
@@ -1120,6 +1183,8 @@ def recalculate_wnba_total_pick(module: Any, row: pd.Series, res: dict, item: di
         'media_total_simulada': round(simulation['average_total'], 2),
         'pesos_probabilidade': weights,
         'jogos_considerados': hist['jogos_considerados'],
+        'jogos_efetivos': round(effective_games, 2),
+        'ev_odd_mediana': round(item['_median_ev'], 2),
         'pushes': hist['pushes'],
         'taxa_bruta': round(hist['taxa_bruta'] * 100.0, 2),
         'taxa_com_shrinkage': round(hist['taxa_com_shrinkage'] * 100.0, 2),
@@ -1309,7 +1374,10 @@ def wnba_non_overlapping_period_frames(module: Any, team: str, local: str) -> tu
         'atual': current_local,
         'recente': recent,
     }
-    weights = wnba_get_season_weights(module, len(current_all))
+    weights = reliability_adjusted_period_weights(
+        wnba_get_season_weights(module, len(current_all)),
+        frames,
+    )
     available = tuple(key for key, frame in frames.items() if frame is not None and not frame.empty and weights.get(key, 0) > 0)
     return frames, normalize_weight_subset(weights, available) if available else weights
 
@@ -1455,7 +1523,32 @@ def wnba_simulate_matchup(
     calibration_delta = calibrated_total - model_total
     home_expected = max(0.0, expectation['home_expected'] + calibration_delta / 2.0)
     away_expected = max(0.0, expectation['away_expected'] + calibration_delta / 2.0)
-    model_margin_expected = home_expected - away_expected
+    score_margin_expected = home_expected - away_expected
+    strength_margin_reference = wnba_strength_margin_reference(res, expectation['projected_pace'])
+    margin_calibration = load_wnba_margin_calibration()
+    strength_margin_weight = WNBA_STRENGTH_MARGIN_WEIGHT
+    if strength_margin_weight <= 0 and margin_calibration.get('active'):
+        strength_margin_weight = float(margin_calibration.get('strength_weight') or 0.0)
+    strength_margin_adjustment = 0.0
+    if strength_margin_reference is not None:
+        strength_margin_adjustment = max(
+            -WNBA_STRENGTH_MARGIN_MAX_ADJUSTMENT,
+            min(
+                WNBA_STRENGTH_MARGIN_MAX_ADJUSTMENT,
+                (strength_margin_reference - score_margin_expected) * strength_margin_weight,
+            ),
+        )
+        home_expected = max(0.0, home_expected + strength_margin_adjustment / 2.0)
+        away_expected = max(0.0, away_expected - strength_margin_adjustment / 2.0)
+    strength_adjusted_margin_expected = home_expected - away_expected
+    model_margin_expected, margin_calibration = apply_wnba_margin_calibration(
+        strength_adjusted_margin_expected,
+        margin_calibration,
+    )
+    calibration_margin_delta = model_margin_expected - strength_adjusted_margin_expected
+    if calibration_margin_delta:
+        home_expected = max(0.0, home_expected + calibration_margin_delta / 2.0)
+        away_expected = max(0.0, away_expected - calibration_margin_delta / 2.0)
     market_margin_anchor = wnba_market_home_margin_anchor(row)
     calibrated_margin_expected = model_margin_expected
     if market_margin_anchor is not None:
@@ -1541,9 +1634,65 @@ def wnba_simulate_matchup(
         'market_anchor_line': market_anchor,
         'calibrated_total_expected': calibrated_total,
         'model_margin_expected': model_margin_expected,
+        'score_margin_expected': score_margin_expected,
+        'strength_margin_reference': strength_margin_reference,
+        'strength_margin_adjustment': strength_margin_adjustment,
+        'strength_margin_weight': strength_margin_weight,
+        'strength_adjusted_margin_expected': strength_adjusted_margin_expected,
+        'margin_calibration_status': margin_calibration['status'],
+        'margin_calibration_intercept': margin_calibration['intercept'],
+        'margin_calibration_slope': margin_calibration['slope'],
         'market_margin_anchor': market_margin_anchor,
         'calibrated_margin_expected': calibrated_margin_expected,
     }
+
+
+def wnba_strength_margin_reference(res: dict[str, Any], projected_pace: float | None) -> float | None:
+    home_net = to_float(res.get('net_c'))
+    away_net = to_float(res.get('net_f'))
+    pace = to_float(projected_pace)
+    if pace is None or pace <= 0:
+        pace = average_valid(res.get('pace_c'), res.get('pace_f'))
+    if home_net is None or away_net is None or pace is None or pace <= 0:
+        return None
+    return (home_net - away_net) * pace / 100.0
+
+
+def load_wnba_margin_calibration(path: Path | None = None) -> dict[str, Any]:
+    config_path = path or WNBA_MARGIN_CALIBRATION_PATH
+    try:
+        payload = json.loads(config_path.read_text(encoding='utf-8'))
+    except Exception:
+        payload = {}
+    active = bool(payload.get('active'))
+    intercept = to_float(payload.get('intercept'))
+    slope = to_float(payload.get('slope'))
+    strength_weight = to_float(payload.get('strength_weight'))
+    if not active or intercept is None or slope is None or not 0.25 <= slope <= 2.0:
+        return {
+            'active': False,
+            'status': str(payload.get('status') or 'identity_no_valid_oos_calibration'),
+            'intercept': 0.0,
+            'slope': 1.0,
+            'strength_weight': 0.0,
+        }
+    return {
+        'active': True,
+        'status': str(payload.get('status') or 'active_oos_calibration'),
+        'intercept': intercept,
+        'slope': slope,
+        'strength_weight': max(0.0, min(0.50, strength_weight or 0.0)),
+    }
+
+
+def apply_wnba_margin_calibration(margin: float, config: dict[str, Any] | None = None) -> tuple[float, dict[str, Any]]:
+    calibration = dict(config or load_wnba_margin_calibration())
+    intercept = float(calibration.get('intercept') or 0.0)
+    slope = float(calibration.get('slope') or 1.0)
+    if not calibration.get('active'):
+        return float(margin), {**calibration, 'intercept': 0.0, 'slope': 1.0}
+    calibrated = intercept + slope * float(margin)
+    return calibrated, calibration
 
 
 def identify_wnba_pick_side(item: dict[str, Any], home: str, away: str) -> str | None:
@@ -1606,6 +1755,7 @@ def wnba_binary_rate_by_period(period_frames: dict[str, pd.DataFrame], base_weig
     if not available_keys:
         return {
             'jogos_considerados': 0,
+            'jogos_efetivos': 0.0,
             'wins': 0,
             'losses': 0,
             'pushes': 0,
@@ -1637,6 +1787,7 @@ def wnba_binary_rate_by_period(period_frames: dict[str, pd.DataFrame], base_weig
         warnings.insert(0, 'LOW_SAMPLE')
     return {
         'jogos_considerados': wins_total + losses_total,
+        'jogos_efetivos': weighted_effective_sample(periodos, weights),
         'wins': wins_total,
         'losses': losses_total,
         'pushes': pushes_total,
@@ -1665,6 +1816,7 @@ def wnba_binary_rate_from_dataframe(df: Any, evaluator: Any) -> dict[str, Any]:
     if considered == 0:
         return {
             'jogos_considerados': 0,
+            'jogos_efetivos': 0.0,
             'wins': wins,
             'losses': losses,
             'pushes': pushes,
@@ -1689,6 +1841,7 @@ def combine_wnba_binary_components(*components: dict[str, Any]) -> dict[str, Any
     if not valid_components:
         return {
             'jogos_considerados': 0,
+            'jogos_efetivos': 0.0,
             'wins': 0,
             'losses': 0,
             'pushes': sum(int(item.get('pushes') or 0) for item in components),
@@ -1699,6 +1852,7 @@ def combine_wnba_binary_components(*components: dict[str, Any]) -> dict[str, Any
             'componentes': components,
         }
     considered = sum(int(item.get('jogos_considerados') or 0) for item in valid_components)
+    effective = combine_effective_samples(valid_components)
     warnings = sorted({warning for item in valid_components for warning in item.get('warnings', [])})
     if considered < WNBA_TOTAL_LOW_SAMPLE * len(valid_components):
         warnings.append('LOW_SAMPLE_COMBINADO')
@@ -1706,6 +1860,7 @@ def combine_wnba_binary_components(*components: dict[str, Any]) -> dict[str, Any
         warnings.insert(0, 'LOW_SAMPLE')
     return {
         'jogos_considerados': considered,
+        'jogos_efetivos': effective,
         'wins': sum(int(item.get('wins') or 0) for item in valid_components),
         'losses': sum(int(item.get('losses') or 0) for item in valid_components),
         'pushes': sum(int(item.get('pushes') or 0) for item in valid_components),
@@ -1765,6 +1920,7 @@ def wnba_historical_total_probability(module: Any, home: str, away: str, line: f
     if not valid_components:
         return {
             'jogos_considerados': 0,
+            'jogos_efetivos': 0.0,
             'pushes': home_component['pushes'] + away_component['pushes'],
             'taxa_bruta': WNBA_TOTAL_PRIOR,
             'taxa_com_shrinkage': WNBA_TOTAL_PRIOR,
@@ -1776,6 +1932,7 @@ def wnba_historical_total_probability(module: Any, home: str, away: str, line: f
     combined_raw = sum(item['taxa_bruta'] for item in valid_components) / len(valid_components)
     combined_shrunk = sum(item['taxa_com_shrinkage'] for item in valid_components) / len(valid_components)
     considered = sum(item['jogos_considerados'] for item in valid_components)
+    effective = combine_effective_samples(valid_components)
     pushes = sum(item['pushes'] for item in valid_components)
     warnings = sorted({warning for item in valid_components for warning in item.get('warnings', [])})
     if considered < WNBA_TOTAL_LOW_SAMPLE * len(valid_components):
@@ -1785,6 +1942,7 @@ def wnba_historical_total_probability(module: Any, home: str, away: str, line: f
 
     return {
         'jogos_considerados': considered,
+        'jogos_efetivos': effective,
         'pushes': pushes,
         'taxa_bruta': combined_raw,
         'taxa_com_shrinkage': combined_shrunk,
@@ -1800,6 +1958,7 @@ def wnba_team_total_component_probability(module: Any, team: str, local: str, li
     if not available_keys:
         return {
             'jogos_considerados': 0,
+            'jogos_efetivos': 0.0,
             'pushes': 0,
             'taxa_bruta': WNBA_TOTAL_PRIOR,
             'taxa_com_shrinkage': WNBA_TOTAL_PRIOR,
@@ -1831,6 +1990,7 @@ def wnba_team_total_component_probability(module: Any, team: str, local: str, li
 
     return {
         'jogos_considerados': considered_total,
+        'jogos_efetivos': weighted_effective_sample(periodos, weights),
         'pushes': pushes_total,
         'taxa_bruta': raw,
         'taxa_com_shrinkage': shrunk,
@@ -1850,6 +2010,7 @@ def compact_wnba_total_components(components: Any) -> dict[str, Any]:
             continue
         compact[side_name] = {
             'jogos': component.get('jogos_considerados'),
+            'jogos_efetivos': round(float(component.get('jogos_efetivos') or 0.0), 2),
             'raw': round(float(component.get('taxa_bruta') or 0.0) * 100.0, 2),
             'shrunk': round(float(component.get('taxa_com_shrinkage') or 0.0) * 100.0, 2),
             'pesos': component.get('pesos_periodos'),
@@ -1937,6 +2098,36 @@ def normalize_weight_subset(weights: dict[str, float], keys: tuple[str, ...]) ->
     return {key: float(weights.get(key, 0.0)) / total for key in keys}
 
 
+def reliability_adjusted_period_weights(weights: dict[str, float], frames: dict[str, pd.DataFrame]) -> dict[str, float]:
+    adjusted: dict[str, float] = {}
+    for key, base_weight in weights.items():
+        frame = frames.get(key)
+        sample_size = len(frame) if frame is not None and not getattr(frame, 'empty', True) else 0
+        reliability = min(1.0, sample_size / float(WNBA_TOTAL_LOW_SAMPLE))
+        adjusted[key] = max(0.0, float(base_weight)) * reliability
+    available = tuple(key for key, value in adjusted.items() if value > 0)
+    return normalize_weight_subset(adjusted, available) if available else adjusted
+
+
+def weighted_effective_sample(periods: dict[str, Any], weights: dict[str, float]) -> float:
+    variance_factor = 0.0
+    for key, weight in weights.items():
+        stats = periods.get(key) if isinstance(periods, dict) else None
+        sample_size = int((stats or {}).get('jogos_considerados') or 0) if isinstance(stats, dict) else 0
+        if sample_size > 0 and weight > 0:
+            variance_factor += float(weight) ** 2 / sample_size
+    return 1.0 / variance_factor if variance_factor > 0 else 0.0
+
+
+def combine_effective_samples(components: list[dict[str, Any]]) -> float:
+    valid = [float(item.get('jogos_efetivos') or 0.0) for item in components if float(item.get('jogos_efetivos') or 0.0) > 0]
+    if not valid:
+        return 0.0
+    component_weight = 1.0 / len(valid)
+    variance_factor = sum(component_weight ** 2 / sample_size for sample_size in valid)
+    return 1.0 / variance_factor if variance_factor > 0 else 0.0
+
+
 def basketball_points_total(row: Any) -> float | None:
     team = first_float(row, ('pontos_time', 'PTS', 'Tm', 'R', 'Pontos'))
     opp = first_float(row, ('pontos_adversario', 'Opp', 'Opp.1', 'RA', 'Pontos_Adv'))
@@ -1978,12 +2169,26 @@ def no_vig_pair(odd_a: float, odd_b: float) -> tuple[float, float] | None:
     return inv_a / total, inv_b / total
 
 
-def conservative_wnba_probability(probability: float, historical_games: int, market: str) -> tuple[float, float]:
-    effective_n = max(10, int(historical_games or 0))
+def conservative_wnba_probability(probability: float, historical_games: float, market: str) -> tuple[float, float]:
+    effective_n = max(10.0, float(historical_games or 0.0))
     standard_error = math.sqrt(max(0.0, probability * (1.0 - probability)) / effective_n)
     factor = 0.75 if market == 'total' else 0.50
     haircut = min(0.06 if market == 'total' else 0.04, factor * standard_error)
     return max(0.01, min(0.99, probability - haircut)), haircut
+
+
+def wnba_robust_value_gate_reason(item: dict[str, Any], market_key: str) -> str | None:
+    low_sample = any(str(warning).startswith('LOW_SAMPLE') for warning in item.get('_hist_warnings', []))
+    minimum_edge = max(
+        WNBA_MIN_EDGE_BY_MARKET[market_key],
+        WNBA_LOW_SAMPLE_MIN_EDGE if low_sample else 0.0,
+    )
+    if float(item.get('edge') or 0.0) < minimum_edge:
+        return f"EDGE_BELOW_{minimum_edge:.1f}"
+    median_ev = to_float(item.get('_median_ev'))
+    if low_sample and (median_ev is None or median_ev < WNBA_LOW_SAMPLE_MIN_MEDIAN_EV):
+        return f"LOW_SAMPLE_MEDIAN_EV_BELOW_{WNBA_LOW_SAMPLE_MIN_MEDIAN_EV:.1f}"
+    return None
 
 
 def wnba_component_disagreement_haircut(
@@ -2021,13 +2226,14 @@ def limit_wnba_correlated_lines(rows: list[dict[str, Any]]) -> list[dict[str, An
         grouped.setdefault(normalize_text(row.get('mercado')), []).append(row)
     selected = [max(moneylines, key=lambda item: float(item.get('edge') or 0.0))] if moneylines else []
     for group in grouped.values():
-        valid = [row for row in group if to_float(row.get('linha')) is not None]
+        valid = [
+            row for row in group
+            if to_float(row.get('linha')) is not None and not row.get('_strong_market_conflict')
+        ]
         if not valid:
             continue
-        principal_candidates = [row for row in valid if not row.get('_strong_market_conflict')]
-        ranking_pool = principal_candidates or valid
         principal = min(
-            ranking_pool,
+            valid,
             key=lambda item: (
                 abs(float(item.get('linha')) - float(item.get('_market_anchor_line') if item.get('_market_anchor_line') is not None else item.get('linha'))),
                 -float(item.get('edge') or 0.0),
@@ -2043,10 +2249,7 @@ def limit_wnba_correlated_lines(rows: list[dict[str, Any]]) -> list[dict[str, An
         )
         chosen = same_side[:WNBA_MAX_CORRELATED_LINES]
         for index, item in enumerate(chosen):
-            if item.get('_strong_market_conflict'):
-                item['selection_role'] = 'RESERVA_CONFLITO_MERCADO'
-            else:
-                item['selection_role'] = 'PRINCIPAL' if index == 0 else 'ALTERNATIVA'
+            item['selection_role'] = 'PRINCIPAL' if index == 0 else 'ALTERNATIVA'
         selected.extend(chosen)
     return selected
 
@@ -2080,11 +2283,11 @@ def apply_wnba_exposure_caps(rows: list[dict[str, Any]]) -> list[dict[str, Any]]
     market_used: dict[tuple[str, str], float] = {}
     kept: list[dict[str, Any]] = []
     for row in sorted(rows, key=lambda item: -float(item.get('edge') or 0.0)):
+        if row.get('_strong_market_conflict'):
+            continue
         game = str(row.get('jogo') or '')
         market = normalize_text(row.get('mercado'))
         requested = parse_units(stake_sugerida(row.get('probabilidade_final'), row.get('edge'), row.get('odd_ofertada')))
-        if row.get('_strong_market_conflict'):
-            requested = min(requested, 0.25)
         available = min(
             WNBA_MAX_GAME_UNITS - game_used.get(game, 0.0),
             WNBA_MAX_MARKET_UNITS - market_used.get((game, market), 0.0),
@@ -2129,6 +2332,44 @@ def mark_wnba_discard(item: dict[str, Any], reason: str, keep: bool = False) -> 
     return item if keep else None
 
 
+def build_wnba_walk_forward_candidate(
+    item: dict[str, Any],
+    debug: dict[str, Any],
+    row: Any,
+    home: str,
+    away: str,
+) -> dict[str, Any]:
+    return {
+        'snapshot_at_utc': datetime.now(timezone.utc).isoformat(),
+        'game_date': normalize_date_for_model(get_row_value(row, ('date', 'data'))),
+        'game_time': normalize_time(get_row_value(row, ('time', 'hora'))),
+        'home': home,
+        'away': away,
+        'market': item.get('mercado'),
+        'pick': item.get('pick'),
+        'line': to_float(item.get('linha')),
+        'model_version': BASKETBALL_WNBA_MODEL_VERSION,
+        'pregame_verified': None,
+        'probability_final': to_float(item.get('probabilidade_final')),
+        'probability_historical': to_float(debug.get('prob_hist')),
+        'probability_simulation': to_float(debug.get('prob_sim')),
+        'probability_market_no_vig': to_float(debug.get('prob_no_vig')),
+        'raw_sample_size': int(debug.get('jogos_considerados') or 0),
+        'effective_sample_size': to_float(debug.get('jogos_efetivos')),
+        'score_margin_pre_strength': to_float(debug.get('margem_placar_pre_forca')),
+        'strength_margin_reference': to_float(debug.get('margem_referencia_forca')),
+        'strength_margin_adjustment': to_float(debug.get('ajuste_margem_forca')),
+        'model_margin_pre_market': to_float(debug.get('margem_modelo_pre_mercado')),
+        'market_margin_anchor': to_float(debug.get('margem_ancora_mercado')),
+        'calibrated_margin': to_float(debug.get('margem_calibrada')),
+        'market_conflict_status': item.get('market_conflict_status'),
+        'warnings': list(debug.get('warnings') or []),
+        'actual_home_points': None,
+        'actual_away_points': None,
+        'actual_margin': None,
+    }
+
+
 def replace_wnba_legacy_margin_context(
     observation: Any,
     home: str,
@@ -2137,8 +2378,8 @@ def replace_wnba_legacy_margin_context(
 ) -> str:
     text = str(observation or '').strip()
     active_context = (
-        f"Margem ativa V2.1 {home} {float(simulation['average_margin']):+.2f}; "
-        f"Pontos esperados V2.1 {home} {float(simulation['home_expected']):.2f} x "
+        f"Margem ativa V2.2 {home} {float(simulation['average_margin']):+.2f}; "
+        f"Pontos esperados V2.2 {home} {float(simulation['home_expected']):.2f} x "
         f"{away} {float(simulation['away_expected']):.2f}"
     )
     replaced, count = re.subn(
@@ -2151,6 +2392,61 @@ def replace_wnba_legacy_margin_context(
     return replaced if count else " | ".join(part for part in (text, active_context) if part)
 
 
+def build_wnba_active_technical_context(item: dict[str, Any], res: dict[str, Any], home: str, away: str) -> str:
+    debug = item.get('_wnba_debug') if isinstance(item.get('_wnba_debug'), dict) else {}
+    lines = [
+        f"Modelo: {BASKETBALL_WNBA_MODEL_VERSION}",
+        f"Confronto: {home} vs {away}",
+        f"Mercado/Pick ativo: {item.get('mercado')} | {item.get('pick')}",
+        (
+            f"RPI: {home} {float(res.get('rpi_c') or 0.0):.3f} x {away} {float(res.get('rpi_f') or 0.0):.3f}; "
+            f"NetRtg: {home} {float(res.get('net_c') or 0.0):.2f} x {away} {float(res.get('net_f') or 0.0):.2f}; "
+            f"Pace: {home} {float(res.get('pace_c') or 0.0):.2f} x {away} {float(res.get('pace_f') or 0.0):.2f}"
+        ),
+    ]
+    calculation_fields = (
+        ('total_modelo_pre_mercado', 'Total do modelo pre-mercado'),
+        ('total_ancora_mercado', 'Ancora de total do mercado'),
+        ('total_calibrado', 'Total calibrado ativo'),
+        ('media_total_simulada', 'Media total simulada'),
+        ('pontos_esperados_casa', 'Pontos esperados casa'),
+        ('pontos_esperados_visitante', 'Pontos esperados visitante'),
+        ('margem_placar_pre_forca', 'Margem antes da forca'),
+        ('margem_referencia_forca', 'Referencia de margem por forca'),
+        ('ajuste_margem_forca', 'Ajuste de margem por forca'),
+        ('peso_margem_forca', 'Peso da margem por forca'),
+        ('margem_modelo_pre_mercado', 'Margem ativa pre-mercado'),
+        ('margem_ancora_mercado', 'Ancora de handicap do mercado'),
+        ('margem_calibrada', 'Margem calibrada ativa'),
+        ('margem_media_simulada', 'Margem media simulada'),
+        ('calibracao_margem_status', 'Calibracao walk-forward da margem'),
+    )
+    active_values = [f"{label}: {debug[key]}" for key, label in calculation_fields if debug.get(key) is not None]
+    if active_values:
+        lines.append("Calculos ativos: " + "; ".join(active_values))
+    lines.append(
+        "Probabilidades ativas: "
+        f"historica={debug.get('prob_hist')}%; simulacao={debug.get('prob_sim')}%; "
+        f"no-vig={debug.get('prob_no_vig')}%; final={item.get('probabilidade_final')}%"
+    )
+    lines.append(
+        "Amostra: "
+        f"bruta={debug.get('jogos_considerados')}; efetiva={debug.get('jogos_efetivos')}; "
+        f"haircut={debug.get('haircut_incerteza_pp', debug.get('haircut_amostra_pp'))} p.p."
+    )
+    lines.append(
+        "Odds/EV: "
+        f"melhor={item.get('odd_melhor', item.get('odd_ofertada'))}; mediana={item.get('odd_mediana')}; "
+        f"edge_melhor={item.get('edge')}%; ev_mediana={debug.get('ev_odd_mediana')}%"
+    )
+    warnings = debug.get('warnings') or []
+    if warnings:
+        lines.append("Alertas: " + ", ".join(str(value) for value in warnings))
+    if item.get('market_conflict_status'):
+        lines.append(f"Status de conflito com mercado: {item.get('market_conflict_status')}")
+    return "\n".join(lines)
+
+
 def append_wnba_debug(observacao: Any, debug: dict[str, Any], reasons: list[str] | None = None) -> str:
     base = str(observacao or '').strip()
     parts = [base] if base else []
@@ -2159,7 +2455,7 @@ def append_wnba_debug(observacao: Any, debug: dict[str, Any], reasons: list[str]
     if reason_text:
         debug_items.append(f"motivos={reason_text}")
     if debug_items:
-        parts.append("WNBA V2.1: " + "; ".join(debug_items))
+        parts.append("WNBA V2.2: " + "; ".join(debug_items))
     return " | ".join(parts)
 
 

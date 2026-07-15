@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import tempfile
 import unittest
+from unittest.mock import patch
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -126,7 +127,7 @@ class BasketballWnbaV11Tests(unittest.TestCase):
         selected = runner.apply_wnba_exposure_caps(rows)
         self.assertLessEqual(sum(runner.parse_units(row["stake"]) for row in selected), runner.WNBA_MAX_MARKET_UNITS)
 
-    def test_strong_market_conflict_caps_pick_at_quarter_unit(self) -> None:
+    def test_strong_market_conflict_is_not_published_or_staked(self) -> None:
         rows = [{
             "jogo": "A vs B",
             "mercado": "Handicap Asiatico",
@@ -139,7 +140,65 @@ class BasketballWnbaV11Tests(unittest.TestCase):
 
         selected = runner.apply_wnba_exposure_caps(rows)
 
-        self.assertEqual(selected[0]["stake"], "0.25u")
+        self.assertEqual(selected, [])
+
+    def test_correlated_line_limit_drops_strong_market_conflicts(self) -> None:
+        selected = runner.limit_wnba_correlated_lines([{
+            "mercado": "Handicap Asiatico",
+            "pick": "B +9.5",
+            "linha": 9.5,
+            "edge": 25.0,
+            "_selection_side": "away",
+            "_market_anchor_line": 9.5,
+            "_strong_market_conflict": True,
+        }])
+
+        self.assertEqual(selected, [])
+
+    def test_effective_sample_uses_weights_instead_of_summing_observations(self) -> None:
+        home_periods = {
+            "passada": {"jogos_considerados": 25},
+            "atual": {"jogos_considerados": 8},
+            "recente": {"jogos_considerados": 10},
+        }
+        away_periods = {
+            "passada": {"jogos_considerados": 22},
+            "atual": {"jogos_considerados": 5},
+            "recente": {"jogos_considerados": 10},
+        }
+        weights = {"passada": 0.15, "atual": 0.50, "recente": 0.35}
+        home_effective = runner.weighted_effective_sample(home_periods, weights)
+        away_effective = runner.weighted_effective_sample(away_periods, weights)
+        combined = runner.combine_effective_samples([
+            {"jogos_efetivos": home_effective},
+            {"jogos_efetivos": away_effective},
+        ])
+
+        self.assertLess(combined, 80.0)
+        self.assertAlmostEqual(combined, 37.15, places=1)
+
+    def test_period_weight_is_reduced_when_current_venue_sample_is_small(self) -> None:
+        adjusted = runner.reliability_adjusted_period_weights(
+            {"passada": 0.15, "atual": 0.50, "recente": 0.35},
+            {
+                "passada": pd.DataFrame({"value": range(22)}),
+                "atual": pd.DataFrame({"value": range(5)}),
+                "recente": pd.DataFrame({"value": range(10)}),
+            },
+        )
+
+        self.assertAlmostEqual(sum(adjusted.values()), 1.0)
+        self.assertLess(adjusted["atual"], 0.50)
+        self.assertGreater(adjusted["recente"], adjusted["atual"])
+
+    def test_low_sample_requires_edge_and_positive_median_ev(self) -> None:
+        item = {"edge": 5.2, "_median_ev": 0.7, "_hist_warnings": ["LOW_SAMPLE_ATUAL"]}
+        self.assertEqual(
+            runner.wnba_robust_value_gate_reason(item, "total"),
+            "LOW_SAMPLE_MEDIAN_EV_BELOW_1.0",
+        )
+        item["_median_ev"] = 1.2
+        self.assertIsNone(runner.wnba_robust_value_gate_reason(item, "total"))
 
     def test_data_access_prefers_merged_and_applies_as_of_cutoff(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -499,6 +558,45 @@ class BasketballWnbaV11Tests(unittest.TestCase):
             simulation["calibrated_total_expected"],
         )
 
+    def test_wnba_strength_margin_adjustment_is_bounded_and_preserves_total(self) -> None:
+        module = FakeWnbaModule([
+            {"pontos_time": 82, "pontos_adversario": 78, "pace": 80, "off_rtg": 108, "def_rtg": 98},
+            {"pontos_time": 80, "pontos_adversario": 79, "pace": 80, "off_rtg": 107, "def_rtg": 99},
+        ])
+        row = pd.Series({"date": "2026-07-03", "time": "20:00"})
+        res = {
+            "net_c": 15.0,
+            "net_f": -10.0,
+            "pace_c": 80.0,
+            "pace_f": 80.0,
+            "ou": {162.5: {"odd_off_over": 1.91, "odd_off_under": 1.91}},
+        }
+
+        with patch.object(runner, 'WNBA_STRENGTH_MARGIN_WEIGHT', 0.20):
+            simulation = runner.wnba_simulate_matchup(module, row, res, "TOR", "PHO", lines=[162.5])
+
+        self.assertGreater(simulation["strength_margin_adjustment"], 0.0)
+        self.assertLessEqual(abs(simulation["strength_margin_adjustment"]), runner.WNBA_STRENGTH_MARGIN_MAX_ADJUSTMENT)
+        self.assertAlmostEqual(
+            simulation["home_expected"] + simulation["away_expected"],
+            simulation["calibrated_total_expected"],
+        )
+
+    def test_margin_calibration_is_identity_until_oos_config_is_active(self) -> None:
+        identity, metadata = runner.apply_wnba_margin_calibration(
+            5.0,
+            {"active": False, "status": "insufficient", "intercept": 4.0, "slope": 1.4},
+        )
+        calibrated, active_metadata = runner.apply_wnba_margin_calibration(
+            5.0,
+            {"active": True, "status": "active_oos_calibration", "intercept": 2.0, "slope": 1.2},
+        )
+
+        self.assertEqual(identity, 5.0)
+        self.assertEqual(metadata["slope"], 1.0)
+        self.assertEqual(calibrated, 8.0)
+        self.assertEqual(active_metadata["status"], "active_oos_calibration")
+
     def test_active_margin_context_replaces_legacy_delta(self) -> None:
         text = runner.replace_wnba_legacy_margin_context(
             "RPI A 0.5 x B 0.4; Delta pontos +17.66; Pace 80",
@@ -508,8 +606,45 @@ class BasketballWnbaV11Tests(unittest.TestCase):
         )
 
         self.assertNotIn("Delta pontos", text)
-        self.assertIn("Margem ativa V2.1 A +6.33", text)
-        self.assertIn("Pontos esperados V2.1 A 89.50 x B 83.17", text)
+        self.assertIn("Margem ativa V2.2 A +6.33", text)
+        self.assertIn("Pontos esperados V2.2 A 89.50 x B 83.17", text)
+
+    def test_active_technical_context_uses_only_v2_2_calculations(self) -> None:
+        item = {
+            "mercado": "Under Pontos",
+            "pick": "Under 181.5",
+            "probabilidade_final": 54.2,
+            "odd_ofertada": 1.91,
+            "odd_melhor": 1.91,
+            "odd_mediana": 1.83,
+            "edge": 3.52,
+            "_wnba_debug": {
+                "prob_hist": 57.1,
+                "prob_sim": 62.5,
+                "prob_no_vig": 50.4,
+                "total_modelo_pre_mercado": 176.4,
+                "total_ancora_mercado": 181.5,
+                "total_calibrado": 177.17,
+                "media_total_simulada": 177.29,
+                "jogos_considerados": 80,
+                "jogos_efetivos": 37.1,
+                "haircut_incerteza_pp": 6.0,
+                "ev_odd_mediana": -0.81,
+                "warnings": ["LOW_SAMPLE_ATUAL"],
+            },
+        }
+        context = runner.build_wnba_active_technical_context(
+            item,
+            {"rpi_c": 0.6, "rpi_f": 0.4, "net_c": 9.9, "net_f": -6.8, "pace_c": 80, "pace_f": 79},
+            "MIN",
+            "LAS",
+        )
+
+        self.assertIn(runner.BASKETBALL_WNBA_MODEL_VERSION, context)
+        self.assertIn("Total calibrado ativo: 177.17", context)
+        self.assertIn("bruta=80; efetiva=37.1", context)
+        self.assertNotIn("Delta pontos", context)
+        self.assertNotIn("Sim Win%", context)
 
     def test_long_csv_to_wide_preserves_median_best_and_bookmaker_columns(self) -> None:
         rows = [

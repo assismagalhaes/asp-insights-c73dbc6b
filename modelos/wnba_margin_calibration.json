@@ -1,0 +1,11 @@
+{
+  "active": false,
+  "status": "insufficient_walk_forward_sample",
+  "sample_size": 0,
+  "minimum_sample_size": 100,
+  "intercept": 0.0,
+  "slope": 1.0,
+  "strength_weight": 0.0,
+  "validation_mae_raw": null,
+  "validation_mae_calibrated": null
+}
