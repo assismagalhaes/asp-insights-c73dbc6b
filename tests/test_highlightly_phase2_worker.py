@@ -102,6 +102,22 @@ class HighlightlyPhaseTwoWorkerTests(unittest.TestCase):
         self.assertEqual(definitions[0]["status"], "needs_review")
         self.assertEqual(facts[0]["numeric_value"], 7.25)
 
+    def test_player_statistics_preserve_competition_and_club_scopes(self):
+        payload = [{
+            "id": 11,
+            "name": "Player",
+            "perCompetition": [{
+                "club": "Club A", "league": "League A", "season": "2026",
+                "type": "national league", "goals": 9, "assists": 4,
+            }],
+            "perClub": [{"club": "Club A", "gamesPlayed": 40, "goals": 15}],
+        }]
+        batch = normalize_football(payload, context("football.player_statistics", {"id": 11}))
+        scopes = {row["scope_key"] for row in batch.table_rows("sports_player_stats")}
+        self.assertIn("competition:league_a:2026:club_a", scopes)
+        self.assertIn("club:club_a", scopes)
+        self.assertFalse(any(".0." in metric["provider_key"] for metric in batch.table_rows("hl_metric_definitions")))
+
     def test_corrupted_standings_are_quarantined(self):
         standing = {
             "team": {"id": 1, "name": "Repeated"},
@@ -186,6 +202,18 @@ class HighlightlyPhaseTwoWorkerTests(unittest.TestCase):
         ])
         self.assertEqual(count, 6)
         self.assertEqual(repository.enqueue_job.call_count, 6)
+
+    def test_shadow_scope_nonce_allows_a_fresh_idempotent_fanout(self):
+        repository = Mock()
+        worker = HighlightlyWorker(Mock(), repository, worker_id="test-worker", enabled=True)
+        payload = {"id": 99, "homeTeam": {}, "awayTeam": {}, "league": {}}
+        worker._enqueue_football_match_fanout(payload, scope_nonce="shadow-a")
+        first_keys = [call.kwargs["dedupe_key"] for call in repository.enqueue_job.call_args_list]
+        repository.reset_mock()
+        worker._enqueue_football_match_fanout(payload, scope_nonce="shadow-b")
+        second_keys = [call.kwargs["dedupe_key"] for call in repository.enqueue_job.call_args_list]
+        self.assertEqual(len(first_keys), len(second_keys))
+        self.assertTrue(set(first_keys).isdisjoint(second_keys))
 
     def test_worker_persists_raw_before_any_canonical_upsert(self):
         repository = Mock()

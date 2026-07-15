@@ -278,6 +278,18 @@ class HighlightlyRepository:
         )
         return sum(int(row.get("requests_used") or 0) for row in rows)
 
+    def set_provider_enabled(self, provider_code: str, enabled: bool) -> dict[str, Any]:
+        rows = self.patch_rows(
+            "sports_providers",
+            {"enabled": bool(enabled)},
+            filters={"code": provider_code},
+        )
+        if len(rows) != 1 or bool(rows[0].get("enabled")) is not bool(enabled):
+            raise HighlightlyRepositoryError(
+                f"Could not set provider {provider_code} enabled={enabled}"
+            )
+        return rows[0]
+
     def upsert_odds_quote(self, quote_row: Mapping[str, Any]) -> dict[str, Any]:
         result = self.rpc("upsert_sports_odds_quote", quote_row)
         if isinstance(result, list):

@@ -530,10 +530,75 @@ def _normalize_player_stats(payload: Any, ctx: NormalizationContext) -> Normaliz
     batch = NormalizedBatch(received=len(records))
     for document in records:
         player_id = _ensure_player(batch, ctx, document)
-        excluded = {"id", "name", "fullName", "logo", "position", "team", "clubs", "competitions"}
+        excluded = {
+            "id", "name", "fullName", "logo", "position", "team",
+            "clubs", "competitions", "perClub", "perCompetition",
+        }
         for metric_key, value in flatten_metrics({key: value for key, value in document.items() if key not in excluded}):
             metric_id = add_metric_definition(batch, ctx, resource="player_statistics", provider_key=metric_key, value=value)
             batch.add("sports_player_stats", {"id": stable_id(player_id, metric_id, "career", "total", ""), "player_id": player_id, "metric_definition_id": metric_id, "scope_key": "career", "split_key": "total", **typed_value(value), "source_raw_object_id": ctx.raw_object_id, "collected_at": ctx.captured_at})
+
+        for competition_stats in document.get("perCompetition", []):
+            if not isinstance(competition_stats, Mapping):
+                continue
+            club_name = str(competition_stats.get("club") or "unknown")
+            league_name = str(competition_stats.get("league") or "unknown")
+            season_label = str(competition_stats.get("season") or "unknown")
+            scope = f"competition:{slug(league_name)}:{slug(season_label)}:{slug(club_name)}"
+            for metric_key, value in competition_stats.items():
+                if metric_key in {"club", "league", "season", "type"} or value is None:
+                    continue
+                metric_id = add_metric_definition(
+                    batch,
+                    ctx,
+                    resource="player_statistics",
+                    group_name="perCompetition",
+                    provider_key=str(metric_key),
+                    value=value,
+                )
+                batch.add(
+                    "sports_player_stats",
+                    {
+                        "id": stable_id(player_id, metric_id, scope, "total", ""),
+                        "player_id": player_id,
+                        "metric_definition_id": metric_id,
+                        "scope_key": scope,
+                        "split_key": "total",
+                        **typed_value(value),
+                        "source_raw_object_id": ctx.raw_object_id,
+                        "collected_at": ctx.captured_at,
+                    },
+                )
+
+        for club_stats in document.get("perClub", []):
+            if not isinstance(club_stats, Mapping):
+                continue
+            club_name = str(club_stats.get("club") or "unknown")
+            scope = f"club:{slug(club_name)}"
+            for metric_key, value in club_stats.items():
+                if metric_key == "club" or value is None:
+                    continue
+                metric_id = add_metric_definition(
+                    batch,
+                    ctx,
+                    resource="player_statistics",
+                    group_name="perClub",
+                    provider_key=str(metric_key),
+                    value=value,
+                )
+                batch.add(
+                    "sports_player_stats",
+                    {
+                        "id": stable_id(player_id, metric_id, scope, "total", ""),
+                        "player_id": player_id,
+                        "metric_definition_id": metric_id,
+                        "scope_key": scope,
+                        "split_key": "total",
+                        **typed_value(value),
+                        "source_raw_object_id": ctx.raw_object_id,
+                        "collected_at": ctx.captured_at,
+                    },
+                )
     return batch
 
 

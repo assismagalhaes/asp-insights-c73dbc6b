@@ -217,7 +217,7 @@ class HighlightlyWorker:
             priority=operation.priority,
         )
 
-    def _enqueue_football_match_fanout(self, payload: Any) -> int:
+    def _enqueue_football_match_fanout(self, payload: Any, *, scope_nonce: str = "") -> int:
         matches = payload_items(payload)
         if len(matches) > 10:
             raise ValueError("Shadow fan-out is limited to 10 matches per parent job")
@@ -226,16 +226,17 @@ class HighlightlyWorker:
             match_id = match.get("id")
             if match_id is None:
                 continue
+            match_scope = f"match:{match_id}:{scope_nonce}" if scope_nonce else f"match:{match_id}"
             detail_jobs = (
                 ("football.FootballStatisticsController_getStatistics", {"matchId": match_id}),
                 ("football.FootballLineupsController_getLineups", {"matchId": match_id}),
                 ("football.FootballLiveEventsController_getLiveEvents", {"id": match_id}),
-                ("football.FootballPlayerBoxScoreController_getPlayerBoxScores", {"matchId": match_id, "_fanout_players": True}),
+                ("football.FootballPlayerBoxScoreController_getPlayerBoxScores", {"matchId": match_id, "_fanout_players": True, "_fanout_scope": scope_nonce}),
                 ("football.HighlightsController_getHighlights", {"matchId": match_id, "limit": 40, "offset": 0}),
                 ("football.FootballOddsController_getOddsV2", {"matchId": match_id, "limit": 5, "offset": 0}),
             )
             for endpoint_key, params in detail_jobs:
-                self._enqueue_operation(endpoint_key, params, scope=f"match:{match_id}")
+                self._enqueue_operation(endpoint_key, params, scope=match_scope)
                 count += 1
 
             home = match.get("homeTeam") if isinstance(match.get("homeTeam"), Mapping) else {}
@@ -244,7 +245,7 @@ class HighlightlyWorker:
                 self._enqueue_operation(
                     "football.FootballHead2HeadController_getHead2HeadData",
                     {"teamIdOne": home["id"], "teamIdTwo": away["id"]},
-                    scope=f"match:{match_id}",
+                    scope=match_scope,
                 )
                 count += 1
             for team in (home, away):
@@ -253,7 +254,7 @@ class HighlightlyWorker:
                 self._enqueue_operation(
                     "football.FootballLastFiveGamesController_getLastFiveGames",
                     {"teamId": team["id"]},
-                    scope=f"match:{match_id}",
+                    scope=match_scope,
                 )
                 count += 1
                 match_date = str(match.get("date") or "")[:10]
@@ -264,7 +265,7 @@ class HighlightlyWorker:
                 self._enqueue_operation(
                     "football.TeamsController_teamStatistics",
                     {"id": team["id"], "fromDate": history_from},
-                    scope=f"match:{match_id}",
+                    scope=match_scope,
                 )
                 count += 1
             league = match.get("league") if isinstance(match.get("league"), Mapping) else {}
@@ -272,12 +273,12 @@ class HighlightlyWorker:
                 self._enqueue_operation(
                     "football.FootballStandingsController_getStandings",
                     {"leagueId": league["id"], "season": league["season"]},
-                    scope=f"match:{match_id}",
+                    scope=match_scope,
                 )
                 count += 1
         return count
 
-    def _enqueue_football_player_fanout(self, payload: Any) -> int:
+    def _enqueue_football_player_fanout(self, payload: Any, *, scope_nonce: str = "") -> int:
         player_ids: set[Any] = set()
         for team_block in payload_items(payload):
             for player in team_block.get("players", []):
@@ -287,11 +288,12 @@ class HighlightlyWorker:
             raise ValueError("Player fan-out is limited to 100 players per box-score job")
         count = 0
         for player_id in sorted(player_ids, key=str):
+            player_scope = f"player:{player_id}:{scope_nonce}" if scope_nonce else f"player:{player_id}"
             for endpoint_key in (
                 "football.PlayersController_getPlayerSummaryById",
                 "football.PlayersController_getPlayerStatisticsById",
             ):
-                self._enqueue_operation(endpoint_key, {"id": player_id}, scope=f"player:{player_id}")
+                self._enqueue_operation(endpoint_key, {"id": player_id}, scope=player_scope)
                 count += 1
         return count
 
@@ -439,9 +441,15 @@ class HighlightlyWorker:
             if not reprocess_id:
                 self._enqueue_next_page(payload, operation=operation, request_params=request_params)
                 if operation.normalizer == "football.matches" and _truthy(str(request_params.get("_fanout"))):
-                    self._enqueue_football_match_fanout(payload)
+                    self._enqueue_football_match_fanout(
+                        payload,
+                        scope_nonce=str(request_params.get("_fanout_scope") or ""),
+                    )
                 if operation.normalizer == "football.box_scores" and _truthy(str(request_params.get("_fanout_players"))):
-                    self._enqueue_football_player_fanout(payload)
+                    self._enqueue_football_player_fanout(
+                        payload,
+                        scope_nonce=str(request_params.get("_fanout_scope") or ""),
+                    )
 
             duration = int((time.monotonic() - started) * 1000)
             run_status = "partial" if batch.rejected or any(row["severity"] == "critical" for row in quality_rows) else "succeeded"

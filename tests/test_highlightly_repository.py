@@ -224,6 +224,16 @@ class HighlightlyRepositoryTests(unittest.TestCase):
         self.assertTrue(url.endswith("/rest/v1/rpc/upsert_sports_odds_quotes"))
         self.assertEqual(len(kwargs["json"]["p_quotes"]), 2)
 
+    def test_provider_kill_switch_requires_exactly_one_confirmed_row(self):
+        session = _Session([_Response(200, [{"code": "highlightly", "enabled": True}])])
+        repository = HighlightlyRepository("https://example.supabase.co", "service-secret", session=session)
+        row = repository.set_provider_enabled("highlightly", True)
+        self.assertTrue(row["enabled"])
+        method, url, kwargs = session.calls[0]
+        self.assertEqual(method, "PATCH")
+        self.assertIn("code=eq.highlightly", url)
+        self.assertEqual(kwargs["json"], {"enabled": True})
+
 
 if __name__ == "__main__":
     unittest.main()

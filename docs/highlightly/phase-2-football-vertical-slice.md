@@ -1,7 +1,7 @@
 # Fase 2 — vertical slice Football
 
 Data: 15/07/2026
-Estado: implementação e validação local concluídas; migrations ainda não aplicadas no banco ativo
+Estado: migrations aplicadas e validadas no banco ativo; shadow operacional pendente
 
 ## Resultado
 
@@ -80,15 +80,30 @@ A RPC singular usa advisory lock transacional. A RPC em lote limita cada chamada
 
 ## Shadow de uma partida
 
-Depois de aplicar as migrations e executar o smoke, enfileirar uma partida sem ativar coleta:
+O executor recomendado realiza um shadow limitado, exige confirmação explícita e pode descobrir automaticamente uma partida a partir da data informada:
 
 ```powershell
-python -m scripts.enqueue_highlightly_football_match 123456 --fanout
+python -m scripts.run_highlightly_football_shadow `
+  --date 2026-07-15 `
+  --max-jobs 100 `
+  --confirm-bounded-shadow
 ```
 
-O fan-out cria jobs para odds, estatísticas, escalações, eventos, box score, highlights, confronto direto, últimos cinco jogos, estatísticas dos dois times e standings da competição.
+Para testar um ID conhecido, substituir `--date` por `--match-id 123456`.
 
-Para processar o shadow, a mudança precisa ser deliberada e temporária:
+O executor:
+
+- recusa iniciar se o provider já estiver ligado ou se houver jobs pendentes/running;
+- preserva também o payload usado na descoberta automática;
+- liga `sports_providers.enabled` apenas dentro do processo;
+- cria um escopo de dedupe exclusivo para o shadow;
+- processa no máximo o limite solicitado;
+- cria fan-out para odds, estatísticas, escalações, eventos, box score, jogadores, highlights, confronto direto, últimos cinco jogos, estatísticas dos dois times e standings;
+- restaura `sports_providers.enabled=false` em bloco `finally`, inclusive após falha;
+- mantém `HIGHLIGHTLY_ANALYSIS_ENABLED=false` no ambiente normal;
+- imprime um relatório JSON sem credenciais.
+
+O caminho manual continua disponível, mas não é o recomendado:
 
 1. habilitar `sports_providers.enabled=true` para `highlightly`;
 2. definir `HIGHLIGHTLY_ANALYSIS_ENABLED=true` somente no processo do worker;
@@ -133,7 +148,7 @@ PASS 6 migrations em sequência no PGlite 0.3.14
 PASS odds idempotency: current=1, history=2, opening -> price
 PASS Football daily list e match detail
 PASS Phase 2 transactional smoke
-PASS 423 testes Python do repositório
+PASS 429 testes Python do repositório
 PASS TypeScript typecheck
 ```
 
