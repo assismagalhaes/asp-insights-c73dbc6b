@@ -426,9 +426,10 @@ Aceite:
 
 - todas as métricas retornadas ficam pesquisáveis por grupo;
 - starter e lineup têm status de confirmação;
-- Moneyline, total e run line exibem mediana/movimento.
+- Moneyline, total e run line exibem odds e movimento;
+- a mediana só é publicada quando a mesma seleção/linha possui 5–7 bookmakers preferidos.
 
-Estado em 15/07/2026: implementação local concluída e validada; migrations e shadow operacional pendentes. Ver `docs/highlightly/phase-3-mlb-vertical-slice.md`.
+Estado em 15/07/2026: implementação, migrations e validação operacional concluídas. Dois shadows reais confirmaram 171 métricas por equipe, lineups/starting pitchers, eventos, box scores, histórico de odds e consenso de 5–6 fontes para Moneyline e Totais. A API forneceu no máximo quatro fontes preferidas por Run Line nas 15 partidas regulares auditadas; por isso o sistema preservou as odds individuais e corretamente não publicou uma mediana abaixo do mínimo aprovado. Provider e feature flag permanecem desligados; backfill ainda não foi iniciado. Ver `docs/highlightly/phase-3-mlb-vertical-slice.md`.
 
 ### Fase 4 — WNBA
 

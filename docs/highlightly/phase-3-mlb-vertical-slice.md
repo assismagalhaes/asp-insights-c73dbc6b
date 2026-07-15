@@ -1,7 +1,7 @@
 # Fase 3 — vertical slice MLB
 
 Data: 15/07/2026
-Estado: implementação e validação local concluídas; migrations e shadow operacional pendentes no banco ativo
+Estado: implementação, migrations e validação operacional concluídas no banco ativo; provider mantido desligado
 
 ## Resultado
 
@@ -138,15 +138,57 @@ PASS Phase 3 transactional smoke
 PASS 78 testes Python Highlightly
 ```
 
-## Aceite operacional pendente
+## Evidência operacional
 
-A Fase 3 só deve ser marcada como operacionalmente concluída depois de:
+As migrations da Fase 3 foram aplicadas no banco ativo e o smoke transacional passou sem exceções. Em seguida, dois shadows isolados foram executados na VM com restauração automática de `sports_providers.enabled=false`.
 
-1. aplicar as duas migrations no banco ativo;
-2. confirmar provider desligado e privilégios esperados;
-3. executar um shadow MLB limitado;
-4. verificar que as métricas retornadas, lineups, box scores e odds não geraram erros críticos;
-5. confirmar que o provider foi restaurado para `false`;
-6. iniciar backfill progressivo apenas após o shadow aprovado.
+### All-Star Game — contrato completo e drenagem da fila
 
-Até esse gate, os novos dados não alimentam prognósticos, bankroll ou publicação.
+- Highlightly match `1545955`;
+- canonical match `fc8feaeb-7ed1-5c1e-94b1-c896cd7adf07`;
+- 100 jobs iniciais bem-sucedidos e 34 jobs de jogadores drenados pelo escopo `mlb-shadow-20260715T173457Z-c20a80ae`;
+- fila final: zero `pending`, `retry` ou `running`;
+- 342 estatísticas de equipe, 18 inning scores, 547 eventos, 631 fatos de box score e 192 odds atuais/históricas;
+- duas escalações e dois starting pitchers confirmados;
+- 12 warnings `SCHEMA_FINGERPRINT_CHANGED`, todos explicados pela diferença esperada entre payloads pré-jogo e pós-jogo, sem erro ou corrupção.
+
+### Dodgers × Diamondbacks — partida regular concluída
+
+- Highlightly match `1543179`;
+- canonical match `2746e4ff-6780-5365-845a-07947ef045d1`;
+- escopo `mlb-shadow-20260715T180130Z-0e5eac4e`;
+- 75 jobs bem-sucedidos e encerramento por fila ociosa;
+- fila final vazia e provider restaurado para `false`;
+- Dodgers: 171 métricas; Diamondbacks: 171 métricas;
+- 18 inning scores, 566 eventos, 328 fatos de box score, duas escalações confirmadas e 32 jogadores de lineup;
+- starting pitchers confirmados: Emmet Sheehan e Mitch Bratt;
+- 478 odds atuais e 478 aberturas no histórico;
+- oito consensos válidos com 5–6 bookmakers: Moneyline e Totais 8.5, 9.5 e 10.5;
+- um warning `SCHEMA_FINGERPRINT_CHANGED` no detalhe da partida, sem erro crítico.
+
+## Cobertura real de Run Line
+
+Uma varredura somente leitura das 15 partidas MLB de 12/07/2026 mostrou cobertura máxima de quatro bookmakers preferidos para uma mesma seleção/linha de Run Line: bet365, Ladbrokes, Stake.com e William Hill. Portanto, a ausência de mediana de Run Line não é falha de ingestão ou agrupamento.
+
+A regra aprovada continua sendo 5–7 bookmakers. O sistema não reduz silenciosamente o mínimo e não fabrica consenso com quatro fontes. Nessa situação, o read model entrega:
+
+- todas as odds individuais de Run Line;
+- quantidade e identidade das fontes disponíveis;
+- histórico de abertura e mudanças futuras;
+- `oddsConsensus` vazio para a linha sem cinco fontes.
+
+Moneyline e Totais atingiram o mínimo e tiveram mediana, melhor odd, mínima e IQR persistidos. Run Line passará a ter mediana automaticamente quando a Highlightly fornecer pelo menos cinco bookmakers preferidos para a mesma linha.
+
+## Aceite operacional
+
+- PASS migrations e smoke no banco ativo;
+- PASS 171 métricas por equipe pesquisáveis por grupo;
+- PASS lineups e starting pitchers com status confirmado;
+- PASS eventos, box scores, jogadores, highlights e inning scores;
+- PASS Moneyline e Totais com consenso real de 5–6 bookmakers;
+- PASS Run Line com odds individuais e histórico; consenso corretamente indisponível abaixo de cinco fontes;
+- PASS fila isolada e completamente drenada;
+- PASS provider restaurado para `false` e `HIGHLIGHTLY_ANALYSIS_ENABLED=false` mantido;
+- PASS nenhum erro de qualidade crítico.
+
+A Fase 3 está operacionalmente validada. Backfill progressivo, alimentação de prognósticos, bankroll e publicação continuam desligados até autorização específica da etapa de ativação.
