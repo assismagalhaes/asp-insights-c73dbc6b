@@ -315,8 +315,23 @@ class HighlightlyRepositoryTests(unittest.TestCase):
         method, url, kwargs = session.calls[0]
         self.assertEqual(method, "POST")
         self.assertTrue(url.endswith("/rest/v1/rpc/refresh_sports_odds_consensus"))
-        self.assertEqual(kwargs["json"]["p_min_bookmakers"], 5)
+        self.assertEqual(kwargs["json"]["p_min_bookmakers"], 2)
         self.assertEqual(kwargs["json"]["p_max_bookmakers"], 7)
+
+    def test_refresh_odds_consensus_rejects_bookmaker_bounds_outside_two_to_seven(self):
+        session = _Session([])
+        repository = HighlightlyRepository("https://example.supabase.co", "service-secret", session=session)
+        with self.assertRaisesRegex(ValueError, "min_bookmakers"):
+            repository.refresh_odds_consensus(
+                "30000000-0000-4000-8000-000000000006",
+                min_bookmakers=1,
+            )
+        with self.assertRaisesRegex(ValueError, "max_bookmakers"):
+            repository.refresh_odds_consensus(
+                "30000000-0000-4000-8000-000000000006",
+                max_bookmakers=8,
+            )
+        self.assertEqual(session.calls, [])
 
     def test_provider_kill_switch_requires_exactly_one_confirmed_row(self):
         session = _Session([_Response(200, [{"code": "highlightly", "enabled": True}])])

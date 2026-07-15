@@ -4,7 +4,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CONSENSUS = ROOT / "supabase" / "migrations" / "20260715100000_create_highlightly_odds_consensus_refresh.sql"
+CONSENSUS = ROOT / "supabase" / "migrations" / "20260715190000_lower_highlightly_consensus_minimum.sql"
 READ_MODELS = ROOT / "supabase" / "migrations" / "20260715101000_create_highlightly_baseball_read_models.sql"
 
 
@@ -13,9 +13,11 @@ class HighlightlyPhaseThreeContractTests(unittest.TestCase):
         self.consensus = CONSENSUS.read_text(encoding="utf-8")
         self.read_models = READ_MODELS.read_text(encoding="utf-8")
 
-    def test_consensus_uses_five_to_seven_preferred_bookmakers(self):
+    def test_consensus_uses_two_to_seven_preferred_bookmakers(self):
         self.assertIn("bookmaker.is_preferred", self.consensus)
-        self.assertIn("p_max_bookmakers < 5 OR p_max_bookmakers > 7", self.consensus)
+        self.assertIn("p_min_bookmakers integer DEFAULT 2", self.consensus)
+        self.assertIn("p_max_bookmakers < 2 OR p_max_bookmakers > 7", self.consensus)
+        self.assertIn("p_min_bookmakers < 2 OR p_min_bookmakers > p_max_bookmakers", self.consensus)
         self.assertIn("percentile_cont(0.5)", self.consensus)
         self.assertIn("percentile_cont(0.75)", self.consensus)
         self.assertIn("percentile_cont(0.25)", self.consensus)

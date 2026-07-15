@@ -447,9 +447,13 @@ class HighlightlyRepository:
         match_id: str,
         *,
         snapshot_at: str | None = None,
-        min_bookmakers: int = 5,
+        min_bookmakers: int = 2,
         max_bookmakers: int = 7,
     ) -> int:
+        if max_bookmakers < 2 or max_bookmakers > 7:
+            raise ValueError("max_bookmakers must be between 2 and 7")
+        if min_bookmakers < 2 or min_bookmakers > max_bookmakers:
+            raise ValueError("min_bookmakers must be between 2 and max_bookmakers")
         result = self.rpc(
             "refresh_sports_odds_consensus",
             {

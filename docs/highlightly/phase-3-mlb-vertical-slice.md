@@ -21,7 +21,7 @@ Aplicar depois das migrations da Fase 2, nesta ordem:
 1. `20260715100000_create_highlightly_odds_consensus_refresh.sql`;
 2. `20260715101000_create_highlightly_baseball_read_models.sql`.
 
-A primeira migration cria a RPC service-only `refresh_sports_odds_consensus`. Ela considera apenas bookmakers preferidos e ativos, usa no máximo sete e exige cinco por padrão. A seleção segue prioridade determinística e calcula mediana, melhor odd, mínima e IQR.
+A RPC service-only `refresh_sports_odds_consensus` considera apenas bookmakers preferidos e ativos, usa no máximo sete e exige duas fontes por padrão. A seleção segue prioridade determinística e calcula mediana, melhor odd, mínima e IQR.
 
 A segunda migration cria:
 
@@ -84,7 +84,7 @@ Após persistir um payload de odds, o worker cria um snapshot de consenso por pa
 10. Novibet;
 11. Parimatch.
 
-Somente os sete primeiros disponíveis entram no snapshot. Por padrão, mercados com menos de cinco fontes não recebem mediana; as odds individuais permanecem disponíveis e a ausência de consenso fica explícita.
+Somente os sete primeiros disponíveis entram no snapshot. Mercados com duas ou mais fontes recebem mediana; com uma única fonte, a odd individual permanece disponível e a ausência de consenso fica explícita.
 
 ## Fan-out de uma partida
 
@@ -166,18 +166,18 @@ As migrations da Fase 3 foram aplicadas no banco ativo e o smoke transacional pa
 - oito consensos válidos com 5–6 bookmakers: Moneyline e Totais 8.5, 9.5 e 10.5;
 - um warning `SCHEMA_FINGERPRINT_CHANGED` no detalhe da partida, sem erro crítico.
 
-## Cobertura real de Run Line
+## Cobertura real de Run Line e regra atualizada
 
-Uma varredura somente leitura das 15 partidas MLB de 12/07/2026 mostrou cobertura máxima de quatro bookmakers preferidos para uma mesma seleção/linha de Run Line: bet365, Ladbrokes, Stake.com e William Hill. Portanto, a ausência de mediana de Run Line não é falha de ingestão ou agrupamento.
+Uma varredura somente leitura das 15 partidas MLB de 12/07/2026 mostrou cobertura máxima de quatro bookmakers preferidos para uma mesma seleção/linha de Run Line: bet365, Ladbrokes, Stake.com e William Hill. Isso confirmou que a cobertura varia por mercado e partida.
 
-A regra aprovada continua sendo 5–7 bookmakers. O sistema não reduz silenciosamente o mínimo e não fabrica consenso com quatro fontes. Nessa situação, o read model entrega:
+A regra global foi atualizada para 2–7 bookmakers. Com duas, três ou quatro fontes, o sistema calcula a mediana normalmente e mantém `bookmaker_count` e `bookmaker_ids` para que a interface e os modelos conheçam a cobertura. O read model entrega:
 
 - todas as odds individuais de Run Line;
 - quantidade e identidade das fontes disponíveis;
 - histórico de abertura e mudanças futuras;
-- `oddsConsensus` vazio para a linha sem cinco fontes.
+- `oddsConsensus` vazio apenas quando existe menos de duas fontes para a mesma seleção/linha.
 
-Moneyline e Totais atingiram o mínimo e tiveram mediana, melhor odd, mínima e IQR persistidos. Run Line passará a ter mediana automaticamente quando a Highlightly fornecer pelo menos cinco bookmakers preferidos para a mesma linha.
+Moneyline, Totais e Run Line recebem mediana, melhor odd, mínima e IQR quando houver de duas a sete fontes. Quanto maior `bookmaker_count`, maior a cobertura observada; nenhum preço é inventado quando existe somente uma fonte.
 
 ## Aceite operacional
 
@@ -186,7 +186,7 @@ Moneyline e Totais atingiram o mínimo e tiveram mediana, melhor odd, mínima e 
 - PASS lineups e starting pitchers com status confirmado;
 - PASS eventos, box scores, jogadores, highlights e inning scores;
 - PASS Moneyline e Totais com consenso real de 5–6 bookmakers;
-- PASS Run Line com odds individuais e histórico; consenso corretamente indisponível abaixo de cinco fontes;
+- PASS regra global de consenso atualizada para 2–7 bookmakers, incluindo Run Line;
 - PASS fila isolada e completamente drenada;
 - PASS provider restaurado para `false` e `HIGHLIGHTLY_ANALYSIS_ENABLED=false` mantido;
 - PASS nenhum erro de qualidade crítico.
