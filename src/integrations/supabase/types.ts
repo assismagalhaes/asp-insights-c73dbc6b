@@ -2448,6 +2448,321 @@ export type Database = {
         }
         Relationships: []
       }
+      sports_highlights: {
+        Row: {
+          category: string | null
+          channel_name: string | null
+          content_url: string
+          created_at: string
+          description: string | null
+          embed_url: string | null
+          external_id: string
+          geo_restrictions: Json
+          highlight_type: string | null
+          id: string
+          match_id: string | null
+          metadata: Json
+          preview_url: string | null
+          provider_id: string
+          source_name: string | null
+          source_raw_object_id: string | null
+          sport_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          channel_name?: string | null
+          content_url: string
+          created_at?: string
+          description?: string | null
+          embed_url?: string | null
+          external_id: string
+          geo_restrictions?: Json
+          highlight_type?: string | null
+          id?: string
+          match_id?: string | null
+          metadata?: Json
+          preview_url?: string | null
+          provider_id: string
+          source_name?: string | null
+          source_raw_object_id?: string | null
+          sport_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          channel_name?: string | null
+          content_url?: string
+          created_at?: string
+          description?: string | null
+          embed_url?: string | null
+          external_id?: string
+          geo_restrictions?: Json
+          highlight_type?: string | null
+          id?: string
+          match_id?: string | null
+          metadata?: Json
+          preview_url?: string | null
+          provider_id?: string
+          source_name?: string | null
+          source_raw_object_id?: string | null
+          sport_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_highlights_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_highlights_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "sports_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_highlights_source_raw_object_id_fkey"
+            columns: ["source_raw_object_id"]
+            isOneToOne: false
+            referencedRelation: "hl_raw_objects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_highlights_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sports_lineup_players: {
+        Row: {
+          created_at: string
+          formation_order: number | null
+          formation_row: number | null
+          id: string
+          lineup_id: string
+          metadata: Json
+          player_id: string
+          position: string | null
+          role: string
+          shirt_number: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          formation_order?: number | null
+          formation_row?: number | null
+          id?: string
+          lineup_id: string
+          metadata?: Json
+          player_id: string
+          position?: string | null
+          role?: string
+          shirt_number?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          formation_order?: number | null
+          formation_row?: number | null
+          id?: string
+          lineup_id?: string
+          metadata?: Json
+          player_id?: string
+          position?: string | null
+          role?: string
+          shirt_number?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_lineup_players_lineup_id_fkey"
+            columns: ["lineup_id"]
+            isOneToOne: false
+            referencedRelation: "sports_lineups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_lineup_players_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "sports_players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sports_lineups: {
+        Row: {
+          coach_name: string | null
+          created_at: string
+          formation: string | null
+          id: string
+          is_confirmed: boolean
+          match_id: string
+          metadata: Json
+          published_at: string | null
+          source_raw_object_id: string | null
+          team_id: string
+          updated_at: string
+          version_key: string
+        }
+        Insert: {
+          coach_name?: string | null
+          created_at?: string
+          formation?: string | null
+          id?: string
+          is_confirmed?: boolean
+          match_id: string
+          metadata?: Json
+          published_at?: string | null
+          source_raw_object_id?: string | null
+          team_id: string
+          updated_at?: string
+          version_key: string
+        }
+        Update: {
+          coach_name?: string | null
+          created_at?: string
+          formation?: string | null
+          id?: string
+          is_confirmed?: boolean
+          match_id?: string
+          metadata?: Json
+          published_at?: string | null
+          source_raw_object_id?: string | null
+          team_id?: string
+          updated_at?: string
+          version_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_lineups_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_lineups_source_raw_object_id_fkey"
+            columns: ["source_raw_object_id"]
+            isOneToOne: false
+            referencedRelation: "hl_raw_objects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_lineups_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sports_match_events: {
+        Row: {
+          clock_display: string | null
+          collected_at: string
+          created_at: string
+          elapsed_seconds: number | null
+          event_type: string
+          id: string
+          match_id: string
+          metadata: Json
+          occurred_at: string | null
+          period_key: string
+          player_id: string | null
+          related_player_id: string | null
+          score_data: Json
+          sequence_key: string
+          source_raw_object_id: string | null
+          team_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          clock_display?: string | null
+          collected_at?: string
+          created_at?: string
+          elapsed_seconds?: number | null
+          event_type: string
+          id?: string
+          match_id: string
+          metadata?: Json
+          occurred_at?: string | null
+          period_key?: string
+          player_id?: string | null
+          related_player_id?: string | null
+          score_data?: Json
+          sequence_key: string
+          source_raw_object_id?: string | null
+          team_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          clock_display?: string | null
+          collected_at?: string
+          created_at?: string
+          elapsed_seconds?: number | null
+          event_type?: string
+          id?: string
+          match_id?: string
+          metadata?: Json
+          occurred_at?: string | null
+          period_key?: string
+          player_id?: string | null
+          related_player_id?: string | null
+          score_data?: Json
+          sequence_key?: string
+          source_raw_object_id?: string | null
+          team_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_match_events_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_match_events_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "sports_players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_match_events_related_player_id_fkey"
+            columns: ["related_player_id"]
+            isOneToOne: false
+            referencedRelation: "sports_players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_match_events_source_raw_object_id_fkey"
+            columns: ["source_raw_object_id"]
+            isOneToOne: false
+            referencedRelation: "hl_raw_objects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_match_events_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sports_match_participants: {
         Row: {
           created_at: string
@@ -2547,6 +2862,86 @@ export type Database = {
           },
         ]
       }
+      sports_match_team_stats: {
+        Row: {
+          boolean_value: boolean | null
+          collected_at: string
+          created_at: string
+          id: string
+          json_value: Json | null
+          match_id: string
+          metric_definition_id: string
+          numeric_value: number | null
+          period_key: string
+          source_raw_object_id: string | null
+          split_key: string
+          team_id: string
+          text_value: string | null
+          updated_at: string
+        }
+        Insert: {
+          boolean_value?: boolean | null
+          collected_at?: string
+          created_at?: string
+          id?: string
+          json_value?: Json | null
+          match_id: string
+          metric_definition_id: string
+          numeric_value?: number | null
+          period_key?: string
+          source_raw_object_id?: string | null
+          split_key?: string
+          team_id: string
+          text_value?: string | null
+          updated_at?: string
+        }
+        Update: {
+          boolean_value?: boolean | null
+          collected_at?: string
+          created_at?: string
+          id?: string
+          json_value?: Json | null
+          match_id?: string
+          metric_definition_id?: string
+          numeric_value?: number | null
+          period_key?: string
+          source_raw_object_id?: string | null
+          split_key?: string
+          team_id?: string
+          text_value?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_match_team_stats_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_match_team_stats_metric_definition_id_fkey"
+            columns: ["metric_definition_id"]
+            isOneToOne: false
+            referencedRelation: "hl_metric_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_match_team_stats_source_raw_object_id_fkey"
+            columns: ["source_raw_object_id"]
+            isOneToOne: false
+            referencedRelation: "hl_raw_objects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_match_team_stats_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sports_matches: {
         Row: {
           competition_id: string | null
@@ -2619,6 +3014,196 @@ export type Database = {
             columns: ["sport_id"]
             isOneToOne: false
             referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sports_player_box_scores: {
+        Row: {
+          boolean_value: boolean | null
+          collected_at: string
+          created_at: string
+          id: string
+          json_value: Json | null
+          match_id: string
+          metric_definition_id: string
+          numeric_value: number | null
+          period_key: string
+          player_id: string
+          source_raw_object_id: string | null
+          team_id: string
+          text_value: string | null
+          updated_at: string
+        }
+        Insert: {
+          boolean_value?: boolean | null
+          collected_at?: string
+          created_at?: string
+          id?: string
+          json_value?: Json | null
+          match_id: string
+          metric_definition_id: string
+          numeric_value?: number | null
+          period_key?: string
+          player_id: string
+          source_raw_object_id?: string | null
+          team_id: string
+          text_value?: string | null
+          updated_at?: string
+        }
+        Update: {
+          boolean_value?: boolean | null
+          collected_at?: string
+          created_at?: string
+          id?: string
+          json_value?: Json | null
+          match_id?: string
+          metric_definition_id?: string
+          numeric_value?: number | null
+          period_key?: string
+          player_id?: string
+          source_raw_object_id?: string | null
+          team_id?: string
+          text_value?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_player_box_scores_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_player_box_scores_metric_definition_id_fkey"
+            columns: ["metric_definition_id"]
+            isOneToOne: false
+            referencedRelation: "hl_metric_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_player_box_scores_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "sports_players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_player_box_scores_source_raw_object_id_fkey"
+            columns: ["source_raw_object_id"]
+            isOneToOne: false
+            referencedRelation: "hl_raw_objects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_player_box_scores_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sports_player_stats: {
+        Row: {
+          boolean_value: boolean | null
+          collected_at: string
+          competition_id: string | null
+          created_at: string
+          id: string
+          json_value: Json | null
+          metric_definition_id: string
+          numeric_value: number | null
+          period_key: string
+          player_id: string
+          scope_key: string
+          season_id: string | null
+          source_raw_object_id: string | null
+          split_key: string
+          team_id: string | null
+          text_value: string | null
+          updated_at: string
+        }
+        Insert: {
+          boolean_value?: boolean | null
+          collected_at?: string
+          competition_id?: string | null
+          created_at?: string
+          id?: string
+          json_value?: Json | null
+          metric_definition_id: string
+          numeric_value?: number | null
+          period_key?: string
+          player_id: string
+          scope_key: string
+          season_id?: string | null
+          source_raw_object_id?: string | null
+          split_key?: string
+          team_id?: string | null
+          text_value?: string | null
+          updated_at?: string
+        }
+        Update: {
+          boolean_value?: boolean | null
+          collected_at?: string
+          competition_id?: string | null
+          created_at?: string
+          id?: string
+          json_value?: Json | null
+          metric_definition_id?: string
+          numeric_value?: number | null
+          period_key?: string
+          player_id?: string
+          scope_key?: string
+          season_id?: string | null
+          source_raw_object_id?: string | null
+          split_key?: string
+          team_id?: string | null
+          text_value?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_player_stats_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "sports_competitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_player_stats_metric_definition_id_fkey"
+            columns: ["metric_definition_id"]
+            isOneToOne: false
+            referencedRelation: "hl_metric_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_player_stats_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "sports_players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_player_stats_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "sports_seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_player_stats_source_raw_object_id_fkey"
+            columns: ["source_raw_object_id"]
+            isOneToOne: false
+            referencedRelation: "hl_raw_objects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_player_stats_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_teams"
             referencedColumns: ["id"]
           },
         ]
@@ -2822,6 +3407,206 @@ export type Database = {
             columns: ["competition_id"]
             isOneToOne: false
             referencedRelation: "sports_competitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sports_standings_snapshots: {
+        Row: {
+          competition_id: string
+          conceded: number | null
+          created_at: string
+          draws: number | null
+          form: string | null
+          goal_difference: number | null
+          group_key: string
+          id: string
+          losses: number | null
+          metadata: Json
+          played: number | null
+          points: number
+          quality_status: string
+          rank: number
+          scored: number | null
+          season_id: string
+          snapshot_at: string
+          source_raw_object_id: string | null
+          split_data: Json
+          team_id: string
+          wins: number | null
+        }
+        Insert: {
+          competition_id: string
+          conceded?: number | null
+          created_at?: string
+          draws?: number | null
+          form?: string | null
+          goal_difference?: number | null
+          group_key?: string
+          id?: string
+          losses?: number | null
+          metadata?: Json
+          played?: number | null
+          points?: number
+          quality_status?: string
+          rank: number
+          scored?: number | null
+          season_id: string
+          snapshot_at: string
+          source_raw_object_id?: string | null
+          split_data?: Json
+          team_id: string
+          wins?: number | null
+        }
+        Update: {
+          competition_id?: string
+          conceded?: number | null
+          created_at?: string
+          draws?: number | null
+          form?: string | null
+          goal_difference?: number | null
+          group_key?: string
+          id?: string
+          losses?: number | null
+          metadata?: Json
+          played?: number | null
+          points?: number
+          quality_status?: string
+          rank?: number
+          scored?: number | null
+          season_id?: string
+          snapshot_at?: string
+          source_raw_object_id?: string | null
+          split_data?: Json
+          team_id?: string
+          wins?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_standings_snapshots_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "sports_competitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_standings_snapshots_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "sports_seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_standings_snapshots_source_raw_object_id_fkey"
+            columns: ["source_raw_object_id"]
+            isOneToOne: false
+            referencedRelation: "hl_raw_objects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_standings_snapshots_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sports_team_season_stats: {
+        Row: {
+          boolean_value: boolean | null
+          collected_at: string
+          competition_id: string | null
+          created_at: string
+          id: string
+          json_value: Json | null
+          metric_definition_id: string
+          numeric_value: number | null
+          period_key: string
+          scope_key: string
+          season_id: string | null
+          source_raw_object_id: string | null
+          split_key: string
+          team_id: string
+          text_value: string | null
+          updated_at: string
+          window_from: string | null
+          window_to: string | null
+        }
+        Insert: {
+          boolean_value?: boolean | null
+          collected_at?: string
+          competition_id?: string | null
+          created_at?: string
+          id?: string
+          json_value?: Json | null
+          metric_definition_id: string
+          numeric_value?: number | null
+          period_key?: string
+          scope_key: string
+          season_id?: string | null
+          source_raw_object_id?: string | null
+          split_key?: string
+          team_id: string
+          text_value?: string | null
+          updated_at?: string
+          window_from?: string | null
+          window_to?: string | null
+        }
+        Update: {
+          boolean_value?: boolean | null
+          collected_at?: string
+          competition_id?: string | null
+          created_at?: string
+          id?: string
+          json_value?: Json | null
+          metric_definition_id?: string
+          numeric_value?: number | null
+          period_key?: string
+          scope_key?: string
+          season_id?: string | null
+          source_raw_object_id?: string | null
+          split_key?: string
+          team_id?: string
+          text_value?: string | null
+          updated_at?: string
+          window_from?: string | null
+          window_to?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_team_season_stats_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "sports_competitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_team_season_stats_metric_definition_id_fkey"
+            columns: ["metric_definition_id"]
+            isOneToOne: false
+            referencedRelation: "hl_metric_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_team_season_stats_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "sports_seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_team_season_stats_source_raw_object_id_fkey"
+            columns: ["source_raw_object_id"]
+            isOneToOne: false
+            referencedRelation: "hl_raw_objects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_team_season_stats_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "sports_teams"
             referencedColumns: ["id"]
           },
         ]
