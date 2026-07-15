@@ -1039,6 +1039,226 @@ export type Database = {
           },
         ]
       }
+      hl_data_quality_issues: {
+        Row: {
+          actual_value: Json | null
+          created_at: string
+          details: Json
+          endpoint_key: string
+          entity_type: string | null
+          expected_value: Json | null
+          external_id: string | null
+          field_path: string | null
+          id: string
+          issue_code: string
+          raw_object_id: string | null
+          resolution_status: string
+          resolved_at: string | null
+          run_id: string | null
+          severity: string
+          sport: string
+          updated_at: string
+        }
+        Insert: {
+          actual_value?: Json | null
+          created_at?: string
+          details?: Json
+          endpoint_key: string
+          entity_type?: string | null
+          expected_value?: Json | null
+          external_id?: string | null
+          field_path?: string | null
+          id?: string
+          issue_code: string
+          raw_object_id?: string | null
+          resolution_status?: string
+          resolved_at?: string | null
+          run_id?: string | null
+          severity: string
+          sport: string
+          updated_at?: string
+        }
+        Update: {
+          actual_value?: Json | null
+          created_at?: string
+          details?: Json
+          endpoint_key?: string
+          entity_type?: string | null
+          expected_value?: Json | null
+          external_id?: string | null
+          field_path?: string | null
+          id?: string
+          issue_code?: string
+          raw_object_id?: string | null
+          resolution_status?: string
+          resolved_at?: string | null
+          run_id?: string | null
+          severity?: string
+          sport?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_data_quality_issues_raw_object_id_fkey"
+            columns: ["raw_object_id"]
+            isOneToOne: false
+            referencedRelation: "hl_raw_objects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hl_data_quality_issues_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "hl_ingestion_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hl_ingestion_jobs: {
+        Row: {
+          attempts: number
+          created_at: string
+          cursor_data: Json
+          dedupe_key: string
+          endpoint_key: string
+          finished_at: string | null
+          id: string
+          last_error: string | null
+          lock_expires_at: string | null
+          locked_at: string | null
+          max_attempts: number
+          priority: number
+          reprocess_raw_object_id: string | null
+          request_params: Json
+          resource: string
+          scheduled_at: string
+          sport: string
+          started_at: string | null
+          status: string
+          updated_at: string
+          worker_id: string | null
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          cursor_data?: Json
+          dedupe_key: string
+          endpoint_key: string
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          lock_expires_at?: string | null
+          locked_at?: string | null
+          max_attempts?: number
+          priority?: number
+          reprocess_raw_object_id?: string | null
+          request_params?: Json
+          resource: string
+          scheduled_at?: string
+          sport: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          worker_id?: string | null
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          cursor_data?: Json
+          dedupe_key?: string
+          endpoint_key?: string
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          lock_expires_at?: string | null
+          locked_at?: string | null
+          max_attempts?: number
+          priority?: number
+          reprocess_raw_object_id?: string | null
+          request_params?: Json
+          resource?: string
+          scheduled_at?: string
+          sport?: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_ingestion_jobs_reprocess_raw_object_id_fkey"
+            columns: ["reprocess_raw_object_id"]
+            isOneToOne: false
+            referencedRelation: "hl_raw_objects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hl_ingestion_runs: {
+        Row: {
+          created_at: string
+          duration_ms: number | null
+          error_code: string | null
+          error_message: string | null
+          finished_at: string | null
+          http_status: number | null
+          id: string
+          job_id: string
+          rate_limit: number | null
+          rate_remaining: number | null
+          records_normalized: number
+          records_received: number
+          records_rejected: number
+          started_at: string
+          status: string
+          worker_id: string
+        }
+        Insert: {
+          created_at?: string
+          duration_ms?: number | null
+          error_code?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          http_status?: number | null
+          id?: string
+          job_id: string
+          rate_limit?: number | null
+          rate_remaining?: number | null
+          records_normalized?: number
+          records_received?: number
+          records_rejected?: number
+          started_at?: string
+          status?: string
+          worker_id: string
+        }
+        Update: {
+          created_at?: string
+          duration_ms?: number | null
+          error_code?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          http_status?: number | null
+          id?: string
+          job_id?: string
+          rate_limit?: number | null
+          rate_remaining?: number | null
+          records_normalized?: number
+          records_received?: number
+          records_rejected?: number
+          started_at?: string
+          status?: string
+          worker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_ingestion_runs_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "hl_ingestion_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hl_metric_definitions: {
         Row: {
           aggregation: string | null
@@ -1116,6 +1336,152 @@ export type Database = {
           },
           {
             foreignKeyName: "hl_metric_definitions_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hl_rate_limit_usage: {
+        Row: {
+          created_at: string
+          endpoint_key: string
+          id: string
+          observed_at: string
+          provider_id: string
+          rate_limit: number | null
+          rate_remaining: number | null
+          request_date: string
+          requests_used: number
+          run_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          endpoint_key: string
+          id?: string
+          observed_at?: string
+          provider_id: string
+          rate_limit?: number | null
+          rate_remaining?: number | null
+          request_date?: string
+          requests_used?: number
+          run_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          endpoint_key?: string
+          id?: string
+          observed_at?: string
+          provider_id?: string
+          rate_limit?: number | null
+          rate_remaining?: number | null
+          request_date?: string
+          requests_used?: number
+          run_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_rate_limit_usage_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "sports_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hl_rate_limit_usage_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "hl_ingestion_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hl_raw_objects: {
+        Row: {
+          byte_size: number
+          content_encoding: string
+          content_type: string
+          created_at: string
+          endpoint_key: string
+          id: string
+          job_id: string | null
+          normalized_at: string | null
+          provider_id: string
+          request_metadata: Json
+          response_metadata: Json
+          retention_until: string | null
+          run_id: string | null
+          schema_fingerprint: string | null
+          sha256: string
+          sport_id: string
+          storage_bucket: string
+          storage_path: string
+        }
+        Insert: {
+          byte_size: number
+          content_encoding?: string
+          content_type?: string
+          created_at?: string
+          endpoint_key: string
+          id?: string
+          job_id?: string | null
+          normalized_at?: string | null
+          provider_id: string
+          request_metadata?: Json
+          response_metadata?: Json
+          retention_until?: string | null
+          run_id?: string | null
+          schema_fingerprint?: string | null
+          sha256: string
+          sport_id: string
+          storage_bucket?: string
+          storage_path: string
+        }
+        Update: {
+          byte_size?: number
+          content_encoding?: string
+          content_type?: string
+          created_at?: string
+          endpoint_key?: string
+          id?: string
+          job_id?: string | null
+          normalized_at?: string | null
+          provider_id?: string
+          request_metadata?: Json
+          response_metadata?: Json
+          retention_until?: string | null
+          run_id?: string | null
+          schema_fingerprint?: string | null
+          sha256?: string
+          sport_id?: string
+          storage_bucket?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_raw_objects_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "hl_ingestion_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hl_raw_objects_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "sports_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hl_raw_objects_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "hl_ingestion_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hl_raw_objects_sport_id_fkey"
             columns: ["sport_id"]
             isOneToOne: false
             referencedRelation: "sports"
