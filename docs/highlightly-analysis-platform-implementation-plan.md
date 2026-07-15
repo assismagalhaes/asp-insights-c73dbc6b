@@ -428,6 +428,8 @@ Aceite:
 - starter e lineup têm status de confirmação;
 - Moneyline, total e run line exibem mediana/movimento.
 
+Estado em 15/07/2026: implementação local concluída e validada; migrations e shadow operacional pendentes. Ver `docs/highlightly/phase-3-mlb-vertical-slice.md`.
+
 ### Fase 4 — WNBA
 
 Duração estimada: 5–7 dias.

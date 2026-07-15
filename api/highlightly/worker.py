@@ -11,7 +11,7 @@ from typing import Any, Mapping
 from api.highlightly_client import HighlightlyClient, HighlightlyError, HighlightlyResponse
 from api.highlightly_repository import HighlightlyRepository, HighlightlyRepositoryError
 
-from .normalizers import normalize_football
+from .normalizers import normalize_baseball, normalize_football
 from .normalizers.common import NormalizationContext, NormalizedBatch, schema_fingerprint, stable_id
 from .normalizers.common import items as payload_items
 from .registry import EndpointDefinition, EndpointRegistry
@@ -138,7 +138,9 @@ class HighlightlyWorker:
         )
         if operation.sport == "football":
             return normalize_football(payload, context)
-        raise ValueError(f"Normalizer runtime for {operation.sport} is not implemented in Phase 2")
+        if operation.sport == "baseball":
+            return normalize_baseball(payload, context)
+        raise ValueError(f"Normalizer runtime for {operation.sport} is not implemented")
 
     def _persist(self, batch: NormalizedBatch) -> int:
         persisted = 0
@@ -158,6 +160,12 @@ class HighlightlyWorker:
         if batch.odds_quotes:
             self.repository.upsert_odds_quotes(batch.odds_quotes)
             persisted += len(batch.odds_quotes)
+            match_ids = sorted({str(quote["p_match_id"]) for quote in batch.odds_quotes})
+            for match_id in match_ids:
+                persisted += self.repository.refresh_odds_consensus(
+                    match_id,
+                    snapshot_at=batch.odds_quotes[0].get("p_collected_at"),
+                )
         return persisted
 
     def _enqueue_next_page(
@@ -200,7 +208,8 @@ class HighlightlyWorker:
         return True
 
     def _enqueue_operation(self, endpoint_key: str, params: Mapping[str, Any], *, scope: str) -> None:
-        operation = self.registry.get(endpoint_key, sport="football")
+        endpoint_sport = endpoint_key.split(".", 1)[0]
+        operation = self.registry.get(endpoint_key, sport=endpoint_sport)
         clean_params = {
             key: value
             for key, value in params.items()
@@ -292,6 +301,95 @@ class HighlightlyWorker:
             for endpoint_key in (
                 "football.PlayersController_getPlayerSummaryById",
                 "football.PlayersController_getPlayerStatisticsById",
+            ):
+                self._enqueue_operation(endpoint_key, {"id": player_id}, scope=player_scope)
+                count += 1
+        return count
+
+    def _enqueue_baseball_match_fanout(self, payload: Any, *, scope_nonce: str = "") -> int:
+        matches = payload_items(payload)
+        if len(matches) > 10:
+            raise ValueError("Shadow fan-out is limited to 10 matches per parent job")
+        count = 0
+        for match in matches:
+            match_id = match.get("id")
+            if match_id is None:
+                continue
+            match_scope = f"match:{match_id}:{scope_nonce}" if scope_nonce else f"match:{match_id}"
+            detail_jobs = (
+                ("baseball.BaseballMatchStatisticsController_getStatistics", {"id": match_id}),
+                ("baseball.BaseballLineupsController_getLineups", {"matchId": match_id}),
+                (
+                    "baseball.BaseballBoxScoresController_getBoxScores",
+                    {"id": match_id, "_fanout_players": True, "_fanout_scope": scope_nonce},
+                ),
+                ("baseball.HighlightsController_getHighlights", {"matchId": match_id, "limit": 40, "offset": 0}),
+                ("baseball.BaseballOddsController_getOddsV2", {"matchId": match_id, "limit": 100, "offset": 0}),
+            )
+            for endpoint_key, params in detail_jobs:
+                self._enqueue_operation(endpoint_key, params, scope=match_scope)
+                count += 1
+
+            home = match.get("homeTeam") if isinstance(match.get("homeTeam"), Mapping) else {}
+            away = match.get("awayTeam") if isinstance(match.get("awayTeam"), Mapping) else {}
+            if home.get("id") is not None and away.get("id") is not None:
+                self._enqueue_operation(
+                    "baseball.BaseballHead2HeadController_getHead2HeadData",
+                    {"teamIdOne": home["id"], "teamIdTwo": away["id"]},
+                    scope=match_scope,
+                )
+                count += 1
+            match_date = str(match.get("date") or "")[:10]
+            try:
+                history_from = (datetime.fromisoformat(match_date) - timedelta(days=365)).date().isoformat()
+            except ValueError:
+                history_from = match_date or None
+            for team in (home, away):
+                if team.get("id") is None:
+                    continue
+                self._enqueue_operation(
+                    "baseball.BaseballLastFiveGamesController_getLastFiveGames",
+                    {"teamId": team["id"]},
+                    scope=match_scope,
+                )
+                count += 1
+                self._enqueue_operation(
+                    "baseball.TeamController_getTeamStats",
+                    {"id": team["id"], "fromDate": history_from},
+                    scope=match_scope,
+                )
+                count += 1
+            if match.get("league") and match.get("season") is not None:
+                self._enqueue_operation(
+                    "baseball.BaseballStandingsController_getStandings",
+                    {
+                        "leagueName": match["league"],
+                        "year": match["season"],
+                        "limit": 100,
+                        "offset": 0,
+                    },
+                    scope=match_scope,
+                )
+                count += 1
+        return count
+
+    def _enqueue_baseball_player_fanout(self, payload: Any, *, scope_nonce: str = "") -> int:
+        player_ids: set[Any] = set()
+        for team_block in payload_items(payload):
+            for box_score in team_block.get("boxScores", []):
+                if not isinstance(box_score, Mapping):
+                    continue
+                player = box_score.get("player") if isinstance(box_score.get("player"), Mapping) else {}
+                if player.get("id") is not None:
+                    player_ids.add(player["id"])
+        if len(player_ids) > 100:
+            raise ValueError("Player fan-out is limited to 100 players per box-score job")
+        count = 0
+        for player_id in sorted(player_ids, key=str):
+            player_scope = f"player:{player_id}:{scope_nonce}" if scope_nonce else f"player:{player_id}"
+            for endpoint_key in (
+                "baseball.BaseballPlayersController_getPlayerSummaryById",
+                "baseball.BaseballPlayersController_getPlayerStatisticsById",
             ):
                 self._enqueue_operation(endpoint_key, {"id": player_id}, scope=player_scope)
                 count += 1
@@ -447,6 +545,16 @@ class HighlightlyWorker:
                     )
                 if operation.normalizer == "football.box_scores" and _truthy(str(request_params.get("_fanout_players"))):
                     self._enqueue_football_player_fanout(
+                        payload,
+                        scope_nonce=str(request_params.get("_fanout_scope") or ""),
+                    )
+                if operation.normalizer == "baseball.matches" and _truthy(str(request_params.get("_fanout"))):
+                    self._enqueue_baseball_match_fanout(
+                        payload,
+                        scope_nonce=str(request_params.get("_fanout_scope") or ""),
+                    )
+                if operation.normalizer == "baseball.box_scores" and _truthy(str(request_params.get("_fanout_players"))):
+                    self._enqueue_baseball_player_fanout(
                         payload,
                         scope_nonce=str(request_params.get("_fanout_scope") or ""),
                     )

@@ -313,6 +313,25 @@ class HighlightlyRepository:
             saved.extend(dict(row) for row in (result or []))
         return saved
 
+    def refresh_odds_consensus(
+        self,
+        match_id: str,
+        *,
+        snapshot_at: str | None = None,
+        min_bookmakers: int = 5,
+        max_bookmakers: int = 7,
+    ) -> int:
+        result = self.rpc(
+            "refresh_sports_odds_consensus",
+            {
+                "p_match_id": match_id,
+                "p_snapshot_at": snapshot_at or datetime.now(timezone.utc).isoformat(),
+                "p_min_bookmakers": min_bookmakers,
+                "p_max_bookmakers": max_bookmakers,
+            },
+        )
+        return int(result or 0)
+
     def record_quality_issues(self, rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
         if not rows:
             return []

@@ -224,6 +224,20 @@ class HighlightlyRepositoryTests(unittest.TestCase):
         self.assertTrue(url.endswith("/rest/v1/rpc/upsert_sports_odds_quotes"))
         self.assertEqual(len(kwargs["json"]["p_quotes"]), 2)
 
+    def test_refresh_odds_consensus_uses_bounded_preferred_bookmaker_defaults(self):
+        session = _Session([_Response(200, 3)])
+        repository = HighlightlyRepository("https://example.supabase.co", "service-secret", session=session)
+        refreshed = repository.refresh_odds_consensus(
+            "30000000-0000-4000-8000-000000000006",
+            snapshot_at="2026-07-15T20:05:00Z",
+        )
+        self.assertEqual(refreshed, 3)
+        method, url, kwargs = session.calls[0]
+        self.assertEqual(method, "POST")
+        self.assertTrue(url.endswith("/rest/v1/rpc/refresh_sports_odds_consensus"))
+        self.assertEqual(kwargs["json"]["p_min_bookmakers"], 5)
+        self.assertEqual(kwargs["json"]["p_max_bookmakers"], 7)
+
     def test_provider_kill_switch_requires_exactly_one_confirmed_row(self):
         session = _Session([_Response(200, [{"code": "highlightly", "enabled": True}])])
         repository = HighlightlyRepository("https://example.supabase.co", "service-secret", session=session)
