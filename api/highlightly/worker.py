@@ -326,7 +326,7 @@ class HighlightlyWorker:
                     {"id": match_id, "_fanout_players": True, "_fanout_scope": scope_nonce},
                 ),
                 ("baseball.HighlightsController_getHighlights", {"matchId": match_id, "limit": 40, "offset": 0}),
-                ("baseball.BaseballOddsController_getOddsV2", {"matchId": match_id, "limit": 100, "offset": 0}),
+                ("baseball.BaseballOddsController_getOddsV2", {"matchId": match_id, "limit": 5, "offset": 0}),
             )
             for endpoint_key, params in detail_jobs:
                 self._enqueue_operation(endpoint_key, params, scope=match_scope)

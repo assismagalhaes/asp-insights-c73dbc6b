@@ -689,7 +689,7 @@ class HighlightlyRepository:
                 "content-type": "application/json",
                 "prefer": "resolution=merge-duplicates,return=representation",
             },
-            expected=(201,),
+            expected=(200, 201),
         )
         saved = result[0]
         return StoredRawObject(

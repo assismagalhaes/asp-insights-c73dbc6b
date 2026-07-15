@@ -206,6 +206,12 @@ class HighlightlyPhaseThreeBaseballTests(unittest.TestCase):
         self.assertIn("baseball.BaseballBoxScoresController_getBoxScores", keys)
         self.assertIn("baseball.BaseballOddsController_getOddsV2", keys)
         self.assertIn("baseball.BaseballStandingsController_getStandings", keys)
+        odds_job = next(
+            call.kwargs
+            for call in repository.enqueue_job.call_args_list
+            if call.kwargs["endpoint_key"] == "baseball.BaseballOddsController_getOddsV2"
+        )
+        self.assertEqual(odds_job["request_params"]["limit"], 5)
 
     def test_baseball_box_score_fanout_queues_unique_players(self):
         repository = Mock()

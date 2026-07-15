@@ -224,7 +224,8 @@ class HighlightlyRepositoryTests(unittest.TestCase):
             "sha256": digest,
             "byte_size": len(compressed),
         }
-        session = _Session([_Response(200), _Response(201, [saved]), _Response(200, content=compressed)])
+        # PostgREST returns 200 when the content-addressed raw object already exists.
+        session = _Session([_Response(200), _Response(200, [saved]), _Response(200, content=compressed)])
         repository = HighlightlyRepository("https://example.supabase.co", "service-secret", session=session)
 
         raw_object = repository.store_raw_payload(
