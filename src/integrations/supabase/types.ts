@@ -4706,6 +4706,15 @@ export type Database = {
         }
         Returns: boolean
       }
+      refresh_sports_odds_consensus: {
+        Args: {
+          p_match_id: string
+          p_max_bookmakers?: number
+          p_min_bookmakers?: number
+          p_snapshot_at?: string
+        }
+        Returns: number
+      }
       upsert_sports_odds_quote: {
         Args: {
           p_bookmaker_id: string
