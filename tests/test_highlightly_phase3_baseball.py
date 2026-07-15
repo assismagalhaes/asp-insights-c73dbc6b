@@ -64,6 +64,26 @@ class HighlightlyPhaseThreeBaseballTests(unittest.TestCase):
         self.assertEqual(len(batch.table_rows("sports_match_participants")), 2)
         self.assertEqual(len(batch.table_rows("sports_match_period_scores")), 6)
 
+    def test_scheduled_match_accepts_nullable_provider_arrays(self):
+        payload = [{
+            "id": 1548610,
+            "date": "2026-07-16T23:00:00Z",
+            "league": "MLB",
+            "season": 2026,
+            "homeTeam": {"id": 1, "name": "Phillies"},
+            "awayTeam": {"id": 2, "name": "Mets"},
+            "state": {"description": "Not Started"},
+            "stats": None,
+            "plays": None,
+            "referees": None,
+            "rosters": None,
+        }]
+
+        batch = normalize_baseball(payload, context("baseball.matches"))
+
+        self.assertEqual(batch.table_rows("sports_matches")[0]["status"], "scheduled")
+        self.assertEqual(batch.table_rows("sports_match_events"), [])
+
     def test_all_171_match_metrics_are_dynamic_and_queryable(self):
         statistics = [
             {"name": f"Metric {index}", "group": ["Batting", "Pitching", "Fielding"][index % 3], "value": index + 0.5}

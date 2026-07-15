@@ -41,6 +41,12 @@ SUPPORTED_NORMALIZERS = frozenset({
 })
 
 
+def _as_list(value: Any) -> list[Any]:
+    """Treat nullable provider arrays as empty without accepting arbitrary iterables."""
+
+    return value if isinstance(value, list) else []
+
+
 def _external(value: Any, fallback: str) -> str:
     text = str(value if value is not None else "").strip()
     return text or fallback
@@ -194,7 +200,7 @@ def _add_match_statistics(
             batch.rejected += 1
             continue
         team_id = _ensure_team(batch, ctx, team)
-        for statistic in team.get("statistics", []):
+        for statistic in _as_list(team.get("statistics")):
             if not isinstance(statistic, Mapping) or statistic.get("value") is None:
                 continue
             display = str(statistic.get("name") or statistic.get("displayName") or "unknown")
@@ -295,9 +301,9 @@ def _normalize_matches(payload: Any, ctx: NormalizationContext) -> NormalizedBat
                     },
                 )
 
-        embedded_stats = [row for row in match.get("stats", []) if isinstance(row, Mapping)]
+        embedded_stats = [row for row in _as_list(match.get("stats")) if isinstance(row, Mapping)]
         _add_match_statistics(batch, embedded_stats, ctx, match_id)
-        for index, play in enumerate(match.get("plays", [])):
+        for index, play in enumerate(_as_list(match.get("plays"))):
             if not isinstance(play, Mapping):
                 continue
             sequence = hashlib.sha256(json.dumps(play, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:24]
@@ -375,7 +381,7 @@ def _normalize_odds(payload: Any, ctx: NormalizationContext) -> NormalizedBatch:
             batch.issue("ODDS_MATCH_ID_MISSING", "Baseball odds payload has no matchId.")
             continue
         match_id = stable_id(ctx.provider_id, ctx.sport_id, "match", match_external)
-        for market in record.get("odds", []):
+        for market in _as_list(record.get("odds")):
             if not isinstance(market, Mapping):
                 continue
             bookmaker_name = str(market.get("bookmakerName") or market.get("bookmakerId") or "unknown")
@@ -403,7 +409,7 @@ def _normalize_odds(payload: Any, ctx: NormalizationContext) -> NormalizedBatch:
                     "metadata": {"provider_type": market.get("type")},
                 },
             )
-            for selection in market.get("values", []):
+            for selection in _as_list(market.get("values")):
                 if not isinstance(selection, Mapping):
                     continue
                 selection_name = str(selection.get("value") or "").strip()
@@ -458,7 +464,7 @@ def _normalize_lineups(payload: Any, ctx: NormalizationContext) -> NormalizedBat
             if not team:
                 continue
             team_id = _ensure_team(batch, ctx, team)
-            players = [player for player in block.get("lineup", []) if isinstance(player, Mapping)]
+            players = [player for player in _as_list(block.get("lineup")) if isinstance(player, Mapping)]
             version = hashlib.sha256(json.dumps(block, sort_keys=True, default=str).encode("utf-8")).hexdigest()
             lineup_id = stable_id(match_id, team_id, "lineup", version)
             confirmed = any(player.get("isStarter") is True for player in players)
@@ -546,17 +552,17 @@ def _normalize_player_stats(payload: Any, ctx: NormalizationContext) -> Normaliz
     batch = NormalizedBatch(received=len(records))
     for document in records:
         player_id = _ensure_player(batch, ctx, document)
-        for season_block in document.get("perSeason", []):
+        for season_block in _as_list(document.get("perSeason")):
             if not isinstance(season_block, Mapping):
                 continue
             league = season_block.get("league") or "unknown"
             season = season_block.get("season")
             competition_id, season_id = _ensure_competition(batch, ctx, league, season)
-            teams = [team for team in season_block.get("teams", []) if isinstance(team, Mapping)] or [None]
+            teams = [team for team in _as_list(season_block.get("teams")) if isinstance(team, Mapping)] or [None]
             scope = f"season:{slug(league)}:{slug(season)}:{slug(season_block.get('seasonBreakdown') or 'all')}"
             for team in teams:
                 team_id = _ensure_team(batch, ctx, team) if team else None
-                for statistic in season_block.get("stats", []):
+                for statistic in _as_list(season_block.get("stats")):
                     if not isinstance(statistic, Mapping) or statistic.get("value") is None:
                         continue
                     display = str(statistic.get("name") or "unknown")
@@ -599,12 +605,12 @@ def _normalize_box_scores(payload: Any, ctx: NormalizationContext) -> Normalized
             batch.rejected += 1
             continue
         team_id = _ensure_team(batch, ctx, team)
-        for item in team_block.get("boxScores", []):
+        for item in _as_list(team_block.get("boxScores")):
             if not isinstance(item, Mapping):
                 continue
             player = item.get("player") if isinstance(item.get("player"), Mapping) else {}
             player_id = _ensure_player(batch, ctx, player, team_id=team_id)
-            for statistic in item.get("statistics", []):
+            for statistic in _as_list(item.get("statistics")):
                 if not isinstance(statistic, Mapping) or statistic.get("value") is None:
                     continue
                 display = str(statistic.get("name") or "unknown")
@@ -647,7 +653,7 @@ def _number(stats: Mapping[str, Any], *keys: str) -> float | None:
 
 def _normalize_standings(payload: Any, ctx: NormalizationContext) -> NormalizedBatch:
     leagues = items(payload)
-    batch = NormalizedBatch(received=sum(len(row.get("data", [])) for row in leagues))
+    batch = NormalizedBatch(received=sum(len(_as_list(row.get("data"))) for row in leagues))
     for league in leagues:
         competition_id, season_id = _ensure_competition(
             batch,
@@ -661,14 +667,14 @@ def _normalize_standings(payload: Any, ctx: NormalizationContext) -> NormalizedB
             continue
         group_key = ":".join(filter(None, (str(league.get("leagueType") or ""), str(league.get("seasonType") or ""))))
         identities: list[str] = []
-        for index, standing in enumerate(league.get("data", []), start=1):
+        for index, standing in enumerate(_as_list(league.get("data")), start=1):
             if not isinstance(standing, Mapping):
                 continue
             team_id = _ensure_team(batch, ctx, standing)
             identities.append(team_id)
             stats: dict[str, Any] = {}
             raw_stats: list[dict[str, Any]] = []
-            for statistic in standing.get("stats", []):
+            for statistic in _as_list(standing.get("stats")):
                 if not isinstance(statistic, Mapping):
                     continue
                 raw_stats.append(dict(statistic))

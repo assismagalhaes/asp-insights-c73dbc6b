@@ -64,6 +64,10 @@ def _truthy(value: str | None) -> bool:
     return str(value or "").strip().casefold() in {"1", "true", "yes", "on"}
 
 
+def _as_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
 def _retention_until(policy: str, captured_at: datetime) -> str | None:
     for days in (365, 90, 30):
         if f"{days}d" in policy:
@@ -288,7 +292,7 @@ class HighlightlyWorker:
     def _enqueue_football_player_fanout(self, payload: Any, *, scope_nonce: str = "") -> int:
         player_ids: set[Any] = set()
         for team_block in payload_items(payload):
-            for player in team_block.get("players", []):
+            for player in _as_list(team_block.get("players")):
                 if isinstance(player, Mapping) and player.get("id") is not None:
                     player_ids.add(player["id"])
         if len(player_ids) > 100:
@@ -374,7 +378,7 @@ class HighlightlyWorker:
     def _enqueue_baseball_player_fanout(self, payload: Any, *, scope_nonce: str = "") -> int:
         player_ids: set[Any] = set()
         for team_block in payload_items(payload):
-            for box_score in team_block.get("boxScores", []):
+            for box_score in _as_list(team_block.get("boxScores")):
                 if not isinstance(box_score, Mapping):
                     continue
                 player = box_score.get("player") if isinstance(box_score.get("player"), Mapping) else {}
