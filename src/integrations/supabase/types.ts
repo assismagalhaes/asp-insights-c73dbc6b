@@ -2667,6 +2667,66 @@ export type Database = {
           },
         ]
       }
+      sports_market_definitions: {
+        Row: {
+          canonical_family: string
+          created_at: string
+          display_name: string
+          id: string
+          is_active: boolean
+          metadata: Json
+          odds_type: string
+          provider_id: string
+          provider_market_key: string
+          settlement_rule: string | null
+          sport_id: string
+          updated_at: string
+        }
+        Insert: {
+          canonical_family: string
+          created_at?: string
+          display_name: string
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          odds_type?: string
+          provider_id: string
+          provider_market_key: string
+          settlement_rule?: string | null
+          sport_id: string
+          updated_at?: string
+        }
+        Update: {
+          canonical_family?: string
+          created_at?: string
+          display_name?: string
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          odds_type?: string
+          provider_id?: string
+          provider_market_key?: string
+          settlement_rule?: string | null
+          sport_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_market_definitions_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "sports_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_market_definitions_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sports_match_events: {
         Row: {
           clock_display: string | null
@@ -3014,6 +3074,272 @@ export type Database = {
             columns: ["sport_id"]
             isOneToOne: false
             referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sports_odds_consensus: {
+        Row: {
+          best_odds: number
+          bookmaker_count: number
+          bookmaker_ids: string[]
+          created_at: string
+          id: string
+          iqr: number
+          is_live: boolean
+          line_key: string
+          line_value: number | null
+          market_definition_id: string
+          match_id: string
+          median_odds: number
+          minimum_odds: number
+          selection_key: string
+          selection_name: string
+          snapshot_at: string
+        }
+        Insert: {
+          best_odds: number
+          bookmaker_count: number
+          bookmaker_ids?: string[]
+          created_at?: string
+          id?: string
+          iqr?: number
+          is_live?: boolean
+          line_key?: string
+          line_value?: number | null
+          market_definition_id: string
+          match_id: string
+          median_odds: number
+          minimum_odds: number
+          selection_key: string
+          selection_name: string
+          snapshot_at: string
+        }
+        Update: {
+          best_odds?: number
+          bookmaker_count?: number
+          bookmaker_ids?: string[]
+          created_at?: string
+          id?: string
+          iqr?: number
+          is_live?: boolean
+          line_key?: string
+          line_value?: number | null
+          market_definition_id?: string
+          match_id?: string
+          median_odds?: number
+          minimum_odds?: number
+          selection_key?: string
+          selection_name?: string
+          snapshot_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_odds_consensus_market_definition_id_fkey"
+            columns: ["market_definition_id"]
+            isOneToOne: false
+            referencedRelation: "sports_market_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_odds_consensus_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sports_odds_current: {
+        Row: {
+          bookmaker_id: string
+          created_at: string
+          decimal_odds: number
+          first_seen_at: string
+          id: string
+          is_live: boolean
+          last_seen_at: string
+          line_key: string
+          line_value: number | null
+          market_definition_id: string
+          match_id: string
+          provider_updated_at: string | null
+          quote_status: string
+          selection_key: string
+          selection_name: string
+          source_raw_object_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          bookmaker_id: string
+          created_at?: string
+          decimal_odds: number
+          first_seen_at?: string
+          id?: string
+          is_live?: boolean
+          last_seen_at?: string
+          line_key?: string
+          line_value?: number | null
+          market_definition_id: string
+          match_id: string
+          provider_updated_at?: string | null
+          quote_status?: string
+          selection_key: string
+          selection_name: string
+          source_raw_object_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bookmaker_id?: string
+          created_at?: string
+          decimal_odds?: number
+          first_seen_at?: string
+          id?: string
+          is_live?: boolean
+          last_seen_at?: string
+          line_key?: string
+          line_value?: number | null
+          market_definition_id?: string
+          match_id?: string
+          provider_updated_at?: string | null
+          quote_status?: string
+          selection_key?: string
+          selection_name?: string
+          source_raw_object_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_odds_current_bookmaker_id_fkey"
+            columns: ["bookmaker_id"]
+            isOneToOne: false
+            referencedRelation: "sports_bookmakers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_odds_current_market_definition_id_fkey"
+            columns: ["market_definition_id"]
+            isOneToOne: false
+            referencedRelation: "sports_market_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_odds_current_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_odds_current_source_raw_object_id_fkey"
+            columns: ["source_raw_object_id"]
+            isOneToOne: false
+            referencedRelation: "hl_raw_objects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sports_odds_history: {
+        Row: {
+          bookmaker_id: string
+          captured_at: string
+          change_kind: string
+          created_at: string
+          current_quote_id: string
+          decimal_odds: number
+          id: string
+          is_live: boolean
+          line_key: string
+          line_value: number | null
+          market_definition_id: string
+          match_id: string
+          previous_decimal_odds: number | null
+          previous_quote_status: string | null
+          provider_updated_at: string | null
+          quote_fingerprint: string
+          quote_status: string
+          selection_key: string
+          selection_name: string
+          source_raw_object_id: string | null
+        }
+        Insert: {
+          bookmaker_id: string
+          captured_at?: string
+          change_kind: string
+          created_at?: string
+          current_quote_id: string
+          decimal_odds: number
+          id?: string
+          is_live?: boolean
+          line_key?: string
+          line_value?: number | null
+          market_definition_id: string
+          match_id: string
+          previous_decimal_odds?: number | null
+          previous_quote_status?: string | null
+          provider_updated_at?: string | null
+          quote_fingerprint: string
+          quote_status: string
+          selection_key: string
+          selection_name: string
+          source_raw_object_id?: string | null
+        }
+        Update: {
+          bookmaker_id?: string
+          captured_at?: string
+          change_kind?: string
+          created_at?: string
+          current_quote_id?: string
+          decimal_odds?: number
+          id?: string
+          is_live?: boolean
+          line_key?: string
+          line_value?: number | null
+          market_definition_id?: string
+          match_id?: string
+          previous_decimal_odds?: number | null
+          previous_quote_status?: string | null
+          provider_updated_at?: string | null
+          quote_fingerprint?: string
+          quote_status?: string
+          selection_key?: string
+          selection_name?: string
+          source_raw_object_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sports_odds_history_bookmaker_id_fkey"
+            columns: ["bookmaker_id"]
+            isOneToOne: false
+            referencedRelation: "sports_bookmakers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_odds_history_current_quote_id_fkey"
+            columns: ["current_quote_id"]
+            isOneToOne: false
+            referencedRelation: "sports_odds_current"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_odds_history_market_definition_id_fkey"
+            columns: ["market_definition_id"]
+            isOneToOne: false
+            referencedRelation: "sports_market_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_odds_history_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sports_odds_history_source_raw_object_id_fkey"
+            columns: ["source_raw_object_id"]
+            isOneToOne: false
+            referencedRelation: "hl_raw_objects"
             referencedColumns: ["id"]
           },
         ]
@@ -4015,6 +4341,76 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      upsert_sports_odds_quote: {
+        Args: {
+          p_bookmaker_id: string
+          p_collected_at?: string
+          p_decimal_odds: number
+          p_is_live: boolean
+          p_line_key: string
+          p_line_value: number
+          p_market_definition_id: string
+          p_match_id: string
+          p_provider_updated_at?: string
+          p_quote_status: string
+          p_selection_key: string
+          p_selection_name: string
+          p_source_raw_object_id?: string
+        }
+        Returns: {
+          bookmaker_id: string
+          created_at: string
+          decimal_odds: number
+          first_seen_at: string
+          id: string
+          is_live: boolean
+          last_seen_at: string
+          line_key: string
+          line_value: number | null
+          market_definition_id: string
+          match_id: string
+          provider_updated_at: string | null
+          quote_status: string
+          selection_key: string
+          selection_name: string
+          source_raw_object_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "sports_odds_current"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      upsert_sports_odds_quotes: {
+        Args: { p_quotes: Json }
+        Returns: {
+          bookmaker_id: string
+          created_at: string
+          decimal_odds: number
+          first_seen_at: string
+          id: string
+          is_live: boolean
+          last_seen_at: string
+          line_key: string
+          line_value: number | null
+          market_definition_id: string
+          match_id: string
+          provider_updated_at: string | null
+          quote_status: string
+          selection_key: string
+          selection_name: string
+          source_raw_object_id: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "sports_odds_current"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
     }
     Enums: {
