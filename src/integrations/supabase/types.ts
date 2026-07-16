@@ -2734,6 +2734,7 @@ export type Database = {
           content_url: string
           created_at: string
           description: string | null
+          duration_seconds: number | null
           embed_url: string | null
           external_id: string
           geo_restrictions: Json
@@ -2743,9 +2744,11 @@ export type Database = {
           metadata: Json
           preview_url: string | null
           provider_id: string
+          published_at: string | null
           source_name: string | null
           source_raw_object_id: string | null
           sport_id: string
+          thumbnail_url: string | null
           title: string
           updated_at: string
         }
@@ -2755,6 +2758,7 @@ export type Database = {
           content_url: string
           created_at?: string
           description?: string | null
+          duration_seconds?: number | null
           embed_url?: string | null
           external_id: string
           geo_restrictions?: Json
@@ -2764,9 +2768,11 @@ export type Database = {
           metadata?: Json
           preview_url?: string | null
           provider_id: string
+          published_at?: string | null
           source_name?: string | null
           source_raw_object_id?: string | null
           sport_id: string
+          thumbnail_url?: string | null
           title: string
           updated_at?: string
         }
@@ -2776,6 +2782,7 @@ export type Database = {
           content_url?: string
           created_at?: string
           description?: string | null
+          duration_seconds?: number | null
           embed_url?: string | null
           external_id?: string
           geo_restrictions?: Json
@@ -2785,9 +2792,11 @@ export type Database = {
           metadata?: Json
           preview_url?: string | null
           provider_id?: string
+          published_at?: string | null
           source_name?: string | null
           source_raw_object_id?: string | null
           sport_id?: string
+          thumbnail_url?: string | null
           title?: string
           updated_at?: string
         }
