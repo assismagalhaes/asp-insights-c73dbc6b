@@ -2734,7 +2734,6 @@ export type Database = {
           content_url: string
           created_at: string
           description: string | null
-          duration_seconds: number | null
           embed_url: string | null
           external_id: string
           geo_restrictions: Json
@@ -2744,12 +2743,10 @@ export type Database = {
           metadata: Json
           preview_url: string | null
           provider_id: string
-          published_at: string | null
           source_name: string | null
           source_raw_object_id: string | null
           sport_id: string
           title: string
-          thumbnail_url: string | null
           updated_at: string
         }
         Insert: {
@@ -2758,7 +2755,6 @@ export type Database = {
           content_url: string
           created_at?: string
           description?: string | null
-          duration_seconds?: number | null
           embed_url?: string | null
           external_id: string
           geo_restrictions?: Json
@@ -2768,12 +2764,10 @@ export type Database = {
           metadata?: Json
           preview_url?: string | null
           provider_id: string
-          published_at?: string | null
           source_name?: string | null
           source_raw_object_id?: string | null
           sport_id: string
           title: string
-          thumbnail_url?: string | null
           updated_at?: string
         }
         Update: {
@@ -2782,7 +2776,6 @@ export type Database = {
           content_url?: string
           created_at?: string
           description?: string | null
-          duration_seconds?: number | null
           embed_url?: string | null
           external_id?: string
           geo_restrictions?: Json
@@ -2792,12 +2785,10 @@ export type Database = {
           metadata?: Json
           preview_url?: string | null
           provider_id?: string
-          published_at?: string | null
           source_name?: string | null
           source_raw_object_id?: string | null
           sport_id?: string
           title?: string
-          thumbnail_url?: string | null
           updated_at?: string
         }
         Relationships: [
