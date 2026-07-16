@@ -1156,6 +1156,7 @@ export type Database = {
           request_params: Json
           resource: string
           scheduled_at: string
+          shadow_scope: string | null
           sport: string
           started_at: string | null
           status: string
@@ -1179,6 +1180,7 @@ export type Database = {
           request_params?: Json
           resource: string
           scheduled_at?: string
+          shadow_scope?: string | null
           sport: string
           started_at?: string | null
           status?: string
@@ -1202,6 +1204,7 @@ export type Database = {
           request_params?: Json
           resource?: string
           scheduled_at?: string
+          shadow_scope?: string | null
           sport?: string
           started_at?: string | null
           status?: string
@@ -1509,6 +1512,251 @@ export type Database = {
             columns: ["sport_id"]
             isOneToOne: false
             referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hl_shadow_observations: {
+        Row: {
+          created_at: string
+          freshness_p95_seconds: number | null
+          id: string
+          jobs_dead: number
+          jobs_partial: number
+          jobs_pending: number
+          jobs_retry: number
+          jobs_succeeded: number
+          jobs_total: number
+          latency_p50_ms: number | null
+          latency_p95_ms: number | null
+          match_coverage_pct: number | null
+          matches_expected: number
+          matches_seen: number
+          matches_with_odds: number
+          observed_on: string
+          odds_coverage_pct: number | null
+          open_critical_issues: number
+          open_error_issues: number
+          open_warning_issues: number
+          requests_used: number
+          source_metadata: Json
+          sport: string
+          updated_at: string
+          window_id: string
+        }
+        Insert: {
+          created_at?: string
+          freshness_p95_seconds?: number | null
+          id?: string
+          jobs_dead?: number
+          jobs_partial?: number
+          jobs_pending?: number
+          jobs_retry?: number
+          jobs_succeeded?: number
+          jobs_total?: number
+          latency_p50_ms?: number | null
+          latency_p95_ms?: number | null
+          match_coverage_pct?: number | null
+          matches_expected?: number
+          matches_seen?: number
+          matches_with_odds?: number
+          observed_on: string
+          odds_coverage_pct?: number | null
+          open_critical_issues?: number
+          open_error_issues?: number
+          open_warning_issues?: number
+          requests_used?: number
+          source_metadata?: Json
+          sport: string
+          updated_at?: string
+          window_id: string
+        }
+        Update: {
+          created_at?: string
+          freshness_p95_seconds?: number | null
+          id?: string
+          jobs_dead?: number
+          jobs_partial?: number
+          jobs_pending?: number
+          jobs_retry?: number
+          jobs_succeeded?: number
+          jobs_total?: number
+          latency_p50_ms?: number | null
+          latency_p95_ms?: number | null
+          match_coverage_pct?: number | null
+          matches_expected?: number
+          matches_seen?: number
+          matches_with_odds?: number
+          observed_on?: string
+          odds_coverage_pct?: number | null
+          open_critical_issues?: number
+          open_error_issues?: number
+          open_warning_issues?: number
+          requests_used?: number
+          source_metadata?: Json
+          sport?: string
+          updated_at?: string
+          window_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_shadow_observations_window_id_fkey"
+            columns: ["window_id"]
+            isOneToOne: false
+            referencedRelation: "hl_phase7_window_health_v"
+            referencedColumns: ["window_id"]
+          },
+          {
+            foreignKeyName: "hl_shadow_observations_window_id_fkey"
+            columns: ["window_id"]
+            isOneToOne: false
+            referencedRelation: "hl_shadow_windows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hl_shadow_windows: {
+        Row: {
+          config: Json
+          created_at: string
+          daily_request_budget: number
+          ended_at: string | null
+          freshness_sla_seconds: number
+          id: string
+          match_coverage_sla: number
+          notes: string | null
+          odds_coverage_sla: number
+          planned_end_at: string
+          provider_id: string
+          reserve_requests: number
+          scope: string
+          sports: string[]
+          started_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          daily_request_budget?: number
+          ended_at?: string | null
+          freshness_sla_seconds?: number
+          id?: string
+          match_coverage_sla?: number
+          notes?: string | null
+          odds_coverage_sla?: number
+          planned_end_at: string
+          provider_id: string
+          reserve_requests?: number
+          scope: string
+          sports?: string[]
+          started_at: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          daily_request_budget?: number
+          ended_at?: string | null
+          freshness_sla_seconds?: number
+          id?: string
+          match_coverage_sla?: number
+          notes?: string | null
+          odds_coverage_sla?: number
+          planned_end_at?: string
+          provider_id?: string
+          reserve_requests?: number
+          scope?: string
+          sports?: string[]
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_shadow_windows_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "sports_providers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hl_source_reconciliations: {
+        Row: {
+          competition_key: string
+          coverage_pct: number | null
+          created_at: string
+          details: Json
+          expected_matches: number
+          extra_in_highlightly: number
+          highlightly_matches: number
+          id: string
+          kickoff_divergences: number
+          matched_matches: number
+          missing_in_highlightly: number
+          observed_on: string
+          odds_divergences: number
+          score_divergences: number
+          source_name: string
+          sport: string
+          updated_at: string
+          window_id: string
+        }
+        Insert: {
+          competition_key?: string
+          coverage_pct?: number | null
+          created_at?: string
+          details?: Json
+          expected_matches?: number
+          extra_in_highlightly?: number
+          highlightly_matches?: number
+          id?: string
+          kickoff_divergences?: number
+          matched_matches?: number
+          missing_in_highlightly?: number
+          observed_on: string
+          odds_divergences?: number
+          score_divergences?: number
+          source_name: string
+          sport: string
+          updated_at?: string
+          window_id: string
+        }
+        Update: {
+          competition_key?: string
+          coverage_pct?: number | null
+          created_at?: string
+          details?: Json
+          expected_matches?: number
+          extra_in_highlightly?: number
+          highlightly_matches?: number
+          id?: string
+          kickoff_divergences?: number
+          matched_matches?: number
+          missing_in_highlightly?: number
+          observed_on?: string
+          odds_divergences?: number
+          score_divergences?: number
+          source_name?: string
+          sport?: string
+          updated_at?: string
+          window_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_source_reconciliations_window_id_fkey"
+            columns: ["window_id"]
+            isOneToOne: false
+            referencedRelation: "hl_phase7_window_health_v"
+            referencedColumns: ["window_id"]
+          },
+          {
+            foreignKeyName: "hl_source_reconciliations_window_id_fkey"
+            columns: ["window_id"]
+            isOneToOne: false
+            referencedRelation: "hl_shadow_windows"
             referencedColumns: ["id"]
           },
         ]
@@ -5133,6 +5381,32 @@ export type Database = {
       }
     }
     Views: {
+      hl_phase7_window_health_v: {
+        Row: {
+          daily_request_budget: number | null
+          ended_at: string | null
+          freshness_sla_seconds: number | null
+          gate_status: string | null
+          match_coverage_sla: number | null
+          maximum_freshness_p95_seconds: number | null
+          maximum_latency_p95_ms: number | null
+          minimum_match_coverage_pct: number | null
+          minimum_odds_coverage_pct: number | null
+          observed_days: number | null
+          odds_coverage_sla: number | null
+          open_critical_issues: number | null
+          planned_end_at: string | null
+          requests_used: number | null
+          reserve_requests: number | null
+          scope: string | null
+          sports: string[] | null
+          started_at: string | null
+          status: string | null
+          unrecovered_jobs: number | null
+          window_id: string | null
+        }
+        Relationships: []
+      }
       prognosticos_clv: {
         Row: {
           clv: number | null
@@ -5268,6 +5542,7 @@ export type Database = {
           request_params: Json
           resource: string
           scheduled_at: string
+          shadow_scope: string | null
           sport: string
           started_at: string | null
           status: string
@@ -5311,6 +5586,7 @@ export type Database = {
           request_params: Json
           resource: string
           scheduled_at: string
+          shadow_scope: string | null
           sport: string
           started_at: string | null
           status: string
@@ -5349,6 +5625,7 @@ export type Database = {
           request_params: Json
           resource: string
           scheduled_at: string
+          shadow_scope: string | null
           sport: string
           started_at: string | null
           status: string
@@ -5501,6 +5778,77 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      refresh_highlightly_shadow_observation: {
+        Args: {
+          p_matches_expected?: number
+          p_observed_on: string
+          p_scope: string
+          p_sport: string
+          p_window_id: string
+        }
+        Returns: {
+          created_at: string
+          freshness_p95_seconds: number | null
+          id: string
+          jobs_dead: number
+          jobs_partial: number
+          jobs_pending: number
+          jobs_retry: number
+          jobs_succeeded: number
+          jobs_total: number
+          latency_p50_ms: number | null
+          latency_p95_ms: number | null
+          match_coverage_pct: number | null
+          matches_expected: number
+          matches_seen: number
+          matches_with_odds: number
+          observed_on: string
+          odds_coverage_pct: number | null
+          open_critical_issues: number
+          open_error_issues: number
+          open_warning_issues: number
+          requests_used: number
+          source_metadata: Json
+          sport: string
+          updated_at: string
+          window_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "hl_shadow_observations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      refresh_highlightly_source_reconciliation: {
+        Args: { p_observed_on: string; p_sport: string; p_window_id: string }
+        Returns: {
+          competition_key: string
+          coverage_pct: number | null
+          created_at: string
+          details: Json
+          expected_matches: number
+          extra_in_highlightly: number
+          highlightly_matches: number
+          id: string
+          kickoff_divergences: number
+          matched_matches: number
+          missing_in_highlightly: number
+          observed_on: string
+          odds_divergences: number
+          score_divergences: number
+          source_name: string
+          sport: string
+          updated_at: string
+          window_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "hl_source_reconciliations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       refresh_sports_odds_consensus: {
         Args: {
