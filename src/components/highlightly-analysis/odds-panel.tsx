@@ -51,6 +51,8 @@ type MovementPoint = {
   [selection: string]: string | number;
 };
 
+const EMPTY_FAMILIES: string[] = [];
+
 function key(record: JsonRecord, camel: string, snake = camel): string | null {
   return jsonString(record[camel]) ?? jsonString(record[snake]);
 }
@@ -150,15 +152,26 @@ function movementSeries(
     .sort((a, b) => a.timestamp - b.timestamp);
 }
 
-export default function OddsPanel({ detail }: { detail: MatchDetail }) {
+export default function OddsPanel({
+  detail,
+  preferredFamilies = EMPTY_FAMILIES,
+}: {
+  detail: MatchDetail;
+  preferredFamilies?: string[];
+}) {
   const families = useMemo(() => [...new Set(detail.odds.map(marketFamily))], [detail.odds]);
   const initialFamily =
-    families.find((value) => value.toLowerCase().includes("total")) ?? families[0] ?? "";
+    families.find((value) =>
+      preferredFamilies.some((preferred) => value.toLowerCase().includes(preferred)),
+    ) ??
+    families.find((value) => value.toLowerCase().includes("total")) ??
+    families[0] ??
+    "";
   const [family, setFamily] = useState(initialFamily);
 
   useEffect(() => {
-    if (!families.includes(family)) setFamily(initialFamily);
-  }, [families, family, initialFamily]);
+    if (preferredFamilies.length || !families.includes(family)) setFamily(initialFamily);
+  }, [families, family, initialFamily, preferredFamilies]);
 
   const familyOdds = useMemo(
     () => detail.odds.filter((quote) => marketFamily(quote) === family),

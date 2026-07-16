@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
+  analysisPresets,
   analysisSportLabels,
   fetchDailyMatches,
   fetchMatchDetail,
@@ -39,27 +40,6 @@ export interface CentralEsportivaSearch {
   date: string;
   match?: string;
 }
-
-const presetOptions: Record<AnalysisSportFilter, string[]> = {
-  all: ["Visão geral", "Odds e movimento"],
-  football: ["Geral / forma", "Gols e xG", "1X2 / BTTS", "Cantos", "Handicap", "Odds e movimento"],
-  baseball: [
-    "Geral / forma",
-    "Ataque",
-    "Starting pitchers",
-    "Bullpen",
-    "Totais",
-    "Odds e movimento",
-  ],
-  basketball: [
-    "Geral / forma",
-    "Eficiência e pace",
-    "Arremessos",
-    "Rebotes / turnovers",
-    "Totais",
-    "Odds e movimento",
-  ],
-};
 
 function shiftDate(value: string, amount: number): string {
   const date = new Date(`${value}T12:00:00`);
@@ -112,11 +92,9 @@ export function CentralEsportiva({
   const queryClient = useQueryClient();
   const [text, setText] = useState("");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [preset, setPreset] = useState(presetOptions[search.sport][0]);
+  const [presetId, setPresetId] = useState(analysisPresets[search.sport][0].id);
   const deferredText = useDeferredValue(text.trim().toLocaleLowerCase("pt-BR"));
   const { favorites, toggle } = useFavoriteMatches();
-
-  useEffect(() => setPreset(presetOptions[search.sport][0]), [search.sport]);
 
   const matchesQuery = useQuery({
     queryKey: ["highlightly-analysis", "daily", search.sport, search.date],
@@ -129,7 +107,13 @@ export function CentralEsportiva({
     return matches.filter((match) => {
       if (favoritesOnly && !favorites.has(String(match.match_id))) return false;
       if (!deferredText) return true;
-      return [match.home_team_name, match.away_team_name, match.competition_name]
+      return [
+        match.home_team_name,
+        match.away_team_name,
+        match.competition_name,
+        match.country_name,
+        match.country_code,
+      ]
         .filter(Boolean)
         .join(" ")
         .toLocaleLowerCase("pt-BR")
@@ -137,6 +121,15 @@ export function CentralEsportiva({
     });
   }, [matches, favoritesOnly, favorites, deferredText]);
   const selectedMatch = matches.find((match) => String(match.match_id) === search.match);
+  const presetSport = selectedMatch?.sport ?? search.sport;
+  const availablePresets = analysisPresets[presetSport];
+  const activePreset =
+    availablePresets.find((option) => option.id === presetId) ?? availablePresets[0];
+
+  useEffect(() => {
+    setPresetId(analysisPresets[presetSport][0].id);
+  }, [presetSport]);
+
   const detailQuery = useQuery({
     queryKey: ["highlightly-analysis", "detail", selectedMatch?.sport, selectedMatch?.match_id],
     queryFn: () => fetchMatchDetail(selectedMatch!.sport, String(selectedMatch!.match_id)),
@@ -147,7 +140,7 @@ export function CentralEsportiva({
   const updatedAt = latestUpdate(matches);
 
   function selectMatch(match: DailyMatch) {
-    onSearchChange({ sport: match.sport, date: search.date, match: String(match.match_id) });
+    onSearchChange({ sport: search.sport, date: search.date, match: String(match.match_id) });
   }
 
   return (
@@ -157,9 +150,6 @@ export function CentralEsportiva({
           <div className="flex min-w-0 items-center justify-between gap-3">
             <div>
               <h1 className="text-lg font-semibold tracking-tight">Central de Análises</h1>
-              <p className="text-[10px] text-muted-foreground">
-                Highlightly · read models canônicos
-              </p>
             </div>
             <Badge variant="outline" className="xl:hidden">
               {filteredMatches.length} jogos
@@ -253,15 +243,15 @@ export function CentralEsportiva({
           </ToggleGroup>
           <div className="flex items-center gap-2">
             <SlidersHorizontal className="size-3.5 text-muted-foreground" aria-hidden="true" />
-            <Select value={preset} onValueChange={setPreset}>
+            <Select value={activePreset.id} onValueChange={setPresetId} disabled={!selectedMatch}>
               <SelectTrigger className="h-8 w-48" aria-label="Preset analítico">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  {presetOptions[search.sport].map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {option}
+                  {availablePresets.map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
+                      {option.label}
                     </SelectItem>
                   ))}
                 </SelectGroup>
@@ -292,7 +282,7 @@ export function CentralEsportiva({
             aria-label="Explorador de partidas"
           >
             <div className="flex h-9 shrink-0 items-center justify-between border-b border-border px-3 text-[10px] text-muted-foreground">
-              <span>Hoje, {formatAnalysisDate(search.date)}</span>
+              <span>Jogos de {formatAnalysisDate(search.date)}</span>
               <span>{filteredMatches.length} resultados</span>
             </div>
             <MatchExplorer
@@ -333,6 +323,7 @@ export function CentralEsportiva({
                   detail={detailQuery.data}
                   isLoading={detailQuery.isLoading}
                   error={detailQuery.error}
+                  preset={activePreset}
                   onClose={() => onSearchChange({ sport: search.sport, date: search.date }, true)}
                 />
               </div>

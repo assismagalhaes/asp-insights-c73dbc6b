@@ -2,7 +2,13 @@ import { useDeferredValue, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { isJsonRecord, jsonNumber, jsonString, type JsonRecord } from "@/lib/highlightly-analysis";
+import {
+  isJsonRecord,
+  jsonNumber,
+  jsonString,
+  translateAnalyticsLabel,
+  type JsonRecord,
+} from "@/lib/highlightly-analysis";
 import { AnalysisEmpty, SectionLabel } from "./analysis-primitives";
 
 type MetricPair = {
@@ -13,6 +19,8 @@ type MetricPair = {
   home: JsonRecord | null;
   away: JsonRecord | null;
 };
+
+const EMPTY_TERMS: string[] = [];
 
 function value(record: JsonRecord | null): string {
   if (!record) return "—";
@@ -39,6 +47,7 @@ export default function StatisticsPanel({
   homeName,
   awayName,
   title = "Estatísticas",
+  filterTerms = EMPTY_TERMS,
 }: {
   rows: JsonRecord[];
   homeTeamId: string | null;
@@ -46,6 +55,7 @@ export default function StatisticsPanel({
   homeName: string;
   awayName: string;
   title?: string;
+  filterTerms?: string[];
 }) {
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search.trim().toLocaleLowerCase("pt-BR"));
@@ -61,11 +71,17 @@ export default function StatisticsPanel({
       const group = jsonString(row.group) ?? "Geral";
       const scope = jsonString(row.scopeKey) ?? "";
       const split = jsonString(row.splitKey) ?? "";
-      const pairKey = `${group}|${scope}|${split}|${metricKey}`;
+      const player = jsonString(row.player) ?? "";
+      const translatedGroup = [
+        ...new Set([group, scope, split].filter(Boolean).map(translateAnalyticsLabel)),
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      const pairKey = `${group}|${scope}|${split}|${player}|${metricKey}`;
       const pair = metrics.get(pairKey) ?? {
         key: pairKey,
-        name: jsonString(row.displayName) ?? metricKey.replaceAll("_", " "),
-        group: [group, scope, split].filter(Boolean).join(" · "),
+        name: translateAnalyticsLabel(jsonString(row.displayName) ?? metricKey),
+        group: [player, translatedGroup].filter(Boolean).join(" · ") || "Geral",
         unit: jsonString(row.unit),
         home: null,
         away: null,
@@ -76,22 +92,26 @@ export default function StatisticsPanel({
       metrics.set(pairKey, pair);
     }
 
+    const normalizedTerms = filterTerms.map((term) => term.toLocaleLowerCase("pt-BR"));
     const filtered = [...metrics.values()].filter((metric) => {
-      if (!deferredSearch) return true;
-      return `${metric.name} ${metric.group}`.toLocaleLowerCase("pt-BR").includes(deferredSearch);
+      const searchable = `${metric.name} ${metric.group}`.toLocaleLowerCase("pt-BR");
+      if (normalizedTerms.length && !normalizedTerms.some((term) => searchable.includes(term))) {
+        return false;
+      }
+      return !deferredSearch || searchable.includes(deferredSearch);
     });
     const grouped = new Map<string, MetricPair[]>();
     for (const metric of filtered) {
       grouped.set(metric.group, [...(grouped.get(metric.group) ?? []), metric]);
     }
     return grouped;
-  }, [rows, homeTeamId, awayTeamId, deferredSearch]);
+  }, [rows, homeTeamId, awayTeamId, deferredSearch, filterTerms]);
 
   if (!rows.length) {
     return (
       <AnalysisEmpty
         title={`${title} indisponíveis`}
-        description="Não existem métricas normalizadas para este recorte."
+        description="Este conjunto ainda não foi coletado ou validado para a partida."
       />
     );
   }
@@ -106,7 +126,7 @@ export default function StatisticsPanel({
         <Input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Buscar qualquer métrica..."
+          placeholder="Buscar métrica em português..."
           className="pl-9"
         />
       </div>
@@ -156,8 +176,8 @@ export default function StatisticsPanel({
       ))}
       {!groups.size ? (
         <AnalysisEmpty
-          title="Nenhuma métrica encontrada"
-          description="Tente outro termo de busca."
+          title="Sem métricas para este recorte"
+          description="O filtro selecionado não encontrou dados coletados. Escolha outra visão analítica."
         />
       ) : null}
     </div>

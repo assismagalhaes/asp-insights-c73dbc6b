@@ -70,6 +70,45 @@ class HighlightlyPhaseFourBasketballTests(unittest.TestCase):
         self.assertEqual(home["score_data"]["current"], 90)
         self.assertEqual(home["score_data"]["periods"]["q1"], 22)
 
+    def test_wnba_names_are_canonical_without_losing_provider_payload(self):
+        payload = [{
+            "id": 100,
+            "date": "2026-07-16T22:00:00Z",
+            "league": {"id": 11847, "name": "NBA Women", "season": 2026},
+            "homeTeam": {"id": 1, "name": "Washington Mystics Women"},
+            "awayTeam": {"id": 2, "name": "Portland Women"},
+            "state": {"description": "Scheduled"},
+        }]
+        batch = normalize_basketball(payload, context("basketball.matches"))
+        competition = batch.table_rows("sports_competitions")[0]
+        teams = {row["name"]: row for row in batch.table_rows("sports_teams")}
+
+        self.assertEqual(competition["name"], "WNBA")
+        self.assertEqual(competition["short_name"], "WNBA")
+        self.assertEqual(competition["metadata"]["provider_name"], "NBA Women")
+        self.assertEqual(
+            teams["Washington Mystics Women"]["display_name"],
+            "Washington Mystics W",
+        )
+        self.assertEqual(teams["Portland Women"]["display_name"], "Portland Fire W")
+
+    def test_basketball_highlights_fill_detail_contract_fields(self):
+        payload = [{
+            "id": 501,
+            "matchId": 100,
+            "title": "Resumo",
+            "imgUrl": "https://example.test/thumb.jpg",
+            "url": "https://example.test/highlight",
+            "durationSeconds": 42,
+            "publishedAt": "2026-07-16T23:00:00Z",
+        }]
+        batch = normalize_basketball(payload, context("basketball.highlights"))
+        highlight = batch.table_rows("sports_highlights")[0]
+
+        self.assertEqual(highlight["thumbnail_url"], payload[0]["imgUrl"])
+        self.assertEqual(highlight["duration_seconds"], 42)
+        self.assertEqual(highlight["published_at"], payload[0]["publishedAt"])
+
     def test_twenty_one_raw_metrics_and_six_efficiencies_per_team(self):
         home_values = {
             "Succesful Field Goals": 35, "Field Goals": 67,

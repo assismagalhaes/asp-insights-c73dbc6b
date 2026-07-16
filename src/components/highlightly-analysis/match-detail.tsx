@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CalendarClock, ExternalLink, ShieldAlert, X } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -14,12 +14,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  analysisSportLabels,
   getMatchScore,
   isJsonRecord,
   jsonArray,
   jsonNumber,
   jsonString,
   matchStatusLabel,
+  normalizeCompetitionName,
+  translateAnalyticsLabel,
+  type AnalysisDetailTab,
+  type AnalysisPreset,
   type DailyMatch,
   type JsonRecord,
   type MatchDetail,
@@ -28,16 +33,6 @@ import { AnalysisEmpty, AnalysisError, SectionLabel, TeamMark } from "./analysis
 
 const OddsPanel = lazy(() => import("./odds-panel"));
 const StatisticsPanel = lazy(() => import("./statistics-panel"));
-
-type DetailTab =
-  | "summary"
-  | "odds"
-  | "statistics"
-  | "form"
-  | "lineups"
-  | "events"
-  | "standings"
-  | "source";
 
 function formatDateTime(value: string | null): string {
   if (!value) return "Data não informada";
@@ -103,7 +98,12 @@ function SummaryPanel({ match, detail }: { match: DailyMatch; detail: MatchDetai
             className="flex items-baseline justify-between gap-2 border-b border-border px-3 py-2.5 sm:nth-[n+4]:border-b-0"
           >
             <span className="text-xs text-muted-foreground">{label}</span>
-            <strong className="font-mono text-sm">{count}</strong>
+            <span className="flex flex-col items-end">
+              <strong className="font-mono text-sm">{count || "—"}</strong>
+              <span className="text-[9px] text-muted-foreground">
+                {count ? "coletados" : "não coletado"}
+              </span>
+            </span>
           </div>
         ))}
       </section>
@@ -200,9 +200,14 @@ function LineupsPanel({ detail }: { detail: MatchDetail }) {
             <div className="mb-2 flex items-center justify-between">
               <SectionLabel>Escalação</SectionLabel>
               <Badge variant={lineup.confirmed === true ? "secondary" : "outline"}>
-                {lineup.confirmed === true ? "Confirmada" : "Não confirmada"}
+                {lineup.confirmed === true ? "Confirmada" : "Prévia"}
               </Badge>
             </div>
+            {lineup.confirmed !== true ? (
+              <p className="mb-2 text-[10px] text-muted-foreground">
+                Escalação recebida, mas ainda não confirmada oficialmente pela fonte.
+              </p>
+            ) : null}
             <div className="flex flex-col divide-y divide-border">
               {players.map((player, playerIndex) => (
                 <div
@@ -252,9 +257,7 @@ function EventsPanel({ detail }: { detail: MatchDetail }) {
           <span className="font-mono text-muted-foreground">
             {jsonString(event.clock) ?? jsonString(event.periodKey) ?? "—"}
           </span>
-          <span className="capitalize">
-            {(jsonString(event.type) ?? "evento").replaceAll("_", " ")}
-          </span>
+          <span>{translateAnalyticsLabel(jsonString(event.type) ?? "evento")}</span>
         </div>
       ))}
     </div>
@@ -319,8 +322,9 @@ function StandingsPanel({ detail }: { detail: MatchDetail }) {
 function SourcePanel({ match, detail }: { match: DailyMatch; detail: MatchDetail }) {
   const facts = [
     ["ID canônico", match.match_id],
-    ["Esporte", match.sport],
-    ["Competição", match.competition_name],
+    ["Esporte", analysisSportLabels[match.sport]],
+    ["País", match.country_name ?? match.country_code],
+    ["Competição", normalizeCompetitionName(match)],
     ["Temporada", match.season_label],
     ["Status do provider", match.provider_status],
     ["Atualizado", match.updated_at ? formatDateTime(match.updated_at) : null],
@@ -346,19 +350,26 @@ export function MatchDetailView({
   detail,
   isLoading,
   error,
+  preset,
   onClose,
 }: {
   match: DailyMatch;
   detail?: MatchDetail;
   isLoading: boolean;
   error?: Error | null;
+  preset: AnalysisPreset;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<DetailTab>("summary");
+  const [tab, setTab] = useState<AnalysisDetailTab>(preset.tab);
+
+  useEffect(() => {
+    setTab(preset.tab);
+  }, [match.match_id, preset.id, preset.tab]);
+
   const homeScore = getMatchScore(match, "home");
   const awayScore = getMatchScore(match, "away");
   const status = matchStatusLabel(match.status);
-  const tabs: Array<[DetailTab, string]> = [
+  const tabs: Array<[AnalysisDetailTab, string]> = [
     ["summary", "Resumo"],
     ["odds", "Odds"],
     ["statistics", "Estatísticas"],
@@ -368,6 +379,12 @@ export function MatchDetailView({
     ["standings", "Classificação"],
     ["source", "Fonte"],
   ];
+  const statisticsRows =
+    preset.source === "startingPitchers"
+      ? (detail?.startingPitcherStatistics ?? [])
+      : (detail?.teamStatistics ?? []);
+  const statisticsTitle =
+    preset.source === "startingPitchers" ? "Arremessadores titulares" : "Estatísticas";
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
@@ -391,7 +408,7 @@ export function MatchDetailView({
           <X />
         </Button>
         <div className="mb-3 flex items-center justify-center gap-1 text-[10px] text-muted-foreground">
-          <span>{match.competition_name || "Competição"}</span>
+          <span>{normalizeCompetitionName(match)}</span>
           <span>·</span>
           <span className={status === "Finalizado" ? "text-success" : "text-primary"}>
             {status}
@@ -450,7 +467,7 @@ export function MatchDetailView({
 
       <Tabs
         value={tab}
-        onValueChange={(value) => setTab(value as DetailTab)}
+        onValueChange={(value) => setTab(value as AnalysisDetailTab)}
         className="flex min-h-0 flex-1 flex-col"
       >
         <div className="shrink-0 overflow-x-auto border-b border-border px-2 md:px-4">
@@ -478,15 +495,17 @@ export function MatchDetailView({
                 <SummaryPanel match={match} detail={detail} />
               </TabsContent>
               <TabsContent value="odds" className="m-0">
-                <OddsPanel detail={detail} />
+                <OddsPanel detail={detail} preferredFamilies={preset.marketFamilies} />
               </TabsContent>
               <TabsContent value="statistics" className="m-0">
                 <StatisticsPanel
-                  rows={detail.teamStatistics}
+                  rows={statisticsRows}
                   homeTeamId={match.home_team_id}
                   awayTeamId={match.away_team_id}
                   homeName={match.home_team_name || "Mandante"}
                   awayName={match.away_team_name || "Visitante"}
+                  title={statisticsTitle}
+                  filterTerms={preset.metricTerms}
                 />
               </TabsContent>
               <TabsContent value="form" className="m-0">

@@ -21,6 +21,39 @@ _LINE = re.compile(r"(?<!\d)([+-]?\d+(?:\.\d+)?)(?!\d)")
 _BOOKMAKER_TOKEN = re.compile(r"[^a-z0-9._-]+")
 _PERIODS = (("q1", 1), ("q2", 2), ("q3", 3), ("q4", 4), ("overTime", 5))
 
+_WNBA_TEAM_NAMES = {
+    "atlanta": "Atlanta Dream W",
+    "atlanta dream": "Atlanta Dream W",
+    "chicago": "Chicago Sky W",
+    "chicago sky": "Chicago Sky W",
+    "connecticut": "Connecticut Sun W",
+    "connecticut sun": "Connecticut Sun W",
+    "dallas": "Dallas Wings W",
+    "dallas wings": "Dallas Wings W",
+    "golden state": "Golden State Valkyries W",
+    "golden state valkyries": "Golden State Valkyries W",
+    "indiana": "Indiana Fever W",
+    "indiana fever": "Indiana Fever W",
+    "las vegas": "Las Vegas Aces W",
+    "las vegas aces": "Las Vegas Aces W",
+    "los angeles": "Los Angeles Sparks W",
+    "los angeles sparks": "Los Angeles Sparks W",
+    "minnesota": "Minnesota Lynx W",
+    "minnesota lynx": "Minnesota Lynx W",
+    "new york": "New York Liberty W",
+    "new york liberty": "New York Liberty W",
+    "phoenix": "Phoenix Mercury W",
+    "phoenix mercury": "Phoenix Mercury W",
+    "portland": "Portland Fire W",
+    "portland fire": "Portland Fire W",
+    "seattle": "Seattle Storm W",
+    "seattle storm": "Seattle Storm W",
+    "toronto": "Toronto Tempo W",
+    "toronto tempo": "Toronto Tempo W",
+    "washington": "Washington Mystics W",
+    "washington mystics": "Washington Mystics W",
+}
+
 SUPPORTED_NORMALIZERS = frozenset({
     "basketball.bookmakers",
     "basketball.countries",
@@ -49,6 +82,17 @@ def _external(value: Any, fallback: str) -> str:
 
 def _bookmaker_token(value: Any) -> str:
     return _BOOKMAKER_TOKEN.sub("-", str(value or "").strip().casefold()).strip("-")
+
+
+def _canonical_competition_name(value: Any) -> str:
+    name = str(value or "unknown").strip()
+    return "WNBA" if name.casefold() in {"nba women", "wnba"} else name
+
+
+def _canonical_team_display_name(value: Any) -> str:
+    name = str(value or "").strip()
+    base_name = re.sub(r"\s+(?:women|woman|w)$", "", name, flags=re.IGNORECASE).strip()
+    return _WNBA_TEAM_NAMES.get(base_name.casefold(), name)
 
 
 def _status(state: Any) -> str:
@@ -85,11 +129,15 @@ def _ensure_country(batch: NormalizedBatch, ctx: NormalizationContext, country: 
 def _ensure_team(batch: NormalizedBatch, ctx: NormalizationContext, team: Mapping[str, Any]) -> str:
     external_id = _external(team.get("id"), f"name:{slug(team.get('name'))}")
     team_id = stable_id(ctx.provider_id, ctx.sport_id, "team", external_id)
+    raw_name = str(team.get("name") or external_id)
+    display_name = _canonical_team_display_name(
+        team.get("displayName") or team.get("fullName") or raw_name
+    )
     batch.add("sports_teams", {
         "id": team_id,
         "sport_id": ctx.sport_id,
-        "name": str(team.get("name") or external_id),
-        "display_name": team.get("displayName") or team.get("fullName"),
+        "name": raw_name,
+        "display_name": display_name,
         "abbreviation": team.get("abbreviation"),
         "team_type": team.get("type"),
         "logo_url": team.get("logo") or team.get("logoUrl"),
@@ -111,18 +159,19 @@ def _ensure_competition(
     country_id: str | None = None,
 ) -> tuple[str, str | None]:
     league_data = dict(league) if isinstance(league, Mapping) else {"name": league}
-    name = league_data.get("name") or league_data.get("leagueName") or "unknown"
-    external_id = _external(league_data.get("id"), f"name:{slug(name)}")
+    provider_name = league_data.get("name") or league_data.get("leagueName") or "unknown"
+    name = _canonical_competition_name(provider_name)
+    external_id = _external(league_data.get("id"), f"name:{slug(provider_name)}")
     competition_id = stable_id(ctx.provider_id, ctx.sport_id, "competition", external_id)
     batch.add("sports_competitions", {
         "id": competition_id,
         "sport_id": ctx.sport_id,
         "country_id": country_id,
         "name": str(name),
-        "short_name": league_data.get("shortName") or league_data.get("abbreviation"),
+        "short_name": "WNBA" if name == "WNBA" else league_data.get("shortName") or league_data.get("abbreviation"),
         "competition_type": league_data.get("type"),
         "logo_url": league_data.get("logo"),
-        "metadata": {"provider": "highlightly"},
+        "metadata": {"provider": "highlightly", "provider_name": provider_name},
     })
     add_provider_mapping(batch, ctx, "competition", external_id, competition_id, league_data)
     season_value = season if season is not None else league_data.get("season")
@@ -674,8 +723,11 @@ def _normalize_highlights(payload: Any, ctx: NormalizationContext) -> Normalized
             "channel_name": highlight.get("channel"),
             "category": highlight.get("category"),
             "preview_url": highlight.get("imgUrl"),
+            "thumbnail_url": highlight.get("imgUrl"),
             "content_url": str(highlight.get("url") or highlight.get("embedUrl") or ""),
             "embed_url": highlight.get("embedUrl"),
+            "duration_seconds": highlight.get("durationSeconds"),
+            "published_at": highlight.get("publishedAt") or ctx.captured_at,
             "source_raw_object_id": ctx.raw_object_id,
             "metadata": {"match": match},
         })

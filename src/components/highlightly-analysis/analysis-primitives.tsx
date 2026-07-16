@@ -78,7 +78,7 @@ export function MatchListSkeleton() {
   return (
     <div className="flex flex-col gap-px" aria-label="Carregando partidas">
       {Array.from({ length: 8 }, (_, index) => (
-        <div key={index} className="flex h-[70px] items-center gap-3 border-b border-border px-3">
+        <div key={index} className="flex h-[76px] items-center gap-3 border-b border-border px-3">
           <Skeleton className="h-4 w-10" />
           <Skeleton className="h-8 w-20" />
           <div className="flex flex-1 flex-col gap-2">

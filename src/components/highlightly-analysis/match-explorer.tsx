@@ -10,7 +10,7 @@ import {
 } from "@/lib/highlightly-analysis";
 import { AnalysisEmpty, MatchListSkeleton } from "./analysis-primitives";
 
-const ROW_HEIGHT = 70;
+const ROW_HEIGHT = 76;
 const OVERSCAN = 6;
 
 function formatKickoff(value: string | null): string {
@@ -62,9 +62,9 @@ export function MatchExplorer({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="grid h-9 shrink-0 grid-cols-[54px_88px_minmax(0,1fr)_72px] items-center border-y border-border px-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+      <div className="grid h-9 shrink-0 grid-cols-[54px_104px_minmax(0,1fr)_72px] items-center border-y border-border px-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
         <span>Hora</span>
-        <span>Liga</span>
+        <span>País / liga</span>
         <span>Jogo</span>
         <span className="text-right">Status</span>
       </div>
@@ -91,7 +91,7 @@ export function MatchExplorer({
                 aria-selected={selected}
                 onClick={() => onSelect(match)}
                 className={cn(
-                  "absolute left-0 grid w-full grid-cols-[54px_88px_minmax(0,1fr)_72px] items-center border-b border-border px-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                  "absolute left-0 grid w-full grid-cols-[54px_104px_minmax(0,1fr)_72px] items-center border-b border-border px-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                   selected
                     ? "bg-primary/10 before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-primary"
                     : "hover:bg-muted/50",
@@ -104,10 +104,21 @@ export function MatchExplorer({
                 <span className="font-mono text-xs text-foreground">
                   {status === "Finalizado" ? "Final" : formatKickoff(match.kickoff_at)}
                 </span>
-                <span className="line-clamp-2 pr-2 text-[10px] leading-4 text-muted-foreground">
-                  {match.competition_short_name ||
-                    match.competition_name ||
-                    analysisSportLabels[match.sport]}
+                <span className="flex min-w-0 flex-col pr-2 text-[10px] leading-4">
+                  <span
+                    className="truncate font-medium text-foreground"
+                    title={match.country_name ?? match.country_code ?? undefined}
+                  >
+                    {match.country_name ?? match.country_code ?? "—"}
+                  </span>
+                  <span
+                    className="truncate text-muted-foreground"
+                    title={match.competition_name ?? undefined}
+                  >
+                    {match.competition_short_name ||
+                      match.competition_name ||
+                      analysisSportLabels[match.sport]}
+                  </span>
                 </span>
                 <span className="flex min-w-0 flex-col gap-1">
                   <span className="truncate text-xs font-medium">
@@ -140,7 +151,7 @@ export function MatchExplorer({
       </div>
       <div className="flex h-9 shrink-0 items-center justify-between border-t border-border px-3 text-[10px] text-muted-foreground">
         <span>{matches.length} partidas</span>
-        <span>Lista virtualizada</span>
+        <span>Dados disponíveis</span>
       </div>
     </div>
   );
