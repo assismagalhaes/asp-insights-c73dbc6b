@@ -49,19 +49,20 @@ def main() -> int:
         return 0
 
     target_ids = {str(job["id"]) for job in retry_jobs}
-    priority_zero_jobs: list[dict] = []
+    replay_priority = -10
+    replay_priority_jobs: list[dict] = []
     for status in ("pending", "retry"):
-        priority_zero_jobs.extend(
+        replay_priority_jobs.extend(
             repository.select_rows(
                 "hl_ingestion_jobs",
                 columns="id,status",
-                filters={"status": status, "priority": 0},
+                filters={"status": status, "priority": replay_priority},
                 limit=201,
             )
         )
-    priority_outsiders = [row for row in priority_zero_jobs if str(row["id"]) not in target_ids]
+    priority_outsiders = [row for row in replay_priority_jobs if str(row["id"]) not in target_ids]
     if priority_outsiders:
-        raise RuntimeError("Another priority-zero ingestion job could preempt the bounded replay")
+        raise RuntimeError("Another ingestion job uses the isolated raw-replay priority")
 
     prepared: list[dict] = []
     for job in retry_jobs:
@@ -84,7 +85,7 @@ def main() -> int:
             "hl_ingestion_jobs",
             {
                 "reprocess_raw_object_id": item["raw"]["id"],
-                "priority": 0,
+                "priority": replay_priority,
                 "scheduled_at": scheduled_at,
             },
             filters={"id": item["job"]["id"], "status": "retry"},

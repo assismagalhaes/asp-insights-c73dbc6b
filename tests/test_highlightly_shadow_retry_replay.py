@@ -48,7 +48,7 @@ class HighlightlyShadowRetryReplayTests(unittest.TestCase):
         repository.patch_rows.assert_called_once()
         patch_values = repository.patch_rows.call_args.args[1]
         self.assertEqual(patch_values["reprocess_raw_object_id"], "raw-1")
-        self.assertEqual(patch_values["priority"], 0)
+        self.assertEqual(patch_values["priority"], -10)
         repository.set_provider_enabled.assert_any_call("highlightly", True)
         repository.set_provider_enabled.assert_any_call("highlightly", False)
         self.assertEqual(repository.daily_request_usage.call_count, 2)
