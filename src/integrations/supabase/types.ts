@@ -2748,8 +2748,8 @@ export type Database = {
           source_name: string | null
           source_raw_object_id: string | null
           sport_id: string
-          title: string
           thumbnail_url: string | null
+          title: string
           updated_at: string
         }
         Insert: {
@@ -2772,8 +2772,8 @@ export type Database = {
           source_name?: string | null
           source_raw_object_id?: string | null
           sport_id: string
-          title: string
           thumbnail_url?: string | null
+          title: string
           updated_at?: string
         }
         Update: {
@@ -2796,8 +2796,8 @@ export type Database = {
           source_name?: string | null
           source_raw_object_id?: string | null
           sport_id?: string
-          title?: string
           thumbnail_url?: string | null
+          title?: string
           updated_at?: string
         }
         Relationships: [
