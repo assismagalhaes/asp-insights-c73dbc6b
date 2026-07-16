@@ -24,8 +24,6 @@ class HighlightlyShadowRetryReplayTests(unittest.TestCase):
         repository.select_rows.side_effect = [
             [],
             [{"id": "job-1", "endpoint_key": "football.OddsV2", "status": "retry"}],
-            [],
-            [],
             [{"id": "raw-1", "job_id": "job-1", "created_at": "2026-07-16T12:00:00Z"}],
         ]
         repository.daily_request_usage.side_effect = [237, 237]
@@ -45,10 +43,11 @@ class HighlightlyShadowRetryReplayTests(unittest.TestCase):
             exit_code = replay.main()
 
         self.assertEqual(exit_code, 0)
-        repository.patch_rows.assert_called_once()
-        patch_values = repository.patch_rows.call_args.args[1]
-        self.assertEqual(patch_values["reprocess_raw_object_id"], "raw-1")
-        self.assertEqual(patch_values["priority"], -10)
+        repository.upsert_rows.assert_called_once()
+        replay_row = repository.upsert_rows.call_args.args[1][0]
+        self.assertEqual(replay_row["reprocess_raw_object_id"], "raw-1")
+        self.assertEqual(replay_row["priority"], 0)
+        self.assertEqual(replay_row["scheduled_at"], "1970-01-01T00:00:00+00:00")
         repository.set_provider_enabled.assert_any_call("highlightly", True)
         repository.set_provider_enabled.assert_any_call("highlightly", False)
         self.assertEqual(repository.daily_request_usage.call_count, 2)

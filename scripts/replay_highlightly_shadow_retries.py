@@ -39,7 +39,7 @@ def main() -> int:
 
     retry_jobs = repository.select_rows(
         "hl_ingestion_jobs",
-        columns="id,endpoint_key,status",
+        columns="*",
         filters={"shadow_scope": args.scope, "sport": args.sport, "status": "retry"},
         order="scheduled_at.asc,created_at.asc",
         limit=args.max_jobs,
@@ -49,20 +49,6 @@ def main() -> int:
         return 0
 
     target_ids = {str(job["id"]) for job in retry_jobs}
-    replay_priority = -10
-    replay_priority_jobs: list[dict] = []
-    for status in ("pending", "retry"):
-        replay_priority_jobs.extend(
-            repository.select_rows(
-                "hl_ingestion_jobs",
-                columns="id,status",
-                filters={"status": status, "priority": replay_priority},
-                limit=201,
-            )
-        )
-    priority_outsiders = [row for row in replay_priority_jobs if str(row["id"]) not in target_ids]
-    if priority_outsiders:
-        raise RuntimeError("Another ingestion job uses the isolated raw-replay priority")
 
     prepared: list[dict] = []
     for job in retry_jobs:
@@ -79,17 +65,17 @@ def main() -> int:
 
     request_date = datetime.now(timezone.utc).date().isoformat()
     usage_before = repository.daily_request_usage(str(provider["id"]), request_date)
-    scheduled_at = datetime.now(timezone.utc).isoformat()
+    replay_rows: list[dict] = []
     for item in prepared:
-        repository.patch_rows(
-            "hl_ingestion_jobs",
+        replay_rows.append(
             {
+                **item["job"],
                 "reprocess_raw_object_id": item["raw"]["id"],
-                "priority": replay_priority,
-                "scheduled_at": scheduled_at,
-            },
-            filters={"id": item["job"]["id"], "status": "retry"},
+                "priority": 0,
+                "scheduled_at": "1970-01-01T00:00:00+00:00",
+            }
         )
+    repository.upsert_rows("hl_ingestion_jobs", replay_rows, on_conflict="id")
 
     client = HighlightlyClient(
         os.environ.get("HIGHLIGHTLY_API_KEY", ""),
