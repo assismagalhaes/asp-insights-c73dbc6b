@@ -190,6 +190,7 @@ const ANALYTICS_LABELS: Record<string, string> = {
   home: "Casa",
   away: "Fora",
   total: "Geral",
+  season: "Temporada",
   "round:post_season": "Pós-temporada",
   "round:postseason": "Pós-temporada",
   "round:preseason": "Pré-temporada",
