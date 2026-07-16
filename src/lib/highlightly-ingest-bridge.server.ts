@@ -18,7 +18,14 @@ const ALLOWED_PREFER = new Set([
   "return=representation",
   "resolution=merge-duplicates,return=representation",
 ]);
-const PATCHABLE_TABLES = new Set(["sports_providers", "hl_ingestion_runs", "hl_raw_objects"]);
+const PATCHABLE_TABLES = new Set([
+  "sports_providers",
+  "hl_ingestion_runs",
+  "hl_raw_objects",
+  "hl_shadow_windows",
+  "hl_shadow_observations",
+  "hl_source_reconciliations",
+]);
 
 export const HIGHLIGHTLY_BRIDGE_TABLES = new Set([
   "sports_providers",
@@ -52,6 +59,10 @@ export const HIGHLIGHTLY_BRIDGE_TABLES = new Set([
   "hl_raw_objects",
   "hl_rate_limit_usage",
   "hl_data_quality_issues",
+  "hl_shadow_windows",
+  "hl_shadow_observations",
+  "hl_source_reconciliations",
+  "hl_phase7_window_health_v",
 ]);
 
 export const HIGHLIGHTLY_BRIDGE_RPCS = new Set([
@@ -61,6 +72,8 @@ export const HIGHLIGHTLY_BRIDGE_RPCS = new Set([
   "upsert_sports_odds_quote",
   "upsert_sports_odds_quotes",
   "refresh_sports_odds_consensus",
+  "refresh_highlightly_shadow_observation",
+  "refresh_highlightly_source_reconciliation",
 ]);
 
 export type HighlightlyBridgeTarget = {

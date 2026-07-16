@@ -22,6 +22,9 @@ class HighlightlyBridgeContractTests(unittest.TestCase):
         self.assertIn('HIGHLIGHTLY_BRIDGE_RPCS', verifier)
         self.assertIn('"refresh_sports_odds_consensus"', verifier)
         self.assertIn('"sports_player_box_scores"', verifier)
+        self.assertIn('"hl_shadow_observations"', verifier)
+        self.assertIn('"hl_phase7_window_health_v"', verifier)
+        self.assertIn('"refresh_highlightly_shadow_observation"', verifier)
         self.assertIn('/storage/v1/object/highlightly-raw/', verifier)
 
     def test_nonce_rpc_is_service_role_only(self):

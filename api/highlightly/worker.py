@@ -43,6 +43,8 @@ TABLE_ORDER = (
     "sports_odds_consensus",
 )
 
+_PAGINATION_INTERNAL_KEYS = frozenset(("_fanout", "_fanout_scope", "_shadow_scope"))
+
 
 @dataclass(frozen=True)
 class WorkerResult:
@@ -92,6 +94,7 @@ class HighlightlyWorker:
         worker_id: str,
         registry: EndpointRegistry | None = None,
         enabled: bool = False,
+        daily_quota_ceiling: int | None = None,
     ):
         if not worker_id.strip():
             raise ValueError("worker_id must not be empty")
@@ -100,15 +103,22 @@ class HighlightlyWorker:
         self.worker_id = worker_id.strip()
         self.registry = registry or EndpointRegistry()
         self.enabled = enabled
+        if daily_quota_ceiling is not None and not 1 <= daily_quota_ceiling <= self.registry.daily_limit:
+            raise ValueError(
+                f"daily_quota_ceiling must be between 1 and {self.registry.daily_limit}"
+            )
+        self.daily_quota_ceiling = daily_quota_ceiling
 
     @classmethod
     def from_environment(cls, *, worker_id: str) -> "HighlightlyWorker":
         api_key = os.environ.get("HIGHLIGHTLY_API_KEY", "")
+        raw_quota_ceiling = os.environ.get("HIGHLIGHTLY_DAILY_QUOTA_CEILING", "").strip()
         return cls(
             HighlightlyClient(api_key, base_url=os.environ.get("HIGHLIGHTLY_BASE_URL", "https://sports.highlightly.net")),
             HighlightlyRepository.from_environment(),
             worker_id=worker_id,
             enabled=_truthy(os.environ.get("HIGHLIGHTLY_ANALYSIS_ENABLED")),
+            daily_quota_ceiling=int(raw_quota_ceiling) if raw_quota_ceiling else None,
         )
 
     def normalize_payload(
@@ -197,16 +207,19 @@ class HighlightlyWorker:
         next_params = {
             key: value
             for key, value in request_params.items()
-            if key in operation.parameter_names and value is not None
+            if (key in operation.parameter_names or key in _PAGINATION_INTERNAL_KEYS)
+            and value is not None
         }
         next_params["offset"] = next_offset
         canonical = json.dumps(next_params, sort_keys=True, separators=(",", ":"), default=str)
         dedupe = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        scope = str(next_params.get("_fanout_scope") or "").strip()
+        prefix = f"page:{scope}" if scope else "page"
         self.repository.enqueue_job(
             endpoint_key=operation.key,
             sport=operation.sport,
             resource=operation.resource,
-            dedupe_key=f"page:{operation.key}:{dedupe}",
+            dedupe_key=f"{prefix}:{operation.key}:{dedupe}",
             request_params=next_params,
             priority=operation.priority,
         )
@@ -220,6 +233,9 @@ class HighlightlyWorker:
             for key, value in params.items()
             if (key in operation.parameter_names or key.startswith("_")) and value is not None
         }
+        scope_parts = scope.split(":", 2)
+        if len(scope_parts) == 3 and scope_parts[0] in {"match", "player"}:
+            clean_params["_shadow_scope"] = scope_parts[2]
         canonical = json.dumps(clean_params, sort_keys=True, separators=(",", ":"), default=str)
         digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
         self.repository.enqueue_job(
@@ -560,7 +576,16 @@ class HighlightlyWorker:
                 raw_object_id = str(raw_record["id"])
             else:
                 usage = self.repository.daily_request_usage(str(provider["id"]), captured.date().isoformat())
-                ceiling = self.registry.daily_limit if int(job.get("priority", 4)) == 0 else self.registry.daily_limit - self.registry.reserve
+                default_ceiling = (
+                    self.registry.daily_limit
+                    if int(job.get("priority", 4)) == 0
+                    else self.registry.daily_limit - self.registry.reserve
+                )
+                ceiling = (
+                    min(default_ceiling, self.daily_quota_ceiling)
+                    if self.daily_quota_ceiling is not None
+                    else default_ceiling
+                )
                 if usage >= ceiling:
                     raise WorkerDeferredError(
                         f"Highlightly daily quota guard reached ({usage}/{ceiling})",

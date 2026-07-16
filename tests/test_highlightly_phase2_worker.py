@@ -157,6 +157,28 @@ class HighlightlyPhaseTwoWorkerTests(unittest.TestCase):
         self.assertNotIn("api_key", request["request_params"])
         self.assertTrue(request["dedupe_key"].startswith(f"page:{operation.key}:"))
 
+    def test_pagination_preserves_bounded_fanout_scope(self):
+        repository = Mock()
+        worker = HighlightlyWorker(Mock(), repository, worker_id="test-worker", enabled=True)
+        operation = worker.registry.get("baseball.BaseballMatchController_getMatches")
+        self.assertTrue(
+            worker._enqueue_next_page(
+                {"data": [{"id": 1}], "pagination": {"offset": 0, "limit": 10, "totalCount": 15}},
+                operation=operation,
+                request_params={
+                    "date": "2026-07-15",
+                    "limit": 10,
+                    "offset": 0,
+                    "_fanout": True,
+                    "_fanout_scope": "phase7-scope",
+                },
+            )
+        )
+        request = repository.enqueue_job.call_args.kwargs
+        self.assertTrue(request["request_params"]["_fanout"])
+        self.assertEqual(request["request_params"]["_fanout_scope"], "phase7-scope")
+        self.assertTrue(request["dedupe_key"].startswith("page:phase7-scope:"))
+
     def test_pagination_stops_at_total_count(self):
         repository = Mock()
         worker = HighlightlyWorker(Mock(), repository, worker_id="test-worker", enabled=True)
@@ -214,6 +236,12 @@ class HighlightlyPhaseTwoWorkerTests(unittest.TestCase):
         second_keys = [call.kwargs["dedupe_key"] for call in repository.enqueue_job.call_args_list]
         self.assertEqual(len(first_keys), len(second_keys))
         self.assertTrue(set(first_keys).isdisjoint(second_keys))
+        self.assertTrue(
+            all(
+                call.kwargs["request_params"]["_shadow_scope"] == "shadow-b"
+                for call in repository.enqueue_job.call_args_list
+            )
+        )
 
     def test_worker_persists_raw_before_any_canonical_upsert(self):
         repository = Mock()
@@ -258,6 +286,39 @@ class HighlightlyPhaseTwoWorkerTests(unittest.TestCase):
         calls = [call[0] for call in repository.method_calls]
         self.assertLess(calls.index("store_raw_payload"), calls.index("upsert_rows"))
         repository.finish_job.assert_called_once_with("job-1", "test-worker", "succeeded")
+
+    def test_explicit_quota_ceiling_applies_to_priority_zero_jobs(self):
+        repository = Mock()
+        repository.claim_job.return_value = {
+            "id": "job-1",
+            "endpoint_key": "football.MatchesController_getMatchById",
+            "sport": "football",
+            "priority": 0,
+            "request_params": {"id": 99},
+            "reprocess_raw_object_id": None,
+        }
+        repository.create_run.return_value = {"id": "run-1"}
+        repository.ingestion_context.return_value = {
+            "provider": {"id": PROVIDER_ID, "enabled": True, "contract_version": "6.13.2"},
+            "sport": {"id": SPORT_ID},
+            "bookmakers": [],
+        }
+        repository.daily_request_usage.return_value = 1_500
+        client = Mock()
+        worker = HighlightlyWorker(
+            client,
+            repository,
+            worker_id="phase7-worker",
+            enabled=True,
+            daily_quota_ceiling=1_500,
+        )
+
+        result = worker.run_once()
+
+        self.assertEqual(result.status, "retry")
+        self.assertIn("quota guard", result.message)
+        client.get.assert_not_called()
+        repository.finish_job.assert_called_once()
 
 
 if __name__ == "__main__":

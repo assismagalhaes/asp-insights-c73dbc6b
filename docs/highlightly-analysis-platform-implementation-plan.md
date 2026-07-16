@@ -490,6 +490,11 @@ Aceite:
 
 ### Fase 7 — backfill, QA e shadow
 
+Estado em 15/07/2026: fundação de observabilidade, reconciliação, quota ceiling e executor
+progressivo implementada localmente. Migration e smoke aguardam aplicação no backend Lovable; a
+janela real de sete dias ainda não foi iniciada e o provider permanece desligado. Ver
+`docs/highlightly/phase-7-backfill-shadow-runbook.md`.
+
 Duração estimada: 7–10 dias.
 
 Entregáveis:
