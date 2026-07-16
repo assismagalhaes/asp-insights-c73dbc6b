@@ -306,6 +306,51 @@ class HighlightlyRepositoryTests(unittest.TestCase):
         self.assertIn("on_conflict=id", session.calls[0][1])
         self.assertIn("resolution=merge-duplicates", session.calls[0][2]["headers"]["prefer"])
 
+    def test_batch_upsert_merges_duplicate_conflict_targets_before_posting(self):
+        session = _Session([_Response(201, [{"id": "1", "name": "latest", "metadata": {"a": 1}}])])
+        repository = HighlightlyRepository("https://example.supabase.co", "service-secret", session=session)
+
+        saved = repository.upsert_rows(
+            "sports_teams",
+            [
+                {"id": "1", "name": "first", "metadata": {"a": 1}},
+                {"id": "1", "name": "latest"},
+            ],
+            on_conflict="id",
+        )
+
+        self.assertEqual(saved[0]["name"], "latest")
+        self.assertEqual(len(session.calls), 1)
+        self.assertEqual(
+            session.calls[0][2]["json"],
+            [{"id": "1", "name": "latest", "metadata": {"a": 1}}],
+        )
+
+    def test_batch_upsert_splits_heterogeneous_rows_without_padding_nulls(self):
+        session = _Session(
+            [
+                _Response(201, [{"id": "1"}, {"id": "3"}]),
+                _Response(201, [{"id": "2", "metadata": {"side": "home"}}]),
+            ]
+        )
+        repository = HighlightlyRepository("https://example.supabase.co", "service-secret", session=session)
+
+        repository.upsert_rows(
+            "sports_lineup_players",
+            [
+                {"id": "1", "role": "starter"},
+                {"id": "2", "role": "starter", "metadata": {"side": "home"}},
+                {"id": "3", "role": "substitute"},
+            ],
+            on_conflict="id",
+        )
+
+        self.assertEqual(len(session.calls), 2)
+        for _, _, kwargs in session.calls:
+            shapes = {tuple(sorted(row)) for row in kwargs["json"]}
+            self.assertEqual(len(shapes), 1)
+        self.assertNotIn("metadata", session.calls[0][2]["json"][0])
+
     def test_bulk_odds_writer_uses_one_rpc_per_chunk(self):
         session = _Session([_Response(200, [{"id": "q1"}, {"id": "q2"}])])
         repository = HighlightlyRepository("https://example.supabase.co", "service-secret", session=session)
@@ -315,6 +360,29 @@ class HighlightlyRepositoryTests(unittest.TestCase):
         self.assertEqual(method, "POST")
         self.assertTrue(url.endswith("/rest/v1/rpc/upsert_sports_odds_quotes"))
         self.assertEqual(len(kwargs["json"]["p_quotes"]), 2)
+
+    def test_bulk_odds_writer_keeps_latest_duplicate_quote(self):
+        session = _Session([_Response(200, [{"id": "q1", "decimal_odds": 2.2}])])
+        repository = HighlightlyRepository("https://example.supabase.co", "service-secret", session=session)
+        identity = {
+            "p_match_id": "match-1",
+            "p_bookmaker_id": "bookmaker-1",
+            "p_market_definition_id": "market-1",
+            "p_selection_key": "home",
+            "p_line_key": "",
+            "p_is_live": False,
+        }
+
+        repository.upsert_odds_quotes(
+            [
+                {**identity, "p_decimal_odds": 2.0},
+                {**identity, "p_decimal_odds": 2.2},
+            ]
+        )
+
+        quotes = session.calls[0][2]["json"]["p_quotes"]
+        self.assertEqual(len(quotes), 1)
+        self.assertEqual(quotes[0]["p_decimal_odds"], 2.2)
 
     def test_refresh_odds_consensus_uses_bounded_preferred_bookmaker_defaults(self):
         session = _Session([_Response(200, 3)])

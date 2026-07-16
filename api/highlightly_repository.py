@@ -105,6 +105,68 @@ def _path_token(value: str) -> str:
     return token[:100] or "unknown"
 
 
+def _merge_rows_by_conflict(
+    rows: Sequence[Mapping[str, Any]],
+    on_conflict: str,
+) -> list[dict[str, Any]]:
+    """Merge duplicate UPSERT targets while preserving absent optional fields."""
+
+    conflict_columns = tuple(column.strip() for column in on_conflict.split(",") if column.strip())
+    if not conflict_columns:
+        raise ValueError("on_conflict must contain at least one column")
+
+    merged: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for index, source in enumerate(rows):
+        row = dict(source)
+        if all(column in row for column in conflict_columns):
+            try:
+                identity = ("conflict", *tuple(row[column] for column in conflict_columns))
+                hash(identity)
+            except TypeError:
+                identity = ("row", index)
+        else:
+            identity = ("row", index)
+
+        existing = merged.get(identity)
+        if existing is None:
+            merged[identity] = row
+        else:
+            existing.update(row)
+    return list(merged.values())
+
+
+def _homogeneous_row_groups(rows: Sequence[Mapping[str, Any]]) -> list[list[dict[str, Any]]]:
+    """Group rows by JSON object shape as required by PostgREST bulk writes."""
+
+    groups: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+    for source in rows:
+        row = dict(source)
+        groups.setdefault(tuple(sorted(row)), []).append(row)
+    return list(groups.values())
+
+
+def _dedupe_odds_quotes(quote_rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Keep the latest quote for each canonical current-odds identity."""
+
+    identity_columns = (
+        "p_match_id",
+        "p_bookmaker_id",
+        "p_market_definition_id",
+        "p_selection_key",
+        "p_line_key",
+        "p_is_live",
+    )
+    deduped: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for index, source in enumerate(quote_rows):
+        row = dict(source)
+        if all(column in row for column in identity_columns):
+            identity = ("quote", *tuple(row[column] for column in identity_columns))
+        else:
+            identity = ("row", index)
+        deduped[identity] = row
+    return list(deduped.values())
+
+
 class HighlightlyRepository:
     """Small service-role Supabase client for jobs, runs and raw objects."""
 
@@ -340,20 +402,22 @@ class HighlightlyRepository:
         if chunk_size < 1 or chunk_size > 1000:
             raise ValueError("chunk_size must be between 1 and 1000")
         saved: list[dict[str, Any]] = []
-        for start in range(0, len(rows), chunk_size):
-            chunk = [dict(row) for row in rows[start : start + chunk_size]]
-            query = urlencode({"on_conflict": on_conflict})
-            result = self._request(
-                "POST",
-                f"/rest/v1/{quote(table, safe='')}?{query}",
-                json_body=chunk,
-                headers={
-                    "content-type": "application/json",
-                    "prefer": "resolution=merge-duplicates,return=representation",
-                },
-                expected=(200, 201),
-            )
-            saved.extend(dict(row) for row in (result or []))
+        prepared = _merge_rows_by_conflict(rows, on_conflict)
+        for group in _homogeneous_row_groups(prepared):
+            for start in range(0, len(group), chunk_size):
+                chunk = group[start : start + chunk_size]
+                query = urlencode({"on_conflict": on_conflict})
+                result = self._request(
+                    "POST",
+                    f"/rest/v1/{quote(table, safe='')}?{query}",
+                    json_body=chunk,
+                    headers={
+                        "content-type": "application/json",
+                        "prefer": "resolution=merge-duplicates,return=representation",
+                    },
+                    expected=(200, 201),
+                )
+                saved.extend(dict(row) for row in (result or []))
         return saved
 
     def patch_rows(
@@ -434,10 +498,11 @@ class HighlightlyRepository:
         if chunk_size < 1 or chunk_size > 1000:
             raise ValueError("chunk_size must be between 1 and 1000")
         saved: list[dict[str, Any]] = []
-        for start in range(0, len(quote_rows), chunk_size):
+        prepared = _dedupe_odds_quotes(quote_rows)
+        for start in range(0, len(prepared), chunk_size):
             result = self.rpc(
                 "upsert_sports_odds_quotes",
-                {"p_quotes": [dict(row) for row in quote_rows[start : start + chunk_size]]},
+                {"p_quotes": prepared[start : start + chunk_size]},
             )
             saved.extend(dict(row) for row in (result or []))
         return saved
