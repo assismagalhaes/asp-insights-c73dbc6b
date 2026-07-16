@@ -49,12 +49,17 @@ provider permanece desligado.
 O bridge HMAC passa a permitir somente as três tabelas operacionais, a view de saúde e as duas
 RPCs da Fase 7. A `service_role` continua somente na Lovable Cloud.
 
-## 3. Escolher as ligas de futebol
+## 3. Escopo esportivo aprovado
 
-O shadow completo exige IDs explícitos de pelo menos duas ligas de futebol. O executor se recusa
-a coletar football sem `--football-league-id`; isso impede uma varredura global acidental.
+Football usa `--all-football-leagues`, opção global que precisa ser informada explicitamente. O
+executor primeiro pagina o catálogo `/football/leagues` em lotes de 100 e depois consulta todas
+as partidas de cada data sem filtro de liga, em páginas de 10. Isso cobre ligas com jogos no dia
+sem gastar uma chamada de descoberta por liga. O catálogo recebe uma identificação de snapshot
+para que suas páginas não sejam confundidas entre dias diferentes e suas continuações têm
+prioridade de paginação, concluindo o catálogo antes do fan-out mais caro.
 
-MLB e WNBA já estão limitadas respectivamente a `league=MLB` e `leagueId=11847`.
+O modo global e `--football-league-id` são mutuamente exclusivos. MLB e WNBA continuam limitadas
+respectivamente a `league=MLB` e `leagueId=11847`.
 
 ## 4. Fazer o dry-run na VM
 
@@ -66,15 +71,16 @@ cd /home/ubuntu/asp-insights-c73dbc6b
   --scope phase7-YYYYMMDD \
   --data-start YYYY-MM-DD \
   --backfill-days 1 \
-  --football-league-id LEAGUE_ID_1 \
-  --football-league-id LEAGUE_ID_2
+  --all-football-leagues
 ```
 
 Revisar no JSON:
 
 - três esportes;
-- quantidade de seed jobs;
+- um seed do catálogo completo de football e um seed global de partidas por data;
+- nenhuma propriedade `leagueId` nos seeds globais de football;
 - páginas de 10 partidas;
+- páginas de 100 ligas;
 - orçamento máximo de 1.500;
 - reserva de 750;
 - mesmo `scope` em todos os jobs.
@@ -91,8 +97,7 @@ sudo /bin/bash -lc "set -a; source /etc/asp-scraper-api.env; set +a; \
   --scope phase7-YYYYMMDD \
   --data-start YYYY-MM-DD \
   --backfill-days 1 \
-  --football-league-id LEAGUE_ID_1 \
-  --football-league-id LEAGUE_ID_2 \
+  --all-football-leagues \
   --daily-request-budget 1500 \
   --max-jobs 200 \
   --confirm-phase7-shadow"

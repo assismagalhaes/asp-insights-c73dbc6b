@@ -43,7 +43,15 @@ TABLE_ORDER = (
     "sports_odds_consensus",
 )
 
-_PAGINATION_INTERNAL_KEYS = frozenset(("_fanout", "_fanout_scope", "_shadow_scope"))
+_PAGINATION_INTERNAL_KEYS = frozenset(
+    (
+        "_fanout",
+        "_fanout_scope",
+        "_shadow_scope",
+        "_shadow_batch",
+        "_pagination_priority",
+    )
+)
 
 
 @dataclass(frozen=True)
@@ -215,13 +223,16 @@ class HighlightlyWorker:
         dedupe = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
         scope = str(next_params.get("_fanout_scope") or "").strip()
         prefix = f"page:{scope}" if scope else "page"
+        pagination_priority = int(next_params.get("_pagination_priority", operation.priority))
+        if not 0 <= pagination_priority <= 4:
+            raise ValueError("pagination priority must be between 0 and 4")
         self.repository.enqueue_job(
             endpoint_key=operation.key,
             sport=operation.sport,
             resource=operation.resource,
             dedupe_key=f"{prefix}:{operation.key}:{dedupe}",
             request_params=next_params,
-            priority=operation.priority,
+            priority=pagination_priority,
         )
         return True
 

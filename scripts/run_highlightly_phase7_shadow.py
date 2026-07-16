@@ -45,6 +45,7 @@ def build_seed_jobs(
     days: int,
     sports: Iterable[str],
     football_league_ids: Iterable[int],
+    all_football_leagues: bool = False,
 ) -> list[SeedJob]:
     if not 1 <= days <= 7:
         raise ValueError("days must be between 1 and 7")
@@ -52,23 +53,44 @@ def build_seed_jobs(
     if not selected or any(sport not in SPORTS for sport in selected):
         raise ValueError("sports must contain football, baseball, or basketball")
     league_ids = tuple(dict.fromkeys(int(value) for value in football_league_ids))
-    if "football" in selected and not league_ids:
-        raise ValueError("at least one football league id is required when football is selected")
+    if "football" in selected and all_football_leagues and league_ids:
+        raise ValueError("all football leagues and explicit football league ids are mutually exclusive")
+    if "football" in selected and not all_football_leagues and not league_ids:
+        raise ValueError(
+            "select --all-football-leagues or at least one football league id when football is selected"
+        )
 
     jobs: list[SeedJob] = []
+    if "football" in selected and all_football_leagues:
+        endpoint = "football.LeaguesController_getLeagues"
+        snapshot = start_date.isoformat()
+        jobs.append(
+            SeedJob(
+                endpoint_key=endpoint,
+                sport="football",
+                resource="leagues",
+                dedupe_key=f"{scope}:catalog:{endpoint}:{snapshot}:all",
+                request_params={
+                    "limit": 100,
+                    "offset": 0,
+                    "_fanout_scope": scope,
+                    "_shadow_batch": snapshot,
+                    "_pagination_priority": 0,
+                },
+            )
+        )
     for target_date in _dates(start_date, days):
         date_value = target_date.isoformat()
         if "football" in selected:
-            for league_id in league_ids:
+            if all_football_leagues:
                 endpoint = "football.MatchesController_getMatches"
                 jobs.append(
                     SeedJob(
                         endpoint_key=endpoint,
                         sport="football",
                         resource="matches",
-                        dedupe_key=f"{scope}:seed:{endpoint}:{date_value}:league:{league_id}",
+                        dedupe_key=f"{scope}:seed:{endpoint}:{date_value}:all",
                         request_params={
-                            "leagueId": league_id,
                             "date": date_value,
                             "timezone": "America/Sao_Paulo",
                             "limit": 10,
@@ -78,6 +100,26 @@ def build_seed_jobs(
                         },
                     )
                 )
+            else:
+                for league_id in league_ids:
+                    endpoint = "football.MatchesController_getMatches"
+                    jobs.append(
+                        SeedJob(
+                            endpoint_key=endpoint,
+                            sport="football",
+                            resource="matches",
+                            dedupe_key=f"{scope}:seed:{endpoint}:{date_value}:league:{league_id}",
+                            request_params={
+                                "leagueId": league_id,
+                                "date": date_value,
+                                "timezone": "America/Sao_Paulo",
+                                "limit": 10,
+                                "offset": 0,
+                                "_fanout": True,
+                                "_fanout_scope": scope,
+                            },
+                        )
+                    )
         if "baseball" in selected:
             endpoint = "baseball.BaseballMatchController_getMatches"
             jobs.append(
@@ -146,7 +188,9 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--data-start", type=date.fromisoformat, default=datetime.now(timezone.utc).date())
     parser.add_argument("--backfill-days", type=int, default=1)
     parser.add_argument("--sport", action="append", choices=SPORTS, dest="sports")
-    parser.add_argument("--football-league-id", action="append", type=int, default=[])
+    football_scope = parser.add_mutually_exclusive_group()
+    football_scope.add_argument("--all-football-leagues", action="store_true")
+    football_scope.add_argument("--football-league-id", action="append", type=int, default=[])
     parser.add_argument("--daily-request-budget", type=int, default=BACKFILL_BUDGET_LIMIT)
     parser.add_argument("--max-jobs", type=int, default=200)
     parser.add_argument("--confirm-phase7-shadow", action="store_true")
@@ -172,6 +216,7 @@ def main() -> int:
         days=args.backfill_days,
         sports=sports,
         football_league_ids=args.football_league_id,
+        all_football_leagues=args.all_football_leagues,
     )
     plan = {
         "mode": "execute" if args.confirm_phase7_shadow else "dry-run",
@@ -183,6 +228,7 @@ def main() -> int:
         "daily_request_budget": args.daily_request_budget,
         "reserve_requests": RESERVE_REQUESTS,
         "max_jobs": args.max_jobs,
+        "all_football_leagues": args.all_football_leagues,
         "football_league_ids": args.football_league_id,
     }
     if not args.confirm_phase7_shadow:
@@ -240,6 +286,7 @@ def main() -> int:
                     "config": {
                         "data_start": args.data_start.isoformat(),
                         "backfill_days": args.backfill_days,
+                        "all_football_leagues": args.all_football_leagues,
                         "football_league_ids": args.football_league_id,
                         "max_jobs_per_slice": args.max_jobs,
                     },

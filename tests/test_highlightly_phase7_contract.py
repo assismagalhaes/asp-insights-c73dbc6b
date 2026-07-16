@@ -32,6 +32,14 @@ class HighlightlyPhaseSevenContractTests(unittest.TestCase):
         self.assertIn("Highlightly provider must stay disabled", sql)
         self.assertIn("Phase 7 observation RPC privileges are invalid", sql)
 
+    def test_runbook_uses_explicit_all_football_leagues_mode(self):
+        runbook = (
+            ROOT / "docs/highlightly/phase-7-backfill-shadow-runbook.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("--all-football-leagues", runbook)
+        self.assertIn("páginas de 100 ligas", runbook)
+        self.assertIn("sem filtro de liga", runbook)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -171,12 +171,17 @@ class HighlightlyPhaseTwoWorkerTests(unittest.TestCase):
                     "offset": 0,
                     "_fanout": True,
                     "_fanout_scope": "phase7-scope",
+                    "_shadow_batch": "2026-07-15",
+                    "_pagination_priority": 0,
                 },
             )
         )
         request = repository.enqueue_job.call_args.kwargs
         self.assertTrue(request["request_params"]["_fanout"])
         self.assertEqual(request["request_params"]["_fanout_scope"], "phase7-scope")
+        self.assertEqual(request["request_params"]["_shadow_batch"], "2026-07-15")
+        self.assertEqual(request["request_params"]["_pagination_priority"], 0)
+        self.assertEqual(request["priority"], 0)
         self.assertTrue(request["dedupe_key"].startswith("page:phase7-scope:"))
 
     def test_pagination_stops_at_total_count(self):

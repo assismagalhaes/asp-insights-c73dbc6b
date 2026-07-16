@@ -495,6 +495,9 @@ progressivo implementada localmente. Migration e smoke aguardam aplicação no b
 janela real de sete dias ainda não foi iniciada e o provider permanece desligado. Ver
 `docs/highlightly/phase-7-backfill-shadow-runbook.md`.
 
+Escopo aprovado em 15/07/2026: Football abrangerá todas as ligas disponíveis por catálogo
+paginado e consulta global de partidas por data; MLB e WNBA permanecem delimitadas.
+
 Duração estimada: 7–10 dias.
 
 Entregáveis:

@@ -23,13 +23,46 @@ class HighlightlyPhaseSevenShadowTests(unittest.TestCase):
         self.assertTrue(all("phase7-test" in job.dedupe_key for job in jobs))
 
     def test_football_requires_an_explicit_league_boundary(self):
-        with self.assertRaisesRegex(ValueError, "football league id"):
+        with self.assertRaisesRegex(ValueError, "all-football-leagues"):
             phase7.build_seed_jobs(
                 scope="phase7-test",
                 start_date=date(2026, 7, 15),
                 days=1,
                 sports=("football",),
                 football_league_ids=(),
+            )
+
+    def test_all_football_leagues_uses_one_catalog_and_global_daily_matches(self):
+        jobs = phase7.build_seed_jobs(
+            scope="phase7-all-football",
+            start_date=date(2026, 7, 15),
+            days=2,
+            sports=("football",),
+            football_league_ids=(),
+            all_football_leagues=True,
+        )
+
+        self.assertEqual(len(jobs), 3)
+        catalog = jobs[0]
+        self.assertEqual(catalog.endpoint_key, "football.LeaguesController_getLeagues")
+        self.assertEqual(catalog.request_params["limit"], 100)
+        self.assertEqual(catalog.request_params["_shadow_batch"], "2026-07-15")
+        self.assertEqual(catalog.request_params["_pagination_priority"], 0)
+        matches = jobs[1:]
+        self.assertTrue(all(job.endpoint_key == "football.MatchesController_getMatches" for job in matches))
+        self.assertTrue(all("leagueId" not in job.request_params for job in matches))
+        self.assertTrue(all(job.request_params["limit"] == 10 for job in matches))
+        self.assertTrue(all(job.request_params["_fanout"] for job in matches))
+
+    def test_all_football_leagues_rejects_explicit_ids(self):
+        with self.assertRaisesRegex(ValueError, "mutually exclusive"):
+            phase7.build_seed_jobs(
+                scope="phase7-invalid",
+                start_date=date(2026, 7, 15),
+                days=1,
+                sports=("football",),
+                football_league_ids=(42,),
+                all_football_leagues=True,
             )
 
     @patch.object(phase7, "HighlightlyRepository")
@@ -51,6 +84,33 @@ class HighlightlyPhaseSevenShadowTests(unittest.TestCase):
         report = json.loads(output.call_args.args[0])
         self.assertEqual(report["mode"], "dry-run")
         self.assertEqual(report["seed_jobs"], 1)
+
+    @patch.object(phase7, "HighlightlyRepository")
+    def test_all_football_dry_run_is_global_and_does_not_touch_supabase(
+        self, repository_factory
+    ):
+        argv = [
+            "run_highlightly_phase7_shadow",
+            "--scope",
+            "phase7-all-dry",
+            "--data-start",
+            "2026-07-15",
+            "--all-football-leagues",
+        ]
+        with patch("sys.argv", argv), patch("builtins.print") as output:
+            exit_code = phase7.main()
+
+        self.assertEqual(exit_code, 0)
+        repository_factory.from_environment.assert_not_called()
+        report = json.loads(output.call_args.args[0])
+        self.assertTrue(report["all_football_leagues"])
+        football_matches = [
+            job
+            for job in report["jobs"]
+            if job["endpoint_key"] == "football.MatchesController_getMatches"
+        ]
+        self.assertEqual(len(football_matches), 1)
+        self.assertNotIn("leagueId", football_matches[0]["request_params"])
 
     @patch.object(phase7, "HighlightlyWorker")
     @patch.object(phase7, "HighlightlyClient")
