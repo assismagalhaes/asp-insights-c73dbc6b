@@ -26,7 +26,7 @@ class HighlightlyShadowRetryReplayTests(unittest.TestCase):
             [{"id": "job-1", "endpoint_key": "football.OddsV2", "status": "retry"}],
             [],
             [],
-            [{"id": "raw-1", "job_id": "job-1", "captured_at": "2026-07-16T12:00:00Z"}],
+            [{"id": "raw-1", "job_id": "job-1", "created_at": "2026-07-16T12:00:00Z"}],
         ]
         repository.daily_request_usage.side_effect = [237, 237]
         worker_factory.return_value.run_once.return_value = WorkerResult(

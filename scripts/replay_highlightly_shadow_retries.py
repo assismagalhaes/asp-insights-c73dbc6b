@@ -68,9 +68,9 @@ def main() -> int:
     for job in retry_jobs:
         raw_rows = repository.select_rows(
             "hl_raw_objects",
-            columns="id,job_id,captured_at",
+            columns="id,job_id,created_at",
             filters={"job_id": job["id"]},
-            order="captured_at.desc",
+            order="created_at.desc",
             limit=1,
         )
         if not raw_rows:
