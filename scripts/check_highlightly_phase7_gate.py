@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import json
 from typing import Any
 
@@ -47,7 +48,7 @@ def main() -> int:
         active_jobs.extend(
             repository.select_rows(
                 "hl_ingestion_jobs",
-                columns="id,status,endpoint_key,scheduled_at",
+                columns="id,status,sport,endpoint_key,scheduled_at,last_error",
                 filters={"shadow_scope": args.scope, "status": status},
                 limit=1_501,
                 order="scheduled_at.asc",
@@ -61,11 +62,35 @@ def main() -> int:
     failed = provider_enabled or gate_status in {"blocked", "below_sla"}
     if args.require_ready and gate_status != "ready":
         failed = True
+    job_breakdown = Counter(
+        (
+            str(job.get("sport") or "unknown"),
+            str(job.get("status") or "unknown"),
+            str(job.get("endpoint_key") or "unknown"),
+        )
+        for job in active_jobs
+    )
+    retry_errors = Counter(
+        (
+            str(job.get("endpoint_key") or "unknown"),
+            str(job.get("last_error") or "sem mensagem"),
+        )
+        for job in active_jobs
+        if job.get("status") == "retry"
+    )
     report = {
         "scope": args.scope,
         "gate_status": gate_status,
         "provider_disabled_at_rest": not provider_enabled,
         "active_jobs": len(active_jobs),
+        "active_job_breakdown": [
+            {"sport": sport, "status": status, "endpoint_key": endpoint, "count": count}
+            for (sport, status, endpoint), count in job_breakdown.most_common()
+        ],
+        "retry_error_breakdown": [
+            {"endpoint_key": endpoint, "error": error, "count": count}
+            for (endpoint, error), count in retry_errors.most_common(25)
+        ],
         "health": health,
         "observations": observations,
         "reconciliations": reconciliations,
