@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock
 
-from api.highlightly.normalizers.common import NormalizationContext, schema_fingerprint, stable_id
+from api.highlightly.normalizers.common import NormalizationContext, NormalizedBatch, schema_fingerprint, stable_id
 from api.highlightly.normalizers.football import SUPPORTED_NORMALIZERS, normalize_football
 from api.highlightly.registry import EndpointRegistry
 from api.highlightly.worker import HighlightlyWorker
@@ -62,6 +62,50 @@ class HighlightlyPhaseTwoWorkerTests(unittest.TestCase):
         self.assertEqual(len(first.table_rows("sports_teams")), 2)
         self.assertEqual(first.table_rows("sports_matches")[0]["status"], "scheduled")
         self.assertEqual(first.table_rows("sports_matches")[0]["id"], stable_id(PROVIDER_ID, SPORT_ID, "match", 99))
+        self.assertEqual(first.table_rows("sports_countries")[0]["id"], stable_id("country", "BR"))
+
+    def test_persist_reuses_legacy_country_id_and_remaps_dependents(self):
+        repository = Mock()
+        repository.select_rows.return_value = [{
+            "id": "11111111-1111-4111-8111-111111111111",
+            "code": "US",
+            "name": "USA",
+        }]
+        worker = HighlightlyWorker(Mock(), repository, worker_id="test-worker", enabled=True)
+        generated = stable_id("country", "US")
+        batch = NormalizedBatch()
+        batch.add("sports_countries", {"id": generated, "code": "US", "name": "USA"})
+        batch.add("sports_competitions", {
+            "id": "22222222-2222-4222-8222-222222222222",
+            "sport_id": SPORT_ID,
+            "country_id": generated,
+            "name": "NBA Women",
+        })
+        batch.add(
+            "sports_provider_entities",
+            {
+                "provider_id": PROVIDER_ID,
+                "sport_id": SPORT_ID,
+                "entity_type": "country",
+                "external_id": "US",
+                "canonical_id": generated,
+            },
+            conflict="provider_id,sport_id,entity_type,external_id",
+            key="country:US",
+        )
+
+        worker._persist(batch)
+
+        writes = {call.args[0]: call.args[1] for call in repository.upsert_rows.call_args_list}
+        self.assertNotIn("sports_countries", writes)
+        self.assertEqual(
+            writes["sports_competitions"][0]["country_id"],
+            "11111111-1111-4111-8111-111111111111",
+        )
+        self.assertEqual(
+            writes["sports_provider_entities"][0]["canonical_id"],
+            "11111111-1111-4111-8111-111111111111",
+        )
 
     def test_odds_normalizer_keeps_every_market_selection(self):
         payload = {"data": [{"matchId": 99, "odds": [{

@@ -70,7 +70,7 @@ def _status(state: Any) -> str:
 
 def _ensure_country(batch: NormalizedBatch, ctx: NormalizationContext, country: Mapping[str, Any]) -> str:
     code = _external(country.get("code"), slug(country.get("name"))).upper()
-    country_id = stable_id(ctx.provider_id, ctx.sport_id, "country", code)
+    country_id = stable_id("country", code)
     batch.add("sports_countries", {
         "id": country_id,
         "code": code,

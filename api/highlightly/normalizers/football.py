@@ -72,7 +72,10 @@ def _status(state: Any) -> str:
 
 def _ensure_country(batch: NormalizedBatch, ctx: NormalizationContext, country: Mapping[str, Any]) -> str:
     code = _external(country.get("code"), slug(country.get("name"))).upper()
-    country_id = stable_id(ctx.provider_id, ctx.sport_id, "country", code)
+    # Countries are canonical across providers and sports.  Keeping the sport in
+    # this identity produces a different UUID for the same ISO code and violates
+    # sports_countries' global unique indexes when a second sport is ingested.
+    country_id = stable_id("country", code)
     batch.add(
         "sports_countries",
         {

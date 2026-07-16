@@ -11,6 +11,7 @@ from api.highlightly_repository import (
     HighlightlyRepositoryError,
     redact_secrets,
 )
+from api.highlightly.worker import _safe_error
 
 
 class _Response:
@@ -35,6 +36,17 @@ class _Session:
 
 
 class HighlightlyRepositoryTests(unittest.TestCase):
+    def test_safe_error_preserves_structured_postgrest_conflict_details(self):
+        error = HighlightlyRepositoryError(
+            "Supabase returned HTTP 409",
+            status=409,
+            body={"code": "23505", "message": "duplicate country code", "api_key": "must-not-leak"},
+        )
+        message = _safe_error(error)
+        self.assertIn('"code":"23505"', message)
+        self.assertIn("duplicate country code", message)
+        self.assertNotIn("must-not-leak", message)
+
     def test_bridge_signs_and_forwards_without_service_role_key(self):
         session = _Session([_Response(200, [{"id": "team-1"}])])
         secret = "bridge-secret-with-at-least-32-characters"

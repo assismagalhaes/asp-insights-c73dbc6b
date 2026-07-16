@@ -10,7 +10,7 @@ import time
 from typing import Any, Mapping
 
 from api.highlightly_client import HighlightlyClient, HighlightlyError, HighlightlyResponse
-from api.highlightly_repository import HighlightlyRepository, HighlightlyRepositoryError
+from api.highlightly_repository import HighlightlyRepository, HighlightlyRepositoryError, redact_secrets
 
 from .normalizers import normalize_baseball, normalize_basketball, normalize_football
 from .normalizers.common import NormalizationContext, NormalizedBatch, schema_fingerprint, stable_id
@@ -87,7 +87,11 @@ def _retention_until(policy: str, captured_at: datetime) -> str | None:
 
 
 def _safe_error(exc: Exception) -> str:
-    text = str(exc).replace("\r", " ").replace("\n", " ")
+    text = str(exc)
+    if isinstance(exc, HighlightlyRepositoryError) and exc.body:
+        body = json.dumps(redact_secrets(exc.body), ensure_ascii=True, separators=(",", ":"), default=str)
+        text = f"{text}: {body}"
+    text = text.replace("\r", " ").replace("\n", " ")
     return text[:1000]
 
 
@@ -166,6 +170,7 @@ class HighlightlyWorker:
         raise ValueError(f"Normalizer runtime for {operation.sport} is not implemented")
 
     def _persist(self, batch: NormalizedBatch) -> int:
+        self._reconcile_country_ids(batch)
         persisted = 0
         known = set(TABLE_ORDER)
         unknown = set(batch.rows) - known
@@ -190,6 +195,55 @@ class HighlightlyWorker:
                     snapshot_at=batch.odds_quotes[0].get("p_collected_at"),
                 )
         return persisted
+
+    def _reconcile_country_ids(self, batch: NormalizedBatch) -> None:
+        """Adopt legacy canonical country IDs before writing dependent rows.
+
+        Earlier normalizers derived country IDs per sport even though
+        sports_countries enforces a global code/name identity. Existing
+        installations can therefore contain a valid legacy UUID that differs
+        from the new global deterministic UUID. Reusing that row keeps the
+        migration backward compatible and prevents a PostgREST 409.
+        """
+
+        country_rows = batch.rows.get("sports_countries")
+        if not country_rows:
+            return
+        existing = self.repository.select_rows(
+            "sports_countries",
+            columns="id,code,name",
+            limit=500,
+        )
+        by_code = {
+            str(row.get("code") or "").strip().upper(): row
+            for row in existing
+            if str(row.get("code") or "").strip()
+        }
+        by_name = {
+            str(row.get("name") or "").strip().casefold(): row
+            for row in existing
+            if str(row.get("name") or "").strip()
+        }
+        remapped: dict[str, str] = {}
+        for identity, row in list(country_rows.items()):
+            code = str(row.get("code") or "").strip().upper()
+            name = str(row.get("name") or "").strip().casefold()
+            canonical = by_code.get(code) or by_name.get(name)
+            if not canonical or str(canonical["id"]) == str(row.get("id")):
+                continue
+            remapped[str(row["id"])] = str(canonical["id"])
+            del country_rows[identity]
+
+        if not remapped:
+            return
+        for competition in batch.table_rows("sports_competitions"):
+            current = str(competition.get("country_id") or "")
+            if current in remapped:
+                competition["country_id"] = remapped[current]
+        for mapping in batch.table_rows("sports_provider_entities"):
+            current = str(mapping.get("canonical_id") or "")
+            if mapping.get("entity_type") == "country" and current in remapped:
+                mapping["canonical_id"] = remapped[current]
 
     def _enqueue_next_page(
         self,

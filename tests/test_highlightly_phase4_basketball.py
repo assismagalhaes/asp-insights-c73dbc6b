@@ -65,6 +65,7 @@ class HighlightlyPhaseFourBasketballTests(unittest.TestCase):
         self.assertEqual(match["id"], stable_id(PROVIDER_ID, SPORT_ID, "match", 99))
         self.assertEqual(len(batch.table_rows("sports_match_participants")), 2)
         self.assertEqual(len(batch.table_rows("sports_match_period_scores")), 8)
+        self.assertEqual(batch.table_rows("sports_countries")[0]["id"], stable_id("country", "US"))
         home = next(row for row in batch.table_rows("sports_match_participants") if row["role"] == "home")
         self.assertEqual(home["score_data"]["current"], 90)
         self.assertEqual(home["score_data"]["periods"]["q1"], 22)
