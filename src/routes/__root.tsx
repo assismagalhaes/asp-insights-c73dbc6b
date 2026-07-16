@@ -163,6 +163,7 @@ function RootComponent() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [email, setEmail] = useState<string | null>(null);
   const isAuthRoute = pathname === "/auth";
+  const isAnalysisRoute = pathname === "/central-esportiva";
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setEmail(data.session?.user.email ?? null));
@@ -222,7 +223,7 @@ function RootComponent() {
                 </Button>
               </div>
             </header>
-            <main className="flex-1 p-4 md:p-6">
+            <main className={isAnalysisRoute ? "min-h-0 flex-1" : "flex-1 p-4 md:p-6"}>
               <Outlet />
             </main>
           </div>

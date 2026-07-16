@@ -21,6 +21,7 @@ import { Route as AuthenticatedImportarRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedHistoricoRouteImport } from './routes/_authenticated/historico'
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
 import { Route as AuthenticatedColetaDadosRouteImport } from './routes/_authenticated/coleta-dados'
+import { Route as AuthenticatedCentralEsportivaRouteImport } from './routes/_authenticated/central-esportiva'
 import { Route as AuthenticatedBaseDadosRouteImport } from './routes/_authenticated/base-dados'
 import { Route as AuthenticatedBankrollRouteImport } from './routes/_authenticated/bankroll'
 import { Route as AuthenticatedAprendizadoIaRouteImport } from './routes/_authenticated/aprendizado-ia'
@@ -95,6 +96,12 @@ const AuthenticatedColetaDadosRoute =
     path: '/coleta-dados',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedCentralEsportivaRoute =
+  AuthenticatedCentralEsportivaRouteImport.update({
+    id: '/central-esportiva',
+    path: '/central-esportiva',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedBaseDadosRoute = AuthenticatedBaseDadosRouteImport.update({
   id: '/base-dados',
   path: '/base-dados',
@@ -162,6 +169,7 @@ export interface FileRoutesByFullPath {
   '/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
   '/bankroll': typeof AuthenticatedBankrollRoute
   '/base-dados': typeof AuthenticatedBaseDadosRoute
+  '/central-esportiva': typeof AuthenticatedCentralEsportivaRoute
   '/coleta-dados': typeof AuthenticatedColetaDadosRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/historico': typeof AuthenticatedHistoricoRoute
@@ -184,6 +192,7 @@ export interface FileRoutesByTo {
   '/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
   '/bankroll': typeof AuthenticatedBankrollRoute
   '/base-dados': typeof AuthenticatedBaseDadosRoute
+  '/central-esportiva': typeof AuthenticatedCentralEsportivaRoute
   '/coleta-dados': typeof AuthenticatedColetaDadosRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/historico': typeof AuthenticatedHistoricoRoute
@@ -209,6 +218,7 @@ export interface FileRoutesById {
   '/_authenticated/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
   '/_authenticated/bankroll': typeof AuthenticatedBankrollRoute
   '/_authenticated/base-dados': typeof AuthenticatedBaseDadosRoute
+  '/_authenticated/central-esportiva': typeof AuthenticatedCentralEsportivaRoute
   '/_authenticated/coleta-dados': typeof AuthenticatedColetaDadosRoute
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/_authenticated/historico': typeof AuthenticatedHistoricoRoute
@@ -235,6 +245,7 @@ export interface FileRouteTypes {
     | '/aprendizado-ia'
     | '/bankroll'
     | '/base-dados'
+    | '/central-esportiva'
     | '/coleta-dados'
     | '/configuracoes'
     | '/historico'
@@ -257,6 +268,7 @@ export interface FileRouteTypes {
     | '/aprendizado-ia'
     | '/bankroll'
     | '/base-dados'
+    | '/central-esportiva'
     | '/coleta-dados'
     | '/configuracoes'
     | '/historico'
@@ -281,6 +293,7 @@ export interface FileRouteTypes {
     | '/_authenticated/aprendizado-ia'
     | '/_authenticated/bankroll'
     | '/_authenticated/base-dados'
+    | '/_authenticated/central-esportiva'
     | '/_authenticated/coleta-dados'
     | '/_authenticated/configuracoes'
     | '/_authenticated/historico'
@@ -396,6 +409,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedColetaDadosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/central-esportiva': {
+      id: '/_authenticated/central-esportiva'
+      path: '/central-esportiva'
+      fullPath: '/central-esportiva'
+      preLoaderRoute: typeof AuthenticatedCentralEsportivaRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/base-dados': {
       id: '/_authenticated/base-dados'
       path: '/base-dados'
@@ -473,6 +493,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAprendizadoIaRoute: typeof AuthenticatedAprendizadoIaRoute
   AuthenticatedBankrollRoute: typeof AuthenticatedBankrollRoute
   AuthenticatedBaseDadosRoute: typeof AuthenticatedBaseDadosRoute
+  AuthenticatedCentralEsportivaRoute: typeof AuthenticatedCentralEsportivaRoute
   AuthenticatedColetaDadosRoute: typeof AuthenticatedColetaDadosRoute
   AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRoute
   AuthenticatedHistoricoRoute: typeof AuthenticatedHistoricoRoute
@@ -488,6 +509,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAprendizadoIaRoute: AuthenticatedAprendizadoIaRoute,
   AuthenticatedBankrollRoute: AuthenticatedBankrollRoute,
   AuthenticatedBaseDadosRoute: AuthenticatedBaseDadosRoute,
+  AuthenticatedCentralEsportivaRoute: AuthenticatedCentralEsportivaRoute,
   AuthenticatedColetaDadosRoute: AuthenticatedColetaDadosRoute,
   AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRoute,
   AuthenticatedHistoricoRoute: AuthenticatedHistoricoRoute,

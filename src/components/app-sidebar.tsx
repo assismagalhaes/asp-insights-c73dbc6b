@@ -1,6 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   BrainCircuit,
+  ChartNoAxesCombined,
   Cpu,
   Database,
   DownloadCloud,
@@ -28,6 +29,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { useSidebar } from "@/components/ui/sidebar-context";
+import { featureFlags } from "@/lib/feature-flags";
 
 const navigationGroups = [
   {
@@ -47,6 +49,9 @@ const navigationGroups = [
     items: [
       { title: "Coleta de Odds", url: "/coleta-dados", icon: DownloadCloud },
       { title: "Base de Dados", url: "/base-dados", icon: Database },
+      ...(featureFlags.highlightlyAnalysis
+        ? [{ title: "Central Esportiva", url: "/central-esportiva", icon: ChartNoAxesCombined }]
+        : []),
       { title: "Modelos Preditivos", url: "/modelos-preditivos", icon: Cpu },
       { title: "Aprendizado da IA", url: "/aprendizado-ia", icon: BrainCircuit },
     ],
@@ -91,7 +96,6 @@ export function AppSidebar() {
               </span>
             </div>
           )}
-          
         </div>
       </SidebarHeader>
 
