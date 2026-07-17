@@ -170,7 +170,9 @@ function isTransientFetchError(err: unknown): boolean {
 async function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-const SNAPSHOT_INSERT_BATCH_SIZE = 100;
+const SNAPSHOT_INSERT_BATCH_SIZE = 50;
+const SNAPSHOT_INSERT_MIN_BATCH_SIZE = 10;
+const NORMALIZED_AUDIT_SAMPLE_SIZE = 25;
 const ODDS_JOGOS_LIST_COLUMNS = [
   "id",
   "coleta_id",
@@ -1190,7 +1192,11 @@ function compactNormalizedForStorage(normalized: NormalizedCollection, rows: Nor
       ...game,
       mercados: Array.from(game.mercados),
     })),
-    rows: rows.map(compactScreenerRow),
+    // Full rows already live in odds_jogos and odds_market_snapshots. Keeping them
+    // here as well made a single JSONB update several MB large and hit Postgres'
+    // statement timeout. Preserve only a bounded audit sample in the collection.
+    sample_rows: rows.slice(0, NORMALIZED_AUDIT_SAMPLE_SIZE).map(compactScreenerRow),
+    rows_omitted: Math.max(0, rows.length - NORMALIZED_AUDIT_SAMPLE_SIZE),
     aggregate_fields: [
       "odd_media",
       "odd_mediana",
@@ -1311,15 +1317,44 @@ async function replaceOddsMarketSnapshots(
     .eq("coleta_id", coletaId);
   if (deleteError) throw deleteError;
 
-  for (let index = 0; index < snapshots.length; index += SNAPSHOT_INSERT_BATCH_SIZE) {
-    const { error } = await coletaDb
-      .from("odds_market_snapshots")
-      .insert(
-        snapshots
-          .slice(index, index + SNAPSHOT_INSERT_BATCH_SIZE)
-          .map((snapshot) => ({ ...snapshot })),
-      );
-    if (error) throw error;
+  let batchSize = SNAPSHOT_INSERT_BATCH_SIZE;
+  let index = 0;
+  while (index < snapshots.length) {
+    const batch = snapshots.slice(index, index + batchSize).map((snapshot) => ({ ...snapshot }));
+    let attempt = 0;
+    let inserted = false;
+    let lastError: unknown = null;
+    while (!inserted && attempt <= ODDS_INSERT_MAX_RETRIES) {
+      let error: unknown = null;
+      try {
+        const result = await coletaDb.from("odds_market_snapshots").insert(batch);
+        error = (result as { error?: unknown })?.error ?? null;
+      } catch (thrown) {
+        error = thrown;
+      }
+      if (!error) {
+        inserted = true;
+        break;
+      }
+      lastError = error;
+      if (isStatementTimeoutError(error) && batchSize > SNAPSHOT_INSERT_MIN_BATCH_SIZE) {
+        batchSize = Math.max(SNAPSHOT_INSERT_MIN_BATCH_SIZE, Math.floor(batchSize / 2));
+        break;
+      }
+      if (!isTransientFetchError(error)) throw error;
+      attempt += 1;
+      if (attempt <= ODDS_INSERT_MAX_RETRIES) {
+        await sleep(ODDS_INSERT_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
+      }
+    }
+    if (!inserted) {
+      if (batchSize > SNAPSHOT_INSERT_MIN_BATCH_SIZE) {
+        batchSize = Math.max(SNAPSHOT_INSERT_MIN_BATCH_SIZE, Math.floor(batchSize / 2));
+        continue;
+      }
+      throw lastError ?? new Error("Falha ao inserir snapshots consolidados");
+    }
+    index += batch.length;
   }
   return snapshots.length;
 }
