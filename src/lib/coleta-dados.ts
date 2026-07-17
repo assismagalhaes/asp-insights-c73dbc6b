@@ -102,10 +102,11 @@ type ColetaQueryLike<T = unknown> = PromiseLike<QueryResultLike<T>> & {
 const coletaDb = supabase as unknown as {
   from: (table: string) => ColetaQueryLike;
 };
-const ODDS_INSERT_BATCH_SIZE = 200;
+const ODDS_INSERT_BATCH_SIZE = 150;
 const ODDS_INSERT_MIN_BATCH_SIZE = 25;
-const ODDS_INSERT_MAX_RETRIES = 4;
-const ODDS_INSERT_RETRY_BASE_DELAY_MS = 800;
+const ODDS_INSERT_MAX_RETRIES = 8;
+const ODDS_INSERT_RETRY_BASE_DELAY_MS = 600;
+const ODDS_INSERT_INTER_BATCH_DELAY_MS = 40;
 
 function isStatementTimeoutError(err: unknown): boolean {
   if (!err) return false;
@@ -1095,29 +1096,48 @@ async function insertOddsRowsInBatches(rows: NormalizedOdd[], coletaId: string) 
       .map((row) => toOddsJogoInsert(row, coletaId));
     let attempt = 0;
     let inserted = false;
-    while (!inserted) {
-      const { error } = await coletaDb.from("odds_jogos").insert(batch);
+    let lastError: unknown = null;
+    while (!inserted && attempt <= ODDS_INSERT_MAX_RETRIES) {
+      let error: unknown = null;
+      try {
+        const res = await coletaDb.from("odds_jogos").insert(batch);
+        error = (res as { error?: unknown })?.error ?? null;
+      } catch (thrown) {
+        // supabase-js can rethrow low-level fetch failures; treat as transient error object
+        error = thrown;
+      }
       if (!error) {
         inserted = true;
         break;
       }
+      lastError = error;
       // Statement timeout → shrink batch aggressively and retry the same slice.
       if (isStatementTimeoutError(error) && batchSize > ODDS_INSERT_MIN_BATCH_SIZE) {
         batchSize = Math.max(ODDS_INSERT_MIN_BATCH_SIZE, Math.floor(batchSize / 2));
         break;
       }
-      const transient = isTransientFetchError(error);
-      if (!transient || attempt >= ODDS_INSERT_MAX_RETRIES) {
-        if (transient && batchSize > ODDS_INSERT_MIN_BATCH_SIZE) {
-          batchSize = Math.max(ODDS_INSERT_MIN_BATCH_SIZE, Math.floor(batchSize / 2));
-          break;
-        }
+      if (!isTransientFetchError(error)) {
         throw error;
       }
       attempt += 1;
-      await sleep(ODDS_INSERT_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
+      if (attempt > ODDS_INSERT_MAX_RETRIES) break;
+      const backoff = ODDS_INSERT_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+      const jitter = Math.floor(Math.random() * 400);
+      await sleep(backoff + jitter);
     }
-    if (inserted) index += batch.length;
+    if (!inserted) {
+      // Out of retries at current size: shrink and try again (don't advance index)
+      if (batchSize > ODDS_INSERT_MIN_BATCH_SIZE) {
+        batchSize = Math.max(ODDS_INSERT_MIN_BATCH_SIZE, Math.floor(batchSize / 2));
+        await sleep(1000);
+        continue;
+      }
+      throw lastError ?? new Error("Falha ao inserir odds após múltiplas tentativas");
+    }
+    index += batch.length;
+    if (index < rows.length && ODDS_INSERT_INTER_BATCH_DELAY_MS > 0) {
+      await sleep(ODDS_INSERT_INTER_BATCH_DELAY_MS);
+    }
   }
 }
 
