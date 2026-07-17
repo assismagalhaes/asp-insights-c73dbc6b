@@ -2126,6 +2126,122 @@ export type Database = {
           },
         ]
       }
+      odds_market_snapshots: {
+        Row: {
+          away_team: string | null
+          best_bookmaker: string | null
+          best_odd: number | null
+          bookmaker_count: number
+          captured_at: string
+          coleta_id: string
+          created_at: string
+          eligible_pre_match: boolean
+          event_name: string
+          event_start_at: string | null
+          home_team: string | null
+          id: string
+          implied_probability_mean: number | null
+          implied_probability_median: number | null
+          lead_minutes: number | null
+          league: string | null
+          line: string
+          market: string
+          market_margin_mean: number | null
+          market_margin_median: number | null
+          max_odd: number | null
+          mean_odd: number | null
+          median_odd: number
+          min_odd: number | null
+          odd_stddev: number | null
+          odds_available: number
+          period: string
+          selection: string
+          source: string
+          source_event_id: string | null
+          source_ref: Json
+          sport: string | null
+          timing_bucket: string
+        }
+        Insert: {
+          away_team?: string | null
+          best_bookmaker?: string | null
+          best_odd?: number | null
+          bookmaker_count?: number
+          captured_at: string
+          coleta_id: string
+          created_at?: string
+          eligible_pre_match: boolean
+          event_name: string
+          event_start_at?: string | null
+          home_team?: string | null
+          id?: string
+          implied_probability_mean?: number | null
+          implied_probability_median?: number | null
+          lead_minutes?: number | null
+          league?: string | null
+          line?: string
+          market: string
+          market_margin_mean?: number | null
+          market_margin_median?: number | null
+          max_odd?: number | null
+          mean_odd?: number | null
+          median_odd: number
+          min_odd?: number | null
+          odd_stddev?: number | null
+          odds_available?: number
+          period?: string
+          selection: string
+          source: string
+          source_event_id?: string | null
+          source_ref?: Json
+          sport?: string | null
+          timing_bucket: string
+        }
+        Update: {
+          away_team?: string | null
+          best_bookmaker?: string | null
+          best_odd?: number | null
+          bookmaker_count?: number
+          captured_at?: string
+          coleta_id?: string
+          created_at?: string
+          eligible_pre_match?: boolean
+          event_name?: string
+          event_start_at?: string | null
+          home_team?: string | null
+          id?: string
+          implied_probability_mean?: number | null
+          implied_probability_median?: number | null
+          lead_minutes?: number | null
+          league?: string | null
+          line?: string
+          market?: string
+          market_margin_mean?: number | null
+          market_margin_median?: number | null
+          max_odd?: number | null
+          mean_odd?: number | null
+          median_odd?: number
+          min_odd?: number | null
+          odd_stddev?: number | null
+          odds_available?: number
+          period?: string
+          selection?: string
+          source?: string
+          source_event_id?: string | null
+          source_ref?: Json
+          sport?: string | null
+          timing_bucket?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "odds_market_snapshots_coleta_id_fkey"
+            columns: ["coleta_id"]
+            isOneToOne: false
+            referencedRelation: "coletas_odds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       opportunity_ranking_items: {
         Row: {
           ai_decision: string | null
@@ -5415,6 +5531,122 @@ export type Database = {
           window_id: string | null
         }
         Relationships: []
+      }
+      odds_backtest_snapshots: {
+        Row: {
+          away_team: string | null
+          best_bookmaker: string | null
+          best_odd: number | null
+          bookmaker_count: number | null
+          captured_at: string | null
+          coleta_id: string | null
+          created_at: string | null
+          eligible_pre_match: boolean | null
+          event_name: string | null
+          event_start_at: string | null
+          home_team: string | null
+          id: string | null
+          implied_probability_mean: number | null
+          implied_probability_median: number | null
+          lead_minutes: number | null
+          league: string | null
+          line: string | null
+          market: string | null
+          market_margin_mean: number | null
+          market_margin_median: number | null
+          max_odd: number | null
+          mean_odd: number | null
+          median_odd: number | null
+          min_odd: number | null
+          odd_stddev: number | null
+          odds_available: number | null
+          period: string | null
+          selection: string | null
+          source: string | null
+          source_event_id: string | null
+          source_ref: Json | null
+          sport: string | null
+          timing_bucket: string | null
+        }
+        Insert: {
+          away_team?: string | null
+          best_bookmaker?: string | null
+          best_odd?: number | null
+          bookmaker_count?: number | null
+          captured_at?: string | null
+          coleta_id?: string | null
+          created_at?: string | null
+          eligible_pre_match?: boolean | null
+          event_name?: string | null
+          event_start_at?: string | null
+          home_team?: string | null
+          id?: string | null
+          implied_probability_mean?: number | null
+          implied_probability_median?: number | null
+          lead_minutes?: number | null
+          league?: string | null
+          line?: string | null
+          market?: string | null
+          market_margin_mean?: number | null
+          market_margin_median?: number | null
+          max_odd?: number | null
+          mean_odd?: number | null
+          median_odd?: number | null
+          min_odd?: number | null
+          odd_stddev?: number | null
+          odds_available?: number | null
+          period?: string | null
+          selection?: string | null
+          source?: string | null
+          source_event_id?: string | null
+          source_ref?: Json | null
+          sport?: string | null
+          timing_bucket?: string | null
+        }
+        Update: {
+          away_team?: string | null
+          best_bookmaker?: string | null
+          best_odd?: number | null
+          bookmaker_count?: number | null
+          captured_at?: string | null
+          coleta_id?: string | null
+          created_at?: string | null
+          eligible_pre_match?: boolean | null
+          event_name?: string | null
+          event_start_at?: string | null
+          home_team?: string | null
+          id?: string | null
+          implied_probability_mean?: number | null
+          implied_probability_median?: number | null
+          lead_minutes?: number | null
+          league?: string | null
+          line?: string | null
+          market?: string | null
+          market_margin_mean?: number | null
+          market_margin_median?: number | null
+          max_odd?: number | null
+          mean_odd?: number | null
+          median_odd?: number | null
+          min_odd?: number | null
+          odd_stddev?: number | null
+          odds_available?: number | null
+          period?: string | null
+          selection?: string | null
+          source?: string | null
+          source_event_id?: string | null
+          source_ref?: Json | null
+          sport?: string | null
+          timing_bucket?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "odds_market_snapshots_coleta_id_fkey"
+            columns: ["coleta_id"]
+            isOneToOne: false
+            referencedRelation: "coletas_odds"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       prognosticos_clv: {
         Row: {
