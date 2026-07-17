@@ -102,7 +102,21 @@ type ColetaQueryLike<T = unknown> = PromiseLike<QueryResultLike<T>> & {
 const coletaDb = supabase as unknown as {
   from: (table: string) => ColetaQueryLike;
 };
-const ODDS_INSERT_BATCH_SIZE = 15;
+const ODDS_INSERT_BATCH_SIZE = 500;
+const ODDS_INSERT_MAX_RETRIES = 4;
+const ODDS_INSERT_RETRY_BASE_DELAY_MS = 800;
+
+function isTransientFetchError(err: unknown): boolean {
+  if (!err) return false;
+  const msg = (err as { message?: string })?.message ?? String(err);
+  return /Failed to fetch|NetworkError|fetch failed|timeout|ETIMEDOUT|ECONNRESET|network|temporarily|503|504|statement timeout|canceling statement/i.test(
+    msg,
+  );
+}
+
+async function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 const ODDS_JOGOS_LIST_COLUMNS = [
   "id",
   "coleta_id",
