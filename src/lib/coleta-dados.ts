@@ -148,7 +148,7 @@ const coletaDb = supabase as unknown as {
   from: (table: string) => ColetaQueryLike;
 };
 const ODDS_INSERT_BATCH_SIZE = 75;
-const ODDS_INSERT_MIN_BATCH_SIZE = 20;
+const ODDS_INSERT_MIN_BATCH_SIZE = 1;
 const ODDS_INSERT_MAX_RETRIES = 8;
 const ODDS_INSERT_RETRY_BASE_DELAY_MS = 600;
 const ODDS_INSERT_INTER_BATCH_DELAY_MS = 60;
@@ -171,8 +171,16 @@ async function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 const SNAPSHOT_INSERT_BATCH_SIZE = 50;
-const SNAPSHOT_INSERT_MIN_BATCH_SIZE = 10;
+const SNAPSHOT_INSERT_MIN_BATCH_SIZE = 1;
 const NORMALIZED_AUDIT_SAMPLE_SIZE = 25;
+
+function persistenceError(stage: string, error: unknown, context?: string): Error {
+  const original = (error as { message?: string })?.message ?? String(error);
+  const suffix = context ? ` (${context})` : "";
+  const wrapped = new Error(`Falha ao salvar ${stage}${suffix}: ${original}`);
+  (wrapped as Error & { cause?: unknown }).cause = error;
+  return wrapped;
+}
 const ODDS_JOGOS_LIST_COLUMNS = [
   "id",
   "coleta_id",
@@ -1308,8 +1316,11 @@ async function insertOddsRowsInBatches(rows: NormalizedOdd[], coletaId: string) 
         batchSize = Math.max(ODDS_INSERT_MIN_BATCH_SIZE, Math.floor(batchSize / 2));
         break;
       }
+      if (isStatementTimeoutError(error)) {
+        throw persistenceError("odds consolidadas", error, "lote mínimo de 1 linha");
+      }
       if (!isTransientFetchError(error)) {
-        throw error;
+        throw persistenceError("odds consolidadas", error, `lote de ${batch.length} linhas`);
       }
       attempt += 1;
       if (attempt > ODDS_INSERT_MAX_RETRIES) break;
@@ -1324,7 +1335,11 @@ async function insertOddsRowsInBatches(rows: NormalizedOdd[], coletaId: string) 
         await sleep(1000);
         continue;
       }
-      throw lastError ?? new Error("Falha ao inserir odds após múltiplas tentativas");
+      throw persistenceError(
+        "odds consolidadas",
+        lastError ?? new Error("múltiplas tentativas sem sucesso"),
+        `lote de ${batch.length} linhas`,
+      );
     }
     index += batch.length;
     if (index < rows.length && ODDS_INSERT_INTER_BATCH_DELAY_MS > 0) {
@@ -1338,7 +1353,7 @@ async function replaceOddsMarketSnapshots(snapshots: OddsMarketSnapshot[], colet
     .from("odds_market_snapshots")
     .delete()
     .eq("coleta_id", coletaId);
-  if (deleteError) throw deleteError;
+  if (deleteError) throw persistenceError("a limpeza dos snapshots anteriores", deleteError);
 
   let batchSize = SNAPSHOT_INSERT_BATCH_SIZE;
   let index = 0;
@@ -1364,7 +1379,12 @@ async function replaceOddsMarketSnapshots(snapshots: OddsMarketSnapshot[], colet
         batchSize = Math.max(SNAPSHOT_INSERT_MIN_BATCH_SIZE, Math.floor(batchSize / 2));
         break;
       }
-      if (!isTransientFetchError(error)) throw error;
+      if (isStatementTimeoutError(error)) {
+        throw persistenceError("snapshots consolidados", error, "lote mínimo de 1 linha");
+      }
+      if (!isTransientFetchError(error)) {
+        throw persistenceError("snapshots consolidados", error, `lote de ${batch.length} linhas`);
+      }
       attempt += 1;
       if (attempt <= ODDS_INSERT_MAX_RETRIES) {
         await sleep(ODDS_INSERT_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
@@ -1375,7 +1395,11 @@ async function replaceOddsMarketSnapshots(snapshots: OddsMarketSnapshot[], colet
         batchSize = Math.max(SNAPSHOT_INSERT_MIN_BATCH_SIZE, Math.floor(batchSize / 2));
         continue;
       }
-      throw lastError ?? new Error("Falha ao inserir snapshots consolidados");
+      throw persistenceError(
+        "snapshots consolidados",
+        lastError ?? new Error("múltiplas tentativas sem sucesso"),
+        `lote de ${batch.length} linhas`,
+      );
     }
     index += batch.length;
   }
@@ -1417,9 +1441,11 @@ export async function saveCollection(
       total_odds: consolidatedRows.length,
       erro: null,
     })
-    .select("*")
+    .select(
+      "id,job_id,status,esporte,liga,data_inicio,data_fim,mercados,parametros,total_jogos,total_odds,erro,created_at,updated_at",
+    )
     .single();
-  if (error) throw error;
+  if (error) throw persistenceError("o cabeçalho da coleta", error);
 
   const coletaRow = coleta as ColetaOdds;
   const persistedSnapshots = snapshots.map((snapshot) => ({
@@ -1512,13 +1538,13 @@ export async function completeRemoteCollection(
       updated_at: new Date().toISOString(),
     })
     .eq("id", coletaId);
-  if (error) throw error;
+  if (error) throw persistenceError("o resultado da coleta", error);
 
   const { error: deleteError } = await coletaDb
     .from("odds_jogos")
     .delete()
     .eq("coleta_id", coletaId);
-  if (deleteError) throw deleteError;
+  if (deleteError) throw persistenceError("a limpeza das odds anteriores", deleteError);
 
   if (consolidatedRows.length) {
     await insertOddsRowsInBatches(consolidatedRows, coletaId);
