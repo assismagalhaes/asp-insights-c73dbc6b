@@ -384,7 +384,9 @@ function Validacao() {
   const enrichPreview = useEnrichOpportunityRankingItemPreview();
   const applyRankingValidation = useApplyCriticalValidationToOpportunityRanking();
   const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
-  const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
+  const mercados = Array.from(
+    new Set([...(cfg?.mercados_ativos ?? MERCADOS_DEFAULT), ...MERCADOS_DEFAULT]),
+  );
 
   // estado por opção e por grupo
   const [oddsAj, setOddsAj] = useState<Record<string, string>>({});
