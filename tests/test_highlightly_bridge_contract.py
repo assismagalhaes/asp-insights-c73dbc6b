@@ -27,6 +27,7 @@ class HighlightlyBridgeContractTests(unittest.TestCase):
         self.assertIn('"hl_phase7_window_health_v"', verifier)
         self.assertIn('"refresh_highlightly_shadow_observation"', verifier)
         self.assertIn('"cancel_highlightly_redundant_shadow_jobs"', verifier)
+        self.assertIn('"get_highlightly_daily_request_usage"', verifier)
         self.assertIn('/storage/v1/object/highlightly-raw/', verifier)
 
     def test_nonce_rpc_is_service_role_only(self):

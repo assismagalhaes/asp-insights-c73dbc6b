@@ -464,12 +464,11 @@ class HighlightlyRepository:
         }
 
     def daily_request_usage(self, provider_id: str, request_date: str) -> int:
-        rows = self.select_rows(
-            "hl_rate_limit_usage",
-            columns="requests_used",
-            filters={"provider_id": provider_id, "request_date": request_date},
+        usage = self.rpc(
+            "get_highlightly_daily_request_usage",
+            {"p_provider_id": provider_id, "p_request_date": request_date},
         )
-        return sum(int(row.get("requests_used") or 0) for row in rows)
+        return int(usage or 0)
 
     def set_provider_enabled(self, provider_code: str, enabled: bool) -> dict[str, Any]:
         rows = self.patch_rows(

@@ -75,6 +75,7 @@ export const HIGHLIGHTLY_BRIDGE_RPCS = new Set([
   "refresh_highlightly_shadow_observation",
   "refresh_highlightly_source_reconciliation",
   "cancel_highlightly_redundant_shadow_jobs",
+  "get_highlightly_daily_request_usage",
 ]);
 
 export type HighlightlyBridgeTarget = {

@@ -423,6 +423,21 @@ class HighlightlyRepositoryTests(unittest.TestCase):
         self.assertIn("code=eq.highlightly", url)
         self.assertEqual(kwargs["json"], {"enabled": True})
 
+    def test_daily_request_usage_is_aggregated_by_rpc_without_rest_row_cap(self):
+        session = _Session([_Response(200, 1_108)])
+        repository = HighlightlyRepository("https://example.supabase.co", "service-secret", session=session)
+
+        usage = repository.daily_request_usage("provider-1", "2026-07-17")
+
+        self.assertEqual(usage, 1_108)
+        method, url, kwargs = session.calls[0]
+        self.assertEqual(method, "POST")
+        self.assertTrue(url.endswith("/rest/v1/rpc/get_highlightly_daily_request_usage"))
+        self.assertEqual(
+            kwargs["json"],
+            {"p_provider_id": "provider-1", "p_request_date": "2026-07-17"},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
