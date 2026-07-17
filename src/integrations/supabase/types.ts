@@ -6017,6 +6017,10 @@ export type Database = {
         }
       }
       get_football_match_detail: { Args: { p_match_id: string }; Returns: Json }
+      get_highlightly_daily_request_usage: {
+        Args: { p_provider_id: string; p_request_date: string }
+        Returns: number
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
