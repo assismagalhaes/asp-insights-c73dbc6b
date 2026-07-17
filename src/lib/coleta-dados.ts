@@ -1101,11 +1101,15 @@ async function insertOddsRowsInBatches(rows: NormalizedOdd[], coletaId: string) 
         inserted = true;
         break;
       }
+      // Statement timeout → shrink batch aggressively and retry the same slice.
+      if (isStatementTimeoutError(error) && batchSize > ODDS_INSERT_MIN_BATCH_SIZE) {
+        batchSize = Math.max(ODDS_INSERT_MIN_BATCH_SIZE, Math.floor(batchSize / 2));
+        break;
+      }
       const transient = isTransientFetchError(error);
       if (!transient || attempt >= ODDS_INSERT_MAX_RETRIES) {
-        // On persistent failure with big batch, try halving once before giving up.
-        if (transient && batchSize > 50) {
-          batchSize = Math.max(50, Math.floor(batchSize / 2));
+        if (transient && batchSize > ODDS_INSERT_MIN_BATCH_SIZE) {
+          batchSize = Math.max(ODDS_INSERT_MIN_BATCH_SIZE, Math.floor(batchSize / 2));
           break;
         }
         throw error;
@@ -1113,9 +1117,10 @@ async function insertOddsRowsInBatches(rows: NormalizedOdd[], coletaId: string) 
       attempt += 1;
       await sleep(ODDS_INSERT_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
     }
-    if (inserted) index += batchSize;
+    if (inserted) index += batch.length;
   }
 }
+
 
 export function downloadText(filename: string, content: string, type = "text/csv;charset=utf-8") {
   const blob = new Blob([content], { type });
