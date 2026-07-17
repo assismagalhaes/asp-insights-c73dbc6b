@@ -1013,9 +1013,44 @@ export function buildOddsMarketSnapshots(
         game_id: first.raw_ref.game_id ?? first.raw_ref.match_id ?? null,
         source_url: first.raw_ref.source_url ?? first.raw_ref.url ?? first.raw_ref.link ?? null,
         timezone: first.raw_ref.timezone ?? "America/Sao_Paulo",
+        event_date: first.data,
+        event_time: first.hora,
       },
     };
   });
+}
+
+function snapshotToNormalizedOdd(snapshot: OddsMarketSnapshot): NormalizedOdd {
+  return {
+    data: toText(snapshot.source_ref.event_date),
+    hora: toText(snapshot.source_ref.event_time),
+    esporte: snapshot.sport,
+    liga: snapshot.league,
+    jogo: snapshot.event_name,
+    mandante: snapshot.home_team ?? "",
+    visitante: snapshot.away_team ?? "",
+    mercado: snapshot.market,
+    pick: snapshot.selection,
+    linha: snapshot.line || null,
+    odd: snapshot.median_odd,
+    odd_media: snapshot.mean_odd,
+    odd_mediana: snapshot.median_odd,
+    odd_minima: snapshot.min_odd,
+    odd_maxima: snapshot.max_odd,
+    odd_melhor: snapshot.best_odd,
+    bookmaker_melhor: snapshot.best_bookmaker,
+    odd_desvio_padrao: snapshot.odd_stddev,
+    casas_count: snapshot.bookmaker_count,
+    odds_disponiveis: snapshot.odds_available,
+    probabilidade_implicita_media: snapshot.implied_probability_mean,
+    probabilidade_implicita_mediana: snapshot.implied_probability_median,
+    margem_mercado_media: snapshot.market_margin_mean,
+    margem_mercado_mediana: snapshot.market_margin_median,
+    bookmaker: snapshot.best_bookmaker,
+    fonte: snapshot.source,
+    capturado_em: snapshot.captured_at,
+    raw_ref: snapshot.source_ref,
+  };
 }
 
 export function toCsv(rows: NormalizedOdd[]): string {
@@ -1097,13 +1132,6 @@ function compactRawRef(
     game_id: rawRef.game_id ?? null,
     source_url: rawRef.source_url ?? rawRef.url ?? rawRef.link ?? null,
     market: rawRef.market ?? null,
-  };
-}
-
-function compactNormalizedRow(row: NormalizedOdd): NormalizedOdd {
-  return {
-    ...row,
-    raw_ref: compactRawRef(row.raw_ref),
   };
 }
 
@@ -1305,12 +1333,7 @@ async function insertOddsRowsInBatches(rows: NormalizedOdd[], coletaId: string) 
   }
 }
 
-async function replaceOddsMarketSnapshots(
-  rows: NormalizedOdd[],
-  coletaId: string,
-  fallbackCapturedAt: string,
-) {
-  const snapshots = buildOddsMarketSnapshots(rows, coletaId, fallbackCapturedAt);
+async function replaceOddsMarketSnapshots(snapshots: OddsMarketSnapshot[], coletaId: string) {
   const { error: deleteError } = await coletaDb
     .from("odds_market_snapshots")
     .delete()
@@ -1375,8 +1398,9 @@ export async function saveCollection(
   parametros: Record<string, unknown>,
 ) {
   const deduped = dedupeRows(normalized.rows);
-  const compactRows = deduped.rows.map(compactNormalizedRow);
-  const normalizedSnapshot = compactNormalizedForStorage(normalized, compactRows);
+  const snapshots = buildOddsMarketSnapshots(deduped.rows, "pending");
+  const consolidatedRows = snapshots.map(snapshotToNormalizedOdd);
+  const normalizedSnapshot = compactNormalizedForStorage(normalized, consolidatedRows);
   const { data: coleta, error } = await coletaDb
     .from("coletas_odds")
     .insert({
@@ -1390,7 +1414,7 @@ export async function saveCollection(
       raw_json: compactRawForStorage(raw),
       normalized_json: normalizedSnapshot,
       total_jogos: normalized.total_jogos,
-      total_odds: deduped.rows.length,
+      total_odds: consolidatedRows.length,
       erro: null,
     })
     .select("*")
@@ -1398,11 +1422,15 @@ export async function saveCollection(
   if (error) throw error;
 
   const coletaRow = coleta as ColetaOdds;
-  if (deduped.rows.length) {
-    await insertOddsRowsInBatches(deduped.rows, coletaRow.id);
+  const persistedSnapshots = snapshots.map((snapshot) => ({
+    ...snapshot,
+    coleta_id: coletaRow.id,
+  }));
+  if (consolidatedRows.length) {
+    await insertOddsRowsInBatches(consolidatedRows, coletaRow.id);
   }
 
-  await replaceOddsMarketSnapshots(deduped.rows, coletaRow.id, coletaRow.created_at);
+  await replaceOddsMarketSnapshots(persistedSnapshots, coletaRow.id);
 
   return coletaRow;
 }
@@ -1462,8 +1490,11 @@ export async function completeRemoteCollection(
   status = "CONCLUIDA",
 ): Promise<ImportResult> {
   const deduped = dedupeRows(normalized.rows);
-  const compactRows = deduped.rows.map(compactNormalizedRow);
-  const normalizedSnapshot = compactNormalizedForStorage(normalized, compactRows);
+  const fallbackCapturedAt =
+    normalized.rows.find((row) => row.capturado_em)?.capturado_em ?? new Date().toISOString();
+  const snapshots = buildOddsMarketSnapshots(deduped.rows, coletaId, fallbackCapturedAt);
+  const consolidatedRows = snapshots.map(snapshotToNormalizedOdd);
+  const normalizedSnapshot = compactNormalizedForStorage(normalized, consolidatedRows);
   const { error } = await coletaDb
     .from("coletas_odds")
     .update({
@@ -1476,7 +1507,7 @@ export async function completeRemoteCollection(
       raw_json: compactRawForStorage(raw),
       normalized_json: normalizedSnapshot,
       total_jogos: normalized.total_jogos,
-      total_odds: deduped.rows.length,
+      total_odds: consolidatedRows.length,
       erro: null,
       updated_at: new Date().toISOString(),
     })
@@ -1489,17 +1520,17 @@ export async function completeRemoteCollection(
     .eq("coleta_id", coletaId);
   if (deleteError) throw deleteError;
 
-  if (deduped.rows.length) {
-    await insertOddsRowsInBatches(deduped.rows, coletaId);
+  if (consolidatedRows.length) {
+    await insertOddsRowsInBatches(consolidatedRows, coletaId);
   }
 
-  const snapshots = await replaceOddsMarketSnapshots(
-    deduped.rows,
-    coletaId,
-    normalized.rows.find((row) => row.capturado_em)?.capturado_em ?? new Date().toISOString(),
-  );
+  await replaceOddsMarketSnapshots(snapshots, coletaId);
 
-  return { inserted: deduped.rows.length, duplicated: deduped.duplicated, snapshots };
+  return {
+    inserted: consolidatedRows.length,
+    duplicated: deduped.duplicated,
+    snapshots: snapshots.length,
+  };
 }
 
 export async function fetchCollections(): Promise<ColetaOdds[]> {
