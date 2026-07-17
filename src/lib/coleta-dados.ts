@@ -1079,12 +1079,33 @@ function compactRawForStorage(raw: unknown): unknown {
 }
 
 async function insertOddsRowsInBatches(rows: NormalizedOdd[], coletaId: string) {
-  for (let index = 0; index < rows.length; index += ODDS_INSERT_BATCH_SIZE) {
+  let batchSize = ODDS_INSERT_BATCH_SIZE;
+  let index = 0;
+  while (index < rows.length) {
     const batch = rows
-      .slice(index, index + ODDS_INSERT_BATCH_SIZE)
+      .slice(index, index + batchSize)
       .map((row) => toOddsJogoInsert(row, coletaId));
-    const { error } = await coletaDb.from("odds_jogos").insert(batch);
-    if (error) throw error;
+    let attempt = 0;
+    let inserted = false;
+    while (!inserted) {
+      const { error } = await coletaDb.from("odds_jogos").insert(batch);
+      if (!error) {
+        inserted = true;
+        break;
+      }
+      const transient = isTransientFetchError(error);
+      if (!transient || attempt >= ODDS_INSERT_MAX_RETRIES) {
+        // On persistent failure with big batch, try halving once before giving up.
+        if (transient && batchSize > 50) {
+          batchSize = Math.max(50, Math.floor(batchSize / 2));
+          break;
+        }
+        throw error;
+      }
+      attempt += 1;
+      await sleep(ODDS_INSERT_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
+    }
+    if (inserted) index += batchSize;
   }
 }
 
