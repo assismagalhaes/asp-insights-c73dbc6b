@@ -916,15 +916,20 @@ def consultar_status_job(
 ):
     verificar_token(authorization)
     job = load_job(job_id)
-    return {
-        "job_id": job.get("job_id"),
-        "status": job.get("status"),
-        "erro": job.get("erro"),
-        "total_jogos": job.get("total_jogos", 0),
-        "total_odds": job.get("total_odds", 0),
-        "created_at": job.get("created_at"),
-        "updated_at": job.get("updated_at"),
-    }
+    status_fields = (
+        "job_id",
+        "status",
+        "total_jogos",
+        "total_odds",
+        "erro",
+        "warning",
+        "mensagem",
+        "created_at",
+        "updated_at",
+        "iniciado_em",
+        "finalizado_em",
+    )
+    return {field: job.get(field) for field in status_fields if field in job}
 
 @app.get("/scraping/jobs/{job_id}/raw")
 def consultar_raw(

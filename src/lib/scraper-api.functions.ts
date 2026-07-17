@@ -193,7 +193,12 @@ const SCRAPER_JOB_CREATE_TIMEOUT_MS = 180000;
 const SCRAPER_JOB_STATUS_TIMEOUT_MS = 120000;
 const SCRAPER_LARGE_PAYLOAD_TIMEOUT_MS = 300000;
 
-async function scraperRequest(path: string, init?: RequestInit, timeoutMs = SCRAPER_DEFAULT_TIMEOUT_MS) {
+async function scraperRequest(
+  path: string,
+  init?: RequestInit,
+  timeoutMs = SCRAPER_DEFAULT_TIMEOUT_MS,
+  timeoutMessage?: string,
+) {
   const { baseUrl, apiKey } = getScraperConfig();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -249,7 +254,9 @@ async function scraperRequest(path: string, init?: RequestInit, timeoutMs = SCRA
     return payload;
   } catch (e) {
     if ((e as Error).name === "AbortError") {
-      throw new Error(`Timeout ao chamar API da VM (${path}) após ${Math.round(timeoutMs / 1000)}s.`);
+      throw new Error(
+        `Timeout ao chamar API da VM (${path}) após ${Math.round(timeoutMs / 1000)}s.`,
+      );
     }
     throw e;
   } finally {
@@ -389,11 +396,11 @@ export const getScrapingJobRaw = createServerFn({ method: "POST" })
       `/scraping/jobs/${encodeURIComponent(data.job_id)}/raw`,
       undefined,
       SCRAPER_LARGE_PAYLOAD_TIMEOUT_MS,
+      "Timeout ao baixar o JSON bruto da coleta. A coleta na VM pode ter sido concluida normalmente.",
     );
     return {
       job_id: data.job_id,
       raw_json: pickPayload(payload) as JsonValue,
-      payload: payload as JsonValue,
     };
   });
 
@@ -405,12 +412,12 @@ export const getScrapingJobNormalized = createServerFn({ method: "POST" })
       `/scraping/jobs/${encodeURIComponent(data.job_id)}/normalized`,
       undefined,
       SCRAPER_LARGE_PAYLOAD_TIMEOUT_MS,
+      "Timeout ao baixar o resultado normalizado. A coleta na VM foi concluida, mas o arquivo e grande demais para o tempo de importacao.",
     );
 
     return {
       job_id: data.job_id,
       normalized_json: pickPayload(payload) as JsonValue,
-      payload: payload as JsonValue,
     };
   });
 

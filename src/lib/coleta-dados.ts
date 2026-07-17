@@ -45,6 +45,51 @@ export interface NormalizedCollection {
 export interface ImportResult {
   inserted: number;
   duplicated: number;
+  snapshots: number;
+}
+
+export type OddsTimingBucket =
+  | "D2_PLUS"
+  | "D1"
+  | "H6_24"
+  | "H3_6"
+  | "H1_3"
+  | "H0_1"
+  | "POS_INICIO"
+  | "UNKNOWN";
+
+export interface OddsMarketSnapshot {
+  coleta_id: string;
+  source: string;
+  source_event_id: string | null;
+  sport: string | null;
+  league: string | null;
+  event_name: string;
+  home_team: string | null;
+  away_team: string | null;
+  event_start_at: string | null;
+  captured_at: string;
+  lead_minutes: number | null;
+  timing_bucket: OddsTimingBucket;
+  eligible_pre_match: boolean;
+  market: string;
+  period: string;
+  line: string;
+  selection: string;
+  median_odd: number;
+  mean_odd: number;
+  min_odd: number;
+  max_odd: number;
+  best_odd: number;
+  best_bookmaker: string | null;
+  odd_stddev: number;
+  bookmaker_count: number;
+  odds_available: number;
+  implied_probability_mean: number | null;
+  implied_probability_median: number | null;
+  market_margin_mean: number | null;
+  market_margin_median: number | null;
+  source_ref: Record<string, unknown>;
 }
 
 export interface ColetaOdds {
@@ -122,10 +167,10 @@ function isTransientFetchError(err: unknown): boolean {
   );
 }
 
-
 async function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+const SNAPSHOT_INSERT_BATCH_SIZE = 100;
 const ODDS_JOGOS_LIST_COLUMNS = [
   "id",
   "coleta_id",
@@ -858,6 +903,119 @@ function dedupeRows(rows: NormalizedOdd[]): { rows: NormalizedOdd[]; duplicated:
   return { rows: uniqueRows, duplicated: rows.length - uniqueRows.length };
 }
 
+export function classifyOddsTiming(leadMinutes: number | null): {
+  bucket: OddsTimingBucket;
+  eligiblePreMatch: boolean;
+} {
+  if (leadMinutes == null || !Number.isFinite(leadMinutes)) {
+    return { bucket: "UNKNOWN", eligiblePreMatch: false };
+  }
+  if (leadMinutes < 0) return { bucket: "POS_INICIO", eligiblePreMatch: false };
+  if (leadMinutes >= 48 * 60) return { bucket: "D2_PLUS", eligiblePreMatch: true };
+  if (leadMinutes >= 24 * 60) return { bucket: "D1", eligiblePreMatch: true };
+  if (leadMinutes >= 6 * 60) return { bucket: "H6_24", eligiblePreMatch: true };
+  if (leadMinutes >= 3 * 60) return { bucket: "H3_6", eligiblePreMatch: true };
+  if (leadMinutes >= 60) return { bucket: "H1_3", eligiblePreMatch: true };
+  return { bucket: "H0_1", eligiblePreMatch: true };
+}
+
+function eventStartIso(row: NormalizedOdd): string | null {
+  if (!row.data || !row.hora) return null;
+  const timezone = toText(row.raw_ref.timezone) ?? "America/Sao_Paulo";
+  // Current collection dates use the application's Brazil-local match clock.
+  // Preserve the timezone name in source_ref so a provider adapter can override it later.
+  const offset = timezone === "America/Sao_Paulo" ? "-03:00" : "Z";
+  const iso = `${row.data}T${row.hora.length === 5 ? `${row.hora}:00` : row.hora}${offset}`;
+  return Number.isNaN(Date.parse(iso)) ? null : new Date(iso).toISOString();
+}
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+export function buildOddsMarketSnapshots(
+  rows: NormalizedOdd[],
+  coletaId: string,
+  fallbackCapturedAt = new Date().toISOString(),
+): OddsMarketSnapshot[] {
+  const groups = new Map<string, NormalizedOdd[]>();
+  for (const row of rows) {
+    if (!(row.odd > 1)) continue;
+    const capturedAt = parseCapturedAt(row.capturado_em) ?? fallbackCapturedAt;
+    const sourceEventId = toText(row.raw_ref.game_id ?? row.raw_ref.match_id);
+    const period = toText(row.raw_ref.period ?? row.raw_ref.scope) ?? "full_time";
+    const key = [
+      sourceEventId ?? "",
+      row.data ?? "",
+      row.hora ?? "",
+      row.jogo,
+      row.mercado,
+      period,
+      row.linha ?? "",
+      row.pick,
+      capturedAt,
+    ]
+      .join("|")
+      .toLowerCase();
+    groups.set(key, [...(groups.get(key) ?? []), { ...row, capturado_em: capturedAt }]);
+  }
+
+  return Array.from(groups.values()).map((group) => {
+    const first = group[0];
+    const odds = group.map((row) => row.odd).filter((odd) => odd > 1);
+    const capturedAt = first.capturado_em ?? fallbackCapturedAt;
+    const eventStartAt = eventStartIso(first);
+    const leadMinutes = eventStartAt
+      ? Math.round((Date.parse(eventStartAt) - Date.parse(capturedAt)) / 60000)
+      : null;
+    const timing = classifyOddsTiming(leadMinutes);
+    const best = group.reduce((current, row) => (row.odd > current.odd ? row : current));
+    const meanOdd = odds.reduce((sum, odd) => sum + odd, 0) / odds.length;
+    const variance = odds.reduce((sum, odd) => sum + (odd - meanOdd) ** 2, 0) / odds.length;
+    const bookmakers = new Set(group.map((row) => row.bookmaker).filter(Boolean));
+    const source = toText(first.fonte) ?? "unknown";
+    return {
+      coleta_id: coletaId,
+      source: source.toLowerCase().includes("highlightly") ? "highlightly" : source.toLowerCase(),
+      source_event_id: toText(first.raw_ref.game_id ?? first.raw_ref.match_id),
+      sport: first.esporte,
+      league: first.liga,
+      event_name: first.jogo,
+      home_team: first.mandante || null,
+      away_team: first.visitante || null,
+      event_start_at: eventStartAt,
+      captured_at: capturedAt,
+      lead_minutes: leadMinutes,
+      timing_bucket: timing.bucket,
+      eligible_pre_match: timing.eligiblePreMatch,
+      market: first.mercado,
+      period: toText(first.raw_ref.period ?? first.raw_ref.scope) ?? "full_time",
+      line: first.linha ?? "",
+      selection: first.pick,
+      median_odd: median(odds),
+      mean_odd: meanOdd,
+      min_odd: Math.min(...odds),
+      max_odd: Math.max(...odds),
+      best_odd: best.odd,
+      best_bookmaker: best.bookmaker,
+      odd_stddev: Math.sqrt(variance),
+      bookmaker_count: bookmakers.size,
+      odds_available: odds.length,
+      implied_probability_mean: first.probabilidade_implicita_media ?? null,
+      implied_probability_median: first.probabilidade_implicita_mediana ?? null,
+      market_margin_mean: first.margem_mercado_media ?? null,
+      market_margin_median: first.margem_mercado_mediana ?? null,
+      source_ref: {
+        game_id: first.raw_ref.game_id ?? first.raw_ref.match_id ?? null,
+        source_url: first.raw_ref.source_url ?? first.raw_ref.url ?? first.raw_ref.link ?? null,
+        timezone: first.raw_ref.timezone ?? "America/Sao_Paulo",
+      },
+    };
+  });
+}
+
 export function toCsv(rows: NormalizedOdd[]): string {
   const headers = [
     "data",
@@ -1141,6 +1299,30 @@ async function insertOddsRowsInBatches(rows: NormalizedOdd[], coletaId: string) 
   }
 }
 
+async function replaceOddsMarketSnapshots(
+  rows: NormalizedOdd[],
+  coletaId: string,
+  fallbackCapturedAt: string,
+) {
+  const snapshots = buildOddsMarketSnapshots(rows, coletaId, fallbackCapturedAt);
+  const { error: deleteError } = await coletaDb
+    .from("odds_market_snapshots")
+    .delete()
+    .eq("coleta_id", coletaId);
+  if (deleteError) throw deleteError;
+
+  for (let index = 0; index < snapshots.length; index += SNAPSHOT_INSERT_BATCH_SIZE) {
+    const { error } = await coletaDb
+      .from("odds_market_snapshots")
+      .insert(
+        snapshots
+          .slice(index, index + SNAPSHOT_INSERT_BATCH_SIZE)
+          .map((snapshot) => ({ ...snapshot })),
+      );
+    if (error) throw error;
+  }
+  return snapshots.length;
+}
 
 export function downloadText(filename: string, content: string, type = "text/csv;charset=utf-8") {
   const blob = new Blob([content], { type });
@@ -1184,6 +1366,8 @@ export async function saveCollection(
   if (deduped.rows.length) {
     await insertOddsRowsInBatches(deduped.rows, coletaRow.id);
   }
+
+  await replaceOddsMarketSnapshots(deduped.rows, coletaRow.id, coletaRow.created_at);
 
   return coletaRow;
 }
@@ -1274,7 +1458,13 @@ export async function completeRemoteCollection(
     await insertOddsRowsInBatches(deduped.rows, coletaId);
   }
 
-  return { inserted: deduped.rows.length, duplicated: deduped.duplicated };
+  const snapshots = await replaceOddsMarketSnapshots(
+    deduped.rows,
+    coletaId,
+    normalized.rows.find((row) => row.capturado_em)?.capturado_em ?? new Date().toISOString(),
+  );
+
+  return { inserted: deduped.rows.length, duplicated: deduped.duplicated, snapshots };
 }
 
 export async function fetchCollections(): Promise<ColetaOdds[]> {
