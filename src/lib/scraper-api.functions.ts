@@ -374,7 +374,11 @@ export const getScrapingJobRaw = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => JobIdSchema.parse(input))
   .handler(async ({ data }) => {
-    const payload = await scraperRequest(`/scraping/jobs/${encodeURIComponent(data.job_id)}/raw`);
+    const payload = await scraperRequest(
+      `/scraping/jobs/${encodeURIComponent(data.job_id)}/raw`,
+      undefined,
+      300000,
+    );
     return {
       job_id: data.job_id,
       raw_json: pickPayload(payload) as JsonValue,
@@ -388,7 +392,10 @@ export const getScrapingJobNormalized = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const payload = await scraperRequest(
       `/scraping/jobs/${encodeURIComponent(data.job_id)}/normalized`,
+      undefined,
+      300000,
     );
+
     return {
       job_id: data.job_id,
       normalized_json: pickPayload(payload) as JsonValue,
