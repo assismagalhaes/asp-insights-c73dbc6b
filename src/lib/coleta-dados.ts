@@ -102,10 +102,11 @@ type ColetaQueryLike<T = unknown> = PromiseLike<QueryResultLike<T>> & {
 const coletaDb = supabase as unknown as {
   from: (table: string) => ColetaQueryLike;
 };
-const ODDS_INSERT_BATCH_SIZE = 200;
+const ODDS_INSERT_BATCH_SIZE = 150;
 const ODDS_INSERT_MIN_BATCH_SIZE = 25;
-const ODDS_INSERT_MAX_RETRIES = 4;
-const ODDS_INSERT_RETRY_BASE_DELAY_MS = 800;
+const ODDS_INSERT_MAX_RETRIES = 8;
+const ODDS_INSERT_RETRY_BASE_DELAY_MS = 600;
+const ODDS_INSERT_INTER_BATCH_DELAY_MS = 40;
 
 function isStatementTimeoutError(err: unknown): boolean {
   if (!err) return false;
