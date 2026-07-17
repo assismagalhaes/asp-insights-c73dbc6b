@@ -4,6 +4,8 @@ import {
   verifyHighlightlyBridgeRequest,
 } from "@/lib/highlightly-ingest-bridge.server";
 
+const SUPABASE_UPSTREAM_TIMEOUT_MS = 20_000;
+
 function jsonError(status: number, error: string): Response {
   return new Response(JSON.stringify({ error }), {
     status,
@@ -62,6 +64,7 @@ export const Route = createFileRoute("/api/public/hooks/highlightly-ingest")({
                 p_signed_at: auth.signedAt.toISOString(),
                 p_expires_at: expiresAt,
               }),
+              signal: AbortSignal.timeout(SUPABASE_UPSTREAM_TIMEOUT_MS),
             },
           );
         } catch {
@@ -92,6 +95,7 @@ export const Route = createFileRoute("/api/public/hooks/highlightly-ingest")({
             method: auth.method,
             headers: forwardHeaders,
             body: auth.method === "GET" ? undefined : forwardBody,
+            signal: AbortSignal.timeout(SUPABASE_UPSTREAM_TIMEOUT_MS),
           });
         } catch {
           return jsonError(502, "supabase_unavailable");

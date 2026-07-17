@@ -199,19 +199,28 @@ class HighlightlyPhaseThreeBaseballTests(unittest.TestCase):
             "homeTeam": {"id": 1, "name": "Home"},
             "awayTeam": {"id": 2, "name": "Away"},
         })
-        self.assertEqual(count, 11)
+        self.assertEqual(count, 7)
         keys = {call.kwargs["endpoint_key"] for call in repository.enqueue_job.call_args_list}
         self.assertIn("baseball.BaseballMatchStatisticsController_getStatistics", keys)
         self.assertIn("baseball.BaseballLineupsController_getLineups", keys)
         self.assertIn("baseball.BaseballBoxScoresController_getBoxScores", keys)
         self.assertIn("baseball.BaseballOddsController_getOddsV2", keys)
         self.assertIn("baseball.BaseballStandingsController_getStandings", keys)
+        self.assertNotIn("baseball.HighlightsController_getHighlights", keys)
+        self.assertNotIn("baseball.BaseballHead2HeadController_getHead2HeadData", keys)
+        self.assertNotIn("baseball.BaseballLastFiveGamesController_getLastFiveGames", keys)
         odds_job = next(
             call.kwargs
             for call in repository.enqueue_job.call_args_list
             if call.kwargs["endpoint_key"] == "baseball.BaseballOddsController_getOddsV2"
         )
         self.assertEqual(odds_job["request_params"]["limit"], 5)
+        box_score_job = next(
+            call.kwargs
+            for call in repository.enqueue_job.call_args_list
+            if call.kwargs["endpoint_key"] == "baseball.BaseballBoxScoresController_getBoxScores"
+        )
+        self.assertNotIn("_fanout_players", box_score_job["request_params"])
 
     def test_baseball_box_score_fanout_queues_unique_players(self):
         repository = Mock()

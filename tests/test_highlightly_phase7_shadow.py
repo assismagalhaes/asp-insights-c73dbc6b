@@ -20,6 +20,7 @@ class HighlightlyPhaseSevenShadowTests(unittest.TestCase):
         self.assertEqual({job.sport for job in jobs}, set(phase7.SPORTS))
         self.assertTrue(all(job.request_params["limit"] == 10 for job in jobs))
         self.assertTrue(all(job.request_params["_fanout_scope"] == "phase7-test" for job in jobs))
+        self.assertTrue(all(job.request_params["_pagination_priority"] == 0 for job in jobs))
         self.assertTrue(all("phase7-test" in job.dedupe_key for job in jobs))
 
     def test_football_requires_an_explicit_league_boundary(self):

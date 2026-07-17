@@ -97,6 +97,7 @@ def build_seed_jobs(
                             "offset": 0,
                             "_fanout": True,
                             "_fanout_scope": scope,
+                            "_pagination_priority": 0,
                         },
                     )
                 )
@@ -117,6 +118,7 @@ def build_seed_jobs(
                                 "offset": 0,
                                 "_fanout": True,
                                 "_fanout_scope": scope,
+                                "_pagination_priority": 0,
                             },
                         )
                     )
@@ -136,6 +138,7 @@ def build_seed_jobs(
                         "offset": 0,
                         "_fanout": True,
                         "_fanout_scope": scope,
+                        "_pagination_priority": 0,
                     },
                 )
             )
@@ -155,6 +158,7 @@ def build_seed_jobs(
                         "offset": 0,
                         "_fanout": True,
                         "_fanout_scope": scope,
+                        "_pagination_priority": 0,
                     },
                 )
             )
@@ -303,7 +307,7 @@ def main() -> int:
             resource=job.resource,
             dedupe_key=job.dedupe_key,
             request_params=job.request_params,
-            priority=1,
+            priority=0,
         )
 
     client = HighlightlyClient(

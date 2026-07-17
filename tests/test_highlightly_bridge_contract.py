@@ -13,6 +13,7 @@ class HighlightlyBridgeContractTests(unittest.TestCase):
         self.assertIn('claim_highlightly_ingestion_bridge_nonce', route)
         self.assertNotIn('SUPABASE_PUBLISHABLE_KEY', route)
         self.assertNotIn('x-highlightly-forward-authorization', route)
+        self.assertIn('AbortSignal.timeout(SUPABASE_UPSTREAM_TIMEOUT_MS)', route)
 
     def test_verifier_uses_constant_time_hmac_and_explicit_allowlists(self):
         verifier = (ROOT / "src/lib/highlightly-ingest-bridge.server.ts").read_text(encoding="utf-8")
@@ -25,6 +26,7 @@ class HighlightlyBridgeContractTests(unittest.TestCase):
         self.assertIn('"hl_shadow_observations"', verifier)
         self.assertIn('"hl_phase7_window_health_v"', verifier)
         self.assertIn('"refresh_highlightly_shadow_observation"', verifier)
+        self.assertIn('"cancel_highlightly_redundant_shadow_jobs"', verifier)
         self.assertIn('/storage/v1/object/highlightly-raw/', verifier)
 
     def test_nonce_rpc_is_service_role_only(self):

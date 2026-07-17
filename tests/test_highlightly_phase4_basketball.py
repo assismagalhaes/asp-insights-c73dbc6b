@@ -229,11 +229,14 @@ class HighlightlyPhaseFourBasketballTests(unittest.TestCase):
             "awayTeam": {"id": 2, "name": "Away"},
             "state": {"score": {"current": "90 - 87"}},
         })
-        self.assertEqual(count, 9)
+        self.assertEqual(count, 5)
         jobs = {call.kwargs["endpoint_key"]: call.kwargs for call in repository.enqueue_job.call_args_list}
         self.assertIn("basketball.BasketballStatisticsController_getStatistics", jobs)
         self.assertIn("basketball.BasketballOddsController_getOddsV2", jobs)
         self.assertIn("basketball.BasketballStandingsController_getStandings", jobs)
+        self.assertNotIn("basketball.HighlightsController_getHighlights", jobs)
+        self.assertNotIn("basketball.BasketballHead2HeadController_getHead2HeadData", jobs)
+        self.assertNotIn("basketball.BasketballLastFiveGamesController_getLastFiveGames", jobs)
         self.assertEqual(jobs["basketball.BasketballOddsController_getOddsV2"]["request_params"]["limit"], 5)
         statistics_job = jobs["basketball.BasketballStatisticsController_getStatistics"]["request_params"]
         self.assertEqual(statistics_job["_home_score"], 90)

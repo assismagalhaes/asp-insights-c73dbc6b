@@ -249,7 +249,7 @@ class HighlightlyPhaseTwoWorkerTests(unittest.TestCase):
             "awayTeam": {"id": 2, "name": "Away"},
             "league": {"id": 7, "season": 2026},
         })
-        self.assertEqual(count, 12)
+        self.assertEqual(count, 8)
         keys = {call.kwargs["endpoint_key"] for call in repository.enqueue_job.call_args_list}
         self.assertIn("football.FootballOddsController_getOddsV2", keys)
         self.assertIn("football.FootballStatisticsController_getStatistics", keys)
@@ -257,12 +257,22 @@ class HighlightlyPhaseTwoWorkerTests(unittest.TestCase):
         self.assertIn("football.FootballLiveEventsController_getLiveEvents", keys)
         self.assertIn("football.FootballPlayerBoxScoreController_getPlayerBoxScores", keys)
         self.assertIn("football.FootballStandingsController_getStandings", keys)
+        self.assertNotIn("football.HighlightsController_getHighlights", keys)
+        self.assertNotIn("football.FootballHead2HeadController_getHead2HeadData", keys)
+        self.assertNotIn("football.FootballLastFiveGamesController_getLastFiveGames", keys)
+        self.assertNotIn("football.PlayersController_getPlayerSummaryById", keys)
         team_stats_calls = [
             call.kwargs["request_params"]
             for call in repository.enqueue_job.call_args_list
             if call.kwargs["endpoint_key"] == "football.TeamsController_teamStatistics"
         ]
         self.assertTrue(all(params["fromDate"] == "2025-07-15" for params in team_stats_calls))
+        box_score = next(
+            call.kwargs["request_params"]
+            for call in repository.enqueue_job.call_args_list
+            if call.kwargs["endpoint_key"] == "football.FootballPlayerBoxScoreController_getPlayerBoxScores"
+        )
+        self.assertNotIn("_fanout_players", box_score)
 
     def test_box_score_fanout_queues_player_summary_and_statistics(self):
         repository = Mock()
@@ -290,6 +300,20 @@ class HighlightlyPhaseTwoWorkerTests(unittest.TestCase):
                 call.kwargs["request_params"]["_shadow_scope"] == "shadow-b"
                 for call in repository.enqueue_job.call_args_list
             )
+        )
+
+    def test_phase7_fanout_is_prioritized_ahead_of_stale_shadow_jobs(self):
+        repository = Mock()
+        worker = HighlightlyWorker(Mock(), repository, worker_id="test-worker", enabled=True)
+
+        worker._enqueue_football_match_fanout(
+            {"id": 99, "homeTeam": {}, "awayTeam": {}, "league": {}},
+            scope_nonce="phase7-20260716-all-sports",
+        )
+
+        self.assertTrue(repository.enqueue_job.call_args_list)
+        self.assertTrue(
+            all(call.kwargs["priority"] == 0 for call in repository.enqueue_job.call_args_list)
         )
 
     def test_worker_persists_raw_before_any_canonical_upsert(self):
