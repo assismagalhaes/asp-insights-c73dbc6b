@@ -25,6 +25,9 @@ Deno.serve(async (req) => {
     return json({ error: "SCRAPER_API_URL ou SCRAPER_API_KEY não configurados." }, 500);
   }
 
+  let timeoutPath = "API da VM";
+  let timeoutMs = 120000;
+
   try {
     const url = new URL(req.url);
     // Action via query (?action=/health) or JSON body { action, path, method, body, query }
@@ -62,6 +65,12 @@ Deno.serve(async (req) => {
     if (!path.startsWith("/")) path = `/${path}`;
 
     const target = new URL(`${baseUrl}${path}`);
+    timeoutPath = target.pathname;
+    if (/\/scraping\/jobs\/[^/]+\/(raw|normalized|csv)$/.test(target.pathname)) {
+      timeoutMs = 300000;
+    } else if (target.pathname === "/scraping/jobs" && method === "POST") {
+      timeoutMs = 180000;
+    }
     if (query) {
       for (const [k, v] of Object.entries(query)) {
         target.searchParams.set(k, String(v));
@@ -81,7 +90,7 @@ Deno.serve(async (req) => {
     }
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 45000);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     let upstream: Response;
     try {
       upstream = await fetch(target.toString(), { ...init, signal: controller.signal });
@@ -102,6 +111,12 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      return json(
+        { error: `Timeout ao chamar API da VM (${timeoutPath}) após ${Math.round(timeoutMs / 1000)}s.` },
+        504,
+      );
+    }
     const msg = e instanceof Error ? e.message : String(e);
     return json({ error: msg }, 500);
   }

@@ -915,7 +915,16 @@ def consultar_status_job(
     authorization: str | None = Header(default=None)
 ):
     verificar_token(authorization)
-    return load_job(job_id)
+    job = load_job(job_id)
+    return {
+        "job_id": job.get("job_id"),
+        "status": job.get("status"),
+        "erro": job.get("erro"),
+        "total_jogos": job.get("total_jogos", 0),
+        "total_odds": job.get("total_odds", 0),
+        "created_at": job.get("created_at"),
+        "updated_at": job.get("updated_at"),
+    }
 
 @app.get("/scraping/jobs/{job_id}/raw")
 def consultar_raw(

@@ -715,11 +715,30 @@ async function pollVmJob(
   maxAttempts = 120,
 ) {
   let latestStatus = "PENDENTE";
+  let consecutiveStatusFailures = 0;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     onStatus(
       `Coleta em andamento na VM. Você pode sair da tela e voltar depois. Tentativa ${attempt}/${maxAttempts}`,
     );
-    const result = await getScrapingJobStatus({ data: { job_id: jobId } });
+    let result: Awaited<ReturnType<typeof getScrapingJobStatus>>;
+    try {
+      result = await getScrapingJobStatus({ data: { job_id: jobId } });
+      consecutiveStatusFailures = 0;
+    } catch (error) {
+      if (isVmStatusPollingTransient(error)) {
+        consecutiveStatusFailures += 1;
+        latestStatus = isRunningStatus(latestStatus) ? latestStatus : "RODANDO";
+        await updateCollectionStatus(coletaId, latestStatus, null).catch(() => null);
+        onStatus(
+          `A VM demorou para responder o status (${consecutiveStatusFailures}/3). A coleta continua na VM; você pode voltar depois e retomar.`,
+        );
+        if (consecutiveStatusFailures >= 3) return latestStatus;
+        await sleep(30000);
+        continue;
+      }
+      throw error;
+    }
+
     const { status, erro } = extractVmStatus(result.payload);
     latestStatus = status;
     await updateCollectionStatus(coletaId, status, erro);
@@ -734,6 +753,11 @@ async function pollVmJob(
   }
 
   return latestStatus;
+}
+
+function isVmStatusPollingTransient(error: unknown) {
+  const message = extractErrorMessage(error);
+  return /timeout|failed to fetch|network|fetch failed|temporar/i.test(message);
 }
 
 function sleep(ms: number) {

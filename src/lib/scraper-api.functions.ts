@@ -188,7 +188,12 @@ function extractJobId(payload: unknown): string {
   return String(value);
 }
 
-async function scraperRequest(path: string, init?: RequestInit, timeoutMs = 45000) {
+const SCRAPER_DEFAULT_TIMEOUT_MS = 120000;
+const SCRAPER_JOB_CREATE_TIMEOUT_MS = 180000;
+const SCRAPER_JOB_STATUS_TIMEOUT_MS = 120000;
+const SCRAPER_LARGE_PAYLOAD_TIMEOUT_MS = 300000;
+
+async function scraperRequest(path: string, init?: RequestInit, timeoutMs = SCRAPER_DEFAULT_TIMEOUT_MS) {
   const { baseUrl, apiKey } = getScraperConfig();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -244,7 +249,7 @@ async function scraperRequest(path: string, init?: RequestInit, timeoutMs = 4500
     return payload;
   } catch (e) {
     if ((e as Error).name === "AbortError") {
-      throw new Error("Timeout ao chamar API da VM.");
+      throw new Error(`Timeout ao chamar API da VM (${path}) após ${Math.round(timeoutMs / 1000)}s.`);
     }
     throw e;
   } finally {
@@ -255,7 +260,7 @@ async function scraperRequest(path: string, init?: RequestInit, timeoutMs = 4500
 async function scraperFormRequest(path: string, formData: FormData) {
   const { baseUrl, apiKey } = getScraperConfig();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 45000);
+  const timer = setTimeout(() => controller.abort(), SCRAPER_DEFAULT_TIMEOUT_MS);
   try {
     const res = await fetch(`${baseUrl}${path}`, {
       method: "POST",
@@ -347,10 +352,14 @@ export const createScrapingJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => JobParamsSchema.parse(input))
   .handler(async ({ data }) => {
-    const payload = await scraperRequest("/scraping/jobs", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    const payload = await scraperRequest(
+      "/scraping/jobs",
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+      SCRAPER_JOB_CREATE_TIMEOUT_MS,
+    );
     return {
       job_id: extractJobId(payload),
       payload: payload as JsonValue,
@@ -363,6 +372,8 @@ export const getScrapingJobStatus = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const payload = await scraperRequest(
       `/scraping/jobs/${encodeURIComponent(data.job_id)}/status`,
+      undefined,
+      SCRAPER_JOB_STATUS_TIMEOUT_MS,
     );
     return {
       job_id: data.job_id,
@@ -377,7 +388,7 @@ export const getScrapingJobRaw = createServerFn({ method: "POST" })
     const payload = await scraperRequest(
       `/scraping/jobs/${encodeURIComponent(data.job_id)}/raw`,
       undefined,
-      300000,
+      SCRAPER_LARGE_PAYLOAD_TIMEOUT_MS,
     );
     return {
       job_id: data.job_id,
@@ -393,7 +404,7 @@ export const getScrapingJobNormalized = createServerFn({ method: "POST" })
     const payload = await scraperRequest(
       `/scraping/jobs/${encodeURIComponent(data.job_id)}/normalized`,
       undefined,
-      300000,
+      SCRAPER_LARGE_PAYLOAD_TIMEOUT_MS,
     );
 
     return {
@@ -407,7 +418,10 @@ export const getScrapingJobCsv = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => JobIdSchema.parse(input))
   .handler(async ({ data }) => {
-    const csv = await scraperTextRequest(`/scraping/jobs/${encodeURIComponent(data.job_id)}/csv`);
+    const csv = await scraperTextRequest(
+      `/scraping/jobs/${encodeURIComponent(data.job_id)}/csv`,
+      SCRAPER_LARGE_PAYLOAD_TIMEOUT_MS,
+    );
     return {
       job_id: data.job_id,
       csv,
