@@ -314,7 +314,7 @@ export function ScraperApiDialog({ onRowsReady }: Props) {
       let finalStatus = "";
       for (let i = 0; i < maxTries; i++) {
         await sleep(3000);
-        const st = await callApi(`/scraping/jobs/${jobId}`, "GET");
+        const st = await callApi(`/scraping/jobs/${jobId}/status`, "GET");
         if (!st.ok) throw new Error(`Falha ao consultar status (HTTP ${st.status})`);
         const rec = st.data as { status?: string; erro?: string | null };
         finalStatus = rec.status ?? "";
