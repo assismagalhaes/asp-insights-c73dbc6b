@@ -303,10 +303,11 @@ async function scraperFormRequest(path: string, formData: FormData) {
   }
 }
 
-async function scraperTextRequest(path: string) {
+async function scraperTextRequest(path: string, timeoutMs = 300000) {
   const { baseUrl, apiKey } = getScraperConfig();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 45000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
     const res = await fetch(`${baseUrl}${path}`, {
       signal: controller.signal,
