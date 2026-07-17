@@ -5523,6 +5523,10 @@ export type Database = {
       }
     }
     Functions: {
+      cancel_highlightly_redundant_shadow_jobs: {
+        Args: { p_endpoint_keys: string[]; p_reason?: string; p_scope: string }
+        Returns: number
+      }
       claim_highlightly_ingestion_bridge_nonce: {
         Args: {
           p_expires_at: string
@@ -5787,6 +5791,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      prune_highlightly_ingestion_bridge_nonces: {
+        Args: { p_before?: string; p_limit?: number }
+        Returns: number
       }
       refresh_highlightly_shadow_observation: {
         Args: {
