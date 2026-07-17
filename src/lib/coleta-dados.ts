@@ -102,7 +102,21 @@ type ColetaQueryLike<T = unknown> = PromiseLike<QueryResultLike<T>> & {
 const coletaDb = supabase as unknown as {
   from: (table: string) => ColetaQueryLike;
 };
-const ODDS_INSERT_BATCH_SIZE = 15;
+const ODDS_INSERT_BATCH_SIZE = 500;
+const ODDS_INSERT_MAX_RETRIES = 4;
+const ODDS_INSERT_RETRY_BASE_DELAY_MS = 800;
+
+function isTransientFetchError(err: unknown): boolean {
+  if (!err) return false;
+  const msg = (err as { message?: string })?.message ?? String(err);
+  return /Failed to fetch|NetworkError|fetch failed|timeout|ETIMEDOUT|ECONNRESET|network|temporarily|503|504|statement timeout|canceling statement/i.test(
+    msg,
+  );
+}
+
+async function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 const ODDS_JOGOS_LIST_COLUMNS = [
   "id",
   "coleta_id",
@@ -1065,12 +1079,33 @@ function compactRawForStorage(raw: unknown): unknown {
 }
 
 async function insertOddsRowsInBatches(rows: NormalizedOdd[], coletaId: string) {
-  for (let index = 0; index < rows.length; index += ODDS_INSERT_BATCH_SIZE) {
+  let batchSize = ODDS_INSERT_BATCH_SIZE;
+  let index = 0;
+  while (index < rows.length) {
     const batch = rows
-      .slice(index, index + ODDS_INSERT_BATCH_SIZE)
+      .slice(index, index + batchSize)
       .map((row) => toOddsJogoInsert(row, coletaId));
-    const { error } = await coletaDb.from("odds_jogos").insert(batch);
-    if (error) throw error;
+    let attempt = 0;
+    let inserted = false;
+    while (!inserted) {
+      const { error } = await coletaDb.from("odds_jogos").insert(batch);
+      if (!error) {
+        inserted = true;
+        break;
+      }
+      const transient = isTransientFetchError(error);
+      if (!transient || attempt >= ODDS_INSERT_MAX_RETRIES) {
+        // On persistent failure with big batch, try halving once before giving up.
+        if (transient && batchSize > 50) {
+          batchSize = Math.max(50, Math.floor(batchSize / 2));
+          break;
+        }
+        throw error;
+      }
+      attempt += 1;
+      await sleep(ODDS_INSERT_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
+    }
+    if (inserted) index += batchSize;
   }
 }
 
