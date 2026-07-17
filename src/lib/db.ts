@@ -799,6 +799,9 @@ export const MERCADOS_DEFAULT = [
   "Over Pontos",
   "Under Pontos",
   "ASP BackMatrix",
+  "ASP MatchMatrix",
+  "ASP GoalMatrix",
+  "ASP CornerMatrix",
 ];
 
 export function normalizeMercadoPadrao(mercado: string, esporte?: string | null): string {
