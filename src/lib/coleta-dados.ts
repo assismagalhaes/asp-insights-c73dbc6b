@@ -1511,7 +1511,7 @@ export async function updateCollectionStatus(id: string, status: string, erro?: 
 
 export async function completeRemoteCollection(
   coletaId: string,
-  raw: unknown,
+  _raw: unknown,
   normalized: NormalizedCollection,
   status = "CONCLUIDA",
 ): Promise<ImportResult> {
@@ -1520,25 +1520,6 @@ export async function completeRemoteCollection(
     normalized.rows.find((row) => row.capturado_em)?.capturado_em ?? new Date().toISOString();
   const snapshots = buildOddsMarketSnapshots(deduped.rows, coletaId, fallbackCapturedAt);
   const consolidatedRows = snapshots.map(snapshotToNormalizedOdd);
-  const normalizedSnapshot = compactNormalizedForStorage(normalized, consolidatedRows);
-  const { error } = await coletaDb
-    .from("coletas_odds")
-    .update({
-      status,
-      esporte: normalized.esporte,
-      liga: normalized.liga,
-      data_inicio: normalized.data_inicio,
-      data_fim: normalized.data_fim,
-      mercados: normalized.mercados,
-      raw_json: compactRawForStorage(raw),
-      normalized_json: normalizedSnapshot,
-      total_jogos: normalized.total_jogos,
-      total_odds: consolidatedRows.length,
-      erro: null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", coletaId);
-  if (error) throw persistenceError("o resultado da coleta", error);
 
   const { error: deleteError } = await coletaDb
     .from("odds_jogos")
@@ -1551,6 +1532,26 @@ export async function completeRemoteCollection(
   }
 
   await replaceOddsMarketSnapshots(snapshots, coletaId);
+
+  // The full VM payload is deliberately not copied into coletas_odds. Rewriting
+  // those large JSONB fields caused a single-row UPDATE to exceed statement_timeout;
+  // the durable data already lives in odds_jogos and odds_market_snapshots.
+  const { error } = await coletaDb
+    .from("coletas_odds")
+    .update({
+      status,
+      esporte: normalized.esporte,
+      liga: normalized.liga,
+      data_inicio: normalized.data_inicio,
+      data_fim: normalized.data_fim,
+      mercados: normalized.mercados,
+      total_jogos: normalized.total_jogos,
+      total_odds: consolidatedRows.length,
+      erro: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", coletaId);
+  if (error) throw persistenceError("o resumo da coleta", error);
 
   return {
     inserted: consolidatedRows.length,
