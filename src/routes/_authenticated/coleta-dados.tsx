@@ -788,7 +788,36 @@ async function carregarOddsDaVm(
   esporte: string | null,
   onStatus?: (status: string) => void,
 ) {
-  const normalizedResult = await getScrapingJobNormalized({ data: { job_id: jobId } });
+  let normalizedResult: Awaited<ReturnType<typeof getScrapingJobNormalized>>;
+  try {
+    normalizedResult = await getScrapingJobNormalized({ data: { job_id: jobId } });
+  } catch (error) {
+    if (!isVmStatusPollingTransient(error)) throw error;
+    onStatus?.("O JSON normalizado demorou demais; tentando a importação compacta via CSV...");
+    const csvResult = await getScrapingJobCsv({ data: { job_id: jobId } });
+    const csvRows = parseVmCsv(csvResult.csv);
+    const csvPayload = {
+      source: "OddsAgora",
+      job_id: jobId,
+      total_linhas: csvRows.length,
+      linhas: csvRows,
+    };
+    const normalizedData = normalizeVmNormalizedPayload(csvPayload, { esporte });
+    if (!normalizedData.total_odds) {
+      throw new Error(
+        `O JSON normalizado excedeu o tempo e o CSV retornou ${csvRows.length} linhas, mas nenhuma odd pôde ser reconhecida.`,
+      );
+    }
+    return {
+      raw: {
+        source: "OddsAgora",
+        job_id: jobId,
+        imported_from: "csv",
+        total_linhas: csvRows.length,
+      },
+      normalizedData,
+    };
+  }
   const normalizedRaw = normalizedResult.normalized_json;
   if (import.meta.env.DEV) console.debug("Normalized payload:", normalizedRaw);
   const normalizedRows = extractNormalizedRows(normalizedRaw);
@@ -823,6 +852,61 @@ async function carregarOddsDaVm(
   throw new Error(
     `Payload recebido da VM, porem nenhum formato reconhecido foi encontrado.\n\nChaves disponiveis:\nnormalized: ${normalizedKeys}\nraw: ${rawKeys}\n\nTotais detectados: normalized.linhas=${normalizedRows.length}; raw.jogos=${rawGames.length}.${legacyFlashScoreHint}`,
   );
+}
+
+function parseVmCsv(csv: string): Record<string, string>[] {
+  const firstLine = csv.split(/\r?\n/, 1)[0] ?? "";
+  const delimiter =
+    countCsvDelimiter(firstLine, ";") > countCsvDelimiter(firstLine, ",") ? ";" : ",";
+  const matrix: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let quoted = false;
+
+  for (let index = 0; index < csv.length; index++) {
+    const char = csv[index];
+    if (char === '"') {
+      if (quoted && csv[index + 1] === '"') {
+        field += '"';
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (char === delimiter && !quoted) {
+      row.push(field);
+      field = "";
+    } else if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && csv[index + 1] === "\n") index += 1;
+      row.push(field);
+      if (row.some((value) => value.trim())) matrix.push(row);
+      row = [];
+      field = "";
+    } else {
+      field += char;
+    }
+  }
+  row.push(field);
+  if (row.some((value) => value.trim())) matrix.push(row);
+  if (matrix.length < 2) throw new Error("CSV da VM vazio ou sem linhas de odds.");
+
+  const headers = matrix[0].map((value, index) =>
+    (index === 0 ? value.replace(/^\uFEFF/, "") : value).trim(),
+  );
+  return matrix
+    .slice(1)
+    .map((values) =>
+      Object.fromEntries(headers.map((header, index) => [header, values[index]?.trim() ?? ""])),
+    );
+}
+
+function countCsvDelimiter(line: string, delimiter: string) {
+  let count = 0;
+  let quoted = false;
+  for (let index = 0; index < line.length; index++) {
+    if (line[index] === '"') quoted = !quoted;
+    else if (line[index] === delimiter && !quoted) count += 1;
+  }
+  return count;
 }
 
 function assertTotalLinhasMatches(label: string, payload: unknown, rows: unknown[]) {
@@ -866,8 +950,7 @@ function formatVmError(e: unknown) {
   if (/failed to fetch|network/i.test(message)) return "VM offline ou indisponível.";
   if (/401|403|api key|unauthorized|forbidden/i.test(message))
     return "API key da VM inválida ou sem permissão.";
-  if (/timeout.*resultado normalizado|timeout.*json bruto/i.test(message)) return message;
-  if (/timeout/i.test(message)) return "Timeout ao chamar API da VM.";
+  if (/timeout/i.test(message)) return message;
   return message || "Erro ao chamar API da VM.";
 }
 
