@@ -366,6 +366,24 @@ function autoCheck(p: Prognostico, edgeFinal: number | null, executableOdd: numb
   return null;
 }
 
+function matchesMercadoOuModelo(
+  prognostico: Pick<Prognostico, "mercado" | "origem_modelo">,
+  filtro: string,
+) {
+  const alvo = normalizeFilterValue(filtro);
+  return [prognostico.mercado, prognostico.origem_modelo].some(
+    (value) => normalizeFilterValue(value) === alvo,
+  );
+}
+
+function normalizeFilterValue(value: string | null | undefined) {
+  return String(value ?? "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR");
+}
+
 function Validacao() {
   const { data: prognosticos = [] } = usePrognosticos();
   const { data: cfg } = useConfiguracao();
@@ -384,8 +402,23 @@ function Validacao() {
   const enrichPreview = useEnrichOpportunityRankingItemPreview();
   const applyRankingValidation = useApplyCriticalValidationToOpportunityRanking();
   const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
-  const mercados = Array.from(
-    new Set([...(cfg?.mercados_ativos ?? MERCADOS_DEFAULT), ...MERCADOS_DEFAULT]),
+  const mercados = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          [
+            ...(cfg?.mercados_ativos ?? MERCADOS_DEFAULT),
+            ...MERCADOS_DEFAULT,
+            ...prognosticos.flatMap((prognostico) => [
+              prognostico.mercado,
+              prognostico.origem_modelo,
+            ]),
+          ]
+            .map((value) => value?.trim())
+            .filter((value): value is string => Boolean(value)),
+        ),
+      ).sort((a, b) => a.localeCompare(b, "pt-BR")),
+    [cfg?.mercados_ativos, prognosticos],
   );
 
   // estado por opção e por grupo
@@ -418,7 +451,7 @@ function Validacao() {
           if (!dateInRange(p.data, ini, fim)) return false;
           if (fEsporte !== "all" && p.esporte !== fEsporte) return false;
           if (fLiga !== "all" && p.liga !== fLiga) return false;
-          if (fMercado !== "all" && p.mercado !== fMercado) return false;
+          if (fMercado !== "all" && !matchesMercadoOuModelo(p, fMercado)) return false;
           return true;
         })
         .slice()
@@ -1012,14 +1045,14 @@ function Validacao() {
           </div>
           <div>
             <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
-              Mercado
+              Mercado / modelo
             </Label>
             <Select value={fMercado} onValueChange={setFMercado}>
               <SelectTrigger className="h-9 w-52">
                 <SelectValue placeholder="Mercado" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos os mercados</SelectItem>
+                <SelectItem value="all">Todos os mercados e modelos</SelectItem>
                 {mercados.map((m) => (
                   <SelectItem key={m} value={m}>
                     {m}
