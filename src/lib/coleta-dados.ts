@@ -172,7 +172,6 @@ async function sleep(ms: number) {
 }
 const SNAPSHOT_INSERT_BATCH_SIZE = 50;
 const SNAPSHOT_INSERT_MIN_BATCH_SIZE = 1;
-const NORMALIZED_AUDIT_SAMPLE_SIZE = 25;
 
 function persistenceError(stage: string, error: unknown, context?: string): Error {
   const original = (error as { message?: string })?.message ?? String(error);
@@ -1189,104 +1188,6 @@ export function parseStoredNormalizedPreview(payload: unknown): NormalizedCollec
   return normalized.total_odds ? normalized : null;
 }
 
-function compactNormalizedForStorage(normalized: NormalizedCollection, rows: NormalizedOdd[]) {
-  const markets = Array.from(new Set(rows.map((row) => row.mercado).filter(Boolean)));
-  const games = new Map<
-    string,
-    {
-      jogo: string;
-      mandante: string;
-      visitante: string;
-      data: string | null;
-      hora: string | null;
-      mercados: Set<string>;
-    }
-  >();
-  for (const row of rows) {
-    const key = [row.data ?? "", row.hora ?? "", row.jogo, row.mandante, row.visitante].join("|");
-    const current = games.get(key) ?? {
-      jogo: row.jogo,
-      mandante: row.mandante,
-      visitante: row.visitante,
-      data: row.data,
-      hora: row.hora,
-      mercados: new Set<string>(),
-    };
-    if (row.mercado) current.mercados.add(row.mercado);
-    games.set(key, current);
-  }
-  return {
-    esporte: normalized.esporte,
-    liga: normalized.liga,
-    data_inicio: normalized.data_inicio,
-    data_fim: normalized.data_fim,
-    mercados: normalized.mercados,
-    total_jogos: normalized.total_jogos,
-    total_odds: rows.length,
-    mercados_encontrados: markets,
-    jogos: Array.from(games.values()).map((game) => ({
-      ...game,
-      mercados: Array.from(game.mercados),
-    })),
-    // Full rows already live in odds_jogos and odds_market_snapshots. Keeping them
-    // here as well made a single JSONB update several MB large and hit Postgres'
-    // statement timeout. Preserve only a bounded audit sample in the collection.
-    sample_rows: rows.slice(0, NORMALIZED_AUDIT_SAMPLE_SIZE).map(compactScreenerRow),
-    rows_omitted: Math.max(0, rows.length - NORMALIZED_AUDIT_SAMPLE_SIZE),
-    aggregate_fields: [
-      "odd_media",
-      "odd_mediana",
-      "odd_minima",
-      "odd_maxima",
-      "odd_melhor",
-      "bookmaker_melhor",
-      "casas_count",
-      "odds_disponiveis",
-      "probabilidade_implicita_media",
-      "probabilidade_implicita_mediana",
-      "margem_mercado_media",
-      "margem_mercado_mediana",
-    ],
-  };
-}
-
-function compactRawForStorage(raw: unknown): unknown {
-  if (!isRecord(raw)) return raw;
-  const source = String(raw.source ?? raw.fonte ?? "").toLowerCase();
-  const games = Array.isArray(raw.games) ? raw.games : Array.isArray(raw.jogos) ? raw.jogos : null;
-  if (source !== "oddsagora" || !games) return raw;
-  const compactGames = games.filter(isRecord).map((game) => {
-    const markets = isRecord(game.markets) ? game.markets : {};
-    const markets_summary = Object.fromEntries(
-      Object.entries(markets).map(([market, rows]) => [
-        market,
-        Array.isArray(rows) ? rows.length : 0,
-      ]),
-    );
-    return {
-      game_id: game.game_id ?? game.id ?? null,
-      date: game.date ?? game.data ?? null,
-      time: game.time ?? game.hora ?? null,
-      home_team: game.home_team ?? game.home ?? game.mandante ?? null,
-      away_team: game.away_team ?? game.away ?? game.visitante ?? null,
-      match_url: game.match_url ?? game.url ?? game.link ?? null,
-      markets_summary,
-    };
-  });
-  return {
-    job_id: raw.job_id ?? null,
-    source: raw.source ?? "OddsAgora",
-    sport: raw.sport ?? raw.esporte ?? null,
-    league: raw.league ?? raw.liga ?? null,
-    created_at: raw.created_at ?? null,
-    status: raw.status ?? null,
-    mensagem: raw.mensagem ?? null,
-    summary: raw.summary ?? null,
-    games_count: compactGames.length,
-    games: compactGames,
-  };
-}
-
 async function insertOddsRowsInBatches(rows: NormalizedOdd[], coletaId: string) {
   let batchSize = ODDS_INSERT_BATCH_SIZE;
   let index = 0;
@@ -1417,14 +1318,13 @@ export function downloadText(filename: string, content: string, type = "text/csv
 }
 
 export async function saveCollection(
-  raw: unknown,
+  _raw: unknown,
   normalized: NormalizedCollection,
   parametros: Record<string, unknown>,
 ) {
   const deduped = dedupeRows(normalized.rows);
   const snapshots = buildOddsMarketSnapshots(deduped.rows, "pending");
   const consolidatedRows = snapshots.map(snapshotToNormalizedOdd);
-  const normalizedSnapshot = compactNormalizedForStorage(normalized, consolidatedRows);
   const { data: coleta, error } = await coletaDb
     .from("coletas_odds")
     .insert({
@@ -1435,8 +1335,6 @@ export async function saveCollection(
       data_fim: normalized.data_fim,
       mercados: normalized.mercados,
       parametros,
-      raw_json: compactRawForStorage(raw),
-      normalized_json: normalizedSnapshot,
       total_jogos: normalized.total_jogos,
       total_odds: consolidatedRows.length,
       erro: null,
