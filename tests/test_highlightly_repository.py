@@ -123,6 +123,61 @@ class HighlightlyRepositoryTests(unittest.TestCase):
                 bridge_secret="a" * 32,
             )
 
+    def test_idempotent_get_retries_transient_bridge_error_with_fresh_nonce(self):
+        session = _Session([_Response(503, {"message": "unavailable"}), _Response(200, [{"id": "1"}])])
+        repository = HighlightlyRepository(
+            "",
+            "",
+            session=session,
+            bridge_url="https://app.example.com/api/public/hooks/highlightly-ingest",
+            bridge_secret="a" * 32,
+        )
+
+        with patch("api.highlightly_repository.time.sleep") as sleep, patch(
+            "api.highlightly_repository.secrets.token_hex",
+            side_effect=["1" * 32, "2" * 32],
+        ):
+            rows = repository.select_rows("sports_teams", filters={"id": "1"})
+
+        self.assertEqual(rows, [{"id": "1"}])
+        self.assertEqual(len(session.calls), 2)
+        self.assertEqual(
+            [call[2]["headers"]["x-highlightly-nonce"] for call in session.calls],
+            ["1" * 32, "2" * 32],
+        )
+        sleep.assert_called_once_with(1.0)
+
+    def test_idempotent_upsert_and_patch_retry_transient_gateway_errors(self):
+        session = _Session(
+            [
+                _Response(502, {"message": "bad gateway"}),
+                _Response(201, [{"id": "team-1"}]),
+                _Response(503, {"message": "unavailable"}),
+                _Response(200, [{"code": "highlightly", "enabled": False}]),
+            ]
+        )
+        repository = HighlightlyRepository("https://example.supabase.co", "service-secret", session=session)
+
+        with patch("api.highlightly_repository.time.sleep") as sleep:
+            saved = repository.upsert_rows("sports_teams", [{"id": "team-1"}], on_conflict="id")
+            provider = repository.set_provider_enabled("highlightly", False)
+
+        self.assertEqual(saved, [{"id": "team-1"}])
+        self.assertFalse(provider["enabled"])
+        self.assertEqual(len(session.calls), 4)
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_rpc_is_not_retried_because_effect_may_be_ambiguous(self):
+        session = _Session([_Response(503, {"message": "unavailable"})])
+        repository = HighlightlyRepository("https://example.supabase.co", "service-secret", session=session)
+
+        with patch("api.highlightly_repository.time.sleep") as sleep:
+            with self.assertRaisesRegex(HighlightlyRepositoryError, "HTTP 503"):
+                repository.rpc("claim_highlightly_ingestion_job", {"p_worker_id": "worker-1"})
+
+        self.assertEqual(len(session.calls), 1)
+        sleep.assert_not_called()
+
     def test_redacts_credentials_recursively(self):
         clean = redact_secrets(
             {"query": {"teamId": 7}, "headers": {"x-api-key": "secret", "Authorization": "Bearer secret"}}

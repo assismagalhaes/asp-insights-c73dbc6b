@@ -35,6 +35,8 @@ _SECRET_KEYS = re.compile(r"(api[-_]?key|authorization|token|secret|password)", 
 _PATH_TOKEN = re.compile(r"[^a-zA-Z0-9._-]+")
 _BRIDGE_NONCE = re.compile(r"^[0-9a-f]{32}$")
 BRIDGE_PROTOCOL_VERSION = "v1"
+_TRANSIENT_SUPABASE_STATUS_CODES = frozenset({502, 503, 504})
+_TRANSIENT_RETRY_DELAYS_SECONDS = (1.0, 2.0, 4.0)
 
 
 class HighlightlyRepositoryError(RuntimeError):
@@ -316,6 +318,23 @@ class HighlightlyRepository:
             timeout=self.timeout,
         )
 
+    @staticmethod
+    def _is_idempotent_request(
+        method: str,
+        path: str,
+        headers: Mapping[str, str] | None,
+    ) -> bool:
+        normalized_method = method.upper()
+        if normalized_method in {"GET", "HEAD", "PATCH"}:
+            return True
+        if normalized_method != "POST" or "/rest/v1/rpc/" in path:
+            return False
+        normalized_headers = {
+            str(key).lower(): str(value).lower()
+            for key, value in (headers or {}).items()
+        }
+        return "on_conflict=" in path or normalized_headers.get("x-upsert") == "true"
+
     def _request(
         self,
         method: str,
@@ -326,30 +345,44 @@ class HighlightlyRepository:
         headers: Mapping[str, str] | None = None,
         expected: Sequence[int] = (200,),
     ) -> Any:
-        try:
-            response = self._perform_request(
-                method,
-                path,
-                json_body=json_body,
-                data=data,
-                headers=headers,
-            )
-        except Exception as exc:
-            raise HighlightlyRepositoryError(f"Could not reach Supabase: {exc}") from exc
-
-        body: Any = None
-        if response.content:
+        retryable = self._is_idempotent_request(method, path, headers)
+        retry_delays = _TRANSIENT_RETRY_DELAYS_SECONDS if retryable else ()
+        for attempt in range(len(retry_delays) + 1):
             try:
-                body = response.json()
-            except ValueError:
-                body = response.text
-        if response.status_code not in expected:
+                response = self._perform_request(
+                    method,
+                    path,
+                    json_body=json_body,
+                    data=data,
+                    headers=headers,
+                )
+            except Exception as exc:
+                if attempt < len(retry_delays):
+                    time.sleep(retry_delays[attempt])
+                    continue
+                raise HighlightlyRepositoryError(f"Could not reach Supabase: {exc}") from exc
+
+            body: Any = None
+            if response.content:
+                try:
+                    body = response.json()
+                except ValueError:
+                    body = response.text
+            if response.status_code in expected:
+                return body
+            if (
+                response.status_code in _TRANSIENT_SUPABASE_STATUS_CODES
+                and attempt < len(retry_delays)
+            ):
+                time.sleep(retry_delays[attempt])
+                continue
             raise HighlightlyRepositoryError(
                 f"Supabase returned HTTP {response.status_code}",
                 status=response.status_code,
                 body=body,
             )
-        return body
+
+        raise AssertionError("Supabase retry loop exhausted without returning or raising")
 
     def rpc(self, function_name: str, payload: Mapping[str, Any]) -> Any:
         return self._request(
