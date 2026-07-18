@@ -12,6 +12,7 @@ from datetime import datetime, date
 from zoneinfo import ZoneInfo
 from typing import List, Dict, Tuple, Optional
 import warnings
+from concurrent.futures import ThreadPoolExecutor
 
 # Silenciar FutureWarning (ex.: pandas) — escopo global, seguro
 warnings.simplefilter("ignore", category=FutureWarning)
@@ -806,10 +807,10 @@ def carregar_dados_temporada(urls: dict[str, str], season_label: str) -> pd.Data
     """
     Para mmz4281: não existe coluna Season confiável -> setamos Season=season_label (ex.: '2025/2026').
     """
-    sess, dfs = requests.Session(), []
-    for liga, url in urls.items():
+    def carregar_liga(item):
+        liga, url = item
         try:
-            r = sess.get(url, timeout=30)
+            r = requests.get(url, timeout=30)
             r.raise_for_status()
             tmp = pd.read_csv(
                 io.StringIO(r.text),
@@ -818,9 +819,16 @@ def carregar_dados_temporada(urls: dict[str, str], season_label: str) -> pd.Data
             tmp["Date"] = pd.to_datetime(tmp["Date"], dayfirst=True, errors="coerce")
             tmp["Season"] = normalize_season_str(season_label)
             tmp["Liga"] = liga
-            dfs.append(tmp)
+            return tmp
         except Exception as e:
             logging.warning(f"Falha ao baixar {liga} ({season_label}): {e}")
+            return None
+
+    if not urls:
+        return pd.DataFrame()
+    with ThreadPoolExecutor(max_workers=min(8, len(urls))) as executor:
+        resultados = list(executor.map(carregar_liga, urls.items()))
+    dfs = [resultado for resultado in resultados if resultado is not None]
 
     if not dfs:
         return pd.DataFrame()
@@ -2830,13 +2838,22 @@ def main():
     ext_urls  = {l: LEAGUES_EXTRA[l]    for l in leagues if l in LEAGUES_EXTRA}
 
     # 5) Carrega históricos
-    df_cur  = carregar_dados_temporada(cur_urls,  SEASON_CTX["current_split"])
-    df_prev = carregar_dados_temporada(prev_urls, SEASON_CTX["prev_split"])
-
-    df_extra = (
-        pd.concat([carregar_dados_liga(l, u, VALID_SEASONS) for l, u in ext_urls.items()], ignore_index=True)
-        if ext_urls else pd.DataFrame()
-    )
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        current_future = executor.submit(
+            carregar_dados_temporada, cur_urls, SEASON_CTX["current_split"]
+        )
+        previous_future = executor.submit(
+            carregar_dados_temporada, prev_urls, SEASON_CTX["prev_split"]
+        )
+        extra_future = executor.submit(
+            lambda: pd.concat(
+                [carregar_dados_liga(l, u, VALID_SEASONS) for l, u in ext_urls.items()],
+                ignore_index=True,
+            ) if ext_urls else pd.DataFrame()
+        )
+        df_cur = current_future.result()
+        df_prev = previous_future.result()
+        df_extra = extra_future.result()
 
     # 6) Prepara df_extra somente com temporadas atuais
     if df_extra.empty:
