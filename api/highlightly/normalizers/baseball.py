@@ -5,6 +5,8 @@ import json
 import re
 from typing import Any, Mapping
 
+from ..collection_policy import allows_canonical_odds
+
 from .common import (
     NormalizationContext,
     NormalizedBatch,
@@ -386,15 +388,18 @@ def _normalize_odds(payload: Any, ctx: NormalizationContext) -> NormalizedBatch:
                 continue
             bookmaker_name = str(market.get("bookmakerName") or market.get("bookmakerId") or "unknown")
             normalized_bookmaker = _bookmaker_token(bookmaker_name)
+            market_name = str(market.get("market") or "unknown")
+            odds_type = str(market.get("type") or "unknown").casefold()
+            if odds_type not in {"prematch", "live"}:
+                odds_type = "unknown"
+            market_family = _market_family(market_name)
+            if not allows_canonical_odds("baseball", normalized_bookmaker, market_family, odds_type):
+                continue
             bookmaker_id = ctx.bookmaker_ids.get(normalized_bookmaker)
             if not bookmaker_id:
                 bookmaker_id = stable_id(ctx.provider_id, ctx.sport_id, "bookmaker", market.get("bookmakerId") or normalized_bookmaker)
                 batch.add("sports_bookmakers", {"id": bookmaker_id, "name": bookmaker_name, "normalized_name": normalized_bookmaker, "is_active": True, "metadata": {"provider": "highlightly"}})
             add_provider_mapping(batch, ctx, "bookmaker", market.get("bookmakerId") or normalized_bookmaker, bookmaker_id, market)
-            market_name = str(market.get("market") or "unknown")
-            odds_type = str(market.get("type") or "unknown").casefold()
-            if odds_type not in {"prematch", "live"}:
-                odds_type = "unknown"
             market_id = stable_id(ctx.provider_id, ctx.sport_id, "market", odds_type, market_name)
             batch.add(
                 "sports_market_definitions",
@@ -403,7 +408,7 @@ def _normalize_odds(payload: Any, ctx: NormalizationContext) -> NormalizedBatch:
                     "provider_id": ctx.provider_id,
                     "sport_id": ctx.sport_id,
                     "provider_market_key": market_name,
-                    "canonical_family": _market_family(market_name),
+                    "canonical_family": market_family,
                     "display_name": market_name,
                     "odds_type": odds_type,
                     "metadata": {"provider_type": market.get("type")},

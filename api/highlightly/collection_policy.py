@@ -14,6 +14,20 @@ _YOUTH_PATTERN = re.compile(
 )
 _RESERVE_PATTERN = re.compile(r"\b(?:reserve|reserves|reserva|reservas)\b")
 
+# Canonical analytical storage is intentionally narrower than the raw archive.
+# The raw provider response remains replayable, while normalized odds focus on
+# the sources and market families used by ASP Insights.
+PREFERRED_BOOKMAKERS = frozenset(
+    {"bet365", "1xbet", "unibet", "william-hill", "stake-com", "betsson", "betway"}
+)
+SUPPORTED_ODDS_FAMILIES = {
+    "football": frozenset(
+        {"moneyline", "total", "both_teams_to_score", "first_team_to_score", "handicap", "corners_total"}
+    ),
+    "baseball": frozenset({"moneyline", "total", "run_line"}),
+    "basketball": frozenset({"moneyline", "total", "spread"}),
+}
+
 
 @dataclass(frozen=True)
 class FootballCollectionDecision:
@@ -30,6 +44,27 @@ def _normalized(value: Any) -> str:
     folded = unicodedata.normalize("NFKD", str(value or ""))
     ascii_text = "".join(character for character in folded if not unicodedata.combining(character))
     return re.sub(r"[^a-z0-9]+", " ", ascii_text.casefold()).strip()
+
+
+def allows_canonical_odds(
+    sport: str,
+    bookmaker_token: str,
+    market_family: str,
+    odds_type: str,
+) -> bool:
+    """Return whether a quote belongs in canonical analytical tables.
+
+    Live markets are retained in the raw archive but are not normalized until
+    ASP Insights has a live-betting product. Unknown type is accepted because
+    some prematch provider payloads omit the type discriminator.
+    """
+
+    normalized_bookmaker = bookmaker_token.casefold().replace(".", "-")
+    return (
+        normalized_bookmaker in PREFERRED_BOOKMAKERS
+        and market_family in SUPPORTED_ODDS_FAMILIES.get(sport, frozenset())
+        and odds_type in {"prematch", "unknown"}
+    )
 
 
 def football_collection_decision(match: Mapping[str, Any]) -> FootballCollectionDecision:

@@ -291,7 +291,16 @@ class HighlightlyWorker:
         )
         return True
 
-    def _enqueue_operation(self, endpoint_key: str, params: Mapping[str, Any], *, scope: str) -> None:
+    def _enqueue_operation(
+        self,
+        endpoint_key: str,
+        params: Mapping[str, Any],
+        *,
+        scope: str,
+        dedupe_scope: str | None = None,
+        priority: int | None = None,
+        scheduled_at: str | None = None,
+    ) -> None:
         endpoint_sport = endpoint_key.split(".", 1)[0]
         operation = self.registry.get(endpoint_key, sport=endpoint_sport)
         clean_params = {
@@ -302,17 +311,22 @@ class HighlightlyWorker:
         scope_parts = scope.split(":", 2)
         if len(scope_parts) == 3 and scope_parts[0] in {"match", "player", "team", "competition"}:
             clean_params["_shadow_scope"] = scope_parts[2]
-        canonical = json.dumps(clean_params, sort_keys=True, separators=(",", ":"), default=str)
+        # Internal observability fields must not make an otherwise identical
+        # provider request unique across collection windows.
+        request_identity = {key: value for key, value in clean_params.items() if not key.startswith("_")}
+        canonical = json.dumps(request_identity, sort_keys=True, separators=(",", ":"), default=str)
         digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-        shadow_scope = str(clean_params.get("_shadow_scope") or "")
-        priority = 0 if shadow_scope.startswith("phase7-") else operation.priority
+        effective_priority = operation.priority if priority is None else priority
+        if not 0 <= effective_priority <= 4:
+            raise ValueError("priority must be between 0 and 4")
         self.repository.enqueue_job(
             endpoint_key=operation.key,
             sport=operation.sport,
             resource=operation.resource,
-            dedupe_key=f"{scope}:{operation.key}:{digest}",
+            dedupe_key=f"{dedupe_scope or scope}:{operation.key}:{digest}",
             request_params=clean_params,
-            priority=priority,
+            priority=effective_priority,
+            scheduled_at=scheduled_at,
         )
 
     def _enqueue_football_match_fanout(self, payload: Any, *, scope_nonce: str = "") -> int:
@@ -329,14 +343,14 @@ class HighlightlyWorker:
                 continue
             match_scope = f"match:{match_id}:{scope_nonce}" if scope_nonce else f"match:{match_id}"
             detail_jobs = (
-                ("football.FootballStatisticsController_getStatistics", {"matchId": match_id}),
-                ("football.FootballLineupsController_getLineups", {"matchId": match_id}),
-                ("football.FootballLiveEventsController_getLiveEvents", {"id": match_id}),
-                ("football.FootballPlayerBoxScoreController_getPlayerBoxScores", {"matchId": match_id}),
-                ("football.FootballOddsController_getOddsV2", {"matchId": match_id, "limit": 5, "offset": 0}),
+                ("football.FootballStatisticsController_getStatistics", {"matchId": match_id}, 1),
+                ("football.FootballLineupsController_getLineups", {"matchId": match_id}, 0),
+                ("football.FootballLiveEventsController_getLiveEvents", {"id": match_id}, 2),
+                ("football.FootballPlayerBoxScoreController_getPlayerBoxScores", {"matchId": match_id}, 3),
+                ("football.FootballOddsController_getOddsV2", {"matchId": match_id, "limit": 5, "offset": 0}, 0),
             )
-            for endpoint_key, params in detail_jobs:
-                self._enqueue_operation(endpoint_key, params, scope=match_scope)
+            for endpoint_key, params, priority in detail_jobs:
+                self._enqueue_operation(endpoint_key, params, scope=match_scope, priority=priority)
                 count += 1
 
             home = match.get("homeTeam") if isinstance(match.get("homeTeam"), Mapping) else {}
@@ -353,6 +367,8 @@ class HighlightlyWorker:
                     "football.TeamsController_teamStatistics",
                     {"id": team["id"], "fromDate": history_from},
                     scope=f"team:{team['id']}:{scope_nonce}" if scope_nonce else f"team:{team['id']}",
+                    dedupe_scope=f"team:{team['id']}:daily:{match_date or 'unknown'}",
+                    priority=2,
                 )
                 count += 1
             league = match.get("league") if isinstance(match.get("league"), Mapping) else {}
@@ -365,6 +381,8 @@ class HighlightlyWorker:
                         if scope_nonce
                         else f"competition:{league['id']}"
                     ),
+                    dedupe_scope=f"competition:{league['id']}:daily:{match_date or 'unknown'}",
+                    priority=3,
                 )
                 count += 1
         return count
@@ -378,13 +396,21 @@ class HighlightlyWorker:
         if len(player_ids) > 100:
             raise ValueError("Player fan-out is limited to 100 players per box-score job")
         count = 0
+        today = datetime.now(timezone.utc).date().isoformat()
+        iso_year, iso_week, _ = datetime.now(timezone.utc).isocalendar()
         for player_id in sorted(player_ids, key=str):
             player_scope = f"player:{player_id}:{scope_nonce}" if scope_nonce else f"player:{player_id}"
-            for endpoint_key in (
-                "football.PlayersController_getPlayerSummaryById",
-                "football.PlayersController_getPlayerStatisticsById",
+            for endpoint_key, cadence, priority in (
+                ("football.PlayersController_getPlayerSummaryById", f"weekly:{iso_year}-W{iso_week:02d}", 3),
+                ("football.PlayersController_getPlayerStatisticsById", f"daily:{today}", 2),
             ):
-                self._enqueue_operation(endpoint_key, {"id": player_id}, scope=player_scope)
+                self._enqueue_operation(
+                    endpoint_key,
+                    {"id": player_id},
+                    scope=player_scope,
+                    dedupe_scope=f"player:{player_id}:{cadence}",
+                    priority=priority,
+                )
                 count += 1
         return count
 
@@ -399,16 +425,17 @@ class HighlightlyWorker:
                 continue
             match_scope = f"match:{match_id}:{scope_nonce}" if scope_nonce else f"match:{match_id}"
             detail_jobs = (
-                ("baseball.BaseballMatchStatisticsController_getStatistics", {"id": match_id}),
-                ("baseball.BaseballLineupsController_getLineups", {"matchId": match_id}),
+                ("baseball.BaseballMatchStatisticsController_getStatistics", {"id": match_id}, 1),
+                ("baseball.BaseballLineupsController_getLineups", {"matchId": match_id}, 0),
                 (
                     "baseball.BaseballBoxScoresController_getBoxScores",
                     {"id": match_id},
+                    1,
                 ),
-                ("baseball.BaseballOddsController_getOddsV2", {"matchId": match_id, "limit": 5, "offset": 0}),
+                ("baseball.BaseballOddsController_getOddsV2", {"matchId": match_id, "limit": 5, "offset": 0}, 0),
             )
-            for endpoint_key, params in detail_jobs:
-                self._enqueue_operation(endpoint_key, params, scope=match_scope)
+            for endpoint_key, params, priority in detail_jobs:
+                self._enqueue_operation(endpoint_key, params, scope=match_scope, priority=priority)
                 count += 1
 
             home = match.get("homeTeam") if isinstance(match.get("homeTeam"), Mapping) else {}
@@ -425,6 +452,8 @@ class HighlightlyWorker:
                     "baseball.TeamController_getTeamStats",
                     {"id": team["id"], "fromDate": history_from},
                     scope=f"team:{team['id']}:{scope_nonce}" if scope_nonce else f"team:{team['id']}",
+                    dedupe_scope=f"team:{team['id']}:daily:{match_date or 'unknown'}",
+                    priority=2,
                 )
                 count += 1
             if match.get("league") and match.get("season") is not None:
@@ -441,6 +470,8 @@ class HighlightlyWorker:
                         if scope_nonce
                         else f"competition:{match['league']}"
                     ),
+                    dedupe_scope=f"competition:{match['league']}:daily:{match_date or 'unknown'}",
+                    priority=3,
                 )
                 count += 1
         return count
@@ -457,13 +488,21 @@ class HighlightlyWorker:
         if len(player_ids) > 100:
             raise ValueError("Player fan-out is limited to 100 players per box-score job")
         count = 0
+        today = datetime.now(timezone.utc).date().isoformat()
+        iso_year, iso_week, _ = datetime.now(timezone.utc).isocalendar()
         for player_id in sorted(player_ids, key=str):
             player_scope = f"player:{player_id}:{scope_nonce}" if scope_nonce else f"player:{player_id}"
-            for endpoint_key in (
-                "baseball.BaseballPlayersController_getPlayerSummaryById",
-                "baseball.BaseballPlayersController_getPlayerStatisticsById",
+            for endpoint_key, cadence, priority in (
+                ("baseball.BaseballPlayersController_getPlayerSummaryById", f"weekly:{iso_year}-W{iso_week:02d}", 3),
+                ("baseball.BaseballPlayersController_getPlayerStatisticsById", f"daily:{today}", 2),
             ):
-                self._enqueue_operation(endpoint_key, {"id": player_id}, scope=player_scope)
+                self._enqueue_operation(
+                    endpoint_key,
+                    {"id": player_id},
+                    scope=player_scope,
+                    dedupe_scope=f"player:{player_id}:{cadence}",
+                    priority=priority,
+                )
                 count += 1
         return count
 
@@ -488,11 +527,11 @@ class HighlightlyWorker:
             if home.get("id") is not None and away.get("id") is not None:
                 statistics_params.update({"_home_team_id": home["id"], "_away_team_id": away["id"]})
             detail_jobs = (
-                ("basketball.BasketballStatisticsController_getStatistics", statistics_params),
-                ("basketball.BasketballOddsController_getOddsV2", {"matchId": match_id, "limit": 5, "offset": 0}),
+                ("basketball.BasketballStatisticsController_getStatistics", statistics_params, 1),
+                ("basketball.BasketballOddsController_getOddsV2", {"matchId": match_id, "limit": 5, "offset": 0}, 0),
             )
-            for endpoint_key, params in detail_jobs:
-                self._enqueue_operation(endpoint_key, params, scope=match_scope)
+            for endpoint_key, params, priority in detail_jobs:
+                self._enqueue_operation(endpoint_key, params, scope=match_scope, priority=priority)
                 count += 1
 
             match_date = str(match.get("date") or "")[:10]
@@ -507,6 +546,8 @@ class HighlightlyWorker:
                     "basketball.TeamsController_getTeamStatistics",
                     {"id": team["id"], "fromDate": history_from},
                     scope=f"team:{team['id']}:{scope_nonce}" if scope_nonce else f"team:{team['id']}",
+                    dedupe_scope=f"team:{team['id']}:daily:{match_date or 'unknown'}",
+                    priority=2,
                 )
                 count += 1
             league = match.get("league") if isinstance(match.get("league"), Mapping) else {}
@@ -519,6 +560,8 @@ class HighlightlyWorker:
                         if scope_nonce
                         else f"competition:{league['id']}"
                     ),
+                    dedupe_scope=f"competition:{league['id']}:daily:{match_date or 'unknown'}",
+                    priority=3,
                 )
                 count += 1
         return count

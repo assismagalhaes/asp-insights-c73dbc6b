@@ -5,7 +5,12 @@ from unittest.mock import Mock
 
 from api.highlightly.normalizers.common import NormalizationContext, NormalizedBatch, schema_fingerprint, stable_id
 from api.highlightly.normalizers.football import SUPPORTED_NORMALIZERS, normalize_football
-from api.highlightly.collection_policy import BASIC_PROFILE, FULL_PROFILE, football_collection_decision
+from api.highlightly.collection_policy import (
+    BASIC_PROFILE,
+    FULL_PROFILE,
+    allows_canonical_odds,
+    football_collection_decision,
+)
 from api.highlightly.registry import EndpointRegistry
 from api.highlightly.worker import HighlightlyWorker
 from api.highlightly_client import HighlightlyResponse
@@ -377,7 +382,7 @@ class HighlightlyPhaseTwoWorkerTests(unittest.TestCase):
             )
         )
 
-    def test_phase7_fanout_is_prioritized_ahead_of_stale_shadow_jobs(self):
+    def test_phase7_fanout_uses_domain_priorities(self):
         repository = Mock()
         worker = HighlightlyWorker(Mock(), repository, worker_id="test-worker", enabled=True)
 
@@ -387,9 +392,52 @@ class HighlightlyPhaseTwoWorkerTests(unittest.TestCase):
         )
 
         self.assertTrue(repository.enqueue_job.call_args_list)
-        self.assertTrue(
-            all(call.kwargs["priority"] == 0 for call in repository.enqueue_job.call_args_list)
-        )
+        priorities = {
+            call.kwargs["endpoint_key"]: call.kwargs["priority"]
+            for call in repository.enqueue_job.call_args_list
+        }
+        self.assertEqual(priorities["football.FootballOddsController_getOddsV2"], 0)
+        self.assertEqual(priorities["football.FootballStatisticsController_getStatistics"], 1)
+        self.assertEqual(priorities["football.FootballLiveEventsController_getLiveEvents"], 2)
+        self.assertEqual(priorities["football.FootballPlayerBoxScoreController_getPlayerBoxScores"], 3)
+
+    def test_canonical_odds_policy_keeps_supported_prematch_quotes_only(self):
+        self.assertTrue(allows_canonical_odds("football", "bet365", "moneyline", "prematch"))
+        self.assertTrue(allows_canonical_odds("basketball", "stake.com", "spread", "unknown"))
+        self.assertFalse(allows_canonical_odds("football", "bet365", "moneyline", "live"))
+        self.assertFalse(allows_canonical_odds("football", "random-book", "moneyline", "prematch"))
+        self.assertFalse(allows_canonical_odds("baseball", "bet365", "player-prop", "prematch"))
+
+    def test_team_and_standings_jobs_are_deduplicated_per_day_across_shadow_scopes(self):
+        repository = Mock()
+        worker = HighlightlyWorker(Mock(), repository, worker_id="test-worker", enabled=True)
+        payload = {
+            "id": 99,
+            "date": "2026-07-18T12:00:00Z",
+            "homeTeam": {"id": 1},
+            "awayTeam": {"id": 2},
+            "league": {"id": 7, "season": 2026},
+        }
+        worker._enqueue_football_match_fanout(payload, scope_nonce="window-a")
+        first = {
+            call.kwargs["endpoint_key"]: call.kwargs["dedupe_key"]
+            for call in repository.enqueue_job.call_args_list
+            if call.kwargs["endpoint_key"] in {
+                "football.TeamsController_teamStatistics",
+                "football.FootballStandingsController_getStandings",
+            }
+        }
+        repository.reset_mock()
+        worker._enqueue_football_match_fanout(payload, scope_nonce="window-b")
+        second = {
+            call.kwargs["endpoint_key"]: call.kwargs["dedupe_key"]
+            for call in repository.enqueue_job.call_args_list
+            if call.kwargs["endpoint_key"] in {
+                "football.TeamsController_teamStatistics",
+                "football.FootballStandingsController_getStandings",
+            }
+        }
+        self.assertEqual(first, second)
 
     def test_worker_persists_raw_before_any_canonical_upsert(self):
         repository = Mock()
