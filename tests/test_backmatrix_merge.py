@@ -42,6 +42,8 @@ class BackMatrixMergeTests(unittest.TestCase):
 
         self.assertEqual(len(merged), 1)
         self.assertEqual(merged.iloc[0]["Liga"], "Club Friendlies 3")
+        self.assertEqual(merged.iloc[0]["Liga_10"], "Club Friendlies 3")
+        self.assertEqual(merged.iloc[0]["Liga_20"], "Club Friendlies 3")
         self.assertEqual(merged.iloc[0]["Amostra_10"], 10)
         self.assertEqual(merged.iloc[0]["Amostra_20"], 20)
 

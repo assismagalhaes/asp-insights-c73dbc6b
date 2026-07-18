@@ -206,6 +206,10 @@ def filter_by_status_and_games(frame: pd.DataFrame, statuses: tuple[str, ...], e
 def merge_windows(recent: pd.DataFrame, venue: pd.DataFrame) -> pd.DataFrame:
     keys = ["Liga", "Data/Hora", "Time Casa", "Time Visitante"]
     merged = recent.merge(venue, on=keys, how="inner", suffixes=("_10", "_20"), validate="one_to_one")
+    # Liga is now a merge key, so pandas keeps it unsuffixed. Preserve the aliases
+    # consumed by build_base and by existing diagnostic/output contracts.
+    merged["Liga_10"] = merged["Liga"]
+    merged["Liga_20"] = merged["Liga"]
     return merged
 
 
