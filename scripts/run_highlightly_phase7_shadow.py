@@ -19,9 +19,8 @@ from api.highlightly_repository import HighlightlyRepository
 SPORTS = ("football", "baseball", "basketball")
 ACTIVE_STATUSES = ("pending", "retry", "running")
 DAILY_LIMIT = 7_500
-BACKFILL_BUDGET_LIMIT = 1_500
+BACKFILL_BUDGET_LIMIT = 5_000
 RESERVE_REQUESTS = 750
-WNBA_LEAGUE_ID = 11_847
 
 
 @dataclass(frozen=True)
@@ -129,9 +128,8 @@ def build_seed_jobs(
                     endpoint_key=endpoint,
                     sport="baseball",
                     resource="matches",
-                    dedupe_key=f"{scope}:seed:{endpoint}:{date_value}:MLB",
+                    dedupe_key=f"{scope}:seed:{endpoint}:{date_value}:all",
                     request_params={
-                        "league": "MLB",
                         "date": date_value,
                         "timezone": "America/Sao_Paulo",
                         "limit": 10,
@@ -149,9 +147,8 @@ def build_seed_jobs(
                     endpoint_key=endpoint,
                     sport="basketball",
                     resource="matches",
-                    dedupe_key=f"{scope}:seed:{endpoint}:{date_value}:WNBA",
+                    dedupe_key=f"{scope}:seed:{endpoint}:{date_value}:all",
                     request_params={
-                        "leagueId": WNBA_LEAGUE_ID,
                         "date": date_value,
                         "timezone": "America/Sao_Paulo",
                         "limit": 10,
@@ -203,8 +200,8 @@ def _parse_args() -> argparse.Namespace:
         parser.error("--backfill-days must be between 1 and 7")
     if not 1 <= args.daily_request_budget <= BACKFILL_BUDGET_LIMIT:
         parser.error(f"--daily-request-budget must be between 1 and {BACKFILL_BUDGET_LIMIT}")
-    if not 1 <= args.max_jobs <= 1_500:
-        parser.error("--max-jobs must be between 1 and 1500")
+    if not 1 <= args.max_jobs <= 5_000:
+        parser.error("--max-jobs must be between 1 and 5000")
     return args
 
 

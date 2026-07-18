@@ -55,6 +55,19 @@ class HighlightlyPhaseSevenShadowTests(unittest.TestCase):
         self.assertTrue(all(job.request_params["limit"] == 10 for job in matches))
         self.assertTrue(all(job.request_params["_fanout"] for job in matches))
 
+    def test_baseball_and_basketball_discovery_are_global(self):
+        jobs = phase7.build_seed_jobs(
+            scope="phase7-global-courts-and-diamonds",
+            start_date=date(2026, 7, 19),
+            days=1,
+            sports=("baseball", "basketball"),
+            football_league_ids=(),
+        )
+        self.assertEqual(len(jobs), 2)
+        self.assertTrue(all("league" not in job.request_params for job in jobs))
+        self.assertTrue(all("leagueId" not in job.request_params for job in jobs))
+        self.assertTrue(all(job.dedupe_key.endswith(":all") for job in jobs))
+
     def test_all_football_leagues_rejects_explicit_ids(self):
         with self.assertRaisesRegex(ValueError, "mutually exclusive"):
             phase7.build_seed_jobs(
@@ -171,7 +184,7 @@ class HighlightlyPhaseSevenShadowTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         repository.set_provider_enabled.assert_any_call("highlightly", True)
         repository.set_provider_enabled.assert_any_call("highlightly", False)
-        self.assertEqual(worker_factory.call_args.kwargs["daily_quota_ceiling"], 6_500)
+        self.assertEqual(worker_factory.call_args.kwargs["daily_quota_ceiling"], 6_750)
         self.assertLessEqual(
             worker_factory.call_args.kwargs["daily_quota_ceiling"],
             phase7.DAILY_LIMIT - phase7.RESERVE_REQUESTS,

@@ -9,6 +9,7 @@ from api.highlightly.collection_policy import (
     BASIC_PROFILE,
     FULL_PROFILE,
     allows_canonical_odds,
+    allows_detailed_match_fanout,
     football_collection_decision,
 )
 from api.highlightly.registry import EndpointRegistry
@@ -407,6 +408,13 @@ class HighlightlyPhaseTwoWorkerTests(unittest.TestCase):
         self.assertFalse(allows_canonical_odds("football", "bet365", "moneyline", "live"))
         self.assertFalse(allows_canonical_odds("football", "random-book", "moneyline", "prematch"))
         self.assertFalse(allows_canonical_odds("baseball", "bet365", "player-prop", "prematch"))
+
+    def test_expensive_fanout_uses_approved_baseball_and_basketball_leagues(self):
+        self.assertTrue(allows_detailed_match_fanout("baseball", {"league": "College World Series"}))
+        self.assertTrue(allows_detailed_match_fanout("basketball", {"league": {"name": "NBA Women"}}))
+        self.assertTrue(allows_detailed_match_fanout("basketball", {"league": {"name": "EuroLeague"}}))
+        self.assertFalse(allows_detailed_match_fanout("baseball", {"league": "Independent League"}))
+        self.assertFalse(allows_detailed_match_fanout("basketball", {"league": {"name": "Unknown Cup"}}))
 
     def test_team_and_standings_jobs_are_deduplicated_per_day_across_shadow_scopes(self):
         repository = Mock()

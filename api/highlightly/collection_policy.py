@@ -28,6 +28,28 @@ SUPPORTED_ODDS_FAMILIES = {
     "basketball": frozenset({"moneyline", "total", "spread"}),
 }
 
+_BASEBALL_COMPETITIONS = frozenset(
+    _normalized_name
+    for _normalized_name in (
+        "mlb",
+        "ncaa division i",
+        "college world series",
+    )
+)
+_BASKETBALL_COMPETITIONS = frozenset(
+    _normalized_name
+    for _normalized_name in (
+        "wnba", "nba women", "nba", "nba cup", "nba g league", "nba summer league",
+        "ncaa", "ncaa women", "nit", "cbi", "big3", "nbb", "euroleague", "eurocup",
+        "basketball champions league", "fiba europe cup", "aba league", "bnxt league", "enbl",
+        "eurobasket", "acb", "lnb", "bbl", "lega a", "basket league", "super ligi", "nbl",
+        "cba", "b league", "kbl", "lkl", "liga a", "cebl", "fiba world cup",
+        "fiba world cup women", "olympic games", "olympic games women", "fiba americup",
+        "fiba asia cup", "afrobasket", "bal", "bcl americas", "liga sudamericana",
+        "pan american games",
+    )
+)
+
 
 @dataclass(frozen=True)
 class FootballCollectionDecision:
@@ -65,6 +87,22 @@ def allows_canonical_odds(
         and market_family in SUPPORTED_ODDS_FAMILIES.get(sport, frozenset())
         and odds_type in {"prematch", "unknown"}
     )
+
+
+def allows_detailed_match_fanout(sport: str, match: Mapping[str, Any]) -> bool:
+    """Limit expensive match detail fan-out to the approved competition catalog."""
+
+    league = match.get("league")
+    if isinstance(league, Mapping):
+        league_name = league.get("name") or league.get("shortName") or league.get("abbreviation")
+    else:
+        league_name = league
+    normalized = _normalized(league_name)
+    if sport == "baseball":
+        return normalized in _BASEBALL_COMPETITIONS
+    if sport == "basketball":
+        return normalized in _BASKETBALL_COMPETITIONS
+    return True
 
 
 def football_collection_decision(match: Mapping[str, Any]) -> FootballCollectionDecision:

@@ -12,7 +12,7 @@ from typing import Any, Mapping
 from api.highlightly_client import HighlightlyClient, HighlightlyError, HighlightlyResponse
 from api.highlightly_repository import HighlightlyRepository, HighlightlyRepositoryError, redact_secrets
 
-from .collection_policy import football_collection_decision
+from .collection_policy import allows_detailed_match_fanout, football_collection_decision
 from .normalizers import normalize_baseball, normalize_basketball, normalize_football
 from .normalizers.common import NormalizationContext, NormalizedBatch, schema_fingerprint, stable_id
 from .normalizers.common import items as payload_items
@@ -421,7 +421,7 @@ class HighlightlyWorker:
         count = 0
         for match in matches:
             match_id = match.get("id")
-            if match_id is None:
+            if match_id is None or not allows_detailed_match_fanout("baseball", match):
                 continue
             match_scope = f"match:{match_id}:{scope_nonce}" if scope_nonce else f"match:{match_id}"
             detail_jobs = (
@@ -513,7 +513,7 @@ class HighlightlyWorker:
         count = 0
         for match in matches:
             match_id = match.get("id")
-            if match_id is None:
+            if match_id is None or not allows_detailed_match_fanout("basketball", match):
                 continue
             match_scope = f"match:{match_id}:{scope_nonce}" if scope_nonce else f"match:{match_id}"
             state = match.get("state") if isinstance(match.get("state"), Mapping) else {}
