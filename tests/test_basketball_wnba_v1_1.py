@@ -646,6 +646,79 @@ class BasketballWnbaV11Tests(unittest.TestCase):
         self.assertNotIn("Delta pontos", context)
         self.assertNotIn("Sim Win%", context)
 
+    def test_active_total_context_exposes_projection_history_market_and_gates(self) -> None:
+        item = {
+            "data": "18/07/2026",
+            "hora": "20:00",
+            "mandante": "Golden State Valkyries",
+            "visitante": "Washington Mystics",
+            "mercado": "Over/Under Pontos",
+            "pick": "Over 148.5",
+            "linha": 148.5,
+            "probabilidade_final": 57.43,
+            "odd_melhor": 1.86,
+            "odd_mediana": 1.83,
+            "bookmaker_melhor": "Book A",
+            "edge": 6.81,
+            "_wnba_debug": {
+                "prob_hist": 59.86,
+                "prob_sim": 69.06,
+                "prob_no_vig": 50.41,
+                "prob_bruta_blend": 62.58,
+                "pesos_probabilidade": {"hist": 0.40, "sim": 0.45, "vig": 0.15},
+                "media_pontos_casa": 81.1,
+                "media_pontos_visitante": 75.6,
+                "desvio_pontos_casa": 9.2,
+                "desvio_pontos_visitante": 8.7,
+                "simulacoes": 10_000,
+                "jogos_considerados": 82,
+                "jogos_efetivos": 49.59,
+                "taxa_bruta": 61.0,
+                "taxa_com_shrinkage": 59.86,
+                "pushes": 1,
+                "haircut_incerteza_pp": 5.15,
+                "ev_odd_mediana": 5.09,
+                "componentes_historicos": {
+                    "home": {"jogos": 30, "jogos_efetivos": 20.5, "raw": 60.0, "shrunk": 57.5},
+                },
+                "warnings": ["LOW_SAMPLE", "LOW_SAMPLE_ATUAL"],
+            },
+        }
+
+        context = runner.build_wnba_active_technical_context(
+            item,
+            {"rpi_c": 0.339, "rpi_f": 0.125, "net_c": 8.97, "net_f": -4.45, "pace_c": 74.82, "pace_f": 76.61},
+            "GSV",
+            "WAS",
+        )
+
+        self.assertIn("mandante=Golden State Valkyries; visitante=Washington Mystics", context)
+        self.assertIn("Pontos esperados casa: 81.1", context)
+        self.assertIn("Desvio padrao visitante: 8.7", context)
+        self.assertIn("Simulacoes Monte Carlo: 10000", context)
+        self.assertIn("blend_bruto=62.58%", context)
+        self.assertIn("taxa_bruta=61.0%; taxa_shrinkage=59.86%", context)
+        self.assertIn("Historico - Mandante: jogos=30", context)
+        self.assertIn("bookmaker_melhor=Book A", context)
+        self.assertIn("edge PASS (6.81% >= 5.0%)", context)
+        self.assertIn("EV mediano PASS (5.09% >= 1.0% quando baixa amostra)", context)
+
+    def test_merge_technical_context_preserves_legacy_identification_and_active_decision(self) -> None:
+        legacy = "\n".join((
+            "--- CONFRONTO ---",
+            "Data/Horario: 18/07/2026 / 20:00",
+            "GSV - Posicao: 1 | W/L: 12-3",
+            "WAS - Posicao: 5 | W/L: 6-9",
+        ))
+        active = "Modelo: BASKETBALL_WNBA_V2_2_ROBUST_GATES\nRobust gates: edge PASS"
+
+        merged = runner.merge_wnba_technical_context(legacy, active)
+
+        self.assertIn("Data/Horario: 18/07/2026 / 20:00", merged)
+        self.assertIn("GSV - Posicao: 1 | W/L: 12-3", merged)
+        self.assertIn("--- DECISAO ATIVA WNBA V2.2 ---", merged)
+        self.assertIn("Robust gates: edge PASS", merged)
+
     def test_long_csv_to_wide_preserves_median_best_and_bookmaker_columns(self) -> None:
         rows = [
             {

@@ -138,9 +138,10 @@ def main() -> None:
                     game_rows = montar_linhas_nba(module, row, res)
                 for item in game_rows:
                     if league == 'WNBA':
-                        active_context = build_wnba_active_technical_context(item, res, home, away)
-                        item['dados_tecnicos'] = active_context
-                        item['contexto_modelo'] = active_context
+                        active_context = build_wnba_active_technical_context(item, res, home, away, row=row)
+                        technical_context = merge_wnba_technical_context(context, active_context)
+                        item['dados_tecnicos'] = technical_context
+                        item['contexto_modelo'] = technical_context
                     else:
                         item.setdefault('dados_tecnicos', context)
                         item.setdefault('contexto_modelo', context)
@@ -2392,11 +2393,56 @@ def replace_wnba_legacy_margin_context(
     return replaced if count else " | ".join(part for part in (text, active_context) if part)
 
 
-def build_wnba_active_technical_context(item: dict[str, Any], res: dict[str, Any], home: str, away: str) -> str:
+def merge_wnba_technical_context(legacy_context: Any, active_context: Any) -> str:
+    """Preserva o contexto completo do notebook e acrescenta a decisao ativa V2.2."""
+    legacy = str(legacy_context or '').strip()
+    active = str(active_context or '').strip()
+    if not legacy:
+        return active
+    if not active:
+        return legacy
+    return f"{legacy}\n\n--- DECISAO ATIVA WNBA V2.2 ---\n{active}"
+
+
+def format_wnba_historical_components(components: Any) -> list[str]:
+    if not isinstance(components, dict):
+        return []
+    labels = {'home': 'Mandante', 'away': 'Visitante', 'h2h': 'Confronto direto'}
+    formatted: list[str] = []
+    for key, component in components.items():
+        if not isinstance(component, dict):
+            continue
+        values = [
+            f"jogos={component.get('jogos')}",
+            f"efetivos={component.get('jogos_efetivos')}",
+            f"taxa_bruta={component.get('raw')}%",
+            f"taxa_shrinkage={component.get('shrunk')}%",
+        ]
+        if component.get('pesos'):
+            values.append(f"pesos_periodos={component.get('pesos')}")
+        if component.get('warnings'):
+            values.append(f"alertas={','.join(str(value) for value in component['warnings'])}")
+        formatted.append(f"{labels.get(str(key), str(key))}: " + '; '.join(values))
+    return formatted
+
+
+def build_wnba_active_technical_context(
+    item: dict[str, Any],
+    res: dict[str, Any],
+    home: str,
+    away: str,
+    row: pd.Series | dict[str, Any] | None = None,
+) -> str:
     debug = item.get('_wnba_debug') if isinstance(item.get('_wnba_debug'), dict) else {}
     lines = [
         f"Modelo: {BASKETBALL_WNBA_MODEL_VERSION}",
         f"Confronto: {home} vs {away}",
+        (
+            "Identificacao: "
+            f"liga=WNBA; data={format_date_for_app(get_row_value(row, ('date', 'data'))) if row is not None else item.get('data')}; "
+            f"horario={normalize_time(get_row_value(row, ('time', 'hora'))) if row is not None else item.get('hora')}; "
+            f"mandante={item.get('mandante') or home}; visitante={item.get('visitante') or away}"
+        ),
         f"Mercado/Pick ativo: {item.get('mercado')} | {item.get('pick')}",
         (
             f"RPI: {home} {float(res.get('rpi_c') or 0.0):.3f} x {away} {float(res.get('rpi_f') or 0.0):.3f}; "
@@ -2409,8 +2455,11 @@ def build_wnba_active_technical_context(item: dict[str, Any], res: dict[str, Any
         ('total_ancora_mercado', 'Ancora de total do mercado'),
         ('total_calibrado', 'Total calibrado ativo'),
         ('media_total_simulada', 'Media total simulada'),
-        ('pontos_esperados_casa', 'Pontos esperados casa'),
-        ('pontos_esperados_visitante', 'Pontos esperados visitante'),
+        ('media_pontos_casa', 'Pontos esperados casa'),
+        ('media_pontos_visitante', 'Pontos esperados visitante'),
+        ('desvio_pontos_casa', 'Desvio padrao casa'),
+        ('desvio_pontos_visitante', 'Desvio padrao visitante'),
+        ('simulacoes', 'Simulacoes Monte Carlo'),
         ('margem_placar_pre_forca', 'Margem antes da forca'),
         ('margem_referencia_forca', 'Referencia de margem por forca'),
         ('ajuste_margem_forca', 'Ajuste de margem por forca'),
@@ -2427,18 +2476,50 @@ def build_wnba_active_technical_context(item: dict[str, Any], res: dict[str, Any
     lines.append(
         "Probabilidades ativas: "
         f"historica={debug.get('prob_hist')}%; simulacao={debug.get('prob_sim')}%; "
-        f"no-vig={debug.get('prob_no_vig')}%; final={item.get('probabilidade_final')}%"
+        f"no-vig={debug.get('prob_no_vig')}%; blend_bruto={debug.get('prob_bruta_blend')}%; "
+        f"final={item.get('probabilidade_final')}%; pesos={debug.get('pesos_probabilidade')}"
     )
     lines.append(
         "Amostra: "
         f"bruta={debug.get('jogos_considerados')}; efetiva={debug.get('jogos_efetivos')}; "
-        f"haircut={debug.get('haircut_incerteza_pp', debug.get('haircut_amostra_pp'))} p.p."
+        f"taxa_bruta={debug.get('taxa_bruta')}%; taxa_shrinkage={debug.get('taxa_com_shrinkage')}%; "
+        f"pushes={debug.get('pushes')}; haircut={debug.get('haircut_incerteza_pp', debug.get('haircut_amostra_pp'))} p.p.; "
+        f"fallback={debug.get('fallback')}"
     )
+    for component in format_wnba_historical_components(debug.get('componentes_historicos')):
+        lines.append("Historico - " + component)
     lines.append(
-        "Odds/EV: "
+        "Mercado/Odds/EV: "
+        f"linha={item.get('linha', debug.get('linha_avaliada'))}; "
         f"melhor={item.get('odd_melhor', item.get('odd_ofertada'))}; mediana={item.get('odd_mediana')}; "
+        f"bookmaker_melhor={item.get('bookmaker_melhor') or debug.get('bookmaker_melhor')}; "
         f"edge_melhor={item.get('edge')}%; ev_mediana={debug.get('ev_odd_mediana')}%"
     )
+    market_key = 'handicap' if 'handicap' in normalize_text(item.get('mercado')) else 'total' if any(
+        token in normalize_text(item.get('mercado')) for token in ('overunder', 'total', 'pontos')
+    ) else 'moneyline'
+    low_sample = any(str(value).startswith('LOW_SAMPLE') for value in (debug.get('warnings') or []))
+    minimum_edge = max(WNBA_MIN_EDGE_BY_MARKET[market_key], WNBA_LOW_SAMPLE_MIN_EDGE if low_sample else 0.0)
+    median_ev = to_float(debug.get('ev_odd_mediana'))
+    edge = to_float(item.get('edge'))
+    best_odd = to_float(item.get('odd_melhor', item.get('odd_ofertada')))
+    median_odd = to_float(item.get('odd_mediana'))
+    gate_results = [
+        f"edge {'PASS' if edge is not None and edge >= minimum_edge else 'FAIL'} ({edge}% >= {minimum_edge:.1f}%)",
+        (
+            f"EV mediano {'PASS' if not low_sample or (median_ev is not None and median_ev >= WNBA_LOW_SAMPLE_MIN_MEDIAN_EV) else 'FAIL'} "
+            f"({median_ev}% >= {WNBA_LOW_SAMPLE_MIN_MEDIAN_EV:.1f}% quando baixa amostra)"
+        ),
+        f"confianca {'PASS' if float(item.get('probabilidade_final') or 0.0) < WNBA_OVERCONFIDENCE_CUTOFF else 'FAIL'} "
+        f"({item.get('probabilidade_final')}% < {WNBA_OVERCONFIDENCE_CUTOFF:.1f}%)",
+    ]
+    if best_odd is not None and median_odd is not None and median_odd > 0:
+        ratio = best_odd / median_odd
+        gate_results.append(
+            f"melhor/mediana {'PASS' if ratio <= WNBA_MAX_BEST_TO_MEDIAN_RATIO else 'FAIL'} "
+            f"({ratio:.3f} <= {WNBA_MAX_BEST_TO_MEDIAN_RATIO:.2f})"
+        )
+    lines.append("Robust gates: " + '; '.join(gate_results))
     warnings = debug.get('warnings') or []
     if warnings:
         lines.append("Alertas: " + ", ".join(str(value) for value in warnings))
