@@ -2,7 +2,7 @@ from fastapi import FastAPI, BackgroundTasks, HTTPException, Header, File, Form,
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 from datetime import datetime
 import inspect
 import hashlib
@@ -55,6 +55,7 @@ RAW_DIR = BASE_DIR / "outputs" / "raw"
 NORMALIZED_DIR = BASE_DIR / "outputs" / "normalized"
 EXPORTS_DIR = BASE_DIR / "outputs" / "exports"
 MODEL_INPUTS_DIR = BASE_DIR / "model_inputs"
+MODEL_RUNS_DIR = BASE_DIR / "model_runs"
 DEBUG_DIR = BASE_DIR / "debug"
 
 JOBS_DIR.mkdir(parents=True, exist_ok=True)
@@ -62,6 +63,7 @@ RAW_DIR.mkdir(parents=True, exist_ok=True)
 NORMALIZED_DIR.mkdir(parents=True, exist_ok=True)
 EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
 MODEL_INPUTS_DIR.mkdir(parents=True, exist_ok=True)
+MODEL_RUNS_DIR.mkdir(parents=True, exist_ok=True)
 DEBUG_DIR.mkdir(parents=True, exist_ok=True)
 
 API_KEY = os.getenv("SCRAPER_API_KEY", "asp-teste-123")
@@ -1045,15 +1047,7 @@ class ExecutarPackballModeloRequest(BaseModel):
     run_mode: Literal["prognostico", "backtest"] = "prognostico"
 
 
-@app.post("/modelos/futebol/executar")
-def executar_modelo_futebol(
-    payload: ExecutarModeloRequest,
-    authorization: str | None = Header(default=None)
-):
-    verificar_token(authorization)
-
-    job_id = payload.job_id
-
+def _executar_modelo_futebol(job_id: str):
     job = load_job(job_id)
     raw_path = job.get("raw_path")
 
@@ -1149,6 +1143,91 @@ def executar_modelo_futebol(
     }
 
     return limpar_json_nan(resposta_final)
+
+
+def _model_run_path(run_id: str) -> Path:
+    safe_run_id = str(UUID(run_id))
+    return MODEL_RUNS_DIR / f"{safe_run_id}.json"
+
+
+def _save_model_run(run_id: str, payload: dict) -> None:
+    path = _model_run_path(run_id)
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(
+        json.dumps(limpar_json_nan(payload), ensure_ascii=False),
+        encoding="utf-8",
+    )
+    temporary.replace(path)
+
+
+def _run_football_model_background(run_id: str, job_id: str) -> None:
+    _save_model_run(run_id, {
+        "run_id": run_id,
+        "job_id": job_id,
+        "status": "RODANDO",
+        "iniciado_em": datetime.now().isoformat(),
+    })
+    try:
+        result = _executar_modelo_futebol(job_id)
+        _save_model_run(run_id, {
+            "run_id": run_id,
+            "job_id": job_id,
+            "status": "CONCLUIDO",
+            "finalizado_em": datetime.now().isoformat(),
+            "resultado": result,
+        })
+    except Exception as error:
+        detail = error.detail if isinstance(error, HTTPException) else str(error)
+        _save_model_run(run_id, {
+            "run_id": run_id,
+            "job_id": job_id,
+            "status": "ERRO",
+            "finalizado_em": datetime.now().isoformat(),
+            "erro": detail,
+        })
+
+
+@app.post("/modelos/futebol/executar")
+def executar_modelo_futebol(
+    payload: ExecutarModeloRequest,
+    authorization: str | None = Header(default=None)
+):
+    verificar_token(authorization)
+    return _executar_modelo_futebol(payload.job_id)
+
+
+@app.post("/modelos/futebol/iniciar")
+def iniciar_modelo_futebol(
+    payload: ExecutarModeloRequest,
+    background_tasks: BackgroundTasks,
+    authorization: str | None = Header(default=None),
+):
+    verificar_token(authorization)
+    load_job(payload.job_id)
+    run_id = str(uuid4())
+    _save_model_run(run_id, {
+        "run_id": run_id,
+        "job_id": payload.job_id,
+        "status": "PENDENTE",
+        "criado_em": datetime.now().isoformat(),
+    })
+    background_tasks.add_task(_run_football_model_background, run_id, payload.job_id)
+    return {"run_id": run_id, "job_id": payload.job_id, "status": "PENDENTE"}
+
+
+@app.get("/modelos/futebol/status/{run_id}")
+def status_modelo_futebol(
+    run_id: str,
+    authorization: str | None = Header(default=None),
+):
+    verificar_token(authorization)
+    try:
+        path = _model_run_path(run_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="run_id inválido")
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Execução do modelo não encontrada")
+    return json.loads(path.read_text(encoding="utf-8"))
 
 @app.post("/modelos/baseball/executar")
 def executar_modelo_baseball(
