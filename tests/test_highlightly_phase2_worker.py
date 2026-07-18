@@ -5,6 +5,7 @@ from unittest.mock import Mock
 
 from api.highlightly.normalizers.common import NormalizationContext, NormalizedBatch, schema_fingerprint, stable_id
 from api.highlightly.normalizers.football import SUPPORTED_NORMALIZERS, normalize_football
+from api.highlightly.collection_policy import BASIC_PROFILE, FULL_PROFILE, football_collection_decision
 from api.highlightly.registry import EndpointRegistry
 from api.highlightly.worker import HighlightlyWorker
 from api.highlightly_client import HighlightlyResponse
@@ -305,6 +306,48 @@ class HighlightlyPhaseTwoWorkerTests(unittest.TestCase):
             if call.kwargs["endpoint_key"] == "football.FootballPlayerBoxScoreController_getPlayerBoxScores"
         )
         self.assertNotIn("_fanout_players", box_score)
+
+    def test_football_collection_policy_keeps_professional_and_womens_competitions_full(self):
+        for league_name in ("Premier League", "NWSL Women", "FAI Cup"):
+            with self.subTest(league=league_name):
+                decision = football_collection_decision({"league": {"name": league_name}})
+                self.assertEqual(decision.profile, FULL_PROFILE)
+                self.assertTrue(decision.allows_detailed_fanout)
+
+    def test_football_collection_policy_marks_friendlies_youth_and_reserves_basic(self):
+        expectations = {
+            "Friendlies Clubs": "friendly",
+            "International Friendlies": "friendly",
+            "Paulista - U20": "youth",
+            "Youth Championship": "youth",
+            "Primavera 1": "youth",
+            "Premier Reserve League": "reserve",
+        }
+        for league_name, reason in expectations.items():
+            with self.subTest(league=league_name):
+                decision = football_collection_decision({"league": {"name": league_name}})
+                self.assertEqual(decision.profile, BASIC_PROFILE)
+                self.assertEqual(decision.reason, reason)
+                self.assertFalse(decision.allows_detailed_fanout)
+
+    def test_basic_football_competitions_do_not_enqueue_detailed_fanout(self):
+        repository = Mock()
+        worker = HighlightlyWorker(Mock(), repository, worker_id="test-worker", enabled=True)
+        payload = {
+            "data": [
+                {"id": 1, "league": {"id": 10, "name": "Friendlies Clubs", "season": 2026}},
+                {"id": 2, "league": {"id": 20, "name": "Paulista - U20", "season": 2026}},
+                {"id": 3, "league": {"id": 30, "name": "Reserve League", "season": 2026}},
+            ]
+        }
+
+        self.assertEqual(worker._enqueue_football_match_fanout(payload), 0)
+        repository.enqueue_job.assert_not_called()
+
+    def test_unknown_football_league_remains_full_to_avoid_silent_data_loss(self):
+        decision = football_collection_decision({"league": {"id": 7}})
+        self.assertEqual(decision.profile, FULL_PROFILE)
+        self.assertEqual(decision.reason, "unknown_league_conservative_full")
 
     def test_box_score_fanout_queues_player_summary_and_statistics(self):
         repository = Mock()
