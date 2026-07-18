@@ -64,6 +64,38 @@ class HighlightlyPhaseTwoWorkerTests(unittest.TestCase):
         self.assertEqual(first.table_rows("sports_matches")[0]["id"], stable_id(PROVIDER_ID, SPORT_ID, "match", 99))
         self.assertEqual(first.table_rows("sports_countries")[0]["id"], stable_id("country", "BR"))
 
+    def test_sparse_match_league_does_not_overwrite_catalog_country(self):
+        payload = {
+            "data": [{
+                "id": 100,
+                "date": "2026-07-15T12:00:00Z",
+                "league": {"id": 7, "name": "League", "season": 2026},
+                "homeTeam": {"id": 1, "name": "Home"},
+                "awayTeam": {"id": 2, "name": "Away"},
+                "state": {"description": "Not started", "score": {}},
+            }]
+        }
+
+        batch = normalize_football(payload, context("football.matches"))
+
+        competition = batch.table_rows("sports_competitions")[0]
+        self.assertNotIn("country_id", competition)
+
+    def test_league_catalog_keeps_country_id(self):
+        payload = {
+            "data": [{
+                "id": 7,
+                "name": "League",
+                "country": {"code": "BR", "name": "Brazil"},
+                "seasons": [{"season": 2026}],
+            }]
+        }
+
+        batch = normalize_football(payload, context("football.leagues"))
+
+        competition = batch.table_rows("sports_competitions")[0]
+        self.assertEqual(competition["country_id"], stable_id("country", "BR"))
+
     def test_persist_reuses_legacy_country_id_and_remaps_dependents(self):
         repository = Mock()
         repository.select_rows.return_value = [{

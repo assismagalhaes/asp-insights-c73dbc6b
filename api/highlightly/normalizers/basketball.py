@@ -163,16 +163,18 @@ def _ensure_competition(
     name = _canonical_competition_name(provider_name)
     external_id = _external(league_data.get("id"), f"name:{slug(provider_name)}")
     competition_id = stable_id(ctx.provider_id, ctx.sport_id, "competition", external_id)
-    batch.add("sports_competitions", {
+    competition_row = {
         "id": competition_id,
         "sport_id": ctx.sport_id,
-        "country_id": country_id,
         "name": str(name),
         "short_name": "WNBA" if name == "WNBA" else league_data.get("shortName") or league_data.get("abbreviation"),
         "competition_type": league_data.get("type"),
         "logo_url": league_data.get("logo"),
         "metadata": {"provider": "highlightly", "provider_name": provider_name},
-    })
+    }
+    if country_id is not None:
+        competition_row["country_id"] = country_id
+    batch.add("sports_competitions", competition_row)
     add_provider_mapping(batch, ctx, "competition", external_id, competition_id, league_data)
     season_value = season if season is not None else league_data.get("season")
     if season_value is None:

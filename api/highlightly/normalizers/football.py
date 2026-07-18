@@ -150,19 +150,21 @@ def _ensure_competition(
 ) -> tuple[str, str | None]:
     external_id = _external(league.get("id"), f"name:{slug(league.get('name'))}")
     competition_id = stable_id(ctx.provider_id, ctx.sport_id, "competition", external_id)
-    batch.add(
-        "sports_competitions",
-        {
-            "id": competition_id,
-            "sport_id": ctx.sport_id,
-            "country_id": country_id,
-            "name": str(league.get("name") or external_id),
-            "short_name": league.get("shortName"),
-            "competition_type": league.get("type"),
-            "logo_url": league.get("logo"),
-            "metadata": {"provider": "highlightly"},
-        },
-    )
+    competition_row = {
+        "id": competition_id,
+        "sport_id": ctx.sport_id,
+        "name": str(league.get("name") or external_id),
+        "short_name": league.get("shortName"),
+        "competition_type": league.get("type"),
+        "logo_url": league.get("logo"),
+        "metadata": {"provider": "highlightly"},
+    }
+    # PostgREST merge-upserts only update columns present in the payload. Match
+    # summaries frequently omit country, so leaving the key out preserves the
+    # richer catalog value instead of overwriting it with NULL.
+    if country_id is not None:
+        competition_row["country_id"] = country_id
+    batch.add("sports_competitions", competition_row)
     add_provider_mapping(batch, ctx, "competition", external_id, competition_id, league)
     season_value = league.get("season")
     season_id: str | None = None
