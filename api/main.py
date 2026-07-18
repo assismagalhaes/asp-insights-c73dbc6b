@@ -29,6 +29,7 @@ try:
     from api.scraping_debug import ScraperDebugContext, is_debug_enabled, log_raw_debug
     from api.model_provenance import single_input_model_provenance
     from api.model_names import MODEL_NAME_BASEBALL, MODEL_NAME_FOOTBALL, basketball_model_name
+    from api.odds_csv import consolidar_csv_odds
     from scrapers.oddsagora_normalizer import normalize_oddsagora_raw
     from scrapers.oddsagora_scraper import executar_scraper_oddsagora
 except ModuleNotFoundError:
@@ -36,6 +37,7 @@ except ModuleNotFoundError:
     from scraping_debug import ScraperDebugContext, is_debug_enabled, log_raw_debug
     from model_provenance import single_input_model_provenance
     from model_names import MODEL_NAME_BASEBALL, MODEL_NAME_FOOTBALL, basketball_model_name
+    from odds_csv import consolidar_csv_odds
     from oddsagora_normalizer import normalize_oddsagora_raw
     from oddsagora_scraper import executar_scraper_oddsagora
 
@@ -790,7 +792,7 @@ def executar_coleta_real(job_id: str, params: dict):
         job["finalizado_em"] = datetime.now().isoformat()
         save_job(job)
 
-def gerar_csv_coleta(job_id: str, raw_data: dict, job: dict) -> Path:
+def gerar_csv_coleta(job_id: str, raw_data: dict, job: dict, consolidar: bool = False) -> Path:
     normalized = normalizar_raw_data(job_id, raw_data)
     linhas = normalized.get("linhas", [])
 
@@ -834,6 +836,8 @@ def gerar_csv_coleta(job_id: str, raw_data: dict, job: dict) -> Path:
             df[coluna] = ""
 
     df = df[colunas]
+    if consolidar:
+        df = consolidar_csv_odds(df)
 
     esporte = job.get("params", {}).get("esporte", "coleta")
     esporte_safe = str(esporte).lower().replace(" ", "_").replace("-", "_")
@@ -1006,7 +1010,7 @@ def baixar_csv_coleta(
         raise HTTPException(status_code=404, detail="Arquivo bruto não encontrado")
 
     raw_data = load_raw_json(path, job_id)
-    csv_path = gerar_csv_coleta(job_id, raw_data, job)
+    csv_path = gerar_csv_coleta(job_id, raw_data, job, consolidar=True)
 
     return FileResponse(
         path=str(csv_path),
@@ -1070,7 +1074,7 @@ def executar_modelo_futebol(
     raw_data = load_raw_json(path, job_id)
 
     # Reaproveita a função já existente que gera o CSV da coleta
-    csv_coleta_path = gerar_csv_coleta(job_id, raw_data, job)
+    csv_coleta_path = gerar_csv_coleta(job_id, raw_data, job, consolidar=True)
 
     script_modelo = BASE_DIR / "modelos" / "football_runner_real.py"
     output_path = BASE_DIR / "model_outputs" / f"prognosticos_futebol_{job_id}.csv"
