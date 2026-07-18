@@ -204,7 +204,7 @@ def filter_by_status_and_games(frame: pd.DataFrame, statuses: tuple[str, ...], e
 
 
 def merge_windows(recent: pd.DataFrame, venue: pd.DataFrame) -> pd.DataFrame:
-    keys = ["Data/Hora", "Time Casa", "Time Visitante"]
+    keys = ["Liga", "Data/Hora", "Time Casa", "Time Visitante"]
     merged = recent.merge(venue, on=keys, how="inner", suffixes=("_10", "_20"), validate="one_to_one")
     return merged
 
