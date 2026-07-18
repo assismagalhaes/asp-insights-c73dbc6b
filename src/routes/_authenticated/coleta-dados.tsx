@@ -55,6 +55,7 @@ function ColetaDadosPage() {
   const [normalized, setNormalized] = useState<NormalizedCollection | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [collectionPersisted, setCollectionPersisted] = useState(false);
   const [remoteBusy, setRemoteBusy] = useState<string | null>(null);
   const [remoteStatus, setRemoteStatus] = useState<string | null>(null);
   const [remoteParams, setRemoteParams] = useState({
@@ -121,6 +122,7 @@ function ColetaDadosPage() {
 
   const handleFile = async (file: File | null) => {
     if (!file) return;
+    setCollectionPersisted(false);
     setFileName(file.name);
     setErro(null);
     try {
@@ -149,6 +151,7 @@ function ColetaDadosPage() {
     try {
       await saveCollection(rawJson, normalized, { file_name: fileName, origem: "upload_manual" });
       await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
+      setCollectionPersisted(true);
       toast.success("Coleta salva no banco");
     } catch (e) {
       toast.error((e as Error).message);
@@ -171,6 +174,7 @@ function ColetaDadosPage() {
     await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
     setRawJson(raw);
     setNormalized(normalizedData);
+    setCollectionPersisted(true);
     toast.success(
       `${imported.inserted} odds importadas; ${imported.snapshots} snapshots consolidados${imported.duplicated ? ` (${imported.duplicated} duplicadas ignoradas)` : ""}`,
     );
@@ -287,6 +291,7 @@ function ColetaDadosPage() {
       await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
       setRawJson(raw);
       setNormalized(normalizedData);
+      setCollectionPersisted(true);
       toast.success(
         `${imported.inserted} odds importadas; ${imported.snapshots} snapshots consolidados${imported.duplicated ? ` (${imported.duplicated} duplicadas ignoradas)` : ""}`,
       );
@@ -462,8 +467,9 @@ function ColetaDadosPage() {
               <Info label="Liga" value={normalized?.liga ?? "múltiplas"} />
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button onClick={salvar} disabled={!normalized || saving}>
-                <Save className="mr-2 h-4 w-4" /> Salvar coleta
+              <Button onClick={salvar} disabled={!normalized || saving || collectionPersisted}>
+                <Save className="mr-2 h-4 w-4" />
+                {collectionPersisted ? "Coleta já salva" : "Salvar coleta"}
               </Button>
               <Button
                 variant="outline"
