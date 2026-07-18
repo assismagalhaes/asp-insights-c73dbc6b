@@ -255,7 +255,8 @@ async function scraperRequest(
   } catch (e) {
     if ((e as Error).name === "AbortError") {
       throw new Error(
-        `Timeout ao chamar API da VM (${path}) após ${Math.round(timeoutMs / 1000)}s.`,
+        timeoutMessage ??
+          `Timeout ao chamar API da VM (${path}) após ${Math.round(timeoutMs / 1000)}s.`,
       );
     }
     throw e;
