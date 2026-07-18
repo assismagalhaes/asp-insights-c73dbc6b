@@ -31,6 +31,8 @@ import { fetchCollections, type ColetaOdds } from "@/lib/coleta-dados";
 import {
   executePackballPredictiveModel,
   executePredictiveModel,
+  getFootballPredictiveModelStatus,
+  startFootballPredictiveModel,
   uploadPackballModelFiles,
 } from "@/lib/scraper-api.functions";
 import { supabase } from "@/lib/supabase-public";
@@ -206,9 +208,12 @@ function ModelosPreditivosPage() {
     setRunning(true);
     setResultado(null);
     try {
-      const response = await executePredictiveModel({
-        data: { job_id: coletaSelecionada.job_id, modelo },
-      });
+      const response =
+        modelo === "ASP MatchMatrix"
+          ? await executeFootballModelAsync(coletaSelecionada.job_id)
+          : await executePredictiveModel({
+              data: { job_id: coletaSelecionada.job_id, modelo },
+            });
       const parsed = normalizeModelResponse(response);
       setResultado(parsed);
       const total = parsed.total_prognosticos ?? parsed.prognosticos?.length ?? 0;
@@ -600,6 +605,41 @@ function extractInputId(response: unknown) {
   return String(value);
 }
 
+async function executeFootballModelAsync(jobId: string): Promise<unknown> {
+  const started = await startFootballPredictiveModel({
+    data: { job_id: jobId, modelo: "ASP MatchMatrix" },
+  });
+  if (!isRecord(started) || typeof started.run_id !== "string") {
+    throw new Error("A VM não retornou o identificador da execução do MatchMatrix.");
+  }
+
+  for (let attempt = 1; attempt <= 300; attempt++) {
+    await waitForModelPoll(2000);
+    const state = await getFootballPredictiveModelStatus({
+      data: { run_id: started.run_id },
+    });
+    if (!isRecord(state)) continue;
+    const status = String(state.status ?? "").toUpperCase();
+    if (status === "CONCLUIDO") {
+      if (!("resultado" in state)) throw new Error("A execução terminou sem resultado.");
+      return state.resultado;
+    }
+    if (status === "ERRO") {
+      const detail = state.erro;
+      throw new Error(
+        typeof detail === "string" ? detail : `Erro no MatchMatrix: ${JSON.stringify(detail)}`,
+      );
+    }
+  }
+  throw new Error(
+    "O MatchMatrix continua processando após 10 minutos. Tente consultar novamente mais tarde.",
+  );
+}
+
+function waitForModelPoll(milliseconds: number) {
+  return new Promise((resolve) => globalThis.setTimeout(resolve, milliseconds));
+}
+
 function normalizeModelResponse(response: unknown): ModeloResultado {
   const root = isRecord(response) ? response : {};
   const data = isRecord(root.data) ? root.data : isRecord(root.result) ? root.result : root;
@@ -623,10 +663,7 @@ function normalizeModelResponse(response: unknown): ModeloResultado {
   };
 }
 
-function mapModeloPrognostico(
-  row: Record<string, unknown>,
-  modelName?: string,
-): ModeloPrognostico {
+function mapModeloPrognostico(row: Record<string, unknown>, modelName?: string): ModeloPrognostico {
   const standard = standardizePredictionContract(
     {
       mercado: String(row.mercado ?? ""),

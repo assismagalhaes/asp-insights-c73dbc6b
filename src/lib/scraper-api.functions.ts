@@ -32,6 +32,10 @@ const PredictiveModelSchema = z.object({
   modelo: z.enum(["ASP MatchMatrix", "ASP Diamond", "ASP Court", "ASP Court W"]),
 });
 
+const ModelRunIdSchema = z.object({
+  run_id: z.string().uuid(),
+});
+
 const PackballModelSchema = z.enum(["ASP GoalMatrix", "ASP CornerMatrix", "ASP BackMatrix"]);
 
 const PackballUploadSchema = z.object({
@@ -464,6 +468,33 @@ export const executePredictiveModel = createServerFn({ method: "POST" })
       }
       throw e;
     }
+  });
+
+export const startFootballPredictiveModel = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => PredictiveModelSchema.parse(input))
+  .handler(async ({ data }) => {
+    if (data.modelo !== "ASP MatchMatrix") {
+      throw new Error("Execução assíncrona disponível apenas para o ASP MatchMatrix.");
+    }
+    const payload = await scraperRequest(
+      "/modelos/futebol/iniciar",
+      { method: "POST", body: JSON.stringify({ job_id: data.job_id }) },
+      SCRAPER_DEFAULT_TIMEOUT_MS,
+    );
+    return payload as JsonValue;
+  });
+
+export const getFootballPredictiveModelStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => ModelRunIdSchema.parse(input))
+  .handler(async ({ data }) => {
+    const payload = await scraperRequest(
+      `/modelos/futebol/status/${encodeURIComponent(data.run_id)}`,
+      undefined,
+      SCRAPER_DEFAULT_TIMEOUT_MS,
+    );
+    return payload as JsonValue;
   });
 
 export const uploadPackballModelFiles = createServerFn({ method: "POST" })
