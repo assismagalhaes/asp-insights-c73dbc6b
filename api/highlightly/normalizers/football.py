@@ -355,7 +355,15 @@ def _normalize_odds(payload: Any, ctx: NormalizationContext) -> NormalizedBatch:
                     decimal_odds = float(selection.get("odd"))
                 except (TypeError, ValueError):
                     decimal_odds = 0
-                if not selection_name or decimal_odds <= 1 or decimal_odds > 10000:
+                if selection_name and decimal_odds == 1:
+                    batch.issue(
+                        "ODDS_QUOTE_UNAVAILABLE",
+                        "Provider returned decimal odd 1.00 as an unavailable-market sentinel.",
+                        severity="info",
+                        context={"matchId": match_external, "market": market_name, "selection": selection_name, "odd": selection.get("odd")},
+                    )
+                    continue
+                if not selection_name or decimal_odds < 1 or decimal_odds > 10000:
                     batch.rejected += 1
                     batch.issue(
                         "ODDS_QUOTE_INVALID",

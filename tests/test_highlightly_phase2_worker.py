@@ -161,7 +161,7 @@ class HighlightlyPhaseTwoWorkerTests(unittest.TestCase):
         self.assertEqual({row["p_line_key"] for row in batch.odds_quotes}, {"2.5"})
         self.assertTrue(all(row["p_source_raw_object_id"] == RAW_ID for row in batch.odds_quotes))
 
-    def test_invalid_odds_are_rejected_without_poisoning_the_batch(self):
+    def test_unavailable_odds_sentinel_is_informational_without_poisoning_the_batch(self):
         payload = {"matchId": 99, "odds": [{
             "bookmakerId": 2,
             "bookmakerName": "bet365",
@@ -171,8 +171,21 @@ class HighlightlyPhaseTwoWorkerTests(unittest.TestCase):
         }]}
         batch = normalize_football(payload, context("football.odds"))
         self.assertEqual(len(batch.odds_quotes), 1)
-        self.assertEqual(batch.rejected, 1)
-        self.assertEqual(batch.issues[0]["code"], "ODDS_QUOTE_INVALID")
+        self.assertEqual(batch.rejected, 0)
+        self.assertEqual(batch.issues[0]["code"], "ODDS_QUOTE_UNAVAILABLE")
+        self.assertEqual(batch.issues[0]["severity"], "info")
+
+    def test_truly_invalid_odds_are_still_rejected(self):
+        payload = {"matchId": 99, "odds": [{
+            "bookmakerName": "bet365",
+            "type": "prematch",
+            "market": "Full Time Result",
+            "values": [{"value": "Home", "odd": 0.5}, {"value": "", "odd": 2.0}],
+        }]}
+        batch = normalize_football(payload, context("football.odds"))
+        self.assertEqual(len(batch.odds_quotes), 0)
+        self.assertEqual(batch.rejected, 2)
+        self.assertTrue(all(issue["code"] == "ODDS_QUOTE_INVALID" for issue in batch.issues))
 
     def test_unknown_match_statistic_is_discovered_without_code_change(self):
         payload = [{"team": {"id": 1, "name": "Home"}, "statistics": [
