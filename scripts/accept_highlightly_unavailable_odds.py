@@ -6,7 +6,6 @@ Dry-run is the default. This never changes runs, raw objects, or canonical odds.
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
 import json
 from typing import Any, Mapping
 
@@ -45,14 +44,8 @@ def main() -> int:
     candidates = [issue for issue in issues if is_unavailable_sentinel(issue)]
     updated = 0
     if args.confirm_accept:
-        resolved_at = datetime.now(timezone.utc).isoformat()
-        for issue in candidates:
-            saved = repository.patch_rows(
-                "hl_data_quality_issues",
-                {"resolution_status": "accepted", "resolved_at": resolved_at},
-                filters={"id": issue["id"], "resolution_status": "open"},
-            )
-            updated += len(saved)
+        result = repository.rpc("accept_highlightly_unavailable_odds_issues", {})
+        updated = int(result or 0)
 
     print(
         json.dumps(
