@@ -5755,6 +5755,10 @@ export type Database = {
       }
     }
     Functions: {
+      accept_highlightly_unavailable_odds_issues: {
+        Args: never
+        Returns: number
+      }
       cancel_highlightly_redundant_shadow_jobs: {
         Args: { p_endpoint_keys: string[]; p_reason?: string; p_scope: string }
         Returns: number
