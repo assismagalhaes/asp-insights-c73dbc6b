@@ -922,8 +922,8 @@ function Validacao() {
         }
         if (adjustedEdge == null || adjustedEdge < packball.requiredEdge) {
           toast.error(
-            `Odd insuficiente: o ${packball.modelName} exige edge minimo de ${packball.requiredEdge.toFixed(2)}% ` +
-              `(odd minima ${packball.minimumExecutableOdd.toFixed(2)}).`,
+            `Odd insuficiente: o ${packball.modelName} exige edge mínimo de ${packball.requiredEdge.toFixed(2)}% ` +
+              `(odd mínima ${packball.minimumExecutableOdd.toFixed(2)}).`,
           );
           return;
         }
