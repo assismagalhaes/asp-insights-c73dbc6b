@@ -929,7 +929,7 @@ function Validacao() {
         }
         const kelly = calculatePackballKelly(selected.probabilidade_final, explicitOdd, packball);
         if (kelly < 0.25) {
-          toast.error("A odd executavel nao produz Kelly conservador minimo de 0.25u.");
+          toast.error("A odd executável não produz Kelly conservador mínimo de 0,25u.");
           return;
         }
       }
