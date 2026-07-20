@@ -334,7 +334,7 @@ function BaseDadosPage() {
               : null;
         setYear(defaultYear ? String(defaultYear) : "");
         if (!parsed.length)
-          toast.warning(`A VM respondeu, mas nao retornou anos de base ${league}.`);
+          toast.warning(`A VM respondeu, mas não retornou anos de base ${league}.`);
       })
       .catch((e) => {
         const msg = formatError(e);
@@ -365,7 +365,7 @@ function BaseDadosPage() {
         const parsed = parseTeams(payload, apiLeague);
         setTeams(parsed);
         if (!parsed.length)
-          toast.warning(`A VM respondeu, mas nao retornou times ${league} para ${selectedYear}.`);
+          toast.warning(`A VM respondeu, mas não retornou times ${league} para ${selectedYear}.`);
       })
       .catch((e) => toast.error(formatError(e)))
       .finally(() => {
@@ -1331,10 +1331,10 @@ function parseCsvLine(input: string): string[] {
 }
 
 function getLinePlaceholder(isBasketball: boolean, league: string) {
-  if (!isBasketball) return "Cole aqui a linha no formato esperado pelo CSV historico da MLB.";
+  if (!isBasketball) return "Cole aqui a linha no formato esperado pelo CSV histórico da MLB.";
   if (league === "WNBA")
-    return "Cole aqui a linha basic da WNBA e, em seguida, a linha advanced. Pode separar por espaco ou quebra de linha.";
-  return "Cole aqui a linha basic da NBA e, em seguida, a linha advanced. Pode separar por espaco ou quebra de linha.";
+    return "Cole aqui a linha basic da WNBA e, em seguida, a linha advanced. Pode separar por espaço ou quebra de linha.";
+  return "Cole aqui a linha basic da NBA e, em seguida, a linha advanced. Pode separar por espaço ou quebra de linha.";
 }
 
 function formatLineValue(value: unknown): string {
@@ -1389,7 +1389,7 @@ function getOperationErrorMessage(operation: OperationResult) {
     .map((value) => formatLineValue(value).trim())
     .find(Boolean);
   if (/no module named ['"]?pandas/i.test(details ?? "")) {
-    return "A VM nao conseguiu adicionar: falta instalar o pacote pandas no Python usado pela API.";
+    return "A VM não conseguiu adicionar: falta instalar o pacote pandas no Python usado pela API.";
   }
   return details || "A VM retornou erro ao adicionar a linha.";
 }

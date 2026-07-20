@@ -356,7 +356,7 @@ function ModelosPreditivosPage() {
               </>
             ) : (
               <div>
-                <label className="text-sm font-medium">Coleta concluida</label>
+                <label className="text-sm font-medium">Coleta concluída</label>
                 <Select value={selectedColetaId} onValueChange={setSelectedColetaId}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione uma coleta" />

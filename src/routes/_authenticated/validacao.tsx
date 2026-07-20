@@ -347,7 +347,7 @@ function autoCheck(p: Prognostico, edgeFinal: number | null, executableOdd: numb
   const packball = getPackballValidationRequirements(p);
   if (packball) {
     if (!(executableOdd && executableOdd > 1))
-      return { auto: "ALERTA" as const, reason: "Informe a odd executavel antes da analise" };
+      return { auto: "ALERTA" as const, reason: "Informe a odd executável antes da análise" };
     if (edgeFinal == null || edgeFinal < packball.requiredEdge)
       return {
         auto: "PULAR" as const,
@@ -685,7 +685,7 @@ function Validacao() {
     const executableOdd = getOddAjustadaNum(p);
     const executableEdge = getEdgeAjustado(p);
     if (packball && (!(executableOdd && executableOdd > 1) || executableEdge == null)) {
-      toast.error(`Informe a odd executavel do ${packball.modelName} antes de rodar a IA.`);
+      toast.error(`Informe a odd executável do ${packball.modelName} antes de rodar a IA.`);
       return;
     }
     if (packball && executableEdge! < packball.requiredEdge) {
@@ -896,7 +896,7 @@ function Validacao() {
       });
     } catch (e) {
       console.warn("[Opportunity Ranking] Validacao salva, mas ranking nao atualizado:", e);
-      toast.warning("Validacao salva, mas o ranking final nao foi atualizado automaticamente.");
+      toast.warning("Validação salva, mas o ranking final não foi atualizado automaticamente.");
     }
   };
 
@@ -917,19 +917,19 @@ function Validacao() {
         const explicitOdd = getOddAjustadaNum(selected);
         const adjustedEdge = getEdgeAjustado(selected);
         if (!(explicitOdd && explicitOdd > 1)) {
-          toast.error(`Informe a odd executavel do ${packball.modelName} antes de confirmar.`);
+          toast.error(`Informe a odd executável do ${packball.modelName} antes de confirmar.`);
           return;
         }
         if (adjustedEdge == null || adjustedEdge < packball.requiredEdge) {
           toast.error(
-            `Odd insuficiente: o ${packball.modelName} exige edge minimo de ${packball.requiredEdge.toFixed(2)}% ` +
-              `(odd minima ${packball.minimumExecutableOdd.toFixed(2)}).`,
+            `Odd insuficiente: o ${packball.modelName} exige edge mínimo de ${packball.requiredEdge.toFixed(2)}% ` +
+              `(odd mínima ${packball.minimumExecutableOdd.toFixed(2)}).`,
           );
           return;
         }
         const kelly = calculatePackballKelly(selected.probabilidade_final, explicitOdd, packball);
         if (kelly < 0.25) {
-          toast.error("A odd executavel nao produz Kelly conservador minimo de 0.25u.");
+          toast.error("A odd executável não produz Kelly conservador mínimo de 0,25u.");
           return;
         }
       }
@@ -2056,7 +2056,7 @@ function formatPreviewStatus(status: string): string {
   if (status === "queued") return "em fila";
   if (status === "missing") return "ausente";
   if (status === "error") return "erro";
-  return "nao solicitado";
+  return "não solicitado";
 }
 
 function formatOptionalNumber(value: number | null | undefined): string {
