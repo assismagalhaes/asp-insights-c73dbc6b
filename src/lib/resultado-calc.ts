@@ -101,7 +101,6 @@ export function detectRacePick(
   return { alvo, lado };
 }
 
-
 export function calcularResultadoAuto(
   prog: Pick<Prognostico, "mercado" | "pick" | "mandante" | "visitante"> &
     Partial<Pick<Prognostico, "jogo">>,

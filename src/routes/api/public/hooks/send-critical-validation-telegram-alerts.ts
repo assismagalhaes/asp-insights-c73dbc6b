@@ -24,10 +24,7 @@ function parseTelegramSendError(raw: string): string {
   try {
     const parsed = JSON.parse(raw) as { description?: string; error_code?: number };
     const description = parsed.description ?? raw;
-    if (
-      parsed.error_code === 403 &&
-      /can't initiate conversation with a user/i.test(description)
-    ) {
+    if (parsed.error_code === 403 && /can't initiate conversation with a user/i.test(description)) {
       return `O bot não pode iniciar conversa com o usuário. O usuário precisa abrir @${TELEGRAM_BOT_USERNAME} e enviar /start.`;
     }
     if (/chat not found|invalid_chat_id/i.test(description)) {
@@ -66,7 +63,11 @@ async function sendTelegram(
     }),
   });
   const body = await res.text();
-  if (!res.ok) return { ok: false, error: `HTTP ${res.status}: ${parseTelegramSendError(body).slice(0, 300)}` };
+  if (!res.ok)
+    return {
+      ok: false,
+      error: `HTTP ${res.status}: ${parseTelegramSendError(body).slice(0, 300)}`,
+    };
   try {
     const parsed = JSON.parse(body) as {
       ok?: boolean;
@@ -86,7 +87,8 @@ export const Route = createFileRoute("/api/public/hooks/send-critical-validation
       POST: async ({ request }) => {
         // Minimal auth: require the Supabase anon key header (default pattern).
         const apikey = request.headers.get("apikey") ?? "";
-        const expected = process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY ?? "";
+        const expected =
+          process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY ?? "";
         if (!expected || apikey !== expected) {
           return new Response(JSON.stringify({ error: "unauthorized" }), {
             status: 401,
@@ -159,11 +161,7 @@ export const Route = createFileRoute("/api/public/hooks/send-critical-validation
               .select("status_validacao,resultado")
               .eq("id", a.source_record_id)
               .maybeSingle();
-            if (
-              !prog ||
-              prog.status_validacao !== "PENDENTE" ||
-              prog.resultado !== "PENDENTE"
-            ) {
+            if (!prog || prog.status_validacao !== "PENDENTE" || prog.resultado !== "PENDENTE") {
               await supabase
                 .from("validacao_critica_telegram_alerts")
                 .update({ status: "skipped" })
@@ -243,10 +241,9 @@ export const Route = createFileRoute("/api/public/hooks/send-critical-validation
           }
         }
 
-        return new Response(
-          JSON.stringify({ ok: true, processed: results.length, results }),
-          { headers: { "Content-Type": "application/json" } },
-        );
+        return new Response(JSON.stringify({ ok: true, processed: results.length, results }), {
+          headers: { "Content-Type": "application/json" },
+        });
       },
     },
   },

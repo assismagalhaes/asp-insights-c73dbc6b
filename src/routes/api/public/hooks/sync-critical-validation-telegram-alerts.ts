@@ -19,7 +19,8 @@ export const Route = createFileRoute("/api/public/hooks/sync-critical-validation
     handlers: {
       POST: async ({ request }) => {
         const apikey = request.headers.get("apikey") ?? "";
-        const expected = process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY ?? "";
+        const expected =
+          process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY ?? "";
         if (!expected || apikey !== expected) {
           return new Response(JSON.stringify({ error: "unauthorized" }), {
             status: 401,
@@ -56,10 +57,9 @@ export const Route = createFileRoute("/api/public/hooks/sync-critical-validation
           (u) => !!u.telegram_chat_id && !!u.telegram_chat_id.trim(),
         );
         if (targets.length === 0) {
-          return new Response(
-            JSON.stringify({ ok: true, users: 0, created: 0 }),
-            { headers: { "Content-Type": "application/json" } },
-          );
+          return new Response(JSON.stringify({ ok: true, users: 0, created: 0 }), {
+            headers: { "Content-Type": "application/json" },
+          });
         }
 
         // Pending prognosticos (shared across users in this admin-only setup)

@@ -313,9 +313,7 @@ function ImportarPage() {
     setRawRows(json);
     setMapping(autoMap(hdrs));
 
-    const { data } = await supabase
-      .from("prognosticos")
-      .select("data,esporte,jogo,mercado,pick");
+    const { data } = await supabase.from("prognosticos").select("data,esporte,jogo,mercado,pick");
     const set = new Set<string>();
     (data ?? []).forEach((r: Record<string, unknown>) => {
       set.add(

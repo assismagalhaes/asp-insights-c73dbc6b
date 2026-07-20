@@ -897,27 +897,35 @@ export function validateGenericMatchupPreview(
   const away = prognostico.visitante?.trim() || prognostico.jogo.split(/\s+vs\s+/i)[1]?.trim();
 
   if (!home || !previewContainsTeam(normalizedRaw, home)) {
-    errors.push(`Preview rejeitado: o mandante "${home || "nao identificado"}" nao foi encontrado.`);
+    errors.push(
+      `Preview rejeitado: o mandante "${home || "nao identificado"}" nao foi encontrado.`,
+    );
   }
   if (!away || !previewContainsTeam(normalizedRaw, away)) {
-    errors.push(`Preview rejeitado: o visitante "${away || "nao identificado"}" nao foi encontrado.`);
+    errors.push(
+      `Preview rejeitado: o visitante "${away || "nao identificado"}" nao foi encontrado.`,
+    );
   }
 
-  const lines = rawPreviewText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const lines = rawPreviewText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
   const dateLines = lines.filter(
-    (line, index) => index < 8 || /\b(data|date|horario|horário|kickoff|inicio|início)\b/i.test(line),
+    (line, index) =>
+      index < 8 || /\b(data|date|horario|horário|kickoff|inicio|início)\b/i.test(line),
   );
   const previewDates = new Set(dateLines.flatMap(extractCanonicalDates));
   const eventDate = canonicalDate(prognostico.data);
   if (previewDates.size && eventDate && !previewDates.has(eventDate)) {
-    errors.push(
-      `Preview rejeitado: a data informada nao corresponde ao evento ${eventDate}.`,
-    );
+    errors.push(`Preview rejeitado: a data informada nao corresponde ao evento ${eventDate}.`);
   } else if (!previewDates.size) {
     warnings.push("Data do evento nao identificada no texto colado.");
   }
 
-  const leagueLines = lines.filter((line) => /\b(liga|league|competicao|competição|competition)\b/i.test(line));
+  const leagueLines = lines.filter((line) =>
+    /\b(liga|league|competicao|competição|competition)\b/i.test(line),
+  );
   if (leagueLines.length) {
     const leagueText = normalizePreviewComparable(leagueLines.join(" "));
     const leagueTokens = significantPreviewTokens(prognostico.liga).filter(
@@ -969,7 +977,8 @@ function canonicalDate(value: unknown): string | null {
 }
 
 function extractCanonicalDates(value: string): string[] {
-  const matches = value.match(/\b(?:\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.]\d{4})\b/g) ?? [];
+  const matches =
+    value.match(/\b(?:\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.]\d{4})\b/g) ?? [];
   return matches.map(canonicalDate).filter((date): date is string => Boolean(date));
 }
 
@@ -1022,7 +1031,8 @@ function getMarketFamilyKey(prognostico: Prognostico): string {
   if (/overunder|over under|total|over\b|under\b|gols|pontos|corridas|runs/.test(mercado))
     return "totais";
   if (/dupla chance|duplachance|double chance|doublechance/.test(mercado)) return "dupla-chance";
-  if (/moneyline|backmatrix|1x2|resultado final|resultadofinal|vencedor/.test(mercado)) return "resultado";
+  if (/moneyline|backmatrix|1x2|resultado final|resultadofinal|vencedor/.test(mercado))
+    return "resultado";
   return `mercado:${normalizeKeyPart(getOpportunityMarketLabel(prognostico))}`;
 }
 

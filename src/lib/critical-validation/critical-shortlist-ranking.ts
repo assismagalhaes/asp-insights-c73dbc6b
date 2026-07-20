@@ -6,7 +6,11 @@ import {
 } from "@/lib/packball-validation";
 
 export type CriticalShortlistStatus = "CANDIDATA" | "MONITORAR" | "RESERVA" | "BLOQUEADA";
-export type CriticalShortlistFinalStatus = "TOP_FINAL" | "RESERVA_CONFIRMADA" | "PULAR" | "RESERVA_NAO_ANALISADA";
+export type CriticalShortlistFinalStatus =
+  | "TOP_FINAL"
+  | "RESERVA_CONFIRMADA"
+  | "PULAR"
+  | "RESERVA_NAO_ANALISADA";
 export type CriticalRiskSeverity = "low" | "medium" | "high" | "critical" | "hard_block";
 
 export type CriticalShortlistRiskFlag = {
@@ -94,8 +98,8 @@ const SHORTLIST_LIMIT = 12;
 const WEIGHTS = {
   value: 0.38,
   probabilityMargin: 0.24,
-  dataReadiness: 0.20,
-  marketRisk: 0.10,
+  dataReadiness: 0.2,
+  marketRisk: 0.1,
   timing: 0.06,
   sourceIntegrity: 0.02,
 } as const;
@@ -108,8 +112,13 @@ const PENALTY_BY_SEVERITY: Record<CriticalRiskSeverity, number> = {
   hard_block: 100,
 };
 
-export function buildCriticalShortlist(prognosticos: Prognostico[], now = new Date()): CriticalShortlistResult {
-  const pending = prognosticos.filter((p) => p.resultado === "PENDENTE" && p.status_validacao === "PENDENTE");
+export function buildCriticalShortlist(
+  prognosticos: Prognostico[],
+  now = new Date(),
+): CriticalShortlistResult {
+  const pending = prognosticos.filter(
+    (p) => p.resultado === "PENDENTE" && p.status_validacao === "PENDENTE",
+  );
   const ranked = pending.map((p) => buildCandidate(p, now)).sort(compareCandidates);
 
   let displayRank = 1;
@@ -141,7 +150,10 @@ export function buildCriticalShortlist(prognosticos: Prognostico[], now = new Da
   };
 }
 
-export function calculateCriticalShortlistScore(prognostico: Prognostico, now = new Date()): {
+export function calculateCriticalShortlistScore(
+  prognostico: Prognostico,
+  now = new Date(),
+): {
   score: number;
   components: CriticalShortlistScoreComponents;
   flags: CriticalShortlistRiskFlag[];
@@ -210,7 +222,8 @@ export function calculateCriticalShortlistConfidence(
   if ((probability.margin ?? 0) >= 5) score += 8;
   if (odds >= 90) score += 5;
   if (hasSource) score += 5;
-  if (prognostico.mercado && prognostico.pick && hasNumericPickWhenRequired(prognostico)) score += 5;
+  if (prognostico.mercado && prognostico.pick && hasNumericPickWhenRequired(prognostico))
+    score += 5;
   if (!data.hasUsefulContext) score -= 8;
   if (!isFiniteNumber(prognostico.edge_ajustado) && !packballAwaitingOdd) score -= 8;
   if (packballAwaitingOdd) score += 5;
@@ -249,20 +262,29 @@ export function calculateValueScore(prognostico: Prognostico): {
         : calculatedEdge;
   if (packballAwaitingOdd) {
     const feasibility = getPackballValidationRequirements(prognostico)?.priceFeasibility;
-    const score = feasibility === "ODD_APROVADA"
-      ? 75
-      : feasibility === "AGUARDAR_ODD"
-        ? 65
-        : feasibility === "ODD_POUCO_PROVAVEL"
-          ? 45
-          : 20;
+    const score =
+      feasibility === "ODD_APROVADA"
+        ? 75
+        : feasibility === "AGUARDAR_ODD"
+          ? 65
+          : feasibility === "ODD_POUCO_PROVAVEL"
+            ? 45
+            : 20;
     return { score, effectiveEdge, valueGap };
   }
-  if (!isFiniteNumber(effectiveEdge) || effectiveEdge <= 0) return { score: 0, effectiveEdge, valueGap };
-  if (effectiveEdge <= 3) return { score: round((effectiveEdge / 3) * 30, 1), effectiveEdge, valueGap };
-  if (effectiveEdge <= 6) return { score: round(30 + ((effectiveEdge - 3) / 3) * 25, 1), effectiveEdge, valueGap };
-  if (effectiveEdge <= 10) return { score: round(55 + ((effectiveEdge - 6) / 4) * 30, 1), effectiveEdge, valueGap };
-  return { score: round(clamp(85 + Math.min(effectiveEdge - 10, 5) * 3, 0, 100), 1), effectiveEdge, valueGap };
+  if (!isFiniteNumber(effectiveEdge) || effectiveEdge <= 0)
+    return { score: 0, effectiveEdge, valueGap };
+  if (effectiveEdge <= 3)
+    return { score: round((effectiveEdge / 3) * 30, 1), effectiveEdge, valueGap };
+  if (effectiveEdge <= 6)
+    return { score: round(30 + ((effectiveEdge - 3) / 3) * 25, 1), effectiveEdge, valueGap };
+  if (effectiveEdge <= 10)
+    return { score: round(55 + ((effectiveEdge - 6) / 4) * 30, 1), effectiveEdge, valueGap };
+  return {
+    score: round(clamp(85 + Math.min(effectiveEdge - 10, 5) * 3, 0, 100), 1),
+    effectiveEdge,
+    valueGap,
+  };
 }
 
 export function calculateProbabilityMarginScore(prognostico: Prognostico): {
@@ -276,8 +298,11 @@ export function calculateProbabilityMarginScore(prognostico: Prognostico): {
     ? Number(prognostico.odd_ajustada)
     : prognostico.odd_ofertada;
   const impliedProbability = isPositiveFinite(operationalOdd) ? (1 / operationalOdd) * 100 : null;
-  const probability = isFiniteNumber(prognostico.probabilidade_final) ? prognostico.probabilidade_final : null;
-  const margin = probability != null && impliedProbability != null ? probability - impliedProbability : null;
+  const probability = isFiniteNumber(prognostico.probabilidade_final)
+    ? prognostico.probabilidade_final
+    : null;
+  const margin =
+    probability != null && impliedProbability != null ? probability - impliedProbability : null;
   if (packballAwaitingOdd) return { score: 70, impliedProbability: null, margin: null };
   if (!isFiniteNumber(margin) || margin <= 0) return { score: 0, impliedProbability, margin };
   return { score: round(clamp((margin / 8) * 100, 0, 100), 1), impliedProbability, margin };
@@ -288,10 +313,10 @@ export function calculateOddsOperationalScore(prognostico: Prognostico): number 
     ? Number(prognostico.odd_ajustada)
     : prognostico.odd_ofertada;
   if (!isPositiveFinite(odd)) return 0;
-  if (odd >= 1.70 && odd <= 1.95) return 100;
-  if (odd >= 1.96 && odd <= 2.00) return 90;
-  if (odd >= 1.60 && odd <= 1.69) return 85;
-  if (odd >= 1.50 && odd <= 1.59) return 70;
+  if (odd >= 1.7 && odd <= 1.95) return 100;
+  if (odd >= 1.96 && odd <= 2.0) return 90;
+  if (odd >= 1.6 && odd <= 1.69) return 85;
+  if (odd >= 1.5 && odd <= 1.59) return 70;
   return 35;
 }
 
@@ -318,10 +343,10 @@ export function calculateDataReadinessScore(prognostico: Prognostico): {
   missingFields.push(...critical.missingFields);
   const score = round(
     clamp(
-      structuredFieldsScore * 0.40 +
-        critical.score * 0.30 +
-        contextPresenceScore * 0.20 +
-        sourceIntegrityScore * 0.10,
+      structuredFieldsScore * 0.4 +
+        critical.score * 0.3 +
+        contextPresenceScore * 0.2 +
+        sourceIntegrityScore * 0.1,
       0,
       100,
     ),
@@ -338,22 +363,33 @@ export function calculateDataReadinessScore(prognostico: Prognostico): {
   };
 }
 
-export function calculateMarketRiskScore(prognostico: Prognostico): { score: number; recognized: boolean } {
+export function calculateMarketRiskScore(prognostico: Prognostico): {
+  score: number;
+  recognized: boolean;
+} {
   const market = normalized(`${prognostico.mercado} ${prognostico.pick}`);
   const lineAlternative = isAlternativePick(prognostico);
   if (/player prop|props|jogador|pontos jogador|rebotes|assistencias|pra\b/.test(market)) {
     return { score: lineAlternative ? 30 : 45, recognized: true };
   }
-  if (/race|corrida|primeiro escanteio|first corner/.test(market)) return { score: lineAlternative ? 35 : 50, recognized: true };
-  if (/escanteio|corner/.test(market)) return { score: lineAlternative ? 45 : 62, recognized: true };
+  if (/race|corrida|primeiro escanteio|first corner/.test(market))
+    return { score: lineAlternative ? 35 : 50, recognized: true };
+  if (/escanteio|corner/.test(market))
+    return { score: lineAlternative ? 45 : 62, recognized: true };
   if (/ambas marcam|btts/.test(market)) return { score: 68, recognized: true };
-  if (/handicap|spread|run line/.test(market)) return { score: lineAlternative ? 45 : 70, recognized: true };
-  if (/over|under|total|gols|pontos|corridas|runs/.test(market)) return { score: lineAlternative ? 50 : 75, recognized: true };
-  if (/moneyline|backmatrix|vencedor|resultado|1x2|dupla chance|double chance/.test(market)) return { score: 85, recognized: true };
+  if (/handicap|spread|run line/.test(market))
+    return { score: lineAlternative ? 45 : 70, recognized: true };
+  if (/over|under|total|gols|pontos|corridas|runs/.test(market))
+    return { score: lineAlternative ? 50 : 75, recognized: true };
+  if (/moneyline|backmatrix|vencedor|resultado|1x2|dupla chance|double chance/.test(market))
+    return { score: 85, recognized: true };
   return { score: 40, recognized: false };
 }
 
-export function calculateTimingScore(prognostico: Prognostico, now = new Date()): { score: number; minutesToStart: number | null } {
+export function calculateTimingScore(
+  prognostico: Prognostico,
+  now = new Date(),
+): { score: number; minutesToStart: number | null } {
   const start = parseEventDate(prognostico);
   if (!start) return { score: 40, minutesToStart: null };
   const minutes = (start.getTime() - now.getTime()) / 60000;
@@ -377,7 +413,10 @@ export function calculateSourceIntegrityScore(prognostico: Prognostico): number 
   return 15;
 }
 
-export function detectCriticalShortlistRiskFlags(prognostico: Prognostico, now = new Date()): CriticalShortlistRiskFlag[] {
+export function detectCriticalShortlistRiskFlags(
+  prognostico: Prognostico,
+  now = new Date(),
+): CriticalShortlistRiskFlag[] {
   const flags: CriticalShortlistRiskFlag[] = [];
   const value = calculateValueScore(prognostico);
   const probability = calculateProbabilityMarginScore(prognostico);
@@ -396,34 +435,72 @@ export function detectCriticalShortlistRiskFlags(prognostico: Prognostico, now =
 
   pushIf(flags, !prognostico.pick, "pick_missing", "hard_block", "Pick ausente.");
   pushIf(flags, !prognostico.mercado, "market_missing", "hard_block", "Mercado ausente.");
-  pushIf(flags, !isPositiveFinite(prognostico.odd_ofertada), "odd_missing", "hard_block", "Odd ofertada invalida ou ausente.");
-  pushIf(flags, timing.minutesToStart != null && timing.minutesToStart <= 0, "event_already_started", "hard_block", "Evento ja iniciado.");
   pushIf(
     flags,
-    !packballMatrix && isPositiveFinite(prognostico.odd_valor) && prognostico.odd_ofertada <= prognostico.odd_valor,
+    !isPositiveFinite(prognostico.odd_ofertada),
+    "odd_missing",
+    "hard_block",
+    "Odd ofertada invalida ou ausente.",
+  );
+  pushIf(
+    flags,
+    timing.minutesToStart != null && timing.minutesToStart <= 0,
+    "event_already_started",
+    "hard_block",
+    "Evento ja iniciado.",
+  );
+  pushIf(
+    flags,
+    !packballMatrix &&
+      isPositiveFinite(prognostico.odd_valor) &&
+      prognostico.odd_ofertada <= prognostico.odd_valor,
     "odd_not_above_fair_odd",
     "hard_block",
     "Odd ofertada nao supera a odd de valor esperada pelo modelo.",
   );
-  pushIf(flags, !isPositiveFinite(prognostico.odd_valor), "fair_odd_missing", "medium", "Odd de valor ausente.");
   pushIf(
     flags,
-    !packballMatrix && isPositiveFinite(prognostico.odd_ofertada) && (prognostico.odd_ofertada < 1.5 || prognostico.odd_ofertada > 2),
+    !isPositiveFinite(prognostico.odd_valor),
+    "fair_odd_missing",
+    "medium",
+    "Odd de valor ausente.",
+  );
+  pushIf(
+    flags,
+    !packballMatrix &&
+      isPositiveFinite(prognostico.odd_ofertada) &&
+      (prognostico.odd_ofertada < 1.5 || prognostico.odd_ofertada > 2),
     "odd_outside_model_filter_range",
     "medium",
     "Odd fora da faixa esperada do filtro preditivo inicial.",
   );
   pushIf(
     flags,
-    !packballMatrix && isPositiveFinite(prognostico.odd_valor) && isPositiveFinite(prognostico.odd_ofertada) &&
-      (prognostico.odd_ofertada < 1.5 || prognostico.odd_ofertada > 2 || prognostico.odd_ofertada <= prognostico.odd_valor),
+    !packballMatrix &&
+      isPositiveFinite(prognostico.odd_valor) &&
+      isPositiveFinite(prognostico.odd_ofertada) &&
+      (prognostico.odd_ofertada < 1.5 ||
+        prognostico.odd_ofertada > 2 ||
+        prognostico.odd_ofertada <= prognostico.odd_valor),
     "value_filter_inconsistency",
     "high",
     "Inconsistencia contra o filtro upstream esperado de odd/valor.",
   );
   pushIf(flags, !isFiniteNumber(value.effectiveEdge), "edge_missing", "high", "Edge ausente.");
-  pushIf(flags, !packballAwaitingOdd && isFiniteNumber(value.effectiveEdge) && value.effectiveEdge <= 0, "edge_not_positive", "hard_block", "Edge nao positivo.");
-  pushIf(flags, !packballMatrix && !isFiniteNumber(prognostico.edge_ajustado), "edge_adjusted_missing", "medium", "Edge ajustado ausente.");
+  pushIf(
+    flags,
+    !packballAwaitingOdd && isFiniteNumber(value.effectiveEdge) && value.effectiveEdge <= 0,
+    "edge_not_positive",
+    "hard_block",
+    "Edge nao positivo.",
+  );
+  pushIf(
+    flags,
+    !packballMatrix && !isFiniteNumber(prognostico.edge_ajustado),
+    "edge_adjusted_missing",
+    "medium",
+    "Edge ajustado ausente.",
+  );
   pushIf(
     flags,
     packballAwaitingOdd,
@@ -468,7 +545,13 @@ export function detectCriticalShortlistRiskFlags(prognostico: Prognostico, now =
     "high",
     "Modelo WNBA diverge fortemente da pick de mercado; manter como reserva ate validacao contextual.",
   );
-  pushIf(flags, !isFiniteNumber(prognostico.probabilidade_final), "probability_missing", "hard_block", "Probabilidade ausente.");
+  pushIf(
+    flags,
+    !isFiniteNumber(prognostico.probabilidade_final),
+    "probability_missing",
+    "hard_block",
+    "Probabilidade ausente.",
+  );
   pushIf(
     flags,
     !packballAwaitingOdd && isFiniteNumber(probability.margin) && probability.margin <= 0,
@@ -483,12 +566,48 @@ export function detectCriticalShortlistRiskFlags(prognostico: Prognostico, now =
     "medium",
     "Margem contra a probabilidade implicita e pequena.",
   );
-  pushIf(flags, !String(prognostico.origem_modelo ?? "").trim(), "source_missing", "medium", "Origem nao identificada.");
-  pushIf(flags, !textHasUsefulContent(text), "technical_context_weak", "high", "Contexto tecnico insuficiente.");
-  pushIf(flags, data.missingFields.length > 0, "critical_fields_missing", "medium", "Campos criticos ausentes ou incompletos.");
-  pushIf(flags, !market.recognized, "market_not_recognized", "medium", "Mercado pouco reconhecido.");
-  pushIf(flags, isVolatileMarket(prognostico), "volatile_market", "medium", "Mercado estruturalmente volatil.");
-  pushIf(flags, isAlternativePick(prognostico), "alternative_pick", "high", "Pick alternativa ou distante exige mais contexto.");
+  pushIf(
+    flags,
+    !String(prognostico.origem_modelo ?? "").trim(),
+    "source_missing",
+    "medium",
+    "Origem nao identificada.",
+  );
+  pushIf(
+    flags,
+    !textHasUsefulContent(text),
+    "technical_context_weak",
+    "high",
+    "Contexto tecnico insuficiente.",
+  );
+  pushIf(
+    flags,
+    data.missingFields.length > 0,
+    "critical_fields_missing",
+    "medium",
+    "Campos criticos ausentes ou incompletos.",
+  );
+  pushIf(
+    flags,
+    !market.recognized,
+    "market_not_recognized",
+    "medium",
+    "Mercado pouco reconhecido.",
+  );
+  pushIf(
+    flags,
+    isVolatileMarket(prognostico),
+    "volatile_market",
+    "medium",
+    "Mercado estruturalmente volatil.",
+  );
+  pushIf(
+    flags,
+    isAlternativePick(prognostico),
+    "alternative_pick",
+    "high",
+    "Pick alternativa ou distante exige mais contexto.",
+  );
   pushIf(
     flags,
     market.score <= 62 && !textHasUsefulContent(text),
@@ -505,28 +624,36 @@ export function detectCriticalShortlistRiskFlags(prognostico: Prognostico, now =
   );
   pushIf(
     flags,
-    isWnbaBasketball(prognostico) && isBasketballTotalMarket(prognostico) && !hasBasketballPaceEfficiencyContext(text),
+    isWnbaBasketball(prognostico) &&
+      isBasketballTotalMarket(prognostico) &&
+      !hasBasketballPaceEfficiencyContext(text),
     "wnba_total_pace_context_missing",
     "high",
     "WNBA total/over-under sem sinais de pace, eficiencia ou posses no contexto.",
   );
   pushIf(
     flags,
-    isWnbaBasketball(prognostico) && isBasketballSpreadMarket(prognostico) && !hasBasketballSpreadContext(text),
+    isWnbaBasketball(prognostico) &&
+      isBasketballSpreadMarket(prognostico) &&
+      !hasBasketballSpreadContext(text),
     "wnba_spread_context_missing",
     "medium",
     "WNBA spread/handicap sem sinais de margem, matchup, mando ou descanso.",
   );
   pushIf(
     flags,
-    isWnbaBasketball(prognostico) && isBasketballMoneylineMarket(prognostico) && !hasBasketballMoneylineContext(text),
+    isWnbaBasketball(prognostico) &&
+      isBasketballMoneylineMarket(prognostico) &&
+      !hasBasketballMoneylineContext(text),
     "wnba_moneyline_context_missing",
     "medium",
     "WNBA moneyline sem sinais de forma, matchup, mando ou disponibilidade.",
   );
   pushIf(
     flags,
-    isWnbaBasketball(prognostico) && isBasketballPlayerPropMarket(prognostico) && !hasBasketballPlayerPropContext(text),
+    isWnbaBasketball(prognostico) &&
+      isBasketballPlayerPropMarket(prognostico) &&
+      !hasBasketballPlayerPropContext(text),
     "wnba_player_prop_context_missing",
     "high",
     "WNBA player prop sem sinais de minutos, uso, rotacao ou papel da jogadora.",
@@ -538,7 +665,13 @@ export function detectCriticalShortlistRiskFlags(prognostico: Prognostico, now =
     "low",
     "WNBA sem contexto de rotacao, lesoes, descanso ou disponibilidade.",
   );
-  pushIf(flags, timing.minutesToStart == null, "event_time_missing", "medium", "Horario do evento ausente.");
+  pushIf(
+    flags,
+    timing.minutesToStart == null,
+    "event_time_missing",
+    "medium",
+    "Horario do evento ausente.",
+  );
   pushIf(
     flags,
     timing.minutesToStart != null && timing.minutesToStart > 0 && timing.minutesToStart < 15,
@@ -563,7 +696,11 @@ export function applyCriticalShortlistPenalties(flags: CriticalShortlistRiskFlag
 } {
   const applied = flags
     .filter((flag) => flag.severity !== "hard_block")
-    .map((flag) => ({ code: flag.code, severity: flag.severity, delta: PENALTY_BY_SEVERITY[flag.severity] }));
+    .map((flag) => ({
+      code: flag.code,
+      severity: flag.severity,
+      delta: PENALTY_BY_SEVERITY[flag.severity],
+    }));
   return {
     total: applied.reduce((sum, item) => sum + item.delta, 0),
     applied,
@@ -578,22 +715,29 @@ export function classifyCriticalShortlistCandidate(
 ): CriticalShortlistStatus {
   if (flags.some((flag) => flag.severity === "hard_block")) return "BLOQUEADA";
   if (flags.some((flag) => flag.code === "model_market_conflict_strong")) return "RESERVA";
-  const packballAwaitingOdd = prognostico &&
-    isPackballMatrixPrognostico(prognostico) && !hasPackballExecutableOdd(prognostico);
+  const packballAwaitingOdd =
+    prognostico &&
+    isPackballMatrixPrognostico(prognostico) &&
+    !hasPackballExecutableOdd(prognostico);
   if (packballAwaitingOdd) {
     const feasibility = getPackballValidationRequirements(prognostico)?.priceFeasibility;
     if (feasibility === "SEM_PRECO") return "RESERVA";
     if (feasibility === "ODD_POUCO_PROVAVEL") return "MONITORAR";
     return score >= 55 && confidence >= 45 ? "CANDIDATA" : "MONITORAR";
   }
-  const hasValue = prognostico ? calculateValueScore(prognostico).effectiveEdge ?? 0 : 1;
-  const hasProbabilityMargin = prognostico ? calculateProbabilityMarginScore(prognostico).margin ?? 0 : 1;
-  if (score >= 70 && confidence >= 55 && hasValue > 0 && hasProbabilityMargin > 0) return "CANDIDATA";
+  const hasValue = prognostico ? (calculateValueScore(prognostico).effectiveEdge ?? 0) : 1;
+  const hasProbabilityMargin = prognostico
+    ? (calculateProbabilityMarginScore(prognostico).margin ?? 0)
+    : 1;
+  if (score >= 70 && confidence >= 55 && hasValue > 0 && hasProbabilityMargin > 0)
+    return "CANDIDATA";
   if (score >= 55 || confidence >= 50 || hasValue > 0) return "MONITORAR";
   return "RESERVA";
 }
 
-export function recomputeCriticalFinalRanking(items: CriticalFinalRankingInput[]): CriticalFinalRankingItem[] {
+export function recomputeCriticalFinalRanking(
+  items: CriticalFinalRankingInput[],
+): CriticalFinalRankingItem[] {
   const scored = items.map((input) => {
     const flags = input.final_risk_flags ?? [];
     const operationalOdd = hasPackballExecutableOdd(input.prognostico)
@@ -601,7 +745,8 @@ export function recomputeCriticalFinalRanking(items: CriticalFinalRankingInput[]
       : input.prognostico.odd_ofertada;
     const implied = isPositiveFinite(operationalOdd) ? (1 / operationalOdd) * 100 : null;
     const adjustedProbability = input.adjusted_probability ?? input.prognostico.probabilidade_final;
-    const adjustedEv = input.adjusted_ev ?? input.prognostico.edge_ajustado ?? input.prognostico.edge;
+    const adjustedEv =
+      input.adjusted_ev ?? input.prognostico.edge_ajustado ?? input.prognostico.edge;
     const margin = implied != null ? adjustedProbability - implied : null;
     const hardBlock =
       flags.some((flag) => flag.severity === "hard_block" || flag.severity === "critical") ||
@@ -610,23 +755,36 @@ export function recomputeCriticalFinalRanking(items: CriticalFinalRankingInput[]
       input.conflict_severity === "critical" ||
       input.conflict_severity === "hard_block";
     const penalty = applyCriticalShortlistPenalties(flags).total;
-    const score = hardBlock || input.decision !== "CONFIRMAR"
-      ? 0
-      : round(
-        clamp(
-          normalizePositive(adjustedEv, 15) * 0.25 +
-            normalizePositive(margin, 8) * 0.20 +
-            clamp(input.critical_validation_score ?? 65, 0, 100) * 0.20 +
-            clamp(input.preview_alignment_score ?? 60, 0, 100) * 0.15 +
-            clamp(input.data_quality_after_validation ?? calculateDataReadinessScore(input.prognostico).score, 0, 100) * 0.10 +
-            calculateOddsOperationalScore(input.prognostico) * 0.10 -
-            penalty,
-          0,
-          100,
-        ),
-        1,
-      );
-    return { input, final_risk_flags: flags, critical_final_score: score, rank: null, final_status: "RESERVA_NAO_ANALISADA" as CriticalShortlistFinalStatus };
+    const score =
+      hardBlock || input.decision !== "CONFIRMAR"
+        ? 0
+        : round(
+            clamp(
+              normalizePositive(adjustedEv, 15) * 0.25 +
+                normalizePositive(margin, 8) * 0.2 +
+                clamp(input.critical_validation_score ?? 65, 0, 100) * 0.2 +
+                clamp(input.preview_alignment_score ?? 60, 0, 100) * 0.15 +
+                clamp(
+                  input.data_quality_after_validation ??
+                    calculateDataReadinessScore(input.prognostico).score,
+                  0,
+                  100,
+                ) *
+                  0.1 +
+                calculateOddsOperationalScore(input.prognostico) * 0.1 -
+                penalty,
+              0,
+              100,
+            ),
+            1,
+          );
+    return {
+      input,
+      final_risk_flags: flags,
+      critical_final_score: score,
+      rank: null,
+      final_status: "RESERVA_NAO_ANALISADA" as CriticalShortlistFinalStatus,
+    };
   });
 
   const confirmed = scored
@@ -636,13 +794,14 @@ export function recomputeCriticalFinalRanking(items: CriticalFinalRankingInput[]
   const rankedConfirmed = confirmed.map((item, index) => ({
     ...item,
     rank: index + 1,
-    final_status: index < 3 ? "TOP_FINAL" as const : "RESERVA_CONFIRMADA" as const,
+    final_status: index < 3 ? ("TOP_FINAL" as const) : ("RESERVA_CONFIRMADA" as const),
   }));
   const rest = scored
     .filter((item) => !confirmedIds.has(item.input.prognostico.id))
     .map((item) => ({
       ...item,
-      final_status: item.input.decision === "PULAR" ? "PULAR" as const : "RESERVA_NAO_ANALISADA" as const,
+      final_status:
+        item.input.decision === "PULAR" ? ("PULAR" as const) : ("RESERVA_NAO_ANALISADA" as const),
     }));
   return [...rankedConfirmed, ...rest];
 }
@@ -650,7 +809,12 @@ export function recomputeCriticalFinalRanking(items: CriticalFinalRankingInput[]
 function buildCandidate(prognostico: Prognostico, now: Date): CriticalShortlistCandidate {
   const result = calculateCriticalShortlistScore(prognostico, now);
   const confidence = calculateCriticalShortlistConfidence(prognostico, result.flags);
-  const status = classifyCriticalShortlistCandidate(result.score, confidence, result.flags, prognostico);
+  const status = classifyCriticalShortlistCandidate(
+    result.score,
+    confidence,
+    result.flags,
+    prognostico,
+  );
   return {
     prognostico,
     rank: null,
@@ -665,7 +829,12 @@ function buildCandidate(prognostico: Prognostico, now: Date): CriticalShortlistC
     implied_probability: result.impliedProbability,
     probability_margin: result.probabilityMargin,
     value_gap: result.valueGap,
-    score_explanation: buildScoreExplanation(prognostico, result.score, result.components, result.flags),
+    score_explanation: buildScoreExplanation(
+      prognostico,
+      result.score,
+      result.components,
+      result.flags,
+    ),
     missing_fields: result.missingFields,
   };
 }
@@ -698,13 +867,17 @@ function buildStats(candidates: CriticalShortlistCandidate[]): CriticalShortlist
     monitor: candidates.filter((item) => item.critical_shortlist_status === "MONITORAR").length,
     reserves: candidates.filter((item) => item.critical_shortlist_status === "RESERVA").length,
     blocked: candidates.filter((item) => item.critical_shortlist_status === "BLOQUEADA").length,
-    highRisk: candidates.filter((item) => item.risk_flags.some((flag) => flag.severity === "high" || flag.severity === "critical")).length,
+    highRisk: candidates.filter((item) =>
+      item.risk_flags.some((flag) => flag.severity === "high" || flag.severity === "critical"),
+    ).length,
     bestScore: scores.length ? Math.max(...scores) : null,
     bestEdge: edges.length ? Math.max(...edges) : null,
   };
 }
 
-function detectChallengerAlert(shortlist: CriticalShortlistCandidate[]): CriticalShortlistChallengerAlert | null {
+function detectChallengerAlert(
+  shortlist: CriticalShortlistCandidate[],
+): CriticalShortlistChallengerAlert | null {
   if (shortlist.length < 4) return null;
   const third = shortlist[2];
   const challengers = shortlist.slice(3, 5).filter((item) => {
@@ -716,7 +889,8 @@ function detectChallengerAlert(shortlist: CriticalShortlistCandidate[]): Critica
   });
   if (!challengers.length) return null;
   return {
-    message: "Ha candidato reserva com score competitivo proximo ao TOP 3. Recomenda-se revisar antes de finalizar.",
+    message:
+      "Ha candidato reserva com score competitivo proximo ao TOP 3. Recomenda-se revisar antes de finalizar.",
     challengerIds: challengers.map((item) => item.prognostico.id),
   };
 }
@@ -728,18 +902,28 @@ function buildScoreExplanation(
   flags: CriticalShortlistRiskFlag[],
 ): string {
   if (flags.some((flag) => flag.severity === "hard_block")) {
-    return `Score ${score}: bloqueado por ${flags.filter((flag) => flag.severity === "hard_block").map((flag) => flag.message).join(" ")}`;
+    return `Score ${score}: bloqueado por ${flags
+      .filter((flag) => flag.severity === "hard_block")
+      .map((flag) => flag.message)
+      .join(" ")}`;
   }
   const positives: string[] = [];
   if (components.value_score >= 70) positives.push("valor relativo forte");
-  if (components.probability_margin_score >= 70) positives.push("boa margem contra a probabilidade implicita");
+  if (components.probability_margin_score >= 70)
+    positives.push("boa margem contra a probabilidade implicita");
   if (components.data_readiness_score >= 65) positives.push("dados tecnicos uteis");
   if (components.market_risk_score >= 70) positives.push("mercado estruturalmente mais estavel");
-  const limits = flags.filter((flag) => flag.severity === "medium" || flag.severity === "high").slice(0, 2).map((flag) => flag.message);
+  const limits = flags
+    .filter((flag) => flag.severity === "medium" || flag.severity === "high")
+    .slice(0, 2)
+    .map((flag) => flag.message);
   return `Score ${score}: ${positives.length ? positives.join(", ") : "valor minimo presente, mas com sinais limitados"}. ${limits.length ? `Limitacoes: ${limits.join(" ")}` : `Origem registrada como metadado: ${prognostico.origem_modelo || "nao informada"}.`}`;
 }
 
-function detectMarketCriticalSignals(prognostico: Prognostico, text: string): { score: number; missingFields: string[] } {
+function detectMarketCriticalSignals(
+  prognostico: Prognostico,
+  text: string,
+): { score: number; missingFields: string[] } {
   const missing: string[] = [];
   let hits = 0;
   const sport = normalized(prognostico.esporte);
@@ -752,35 +936,55 @@ function detectMarketCriticalSignals(prognostico: Prognostico, text: string): { 
   require(Boolean(prognostico.pick), "pick");
   require(hasNumericPickWhenRequired(prognostico), "limiar numérico no pick");
   require(isPositiveFinite(prognostico.odd_ofertada), "odd");
-  require(isFiniteNumber(prognostico.probabilidade_final) && isFiniteNumber(prognostico.edge), "probabilidade/edge");
+  require(isFiniteNumber(prognostico.probabilidade_final) &&
+    isFiniteNumber(prognostico.edge), "probabilidade/edge");
   require(textHasUsefulContent(text), "contexto tecnico");
 
   if (/baseball|mlb/.test(sport)) {
-    if (/total|corridas|run|over|under/.test(market)) require(/starter|pitcher|arremessador|probable/i.test(text), "starters");
+    if (/total|corridas|run|over|under/.test(market))
+      require(/starter|pitcher|arremessador|probable/i.test(text), "starters");
     if (/bullpen|lineup|park|clima|weather/i.test(text)) hits += 1;
   } else if (isBasketballSport(prognostico)) {
     require(/time|team|casa|fora|home|away|mandante|visitante|matchup/i.test(text), "times/mando");
     if (/moneyline|vencedor|resultado/.test(market)) {
-      require(/forma|ultimos|last|record|net rating|rating|matchup|casa|fora|home|away/i.test(text), "forma/matchup WNBA");
+      require(/forma|ultimos|last|record|net rating|rating|matchup|casa|fora|home|away/i.test(
+        text,
+      ), "forma/matchup WNBA");
     }
     if (/spread|handicap/.test(market)) {
-      require(/spread|margem|net rating|ats|forma|ultimos|last|casa|fora|home|away|descanso|rest|back.?to.?back|b2b/i.test(text), "margem/rest WNBA");
+      require(/spread|margem|net rating|ats|forma|ultimos|last|casa|fora|home|away|descanso|rest|back.?to.?back|b2b/i.test(
+        text,
+      ), "margem/rest WNBA");
     }
     if (/total|over|under|pontos/.test(market)) {
-      require(/pace|ritmo|posse|possessions|offensive rating|defensive rating|ortg|drtg|efg|turnover|rebote|rebound/i.test(text), "pace/eficiencia WNBA");
+      require(/pace|ritmo|posse|possessions|offensive rating|defensive rating|ortg|drtg|efg|turnover|rebote|rebound/i.test(
+        text,
+      ), "pace/eficiencia WNBA");
     }
     if (/player prop|props|jogador|pontos jogador|rebotes|assistencias|pra\b/.test(market)) {
-      require(/minutos|minutes|usage|uso|starter|titular|lineup|rotation|rotacao|role|papel|rebote|assist|pontos/i.test(text), "minutos/uso do jogador");
+      require(/minutos|minutes|usage|uso|starter|titular|lineup|rotation|rotacao|role|papel|rebote|assist|pontos/i.test(
+        text,
+      ), "minutos/uso do jogador");
     }
-    if (/lesao|injury|injuries|questionable|out|lineup|rotation|rotacao|minutos|minutes|descanso|rest|back.?to.?back|b2b/i.test(text)) hits += 1;
+    if (
+      /lesao|injury|injuries|questionable|out|lineup|rotation|rotacao|minutos|minutes|descanso|rest|back.?to.?back|b2b/i.test(
+        text,
+      )
+    )
+      hits += 1;
   } else if (/futebol|soccer/.test(sport) || /escanteio|corner/.test(market)) {
     if (/forma|ultimos|last|recent|classifica|mando|casa|fora|home|away/i.test(text)) hits += 1;
     if (/escalacao|noticia|desfalque|lineup|neutral|campo neutro/i.test(text)) hits += 1;
     if (/escanteio|corner/.test(market)) {
-      require(/media|average|over|corrida|race|pro|contra|for|against/i.test(text), "metricas de escanteios");
+      require(/media|average|over|corrida|race|pro|contra|for|against/i.test(
+        text,
+      ), "metricas de escanteios");
     }
   }
-  return { score: round(clamp((hits / Math.max(hits + missing.length, 1)) * 100, 0, 100), 1), missingFields: missing };
+  return {
+    score: round(clamp((hits / Math.max(hits + missing.length, 1)) * 100, 0, 100), 1),
+    missingFields: missing,
+  };
 }
 
 function countStructuredSignals(prognostico: Prognostico, text: string): number {
@@ -793,7 +997,9 @@ function countStructuredSignals(prognostico: Prognostico, text: string): number 
     Boolean(prognostico.pick),
     hasNumericPickWhenRequired(prognostico),
     Boolean(prognostico.data || prognostico.hora),
-    /media|average|record|last|ultimos|h2h|forma|starter|lineup|bullpen|escanteio|corner|pace|ritmo|posse|possessions|net rating|ortg|drtg|usage|minutes|minutos|rotation|rotacao|injury|lesao|rest|descanso|b2b/i.test(text),
+    /media|average|record|last|ultimos|h2h|forma|starter|lineup|bullpen|escanteio|corner|pace|ritmo|posse|possessions|net rating|ortg|drtg|usage|minutes|minutos|rotation|rotacao|injury|lesao|rest|descanso|b2b/i.test(
+      text,
+    ),
     /modelo|model|payload|json|origem|source|amostra|sample|historico/i.test(text),
   ];
   return checks.filter(Boolean).length;
@@ -824,7 +1030,9 @@ function combinedContext(prognostico: Prognostico): string {
 
 function textHasUsefulContent(text: string): boolean {
   if (!text.trim()) return false;
-  const signalMatches = text.match(/odd|prob|edge|ev|linha|pick|media|ultimos|h2h|starter|lineup|forma|record|over|under|handicap|escanteio|corner|json|modelo|pace|ritmo|posse|net rating|ortg|drtg|usage|minutes|minutos|rotation|rotacao|injury|lesao|rest|descanso|b2b/gi);
+  const signalMatches = text.match(
+    /odd|prob|edge|ev|linha|pick|media|ultimos|h2h|starter|lineup|forma|record|over|under|handicap|escanteio|corner|json|modelo|pace|ritmo|posse|net rating|ortg|drtg|usage|minutes|minutos|rotation|rotacao|injury|lesao|rest|descanso|b2b/gi,
+  );
   return (signalMatches?.length ?? 0) >= 3 || looksStructured(text);
 }
 
@@ -834,16 +1042,22 @@ function looksStructured(text: string): boolean {
 
 function isVolatileMarket(prognostico: Prognostico): boolean {
   const market = normalized(`${prognostico.mercado} ${prognostico.pick}`);
-  return /escanteio|corner|race|primeiro|first|cartao|cards|player prop|props|jogador|rebotes|assistencias|pra\b/.test(market);
+  return /escanteio|corner|race|primeiro|first|cartao|cards|player prop|props|jogador|rebotes|assistencias|pra\b/.test(
+    market,
+  );
 }
 
 function isAlternativePick(prognostico: Prognostico): boolean {
-  const text = normalized(`${prognostico.mercado} ${prognostico.pick} ${combinedContext(prognostico)}`);
+  const text = normalized(
+    `${prognostico.mercado} ${prognostico.pick} ${combinedContext(prognostico)}`,
+  );
   return /alternativa|alternate|alt pick|pick distante|alt line|linha distante/.test(text);
 }
 
 function marketUsuallyNeedsLine(prognostico: Prognostico): boolean {
-  return /total|over|under|handicap|spread|escanteio|corner|cartao|cards/i.test(`${prognostico.mercado} ${prognostico.pick}`);
+  return /total|over|under|handicap|spread|escanteio|corner|cartao|cards/i.test(
+    `${prognostico.mercado} ${prognostico.pick}`,
+  );
 }
 
 function hasNumericPickWhenRequired(prognostico: Prognostico): boolean {
@@ -851,8 +1065,10 @@ function hasNumericPickWhenRequired(prognostico: Prognostico): boolean {
 }
 
 function isMlbTotals(prognostico: Prognostico): boolean {
-  return /baseball|mlb/i.test(`${prognostico.esporte} ${prognostico.liga}`) &&
-    /total|corridas|runs|over|under/i.test(`${prognostico.mercado} ${prognostico.pick}`);
+  return (
+    /baseball|mlb/i.test(`${prognostico.esporte} ${prognostico.liga}`) &&
+    /total|corridas|runs|over|under/i.test(`${prognostico.mercado} ${prognostico.pick}`)
+  );
 }
 
 function isBasketballSport(prognostico: Prognostico): boolean {
@@ -876,27 +1092,39 @@ function isBasketballMoneylineMarket(prognostico: Prognostico): boolean {
 }
 
 function isBasketballPlayerPropMarket(prognostico: Prognostico): boolean {
-  return /player prop|props|jogador|pontos jogador|rebotes|assistencias|pra\b/i.test(`${prognostico.mercado} ${prognostico.pick}`);
+  return /player prop|props|jogador|pontos jogador|rebotes|assistencias|pra\b/i.test(
+    `${prognostico.mercado} ${prognostico.pick}`,
+  );
 }
 
 function hasBasketballPaceEfficiencyContext(text: string): boolean {
-  return /pace|ritmo|posse|possessions|offensive rating|defensive rating|ortg|drtg|efg|turnover|rebote|rebound/i.test(text);
+  return /pace|ritmo|posse|possessions|offensive rating|defensive rating|ortg|drtg|efg|turnover|rebote|rebound/i.test(
+    text,
+  );
 }
 
 function hasBasketballSpreadContext(text: string): boolean {
-  return /spread|margem|net rating|ats|matchup|forma|ultimos|last|casa|fora|home|away|descanso|rest|back.?to.?back|b2b/i.test(text);
+  return /spread|margem|net rating|ats|matchup|forma|ultimos|last|casa|fora|home|away|descanso|rest|back.?to.?back|b2b/i.test(
+    text,
+  );
 }
 
 function hasBasketballMoneylineContext(text: string): boolean {
-  return /forma|ultimos|last|record|net rating|rating|matchup|casa|fora|home|away|lesao|injury|lineup|rotation|rotacao|descanso|rest/i.test(text);
+  return /forma|ultimos|last|record|net rating|rating|matchup|casa|fora|home|away|lesao|injury|lineup|rotation|rotacao|descanso|rest/i.test(
+    text,
+  );
 }
 
 function hasBasketballPlayerPropContext(text: string): boolean {
-  return /minutos|minutes|usage|uso|starter|titular|lineup|rotation|rotacao|role|papel|rebote|assist|pontos/i.test(text);
+  return /minutos|minutes|usage|uso|starter|titular|lineup|rotation|rotacao|role|papel|rebote|assist|pontos/i.test(
+    text,
+  );
 }
 
 function hasBasketballAvailabilityContext(text: string): boolean {
-  return /lesao|injury|injuries|questionable|out|lineup|rotation|rotacao|minutos|minutes|descanso|rest|back.?to.?back|b2b/i.test(text);
+  return /lesao|injury|injuries|questionable|out|lineup|rotation|rotacao|minutos|minutes|descanso|rest|back.?to.?back|b2b/i.test(
+    text,
+  );
 }
 
 function pushIf(

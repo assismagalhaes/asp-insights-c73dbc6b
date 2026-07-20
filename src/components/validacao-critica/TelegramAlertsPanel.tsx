@@ -87,10 +87,7 @@ export function TelegramAlertsPanel() {
   const load = async () => {
     setLoading(true);
     try {
-      const [chat, list] = await Promise.all([
-        callGetChat(),
-        callList(),
-      ]);
+      const [chat, list] = await Promise.all([callGetChat(), callList()]);
       setChatId(chat.chat_id ?? "");
       setChatIdSaved(chat.chat_id ?? "");
       setAlerts((list as unknown as AlertRow[]) ?? []);
@@ -143,7 +140,6 @@ export function TelegramAlertsPanel() {
       setSavingChat(false);
     }
   };
-
 
   const toggleEnabled = async (a: AlertRow) => {
     try {
@@ -268,8 +264,8 @@ export function TelegramAlertsPanel() {
 
       {alerts.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          Nenhum alerta criado ainda. Clique em "Sincronizar pendentes" para gerar alertas para
-          os prognósticos pendentes com data e horário definidos.
+          Nenhum alerta criado ainda. Clique em "Sincronizar pendentes" para gerar alertas para os
+          prognósticos pendentes com data e horário definidos.
         </p>
       ) : (
         <div className="overflow-x-auto">
@@ -293,9 +289,7 @@ export function TelegramAlertsPanel() {
                   <tr key={a.id} className="border-b border-border/50 align-top">
                     <td className="py-2 pr-2">{a.matchup || "-"}</td>
                     <td className="py-2 pr-2">{a.league || "-"}</td>
-                    <td className="py-2 pr-2 whitespace-nowrap">
-                      {fmtDateTime(a.event_start_at)}
-                    </td>
+                    <td className="py-2 pr-2 whitespace-nowrap">{fmtDateTime(a.event_start_at)}</td>
                     <td className="py-2 pr-2">
                       <div>{a.market || "-"}</div>
                       <div className="text-muted-foreground">

@@ -27,7 +27,9 @@ function normalized(value: unknown) {
 }
 
 function numericLine(value: unknown): number | null {
-  const text = String(value ?? "").trim().replace(",", ".");
+  const text = String(value ?? "")
+    .trim()
+    .replace(",", ".");
   if (!text) return null;
   const direct = Number(text);
   if (Number.isFinite(direct)) return direct;
@@ -39,7 +41,11 @@ function numericLine(value: unknown): number | null {
 
 function formatLine(value: number | null, signed = false) {
   if (value == null) return "";
-  const decimals = Number.isInteger(Math.abs(value)) ? 0 : Number.isInteger(Math.abs(value) * 2) ? 1 : 2;
+  const decimals = Number.isInteger(Math.abs(value))
+    ? 0
+    : Number.isInteger(Math.abs(value) * 2)
+      ? 1
+      : 2;
   const text = value.toFixed(decimals);
   return signed && value >= 0 ? `+${text}` : text;
 }
@@ -55,8 +61,7 @@ function selectionSide(input: PredictionContractInput) {
     return "home";
   if (["a", "2"].includes(option) || ["away", "fora", "visitante", "2"].includes(selection))
     return "away";
-  if (["d", "x"].includes(option) || ["draw", "empate", "x"].includes(selection))
-    return "draw";
+  if (["d", "x"].includes(option) || ["draw", "empate", "x"].includes(selection)) return "draw";
   if (pick.includes("empate") || pick === "x") return "draw";
   if (/\b(casa|mandante|home)\b/.test(pick)) return "home";
   if (/\b(visitante|fora|away)\b/.test(pick)) return "away";
@@ -92,7 +97,8 @@ export function standardizePredictionContract(
   const line = numericLine(input.linha) ?? numericLine(input.pick);
   const side = selectionSide(input);
   const movement = direction(input);
-  const isCornerContract = model.includes("cornermatrix") || /cantos|corner|race/.test(`${market} ${pick}`);
+  const isCornerContract =
+    model.includes("cornermatrix") || /cantos|corner|race/.test(`${market} ${pick}`);
   let mercado = String(input.mercado ?? "").trim();
   let normalizedPick = rawPick;
 
@@ -111,7 +117,8 @@ export function standardizePredictionContract(
       normalizedPick = `${movement === "over" ? "Over" : "Under"} ${formatLine(line)}`.trim();
     } else if (market.includes("race") || pick.includes("race")) {
       mercado = "Race Cantos";
-      normalizedPick = `Race ${formatLine(line)} Cantos ${side === "home" ? "Casa" : "Visitante"}`.trim();
+      normalizedPick =
+        `Race ${formatLine(line)} Cantos ${side === "home" ? "Casa" : "Visitante"}`.trim();
     } else {
       mercado = "Mais Cantos";
       normalizedPick = side === "home" ? "Mais Cantos Casa" : "Mais Cantos Visitante";
@@ -130,7 +137,8 @@ export function standardizePredictionContract(
       normalizedPick = btts === "yes" ? "BTTS Sim" : "BTTS Não";
     } else if (market.includes("handicap") || pick.startsWith("ha ")) {
       mercado = "Handicap Asiático";
-      normalizedPick = `HA ${side === "home" ? "Casa" : "Visitante"} ${formatLine(line, true)}`.trim();
+      normalizedPick =
+        `HA ${side === "home" ? "Casa" : "Visitante"} ${formatLine(line, true)}`.trim();
     } else {
       mercado = "Moneyline";
       normalizedPick = `Moneyline ${side === "home" ? "Casa" : side === "away" ? "Visitante" : "Empate"}`;
@@ -141,7 +149,8 @@ export function standardizePredictionContract(
       normalizedPick = `${movement === "over" ? "Over" : "Under"} ${formatLine(line)}`.trim();
     } else if (/handicap|run line/.test(market) || pick.startsWith("ha ")) {
       mercado = "Handicap Asiático";
-      normalizedPick = `HA ${side === "home" ? "Casa" : "Visitante"} ${formatLine(line, true)}`.trim();
+      normalizedPick =
+        `HA ${side === "home" ? "Casa" : "Visitante"} ${formatLine(line, true)}`.trim();
     } else {
       mercado = "Moneyline";
       normalizedPick = side === "home" ? "Moneyline Casa" : "Moneyline Visitante";
@@ -152,7 +161,8 @@ export function standardizePredictionContract(
       normalizedPick = `${movement === "over" ? "Over" : "Under"} ${formatLine(line)}`.trim();
     } else if (/handicap|spread/.test(market) || pick.startsWith("ha ")) {
       mercado = "Handicap Asiático";
-      normalizedPick = `HA ${side === "home" ? "Casa" : "Visitante"} ${formatLine(line, true)}`.trim();
+      normalizedPick =
+        `HA ${side === "home" ? "Casa" : "Visitante"} ${formatLine(line, true)}`.trim();
     } else {
       mercado = "Moneyline";
       normalizedPick = side === "home" ? "Moneyline Casa" : "Moneyline Visitante";
