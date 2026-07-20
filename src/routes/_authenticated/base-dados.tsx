@@ -365,7 +365,7 @@ function BaseDadosPage() {
         const parsed = parseTeams(payload, apiLeague);
         setTeams(parsed);
         if (!parsed.length)
-          toast.warning(`A VM respondeu, mas nao retornou times ${league} para ${selectedYear}.`);
+          toast.warning(`A VM respondeu, mas não retornou times ${league} para ${selectedYear}.`);
       })
       .catch((e) => toast.error(formatError(e)))
       .finally(() => {
