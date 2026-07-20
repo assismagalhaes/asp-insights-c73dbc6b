@@ -347,7 +347,7 @@ function autoCheck(p: Prognostico, edgeFinal: number | null, executableOdd: numb
   const packball = getPackballValidationRequirements(p);
   if (packball) {
     if (!(executableOdd && executableOdd > 1))
-      return { auto: "ALERTA" as const, reason: "Informe a odd executavel antes da analise" };
+      return { auto: "ALERTA" as const, reason: "Informe a odd executável antes da análise" };
     if (edgeFinal == null || edgeFinal < packball.requiredEdge)
       return {
         auto: "PULAR" as const,
