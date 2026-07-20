@@ -334,7 +334,7 @@ function BaseDadosPage() {
               : null;
         setYear(defaultYear ? String(defaultYear) : "");
         if (!parsed.length)
-          toast.warning(`A VM respondeu, mas nao retornou anos de base ${league}.`);
+          toast.warning(`A VM respondeu, mas não retornou anos de base ${league}.`);
       })
       .catch((e) => {
         const msg = formatError(e);
