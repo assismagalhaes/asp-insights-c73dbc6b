@@ -86,24 +86,21 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "description",
         content:
-          "Plataforma profissional de gerenciamento, validação e acompanhamento de prognósticos esportivos.",
+          "Plataforma administrativa profissional para gerenciamento, validação e acompanhamento de prognósticos esportivos gerados por IA.",
       },
+      { name: "robots", content: "noindex, nofollow" },
+      { property: "og:site_name", content: "ASP Insights" },
       { property: "og:title", content: "ASP Insights — AI Sports Predictions" },
       { name: "twitter:title", content: "ASP Insights — AI Sports Predictions" },
       {
-        name: "description",
-        content:
-          "ASP Insights - AI Sports Predictions is a web platform for managing, validating, and tracking AI-generated sports predictions.",
-      },
-      {
         property: "og:description",
         content:
-          "ASP Insights - AI Sports Predictions is a web platform for managing, validating, and tracking AI-generated sports predictions.",
+          "Plataforma administrativa profissional para gerenciamento, validação e acompanhamento de prognósticos esportivos gerados por IA.",
       },
       {
         name: "twitter:description",
         content:
-          "ASP Insights - AI Sports Predictions is a web platform for managing, validating, and tracking AI-generated sports predictions.",
+          "Plataforma administrativa profissional para gerenciamento, validação e acompanhamento de prognósticos esportivos gerados por IA.",
       },
       {
         property: "og:image",
@@ -118,6 +115,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary_large_image" },
       { property: "og:type", content: "website" },
     ],
+
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "icon", type: "image/png", href: "/favicon.png" },
