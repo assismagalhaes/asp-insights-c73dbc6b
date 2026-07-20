@@ -1331,10 +1331,10 @@ function parseCsvLine(input: string): string[] {
 }
 
 function getLinePlaceholder(isBasketball: boolean, league: string) {
-  if (!isBasketball) return "Cole aqui a linha no formato esperado pelo CSV historico da MLB.";
+  if (!isBasketball) return "Cole aqui a linha no formato esperado pelo CSV histórico da MLB.";
   if (league === "WNBA")
-    return "Cole aqui a linha basic da WNBA e, em seguida, a linha advanced. Pode separar por espaco ou quebra de linha.";
-  return "Cole aqui a linha basic da NBA e, em seguida, a linha advanced. Pode separar por espaco ou quebra de linha.";
+    return "Cole aqui a linha basic da WNBA e, em seguida, a linha advanced. Pode separar por espaço ou quebra de linha.";
+  return "Cole aqui a linha basic da NBA e, em seguida, a linha advanced. Pode separar por espaço ou quebra de linha.";
 }
 
 function formatLineValue(value: unknown): string {
