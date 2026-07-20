@@ -54,7 +54,9 @@ export function buildCriticalValidationTelegramMessage(input: CriticalAlertMessa
   const minutes = input.minutes_before;
 
   const checklist = isBaseball(input.sport, input.league) ? BASEBALL_CHECKLIST : DEFAULT_CHECKLIST;
-  const checklistLabel = isBaseball(input.sport, input.league) ? "Checklist MLB:" : "Checklist final:";
+  const checklistLabel = isBaseball(input.sport, input.league)
+    ? "Checklist MLB:"
+    : "Checklist final:";
 
   const header = `🚨 <b>ASP Insights — Revisão Crítica Pré-Jogo</b>`;
   const late = input.is_late ? "\n⚠️ <i>Alerta tardio: confronto próximo do início.</i>" : "";

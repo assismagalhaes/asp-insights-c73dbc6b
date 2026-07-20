@@ -113,7 +113,9 @@ Deno.serve(async (req) => {
   } catch (e) {
     if (e instanceof Error && e.name === "AbortError") {
       return json(
-        { error: `Timeout ao chamar API da VM (${timeoutPath}) após ${Math.round(timeoutMs / 1000)}s.` },
+        {
+          error: `Timeout ao chamar API da VM (${timeoutPath}) após ${Math.round(timeoutMs / 1000)}s.`,
+        },
         504,
       );
     }

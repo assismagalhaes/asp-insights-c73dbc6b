@@ -657,10 +657,16 @@ function Prognosticos() {
                           <Button
                             size="icon"
                             variant="ghost"
-                            title={p.resultado === "PENDENTE" ? "Registrar resultado" : "Editar resultado / placar"}
+                            title={
+                              p.resultado === "PENDENTE"
+                                ? "Registrar resultado"
+                                : "Editar resultado / placar"
+                            }
                             onClick={() => setResultadoFor(p)}
                           >
-                            <Trophy className={`h-4 w-4 ${p.resultado === "PENDENTE" ? "text-warning" : "text-muted-foreground"}`} />
+                            <Trophy
+                              className={`h-4 w-4 ${p.resultado === "PENDENTE" ? "text-warning" : "text-muted-foreground"}`}
+                            />
                           </Button>
 
                           <Button

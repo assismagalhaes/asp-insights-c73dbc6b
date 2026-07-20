@@ -51,7 +51,9 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
         .eq("prognostico_id", prognostico.id)
         .order("created_at", { ascending: false })
         .limit(1);
-      const ownLast = (own ?? [])[0] as { placar_final: string | null; resultado: Resultado } | undefined;
+      const ownLast = (own ?? [])[0] as
+        | { placar_final: string | null; resultado: Resultado }
+        | undefined;
       if (ownLast?.placar_final) setPlacar(ownLast.placar_final);
       if (ownLast && (ownLast.resultado === "GREEN" || ownLast.resultado === "RED")) {
         setManual(ownLast.resultado);
@@ -86,12 +88,8 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
     })();
   }, [prognostico, open]);
 
-
   const parsed = useMemo(() => parsePlacar(placar), [placar]);
-  const race = useMemo(
-    () => (prognostico ? detectRacePick(prognostico) : null),
-    [prognostico],
-  );
+  const race = useMemo(() => (prognostico ? detectRacePick(prognostico) : null), [prognostico]);
   const raceAmbiguo = useMemo(() => {
     if (!race || !parsed) return false;
     return parsed.mandante >= race.alvo && parsed.visitante >= race.alvo;
@@ -141,7 +139,6 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
         data_resultado: todayBR(),
       });
 
-
       if (placar && siblings.some((s) => s.resultado === "PENDENTE")) {
         toast.info(
           "O placar será sugerido automaticamente ao abrir o resultado dos demais prognósticos deste confronto.",
@@ -168,7 +165,6 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
               : "Registrar resultado"}{" "}
             — {prognostico.jogo}
           </DialogTitle>
-
         </DialogHeader>
         <div className="text-xs text-muted-foreground">Odd usada {oddEfetiva.toFixed(2)}</div>
         <div className="text-xs text-muted-foreground">
@@ -247,8 +243,8 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
         {race && raceAmbiguo && (
           <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm space-y-2">
             <div className="text-xs">
-              Ambos os times alcançaram <b>{race.alvo}</b> cantos. Selecione manualmente quem
-              chegou primeiro:
+              Ambos os times alcançaram <b>{race.alvo}</b> cantos. Selecione manualmente quem chegou
+              primeiro:
             </div>
             <div className="flex gap-2">
               <Button
@@ -270,7 +266,6 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
             </div>
           </div>
         )}
-
 
         <div className="flex gap-2">
           <Button
