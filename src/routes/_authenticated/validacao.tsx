@@ -2056,7 +2056,7 @@ function formatPreviewStatus(status: string): string {
   if (status === "queued") return "em fila";
   if (status === "missing") return "ausente";
   if (status === "error") return "erro";
-  return "nao solicitado";
+  return "não solicitado";
 }
 
 function formatOptionalNumber(value: number | null | undefined): string {
