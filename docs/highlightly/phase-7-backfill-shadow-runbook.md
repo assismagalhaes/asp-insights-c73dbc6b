@@ -116,6 +116,27 @@ uso atual + orçamento solicitado
 
 Assim, as 750 chamadas de reserva nunca ficam disponíveis ao backfill, nem para jobs P0.
 
+### Intervalos maiores que sete dias
+
+Para um backfill longo e independente da sessao do operador, usar
+`scripts.run_highlightly_date_range`. O orquestrador divide o intervalo inclusivo em fatias de no
+maximo sete dias, grava o progresso de forma atomica e retoma da fatia incompleta depois de uma
+reinicializacao. Partidas finalizadas sao incluidas porque a listagem por data nao filtra status.
+
+O servico versionado em `config/systemd/highlightly-date-range.service` executa continuamente e
+reinicia em caso de falha. Configurar `/etc/asp-insights/highlightly-date-range.env` somente com:
+
+```env
+HIGHLIGHTLY_RANGE_SCOPE=phase7-20260701-15-all-sports
+HIGHLIGHTLY_RANGE_START=2026-07-01
+HIGHLIGHTLY_RANGE_END=2026-07-15
+```
+
+O teto contratual continua em 7.500 chamadas por dia UTC, mas o orquestrador preserva 750. Quando
+o uso chega a 6.750, ele aguarda automaticamente a proxima virada UTC (21:00 em Sao Paulo) e segue
+do estado salvo. Nunca manter duas instancias desse servico ou outro consumidor Highlightly
+concorrente.
+
 ## 6. Monitorar sem consumir quota
 
 ```bash

@@ -1,0 +1,19 @@
+[Unit]
+Description=ASP Insights resumable Highlightly date-range backfill
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/ubuntu/asp-insights-c73dbc6b
+EnvironmentFile=/etc/asp-scraper-api.env
+EnvironmentFile=/etc/asp-insights/highlightly-date-range.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/home/ubuntu/asp-scraper-api/.venv/bin/python -m scripts.run_highlightly_date_range --scope ${HIGHLIGHTLY_RANGE_SCOPE} --date-start ${HIGHLIGHTLY_RANGE_START} --date-end ${HIGHLIGHTLY_RANGE_END} --daily-request-budget 5000 --max-jobs 5000 --poll-seconds 300 --state-file /var/lib/asp-insights/highlightly-date-range.json --confirm-date-range
+Restart=on-failure
+RestartSec=300
+TimeoutStartSec=infinity
+
+[Install]
+WantedBy=multi-user.target
