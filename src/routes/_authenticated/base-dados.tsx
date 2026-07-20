@@ -1389,7 +1389,7 @@ function getOperationErrorMessage(operation: OperationResult) {
     .map((value) => formatLineValue(value).trim())
     .find(Boolean);
   if (/no module named ['"]?pandas/i.test(details ?? "")) {
-    return "A VM nao conseguiu adicionar: falta instalar o pacote pandas no Python usado pela API.";
+    return "A VM não conseguiu adicionar: falta instalar o pacote pandas no Python usado pela API.";
   }
   return details || "A VM retornou erro ao adicionar a linha.";
 }
