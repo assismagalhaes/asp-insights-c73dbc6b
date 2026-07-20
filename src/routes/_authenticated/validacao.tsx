@@ -685,7 +685,7 @@ function Validacao() {
     const executableOdd = getOddAjustadaNum(p);
     const executableEdge = getEdgeAjustado(p);
     if (packball && (!(executableOdd && executableOdd > 1) || executableEdge == null)) {
-      toast.error(`Informe a odd executavel do ${packball.modelName} antes de rodar a IA.`);
+      toast.error(`Informe a odd executável do ${packball.modelName} antes de rodar a IA.`);
       return;
     }
     if (packball && executableEdge! < packball.requiredEdge) {
