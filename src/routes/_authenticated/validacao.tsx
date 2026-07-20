@@ -917,7 +917,7 @@ function Validacao() {
         const explicitOdd = getOddAjustadaNum(selected);
         const adjustedEdge = getEdgeAjustado(selected);
         if (!(explicitOdd && explicitOdd > 1)) {
-          toast.error(`Informe a odd executavel do ${packball.modelName} antes de confirmar.`);
+          toast.error(`Informe a odd executável do ${packball.modelName} antes de confirmar.`);
           return;
         }
         if (adjustedEdge == null || adjustedEdge < packball.requiredEdge) {
