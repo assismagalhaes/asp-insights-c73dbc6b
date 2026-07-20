@@ -896,7 +896,7 @@ function Validacao() {
       });
     } catch (e) {
       console.warn("[Opportunity Ranking] Validacao salva, mas ranking nao atualizado:", e);
-      toast.warning("Validacao salva, mas o ranking final nao foi atualizado automaticamente.");
+      toast.warning("Validação salva, mas o ranking final não foi atualizado automaticamente.");
     }
   };
 
