@@ -4,9 +4,12 @@ import unittest
 from unittest.mock import patch
 
 from scrapers.oddsagora_scraper import (
+    _fetch_text,
     _extract_market_pages,
     _extract_match_event_template,
+    _html_blocked_reason,
     _match_event_url,
+    executar_scraper_oddsagora,
     parse_league_html,
     parse_market_html,
     parse_match_event_payload,
@@ -14,6 +17,59 @@ from scrapers.oddsagora_scraper import (
 
 
 class OddsAgoraScraperParserTests(unittest.TestCase):
+    def test_fetch_text_confirms_age_with_provider_cookie(self) -> None:
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return None
+
+            def read(self):
+                return b"<html>ok</html>"
+
+            def geturl(self):
+                return "https://www.oddsagora.com.br/baseball/usa/mlb/"
+
+        captured = {}
+
+        def fake_urlopen(request, timeout):
+            captured["cookie"] = request.get_header("Cookie")
+            captured["timeout"] = timeout
+            return Response()
+
+        with patch("scrapers.oddsagora_scraper.urllib.request.urlopen", side_effect=fake_urlopen):
+            html, final_url = _fetch_text("https://www.oddsagora.com.br/baseball/usa/mlb/")
+
+        self.assertEqual(captured["cookie"], "age_verified=1")
+        self.assertGreaterEqual(captured["timeout"], 3.0)
+        self.assertEqual(html, "<html>ok</html>")
+        self.assertIn("/baseball/usa/mlb/", final_url)
+
+    def test_age_verification_page_is_reported_as_blocking_interstitial(self) -> None:
+        html = """
+        <html><head><title>OddsAgora - Verificação de idade</title></head>
+        <body><h1>Verificação de idade obrigatória</h1>
+        <script>var COOKIE_NAME = "age_verified";</script></body></html>
+        """
+
+        self.assertEqual(_html_blocked_reason(html), "age_verification")
+
+        with patch(
+            "scrapers.oddsagora_scraper._fetch_html",
+            return_value=(html, "https://www.oddsagora.com.br/brazil.html?return=/baseball/usa/mlb/"),
+        ):
+            result = executar_scraper_oddsagora(
+                esporte="Baseball",
+                leagues=["https://www.oddsagora.com.br/baseball/usa/mlb/"],
+            )
+
+        self.assertEqual(result["status"], "WARNING")
+        self.assertEqual(result["summary"]["games_count"], 0)
+        self.assertIn("verificacao de idade", result["mensagem"])
+        opened = next(log for log in result["logs"] if log["event"] == "league_opened")
+        self.assertEqual(opened["blocked_reason"], "age_verification")
+
     def test_parse_league_table_extracts_games_and_home_away_odds(self) -> None:
         html = """
         <html><head><title>Odds para Apostas em MLB</title></head><body>

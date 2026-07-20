@@ -115,6 +115,11 @@ ODDSAGORA_SCOPE_BY_SPORT_MARKET = {
 ODDSAGORA_ENCRYPTION_KEY = "J*8sQ!p$7aD_fR2yW@gHn*3bVp#sAdLd_k"
 ODDSAGORA_ENCRYPTION_SALT = b"5b9a8f2c3e6d1a4b7c8e9d0f1a2b3c4d"
 BLOCKED_HTML_TERMS = ("cloudflare", "captcha", "access denied", "bloqueado", "verify you are human")
+AGE_VERIFICATION_HTML_TERMS = (
+    "oddsagora - verificação de idade",
+    "verificação de idade obrigatória",
+    'var cookie_name = "age_verified"',
+)
 MONTHS_PT = {
     "jan": 1,
     "fev": 2,
@@ -315,6 +320,9 @@ def _fetch_text(url: str, extra_headers: dict[str, str] | None = None) -> tuple[
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ASP Insights OddsAgora scraper",
         "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+        # O OddsAgora redireciona clientes brasileiros para uma parede 18+.
+        # A confirmação é persistida pelo próprio site neste cookie.
+        "Cookie": os.getenv("ODDSAGORA_COOKIE", "age_verified=1"),
     }
     if extra_headers:
         headers.update(extra_headers)
@@ -339,6 +347,8 @@ def _absolute_url(href: str) -> str:
 
 def _html_blocked_reason(html: str) -> str | None:
     lowered = html.casefold()
+    if any(term in lowered for term in AGE_VERIFICATION_HTML_TERMS):
+        return "age_verification"
     for term in BLOCKED_HTML_TERMS:
         if term in lowered:
             return term
@@ -1277,7 +1287,11 @@ def executar_scraper_oddsagora(
     mensagem = "Coleta OddsAgora concluida."
     if blocked_reason and not games:
         status = "WARNING"
-        mensagem = "OddsAgora retornou pagina de bloqueio/captcha em vez da lista de jogos."
+        mensagem = (
+            "OddsAgora retornou pagina de verificacao de idade em vez da lista de jogos."
+            if blocked_reason == "age_verification"
+            else "OddsAgora retornou pagina de bloqueio/captcha em vez da lista de jogos."
+        )
     elif not games:
         status = "WARNING"
         mensagem = "Nenhum jogo encontrado na pagina da liga OddsAgora."
