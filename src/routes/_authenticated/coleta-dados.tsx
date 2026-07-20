@@ -200,7 +200,7 @@ function ColetaDadosPage() {
         data_fim: remoteParams.data_fim,
       };
       if (!scraperPayload.data_inicio || !scraperPayload.data_fim) {
-        toast.error("Informe data inicio e data fim.");
+        toast.error("Informe data início e data fim.");
         return;
       }
       console.info("[Coleta VM] Payload POST /scraping/jobs", scraperPayload);
