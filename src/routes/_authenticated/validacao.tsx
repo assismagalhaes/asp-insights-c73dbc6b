@@ -847,7 +847,7 @@ function Validacao() {
     if (selected && r.stake_sugerida && STAKES.includes(r.stake_sugerida.toFixed(1))) {
       setStakes((s) => ({ ...s, [selected.id]: r.stake_sugerida!.toFixed(1) }));
     }
-    toast.success("Parecer da IA aplicado");
+    toast.success("Parecer da IA aplicado ao prognóstico");
   };
 
   const registrarValidacaoGrupo = async (
@@ -1468,7 +1468,7 @@ function Validacao() {
                           variant="outline"
                           onClick={async () => {
                             await navigator.clipboard.writeText(iaParecerDisplay);
-                            toast.success("Copiado");
+                            toast.success("Copiado para a área de transferência");
                           }}
                         >
                           <Copy className="h-3 w-3" />
@@ -1683,7 +1683,7 @@ function Validacao() {
                 if (!confirmDelete) return;
                 try {
                   await deleteProg.mutateAsync(confirmDelete.id);
-                  toast.success("Prognóstico excluído");
+                  toast.success("Prognóstico excluído com sucesso");
                 } catch (e) {
                   toast.error((e as Error).message);
                 }

@@ -91,7 +91,7 @@ function Configuracoes() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => toast.info("Upload de logo em breve.")}
+                  onClick={() => toast.info("Upload de logo estará disponível em breve.")}
                 >
                   Trocar logotipo
                 </Button>

@@ -93,7 +93,7 @@ function PublicacaoPage() {
   const publicarLote = async () => {
     const alvos = elegiveis.filter((p) => selected.has(p.id) && podePublicar(p));
     if (!alvos.length) {
-      toast.error("Nenhum prognóstico elegível selecionado.");
+      toast.error("Selecione ao menos um prognóstico confirmado para publicar.");
       return;
     }
     for (const p of alvos) {
@@ -222,7 +222,7 @@ function PublicacaoPage() {
                       colSpan={12}
                       className="px-4 py-8 text-center text-sm text-muted-foreground"
                     >
-                      Nenhum prognóstico aguardando publicação.
+                      Nenhum prognóstico aguardando publicação no momento.
                     </td>
                   </tr>
                 )}
@@ -336,7 +336,7 @@ function PublishDialog({
 
   const copy = async () => {
     await navigator.clipboard.writeText(tip);
-    toast.success("TIP copiada");
+    toast.success("TIP copiada para a área de transferência");
   };
 
   const send = async () => {
@@ -345,7 +345,7 @@ function PublishDialog({
       tip_texto: tip,
       canal_publicacao: canal,
     });
-    toast.success("Pick publicada");
+    toast.success("Pick publicada com sucesso");
     onClose();
   };
 

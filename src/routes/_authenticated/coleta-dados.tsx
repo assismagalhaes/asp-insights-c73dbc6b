@@ -152,7 +152,7 @@ function ColetaDadosPage() {
       await saveCollection(rawJson, normalized, { file_name: fileName, origem: "upload_manual" });
       await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
       setCollectionPersisted(true);
-      toast.success("Coleta salva no banco");
+      toast.success("Coleta salva com sucesso");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {

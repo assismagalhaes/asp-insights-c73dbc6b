@@ -231,20 +231,20 @@ function Prognosticos() {
     }
     const justificativaFinal = String(data?.parecer_validacao ?? "").trim();
     if (!justificativaFinal) {
-      toast.info("Nenhuma justificativa final objetiva registrada para copiar.");
+      toast.info("Este prognóstico ainda não tem justificativa final para copiar.");
       return;
     }
     await navigator.clipboard.writeText(gerarTipTexto(p, { parecer: justificativaFinal }));
-    toast.success("TIP copiada");
+    toast.success("TIP copiada para a área de transferência");
   };
 
   const handlePublicar = async (p: Prognostico) => {
     if (!podePublicar(p)) {
-      toast.error("Apenas CONFIRMA pode ser publicado");
+      toast.error("Só é possível publicar picks confirmadas.");
       return;
     }
     await publicar.mutateAsync({ id: p.id, tip_texto: gerarTipTexto(p) });
-    toast.success("Pick publicada");
+    toast.success("Pick publicada com sucesso");
   };
 
   // Dual horizontal scrollbar (top + bottom synced)
@@ -561,7 +561,7 @@ function Prognosticos() {
                       colSpan={18}
                       className="px-4 py-8 text-center text-sm text-muted-foreground"
                     >
-                      Nenhum prognóstico cadastrado.
+                      Nenhum prognóstico cadastrado ainda.
                     </td>
                   </tr>
                 )}
@@ -778,7 +778,7 @@ function Prognosticos() {
                 if (!confirmDelete) return;
                 try {
                   await del.mutateAsync(confirmDelete.id);
-                  toast.success("Prognóstico excluído");
+                  toast.success("Prognóstico excluído com sucesso");
                 } catch (e) {
                   toast.error((e as Error).message);
                 }
