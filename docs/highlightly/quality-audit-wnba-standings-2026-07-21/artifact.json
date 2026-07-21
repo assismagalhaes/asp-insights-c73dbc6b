@@ -1,0 +1,301 @@
+{
+  "surface": "report",
+  "manifest": {
+    "version": 1,
+    "surface": "report",
+    "title": "Auditoria dos parciais de standings da WNBA",
+    "description": "Diagnóstico técnico dos oito runs parciais e das issues críticas BASKETBALL_STANDINGS_CORRUPTED.",
+    "generatedAt": "2026-07-21T22:57:34Z",
+    "sources": [
+      {
+        "id": "src-runs",
+        "label": "Supabase - execução e qualidade da ingestão Highlightly",
+        "query": {
+          "engine": "Supabase Data API",
+          "language": "python",
+          "description": "Consulta somente leitura dos runs parciais, jobs associados e issues de qualidade do escopo auditado.",
+          "sql": "select r.id as run_id, r.job_id, r.status, r.http_status, r.records_received, r.records_normalized, r.records_rejected, r.started_at, j.endpoint_key, j.sport, j.request_params, j.dedupe_key, j.shadow_scope, q.id as issue_id, q.issue_code, q.severity from public.hl_ingestion_runs r join public.hl_ingestion_jobs j on j.id = r.job_id left join public.hl_data_quality_issues q on q.run_id = r.id where r.status = 'partial' and r.worker_id = 'phase7-20260701-15-all-sports:phase7' and j.sport = 'basketball' order by r.started_at;",
+          "query": "select hl_ingestion_runs where status='partial' and worker_id contains scope; for each run select hl_ingestion_jobs and hl_data_quality_issues by id/run_id",
+          "executed_at": "2026-07-21T22:35:00Z",
+          "tables_used": [
+            "public.hl_ingestion_runs",
+            "public.hl_ingestion_jobs",
+            "public.hl_data_quality_issues"
+          ],
+          "filters": [
+            "shadow scope = phase7-20260701-15-all-sports",
+            "sport = basketball",
+            "run status = partial"
+          ],
+          "metric_definitions": [
+            "Run parcial: execução com records_rejected > 0 ou issue critical.",
+            "Taxa de rejeição: records_rejected dividido por records_received."
+          ]
+        }
+      },
+      {
+        "id": "src-raw",
+        "label": "Supabase Storage privado - payloads brutos de basketball standings",
+        "query": {
+          "engine": "Supabase Storage and Data API",
+          "language": "python",
+          "description": "Leitura dos objetos brutos com validação SHA-256 e perfil de liga, grupos e identidades de time.",
+          "sql": "select q.id as issue_id, q.run_id, q.raw_object_id, q.created_at, r.sha256, r.storage_path, r.request_metadata, r.response_metadata, count(s.id) as canonical_rows from public.hl_data_quality_issues q join public.hl_raw_objects r on r.id = q.raw_object_id left join public.sports_standings_snapshots s on s.source_raw_object_id = r.id where q.sport = 'basketball' and q.severity = 'critical' and q.issue_code = 'BASKETBALL_STANDINGS_CORRUPTED' and q.resolution_status = 'open' group by q.id, q.run_id, q.raw_object_id, q.created_at, r.sha256, r.storage_path, r.request_metadata, r.response_metadata order by q.created_at;",
+          "query": "select open critical standings issues; load each linked hl_raw_objects payload; count rows and distinct (team.id, team.name); verify canonical rows by source_raw_object_id",
+          "executed_at": "2026-07-21T22:45:00Z",
+          "tables_used": [
+            "public.hl_raw_objects",
+            "public.hl_data_quality_issues",
+            "public.sports_standings_snapshots"
+          ],
+          "filters": [
+            "issue_code = BASKETBALL_STANDINGS_CORRUPTED",
+            "severity = critical",
+            "resolution_status = open",
+            "leagueId = 11847",
+            "season = 2026"
+          ],
+          "metric_definitions": [
+            "Identidades distintas: quantidade de pares distintos team.id e team.name nas 30 linhas.",
+            "Linhas canônicas contaminadas: standings com source_raw_object_id igual a um objeto rejeitado."
+          ]
+        }
+      }
+    ],
+    "cards": [
+      {
+        "id": "card-partials",
+        "dataset": "headline",
+        "sourceId": "src-runs",
+        "description": "Runs parciais no escopo auditado.",
+        "metrics": [{"label": "Runs parciais", "field": "partial_runs", "format": "number"}]
+      },
+      {
+        "id": "card-rejected",
+        "dataset": "headline",
+        "sourceId": "src-runs",
+        "description": "Todas as linhas recebidas nesses runs foram rejeitadas.",
+        "metrics": [{"label": "Linhas rejeitadas", "field": "records_rejected", "format": "number"}]
+      },
+      {
+        "id": "card-recurrence",
+        "dataset": "headline",
+        "sourceId": "src-raw",
+        "description": "Dias UTC distintos com a mesma corrupção confirmada.",
+        "metrics": [{"label": "Dias com recorrência", "field": "occurrence_days", "format": "number"}]
+      },
+      {
+        "id": "card-contamination",
+        "dataset": "headline",
+        "sourceId": "src-raw",
+        "description": "Linhas dos payloads rejeitados encontradas no standings canônico.",
+        "metrics": [{"label": "Linhas contaminadas", "field": "canonical_rows", "format": "number"}]
+      }
+    ],
+    "charts": [
+      {
+        "id": "chart-identity-collapse",
+        "title": "Posições retornadas e identidades distintas por dia",
+        "subtitle": "Seis capturas entre 15 e 21 de julho de 2026; contagens por resposta do endpoint WNBA standings.",
+        "type": "bar",
+        "dataset": "identity_series",
+        "sourceId": "src-raw",
+        "encodings": {
+          "x": {"field": "observed_date", "type": "temporal", "label": "Data da captura"},
+          "y": {"field": "value", "type": "quantitative", "label": "Quantidade"},
+          "color": {"field": "metric", "type": "nominal", "label": "Métrica"},
+          "tooltip": [
+            {"field": "observed_date", "type": "temporal", "label": "Data"},
+            {"field": "metric", "type": "nominal", "label": "Métrica"},
+            {"field": "value", "type": "quantitative", "label": "Quantidade"},
+            {"field": "league", "type": "nominal", "label": "Liga"}
+          ]
+        },
+        "xAxisTitle": "Data da captura",
+        "yAxisTitle": "Quantidade",
+        "valueFormat": "number",
+        "layout": "full",
+        "maxRows": 20,
+        "question": "As posições retornadas representam times distintos?",
+        "rationale": "Barras agrupadas comparam duas contagens na mesma unidade e tornam evidente o colapso de 30 posições em uma identidade."
+      }
+    ],
+    "tables": [
+      {
+        "id": "table-partials",
+        "title": "Os oito runs parciais",
+        "subtitle": "Consultas WNBA 2026 por data de origem; todas retornaram HTTP 200 e rejeição integral.",
+        "dataset": "partial_runs",
+        "sourceId": "src-runs",
+        "layout": "full",
+        "density": "dense",
+        "defaultSort": {"field": "source_date", "direction": "asc"},
+        "columns": [
+          {"field": "source_date", "label": "Data de origem", "type": "date"},
+          {"field": "http_status", "label": "HTTP", "type": "number"},
+          {"field": "received", "label": "Recebidas", "type": "number"},
+          {"field": "normalized", "label": "Normalizadas", "type": "number"},
+          {"field": "rejected", "label": "Rejeitadas", "type": "number"},
+          {"field": "issue_linked", "label": "Issue vinculada", "type": "text"}
+        ]
+      },
+      {
+        "id": "table-history",
+        "title": "Recorrência confirmada no bruto",
+        "subtitle": "Seis dias UTC distintos, sempre com 30 linhas e somente Panevezys Women.",
+        "dataset": "critical_history",
+        "sourceId": "src-raw",
+        "layout": "full",
+        "density": "dense",
+        "defaultSort": {"field": "observed_date", "direction": "asc"},
+        "columns": [
+          {"field": "observed_date", "label": "Observado em", "type": "date"},
+          {"field": "league", "label": "Liga", "type": "text"},
+          {"field": "rows", "label": "Linhas", "type": "number"},
+          {"field": "distinct_teams", "label": "Times distintos", "type": "number"},
+          {"field": "repeated_team", "label": "Identidade repetida", "type": "text"},
+          {"field": "canonical_rows", "label": "Persistidas", "type": "number"}
+        ]
+      }
+    ],
+    "blocks": [
+      {"id": "title", "type": "markdown", "layout": "full", "body": "# Auditoria dos parciais de standings da WNBA"},
+      {
+        "id": "technical-summary",
+        "type": "markdown",
+        "layout": "full",
+        "body": "## Resultado técnico\n\nOs oito runs parciais não são falhas de transporte: todos receberam HTTP 200, mas o provedor devolveu standings semanticamente corrompidos para a WNBA 2026. As 240 linhas foram rejeitadas e nenhuma contaminou o modelo canônico. O guardrail funciona; o endpoint não é confiável para uso analítico neste estado.\n\nA auditoria também revelou perda de rastreabilidade: sete runs não mantiveram vínculo próprio com bruto e issue porque respostas idênticas capturadas no mesmo dia foram consolidadas no mesmo caminho content-addressed."
+      },
+      {"id": "headline-metrics", "type": "metric-strip", "layout": "full", "cardIds": ["card-partials", "card-rejected", "card-recurrence", "card-contamination"]},
+      {
+        "id": "finding-provider",
+        "type": "markdown",
+        "layout": "full",
+        "sourceId": "src-raw",
+        "body": "## A corrupção é recorrente e vem do provedor\n\nEm seis dias UTC distintos entre 15 e 21 de julho, o endpoint retornou a liga correta (`11847`, `NBA Women`, temporada 2026), com grupos de 8, 7 e 15 posições. Entretanto, todas as 30 posições apontavam para o mesmo time: `id=784`, `Panevezys Women`. A recorrência e os hashes diferentes entre dias descartam um incidente isolado do worker."
+      },
+      {"id": "identity-chart", "type": "chart", "layout": "full", "chartId": "chart-identity-collapse"},
+      {"id": "history-table", "type": "table", "layout": "full", "tableId": "table-history"},
+      {
+        "id": "finding-partials",
+        "type": "markdown",
+        "layout": "full",
+        "sourceId": "src-runs",
+        "body": "## Os oito parciais representam rejeição segura, não perda silenciosa\n\nOs runs correspondem às datas de origem 2, 3, 4, 5, 6, 7, 8 e 10 de julho. Cada execução recebeu 30 registros, normalizou zero e rejeitou 30. O job foi encerrado como `succeeded`, enquanto o run ficou `partial`; esse desenho evita retry infinito de um payload HTTP 200 que continua semanticamente inválido."
+      },
+      {"id": "partials-table", "type": "table", "layout": "full", "tableId": "table-partials"},
+      {
+        "id": "finding-provenance",
+        "type": "markdown",
+        "layout": "full",
+        "sourceId": "src-runs",
+        "body": "## A observabilidade subconta ocorrências repetidas\n\nSomente um dos oito runs preserva vínculo com `hl_raw_objects` e `hl_data_quality_issues`. Os outros sete têm o resultado parcial, mas nenhum raw/issue associado. O caminho de storage usa data, endpoint e hash; respostas idênticas no mesmo dia fazem upsert do mesmo registro e substituem `job_id`/`run_id`. Por isso o gate mostra uma issue crítica embora oito runs tenham sido afetados."
+      },
+      {
+        "id": "scope-definitions",
+        "type": "markdown",
+        "layout": "full",
+        "body": "## Escopo e definições\n\n**População:** runs `partial` do worker `phase7-20260701-15-all-sports:phase7`, esporte Basketball. **Grão:** uma execução de endpoint por job. **Parcial:** run com registros rejeitados ou issue crítica. **Contaminação:** linha em `sports_standings_snapshots` referenciando um dos objetos brutos críticos. **Janela histórica:** issues abertas observadas entre 15 e 21 de julho de 2026."
+      },
+      {
+        "id": "methodology",
+        "type": "markdown",
+        "layout": "full",
+        "body": "## Método e verificações\n\nA análise reconciliou runs, jobs, issues e objetos brutos pelo identificador. Cada bruto foi baixado do bucket privado, descomprimido e validado contra o SHA-256 registrado antes do perfil. Foram comparados liga, temporada, grupos, quantidade de posições e pares distintos de `team.id`/`team.name`. Finalmente, cada `raw_object_id` crítico foi procurado em `sports_standings_snapshots`."
+      },
+      {
+        "id": "limitations",
+        "type": "markdown",
+        "layout": "full",
+        "body": "## Limitações e robustez\n\nSete vínculos run→raw já foram sobrescritos e não podem ser reconstruídos como observações independentes apenas pelas relações atuais. Ainda assim, os oito runs registram o mesmo perfil de 30 recebidos e 30 rejeitados, e a ocorrência preservada no dia 21 confirma o conteúdo. Não foi feita uma nova chamada à Highlightly; a conclusão usa somente evidência já armazenada."
+      },
+      {
+        "id": "recommendations",
+        "type": "markdown",
+        "layout": "full",
+        "body": "## Correções recomendadas\n\n1. **Manter o guardrail e bloquear standings WNBA** para interface e modelos enquanto o payload continuar repetindo uma identidade.\n2. **Preservar uma observação bruta por run**, incluindo `run_id` no caminho do storage ou separando blob deduplicado de ocorrência de captura.\n3. **Incluir `run_id` na identidade da issue**, impedindo que ocorrências repetidas sejam consolidadas.\n4. **Evitar chamadas históricas redundantes de standings**: o endpoint não recebe data e devolve o snapshot atual; durante backfill, consultar uma vez por liga/temporada/captura, não uma vez por data de jogo.\n5. **Criar testes automáticos** para vínculo 1:1 run→captura, 30/1 identities, zero persistência de payload crítico e contagem de recorrências no gate."
+      },
+      {
+        "id": "further-questions",
+        "type": "markdown",
+        "layout": "full",
+        "body": "## Questões para a próxima etapa\n\n- A Highlightly corrigirá o endpoint WNBA ou devemos usar uma fonte alternativa de classificação?\n- O modelo preditivo precisa de standings oficiais, ou podemos derivar posição e campanha a partir das partidas finalizadas?\n- A correção de proveniência deve ser aplicada somente daqui para frente ou também devemos materializar issues retroativas para os sete runs sem vínculo?"
+      }
+    ]
+  },
+  "snapshot": {
+    "version": 1,
+    "generatedAt": "2026-07-21T22:57:34Z",
+    "status": "ready",
+    "datasets": {
+      "headline": [
+        {
+          "partial_runs": 8,
+          "records_received": 240,
+          "records_rejected": 240,
+          "occurrence_days": 6,
+          "canonical_rows": 0,
+          "runs_with_raw_link": 1
+        }
+      ],
+      "partial_runs": [
+        {"source_date": "2026-07-02", "http_status": 200, "received": 30, "normalized": 0, "rejected": 30, "issue_linked": "Não"},
+        {"source_date": "2026-07-03", "http_status": 200, "received": 30, "normalized": 0, "rejected": 30, "issue_linked": "Não"},
+        {"source_date": "2026-07-04", "http_status": 200, "received": 30, "normalized": 0, "rejected": 30, "issue_linked": "Não"},
+        {"source_date": "2026-07-05", "http_status": 200, "received": 30, "normalized": 0, "rejected": 30, "issue_linked": "Não"},
+        {"source_date": "2026-07-06", "http_status": 200, "received": 30, "normalized": 0, "rejected": 30, "issue_linked": "Não"},
+        {"source_date": "2026-07-07", "http_status": 200, "received": 30, "normalized": 0, "rejected": 30, "issue_linked": "Não"},
+        {"source_date": "2026-07-08", "http_status": 200, "received": 30, "normalized": 0, "rejected": 30, "issue_linked": "Sim"},
+        {"source_date": "2026-07-10", "http_status": 200, "received": 30, "normalized": 0, "rejected": 30, "issue_linked": "Não"}
+      ],
+      "critical_history": [
+        {"observed_date": "2026-07-15", "league": "NBA Women / WNBA", "rows": 30, "distinct_teams": 1, "repeated_team": "Panevezys Women (784)", "canonical_rows": 0},
+        {"observed_date": "2026-07-16", "league": "NBA Women / WNBA", "rows": 30, "distinct_teams": 1, "repeated_team": "Panevezys Women (784)", "canonical_rows": 0},
+        {"observed_date": "2026-07-17", "league": "NBA Women / WNBA", "rows": 30, "distinct_teams": 1, "repeated_team": "Panevezys Women (784)", "canonical_rows": 0},
+        {"observed_date": "2026-07-19", "league": "NBA Women / WNBA", "rows": 30, "distinct_teams": 1, "repeated_team": "Panevezys Women (784)", "canonical_rows": 0},
+        {"observed_date": "2026-07-20", "league": "NBA Women / WNBA", "rows": 30, "distinct_teams": 1, "repeated_team": "Panevezys Women (784)", "canonical_rows": 0},
+        {"observed_date": "2026-07-21", "league": "NBA Women / WNBA", "rows": 30, "distinct_teams": 1, "repeated_team": "Panevezys Women (784)", "canonical_rows": 0}
+      ],
+      "identity_series": [
+        {"observed_date": "2026-07-15", "metric": "Posições retornadas", "value": 30, "league": "NBA Women / WNBA", "distinct_teams": 1, "repeated_team": "Panevezys Women (784)"},
+        {"observed_date": "2026-07-15", "metric": "Times distintos", "value": 1, "league": "NBA Women / WNBA", "distinct_teams": 1, "repeated_team": "Panevezys Women (784)"},
+        {"observed_date": "2026-07-16", "metric": "Posições retornadas", "value": 30, "league": "NBA Women / WNBA", "distinct_teams": 1, "repeated_team": "Panevezys Women (784)"},
+        {"observed_date": "2026-07-16", "metric": "Times distintos", "value": 1, "league": "NBA Women / WNBA", "distinct_teams": 1, "repeated_team": "Panevezys Women (784)"},
+        {"observed_date": "2026-07-17", "metric": "Posições retornadas", "value": 30, "league": "NBA Women / WNBA", "distinct_teams": 1, "repeated_team": "Panevezys Women (784)"},
+        {"observed_date": "2026-07-17", "metric": "Times distintos", "value": 1, "league": "NBA Women / WNBA", "distinct_teams": 1, "repeated_team": "Panevezys Women (784)"},
+        {"observed_date": "2026-07-19", "metric": "Posições retornadas", "value": 30, "league": "NBA Women / WNBA", "distinct_teams": 1, "repeated_team": "Panevezys Women (784)"},
+        {"observed_date": "2026-07-19", "metric": "Times distintos", "value": 1, "league": "NBA Women / WNBA", "distinct_teams": 1, "repeated_team": "Panevezys Women (784)"},
+        {"observed_date": "2026-07-20", "metric": "Posições retornadas", "value": 30, "league": "NBA Women / WNBA", "distinct_teams": 1, "repeated_team": "Panevezys Women (784)"},
+        {"observed_date": "2026-07-20", "metric": "Times distintos", "value": 1, "league": "NBA Women / WNBA", "distinct_teams": 1, "repeated_team": "Panevezys Women (784)"},
+        {"observed_date": "2026-07-21", "metric": "Posições retornadas", "value": 30, "league": "NBA Women / WNBA", "distinct_teams": 1, "repeated_team": "Panevezys Women (784)"},
+        {"observed_date": "2026-07-21", "metric": "Times distintos", "value": 1, "league": "NBA Women / WNBA", "distinct_teams": 1, "repeated_team": "Panevezys Women (784)"}
+      ]
+    }
+  },
+  "sources": [
+    {
+      "id": "src-runs",
+      "label": "Supabase - execução e qualidade da ingestão Highlightly",
+      "query": {
+        "engine": "Supabase Data API",
+        "language": "python",
+        "description": "Consulta somente leitura dos runs parciais, jobs associados e issues de qualidade.",
+        "sql": "select r.id as run_id, r.job_id, r.status, r.http_status, r.records_received, r.records_normalized, r.records_rejected, r.started_at, j.endpoint_key, j.sport, j.request_params, j.dedupe_key, j.shadow_scope, q.id as issue_id, q.issue_code, q.severity from public.hl_ingestion_runs r join public.hl_ingestion_jobs j on j.id = r.job_id left join public.hl_data_quality_issues q on q.run_id = r.id where r.status = 'partial' and r.worker_id = 'phase7-20260701-15-all-sports:phase7' and j.sport = 'basketball' order by r.started_at;",
+        "tables_used": ["public.hl_ingestion_runs", "public.hl_ingestion_jobs", "public.hl_data_quality_issues"],
+        "executed_at": "2026-07-21T22:35:00Z"
+      }
+    },
+    {
+      "id": "src-raw",
+      "label": "Supabase Storage privado - basketball standings",
+      "query": {
+        "engine": "Supabase Storage and Data API",
+        "language": "python",
+        "description": "Perfil de payload bruto com SHA-256 e verificação de não persistência canônica.",
+        "sql": "select q.id as issue_id, q.run_id, q.raw_object_id, q.created_at, r.sha256, r.storage_path, r.request_metadata, r.response_metadata, count(s.id) as canonical_rows from public.hl_data_quality_issues q join public.hl_raw_objects r on r.id = q.raw_object_id left join public.sports_standings_snapshots s on s.source_raw_object_id = r.id where q.sport = 'basketball' and q.severity = 'critical' and q.issue_code = 'BASKETBALL_STANDINGS_CORRUPTED' and q.resolution_status = 'open' group by q.id, q.run_id, q.raw_object_id, q.created_at, r.sha256, r.storage_path, r.request_metadata, r.response_metadata order by q.created_at;",
+        "tables_used": ["public.hl_raw_objects", "public.hl_data_quality_issues", "public.sports_standings_snapshots"],
+        "executed_at": "2026-07-21T22:45:00Z"
+      }
+    }
+  ]
+}
