@@ -1039,6 +1039,90 @@ export type Database = {
           },
         ]
       }
+      hl_competition_scopes: {
+        Row: {
+          aliases: string[]
+          canonical_name: string
+          capabilities: Json
+          catalog_status: string
+          competition_level: string
+          created_at: string
+          gender: string
+          id: string
+          ingestion_enabled: boolean
+          metadata: Json
+          priority: number
+          provider_competition_id: string | null
+          provider_family: string
+          provider_id: string
+          provider_name: string
+          region_code: string | null
+          scope_key: string
+          selected: boolean
+          sport_id: string
+          updated_at: string
+        }
+        Insert: {
+          aliases?: string[]
+          canonical_name: string
+          capabilities?: Json
+          catalog_status?: string
+          competition_level?: string
+          created_at?: string
+          gender?: string
+          id?: string
+          ingestion_enabled?: boolean
+          metadata?: Json
+          priority?: number
+          provider_competition_id?: string | null
+          provider_family: string
+          provider_id: string
+          provider_name: string
+          region_code?: string | null
+          scope_key: string
+          selected?: boolean
+          sport_id: string
+          updated_at?: string
+        }
+        Update: {
+          aliases?: string[]
+          canonical_name?: string
+          capabilities?: Json
+          catalog_status?: string
+          competition_level?: string
+          created_at?: string
+          gender?: string
+          id?: string
+          ingestion_enabled?: boolean
+          metadata?: Json
+          priority?: number
+          provider_competition_id?: string | null
+          provider_family?: string
+          provider_id?: string
+          provider_name?: string
+          region_code?: string | null
+          scope_key?: string
+          selected?: boolean
+          sport_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_competition_scopes_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "sports_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hl_competition_scopes_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hl_data_quality_issues: {
         Row: {
           actual_value: Json | null
@@ -5529,6 +5613,28 @@ export type Database = {
           status: string | null
           unrecovered_jobs: number | null
           window_id: string | null
+        }
+        Relationships: []
+      }
+      hl_selected_competition_scopes_v: {
+        Row: {
+          aliases: string[] | null
+          canonical_name: string | null
+          capabilities: Json | null
+          catalog_status: string | null
+          competition_level: string | null
+          gender: string | null
+          id: string | null
+          ingestion_enabled: boolean | null
+          metadata: Json | null
+          priority: number | null
+          provider_competition_id: string | null
+          provider_family: string | null
+          provider_name: string | null
+          region_code: string | null
+          scope_key: string | null
+          sport: string | null
+          sport_name: string | null
         }
         Relationships: []
       }
