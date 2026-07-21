@@ -168,13 +168,21 @@ def _active_jobs(repository: HighlightlyRepository, *, limit: int) -> list[dict[
         rows.extend(
             repository.select_rows(
                 "hl_ingestion_jobs",
-                columns="id,status,endpoint_key,dedupe_key",
+                columns="id,status,endpoint_key,dedupe_key,shadow_scope",
                 filters={"status": status},
                 limit=limit + 1,
                 order="created_at.asc",
             )
         )
     return rows
+
+
+def _job_belongs_to_scope(row: Mapping[str, Any], scope: str) -> bool:
+    """Prefer the canonical scope column; retain compatibility with legacy rows."""
+    shadow_scope = str(row.get("shadow_scope") or "").strip()
+    if shadow_scope:
+        return shadow_scope == scope
+    return scope in str(row.get("dedupe_key") or "")
 
 
 def _as_row(value: Any) -> dict[str, Any]:
@@ -247,7 +255,7 @@ def main() -> int:
         raise RuntimeError("Highlightly provider was already enabled; refusing a non-isolated Phase 7 run")
 
     active_before = _active_jobs(repository, limit=args.max_jobs)
-    outsiders = [row for row in active_before if scope not in str(row.get("dedupe_key") or "")]
+    outsiders = [row for row in active_before if not _job_belongs_to_scope(row, scope)]
     if outsiders:
         raise RuntimeError("Active ingestion queue contains jobs outside the requested Phase 7 scope")
     if any(row.get("status") == "running" for row in active_before):

@@ -20,6 +20,7 @@ from scripts.run_highlightly_phase7_shadow import (
     DAILY_LIMIT,
     RESERVE_REQUESTS,
     SPORTS,
+    _job_belongs_to_scope,
 )
 
 
@@ -73,12 +74,12 @@ def _active_scope_jobs(repository: HighlightlyRepository, scope: str) -> list[di
     for status in ACTIVE_STATUSES:
         page = repository.select_rows(
             "hl_ingestion_jobs",
-            columns="id,status,dedupe_key,scheduled_for",
+            columns="id,status,dedupe_key,shadow_scope",
             filters={"status": status},
             limit=5_001,
             order="created_at.asc",
         )
-        outsiders = [row for row in page if scope not in str(row.get("dedupe_key") or "")]
+        outsiders = [row for row in page if not _job_belongs_to_scope(row, scope)]
         if outsiders:
             raise RuntimeError("Active ingestion queue contains jobs outside the requested range scope")
         rows.extend(page)

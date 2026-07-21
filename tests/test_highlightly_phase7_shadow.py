@@ -8,6 +8,18 @@ from scripts import run_highlightly_phase7_shadow as phase7
 
 
 class HighlightlyPhaseSevenShadowTests(unittest.TestCase):
+    def test_scope_guard_uses_canonical_shadow_scope_for_derived_jobs(self):
+        row = {
+            "shadow_scope": "phase7-current",
+            "dedupe_key": "football:derived:team-statistics:123",
+        }
+        self.assertTrue(phase7._job_belongs_to_scope(row, "phase7-current"))
+        self.assertFalse(phase7._job_belongs_to_scope(row, "phase7-other"))
+
+    def test_scope_guard_supports_legacy_dedupe_keys_without_shadow_scope(self):
+        row = {"shadow_scope": None, "dedupe_key": "phase7-legacy:football:123"}
+        self.assertTrue(phase7._job_belongs_to_scope(row, "phase7-legacy"))
+
     def test_seed_plan_is_paginated_bounded_and_covers_all_sports(self):
         jobs = phase7.build_seed_jobs(
             scope="phase7-test",
