@@ -75,7 +75,7 @@ BEGIN
     storage_path, sha256, byte_size
   ) VALUES
     (raw_one, job_one, run_one, provider, basketball, 'basketball.BasketballStandingsController_getStandings', 'basketball/smoke/' || run_one || '/same.json.gz', shared_sha, 10),
-    (raw_two, job_two, run_two, provider, basketball, 'basketball/smoke/' || run_two || '/same.json.gz', shared_sha, 10);
+    (raw_two, job_two, run_two, provider, basketball, 'basketball.BasketballStandingsController_getStandings', 'basketball/smoke/' || run_two || '/same.json.gz', shared_sha, 10);
 
   INSERT INTO public.hl_data_quality_issues (
     run_id, raw_object_id, endpoint_key, sport, severity, issue_code

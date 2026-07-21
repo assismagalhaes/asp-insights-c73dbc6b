@@ -28,6 +28,17 @@ class HighlightlyWnbaStandingsLineageContractTests(unittest.TestCase):
         self.assertIn("basketball_standings_corrupted", folded)
         self.assertIn("highlightly provider must remain disabled", folded)
 
+        raw_insert = folded.split(
+            "insert into public.hl_raw_objects", 1
+        )[1].split("insert into public.hl_data_quality_issues", 1)[0]
+        self.assertEqual(
+            raw_insert.count(
+                "'basketball.basketballstandingscontroller_getstandings'"
+            ),
+            2,
+            "each raw-object tuple must include its endpoint_key",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
