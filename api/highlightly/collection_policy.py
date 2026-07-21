@@ -50,6 +50,9 @@ _BASKETBALL_COMPETITIONS = frozenset(
     )
 )
 
+_QUARANTINED_BASKETBALL_STANDINGS_IDS = frozenset({"11847"})
+_QUARANTINED_BASKETBALL_STANDINGS_NAMES = frozenset({"wnba", "nba women"})
+
 
 @dataclass(frozen=True)
 class FootballCollectionDecision:
@@ -103,6 +106,28 @@ def allows_detailed_match_fanout(sport: str, match: Mapping[str, Any]) -> bool:
     if sport == "basketball":
         return normalized in _BASKETBALL_COMPETITIONS
     return True
+
+
+def is_quarantined_basketball_standings(
+    league: Mapping[str, Any] | None,
+    *,
+    requested_league_id: Any = None,
+) -> bool:
+    """Return whether Highlightly standings are unsafe for canonical use.
+
+    League 11847 repeatedly returned a 30-row WNBA document containing one
+    unrelated team identity.  Match, statistics and odds endpoints remain
+    enabled; only this provider standings contract is quarantined.
+    """
+
+    league = league or {}
+    league_id = league.get("id") if isinstance(league, Mapping) else None
+    league_name = league.get("name") if isinstance(league, Mapping) else None
+    return (
+        str(league_id if league_id is not None else requested_league_id)
+        in _QUARANTINED_BASKETBALL_STANDINGS_IDS
+        or _normalized(league_name) in _QUARANTINED_BASKETBALL_STANDINGS_NAMES
+    )
 
 
 def football_collection_decision(match: Mapping[str, Any]) -> FootballCollectionDecision:

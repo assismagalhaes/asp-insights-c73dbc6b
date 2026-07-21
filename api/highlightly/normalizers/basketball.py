@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any, Mapping
 
-from ..collection_policy import allows_canonical_odds
+from ..collection_policy import allows_canonical_odds, is_quarantined_basketball_standings
 
 from .common import (
     NormalizationContext,
@@ -598,6 +598,23 @@ def _normalize_standings(payload: Any, ctx: NormalizationContext) -> NormalizedB
                     "requestedLeagueId": requested_league, "requestedSeason": requested_season,
                     "rows": len(rows), "distinctTeams": len(set(identities)),
                     "duplicateWithinGroup": duplicate_groups,
+                },
+            )
+            continue
+        if is_quarantined_basketball_standings(
+            league,
+            requested_league_id=requested_league,
+        ):
+            batch.rejected += len(rows)
+            batch.issue(
+                "BASKETBALL_STANDINGS_PROVIDER_QUARANTINED",
+                "Highlightly WNBA standings are quarantined after recurrent identity corruption.",
+                severity="critical",
+                context={
+                    "leagueId": league.get("id"),
+                    "season": league.get("season"),
+                    "rows": len(rows),
+                    "policy": "provider_standings_quarantined",
                 },
             )
             continue

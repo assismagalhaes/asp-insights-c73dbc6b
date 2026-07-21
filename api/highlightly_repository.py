@@ -745,6 +745,11 @@ class HighlightlyRepository:
         digest = hashlib.sha256(raw).hexdigest()
         compressed = gzip.compress(raw, mtime=0)
         captured = captured_at or datetime.now(timezone.utc)
+        capture_token = (
+            _path_token(f"run-{run_id}")
+            if run_id
+            else _path_token(f"capture-{captured.strftime('%H%M%S%f')}")
+        )
         storage_path = "/".join(
             (
                 _path_token(sport),
@@ -752,6 +757,7 @@ class HighlightlyRepository:
                 captured.strftime("%m"),
                 captured.strftime("%d"),
                 _path_token(endpoint_key),
+                capture_token,
                 f"{digest}.json.gz",
             )
         )

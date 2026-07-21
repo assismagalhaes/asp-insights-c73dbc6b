@@ -181,16 +181,39 @@ class HighlightlyPhaseFourBasketballTests(unittest.TestCase):
 
     def test_valid_standings_require_games_to_equal_wins_plus_losses(self):
         payload = {
-            "league": {"id": 11847, "name": "NBA Women", "season": 2026},
+            "league": {"id": 10996, "name": "NBA", "season": 2026},
             "groups": [{"name": "Overall", "standings": [
                 {"team": {"id": 1, "name": "A"}, "wins": 10, "loses": 5, "position": 1, "gamesPlayed": 15},
                 {"team": {"id": 2, "name": "B"}, "wins": 8, "loses": 8, "position": 2, "gamesPlayed": 15},
             ]}],
         }
-        batch = normalize_basketball(payload, context("basketball.standings", {"leagueId": 11847, "season": 2026}))
+        batch = normalize_basketball(payload, context("basketball.standings", {"leagueId": 10996, "season": 2026}))
         self.assertEqual(len(batch.table_rows("sports_standings_snapshots")), 1)
         self.assertEqual(batch.rejected, 1)
         self.assertTrue(all(row["quality_status"] == "valid" for row in batch.table_rows("sports_standings_snapshots")))
+
+    def test_valid_looking_wnba_standings_remain_provider_quarantined(self):
+        payload = {
+            "league": {"id": 11847, "name": "NBA Women", "season": 2026},
+            "groups": [{"name": "Overall", "standings": [
+                {"team": {"id": 1, "name": "A"}, "wins": 10, "loses": 5, "position": 1, "gamesPlayed": 15},
+                {"team": {"id": 2, "name": "B"}, "wins": 8, "loses": 7, "position": 2, "gamesPlayed": 15},
+            ]}],
+        }
+
+        batch = normalize_basketball(
+            payload,
+            context("basketball.standings", {"leagueId": 11847, "season": 2026}),
+        )
+
+        self.assertEqual(batch.table_rows("sports_standings_snapshots"), [])
+        self.assertEqual(batch.table_rows("sports_teams"), [])
+        self.assertEqual(batch.rejected, 2)
+        self.assertTrue(any(
+            issue["code"] == "BASKETBALL_STANDINGS_PROVIDER_QUARANTINED"
+            and issue["severity"] == "critical"
+            for issue in batch.issues
+        ))
 
     def test_odds_classify_moneyline_total_and_spread(self):
         payload = {"data": [{"matchId": 99, "odds": [
@@ -229,11 +252,11 @@ class HighlightlyPhaseFourBasketballTests(unittest.TestCase):
             "awayTeam": {"id": 2, "name": "Away"},
             "state": {"score": {"current": "90 - 87"}},
         })
-        self.assertEqual(count, 5)
+        self.assertEqual(count, 4)
         jobs = {call.kwargs["endpoint_key"]: call.kwargs for call in repository.enqueue_job.call_args_list}
         self.assertIn("basketball.BasketballStatisticsController_getStatistics", jobs)
         self.assertIn("basketball.BasketballOddsController_getOddsV2", jobs)
-        self.assertIn("basketball.BasketballStandingsController_getStandings", jobs)
+        self.assertNotIn("basketball.BasketballStandingsController_getStandings", jobs)
         self.assertNotIn("basketball.HighlightsController_getHighlights", jobs)
         self.assertNotIn("basketball.BasketballHead2HeadController_getHead2HeadData", jobs)
         self.assertNotIn("basketball.BasketballLastFiveGamesController_getLastFiveGames", jobs)
@@ -241,6 +264,27 @@ class HighlightlyPhaseFourBasketballTests(unittest.TestCase):
         statistics_job = jobs["basketball.BasketballStatisticsController_getStatistics"]["request_params"]
         self.assertEqual(statistics_job["_home_score"], 90)
         self.assertEqual(statistics_job["_away_team_id"], 2)
+
+    def test_non_wnba_basketball_standings_remain_enabled(self):
+        repository = Mock()
+        worker = HighlightlyWorker(Mock(), repository, worker_id="test-worker", enabled=True)
+
+        count = worker._enqueue_basketball_match_fanout({
+            "id": 100,
+            "date": "2026-07-15T22:00:00Z",
+            "league": {"id": 10996, "name": "NBA", "season": 2026},
+            "homeTeam": {"id": 1},
+            "awayTeam": {"id": 2},
+            "state": {"score": {"current": "100 - 98"}},
+        })
+
+        self.assertEqual(count, 5)
+        standings = next(
+            call.kwargs
+            for call in repository.enqueue_job.call_args_list
+            if call.kwargs["endpoint_key"] == "basketball.BasketballStandingsController_getStandings"
+        )
+        self.assertIn("season:2026:capture:", standings["dedupe_key"])
 
 
 if __name__ == "__main__":

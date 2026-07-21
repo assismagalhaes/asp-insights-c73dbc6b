@@ -460,6 +460,50 @@ class HighlightlyPhaseTwoWorkerTests(unittest.TestCase):
         }
         self.assertEqual(first, second)
 
+    def test_standings_are_deduplicated_by_capture_not_historical_match_date(self):
+        repository = Mock()
+        worker = HighlightlyWorker(Mock(), repository, worker_id="test-worker", enabled=True)
+        first_match = {
+            "id": 99,
+            "date": "2026-07-01T12:00:00Z",
+            "homeTeam": {},
+            "awayTeam": {},
+            "league": {"id": 7, "season": 2026},
+        }
+        second_match = {**first_match, "id": 100, "date": "2026-07-15T12:00:00Z"}
+
+        worker._enqueue_football_match_fanout(first_match, scope_nonce="window-a")
+        first_key = next(
+            call.kwargs["dedupe_key"]
+            for call in repository.enqueue_job.call_args_list
+            if call.kwargs["endpoint_key"] == "football.FootballStandingsController_getStandings"
+        )
+        repository.reset_mock()
+        worker._enqueue_football_match_fanout(second_match, scope_nonce="window-b")
+        second_key = next(
+            call.kwargs["dedupe_key"]
+            for call in repository.enqueue_job.call_args_list
+            if call.kwargs["endpoint_key"] == "football.FootballStandingsController_getStandings"
+        )
+
+        self.assertEqual(first_key, second_key)
+        self.assertIn("season:2026:capture:", first_key)
+        self.assertNotIn("2026-07-01", first_key)
+        self.assertNotIn("2026-07-15", first_key)
+
+    def test_quality_issue_identity_preserves_each_run_occurrence(self):
+        worker = HighlightlyWorker(Mock(), Mock(), worker_id="test-worker", enabled=True)
+        batch = NormalizedBatch(received=1)
+        batch.issue("TEST_FAILURE", "same payload", severity="critical", context={"key": "same"})
+        job = {"endpoint_key": "basketball.standings", "sport": "basketball"}
+
+        first = worker._quality_rows(batch, job=job, run_id="run-1", raw_object_id="raw-shared")
+        second = worker._quality_rows(batch, job=job, run_id="run-2", raw_object_id="raw-shared")
+
+        self.assertNotEqual(first[0]["id"], second[0]["id"])
+        self.assertEqual(first[0]["run_id"], "run-1")
+        self.assertEqual(second[0]["run_id"], "run-2")
+
     def test_worker_persists_raw_before_any_canonical_upsert(self):
         repository = Mock()
         repository.claim_job.return_value = {

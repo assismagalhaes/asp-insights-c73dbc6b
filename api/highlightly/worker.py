@@ -12,7 +12,11 @@ from typing import Any, Mapping
 from api.highlightly_client import HighlightlyClient, HighlightlyError, HighlightlyResponse
 from api.highlightly_repository import HighlightlyRepository, HighlightlyRepositoryError, redact_secrets
 
-from .collection_policy import allows_detailed_match_fanout, football_collection_decision
+from .collection_policy import (
+    allows_detailed_match_fanout,
+    football_collection_decision,
+    is_quarantined_basketball_standings,
+)
 from .normalizers import normalize_baseball, normalize_basketball, normalize_football
 from .normalizers.common import NormalizationContext, NormalizedBatch, schema_fingerprint, stable_id
 from .normalizers.common import items as payload_items
@@ -94,6 +98,13 @@ def _safe_error(exc: Exception) -> str:
         text = f"{text}: {body}"
     text = text.replace("\r", " ").replace("\n", " ")
     return text[:1000]
+
+
+def _standings_capture_scope(competition: Any, season: Any) -> str:
+    """Deduplicate current standings snapshots independently of match dates."""
+
+    captured_on = datetime.now(timezone.utc).date().isoformat()
+    return f"competition:{competition}:season:{season}:capture:{captured_on}"
 
 
 class HighlightlyWorker:
@@ -373,6 +384,7 @@ class HighlightlyWorker:
                 count += 1
             league = match.get("league") if isinstance(match.get("league"), Mapping) else {}
             if league.get("id") is not None and league.get("season") is not None:
+                standings_scope = _standings_capture_scope(league["id"], league["season"])
                 self._enqueue_operation(
                     "football.FootballStandingsController_getStandings",
                     {"leagueId": league["id"], "season": league["season"]},
@@ -381,7 +393,7 @@ class HighlightlyWorker:
                         if scope_nonce
                         else f"competition:{league['id']}"
                     ),
-                    dedupe_scope=f"competition:{league['id']}:daily:{match_date or 'unknown'}",
+                    dedupe_scope=standings_scope,
                     priority=3,
                 )
                 count += 1
@@ -457,6 +469,7 @@ class HighlightlyWorker:
                 )
                 count += 1
             if match.get("league") and match.get("season") is not None:
+                standings_scope = _standings_capture_scope(match["league"], match["season"])
                 self._enqueue_operation(
                     "baseball.BaseballStandingsController_getStandings",
                     {
@@ -470,7 +483,7 @@ class HighlightlyWorker:
                         if scope_nonce
                         else f"competition:{match['league']}"
                     ),
-                    dedupe_scope=f"competition:{match['league']}:daily:{match_date or 'unknown'}",
+                    dedupe_scope=standings_scope,
                     priority=3,
                 )
                 count += 1
@@ -551,7 +564,12 @@ class HighlightlyWorker:
                 )
                 count += 1
             league = match.get("league") if isinstance(match.get("league"), Mapping) else {}
-            if league.get("id") is not None and league.get("season") is not None:
+            if (
+                league.get("id") is not None
+                and league.get("season") is not None
+                and not is_quarantined_basketball_standings(league)
+            ):
+                standings_scope = _standings_capture_scope(league["id"], league["season"])
                 self._enqueue_operation(
                     "basketball.BasketballStandingsController_getStandings",
                     {"leagueId": league["id"], "season": league["season"]},
@@ -560,7 +578,7 @@ class HighlightlyWorker:
                         if scope_nonce
                         else f"competition:{league['id']}"
                     ),
-                    dedupe_scope=f"competition:{league['id']}:daily:{match_date or 'unknown'}",
+                    dedupe_scope=standings_scope,
                     priority=3,
                 )
                 count += 1
@@ -579,7 +597,13 @@ class HighlightlyWorker:
         for issue in batch.issues:
             rows.append(
                 {
-                    "id": stable_id("quality", raw_object_id, issue.get("code"), issue.get("context")),
+                    "id": stable_id(
+                        "quality",
+                        run_id,
+                        raw_object_id,
+                        issue.get("code"),
+                        issue.get("context"),
+                    ),
                     "run_id": run_id,
                     "raw_object_id": raw_object_id,
                     "endpoint_key": job["endpoint_key"],

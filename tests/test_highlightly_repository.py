@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import os
+from datetime import datetime, timezone
 import unittest
 from unittest.mock import patch
 
@@ -287,7 +288,7 @@ class HighlightlyRepositoryTests(unittest.TestCase):
         saved = {
             "id": "raw-1",
             "storage_bucket": "highlightly-raw",
-            "storage_path": f"football/2026/07/14/matches/{digest}.json.gz",
+            "storage_path": f"football/2026/07/14/matches/run-run-1/{digest}.json.gz",
             "sha256": digest,
             "byte_size": len(compressed),
         }
@@ -301,7 +302,10 @@ class HighlightlyRepositoryTests(unittest.TestCase):
             sport_id="sport-1",
             sport="football",
             endpoint_key="football.matches",
+            job_id="job-1",
+            run_id="run-1",
             request_metadata={"apiKey": "secret", "date": "2026-07-14"},
+            captured_at=datetime(2026, 7, 14, 12, 0, tzinfo=timezone.utc),
         )
         restored = repository.load_raw_payload(
             {
@@ -315,9 +319,43 @@ class HighlightlyRepositoryTests(unittest.TestCase):
         self.assertEqual(restored, payload)
         upload_call = session.calls[0]
         self.assertEqual(upload_call[2]["data"], compressed)
+        self.assertIn("/run-run-1/", upload_call[1])
         registry_call = session.calls[1]
         self.assertEqual(registry_call[2]["json"]["request_metadata"]["apiKey"], "[REDACTED]")
         self.assertIn("on_conflict=storage_bucket%2Cstorage_path", registry_call[1])
+
+    def test_unscoped_raw_captures_use_distinct_capture_tokens(self):
+        payload = {"data": []}
+        digest = hashlib.sha256(b'{"data":[]}').hexdigest()
+        first_path = f"basketball/2026/07/21/standings/capture-120000000001/{digest}.json.gz"
+        second_path = f"basketball/2026/07/21/standings/capture-120000000002/{digest}.json.gz"
+        session = _Session([
+            _Response(200),
+            _Response(201, [{"id": "raw-1", "storage_bucket": "highlightly-raw", "storage_path": first_path, "sha256": digest, "byte_size": 31}]),
+            _Response(200),
+            _Response(201, [{"id": "raw-2", "storage_bucket": "highlightly-raw", "storage_path": second_path, "sha256": digest, "byte_size": 31}]),
+        ])
+        repository = HighlightlyRepository("https://example.supabase.co", "service-secret", session=session)
+
+        first = repository.store_raw_payload(
+            payload,
+            provider_id="provider-1",
+            sport_id="sport-1",
+            sport="basketball",
+            endpoint_key="standings",
+            captured_at=datetime(2026, 7, 21, 12, 0, 0, 1, tzinfo=timezone.utc),
+        )
+        second = repository.store_raw_payload(
+            payload,
+            provider_id="provider-1",
+            sport_id="sport-1",
+            sport="basketball",
+            endpoint_key="standings",
+            captured_at=datetime(2026, 7, 21, 12, 0, 0, 2, tzinfo=timezone.utc),
+        )
+
+        self.assertNotEqual(first.storage_path, second.storage_path)
+        self.assertNotEqual(session.calls[0][1], session.calls[2][1])
 
     def test_checksum_mismatch_stops_reprocessing(self):
         compressed = gzip.compress(b'{"data":[]}', mtime=0)
