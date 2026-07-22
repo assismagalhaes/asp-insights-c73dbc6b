@@ -6128,7 +6128,7 @@ export type Database = {
       }
       get_football_match_detail: { Args: { p_match_id: string }; Returns: Json }
       get_highlightly_collection_monitor: {
-        Args: { p_scope?: string | null }
+        Args: { p_scope?: string }
         Returns: Json
       }
       get_highlightly_daily_request_usage: {
