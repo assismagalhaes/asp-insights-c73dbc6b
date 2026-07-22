@@ -129,7 +129,7 @@ export async function fetchHighlightlyCollectionMonitor(
   scope?: string | null,
 ): Promise<HighlightlyCollectionMonitor> {
   const { data, error } = await supabase.rpc("get_highlightly_collection_monitor", {
-    p_scope: scope || null,
+    p_scope: scope || undefined,
   });
   if (error) throw new Error(error.message);
   if (!data || typeof data !== "object" || Array.isArray(data)) {
