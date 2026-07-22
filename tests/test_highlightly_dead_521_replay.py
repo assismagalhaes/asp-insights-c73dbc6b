@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 
 from api.highlightly.worker import WorkerResult, _retry_delay_seconds
 from api.highlightly_client import HighlightlyError
+from api.highlightly_repository import HighlightlyRepositoryError
 from scripts import replay_highlightly_dead_521 as replay
 
 
@@ -107,6 +108,69 @@ class HighlightlyDead521ReplayTests(unittest.TestCase):
         report = json.loads(output.call_args.args[0])
         self.assertEqual(report["success_rate"], 1.0)
         self.assertEqual(report["recommended_action"], "continue_bounded_replay")
+
+    @patch.object(replay, "HighlightlyWorker")
+    @patch.object(replay, "HighlightlyClient")
+    @patch.object(replay.HighlightlyRepository, "from_environment")
+    def test_finalization_failure_keeps_canary_result_visible(
+        self, repository_factory, client_factory, worker_factory
+    ):
+        repository = Mock()
+        repository_factory.return_value = repository
+        repository.ingestion_context.return_value = {
+            "provider": {"id": "provider-1", "enabled": False}
+        }
+        candidate = {
+            "id": "job-1",
+            "status": "dead",
+            "sport": "football",
+            "endpoint_key": replay.ENDPOINT,
+            "last_error": replay.ERROR,
+            "attempts": 5,
+            "max_attempts": 5,
+        }
+        repository.select_rows.side_effect = [
+            [],
+            [],
+            [],
+            [candidate],
+            [{"id": "window-1"}],
+            [{"matches_expected": 0}],
+            [],
+        ]
+        repository.daily_request_usage.side_effect = [100, 101]
+        repository.rpc.side_effect = [
+            [candidate],
+            {},
+            HighlightlyRepositoryError(
+                "Supabase returned HTTP 404",
+                status=404,
+                body={"code": "42P01"},
+            ),
+        ]
+        worker_factory.return_value.run_once.return_value = WorkerResult(
+            status="succeeded", job_id="job-1", run_id="run-1"
+        )
+
+        with patch(
+            "sys.argv",
+            [
+                "replay",
+                "--scope",
+                "phase7-history",
+                "--max-jobs",
+                "1",
+                "--confirm-dead-521-replay",
+            ],
+        ), patch("builtins.print") as output:
+            exit_code = replay.main()
+
+        self.assertEqual(exit_code, 1)
+        report = json.loads(output.call_args.args[0])
+        self.assertEqual(report["success_rate"], 1.0)
+        self.assertEqual(report["finalization_error"]["status"], 404)
+        self.assertEqual(report["recommended_action"], "stop_and_escalate_provider")
+        repository.set_provider_enabled.assert_any_call("highlightly", False)
 
 
 if __name__ == "__main__":

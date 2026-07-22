@@ -11,7 +11,7 @@ from typing import Any
 
 from api.highlightly.worker import HighlightlyWorker
 from api.highlightly_client import HighlightlyClient
-from api.highlightly_repository import HighlightlyRepository
+from api.highlightly_repository import HighlightlyRepository, HighlightlyRepositoryError
 from scripts.run_highlightly_phase7_shadow import ACTIVE_STATUSES, DAILY_LIMIT, RESERVE_REQUESTS
 
 
@@ -137,6 +137,7 @@ def main() -> int:
         repository.ingestion_context("football")["provider"].get("enabled")
     )
 
+    finalization_error: dict[str, Any] | None = None
     windows = repository.select_rows(
         "hl_shadow_windows",
         columns="id,scope",
@@ -163,7 +164,13 @@ def main() -> int:
                 else 0,
             },
         )
-        repository.rpc("finalize_highlightly_shadow_window", {"p_scope": args.scope})
+        try:
+            repository.rpc("finalize_highlightly_shadow_window", {"p_scope": args.scope})
+        except HighlightlyRepositoryError as exc:
+            finalization_error = {
+                "status": exc.status,
+                "body": exc.body,
+            }
 
     remaining_dead = _dead_candidates(repository, args.scope, 1_000)
     report.update(
@@ -176,16 +183,22 @@ def main() -> int:
             "remaining_dead_521": len(remaining_dead),
             "highlightly_requests_recorded": usage_after - usage_before,
             "provider_restored_disabled": provider_disabled,
+            "finalization_error": finalization_error,
             "recommended_action": (
                 "continue_bounded_replay"
-                if success_rate >= args.minimum_success_rate and not remaining
+                if success_rate >= args.minimum_success_rate
+                and not remaining
+                and finalization_error is None
                 else "stop_and_escalate_provider"
             ),
         }
     )
     print(json.dumps(report, ensure_ascii=False, separators=(",", ":"), default=str))
     return 0 if (
-        success_rate >= args.minimum_success_rate and not remaining and provider_disabled
+        success_rate >= args.minimum_success_rate
+        and not remaining
+        and provider_disabled
+        and finalization_error is None
     ) else 1
 
 

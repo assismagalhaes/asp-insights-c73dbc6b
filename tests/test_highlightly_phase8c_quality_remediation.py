@@ -5,6 +5,10 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / "supabase/migrations/20260722190000_remediate_highlightly_phase7_quality_gate.sql"
 SMOKE = ROOT / "supabase/tests/highlightly_phase8c_quality_remediation_smoke.sql"
+FINALIZER_FIX = (
+    ROOT / "supabase/migrations/20260722220000_fix_highlightly_finalizer_join_order.sql"
+)
+FINALIZER_SMOKE = ROOT / "supabase/tests/highlightly_phase8c_finalizer_fix_smoke.sql"
 
 
 class HighlightlyPhase8CQualityRemediationContractTests(unittest.TestCase):
@@ -50,6 +54,24 @@ class HighlightlyPhase8CQualityRemediationContractTests(unittest.TestCase):
         self.assertTrue(smoke.rstrip().endswith("ROLLBACK;"))
         self.assertIn("latest-state gate still double counts", smoke)
         self.assertIn("WNBA acceptance is not idempotent", smoke)
+
+    def test_finalizer_fix_joins_runs_after_the_issue_and_before_jobs(self):
+        migration = FINALIZER_FIX.read_text(encoding="utf-8").casefold()
+        smoke = FINALIZER_SMOKE.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "join public.hl_ingestion_runs as ingestion_run "
+            "on ingestion_run.id = issue.run_id",
+            migration,
+        )
+        self.assertIn(
+            "join public.hl_ingestion_jobs as ingestion_job "
+            "on ingestion_job.id = ingestion_run.job_id",
+            migration,
+        )
+        self.assertNotIn("run_row.job_id = job.id", migration)
+        self.assertTrue(smoke.lstrip().startswith("BEGIN;"))
+        self.assertTrue(smoke.rstrip().endswith("ROLLBACK;"))
 
 
 if __name__ == "__main__":
