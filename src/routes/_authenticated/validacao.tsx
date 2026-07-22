@@ -371,8 +371,18 @@ function autoCheck(p: Prognostico, edgeFinal: number | null, executableOdd: numb
     odd_ajustada: executableOdd,
     edge_ajustado: edgeFinal,
   });
-  if (mlbGate.applicable && !mlbGate.approved)
-    return { auto: "PULAR" as const, reason: mlbGate.reasons.join(" ") };
+  if (mlbGate.applicable && !mlbGate.approved) {
+    const blockingReasons = mlbGate.reasons.filter(
+      (reason) => reason !== "MLB sem os dois starters confirmados no Preview enriquecido.",
+    );
+    if (blockingReasons.length)
+      return { auto: "PULAR" as const, reason: blockingReasons.join(" ") };
+    if (mlbGate.missingStarters)
+      return {
+        auto: "ALERTA" as const,
+        reason: "Aplique o Preview enriquecido e confirme os dois starters antes da decisao final",
+      };
+  }
   const matchMatrixGate = evaluateMatchMatrixOperationalGate({
     ...p,
     odd_ajustada: executableOdd,

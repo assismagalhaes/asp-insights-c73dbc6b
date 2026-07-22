@@ -783,8 +783,8 @@ export function detectCriticalShortlistRiskFlags(
     flags,
     mlbGate.applicable && mlbGate.missingStarters,
     "mlb_starters_unconfirmed",
-    "hard_block",
-    "MLB sem os dois starters confirmados no Preview enriquecido.",
+    "medium",
+    "MLB aguardando Preview enriquecido com os dois starters; obrigatorio apenas antes da confirmacao.",
   );
   pushIf(
     flags,
