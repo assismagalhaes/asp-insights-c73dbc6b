@@ -126,7 +126,7 @@ function ModelosPreditivosPage() {
       const saved = globalThis.localStorage?.getItem(LAST_PACKBALL_RESULT_KEY);
       if (!saved) return;
       const parsed = JSON.parse(saved) as ModeloResultado;
-      if (!parsed.modelo || !isPackballModel(parsed.modelo)) return;
+      if (!parsed.modelo || !isPackballModel(parsed.modelo as ModeloDisponivel)) return;
       setModelo(parsed.modelo);
       setResultado(parsed);
     } catch {
