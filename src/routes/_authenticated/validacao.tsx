@@ -82,6 +82,10 @@ import {
   type RankedOpportunityAlternative,
   type RankedOpportunityCandidate,
 } from "@/lib/opportunity-ranking";
+import {
+  evaluateMatchMatrixOperationalGate,
+  evaluateMlbOperationalGate,
+} from "@/lib/critical-validation/critical-shortlist-ranking";
 
 export const Route = createFileRoute("/_authenticated/validacao")({
   head: () => ({ meta: [{ title: "Validação Crítica - ASP Insights" }] }),
@@ -288,6 +292,11 @@ function mergeMatchupPreviewContext(baseContext: string, previewContext: string)
   return [base, preview].filter(Boolean).join("\n\n");
 }
 
+function extractMatchupPreviewContext(context: string): string {
+  const markerIndex = context.indexOf(MATCHUP_PREVIEW_CONTEXT_MARKER);
+  return markerIndex >= 0 ? context.slice(markerIndex).trim() : "";
+}
+
 function formatIaParecerForDisplay(parecer: string): string {
   return parecer
     .split(/\r?\n/)
@@ -355,8 +364,22 @@ function autoCheck(p: Prognostico, edgeFinal: number | null, executableOdd: numb
       };
     return { auto: "DESTAQUE" as const, reason: "Odd executavel aprovada para validacao" };
   }
-  if (p.odd_ofertada < p.odd_valor)
+  if ((executableOdd ?? p.odd_ofertada) < p.odd_valor)
     return { auto: "PULAR" as const, reason: "Odd ofertada menor que odd de valor" };
+  const mlbGate = evaluateMlbOperationalGate({
+    ...p,
+    odd_ajustada: executableOdd,
+    edge_ajustado: edgeFinal,
+  });
+  if (mlbGate.applicable && !mlbGate.approved)
+    return { auto: "PULAR" as const, reason: mlbGate.reasons.join(" ") };
+  const matchMatrixGate = evaluateMatchMatrixOperationalGate({
+    ...p,
+    odd_ajustada: executableOdd,
+    edge_ajustado: edgeFinal,
+  });
+  if (matchMatrixGate.applicable && !matchMatrixGate.approved)
+    return { auto: "PULAR" as const, reason: matchMatrixGate.reasons.join(" ") };
   if (edgeFinal != null && edgeFinal < 0)
     return { auto: "PULAR" as const, reason: "Edge negativo" };
   if (p.probabilidade_final < 55)
@@ -533,14 +556,14 @@ function Validacao() {
         if (!previewContext) continue;
 
         const relatedGroups = grupos.filter((group) => group.eventKey === eventKey);
-        const firstGroup = relatedGroups[0];
-        const current = next[eventKey] ?? (firstGroup ? getContextoInicialGrupo(firstGroup) : "");
-        if (current.includes(MATCHUP_PREVIEW_CONTEXT_MARKER)) continue;
-
-        const merged = mergeMatchupPreviewContext(current, previewContext);
-        next[eventKey] = merged;
-        for (const group of relatedGroups) next[group.key] = merged;
-        changed = true;
+        for (const group of relatedGroups) {
+          const current = next[group.key] ?? getContextoInicialGrupo(group);
+          const merged = mergeMatchupPreviewContext(current, previewContext);
+          if (merged !== current) {
+            next[group.key] = merged;
+            changed = true;
+          }
+        }
       }
 
       return changed ? next : prev;
@@ -577,12 +600,10 @@ function Validacao() {
         }
         setContextos((prev) => {
           const next = { ...prev };
-          const group = grupos.find((g) => g.eventKey === eventKey);
-          const base = prev[eventKey] ?? (group ? getContextoInicialGrupo(group) : "");
-          const merged = mergeMatchupPreviewContext(base, previewContext);
-          next[eventKey] = merged;
           for (const g of grupos) {
-            if (g.eventKey === eventKey) next[g.key] = merged;
+            if (g.eventKey !== eventKey) continue;
+            const base = prev[g.key] ?? getContextoInicialGrupo(g);
+            next[g.key] = mergeMatchupPreviewContext(base, previewContext);
           }
           return next;
         });
@@ -596,16 +617,10 @@ function Validacao() {
   };
 
   const getContextoGrupo = (g: ValidationGroup): string =>
-    contextos[g.key] ?? contextos[g.eventKey] ?? getContextoInicialGrupo(g);
+    contextos[g.key] ?? getContextoInicialGrupo(g);
 
   const setContextoGrupo = (g: ValidationGroup, value: string) => {
-    setContextos((prev) => {
-      const next = { ...prev, [g.eventKey]: value };
-      for (const group of grupos) {
-        if (group.eventKey === g.eventKey) next[group.key] = value;
-      }
-      return next;
-    });
+    setContextos((prev) => ({ ...prev, [g.key]: value }));
   };
 
   const getOddAjustadaNum = (p: Prognostico): number | null => {
@@ -912,6 +927,26 @@ function Validacao() {
       return;
     }
     if (decisao === "CONFIRMA" && selected) {
+      const mlbGate = evaluateMlbOperationalGate({
+        ...selected,
+        odd_ajustada: getOddAjustadaNum(selected),
+        edge_ajustado: getEdgeAjustado(selected),
+        dados_tecnicos: getContextoGrupo(g),
+      });
+      if (mlbGate.applicable && !mlbGate.approved) {
+        toast.error(mlbGate.reasons.join(" "));
+        return;
+      }
+      const matchMatrixGate = evaluateMatchMatrixOperationalGate({
+        ...selected,
+        odd_ajustada: getOddAjustadaNum(selected),
+        edge_ajustado: getEdgeAjustado(selected),
+        dados_tecnicos: getContextoGrupo(g),
+      });
+      if (matchMatrixGate.applicable && !matchMatrixGate.approved) {
+        toast.error(matchMatrixGate.reasons.join(" "));
+        return;
+      }
       const packball = getPackballValidationRequirements(selected);
       if (packball) {
         const explicitOdd = getOddAjustadaNum(selected);
@@ -963,13 +998,20 @@ function Validacao() {
             : Number(stakes[retained.id] ?? retained.stake ?? 0)
           : 1;
       const parecerBase = parecer || "Grupo recusado na validação crítica agrupada.";
-      if (contextoAnalise) {
+      const previewContext = extractMatchupPreviewContext(contextoAnalise);
+      if (previewContext) {
         const groupIds = new Set(g.opcoes.map((option) => option.id));
         const relatedEventOptions = pendentes.filter(
           (option) => !groupIds.has(option.id) && getEventKey(option) === g.eventKey,
         );
         for (const option of relatedEventOptions) {
-          await updateProg.mutateAsync({ id: option.id, dados_tecnicos: contextoAnalise });
+          await updateProg.mutateAsync({
+            id: option.id,
+            dados_tecnicos: mergeMatchupPreviewContext(
+              getDadosTecnicos(option)?.trim() ?? "",
+              previewContext,
+            ),
+          });
         }
       }
       await registrarValidacaoGrupo(

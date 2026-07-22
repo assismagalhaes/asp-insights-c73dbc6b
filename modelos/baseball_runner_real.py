@@ -823,6 +823,7 @@ def generate_game_picks(
             continue
         over_sim = total_runs_probability_overdispersed(expected_home, expected_away, line, "over")
         under_sim = total_runs_probability_overdispersed(expected_home, expected_away, line, "under")
+        push_sim = max(0.0, 1.0 - over_sim - under_sim)
         hist_over, over_sample, over_warnings = historical_total_probability(home, away, line, "over")
         hist_under, under_sample, under_warnings = historical_total_probability(home, away, line, "under")
         add_total_pick(
@@ -832,6 +833,7 @@ def generate_game_picks(
             line,
             odds.get("over"),
             over_sim,
+            push_sim,
             hist_over,
             odds.get("under"),
             game_context,
@@ -846,6 +848,7 @@ def generate_game_picks(
             line,
             odds.get("under"),
             under_sim,
+            push_sim,
             hist_under,
             odds.get("over"),
             game_context,
@@ -942,6 +945,7 @@ def add_total_pick(
     line: float,
     odd: Any,
     sim_prob: float,
+    push_prob: float,
     hist_prob: float,
     other_odd: Any,
     game_context: str,
@@ -977,6 +981,7 @@ def add_total_pick(
         {
             "prob_hist": hist_prob,
             "prob_sim": sim_prob,
+            "prob_push": push_prob,
             "prob_no_vig": vig_prob,
             "odd_consenso": market_odd,
             "odd_oposta_consenso": other_market_odd,
@@ -1290,8 +1295,9 @@ def append_if_ev(
         return False
     if prob >= max_prob:
         return False
-    odd_valor = 1 / prob
-    edge = (odd * prob - 1) * 100
+    push_probability = max(0.0, min(0.99, float((diagnostics or {}).get("prob_push") or 0.0)))
+    odd_valor = (1 - push_probability) / prob
+    edge = (odd * prob + push_probability - 1) * 100
     if not (odd > odd_valor and odd > 1.25 and odd <= 2.00):
         return False
     if edge < min_edge:
@@ -1313,6 +1319,7 @@ def append_if_ev(
         f" uncertainty_haircut={float(uncertainty.get('haircut', 0.0)):.4f};"
         f" odd_mercado_base={(market_odd or odd):.3f};"
         f" prob_final={prob:.4f}; sample_size_hist={int(diagnostics.get('sample_size_hist') or 0)};"
+        f" prob_push={push_probability:.4f};"
         f" calibracao={clean(calibration.get('status')) or 'identity'};"
         f" lambda_home={float(lambda_diagnostics.get('expected_home', 0.0)):.3f};"
         f" lambda_away={float(lambda_diagnostics.get('expected_away', 0.0)):.3f};"
@@ -1374,6 +1381,8 @@ def build_game_context(game: dict[str, Any], home: TeamStats, away: TeamStats, s
         home, away, league_runs
     )
     total_expected = expected_home + expected_away
+    total_p10 = total_runs_quantile(expected_home, expected_away, 0.10)
+    total_p90 = total_runs_quantile(expected_home, expected_away, 0.90)
     delta_temporal_win_rate = home.win_rate - away.win_rate
     home_record = season_record(home.current_rows)
     away_record = season_record(away.current_rows)
@@ -1431,7 +1440,7 @@ def build_game_context(game: dict[str, Any], home: TeamStats, away: TeamStats, s
             f"   Media temporal {game['away']}: Marcadas = {float(away.temporal_for or away.avg_for):.2f} | Sofridas = {float(away.temporal_against or away.avg_against):.2f}",
             f"   Media da liga usada = {lambda_diagnostics['league_runs']:.3f}",
             f"   Distribuicao = Negative Binomial | Sobredispersao = {RUNS_OVERDISPERSION:.3f}",
-            f"   Expectativa de Total de Corridas = {total_expected:.2f} | Min = {max(0.0, total_expected - 6.5):.1f} | Max = {total_expected + 6.5:.1f}",
+            f"   Expectativa de Total de Corridas = {total_expected:.2f} | P10 = {total_p10:.0f} | P90 = {total_p90:.0f}",
             "",
             "Diferencial de Corridas:",
             f"   {game['home']}: {home_diff:+.2f}",
@@ -2076,6 +2085,27 @@ def total_runs_probability_overdispersed(
             elif normalized_side == "under" and total < line:
                 probability += p_home * p_away
     return max(0.01, min(0.99, probability))
+
+
+def total_runs_quantile(
+    home_lam: float,
+    away_lam: float,
+    quantile: float,
+    dispersion: float = RUNS_OVERDISPERSION,
+) -> int:
+    target = max(0.0, min(1.0, quantile))
+    home_distribution = score_distribution(home_lam, dispersion)
+    away_distribution = score_distribution(away_lam, dispersion)
+    totals = [0.0] * (len(home_distribution) + len(away_distribution) - 1)
+    for home_runs, p_home in enumerate(home_distribution):
+        for away_runs, p_away in enumerate(away_distribution):
+            totals[home_runs + away_runs] += p_home * p_away
+    cumulative = 0.0
+    for total, probability in enumerate(totals):
+        cumulative += probability
+        if cumulative >= target:
+            return total
+    return len(totals) - 1
 
 
 def win_probability_poisson(home_lam: float, away_lam: float, max_runs: int = 20) -> float:

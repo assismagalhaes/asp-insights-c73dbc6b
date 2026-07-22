@@ -309,6 +309,7 @@ class BaseballRunnerV11Tests(unittest.TestCase):
             7.5,
             1.80,
             0.62,
+            0.0,
             0.56,
             None,
             "contexto",
@@ -317,6 +318,41 @@ class BaseballRunnerV11Tests(unittest.TestCase):
         )
 
         self.assertEqual(picks, [])
+
+    def test_integer_total_push_is_included_in_fair_odd_and_edge(self) -> None:
+        picks: list[dict[str, object]] = []
+
+        runner.append_if_ev(
+            picks,
+            self._game(),
+            "Total de Corridas",
+            "Over 8",
+            "8",
+            1.81,
+            0.50,
+            "contexto",
+            "teste",
+            {
+                "prob_hist": 0.50,
+                "prob_sim": 0.50,
+                "prob_no_vig": 0.50,
+                "prob_push": 0.10,
+                "sample_size_hist": 20,
+            },
+            min_edge=0.0,
+        )
+
+        self.assertEqual(len(picks), 1)
+        self.assertEqual(picks[0]["odd_valor"], 1.8)
+        self.assertEqual(picks[0]["edge"], 0.5)
+        self.assertIn("prob_push=0.1000", picks[0]["observacoes"])
+
+    def test_total_run_quantiles_are_ordered_around_expected_range(self) -> None:
+        p10 = runner.total_runs_quantile(4.7, 4.2, 0.10)
+        p90 = runner.total_runs_quantile(4.7, 4.2, 0.90)
+
+        self.assertLess(p10, p90)
+        self.assertGreaterEqual(p10, 0)
 
     def test_moneyline_still_generates_with_valid_pair(self) -> None:
         picks: list[dict[str, object]] = []
