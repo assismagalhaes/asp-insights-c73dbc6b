@@ -11,6 +11,7 @@ import os
 from typing import Any, Iterable, Mapping
 from uuid import uuid4
 
+from api.highlightly_locks import running_lock_blocks_start
 from api.highlightly.worker import HighlightlyWorker
 from api.highlightly_client import HighlightlyClient
 from api.highlightly_repository import HighlightlyRepository
@@ -168,7 +169,10 @@ def _active_jobs(repository: HighlightlyRepository, *, limit: int) -> list[dict[
         rows.extend(
             repository.select_rows(
                 "hl_ingestion_jobs",
-                columns="id,status,endpoint_key,dedupe_key,shadow_scope",
+                columns=(
+                    "id,status,endpoint_key,dedupe_key,shadow_scope,"
+                    "worker_id,locked_at,lock_expires_at"
+                ),
                 filters={"status": status},
                 limit=limit + 1,
                 order="created_at.asc",
@@ -258,7 +262,7 @@ def main() -> int:
     outsiders = [row for row in active_before if not _job_belongs_to_scope(row, scope)]
     if outsiders:
         raise RuntimeError("Active ingestion queue contains jobs outside the requested Phase 7 scope")
-    if any(row.get("status") == "running" for row in active_before):
+    if any(running_lock_blocks_start(row) for row in active_before):
         raise RuntimeError("An ingestion job is already running; refusing concurrent Phase 7 execution")
 
     today = datetime.now(timezone.utc).date().isoformat()
@@ -270,7 +274,7 @@ def main() -> int:
 
     existing_windows = repository.select_rows(
         "hl_shadow_windows",
-        columns="id,scope,status,started_at,planned_end_at",
+        columns="id,scope,status,started_at,planned_end_at,config",
         filters={"scope": scope},
         limit=1,
     )
@@ -304,6 +308,24 @@ def main() -> int:
             on_conflict="scope",
         )
         window = saved[0]
+
+    current_config = dict(window.get("config") or {})
+    current_config["current_slice"] = {
+        "data_start": args.data_start.isoformat(),
+        "data_end": (args.data_start + timedelta(days=args.backfill_days - 1)).isoformat(),
+        "backfill_days": args.backfill_days,
+        "status": "running",
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "worker_id": f"{scope}:phase7",
+    }
+    patched_windows = repository.patch_rows(
+        "hl_shadow_windows",
+        {"status": "running", "config": current_config},
+        filters={"id": window["id"]},
+    )
+    if len(patched_windows) != 1:
+        raise RuntimeError("Could not publish the current Highlightly shadow slice")
+    window = patched_windows[0]
 
     for job in seed_jobs:
         repository.enqueue_job(

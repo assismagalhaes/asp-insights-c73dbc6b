@@ -20,6 +20,16 @@ class HighlightlyPhaseSevenShadowTests(unittest.TestCase):
         row = {"shadow_scope": None, "dedupe_key": "phase7-legacy:football:123"}
         self.assertTrue(phase7._job_belongs_to_scope(row, "phase7-legacy"))
 
+    def test_active_job_query_includes_lease_metadata_for_recovery(self):
+        repository = Mock()
+        repository.select_rows.return_value = []
+
+        phase7._active_jobs(repository, limit=10)
+
+        self.assertEqual(repository.select_rows.call_count, len(phase7.ACTIVE_STATUSES))
+        for call in repository.select_rows.call_args_list:
+            self.assertIn("lock_expires_at", call.kwargs["columns"])
+
     def test_seed_plan_is_paginated_bounded_and_covers_all_sports(self):
         jobs = phase7.build_seed_jobs(
             scope="phase7-test",
@@ -174,6 +184,19 @@ class HighlightlyPhaseSevenShadowTests(unittest.TestCase):
         repository.upsert_rows.return_value = [
             {"id": "window-1", "scope": "phase7-live", "status": "running"}
         ]
+        repository.patch_rows.return_value = [
+            {
+                "id": "window-1",
+                "scope": "phase7-live",
+                "status": "running",
+                "config": {
+                    "current_slice": {
+                        "data_start": "2026-07-15",
+                        "data_end": "2026-07-15",
+                    }
+                },
+            }
+        ]
         repository.rpc.side_effect = [
             {"expected_matches": 5},
             {"matches_expected": 5, "matches_seen": 5},
@@ -194,6 +217,9 @@ class HighlightlyPhaseSevenShadowTests(unittest.TestCase):
             exit_code = phase7.main()
 
         self.assertEqual(exit_code, 0)
+        published_config = repository.patch_rows.call_args.args[1]["config"]
+        self.assertEqual(published_config["current_slice"]["data_start"], "2026-07-15")
+        self.assertEqual(published_config["current_slice"]["data_end"], "2026-07-15")
         repository.set_provider_enabled.assert_any_call("highlightly", True)
         repository.set_provider_enabled.assert_any_call("highlightly", False)
         self.assertEqual(worker_factory.call_args.kwargs["daily_quota_ceiling"], 6_750)

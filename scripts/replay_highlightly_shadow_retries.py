@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import json
 import os
 
+from api.highlightly_locks import running_lock_blocks_start
 from api.highlightly.worker import HighlightlyWorker
 from api.highlightly_client import HighlightlyClient
 from api.highlightly_repository import HighlightlyRepository
@@ -30,11 +31,12 @@ def main() -> int:
         raise RuntimeError("Highlightly provider was already enabled; refusing a non-isolated replay")
     running = repository.select_rows(
         "hl_ingestion_jobs",
-        columns="id",
+        columns="id,status,lock_expires_at",
         filters={"status": "running"},
         limit=1,
+        order="lock_expires_at.desc",
     )
-    if running:
+    if any(running_lock_blocks_start(row) for row in running):
         raise RuntimeError("An ingestion job is already running; refusing concurrent replay")
 
     retry_jobs = repository.select_rows(

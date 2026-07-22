@@ -8,6 +8,7 @@ import {
   History,
   LayoutDashboard,
   ListChecks,
+  MonitorCog,
   Megaphone,
   Settings,
   ShieldCheck,
@@ -50,7 +51,10 @@ const navigationGroups = [
       { title: "Coleta de Odds", url: "/coleta-dados", icon: DownloadCloud },
       { title: "Base de Dados", url: "/base-dados", icon: Database },
       ...(featureFlags.highlightlyAnalysis
-        ? [{ title: "Central Esportiva", url: "/central-esportiva", icon: ChartNoAxesCombined }]
+        ? [
+            { title: "Central Esportiva", url: "/central-esportiva", icon: ChartNoAxesCombined },
+            { title: "Monitor Highlightly", url: "/monitor-highlightly", icon: MonitorCog },
+          ]
         : []),
       { title: "Modelos Preditivos", url: "/modelos-preditivos", icon: Cpu },
       { title: "Aprendizado da IA", url: "/aprendizado-ia", icon: BrainCircuit },

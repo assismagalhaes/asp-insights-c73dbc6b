@@ -7,6 +7,7 @@ from collections import Counter
 import json
 import os
 
+from api.highlightly_locks import running_lock_blocks_start
 from api.highlightly.worker import HighlightlyWorker
 from api.highlightly_client import HighlightlyClient
 from api.highlightly_repository import HighlightlyRepository
@@ -21,7 +22,7 @@ def _active_jobs(repository: HighlightlyRepository, *, limit: int) -> list[dict]
         rows.extend(
             repository.select_rows(
                 "hl_ingestion_jobs",
-                columns="id,status,endpoint_key,dedupe_key",
+                columns="id,status,endpoint_key,dedupe_key,lock_expires_at",
                 filters={"status": status},
                 limit=limit + 1,
                 order="created_at.asc",
@@ -46,7 +47,7 @@ def main() -> int:
         raise RuntimeError("Highlightly provider was already enabled; refusing a non-isolated drain")
 
     active_before = _active_jobs(repository, limit=args.max_jobs)
-    running = [row for row in active_before if row.get("status") == "running"]
+    running = [row for row in active_before if running_lock_blocks_start(row)]
     if running:
         raise RuntimeError("An ingestion job is already running; refusing concurrent drain")
     outsiders = [row for row in active_before if args.scope not in str(row.get("dedupe_key") or "")]

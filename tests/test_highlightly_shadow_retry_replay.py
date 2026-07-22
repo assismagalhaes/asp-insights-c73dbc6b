@@ -51,6 +51,8 @@ class HighlightlyShadowRetryReplayTests(unittest.TestCase):
         repository.set_provider_enabled.assert_any_call("highlightly", True)
         repository.set_provider_enabled.assert_any_call("highlightly", False)
         self.assertEqual(repository.daily_request_usage.call_count, 2)
+        running_query = repository.select_rows.call_args_list[0]
+        self.assertEqual(running_query.kwargs["order"], "lock_expires_at.desc")
 
 
 if __name__ == "__main__":
