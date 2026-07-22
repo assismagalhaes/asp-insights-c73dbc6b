@@ -1111,6 +1111,13 @@ export type Database = {
             foreignKeyName: "hl_competition_scopes_provider_id_fkey"
             columns: ["provider_id"]
             isOneToOne: false
+            referencedRelation: "hl_highlightly_future_gate_v"
+            referencedColumns: ["provider_id"]
+          },
+          {
+            foreignKeyName: "hl_competition_scopes_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
             referencedRelation: "sports_providers"
             referencedColumns: ["id"]
           },
@@ -1442,6 +1449,13 @@ export type Database = {
             foreignKeyName: "hl_metric_definitions_provider_id_fkey"
             columns: ["provider_id"]
             isOneToOne: false
+            referencedRelation: "hl_highlightly_future_gate_v"
+            referencedColumns: ["provider_id"]
+          },
+          {
+            foreignKeyName: "hl_metric_definitions_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
             referencedRelation: "sports_providers"
             referencedColumns: ["id"]
           },
@@ -1492,6 +1506,13 @@ export type Database = {
           run_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "hl_rate_limit_usage_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "hl_highlightly_future_gate_v"
+            referencedColumns: ["provider_id"]
+          },
           {
             foreignKeyName: "hl_rate_limit_usage_provider_id_fkey"
             columns: ["provider_id"]
@@ -1581,6 +1602,13 @@ export type Database = {
             foreignKeyName: "hl_raw_objects_provider_id_fkey"
             columns: ["provider_id"]
             isOneToOne: false
+            referencedRelation: "hl_highlightly_future_gate_v"
+            referencedColumns: ["provider_id"]
+          },
+          {
+            foreignKeyName: "hl_raw_objects_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
             referencedRelation: "sports_providers"
             referencedColumns: ["id"]
           },
@@ -1614,10 +1642,13 @@ export type Database = {
           latency_p50_ms: number | null
           latency_p95_ms: number | null
           match_coverage_pct: number | null
+          matches_eligible_with_odds: number
           matches_expected: number
+          matches_odds_eligible: number
           matches_seen: number
           matches_with_odds: number
           observed_on: string
+          odds_availability_pct: number | null
           odds_coverage_pct: number | null
           open_critical_issues: number
           open_error_issues: number
@@ -1641,10 +1672,13 @@ export type Database = {
           latency_p50_ms?: number | null
           latency_p95_ms?: number | null
           match_coverage_pct?: number | null
+          matches_eligible_with_odds?: number
           matches_expected?: number
+          matches_odds_eligible?: number
           matches_seen?: number
           matches_with_odds?: number
           observed_on: string
+          odds_availability_pct?: number | null
           odds_coverage_pct?: number | null
           open_critical_issues?: number
           open_error_issues?: number
@@ -1668,10 +1702,13 @@ export type Database = {
           latency_p50_ms?: number | null
           latency_p95_ms?: number | null
           match_coverage_pct?: number | null
+          matches_eligible_with_odds?: number
           matches_expected?: number
+          matches_odds_eligible?: number
           matches_seen?: number
           matches_with_odds?: number
           observed_on?: string
+          odds_availability_pct?: number | null
           odds_coverage_pct?: number | null
           open_critical_issues?: number
           open_error_issues?: number
@@ -1758,6 +1795,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "hl_shadow_windows_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "hl_highlightly_future_gate_v"
+            referencedColumns: ["provider_id"]
+          },
           {
             foreignKeyName: "hl_shadow_windows_provider_id_fkey"
             columns: ["provider_id"]
@@ -3033,6 +3077,13 @@ export type Database = {
             foreignKeyName: "sports_highlights_provider_id_fkey"
             columns: ["provider_id"]
             isOneToOne: false
+            referencedRelation: "hl_highlightly_future_gate_v"
+            referencedColumns: ["provider_id"]
+          },
+          {
+            foreignKeyName: "sports_highlights_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
             referencedRelation: "sports_providers"
             referencedColumns: ["id"]
           },
@@ -3297,6 +3348,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "sports_market_definitions_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "hl_highlightly_future_gate_v"
+            referencedColumns: ["provider_id"]
+          },
           {
             foreignKeyName: "sports_market_definitions_provider_id_fkey"
             columns: ["provider_id"]
@@ -4833,6 +4891,13 @@ export type Database = {
             foreignKeyName: "sports_provider_entities_provider_id_fkey"
             columns: ["provider_id"]
             isOneToOne: false
+            referencedRelation: "hl_highlightly_future_gate_v"
+            referencedColumns: ["provider_id"]
+          },
+          {
+            foreignKeyName: "sports_provider_entities_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
             referencedRelation: "sports_providers"
             referencedColumns: ["id"]
           },
@@ -5590,6 +5655,21 @@ export type Database = {
       }
     }
     Views: {
+      hl_highlightly_future_gate_v: {
+        Row: {
+          gate_status: string | null
+          generated_at: string | null
+          match_coverage_pct: number | null
+          maximum_freshness_p95_seconds: number | null
+          observed_days: number | null
+          observed_sport_days: number | null
+          odds_availability_pct: number | null
+          open_critical_issues: number | null
+          provider_id: string | null
+          unrecovered_jobs: number | null
+        }
+        Relationships: []
+      }
       hl_phase7_window_health_v: {
         Row: {
           daily_request_budget: number | null
@@ -5599,8 +5679,10 @@ export type Database = {
           match_coverage_sla: number | null
           maximum_freshness_p95_seconds: number | null
           maximum_latency_p95_ms: number | null
+          minimum_eligible_odds_coverage_pct: number | null
           minimum_match_coverage_pct: number | null
           minimum_odds_coverage_pct: number | null
+          minimum_raw_odds_coverage_pct: number | null
           observed_days: number | null
           odds_coverage_sla: number | null
           open_critical_issues: number | null
@@ -5613,6 +5695,7 @@ export type Database = {
           status: string | null
           unrecovered_jobs: number | null
           window_id: string | null
+          window_kind: string | null
         }
         Relationships: []
       }
@@ -5861,6 +5944,10 @@ export type Database = {
       }
     }
     Functions: {
+      accept_highlightly_quarantined_wnba_standings_issues: {
+        Args: { p_scope: string }
+        Returns: number
+      }
       accept_highlightly_unavailable_odds_issues: {
         Args: never
         Returns: number
@@ -5951,6 +6038,34 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "hl_ingestion_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      finalize_highlightly_shadow_window: {
+        Args: { p_scope: string }
+        Returns: {
+          config: Json
+          created_at: string
+          daily_request_budget: number
+          ended_at: string | null
+          freshness_sla_seconds: number
+          id: string
+          match_coverage_sla: number
+          notes: string | null
+          odds_coverage_sla: number
+          planned_end_at: string
+          provider_id: string
+          reserve_requests: number
+          scope: string
+          sports: string[]
+          started_at: string
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "hl_shadow_windows"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -6167,10 +6282,13 @@ export type Database = {
           latency_p50_ms: number | null
           latency_p95_ms: number | null
           match_coverage_pct: number | null
+          matches_eligible_with_odds: number
           matches_expected: number
+          matches_odds_eligible: number
           matches_seen: number
           matches_with_odds: number
           observed_on: string
+          odds_availability_pct: number | null
           odds_coverage_pct: number | null
           open_critical_issues: number
           open_error_issues: number
@@ -6225,6 +6343,39 @@ export type Database = {
           p_snapshot_at?: string
         }
         Returns: number
+      }
+      requeue_highlightly_dead_521_jobs: {
+        Args: { p_limit?: number; p_scope: string }
+        Returns: {
+          attempts: number
+          created_at: string
+          cursor_data: Json
+          dedupe_key: string
+          endpoint_key: string
+          finished_at: string | null
+          id: string
+          last_error: string | null
+          lock_expires_at: string | null
+          locked_at: string | null
+          max_attempts: number
+          priority: number
+          reprocess_raw_object_id: string | null
+          request_params: Json
+          resource: string
+          scheduled_at: string
+          shadow_scope: string | null
+          sport: string
+          started_at: string | null
+          status: string
+          updated_at: string
+          worker_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "hl_ingestion_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       upsert_sports_odds_quote: {
         Args: {
