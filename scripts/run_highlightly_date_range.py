@@ -115,6 +115,8 @@ def build_slice_command(
         str(daily_request_budget),
         "--max-jobs",
         str(max_jobs),
+        "--window-kind",
+        "historical",
         "--confirm-phase7-shadow",
     ]
 
@@ -232,9 +234,25 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     if _provider(repository).get("enabled"):
         raise RuntimeError("Highlightly provider was not restored to disabled")
+    finalized = repository.rpc(
+        "finalize_highlightly_shadow_window",
+        {"p_scope": args.scope},
+    )
+    finalized_window = (
+        dict(finalized[0])
+        if isinstance(finalized, list) and finalized
+        else dict(finalized or {})
+    )
     state["completed_at"] = datetime.now(timezone.utc).isoformat()
+    state["window_status"] = finalized_window.get("status")
     _save_state(args.state_file, state)
-    print(json.dumps({**plan, "event": "range_complete", "state": state}, ensure_ascii=False), flush=True)
+    print(
+        json.dumps(
+            {**plan, "event": "range_complete", "state": state, "finalized_window": finalized_window},
+            ensure_ascii=False,
+        ),
+        flush=True,
+    )
     return 0
 
 

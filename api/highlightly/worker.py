@@ -101,6 +101,19 @@ def _safe_error(exc: Exception) -> str:
     return text[:1000]
 
 
+def _retry_delay_seconds(exc: Exception, attempt: int) -> int:
+    """Back off recurrent provider failures without exceeding the RPC limit."""
+
+    if isinstance(exc, WorkerDeferredError):
+        return exc.retry_seconds
+    normalized_attempt = max(1, int(attempt or 1))
+    if isinstance(exc, HighlightlyError) and exc.status == 521:
+        return min(21_600, 300 * (3 ** (normalized_attempt - 1)))
+    if isinstance(exc, HighlightlyError) and exc.status == 429:
+        return min(21_600, 900 * normalized_attempt)
+    return 300
+
+
 def _standings_capture_scope(competition: Any, season: Any) -> str:
     """Deduplicate current standings snapshots independently of match dates."""
 
@@ -818,6 +831,6 @@ class HighlightlyWorker:
             outcome = "retry" if retryable else "dead"
             message = _safe_error(exc)
             self.repository.finish_run(run_id, {"status": "failed", "http_status": getattr(exc, "status", None), "duration_ms": duration, "error_code": exc.__class__.__name__, "error_message": message})
-            retry_delay = exc.retry_seconds if isinstance(exc, WorkerDeferredError) else 300
+            retry_delay = _retry_delay_seconds(exc, int(job.get("attempts") or 1))
             self.repository.finish_job(job_id, self.worker_id, outcome, error=message, retry_delay_seconds=retry_delay)
             return WorkerResult(status=outcome, job_id=job_id, run_id=run_id, message=message)

@@ -30,6 +30,7 @@ class HighlightlyDateRangeTests(unittest.TestCase):
         )
         self.assertIn("--all-football-leagues", command)
         self.assertIn("--confirm-phase7-shadow", command)
+        self.assertEqual(command[command.index("--window-kind") + 1], "historical")
         self.assertNotIn("--sport", command)
         self.assertEqual(command[command.index("--backfill-days") + 1], "7")
 

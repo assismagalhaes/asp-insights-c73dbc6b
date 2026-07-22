@@ -74,11 +74,16 @@ function statusLabel(value?: string): string {
     running: "Em execução",
     passed: "Aprovada",
     failed: "Falhou",
+    completed_with_exceptions: "Concluída com exceções",
     cancelled: "Cancelada",
     collecting: "Coletando",
     ready: "Pronta",
     blocked: "Bloqueada",
     below_sla: "Abaixo do SLA",
+    historical_complete: "Histórico concluído",
+    historical_complete_with_exceptions: "Histórico com exceções",
+    future_slice_complete: "Fatia futura concluída",
+    future_slice_complete_with_exceptions: "Fatia futura com exceções",
   };
   return labels[value ?? ""] ?? value ?? "Sem leitura";
 }

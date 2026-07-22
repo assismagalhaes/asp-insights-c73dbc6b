@@ -40,6 +40,8 @@ class HighlightlyFutureScheduleTests(unittest.TestCase):
 
         self.assertIn("--all-football-leagues", command)
         self.assertEqual(command[command.index("--fanout-mode") + 1], "pregame")
+        self.assertEqual(command[command.index("--window-kind") + 1], "future")
+        self.assertIn("--finalize-window", command)
         self.assertEqual(command[command.index("--backfill-days") + 1], "5")
         self.assertNotIn("--sport", command)
 

@@ -59,7 +59,12 @@ def main() -> int:
         repository.ingestion_context(str(health["sports"][0]))["provider"].get("enabled")
     )
     gate_status = str(health.get("gate_status") or "blocked")
-    failed = provider_enabled or gate_status in {"blocked", "below_sla"}
+    failed = provider_enabled or gate_status in {
+        "blocked",
+        "below_sla",
+        "historical_complete_with_exceptions",
+        "future_slice_complete_with_exceptions",
+    }
     if args.require_ready and gate_status != "ready":
         failed = True
     job_breakdown = Counter(

@@ -214,6 +214,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--daily-request-budget", type=int, default=BACKFILL_BUDGET_LIMIT)
     parser.add_argument("--max-jobs", type=int, default=200)
     parser.add_argument("--fanout-mode", choices=("full", "pregame"), default="full")
+    parser.add_argument(
+        "--window-kind",
+        choices=("shadow", "historical", "future"),
+        default="shadow",
+    )
+    parser.add_argument("--finalize-window", action="store_true")
     parser.add_argument("--confirm-phase7-shadow", action="store_true")
     args = parser.parse_args()
     if not 1 <= args.backfill_days <= 7:
@@ -251,6 +257,8 @@ def main() -> int:
         "reserve_requests": RESERVE_REQUESTS,
         "max_jobs": args.max_jobs,
         "fanout_mode": args.fanout_mode,
+        "window_kind": args.window_kind,
+        "finalize_window": args.finalize_window,
         "all_football_leagues": args.all_football_leagues,
         "football_league_ids": args.football_league_id,
     }
@@ -313,6 +321,7 @@ def main() -> int:
                         "football_league_ids": args.football_league_id,
                         "max_jobs_per_slice": args.max_jobs,
                         "fanout_mode": args.fanout_mode,
+                        "window_kind": args.window_kind,
                     },
                 }
             ],
@@ -321,6 +330,7 @@ def main() -> int:
         window = saved[0]
 
     current_config = dict(window.get("config") or {})
+    current_config["window_kind"] = args.window_kind
     current_config["current_slice"] = {
         "data_start": args.data_start.isoformat(),
         "data_end": (args.data_start + timedelta(days=args.backfill_days - 1)).isoformat(),
@@ -401,6 +411,14 @@ def main() -> int:
 
     provider_disabled = not bool(repository.ingestion_context(sports[0])["provider"].get("enabled"))
     active_after = _active_jobs(repository, limit=args.max_jobs)
+    finalized_window: dict[str, Any] | None = None
+    if args.finalize_window and not active_after and provider_disabled:
+        finalized_window = _as_row(
+            repository.rpc(
+                "finalize_highlightly_shadow_window",
+                {"p_scope": scope},
+            )
+        )
     health_rows = repository.select_rows(
         "hl_phase7_window_health_v",
         filters={"window_id": window["id"]},
@@ -415,6 +433,7 @@ def main() -> int:
         "statuses": dict(Counter(row["status"] for row in results)),
         "active_after": len(active_after),
         "provider_restored_disabled": provider_disabled,
+        "finalized_window": finalized_window,
         "observations": observations,
         "reconciliations": reconciliations,
         "health": health_rows[0] if health_rows else None,

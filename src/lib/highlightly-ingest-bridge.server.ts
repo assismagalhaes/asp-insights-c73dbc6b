@@ -63,6 +63,7 @@ export const HIGHLIGHTLY_BRIDGE_TABLES = new Set([
   "hl_shadow_observations",
   "hl_source_reconciliations",
   "hl_phase7_window_health_v",
+  "hl_highlightly_future_gate_v",
 ]);
 
 export const HIGHLIGHTLY_BRIDGE_RPCS = new Set([
@@ -77,6 +78,9 @@ export const HIGHLIGHTLY_BRIDGE_RPCS = new Set([
   "cancel_highlightly_redundant_shadow_jobs",
   "get_highlightly_daily_request_usage",
   "accept_highlightly_unavailable_odds_issues",
+  "accept_highlightly_quarantined_wnba_standings_issues",
+  "requeue_highlightly_dead_521_jobs",
+  "finalize_highlightly_shadow_window",
 ]);
 
 export type HighlightlyBridgeTarget = {
