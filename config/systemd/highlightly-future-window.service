@@ -1,0 +1,14 @@
+[Unit]
+Description=ASP Insights rolling Highlightly pregame window
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/home/ubuntu/asp-insights-c73dbc6b
+EnvironmentFile=/etc/asp-scraper-api.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/home/ubuntu/asp-scraper-api/.venv/bin/python -m scripts.run_highlightly_future_schedule --confirm-future-window
+TimeoutStartSec=infinity
+Nice=5

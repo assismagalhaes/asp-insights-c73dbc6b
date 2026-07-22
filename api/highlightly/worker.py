@@ -52,6 +52,7 @@ _PAGINATION_INTERNAL_KEYS = frozenset(
     (
         "_fanout",
         "_fanout_scope",
+        "_fanout_mode",
         "_shadow_scope",
         "_shadow_batch",
         "_pagination_priority",
@@ -340,7 +341,15 @@ class HighlightlyWorker:
             scheduled_at=scheduled_at,
         )
 
-    def _enqueue_football_match_fanout(self, payload: Any, *, scope_nonce: str = "") -> int:
+    def _enqueue_football_match_fanout(
+        self,
+        payload: Any,
+        *,
+        scope_nonce: str = "",
+        fanout_mode: str = "full",
+    ) -> int:
+        if fanout_mode not in {"full", "pregame"}:
+            raise ValueError("fanout mode must be full or pregame")
         matches = payload_items(payload)
         if len(matches) > 10:
             raise ValueError("Shadow fan-out is limited to 10 matches per parent job")
@@ -353,13 +362,18 @@ class HighlightlyWorker:
             if not collection.allows_detailed_fanout:
                 continue
             match_scope = f"match:{match_id}:{scope_nonce}" if scope_nonce else f"match:{match_id}"
-            detail_jobs = (
-                ("football.FootballStatisticsController_getStatistics", {"matchId": match_id}, 1),
-                ("football.FootballLineupsController_getLineups", {"matchId": match_id}, 0),
-                ("football.FootballLiveEventsController_getLiveEvents", {"id": match_id}, 2),
-                ("football.FootballPlayerBoxScoreController_getPlayerBoxScores", {"matchId": match_id}, 3),
+            detail_jobs = [
                 ("football.FootballOddsController_getOddsV2", {"matchId": match_id, "limit": 5, "offset": 0}, 0),
-            )
+            ]
+            if fanout_mode == "full":
+                detail_jobs.extend(
+                    (
+                        ("football.FootballStatisticsController_getStatistics", {"matchId": match_id}, 1),
+                        ("football.FootballLineupsController_getLineups", {"matchId": match_id}, 0),
+                        ("football.FootballLiveEventsController_getLiveEvents", {"id": match_id}, 2),
+                        ("football.FootballPlayerBoxScoreController_getPlayerBoxScores", {"matchId": match_id}, 3),
+                    )
+                )
             for endpoint_key, params, priority in detail_jobs:
                 self._enqueue_operation(endpoint_key, params, scope=match_scope, priority=priority)
                 count += 1
@@ -426,7 +440,15 @@ class HighlightlyWorker:
                 count += 1
         return count
 
-    def _enqueue_baseball_match_fanout(self, payload: Any, *, scope_nonce: str = "") -> int:
+    def _enqueue_baseball_match_fanout(
+        self,
+        payload: Any,
+        *,
+        scope_nonce: str = "",
+        fanout_mode: str = "full",
+    ) -> int:
+        if fanout_mode not in {"full", "pregame"}:
+            raise ValueError("fanout mode must be full or pregame")
         matches = payload_items(payload)
         if len(matches) > 10:
             raise ValueError("Shadow fan-out is limited to 10 matches per parent job")
@@ -436,16 +458,17 @@ class HighlightlyWorker:
             if match_id is None or not allows_detailed_match_fanout("baseball", match):
                 continue
             match_scope = f"match:{match_id}:{scope_nonce}" if scope_nonce else f"match:{match_id}"
-            detail_jobs = (
-                ("baseball.BaseballMatchStatisticsController_getStatistics", {"id": match_id}, 1),
-                ("baseball.BaseballLineupsController_getLineups", {"matchId": match_id}, 0),
-                (
-                    "baseball.BaseballBoxScoresController_getBoxScores",
-                    {"id": match_id},
-                    1,
-                ),
+            detail_jobs = [
                 ("baseball.BaseballOddsController_getOddsV2", {"matchId": match_id, "limit": 5, "offset": 0}, 0),
-            )
+            ]
+            if fanout_mode == "full":
+                detail_jobs.extend(
+                    (
+                        ("baseball.BaseballMatchStatisticsController_getStatistics", {"id": match_id}, 1),
+                        ("baseball.BaseballLineupsController_getLineups", {"matchId": match_id}, 0),
+                        ("baseball.BaseballBoxScoresController_getBoxScores", {"id": match_id}, 1),
+                    )
+                )
             for endpoint_key, params, priority in detail_jobs:
                 self._enqueue_operation(endpoint_key, params, scope=match_scope, priority=priority)
                 count += 1
@@ -519,7 +542,15 @@ class HighlightlyWorker:
                 count += 1
         return count
 
-    def _enqueue_basketball_match_fanout(self, payload: Any, *, scope_nonce: str = "") -> int:
+    def _enqueue_basketball_match_fanout(
+        self,
+        payload: Any,
+        *,
+        scope_nonce: str = "",
+        fanout_mode: str = "full",
+    ) -> int:
+        if fanout_mode not in {"full", "pregame"}:
+            raise ValueError("fanout mode must be full or pregame")
         matches = payload_items(payload)
         if len(matches) > 10:
             raise ValueError("Shadow fan-out is limited to 10 matches per parent job")
@@ -539,10 +570,13 @@ class HighlightlyWorker:
             away = match.get("awayTeam") if isinstance(match.get("awayTeam"), Mapping) else {}
             if home.get("id") is not None and away.get("id") is not None:
                 statistics_params.update({"_home_team_id": home["id"], "_away_team_id": away["id"]})
-            detail_jobs = (
-                ("basketball.BasketballStatisticsController_getStatistics", statistics_params, 1),
+            detail_jobs = [
                 ("basketball.BasketballOddsController_getOddsV2", {"matchId": match_id, "limit": 5, "offset": 0}, 0),
-            )
+            ]
+            if fanout_mode == "full":
+                detail_jobs.append(
+                    ("basketball.BasketballStatisticsController_getStatistics", statistics_params, 1)
+                )
             for endpoint_key, params, priority in detail_jobs:
                 self._enqueue_operation(endpoint_key, params, scope=match_scope, priority=priority)
                 count += 1
@@ -746,6 +780,7 @@ class HighlightlyWorker:
                     self._enqueue_football_match_fanout(
                         payload,
                         scope_nonce=str(request_params.get("_fanout_scope") or ""),
+                        fanout_mode=str(request_params.get("_fanout_mode") or "full"),
                     )
                 if operation.normalizer == "football.box_scores" and _truthy(str(request_params.get("_fanout_players"))):
                     self._enqueue_football_player_fanout(
@@ -756,6 +791,7 @@ class HighlightlyWorker:
                     self._enqueue_baseball_match_fanout(
                         payload,
                         scope_nonce=str(request_params.get("_fanout_scope") or ""),
+                        fanout_mode=str(request_params.get("_fanout_mode") or "full"),
                     )
                 if operation.normalizer == "baseball.box_scores" and _truthy(str(request_params.get("_fanout_players"))):
                     self._enqueue_baseball_player_fanout(
@@ -766,6 +802,7 @@ class HighlightlyWorker:
                     self._enqueue_basketball_match_fanout(
                         payload,
                         scope_nonce=str(request_params.get("_fanout_scope") or ""),
+                        fanout_mode=str(request_params.get("_fanout_mode") or "full"),
                     )
 
             duration = int((time.monotonic() - started) * 1000)

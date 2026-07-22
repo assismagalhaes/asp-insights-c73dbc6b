@@ -43,6 +43,7 @@ class HighlightlyPhaseSevenShadowTests(unittest.TestCase):
         self.assertTrue(all(job.request_params["limit"] == 10 for job in jobs))
         self.assertTrue(all(job.request_params["_fanout_scope"] == "phase7-test" for job in jobs))
         self.assertTrue(all(job.request_params["_pagination_priority"] == 0 for job in jobs))
+        self.assertTrue(all(job.request_params["_fanout_mode"] == "full" for job in jobs))
         self.assertTrue(all("phase7-test" in job.dedupe_key for job in jobs))
 
     def test_football_requires_an_explicit_league_boundary(self):
@@ -89,6 +90,22 @@ class HighlightlyPhaseSevenShadowTests(unittest.TestCase):
         self.assertTrue(all("league" not in job.request_params for job in jobs))
         self.assertTrue(all("leagueId" not in job.request_params for job in jobs))
         self.assertTrue(all(job.dedupe_key.endswith(":all") for job in jobs))
+
+    def test_pregame_seed_marks_all_match_pages_without_changing_catalog(self):
+        jobs = phase7.build_seed_jobs(
+            scope="future-20260721-night",
+            start_date=date(2026, 7, 22),
+            days=5,
+            sports=phase7.SPORTS,
+            football_league_ids=(),
+            all_football_leagues=True,
+            fanout_mode="pregame",
+        )
+
+        match_jobs = [job for job in jobs if job.resource == "matches"]
+        self.assertEqual(len(match_jobs), 15)
+        self.assertTrue(all(job.request_params["_fanout_mode"] == "pregame" for job in match_jobs))
+        self.assertNotIn("_fanout_mode", jobs[0].request_params)
 
     def test_all_football_leagues_rejects_explicit_ids(self):
         with self.assertRaisesRegex(ValueError, "mutually exclusive"):

@@ -46,6 +46,7 @@ def build_seed_jobs(
     sports: Iterable[str],
     football_league_ids: Iterable[int],
     all_football_leagues: bool = False,
+    fanout_mode: str = "full",
 ) -> list[SeedJob]:
     if not 1 <= days <= 7:
         raise ValueError("days must be between 1 and 7")
@@ -59,6 +60,8 @@ def build_seed_jobs(
         raise ValueError(
             "select --all-football-leagues or at least one football league id when football is selected"
         )
+    if fanout_mode not in {"full", "pregame"}:
+        raise ValueError("fanout mode must be full or pregame")
 
     jobs: list[SeedJob] = []
     if "football" in selected and all_football_leagues:
@@ -96,6 +99,7 @@ def build_seed_jobs(
                             "limit": 10,
                             "offset": 0,
                             "_fanout": True,
+                            "_fanout_mode": fanout_mode,
                             "_fanout_scope": scope,
                             "_pagination_priority": 0,
                         },
@@ -117,6 +121,7 @@ def build_seed_jobs(
                                 "limit": 10,
                                 "offset": 0,
                                 "_fanout": True,
+                                "_fanout_mode": fanout_mode,
                                 "_fanout_scope": scope,
                                 "_pagination_priority": 0,
                             },
@@ -136,6 +141,7 @@ def build_seed_jobs(
                         "limit": 10,
                         "offset": 0,
                         "_fanout": True,
+                        "_fanout_mode": fanout_mode,
                         "_fanout_scope": scope,
                         "_pagination_priority": 0,
                     },
@@ -155,6 +161,7 @@ def build_seed_jobs(
                         "limit": 10,
                         "offset": 0,
                         "_fanout": True,
+                        "_fanout_mode": fanout_mode,
                         "_fanout_scope": scope,
                         "_pagination_priority": 0,
                     },
@@ -206,6 +213,7 @@ def _parse_args() -> argparse.Namespace:
     football_scope.add_argument("--football-league-id", action="append", type=int, default=[])
     parser.add_argument("--daily-request-budget", type=int, default=BACKFILL_BUDGET_LIMIT)
     parser.add_argument("--max-jobs", type=int, default=200)
+    parser.add_argument("--fanout-mode", choices=("full", "pregame"), default="full")
     parser.add_argument("--confirm-phase7-shadow", action="store_true")
     args = parser.parse_args()
     if not 1 <= args.backfill_days <= 7:
@@ -230,6 +238,7 @@ def main() -> int:
         sports=sports,
         football_league_ids=args.football_league_id,
         all_football_leagues=args.all_football_leagues,
+        fanout_mode=args.fanout_mode,
     )
     plan = {
         "mode": "execute" if args.confirm_phase7_shadow else "dry-run",
@@ -241,6 +250,7 @@ def main() -> int:
         "daily_request_budget": args.daily_request_budget,
         "reserve_requests": RESERVE_REQUESTS,
         "max_jobs": args.max_jobs,
+        "fanout_mode": args.fanout_mode,
         "all_football_leagues": args.all_football_leagues,
         "football_league_ids": args.football_league_id,
     }
@@ -302,6 +312,7 @@ def main() -> int:
                         "all_football_leagues": args.all_football_leagues,
                         "football_league_ids": args.football_league_id,
                         "max_jobs_per_slice": args.max_jobs,
+                        "fanout_mode": args.fanout_mode,
                     },
                 }
             ],

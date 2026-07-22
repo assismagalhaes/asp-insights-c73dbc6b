@@ -1,0 +1,15 @@
+[Unit]
+Description=Schedule the ASP Insights rolling Highlightly pregame window
+
+[Timer]
+OnCalendar=*-*-* 06:10:00 America/Sao_Paulo
+OnCalendar=*-*-* 12:10:00 America/Sao_Paulo
+OnCalendar=*-*-* 18:10:00 America/Sao_Paulo
+OnCalendar=*-*-* 22:10:00 America/Sao_Paulo
+Persistent=true
+AccuracySec=1min
+RandomizedDelaySec=2min
+Unit=highlightly-future-window.service
+
+[Install]
+WantedBy=timers.target
