@@ -112,6 +112,121 @@ const PENALTY_BY_SEVERITY: Record<CriticalRiskSeverity, number> = {
   hard_block: 100,
 };
 
+export type MlbOperationalGate = {
+  applicable: boolean;
+  approved: boolean;
+  minimumEdge: number | null;
+  effectiveEdge: number | null;
+  missingStarters: boolean;
+  reasons: string[];
+};
+
+export type MatchMatrixOperationalGate = {
+  applicable: boolean;
+  approved: boolean;
+  minimumEdge: number | null;
+  effectiveEdge: number | null;
+  diagnosticsPresent: boolean;
+  reasons: string[];
+};
+
+export function evaluateMatchMatrixOperationalGate(
+  prognostico: Prognostico,
+): MatchMatrixOperationalGate {
+  const origin = normalized(`${prognostico.origem_modelo ?? ""} ${prognostico.contexto_modelo ?? ""}`);
+  if (!/asp matchmatrix|football_v1_/.test(origin)) {
+    return {
+      applicable: false,
+      approved: true,
+      minimumEdge: null,
+      effectiveEdge: null,
+      diagnosticsPresent: true,
+      reasons: [],
+    };
+  }
+
+  const text = combinedContext(prognostico);
+  const normalizedText = normalized(text);
+  const effectiveEdge = isFiniteNumber(prognostico.edge_ajustado)
+    ? prognostico.edge_ajustado
+    : isFiniteNumber(prognostico.edge)
+      ? prognostico.edge
+      : null;
+  const configuredMinimum = text.match(/min_edge_required\s*[=:]\s*(0(?:[.,]\d+)?|\d+(?:[.,]\d+)?)/i)?.[1];
+  const configuredMinimumNumber = configuredMinimum
+    ? Number(configuredMinimum.replace(",", "."))
+    : null;
+  const parsedMinimum =
+    configuredMinimumNumber != null && Number.isFinite(configuredMinimumNumber)
+      ? configuredMinimumNumber <= 1
+        ? configuredMinimumNumber * 100
+        : configuredMinimumNumber
+      : null;
+  const riskRequiresFivePercent = /low_sample|overdispersion_poisson/.test(normalizedText);
+  const minimumEdge = Math.max(parsedMinimum ?? 3, riskRequiresFivePercent ? 5 : 3);
+  const diagnosticsPresent =
+    /football_v1_\d/.test(normalizedText) &&
+    /market_conflict_status|min_edge_required/.test(normalizedText);
+  const marketConflict =
+    /market_conflict_review_required|conflito_forte|market_conflict_status\s*[=:]\s*(?:conflito|review)/.test(
+      normalizedText,
+    );
+  const reasons: string[] = [];
+
+  if (!diagnosticsPresent) {
+    reasons.push("ASP MatchMatrix sem diagnostico tecnico versionado para validar amostra, dispersao e conflito de mercado.");
+  }
+  if (effectiveEdge == null || effectiveEdge < minimumEdge) {
+    reasons.push(
+      `Edge executavel ${effectiveEdge?.toFixed(2) ?? "ausente"}% abaixo do minimo MatchMatrix de ${minimumEdge.toFixed(2)}%.`,
+    );
+  }
+  if (marketConflict) {
+    reasons.push("ASP MatchMatrix com conflito relevante contra o mercado; requer nova analise antes da confirmacao.");
+  }
+
+  return {
+    applicable: true,
+    approved: reasons.length === 0,
+    minimumEdge,
+    effectiveEdge,
+    diagnosticsPresent,
+    reasons,
+  };
+}
+
+export function evaluateMlbOperationalGate(prognostico: Prognostico): MlbOperationalGate {
+  const sport = normalized(`${prognostico.esporte} ${prognostico.liga}`);
+  if (!/baseball|mlb/.test(sport)) {
+    return { applicable: false, approved: true, minimumEdge: null, effectiveEdge: null, missingStarters: false, reasons: [] };
+  }
+
+  const market = normalized(`${prognostico.mercado} ${prognostico.pick}`);
+  const minimumEdge = /moneyline|vencedor|resultado/.test(market)
+    ? 5
+    : /total|corridas|runs|over|under/.test(market)
+      ? 4
+      : null;
+  const effectiveEdge = isFiniteNumber(prognostico.edge_ajustado)
+    ? prognostico.edge_ajustado
+    : isFiniteNumber(prognostico.edge)
+      ? prognostico.edge
+      : null;
+  const text = combinedContext(prognostico);
+  const enrichedPreview = text.includes("[MATCHUPS / PREVIEW ENRIQUECIDO]");
+  const starterLines = text.match(/^Starter (?:visitante|mandante):.*$/gim) ?? [];
+  const missingStarters =
+    !enrichedPreview ||
+    starterLines.length < 2 ||
+    starterLines.some((line) => /:\s*-\s*(?:ERA|$)|nao encontrado|não encontrado/i.test(line));
+  const reasons: string[] = [];
+  if (minimumEdge != null && (effectiveEdge == null || effectiveEdge < minimumEdge)) {
+    reasons.push(`Edge executavel ${effectiveEdge?.toFixed(2) ?? "ausente"}% abaixo do minimo MLB de ${minimumEdge.toFixed(2)}%.`);
+  }
+  if (missingStarters) reasons.push("MLB sem os dois starters confirmados no Preview enriquecido.");
+  return { applicable: true, approved: reasons.length === 0, minimumEdge, effectiveEdge, missingStarters, reasons };
+}
+
 export function buildCriticalShortlist(
   prognosticos: Prognostico[],
   now = new Date(),
@@ -424,6 +539,8 @@ export function detectCriticalShortlistRiskFlags(
   const timing = calculateTimingScore(prognostico, now);
   const data = calculateDataReadinessScore(prognostico);
   const text = combinedContext(prognostico);
+  const mlbGate = evaluateMlbOperationalGate(prognostico);
+  const matchMatrixGate = evaluateMatchMatrixOperationalGate(prognostico);
   const packballAwaitingOdd =
     isPackballMatrixPrognostico(prognostico) && !hasPackballExecutableOdd(prognostico);
   const packballMatrix = isPackballMatrixPrognostico(prognostico);
@@ -441,6 +558,32 @@ export function detectCriticalShortlistRiskFlags(
     "odd_missing",
     "hard_block",
     "Odd ofertada invalida ou ausente.",
+  );
+  pushIf(
+    flags,
+    matchMatrixGate.applicable && !matchMatrixGate.diagnosticsPresent,
+    "matchmatrix_diagnostics_missing",
+    "hard_block",
+    matchMatrixGate.reasons[0] ?? "Diagnostico MatchMatrix ausente.",
+  );
+  pushIf(
+    flags,
+    matchMatrixGate.applicable &&
+      matchMatrixGate.minimumEdge != null &&
+      (matchMatrixGate.effectiveEdge == null ||
+        matchMatrixGate.effectiveEdge < matchMatrixGate.minimumEdge),
+    "matchmatrix_executable_edge_below_min",
+    "hard_block",
+    matchMatrixGate.reasons.find((reason) => reason.includes("Edge executavel")) ??
+      "Edge executavel abaixo do minimo MatchMatrix.",
+  );
+  pushIf(
+    flags,
+    matchMatrixGate.applicable &&
+      matchMatrixGate.reasons.some((reason) => reason.includes("conflito relevante")),
+    "matchmatrix_market_conflict",
+    "hard_block",
+    "MatchMatrix com conflito relevante contra o mercado.",
   );
   pushIf(
     flags,
@@ -493,6 +636,15 @@ export function detectCriticalShortlistRiskFlags(
     "edge_not_positive",
     "hard_block",
     "Edge nao positivo.",
+  );
+  pushIf(
+    flags,
+    mlbGate.applicable &&
+      mlbGate.minimumEdge != null &&
+      (mlbGate.effectiveEdge == null || mlbGate.effectiveEdge < mlbGate.minimumEdge),
+    "mlb_executable_edge_below_min",
+    "hard_block",
+    mlbGate.reasons[0] ?? "Edge executavel abaixo do minimo MLB.",
   );
   pushIf(
     flags,
@@ -617,10 +769,10 @@ export function detectCriticalShortlistRiskFlags(
   );
   pushIf(
     flags,
-    isMlbTotals(prognostico) && !/starter|pitcher|arremessador|probable/i.test(text),
-    "mlb_totals_starter_missing",
-    "high",
-    "MLB totals sem starter identificado no contexto.",
+    mlbGate.applicable && mlbGate.missingStarters,
+    "mlb_starters_unconfirmed",
+    "hard_block",
+    "MLB sem os dois starters confirmados no Preview enriquecido.",
   );
   pushIf(
     flags,

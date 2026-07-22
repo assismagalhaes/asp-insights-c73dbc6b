@@ -15,6 +15,8 @@ import {
   calculateCriticalShortlistConfidence,
   calculateCriticalShortlistScore,
   classifyCriticalShortlistCandidate,
+  evaluateMatchMatrixOperationalGate,
+  evaluateMlbOperationalGate,
 } from "@/lib/critical-validation/critical-shortlist-ranking";
 
 export const MAX_FINAL_OPPORTUNITIES = 3;
@@ -258,6 +260,26 @@ export async function applyCriticalValidationToOpportunityRanking({
   const item = itemRows?.[0] as OpportunityRankingItem | undefined;
   if (!item) return null;
 
+  const { data: prognosticoRow, error: prognosticoError } = await supabase
+    .from("prognosticos")
+    .select("*")
+    .eq("id", prognosticoId)
+    .single();
+  if (prognosticoError) throw prognosticoError;
+  const currentPrognostico = prognosticoRow as unknown as Prognostico;
+  const mlbGate = evaluateMlbOperationalGate(currentPrognostico);
+  if (normalizeValidationDecision(decisao) === "CONFIRMA" && mlbGate.applicable && !mlbGate.approved) {
+    throw new Error(mlbGate.reasons.join(" "));
+  }
+  const matchMatrixGate = evaluateMatchMatrixOperationalGate(currentPrognostico);
+  if (
+    normalizeValidationDecision(decisao) === "CONFIRMA" &&
+    matchMatrixGate.applicable &&
+    !matchMatrixGate.approved
+  ) {
+    throw new Error(matchMatrixGate.reasons.join(" "));
+  }
+
   const normalizedDecision = normalizeValidationDecision(decisao);
   const rankingStatus: OpportunityRankingStatus =
     normalizedDecision === "CONFIRMA" ? "CONFIRMA_IA" : "PULAR";
@@ -441,11 +463,30 @@ async function recomputeFinalRankingForRun(runId: string): Promise<void> {
     .eq("run_id", runId)
     .in("ranking_status", ["CONFIRMA_IA", "TOP_FINAL", "RESERVA"]);
   if (error) throw error;
-  const confirmed = ((rows ?? []) as OpportunityRankingItem[])
-    .map((item) => ({
-      item,
-      finalScore: calculateFinalOpportunityScore(item),
-    }))
+  const rankingItems = (rows ?? []) as OpportunityRankingItem[];
+  const prognosticoIds = rankingItems.map((item) => item.prognostico_id);
+  const { data: prognosticoRows, error: prognosticosError } = prognosticoIds.length
+    ? await supabase.from("prognosticos").select("*").in("id", prognosticoIds)
+    : { data: [], error: null };
+  if (prognosticosError) throw prognosticosError;
+  const prognosticoById = new Map(
+    ((prognosticoRows ?? []) as unknown as Prognostico[]).map((row) => [row.id, row]),
+  );
+  const confirmed = rankingItems
+    .map((item) => {
+      const prognostico = prognosticoById.get(item.prognostico_id);
+      if (!prognostico) return null;
+      const mlbGate = evaluateMlbOperationalGate(prognostico);
+      if (mlbGate.applicable && !mlbGate.approved) return null;
+      const matchMatrixGate = evaluateMatchMatrixOperationalGate(prognostico);
+      if (matchMatrixGate.applicable && !matchMatrixGate.approved) return null;
+      const current = calculatePreliminaryOpportunityScore(prognostico);
+      return {
+        item,
+        finalScore: calculateFinalOpportunityScore(item, current),
+      };
+    })
+    .filter((entry): entry is { item: OpportunityRankingItem; finalScore: number } => entry != null)
     .sort(
       (a, b) =>
         b.finalScore - a.finalScore ||
@@ -467,6 +508,20 @@ async function recomputeFinalRankingForRun(runId: string): Promise<void> {
   );
   const failedItemUpdate = itemUpdates.find((result) => result.error);
   if (failedItemUpdate?.error) throw failedItemUpdate.error;
+
+  const eligibleIds = new Set(confirmed.map(({ item }) => item.id));
+  const ineligibleUpdates = await Promise.all(
+    rankingItems
+      .filter((item) => !eligibleIds.has(item.id))
+      .map((item) =>
+        supabase
+          .from("opportunity_ranking_items")
+          .update({ ranking_status: "RESERVA", rank_final: null, opportunity_score_final: 0 })
+          .eq("id", item.id),
+      ),
+  );
+  const failedIneligibleUpdate = ineligibleUpdates.find((result) => result.error);
+  if (failedIneligibleUpdate?.error) throw failedIneligibleUpdate.error;
 
   const { error: clearMarkerError } = await supabase
     .from("prognosticos")
@@ -522,9 +577,12 @@ async function recomputeFinalRankingForRun(runId: string): Promise<void> {
   if (runError) throw runError;
 }
 
-function calculateFinalOpportunityScore(item: OpportunityRankingItem): number {
-  const preScore = numericOrZero(item.opportunity_score_pre);
-  const confidence = numericOrZero(item.confidence_score);
+function calculateFinalOpportunityScore(
+  item: OpportunityRankingItem,
+  current?: RankedOpportunityCandidate,
+): number {
+  const preScore = current?.opportunity_score_pre ?? numericOrZero(item.opportunity_score_pre);
+  const confidence = current?.confidence_score ?? numericOrZero(item.confidence_score);
   const aiSignal = item.ai_decision === "CONFIRMA" ? 100 : 85;
   const previewSignal = item.matchup_preview_status === "loaded" ? 100 : 45;
   const riskPenalty = asStringArray(item.risk_flags).length * 2.5;
