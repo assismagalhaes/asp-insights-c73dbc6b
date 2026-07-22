@@ -5,6 +5,7 @@ const PACKBALL_CONFLICT_MAX_STAKE = 0.25;
 const GOALMATRIX_UNCERTAINTY_MAX_STAKE = 0.5;
 const CORNERMATRIX_NORMAL_MAX_STAKE = 0.75;
 const CORNERMATRIX_DIVERGENCE_MAX_STAKE = 0.5;
+const CORNERMATRIX_UNCALIBRATED_MAX_STAKE = 0.5;
 const CORNERMATRIX_DIVERGENCE_THRESHOLD = 12;
 
 export type PackballPriceFeasibility =
@@ -152,13 +153,16 @@ export function getPackballValidationRequirements(
   const goalMatrixUncertainty =
     modelName === "ASP GoalMatrix" && (calibrationInsufficient || (spread ?? 0) >= 15);
   const cornerMatrixUncertainty =
-    modelName === "ASP CornerMatrix" && (spread ?? 0) >= CORNERMATRIX_DIVERGENCE_THRESHOLD;
+    modelName === "ASP CornerMatrix" &&
+    (calibrationInsufficient || (spread ?? 0) >= CORNERMATRIX_DIVERGENCE_THRESHOLD);
   const maxStake = strongMarketConflict
     ? PACKBALL_CONFLICT_MAX_STAKE
     : goalMatrixUncertainty
       ? GOALMATRIX_UNCERTAINTY_MAX_STAKE
       : cornerMatrixUncertainty
-        ? CORNERMATRIX_DIVERGENCE_MAX_STAKE
+        ? calibrationInsufficient
+          ? CORNERMATRIX_UNCALIBRATED_MAX_STAKE
+          : CORNERMATRIX_DIVERGENCE_MAX_STAKE
         : modelName === "ASP CornerMatrix"
           ? CORNERMATRIX_NORMAL_MAX_STAKE
           : PACKBALL_MAX_STAKE;

@@ -32,7 +32,7 @@ Recent form receives 35-45% and the 20-match venue profile receives 55-65%. Comp
 - CV scored-goal floor of 40% per team and 47.5% on average.
 - At least 0.20 decimal-odd separation from the opposing team.
 - Missing PackBall signal, invalid paired odds and a side disagreement are rejected.
-- Passing probability and CV creates a `CANDIDATO_BACK`, even when the PackBall reference edge is negative.
+- Passing probability and CV creates a `CANDIDATO_BACK` only when the PackBall reference edge is positive. The full candidate-specific edge remains mandatory on the executable bookmaker odd.
 
 ## Validation and publication
 

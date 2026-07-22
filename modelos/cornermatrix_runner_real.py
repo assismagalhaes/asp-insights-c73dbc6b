@@ -49,7 +49,7 @@ output_dir = Path("Prognostico")
 # Nome comercial do modelo para identificação no Lovable.
 # Mantém o campo 'mercado' como nome do modelo, igual ao ASP GoalMatrix.
 MODEL_NAME = "ASP CornerMatrix"
-MODEL_VERSION = "v2.4"
+MODEL_VERSION = "v2.5"
 
 # Modo de execução:
 #   prognostico = apenas jogos NS
@@ -1437,6 +1437,10 @@ def _add_lovable_row(rows: list[dict], row: pd.Series, mercado: str, pick: str, 
     odd = float(odd)
     odd_valor = 100.0 / prob
     edge = ((odd * prob / 100.0) - 1.0) * 100.0
+    # Mantem na fila operacional apenas sinais com EV referencial positivo.
+    # O edge minimo completo continua sendo exigido sobre a odd executavel.
+    if edge <= 0.0:
+        return
     minimum_executable_odd = odd_valor * (1.0 + min_edge / 100.0)
     diagnostics = _pick_probability_diagnostics(row, mercado, pick, linha)
     diagnostics["component_conflict_status"] = _component_conflict_status(diagnostics.get("component_spread_pp"))
@@ -1543,7 +1547,7 @@ def kelly_stake_units(
         if spread >= COMPONENT_UNCERTAINTY_THRESHOLD:
             units = min(units, UNCERTAINTY_MAX_UNITS)
         elif "insufficient_oos" in str(calibration_status or "").lower():
-            units = min(units, MAX_PICK_UNITS)
+            units = min(units, UNCERTAINTY_MAX_UNITS)
     return math.floor(units * 4.0 + 1e-9) / 4.0
 
 

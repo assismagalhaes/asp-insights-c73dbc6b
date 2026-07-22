@@ -19,7 +19,7 @@ import pandas as pd
 
 
 MODEL_NAME = "ASP BackMatrix"
-MODEL_VERSION = "v1.2"
+MODEL_VERSION = "v1.3"
 PACKBALL_FILE_10 = "PackBall Custom ASP_BackMatrix_10 {date}.csv"
 PACKBALL_FILE_20 = "PackBall Custom ASP_BackMatrix_20 {date}.csv"
 
@@ -504,6 +504,8 @@ def _build_prediction(row: pd.Series) -> dict | None:
     if probability < min_probability:
         return None
     edge = (odd * probability / 100.0 - 1.0) * 100.0
+    if edge <= 0.0:
+        return None
     spread = float(row[f"Spread {side}"])
     required_edge = base_edge + min(2.0, max(0.0, 55.0 - cv_average) * 0.08 + max(0.0, spread - 15.0) * 0.05)
     conflict = bool(row[f"Conflict {side}"])
@@ -644,6 +646,7 @@ def build_diagnostic_funnel(base: pd.DataFrame) -> tuple[dict, str]:
         "faixa_odd_e_gap": 0,
         "cv_aprovado": 0,
         "probabilidade_aprovada": 0,
+        "edge_positivo": 0,
         "edge_aprovado": 0,
         "candidatos_back": 0,
     }
@@ -688,6 +691,9 @@ def build_diagnostic_funnel(base: pd.DataFrame) -> tuple[dict, str]:
         if probability < min_probability:
             continue
         counts["probabilidade_aprovada"] += 1
+        if edge <= 0.0:
+            continue
+        counts["edge_positivo"] += 1
         counts["candidatos_back"] += 1
         if edge < required_edge:
             continue

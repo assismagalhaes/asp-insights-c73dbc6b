@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BrainCircuit, Play, Send, Sparkles, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -104,8 +104,11 @@ interface ModeloResultado {
   dados_tecnicos?: string;
   mensagem?: string;
   total_prognosticos?: number;
+  diagnostico_funil?: Record<string, unknown>;
   prognosticos?: ModeloPrognostico[];
 }
+
+const LAST_PACKBALL_RESULT_KEY = "asp-insights:last-packball-model-result";
 
 function ModelosPreditivosPage() {
   const qc = useQueryClient();
@@ -117,6 +120,19 @@ function ModelosPreditivosPage() {
   const [packballFile5, setPackballFile5] = useState<File | null>(null);
   const [packballFile20, setPackballFile20] = useState<File | null>(null);
   const [packballRunMode, setPackballRunMode] = useState<PackballRunMode>("prognostico");
+
+  useEffect(() => {
+    try {
+      const saved = globalThis.localStorage?.getItem(LAST_PACKBALL_RESULT_KEY);
+      if (!saved) return;
+      const parsed = JSON.parse(saved) as ModeloResultado;
+      if (!parsed.modelo || !isPackballModel(parsed.modelo)) return;
+      setModelo(parsed.modelo);
+      setResultado(parsed);
+    } catch {
+      globalThis.localStorage?.removeItem(LAST_PACKBALL_RESULT_KEY);
+    }
+  }, []);
 
   const { data: coletas = [] } = useQuery({
     queryKey: ["coletas-odds"],
@@ -173,6 +189,7 @@ function ModelosPreditivosPage() {
         });
         const parsed = normalizeModelResponse(response);
         setResultado(parsed);
+        globalThis.localStorage?.setItem(LAST_PACKBALL_RESULT_KEY, JSON.stringify(parsed));
         const total = parsed.total_prognosticos ?? parsed.prognosticos?.length ?? 0;
         if (total === 0) {
           toast.info("Nenhuma oportunidade EV+ encontrada para estas planilhas.");
@@ -419,8 +436,24 @@ function ModelosPreditivosPage() {
 
           {resultado && (resultado.total_prognosticos ?? prognosticos.length) === 0 && (
             <div className="rounded-md border border-muted bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-              {resultado.mensagem || "Nenhuma oportunidade EV+ encontrada para esta coleta."}
+              {resultado.mensagem ||
+                "Nenhuma oportunidade EV+ persistida. Consulte o funil abaixo para os motivos de rejeicao."}
             </div>
+          )}
+
+          {resultado?.diagnostico_funil && (
+            <Accordion type="single" collapsible className="rounded-md border px-3">
+              <AccordionItem value="diagnostico-funil" className="border-0">
+                <AccordionTrigger className="text-sm font-semibold">
+                  Diagnostico do Funil
+                </AccordionTrigger>
+                <AccordionContent>
+                  <pre className="max-h-[42vh] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 font-mono text-xs">
+                    {JSON.stringify(resultado.diagnostico_funil, null, 2)}
+                  </pre>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           )}
 
           {(resultado?.contexto_modelo || resultado?.dados_tecnicos) && (
@@ -659,6 +692,7 @@ function normalizeModelResponse(response: unknown): ModeloResultado {
     dados_tecnicos: data.dados_tecnicos ? String(data.dados_tecnicos) : undefined,
     mensagem: data.mensagem ? String(data.mensagem) : undefined,
     total_prognosticos: toNumber(data.total_prognosticos) ?? prognosticos.length,
+    diagnostico_funil: isRecord(data.diagnostico_funil) ? data.diagnostico_funil : undefined,
     prognosticos,
   };
 }

@@ -238,18 +238,30 @@ export function buildCriticalShortlist(
 
   let displayRank = 1;
   const withRanks = ranked.map((candidate) => {
-    if (candidate.critical_shortlist_status === "BLOQUEADA") return { ...candidate, rank: null };
+    if (
+      candidate.critical_shortlist_status === "BLOQUEADA" ||
+      candidate.critical_shortlist_status === "RESERVA"
+    )
+      return { ...candidate, rank: null };
     return { ...candidate, rank: displayRank++ };
   });
 
-  const eligible = withRanks.filter((item) => item.critical_shortlist_status !== "BLOQUEADA");
+  const eligible = withRanks.filter(
+    (item) =>
+      item.critical_shortlist_status !== "BLOQUEADA" &&
+      item.critical_shortlist_status !== "RESERVA",
+  );
   const shortlist = eligible.slice(0, SHORTLIST_LIMIT).map((item) => ({
     ...item,
     operational_status: "SHORTLIST_PRE_IA" as const,
   }));
   const shortlistIds = new Set(shortlist.map((item) => item.prognostico.id));
-  const reservesNotAnalyzed = eligible
-    .filter((item) => !shortlistIds.has(item.prognostico.id))
+  const reservesNotAnalyzed = withRanks
+    .filter(
+      (item) =>
+        item.critical_shortlist_status !== "BLOQUEADA" &&
+        !shortlistIds.has(item.prognostico.id),
+    )
     .map((item) => ({ ...item, operational_status: "RESERVA_NAO_ANALISADA" as const }));
   const blocked = withRanks
     .filter((item) => item.critical_shortlist_status === "BLOQUEADA")

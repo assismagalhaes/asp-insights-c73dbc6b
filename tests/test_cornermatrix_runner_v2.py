@@ -147,6 +147,16 @@ class CornerMatrixRunnerV2Tests(unittest.TestCase):
             0.5,
         )
 
+    def test_insufficient_calibration_caps_kelly_at_half_unit(self) -> None:
+        self.assertEqual(
+            runner.kelly_stake_units(
+                65.0,
+                1.90,
+                calibration_status="identity_insufficient_oos_sample",
+            ),
+            0.5,
+        )
+
     def test_executable_price_has_explicit_operational_status(self) -> None:
         waiting, edge = runner.classify_executable_price(60.0, None, 5.0)
         approved, approved_edge = runner.classify_executable_price(60.0, 1.75, 5.0)

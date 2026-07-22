@@ -42,7 +42,7 @@ output_dir = Path("Prognostico")
 
 # Nome comercial do modelo para identificação no Lovable.
 MODEL_NAME = "ASP GoalMatrix"
-MODEL_VERSION = "v2.6"
+MODEL_VERSION = "v2.7"
 
 # Modo de execução:
 #   prognostico = apenas jogos NS
@@ -1484,6 +1484,10 @@ def _add_lovable_row(rows: list[dict], row: pd.Series, mercado: str, pick: str, 
     cv_away = float(row.get(cv_fields[1]))
     odd_valor = 100.0 / prob
     edge = ((odd * prob / 100.0) - 1.0) * 100.0
+    # A odd PackBall e apenas referencia. Ainda assim, um sinal com EV
+    # referencial nao positivo nao deve poluir a Validacao Critica.
+    if edge <= 0.0:
+        return
     minimum_executable_odd = odd_valor * (1.0 + min_edge / 100.0)
     price_feasibility_status, price_gap_pct = classify_price_feasibility(
         odd,

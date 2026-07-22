@@ -89,7 +89,7 @@ class BackMatrixRunnerV1Tests(unittest.TestCase):
         self.assertEqual(runner.kelly_stake_units(65.0, 1.80), runner.MAX_PICK_UNITS)
         self.assertEqual(runner.kelly_stake_units(65.0, 1.80, conflict=True), runner.CONFLICT_MAX_UNITS)
 
-    def test_probability_candidate_waits_for_executable_odd(self) -> None:
+    def test_probability_candidate_requires_positive_reference_edge(self) -> None:
         row = pd.Series({
             "Odds Pareadas": True,
             "Odd Casa": 1.40,
@@ -123,13 +123,14 @@ class BackMatrixRunnerV1Tests(unittest.TestCase):
             "w10": 0.4,
             "w20": 0.6,
         })
+        self.assertIsNone(runner._build_prediction(row))
+        row["Prob Final Casa"] = 75.0
         prediction = runner._build_prediction(row)
         self.assertIsNotNone(prediction)
         self.assertEqual(prediction["selection_role"], "CANDIDATO_BACK")
         self.assertTrue(prediction["requires_executable_odd"])
         self.assertEqual(prediction["stake"], 0.0)
-        self.assertLess(prediction["edge_referencial"], 0.0)
-        self.assertGreater(prediction["odd_minima_publicacao"], prediction["odd_ofertada"])
+        self.assertGreater(prediction["edge_referencial"], 0.0)
 
     def test_walk_forward_snapshot_starts_unlabeled(self) -> None:
         previous = dict(runner.RUN_PROVENANCE)
