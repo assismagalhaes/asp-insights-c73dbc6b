@@ -6574,10 +6574,6 @@ export type Database = {
         Args: { p_from?: string; p_to?: string }
         Returns: Json
       }
-      get_highlightly_match_lifecycle_operational_report: {
-        Args: { p_from?: string; p_to?: string }
-        Returns: Json
-      }
       get_highlightly_odds_quality_report: {
         Args: { p_from?: string; p_to?: string }
         Returns: Json
@@ -6600,10 +6596,6 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
-      }
-      set_highlightly_match_lifecycle_policy: {
-        Args: { p_enabled: boolean; p_sport_code: string }
-        Returns: Json
       }
       prune_highlightly_ingestion_bridge_nonces: {
         Args: { p_before?: string; p_limit?: number }
