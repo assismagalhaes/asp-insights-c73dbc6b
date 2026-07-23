@@ -1,0 +1,14 @@
+[Unit]
+Description=ASP Insights Highlightly Phase 8D odds-only refresh
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/home/ubuntu/asp-insights-c73dbc6b
+EnvironmentFile=/etc/asp-scraper-api.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/flock --exclusive --nonblock --conflict-exit-code 0 /run/lock/asp-highlightly-future.lock /home/ubuntu/asp-scraper-api/.venv/bin/python -m scripts.run_highlightly_phase8d_odds_refresh --request-budget 750 --max-jobs 500 --confirm-odds-refresh
+TimeoutStartSec=infinity
+Nice=5

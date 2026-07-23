@@ -33,7 +33,9 @@ import {
   fetchHighlightlyCollectionMonitor,
   type HighlightlyCollectionMonitor,
 } from "@/lib/highlightly-monitor";
+import { fetchHighlightlyOddsQualityReport } from "@/lib/highlightly-odds-quality";
 import { cn } from "@/lib/utils";
+import { OddsQualityMonitor } from "./odds-quality-monitor";
 
 const SPORT_LABELS: Record<string, string> = {
   football: "Football",
@@ -223,6 +225,13 @@ export function HighlightlyCollectionMonitorView() {
     staleTime: 15_000,
     retry: 1,
   });
+  const oddsQualityQuery = useQuery({
+    queryKey: ["highlightly-odds-quality"],
+    queryFn: fetchHighlightlyOddsQualityReport,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+    retry: 1,
+  });
   const monitor = monitorQuery.data;
   const selectedScope = scope ?? monitor?.scope ?? "";
 
@@ -284,6 +293,15 @@ export function HighlightlyCollectionMonitorView() {
           </div>
 
           <QueueSummary monitor={monitor} />
+
+          {oddsQualityQuery.data ? <OddsQualityMonitor report={oddsQualityQuery.data} /> : null}
+          {oddsQualityQuery.error ? (
+            <Alert>
+              <AlertTriangle />
+              <AlertTitle>Diagnóstico de odds temporariamente indisponível</AlertTitle>
+              <AlertDescription>{oddsQualityQuery.error.message}</AlertDescription>
+            </Alert>
+          ) : null}
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(420px,0.8fr)]">
             <section

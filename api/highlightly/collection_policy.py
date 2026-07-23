@@ -84,12 +84,35 @@ def allows_canonical_odds(
     some prematch provider payloads omit the type discriminator.
     """
 
+    return canonical_odds_rejection_reason(
+        sport,
+        bookmaker_token,
+        market_family,
+        odds_type,
+    ) is None
+
+
+def canonical_odds_rejection_reason(
+    sport: str,
+    bookmaker_token: str,
+    market_family: str,
+    odds_type: str,
+) -> str | None:
+    """Explain why a provider market is excluded from canonical odds.
+
+    Phase 8D uses these stable reason tokens for operational diagnostics. Raw
+    payloads remain archived regardless of the canonical decision.
+    """
+
     normalized_bookmaker = bookmaker_token.casefold().replace(".", "-")
-    return (
-        normalized_bookmaker in PREFERRED_BOOKMAKERS
-        and market_family in SUPPORTED_ODDS_FAMILIES.get(sport, frozenset())
-        and odds_type in {"prematch", "unknown"}
-    )
+    if normalized_bookmaker not in PREFERRED_BOOKMAKERS:
+        return "bookmaker_missing"
+    if (
+        market_family not in SUPPORTED_ODDS_FAMILIES.get(sport, frozenset())
+        or odds_type not in {"prematch", "unknown"}
+    ):
+        return "market_missing"
+    return None
 
 
 def allows_detailed_match_fanout(sport: str, match: Mapping[str, Any]) -> bool:

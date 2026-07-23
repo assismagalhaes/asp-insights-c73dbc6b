@@ -6246,6 +6246,22 @@ export type Database = {
         Args: { p_scope?: string }
         Returns: Json
       }
+      get_highlightly_odds_quality_report: {
+        Args: { p_from?: string; p_to?: string }
+        Returns: Json
+      }
+      get_highlightly_odds_refresh_candidates: {
+        Args: { p_at?: string; p_limit?: number }
+        Returns: {
+          dedupe_key: string
+          endpoint_key: string
+          external_match_id: string
+          kickoff_at: string
+          match_id: string
+          refresh_horizon: string
+          sport: string
+        }[]
+      }
       get_highlightly_daily_request_usage: {
         Args: { p_provider_id: string; p_request_date: string }
         Returns: number

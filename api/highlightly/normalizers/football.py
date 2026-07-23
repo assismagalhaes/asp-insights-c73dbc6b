@@ -5,7 +5,7 @@ import json
 import re
 from typing import Any, Mapping
 
-from ..collection_policy import allows_canonical_odds
+from ..collection_policy import allows_canonical_odds, canonical_odds_rejection_reason
 
 from .common import (
     NormalizationContext,
@@ -316,7 +316,11 @@ def _normalize_odds(payload: Any, ctx: NormalizationContext) -> NormalizedBatch:
             batch.issue("ODDS_MATCH_ID_MISSING", "Odds payload has no matchId.")
             continue
         match_id = stable_id(ctx.provider_id, ctx.sport_id, "match", match_external)
-        for market in record.get("odds", []):
+        raw_markets = record.get("odds")
+        markets = raw_markets if isinstance(raw_markets, list) else []
+        quotes_before = len(batch.odds_quotes)
+        rejection_reasons: list[str] = []
+        for market in markets:
             if not isinstance(market, Mapping):
                 continue
             bookmaker_name = str(market.get("bookmakerName") or market.get("bookmakerId") or "unknown")
@@ -326,6 +330,14 @@ def _normalize_odds(payload: Any, ctx: NormalizationContext) -> NormalizedBatch:
             if odds_type not in {"prematch", "live"}:
                 odds_type = "unknown"
             market_family = _market_family(market_name)
+            rejection_reason = canonical_odds_rejection_reason(
+                "football",
+                normalized_bookmaker,
+                market_family,
+                odds_type,
+            )
+            if rejection_reason:
+                rejection_reasons.append(rejection_reason)
             if not allows_canonical_odds("football", normalized_bookmaker, market_family, odds_type):
                 continue
             bookmaker_id = ctx.bookmaker_ids.get(normalized_bookmaker)
@@ -388,6 +400,30 @@ def _normalize_odds(payload: Any, ctx: NormalizationContext) -> NormalizedBatch:
                         "p_collected_at": ctx.captured_at,
                         "p_source_raw_object_id": ctx.raw_object_id,
                     }
+                )
+        if len(batch.odds_quotes) == quotes_before:
+            if not markets:
+                batch.issue(
+                    "ODDS_PROVIDER_EMPTY",
+                    "Provider returned no odds markets for the football match.",
+                    severity="info",
+                    context={"matchId": match_external},
+                )
+            elif rejection_reasons and all(
+                reason == "bookmaker_missing" for reason in rejection_reasons
+            ):
+                batch.issue(
+                    "ODDS_BOOKMAKER_MISSING",
+                    "Provider returned no odds from the preferred bookmaker set.",
+                    severity="info",
+                    context={"matchId": match_external},
+                )
+            elif rejection_reasons:
+                batch.issue(
+                    "ODDS_MARKET_MISSING",
+                    "Provider returned no supported prematch market from a preferred bookmaker.",
+                    severity="info",
+                    context={"matchId": match_external},
                 )
     return batch
 

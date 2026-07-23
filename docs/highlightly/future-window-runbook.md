@@ -54,6 +54,15 @@ O continuador recusa locks válidos, múltiplos escopos e filas históricas. Os 
 mesmo `flock` em `/run/lock/asp-highlightly-future.lock`, portanto não executam chamadas concorrentes.
 O provider é ligado apenas pelo runner isolado e restaurado para `enabled=false` em `finally`.
 
+## Atualização incremental de odds (Fase 8D)
+
+A janela futura descobre e reconcilia as partidas. A Fase 8D complementa esse processo com um
+timer separado que consulta somente odds em T−24h, T−6h e T−60m. Estatísticas históricas,
+classificações e demais dados estáticos não são repetidos nessas chamadas.
+
+Consulte `docs/highlightly/phase8d-odds-quality-runbook.md` para migration, instalação do timer,
+metas por esporte, motivos de indisponibilidade e rollback.
+
 Ao zerar a fila, o continuador chama `finalize_highlightly_shadow_window` e publica o estado final
 da janela. Se houver retries ainda não elegíveis ou cota insuficiente, o timer mantém a retomada
 autônoma sem depender de uma sessão do operador.

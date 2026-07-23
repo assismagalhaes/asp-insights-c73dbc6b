@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh Highlightly pregame odds at Phase 8D horizons
+
+[Timer]
+OnCalendar=*-*-* *:00/15:00 America/Sao_Paulo
+Persistent=true
+AccuracySec=1min
+RandomizedDelaySec=2min
+Unit=highlightly-odds-refresh.service
+
+[Install]
+WantedBy=timers.target
