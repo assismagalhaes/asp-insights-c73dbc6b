@@ -1377,6 +1377,244 @@ export type Database = {
           },
         ]
       }
+      hl_match_lifecycle_policies: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          imminent_window_minutes: number
+          live_poll_seconds: number
+          metadata: Json
+          optional_resources: string[]
+          postgame_horizons_minutes: number[]
+          prematch_poll_seconds: number
+          required_resources: string[]
+          sport_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          imminent_window_minutes?: number
+          live_poll_seconds?: number
+          metadata?: Json
+          optional_resources?: string[]
+          postgame_horizons_minutes?: number[]
+          prematch_poll_seconds?: number
+          required_resources: string[]
+          sport_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          imminent_window_minutes?: number
+          live_poll_seconds?: number
+          metadata?: Json
+          optional_resources?: string[]
+          postgame_horizons_minutes?: number[]
+          prematch_poll_seconds?: number
+          required_resources?: string[]
+          sport_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_match_lifecycle_policies_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: true
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hl_match_lifecycle_resources: {
+        Row: {
+          attempts: number
+          completed_at: string | null
+          created_at: string
+          endpoint_key: string
+          last_attempted_at: string | null
+          last_error: string | null
+          last_job_id: string | null
+          match_id: string
+          metadata: Json
+          resource: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string
+          endpoint_key: string
+          last_attempted_at?: string | null
+          last_error?: string | null
+          last_job_id?: string | null
+          match_id: string
+          metadata?: Json
+          resource: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string
+          endpoint_key?: string
+          last_attempted_at?: string | null
+          last_error?: string | null
+          last_job_id?: string | null
+          match_id?: string
+          metadata?: Json
+          resource?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_match_lifecycle_resources_last_job_id_fkey"
+            columns: ["last_job_id"]
+            isOneToOne: false
+            referencedRelation: "hl_ingestion_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hl_match_lifecycle_resources_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_baseball_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "hl_match_lifecycle_resources_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_basketball_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "hl_match_lifecycle_resources_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "hl_match_lifecycle_resources_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hl_match_lifecycle_states: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          external_match_id: string
+          final_observed_at: string | null
+          kickoff_at: string | null
+          last_error: string | null
+          last_polled_at: string | null
+          last_provider_status: string | null
+          lifecycle_stage: string
+          match_id: string
+          metadata: Json
+          missing_resources: string[]
+          next_poll_at: string | null
+          provider_id: string
+          sport_id: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          external_match_id: string
+          final_observed_at?: string | null
+          kickoff_at?: string | null
+          last_error?: string | null
+          last_polled_at?: string | null
+          last_provider_status?: string | null
+          lifecycle_stage?: string
+          match_id: string
+          metadata?: Json
+          missing_resources?: string[]
+          next_poll_at?: string | null
+          provider_id: string
+          sport_id: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          external_match_id?: string
+          final_observed_at?: string | null
+          kickoff_at?: string | null
+          last_error?: string | null
+          last_polled_at?: string | null
+          last_provider_status?: string | null
+          lifecycle_stage?: string
+          match_id?: string
+          metadata?: Json
+          missing_resources?: string[]
+          next_poll_at?: string | null
+          provider_id?: string
+          sport_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_match_lifecycle_states_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: true
+            referencedRelation: "sports_baseball_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "hl_match_lifecycle_states_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: true
+            referencedRelation: "sports_basketball_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "hl_match_lifecycle_states_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: true
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "hl_match_lifecycle_states_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: true
+            referencedRelation: "sports_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hl_match_lifecycle_states_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "hl_highlightly_future_gate_v"
+            referencedColumns: ["provider_id"]
+          },
+          {
+            foreignKeyName: "hl_match_lifecycle_states_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "sports_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hl_match_lifecycle_states_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hl_metric_definitions: {
         Row: {
           aggregation: string | null
@@ -6294,6 +6532,27 @@ export type Database = {
         Args: { p_provider_id: string; p_request_date: string }
         Returns: number
       }
+      get_highlightly_match_lifecycle_candidates: {
+        Args: { p_at?: string; p_include_disabled?: boolean; p_limit?: number }
+        Returns: {
+          cadence_key: string
+          dedupe_key: string
+          endpoint_key: string
+          external_match_id: string
+          kickoff_at: string
+          lifecycle_stage: string
+          match_id: string
+          match_status: string
+          priority: number
+          request_params: Json
+          resource: string
+          sport: string
+        }[]
+      }
+      get_highlightly_match_lifecycle_report: {
+        Args: { p_from?: string; p_to?: string }
+        Returns: Json
+      }
       get_highlightly_odds_quality_report: {
         Args: { p_from?: string; p_to?: string }
         Returns: Json
@@ -6320,6 +6579,10 @@ export type Database = {
       prune_highlightly_ingestion_bridge_nonces: {
         Args: { p_before?: string; p_limit?: number }
         Returns: number
+      }
+      refresh_highlightly_match_lifecycle_states: {
+        Args: { p_at?: string }
+        Returns: Json
       }
       refresh_highlightly_shadow_observation: {
         Args: {
