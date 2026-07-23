@@ -1,0 +1,1 @@
+UPDATE public.sports_providers SET enabled = false WHERE code = 'highlightly';
