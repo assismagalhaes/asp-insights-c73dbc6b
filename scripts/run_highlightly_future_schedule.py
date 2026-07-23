@@ -18,6 +18,7 @@ from scripts.run_highlightly_phase7_shadow import (
     SPORTS,
     _active_jobs,
 )
+from scripts.run_highlightly_future_continuation import resolve_future_scope
 
 
 LOCAL_TIMEZONE = ZoneInfo("America/Sao_Paulo")
@@ -113,6 +114,17 @@ def build_phase7_command(plan: FutureWindowPlan) -> list[str]:
     ]
 
 
+def build_continuation_command() -> list[str]:
+    return [
+        sys.executable,
+        "-m",
+        "scripts.run_highlightly_future_continuation",
+        "--max-jobs",
+        "5000",
+        "--confirm-continuation",
+    ]
+
+
 def _provider(repository: HighlightlyRepository) -> dict[str, Any]:
     contexts = [repository.ingestion_context(sport) for sport in SPORTS]
     provider_ids = {str(context["provider"]["id"]) for context in contexts}
@@ -169,19 +181,47 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     active = _active_jobs(repository, limit=5_000)
     if active:
+        try:
+            active_scope = resolve_future_scope(active)
+        except RuntimeError as error:
+            print(
+                json.dumps(
+                    _report(
+                        plan,
+                        mode=mode,
+                        event="future_window_skipped",
+                        reason="active_foreign_or_ambiguous_queue",
+                        active_jobs=len(active),
+                        detail=str(error),
+                    ),
+                    ensure_ascii=False,
+                )
+            )
+            return 0
+        continuation = subprocess.run(build_continuation_command(), check=False)
+        active_after_continuation = _active_jobs(repository, limit=5_000)
         print(
             json.dumps(
                 _report(
                     plan,
                     mode=mode,
-                    event="future_window_skipped",
-                    reason="active_ingestion_queue",
-                    active_jobs=len(active),
+                    event=(
+                        "future_window_continuation_finished"
+                        if continuation.returncode == 0
+                        else "future_window_continuation_failed"
+                    ),
+                    resumed_scope=active_scope,
+                    active_jobs_before=len(active),
+                    active_jobs_after=len(active_after_continuation),
+                    returncode=continuation.returncode,
                 ),
                 ensure_ascii=False,
             )
         )
-        return 0
+        if continuation.returncode != 0:
+            return continuation.returncode
+        if active_after_continuation or active_scope == plan.scope:
+            return 0
 
     usage_date = _now_utc().date().isoformat()
     usage = repository.daily_request_usage(str(provider["id"]), usage_date)

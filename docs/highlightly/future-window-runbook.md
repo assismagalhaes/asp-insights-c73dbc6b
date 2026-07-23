@@ -23,6 +23,11 @@ O planejamento totaliza no máximo 5.700 chamadas no mesmo dia de quota UTC. O w
 o teto absoluto de 6.750, preservando 750 das 7.500 chamadas contratuais. A execução noturna ocorre
 depois da virada da cota UTC, atualmente às 21:00 em São Paulo.
 
+Uma fila futura que ultrapasse o orçamento do horário não fica ociosa até o próximo slot. O
+continuador roda a cada cinco minutos, reutiliza exclusivamente o mesmo `shadow_scope` e consome
+somente o saldo existente até o teto de 6.750. Se a cota estiver esgotada, ele registra
+`future_continuation_waiting_quota` e tenta novamente depois da renovação diária.
+
 ## Perfil pregame
 
 O parâmetro `--fanout-mode pregame` mantém:
@@ -41,12 +46,17 @@ própria mais próxima do início da partida.
 O scheduler encerra com sucesso e registra `future_window_skipped` quando:
 
 - o provider já está ligado;
-- existe qualquer job ativo de outra coleta;
+- existe job ativo sem escopo canônico, de mais de um escopo ou de uma coleta não futura;
 - o uso diário alcançou o teto que preserva a reserva.
 
-Assim, instalar o timer não interrompe nem concorre com um backfill em andamento. O processo só
-executa em um horário futuro no qual a fila esteja livre. O provider é ligado apenas pelo runner
-isolado e restaurado para `enabled=false` no bloco `finally` já existente.
+Quando existe uma única fila `future-*`, o scheduler chama o continuador em vez de ignorá-la.
+O continuador recusa locks válidos, múltiplos escopos e filas históricas. Os dois serviços usam o
+mesmo `flock` em `/run/lock/asp-highlightly-future.lock`, portanto não executam chamadas concorrentes.
+O provider é ligado apenas pelo runner isolado e restaurado para `enabled=false` em `finally`.
+
+Ao zerar a fila, o continuador chama `finalize_highlightly_shadow_window` e publica o estado final
+da janela. Se houver retries ainda não elegíveis ou cota insuficiente, o timer mantém a retomada
+autônoma sem depender de uma sessão do operador.
 
 ## Preview sem consumir cota
 
@@ -70,9 +80,17 @@ sudo install -o root -g root -m 0644 \
 sudo install -o root -g root -m 0644 \
   config/systemd/highlightly-future-window.timer \
   /etc/systemd/system/highlightly-future-window.timer
+sudo install -o root -g root -m 0644 \
+  config/systemd/highlightly-future-continuation.service \
+  /etc/systemd/system/highlightly-future-continuation.service
+sudo install -o root -g root -m 0644 \
+  config/systemd/highlightly-future-continuation.timer \
+  /etc/systemd/system/highlightly-future-continuation.timer
 sudo systemctl daemon-reload
 sudo systemctl enable --now highlightly-future-window.timer
+sudo systemctl enable --now highlightly-future-continuation.timer
 systemctl list-timers highlightly-future-window.timer --no-pager
+systemctl list-timers highlightly-future-continuation.timer --no-pager
 ```
 
 Não iniciar manualmente o `.service` enquanto existir backfill, fila ativa ou provider ligado.
@@ -82,7 +100,10 @@ Não iniciar manualmente o `.service` enquanto existir backfill, fila ativa ou p
 ```bash
 systemctl status highlightly-future-window.timer --no-pager
 systemctl status highlightly-future-window.service --no-pager
+systemctl status highlightly-future-continuation.timer --no-pager
+systemctl status highlightly-future-continuation.service --no-pager
 journalctl -u highlightly-future-window.service -n 100 --no-pager
+journalctl -u highlightly-future-continuation.service -n 100 --no-pager
 ```
 
 Critérios de aceitação:
@@ -90,5 +111,6 @@ Critérios de aceitação:
 - retorno `future_window_finished` ou um `future_window_skipped` justificável;
 - provider desligado ao final;
 - nenhuma quebra da reserva de 750 chamadas;
+- nenhuma fila futura pendente sem worker por mais de dez minutos quando houver cota;
 - partidas normalizadas para todas as datas do intervalo;
 - odds ausentes tratadas como indisponibilidade do provedor, nunca como `1.00` artificial.

@@ -1,0 +1,12 @@
+[Unit]
+Description=Continue pending ASP Insights Highlightly future jobs
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=5min
+AccuracySec=30s
+RandomizedDelaySec=30s
+Unit=highlightly-future-continuation.service
+
+[Install]
+WantedBy=timers.target

@@ -45,6 +45,13 @@ class HighlightlyFutureScheduleTests(unittest.TestCase):
         self.assertEqual(command[command.index("--backfill-days") + 1], "5")
         self.assertNotIn("--sport", command)
 
+    def test_continuation_command_is_bounded_and_explicit(self):
+        command = future.build_continuation_command()
+
+        self.assertIn("scripts.run_highlightly_future_continuation", command)
+        self.assertEqual(command[command.index("--max-jobs") + 1], "5000")
+        self.assertIn("--confirm-continuation", command)
+
     def test_schedule_budget_preserves_contractual_reserve_and_margin(self):
         self.assertEqual(future.PLANNED_DAILY_BUDGET, 5_700)
         self.assertLessEqual(
@@ -83,7 +90,13 @@ class HighlightlyFutureScheduleTests(unittest.TestCase):
             "provider": {"id": "provider-1", "enabled": False}
         }
         repository_factory.return_value = repository
-        active_jobs.return_value = [{"id": "backfill-job", "status": "running"}]
+        active_jobs.return_value = [
+            {
+                "id": "backfill-job",
+                "status": "pending",
+                "shadow_scope": "phase7-20260701-15-all-sports",
+            }
+        ]
 
         with patch("builtins.print") as output:
             exit_code = future.main(["--confirm-future-window"])
@@ -92,7 +105,44 @@ class HighlightlyFutureScheduleTests(unittest.TestCase):
         subprocess_run.assert_not_called()
         report = json.loads(output.call_args.args[0])
         self.assertEqual(report["event"], "future_window_skipped")
-        self.assertEqual(report["reason"], "active_ingestion_queue")
+        self.assertEqual(report["reason"], "active_foreign_or_ambiguous_queue")
+
+    @patch.object(future.subprocess, "run")
+    @patch.object(future, "_active_jobs")
+    @patch.object(future.HighlightlyRepository, "from_environment")
+    @patch.object(future, "_now_utc")
+    def test_active_future_scope_is_resumed_instead_of_skipped(
+        self,
+        now_utc,
+        repository_factory,
+        active_jobs,
+        subprocess_run,
+    ):
+        now_utc.return_value = datetime(2026, 7, 22, 1, 15, tzinfo=timezone.utc)
+        repository = Mock()
+        repository.ingestion_context.return_value = {
+            "provider": {"id": "provider-1", "enabled": False}
+        }
+        repository_factory.return_value = repository
+        scope = "future-20260721T2210-night"
+        active_jobs.side_effect = [
+            [{"id": "job-1", "status": "pending", "shadow_scope": scope}],
+            [],
+        ]
+        subprocess_run.return_value = Mock(returncode=0)
+
+        with patch("builtins.print") as output:
+            exit_code = future.main(["--confirm-future-window"])
+
+        self.assertEqual(exit_code, 0)
+        subprocess_run.assert_called_once_with(
+            future.build_continuation_command(),
+            check=False,
+        )
+        report = json.loads(output.call_args.args[0])
+        self.assertEqual(report["event"], "future_window_continuation_finished")
+        self.assertEqual(report["resumed_scope"], scope)
+        self.assertEqual(report["active_jobs_after"], 0)
 
 
 if __name__ == "__main__":
