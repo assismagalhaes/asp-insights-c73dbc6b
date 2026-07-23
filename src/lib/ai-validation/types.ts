@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import type { AiOperationalOutputSchema } from "./schema";
 
-export const AI_VALIDATION_SCHEMA_VERSION = "1.0.0" as const;
+export const AI_VALIDATION_SCHEMA_VERSION = "1.1.0" as const;
 
 export const AI_GATE_NAMES = [
   "technical_consistency",

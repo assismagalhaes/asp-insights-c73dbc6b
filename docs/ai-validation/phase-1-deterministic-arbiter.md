@@ -2,7 +2,7 @@
 
 ## Escopo
 
-Esta fase introduz o contrato `1.0.0` para a recomendação da IA e impede que a
+Esta fase introduz o contrato `1.1.0` para a recomendação da IA e impede que a
 resposta bruta do modelo controle decisão, stake ou opção escolhida.
 
 O provider e os prompts atuais continuam em uso. A migração para Structured
@@ -17,10 +17,23 @@ Output pertence à Fase 2.
 4. O árbitro verifica ID, pick, stake, gates vigentes, edge, odd, Preview MLB,
    starters, diagnósticos MatchMatrix e regras PackBall.
 5. O parecer exibido e persistido é gerado por `presentation.ts` a partir do
-   resultado arbitrado.
+   resultado arbitrado, preservando as seções narrativas A–G.
 
 O texto bruto do provider não é usado em nenhum caminho de aplicação ou
 persistência de decisão operacional.
+
+## Apresentação A–G
+
+O adaptador preserva separadamente entrada avaliada, tese favorável, tese
+contrária, gates declarados, riscos, histórico interno, justificativa final e
+condição de mudança. Os gates narrativos são convertidos em
+`APPROVED | REJECTED | UNKNOWN`, mas continuam sendo apenas evidência declarada
+pela IA.
+
+A seção G sempre é reconstruída com os campos arbitrados. Quando a recomendação
+original é bloqueada, o parecer mostra separadamente a decisão original da IA e
+a decisão final validada, sem permitir que o texto bruto controle ID, pick ou
+stake.
 
 ## Comportamento fail-closed
 
