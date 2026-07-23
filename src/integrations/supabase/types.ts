@@ -6549,28 +6549,7 @@ export type Database = {
           sport: string
         }[]
       }
-      get_highlightly_match_lifecycle_candidates_v2: {
-        Args: { p_at?: string; p_include_disabled?: boolean; p_limit?: number }
-        Returns: {
-          cadence_key: string
-          dedupe_key: string
-          endpoint_key: string
-          external_match_id: string
-          kickoff_at: string
-          lifecycle_stage: string
-          match_id: string
-          match_status: string
-          priority: number
-          request_params: Json
-          resource: string
-          sport: string
-        }[]
-      }
       get_highlightly_match_lifecycle_report: {
-        Args: { p_from?: string; p_to?: string }
-        Returns: Json
-      }
-      get_highlightly_match_lifecycle_report_v2: {
         Args: { p_from?: string; p_to?: string }
         Returns: Json
       }
