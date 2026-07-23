@@ -285,17 +285,15 @@ export const analisarValidacaoOnline = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("LOVABLE_API_KEY não configurada.");
     if (!process.env.FIRECRAWL_API_KEY) {
       throw new Error(
         "Firecrawl não está conectado. Conecte-o em Conectores para usar a pesquisa online.",
       );
     }
 
-    const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
+    const { createGoogleProvider, GOOGLE_MODEL_ID } = await import("@/lib/google-ai.server");
     const { firecrawlSearch, firecrawlScrape } = await import("@/lib/firecrawl.server");
-    const gateway = createLovableAiGatewayProvider(key);
+    const google = createGoogleProvider();
 
     const buscasRealizadas: string[] = [];
     const fontesConsultadas: { titulo: string; url: string }[] = [];
@@ -377,7 +375,7 @@ Faça pesquisas online conforme a política descrita e produza o parecer no form
 
     try {
       const { text } = await generateText({
-        model: gateway("google/gemini-3-flash-preview"),
+        model: google(GOOGLE_MODEL_ID),
         system: SYSTEM_PROMPT,
         prompt: userPayload,
         stopWhen: stepCountIs(50),
