@@ -19,6 +19,7 @@ export default tseslint.config(
       "outputs",
       "model_outputs",
       "src/routeTree.gen.ts",
+      "src/integrations/supabase/types.ts",
     ],
   },
   {

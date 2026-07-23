@@ -133,7 +133,9 @@ export type MatchMatrixOperationalGate = {
 export function evaluateMatchMatrixOperationalGate(
   prognostico: Prognostico,
 ): MatchMatrixOperationalGate {
-  const origin = normalized(`${prognostico.origem_modelo ?? ""} ${prognostico.contexto_modelo ?? ""}`);
+  const origin = normalized(
+    `${prognostico.origem_modelo ?? ""} ${prognostico.contexto_modelo ?? ""}`,
+  );
   if (!/asp matchmatrix|football_v1_/.test(origin)) {
     return {
       applicable: false,
@@ -152,7 +154,9 @@ export function evaluateMatchMatrixOperationalGate(
     : isFiniteNumber(prognostico.edge)
       ? prognostico.edge
       : null;
-  const configuredMinimum = text.match(/min_edge_required\s*[=:]\s*(0(?:[.,]\d+)?|\d+(?:[.,]\d+)?)/i)?.[1];
+  const configuredMinimum = text.match(
+    /min_edge_required\s*[=:]\s*(0(?:[.,]\d+)?|\d+(?:[.,]\d+)?)/i,
+  )?.[1];
   const configuredMinimumNumber = configuredMinimum
     ? Number(configuredMinimum.replace(",", "."))
     : null;
@@ -174,7 +178,9 @@ export function evaluateMatchMatrixOperationalGate(
   const reasons: string[] = [];
 
   if (!diagnosticsPresent) {
-    reasons.push("ASP MatchMatrix sem diagnostico tecnico versionado para validar amostra, dispersao e conflito de mercado.");
+    reasons.push(
+      "ASP MatchMatrix sem diagnostico tecnico versionado para validar amostra, dispersao e conflito de mercado.",
+    );
   }
   if (effectiveEdge == null || effectiveEdge < minimumEdge) {
     reasons.push(
@@ -182,7 +188,9 @@ export function evaluateMatchMatrixOperationalGate(
     );
   }
   if (marketConflict) {
-    reasons.push("ASP MatchMatrix com conflito relevante contra o mercado; requer nova analise antes da confirmacao.");
+    reasons.push(
+      "ASP MatchMatrix com conflito relevante contra o mercado; requer nova analise antes da confirmacao.",
+    );
   }
 
   return {
@@ -198,7 +206,14 @@ export function evaluateMatchMatrixOperationalGate(
 export function evaluateMlbOperationalGate(prognostico: Prognostico): MlbOperationalGate {
   const sport = normalized(`${prognostico.esporte} ${prognostico.liga}`);
   if (!/baseball|mlb/.test(sport)) {
-    return { applicable: false, approved: true, minimumEdge: null, effectiveEdge: null, missingStarters: false, reasons: [] };
+    return {
+      applicable: false,
+      approved: true,
+      minimumEdge: null,
+      effectiveEdge: null,
+      missingStarters: false,
+      reasons: [],
+    };
   }
 
   const market = normalized(`${prognostico.mercado} ${prognostico.pick}`);
@@ -221,10 +236,19 @@ export function evaluateMlbOperationalGate(prognostico: Prognostico): MlbOperati
     starterLines.some((line) => /:\s*-\s*(?:ERA|$)|nao encontrado|não encontrado/i.test(line));
   const reasons: string[] = [];
   if (minimumEdge != null && (effectiveEdge == null || effectiveEdge < minimumEdge)) {
-    reasons.push(`Edge executavel ${effectiveEdge?.toFixed(2) ?? "ausente"}% abaixo do minimo MLB de ${minimumEdge.toFixed(2)}%.`);
+    reasons.push(
+      `Edge executavel ${effectiveEdge?.toFixed(2) ?? "ausente"}% abaixo do minimo MLB de ${minimumEdge.toFixed(2)}%.`,
+    );
   }
   if (missingStarters) reasons.push("MLB sem os dois starters confirmados no Preview enriquecido.");
-  return { applicable: true, approved: reasons.length === 0, minimumEdge, effectiveEdge, missingStarters, reasons };
+  return {
+    applicable: true,
+    approved: reasons.length === 0,
+    minimumEdge,
+    effectiveEdge,
+    missingStarters,
+    reasons,
+  };
 }
 
 export function buildCriticalShortlist(
@@ -259,8 +283,7 @@ export function buildCriticalShortlist(
   const reservesNotAnalyzed = withRanks
     .filter(
       (item) =>
-        item.critical_shortlist_status !== "BLOQUEADA" &&
-        !shortlistIds.has(item.prognostico.id),
+        item.critical_shortlist_status !== "BLOQUEADA" && !shortlistIds.has(item.prognostico.id),
     )
     .map((item) => ({ ...item, operational_status: "RESERVA_NAO_ANALISADA" as const }));
   const blocked = withRanks
