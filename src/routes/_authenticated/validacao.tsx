@@ -86,6 +86,9 @@ import {
   evaluateMatchMatrixOperationalGate,
   evaluateMlbOperationalGate,
 } from "@/lib/critical-validation/critical-shortlist-ranking";
+import { arbitrateAiOutput } from "@/lib/ai-validation/arbiter";
+import { formatArbitratedAiValidation } from "@/lib/ai-validation/presentation";
+import type { AiOperationalOutput } from "@/lib/ai-validation/types";
 
 export const Route = createFileRoute("/_authenticated/validacao")({
   head: () => ({ meta: [{ title: "Validação Crítica - ASP Insights" }] }),
@@ -123,6 +126,16 @@ interface IAResult {
   buscas_realizadas?: string[];
   odd_analisada?: number | null;
   odd_analisada_por_opcao?: Record<string, number>;
+  blocking_codes?: string[];
+  model_output?: AiOperationalOutput;
+}
+
+interface ServerAiResult {
+  model_output: unknown;
+  raw_model_text: string;
+  prompt_versao: string;
+  fontes_consultadas?: { titulo: string; url: string }[];
+  buscas_realizadas?: string[];
 }
 
 type ValidationGroup = {
@@ -791,24 +804,49 @@ function Validacao() {
           ...(modo === "online" ? { contexto_online: null } : {}),
         },
       };
-      const raw = modo === "online" ? await callIAOnline(payload) : await callIA(payload);
+      const raw = (
+        modo === "online" ? await callIAOnline(payload) : await callIA(payload)
+      ) as ServerAiResult;
+      const arbitration = arbitrateAiOutput(raw.model_output, {
+        mode: modo,
+        options: g.opcoes.map((option) => ({
+          prediction: {
+            ...option,
+            odd_ajustada: getOddAjustadaNum(option),
+            edge_ajustado: getEdgeAjustado(option),
+            dados_tecnicos: contextoAnalise,
+          },
+          pick: getOpportunityPickLabel(option),
+        })),
+      });
       const oddsAnalisadasMap: Record<string, number> = {};
       for (const option of g.opcoes) {
         const o = getOddAjustadaNum(option);
         if (o != null) oddsAnalisadasMap[option.id] = o;
       }
       const r: IAResult = {
-        ...(raw as Omit<IAResult, "modo">),
+        parecer: formatArbitratedAiValidation(arbitration),
+        decisao_sugerida: arbitration.output.decision,
+        stake_sugerida: arbitration.output.stake,
+        prognostico_id_escolhido: arbitration.output.selected_prediction_id,
+        pick_escolhida: arbitration.output.selected_pick,
+        prompt_versao: raw.prompt_versao,
+        fontes_consultadas: raw.fontes_consultadas,
+        buscas_realizadas: raw.buscas_realizadas,
         modo,
         odd_analisada: oddAj,
         odd_analisada_por_opcao: oddsAnalisadasMap,
+        blocking_codes: arbitration.blocks.map((block) => block.code),
+        model_output: arbitration.output,
       };
       const chosenByIa = r.decisao_sugerida === "CONFIRMA" ? findAiChosenOption(g, r) : null;
       const rWithAviso: IAResult = {
         ...r,
         aviso_opcao:
-          r.decisao_sugerida === "CONFIRMA" && !chosenByIa
-            ? "A IA sugeriu confirmar, mas não foi possível identificar uma opção válida do grupo. Selecione manualmente antes de confirmar."
+          arbitration.blocks.length > 0
+            ? `Árbitro determinístico bloqueou a sugestão: ${arbitration.blocks
+                .map((block) => block.code)
+                .join(", ")}.`
             : null,
       };
       if (chosenByIa) {

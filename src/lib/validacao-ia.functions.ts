@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/lib/auth-middleware-public";
-import { parseLegacyAiDecision } from "@/lib/ai-validation/legacy-parser";
+import { adaptLegacyAiResponse } from "@/lib/ai-validation/legacy-adapter";
 import { generateText } from "ai";
 import { z } from "zod";
 
@@ -281,14 +281,10 @@ ${aspScreenerInstrucao}
         prompt: userPayload,
       });
 
-      const { decisao, stake, prognostico_id_escolhido, pick_escolhida } =
-        parseLegacyAiDecision(text);
+      const modelOutput = adaptLegacyAiResponse({ text });
       return {
-        parecer: text,
-        decisao_sugerida: decisao,
-        stake_sugerida: stake,
-        prognostico_id_escolhido,
-        pick_escolhida,
+        model_output: modelOutput,
+        raw_model_text: text,
         prompt_versao: PROMPT_VERSAO,
       };
     } catch (err: unknown) {
