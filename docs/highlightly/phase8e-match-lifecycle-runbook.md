@@ -33,20 +33,38 @@ Escalações, highlights e o player box score de Football são opcionais. Highli
 a partir de T+2h, quando suportados. A quarentena de standings da WNBA permanece inalterada; a
 Fase 8E não consulta standings.
 
+### Respostas vazias
+
+HTTP 200 não é suficiente para concluir um recurso:
+
+- recurso obrigatório vazio permanece em `retry` até T+24h;
+- recurso obrigatório ainda vazio em T+24h vira `provider_unavailable`;
+- player box score vazio de Football vira `not_supported`;
+- outros recursos opcionais vazios aguardam o próximo horizonte e viram `not_supported`
+  em T+24h;
+- somente respostas com ao menos um registro podem virar `succeeded`.
+
+O monitor administrativo usa 36 horas anteriores e 36 horas futuras para cobrir a mesma janela
+operacional do reconciliador.
+
 ## Aplicação no Lovable
 
 Aplicar exatamente:
 
 1. `supabase/migrations/20260723183721_6981c84a-126e-4be9-ac87-6161b89369e4.sql`;
-2. `supabase/tests/highlightly_phase8e_match_lifecycle_smoke.sql`.
+2. `supabase/migrations/20260723203000_harden_highlightly_phase8e_empty_resources.sql`;
+3. `supabase/tests/highlightly_phase8e_match_lifecycle_smoke.sql`;
+4. `supabase/tests/highlightly_phase8e_empty_resources_smoke.sql`.
 
 Depois publicar o backend para disponibilizar no bridge:
 
 - tabelas `hl_match_lifecycle_policies`, `hl_match_lifecycle_states` e
   `hl_match_lifecycle_resources`;
 - RPCs `get_highlightly_match_lifecycle_candidates`,
+  `get_highlightly_match_lifecycle_candidates_v2`,
   `refresh_highlightly_match_lifecycle_states` e
-  `get_highlightly_match_lifecycle_report`.
+  `get_highlightly_match_lifecycle_report`,
+  `get_highlightly_match_lifecycle_report_v2`.
 
 Critérios:
 

@@ -51,7 +51,7 @@ export interface HighlightlyMatchLifecycleReport {
 }
 
 export async function fetchHighlightlyMatchLifecycleReport(): Promise<HighlightlyMatchLifecycleReport> {
-  const { data, error } = await supabase.rpc("get_highlightly_match_lifecycle_report", {});
+  const { data, error } = await supabase.rpc("get_highlightly_match_lifecycle_report_v2", {});
   if (error) throw new Error(error.message);
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new Error("O monitor do ciclo das partidas retornou um payload inválido.");

@@ -54,8 +54,10 @@ class HighlightlyPhaseEightEMatchLifecycleTests(unittest.TestCase):
             "hl_match_lifecycle_states",
             "hl_match_lifecycle_resources",
             "get_highlightly_match_lifecycle_candidates",
+            "get_highlightly_match_lifecycle_candidates_v2",
             "refresh_highlightly_match_lifecycle_states",
             "get_highlightly_match_lifecycle_report",
+            "get_highlightly_match_lifecycle_report_v2",
         ):
             self.assertIn(f'"{token}"', bridge)
 
@@ -78,7 +80,7 @@ class HighlightlyPhaseEightEMatchLifecycleTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         repository.rpc.assert_called_once_with(
-            "get_highlightly_match_lifecycle_candidates",
+            "get_highlightly_match_lifecycle_candidates_v2",
             {
                 "p_at": "2026-07-23T17:00:00+00:00",
                 "p_limit": 20,
@@ -118,7 +120,12 @@ class HighlightlyPhaseEightEMatchLifecycleTests(unittest.TestCase):
         repository.daily_request_usage.return_value = 100
         active_jobs.side_effect = [[], []]
         worker_factory.return_value.run_once.side_effect = [
-            WorkerResult(status="succeeded", job_id="job-1"),
+            WorkerResult(
+                status="succeeded",
+                job_id="job-1",
+                records_received=3,
+                records_normalized=3,
+            ),
             WorkerResult(status="idle"),
         ]
 
@@ -146,6 +153,20 @@ class HighlightlyPhaseEightEMatchLifecycleTests(unittest.TestCase):
         self.assertEqual(repository.upsert_rows.call_count, 2)
         final_rows = repository.upsert_rows.call_args.args[1]
         self.assertEqual(final_rows[0]["status"], "succeeded")
+        self.assertEqual(final_rows[0]["metadata"]["recordsReceived"], 3)
+        self.assertFalse(final_rows[0]["metadata"]["emptyResponse"])
+        report_call = repository.rpc.call_args_list[2]
+        self.assertEqual(
+            report_call.args[0],
+            "get_highlightly_match_lifecycle_report_v2",
+        )
+        self.assertEqual(
+            report_call.args[1],
+            {
+                "p_from": "2026-07-22T05:00:00+00:00",
+                "p_to": "2026-07-25T05:00:00+00:00",
+            },
+        )
         repository.set_provider_enabled.assert_any_call("highlightly", True)
         repository.set_provider_enabled.assert_any_call("highlightly", False)
         self.assertEqual(worker_factory.call_args.kwargs["daily_quota_ceiling"], 1_600)
@@ -230,23 +251,144 @@ class HighlightlyPhaseEightEMatchLifecycleTests(unittest.TestCase):
 
     def test_terminal_resource_classification_is_deterministic(self):
         self.assertEqual(
-            phase8e._resource_status(WorkerResult(status="succeeded")),
+            phase8e._resource_status(
+                WorkerResult(status="succeeded", records_received=1),
+                sport="football",
+                resource="events",
+                cadence_key="live-1",
+            ),
             "succeeded",
         )
         self.assertEqual(
-            phase8e._resource_status(WorkerResult(status="partial")),
+            phase8e._resource_status(
+                WorkerResult(status="partial"),
+                sport="football",
+                resource="events",
+                cadence_key="live-1",
+            ),
             "quality_rejected",
         )
         self.assertEqual(
             phase8e._resource_status(
-                WorkerResult(status="dead", message="HTTP 404 not found")
+                WorkerResult(status="dead", message="HTTP 404 not found"),
+                sport="football",
+                resource="events",
+                cadence_key="post24h",
             ),
             "provider_unavailable",
         )
         self.assertEqual(
-            phase8e._resource_status(WorkerResult(status="dead", message="HTTP 500")),
+            phase8e._resource_status(
+                WorkerResult(status="dead", message="HTTP 500"),
+                sport="football",
+                resource="events",
+                cadence_key="post24h",
+            ),
             "dead",
         )
+
+    def test_empty_required_resource_retries_until_post24h(self):
+        empty = WorkerResult(status="succeeded", records_received=0)
+
+        self.assertEqual(
+            phase8e._resource_status(
+                empty,
+                sport="football",
+                resource="events",
+                cadence_key="post2h",
+            ),
+            "retry",
+        )
+        self.assertEqual(
+            phase8e._resource_status(
+                empty,
+                sport="football",
+                resource="events",
+                cadence_key="post24h",
+            ),
+            "provider_unavailable",
+        )
+
+    def test_empty_optional_resources_are_terminal_only_when_deterministic(self):
+        empty = WorkerResult(status="succeeded", records_received=0)
+
+        self.assertEqual(
+            phase8e._resource_status(
+                empty,
+                sport="football",
+                resource="box_scores",
+                cadence_key="post15m",
+            ),
+            "not_supported",
+        )
+        self.assertEqual(
+            phase8e._resource_status(
+                empty,
+                sport="football",
+                resource="highlights",
+                cadence_key="post2h",
+            ),
+            "retry",
+        )
+        self.assertEqual(
+            phase8e._resource_status(
+                empty,
+                sport="football",
+                resource="highlights",
+                cadence_key="post24h",
+            ),
+            "not_supported",
+        )
+
+    def test_empty_resource_row_preserves_auditable_counts(self):
+        pending = phase8e._pending_resource_row(
+            candidate(
+                lifecycle_stage="finished_pending_detail",
+                cadence_key="post2h",
+            ),
+            job={"id": "job-empty", "attempts": 0},
+            scope="phase8e-lifecycle-smoke",
+            attempted_at=phase8e.datetime.fromisoformat(
+                "2026-07-23T17:00:00+00:00"
+            ),
+        )
+
+        finished = phase8e._finished_resource_row(
+            pending,
+            WorkerResult(status="succeeded", records_received=0),
+            finished_at=phase8e.datetime.fromisoformat(
+                "2026-07-23T17:01:00+00:00"
+            ),
+        )
+
+        self.assertEqual(finished["status"], "retry")
+        self.assertIsNone(finished["completed_at"])
+        self.assertEqual(
+            finished["last_error"],
+            "empty_required_or_pending_resource_retry",
+        )
+        self.assertTrue(finished["metadata"]["emptyResponse"])
+        self.assertEqual(finished["metadata"]["emptyClassification"], "retry")
+
+    def test_empty_response_hotfix_migration_is_locked_down(self):
+        migration = (
+            ROOT
+            / "supabase/migrations/20260723203000_harden_highlightly_phase8e_empty_resources.sql"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            "get_highlightly_match_lifecycle_candidates_v2",
+            migration,
+        )
+        self.assertIn("get_highlightly_match_lifecycle_report_v2", migration)
+        self.assertIn("SECURITY INVOKER", migration)
+        self.assertNotIn("SECURITY DEFINER", migration)
+        self.assertIn("records_received = 0", migration)
+        self.assertIn("'provider_unavailable'", migration)
+        self.assertIn("'not_supported'", migration)
+        self.assertIn("now() - interval '36 hours'", migration)
+        self.assertIn("FROM PUBLIC, anon, authenticated", migration)
+        self.assertIn("TO service_role", migration)
 
 
 if __name__ == "__main__":

@@ -24,6 +24,11 @@ from scripts.run_highlightly_phase7_shadow import (
 DEFAULT_REQUEST_BUDGET = 1_500
 MAX_REQUEST_BUDGET = 2_000
 PHASE8E_SCOPE_PREFIX = "phase8e-lifecycle-"
+REQUIRED_RESOURCES_BY_SPORT = {
+    "football": frozenset(("match_status", "events", "match_statistics")),
+    "baseball": frozenset(("match_status", "match_statistics", "box_scores")),
+    "basketball": frozenset(("match_status", "match_statistics")),
+}
 
 
 def _now_utc() -> datetime:
@@ -76,9 +81,23 @@ def _report(*, mode: str, event: str, at: datetime, **extra: Any) -> dict[str, A
     }
 
 
-def _resource_status(result: WorkerResult) -> str:
+def _resource_status(
+    result: WorkerResult,
+    *,
+    sport: str,
+    resource: str,
+    cadence_key: str,
+) -> str:
     if result.status == "succeeded":
-        return "succeeded"
+        if result.records_received > 0:
+            return "succeeded"
+        if sport == "football" and resource == "box_scores":
+            return "not_supported"
+        if cadence_key == "post24h":
+            if resource in REQUIRED_RESOURCES_BY_SPORT.get(sport, frozenset()):
+                return "provider_unavailable"
+            return "not_supported"
+        return "retry"
     if result.status == "partial":
         return "quality_rejected"
     if result.status == "retry":
@@ -89,6 +108,16 @@ def _resource_status(result: WorkerResult) -> str:
             return "provider_unavailable"
         return "dead"
     return "pending"
+
+
+def _resource_error(status: str, result: WorkerResult) -> str | None:
+    if result.status == "succeeded" and result.records_received == 0:
+        return {
+            "retry": "empty_required_or_pending_resource_retry",
+            "provider_unavailable": "empty_required_resource_after_post24h",
+            "not_supported": "empty_optional_resource_not_supported",
+        }.get(status)
+    return str(result.message or "")[:1000] or None
 
 
 def _pending_resource_row(
@@ -111,6 +140,7 @@ def _pending_resource_row(
         "metadata": {
             "phase": "8E",
             "scope": scope,
+            "sport": candidate["sport"],
             "cadenceKey": candidate["cadence_key"],
             "lifecycleStage": candidate["lifecycle_stage"],
             "dedupeKey": candidate["dedupe_key"],
@@ -151,7 +181,13 @@ def _finished_resource_row(
     *,
     finished_at: datetime,
 ) -> dict[str, Any]:
-    status = _resource_status(result)
+    metadata = dict(pending.get("metadata") or {})
+    status = _resource_status(
+        result,
+        sport=str(metadata.get("sport") or ""),
+        resource=str(pending.get("resource") or ""),
+        cadence_key=str(metadata.get("cadenceKey") or ""),
+    )
     return {
         **dict(pending),
         "status": status,
@@ -165,7 +201,18 @@ def _finished_resource_row(
             "not_supported",
         }
         else None,
-        "last_error": str(result.message or "")[:1000] or None,
+        "last_error": _resource_error(status, result),
+        "metadata": {
+            **metadata,
+            "recordsReceived": result.records_received,
+            "recordsNormalized": result.records_normalized,
+            "recordsRejected": result.records_rejected,
+            "emptyResponse": result.status == "succeeded"
+            and result.records_received == 0,
+            "emptyClassification": status
+            if result.status == "succeeded" and result.records_received == 0
+            else None,
+        },
     }
 
 
@@ -179,7 +226,7 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     candidates = _as_rows(
         repository.rpc(
-            "get_highlightly_match_lifecycle_candidates",
+            "get_highlightly_match_lifecycle_candidates_v2",
             {
                 "p_at": at.isoformat(),
                 "p_limit": args.max_jobs,
@@ -406,9 +453,9 @@ def main(argv: Iterable[str] | None = None) -> int:
         {"p_at": at.isoformat()},
     )
     lifecycle_report = repository.rpc(
-        "get_highlightly_match_lifecycle_report",
+        "get_highlightly_match_lifecycle_report_v2",
         {
-            "p_from": (at - timedelta(hours=12)).isoformat(),
+            "p_from": (at - timedelta(hours=36)).isoformat(),
             "p_to": (at + timedelta(hours=36)).isoformat(),
         },
     )
@@ -417,6 +464,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         repository.ingestion_context(SPORTS[0])["provider"].get("enabled")
     )
     statuses = Counter(result.status for result in results)
+    resource_statuses = Counter(str(row.get("status")) for row in finished_rows)
     print(
         json.dumps(
             _report(
@@ -431,6 +479,11 @@ def main(argv: Iterable[str] | None = None) -> int:
                 quota_ceiling=quota_ceiling,
                 processed=sum(result.status != "idle" for result in results),
                 statuses=dict(statuses),
+                resource_statuses=dict(resource_statuses),
+                empty_responses=sum(
+                    result.status == "succeeded" and result.records_received == 0
+                    for result in results
+                ),
                 active_after=len(active_after),
                 provider_restored_disabled=provider_disabled,
                 lifecycle_refresh=lifecycle_refresh,

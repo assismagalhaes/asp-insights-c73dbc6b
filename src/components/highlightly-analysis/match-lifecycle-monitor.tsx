@@ -37,6 +37,17 @@ const RESOURCE_LABELS: Record<string, string> = {
   highlights: "Highlights",
 };
 
+const RESOURCE_STATUS_LABELS: Record<string, string> = {
+  pending: "Pendente",
+  running: "Em coleta",
+  succeeded: "Com dados",
+  retry: "Nova tentativa",
+  dead: "Falha definitiva",
+  provider_unavailable: "Indisponível no provedor",
+  quality_rejected: "Rejeitado pela qualidade",
+  not_supported: "Não suportado",
+};
+
 const TERMINAL_STAGES = new Set(["complete", "complete_with_exceptions", "terminal"]);
 
 function dateTime(value?: string | null): string {
@@ -72,7 +83,7 @@ export function MatchLifecycleMonitor({ report }: { report: HighlightlyMatchLife
             Ciclo automático das partidas
           </h2>
           <p className="mt-1 text-[10px] text-muted-foreground">
-            Pré-jogo, acompanhamento ao vivo e complementação pós-jogo em T+15m, T+2h e T+24h.
+            Janela de 36h anteriores e 36h futuras · pré-jogo, ao vivo e pós-jogo até T+24h.
           </p>
         </div>
         <Badge variant="outline">Atualizado {dateTime(report.generated_at)}</Badge>
@@ -106,6 +117,29 @@ export function MatchLifecycleMonitor({ report }: { report: HighlightlyMatchLife
             </article>
           );
         })}
+      </div>
+
+      <div className="border-t border-border px-4 py-3">
+        <p className="text-xs font-semibold">Recursos processados na janela</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {report.by_resource.map((row) => (
+            <Badge
+              key={`${row.sport}:${row.resource}:${row.status}`}
+              variant={row.status === "succeeded" ? "default" : "outline"}
+              className="gap-1.5 font-normal"
+            >
+              {SPORT_LABELS[row.sport] ?? row.sport} ·{" "}
+              {RESOURCE_LABELS[row.resource] ?? row.resource} ·{" "}
+              {RESOURCE_STATUS_LABELS[row.status] ?? row.status}:{" "}
+              <span className="font-mono">{row.matches}</span>
+            </Badge>
+          ))}
+          {!report.by_resource.length ? (
+            <span className="text-[10px] text-muted-foreground">
+              Nenhum recurso processado nesta janela.
+            </span>
+          ) : null}
+        </div>
       </div>
 
       <div className="grid border-t border-border xl:grid-cols-2">

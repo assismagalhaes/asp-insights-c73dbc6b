@@ -88,8 +88,10 @@ export const HIGHLIGHTLY_BRIDGE_RPCS = new Set([
   "get_highlightly_odds_refresh_candidates",
   "get_highlightly_odds_quality_report",
   "get_highlightly_match_lifecycle_candidates",
+  "get_highlightly_match_lifecycle_candidates_v2",
   "refresh_highlightly_match_lifecycle_states",
   "get_highlightly_match_lifecycle_report",
+  "get_highlightly_match_lifecycle_report_v2",
 ]);
 
 export type HighlightlyBridgeTarget = {
