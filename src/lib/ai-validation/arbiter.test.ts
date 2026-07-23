@@ -69,6 +69,15 @@ function output(overrides: Partial<AiOperationalOutput> = {}): AiOperationalOutp
       context: gate,
       correlation: gate,
     },
+    narrative: {
+      evaluated_entry:
+        "Jogo: A vs B\nMercado: Total\nPick: Over 2.5\nOdd: 2.00\nProbabilidade: 60%\nEdge: 20%",
+      thesis_for: "O modelo e a precificação sustentam a entrada.",
+      thesis_against: "A variância do mercado permanece relevante.",
+      internal_history: "Amostra: 10 casos\nGreens/Reds: 6 GREEN / 4 RED",
+      final_justification: "Tese consistente com os dados atuais.",
+      decision_change_condition: "Mudança material de odd ou contexto.",
+    },
     rationale: "Tese consistente com os dados atuais.",
     risks: ["Variância normal do mercado."],
     invalidation_condition: "Mudança material de odd ou contexto.",
@@ -85,6 +94,56 @@ function context(...predictions: Prognostico[]): AiArbiterContext {
     options: predictions.map((item) => ({ prediction: item, pick: item.pick })),
   };
 }
+
+const PHILLIES_DODGERS_LEGACY_REPORT = `A) Entrada avaliada
+Jogo: Philadelphia Phillies vs Los Angeles Dodgers
+Mercado: Under Corridas
+Pick: Under 10.5
+Odd: 1.670 (ajustada)
+Probabilidade: 63.64%
+Edge: 6.28%
+
+B) Tese a favor
+1. Estabilidade Recente: 4 dos últimos 5 jogos entre as equipes na temporada 2026 terminaram com 10 ou menos corridas. O único "outlier" foi o jogo de 20/07 (17 corridas), seguido imediatamente por um jogo de 3 corridas totais no dia 21/07, indicando uma regressão à média defensiva.
+2. Starters Confirmados: Eric Lauer (LAD) e Aaron Nola (PHI) estão confirmados. Embora Nola tenha um ERA elevado na temporada (5.68), ele mantém um K/9 de elite (9.44), o que ajuda a mitigar danos em situações de bases ocupadas.
+3. Histórico de Confronto do Starter: Eric Lauer possui um histórico excepcional contra os Phillies (ERA de 1.08 nos últimos 5 jogos contra a franquia).
+4. Tendência do Under: A média histórica do confronto (H2H) em 2025 e 2026 gira em torno de 8.30 a 8.60 corridas, bem abaixo da linha protetora de 10.5.
+
+C) Tese contra a entrada
+1. ERA de Nola: O starter dos Phillies (Aaron Nola) tem sido castigado por Home Runs na temporada (23 HRs em 103 IP), o que é perigoso em um estádio como o Citizens Bank Park (Park Factor favorável a rebatedores).
+2. Potencial Ofensivo do Dodgers: O lineup de Los Angeles conta com Shohei Ohtani e Mookie Betts saudáveis, capazes de produzir corridas rápidas através de rebatidas extra-base.
+3. Bullpen do Dodgers: Tanner Scott (closer) atuou por 1.2 innings no dia anterior (21/07) para salvar o jogo; se o bullpen de elite estiver cansado, as entradas finais podem ser voláteis.
+
+D) Gates de validação
+Coerência técnica: aprovado - A linha de 10.5 oferece uma proteção de 2 corridas acima da média esperada (8.65).
+Informação crítica: aprovado - Starters confirmados (Lauer x Nola).
+Risco estrutural: aprovado - Bullpens em condições normais, apesar do uso de Tanner Scott (LAD).
+Contexto online/manual: aprovado - A vitória magra de 2-1 no dia anterior sugere um ajuste nos arremessadores após o tiroteio de 17 corridas.
+Duplicidade/correlação: aprovado - A opção Under 10.5 é preferível à Under 9.5 (embora o edge da 9.5 seja maior) pela margem de segurança no gancho crucial de 10 corridas.
+
+E) Riscos principais
+1. Volatilidade de Aaron Nola com HRs permitidos em estádio pequeno.
+2. Potencial explosivo do núcleo do lineup dos Dodgers.
+3. Citizens Bank Park em um dia quente (fator que ajuda a bola a voar).
+
+F) Histórico interno semelhante
+Amostra: 16 casos
+Greens/Reds: 10 GREEN / 6 RED
+ROI/Yield: N/A (Yield histórico positivo no nicho MLB Under)
+Conclusão: Amostra moderada que valida a eficácia do modelo em linhas esticadas de Under (10.5).
+
+G) Decisão final
+Decisão: CONFIRMAR
+decisao_grupo: CONFIRMA
+prognostico_id_escolhido: 1a21dce9-c1ee-429d-9be4-6dc396fd2271
+pick_escolhida: Under 10.5
+stake_confirmada: 1.0
+Stake sugerida: 1.0u
+justificativa_pick: A linha de 10.5 é extremamente protetora para um confronto onde a média projetada é de 8.6 corridas. Lauer domina o matchup contra o Phillies historicamente (1.08 ERA).
+riscos: Nola ceder HRs múltiplos; Bullpen desgastado se os starters saírem cedo.
+condicao_invalidacao: Substituição de Eric Lauer por um bullpen game de última hora.
+Justificativa final objetiva: A linha de 10.5 está inflada pelo jogo atípico de 17 corridas ocorrido há dois dias. O mercado ajustou a odd, mas a probabilidade de um jogo de 11 corridas com Lauer e Nola no montinho é baixa o suficiente para justificar a entrada com 1u.
+Condição que faria mudar a decisão: Confirmação de ventos fortes soprando para fora (outfield) acima de 15mph no horário do jogo.`;
 
 describe("AiOperationalOutputSchema", () => {
   it("aceita somente stakes operacionais previstas", () => {
@@ -315,8 +374,82 @@ stake_confirmada: 2`,
       context(prediction()),
     );
     const text = formatArbitratedAiValidation(result);
-    expect(text).toContain("Decisão: PULAR");
+    expect(text).toContain("Decisão original da IA: CONFIRMA");
+    expect(text).toContain("Decisão final validada: PULAR");
+    expect(text).toContain("decisao_grupo: PULAR");
     expect(text).toContain("[SELECTION_ID_NOT_IN_GROUP]");
-    expect(text).not.toContain("Decisão: CONFIRMA");
+    expect(text).not.toContain("Status do árbitro: APPROVED");
+  });
+
+  it("preserva as seções A–G do parecer informado e interpreta seus gates", () => {
+    const adapted = adaptLegacyAiResponse({ text: PHILLIES_DODGERS_LEGACY_REPORT });
+    expect(adapted.schema_version).toBe("1.1.0");
+    expect(adapted.narrative).toMatchObject({
+      evaluated_entry: expect.stringContaining("Philadelphia Phillies"),
+      thesis_for: expect.stringContaining("Starters Confirmados"),
+      thesis_against: expect.stringContaining("ERA de Nola"),
+      internal_history: expect.stringContaining("10 GREEN / 6 RED"),
+      final_justification: expect.stringContaining("A linha de 10.5 está inflada"),
+      decision_change_condition: expect.stringContaining("ventos fortes soprando para fora"),
+    });
+    expect(adapted.gates).toMatchObject({
+      technical_consistency: { status: "APPROVED" },
+      critical_information: { status: "APPROVED" },
+      structural_risk: { status: "APPROVED" },
+      context: { status: "APPROVED" },
+      correlation: { status: "APPROVED" },
+    });
+    expect(adapted.risks).toEqual(
+      expect.arrayContaining([
+        "Volatilidade de Aaron Nola com HRs permitidos em estádio pequeno.",
+        "Potencial explosivo do núcleo do lineup dos Dodgers.",
+        "Nola ceder HRs múltiplos",
+        "Bullpen desgastado se os starters saírem cedo.",
+      ]),
+    );
+
+    const result = arbitrateAiOutput(adapted, {
+      mode: "online",
+      options: [
+        {
+          prediction: prediction({
+            id: "1a21dce9-c1ee-429d-9be4-6dc396fd2271",
+            jogo: "Philadelphia Phillies vs Los Angeles Dodgers",
+            pick: "Under 10.5",
+          }),
+          pick: "Under 10.5",
+        },
+      ],
+    });
+    const text = formatArbitratedAiValidation(result);
+    expect(result.blocks).toEqual([]);
+    expect(text).toContain("A) Entrada avaliada");
+    expect(text).toContain("B) Tese a favor");
+    expect(text).toContain("C) Tese contra a entrada");
+    expect(text).toContain("D) Gates de validação");
+    expect(text).toContain("Risco estrutural: aprovado - Bullpens em condições normais");
+    expect(text).toContain("E) Riscos principais");
+    expect(text).toContain("F) Histórico interno semelhante");
+    expect(text).toContain("G) Decisão final");
+    expect(text).toContain("Decisão original da IA: CONFIRMA");
+    expect(text).toContain("Decisão final validada: CONFIRMA");
+    expect(text).toContain("Validação determinística: CONFIRMA VALIDADO");
+    expect(text).not.toContain("Status do árbitro: APPROVED");
+  });
+
+  it("nomeia uma decisão segura de PULAR sem usar o status ambíguo APPROVED", () => {
+    const result = arbitrateAiOutput(
+      output({
+        decision: "PULAR",
+        stake: 0,
+        selected_prediction_id: null,
+        selected_pick: null,
+      }),
+      context(prediction()),
+    );
+    const text = formatArbitratedAiValidation(result);
+    expect(text).toContain("Validação determinística: PULAR VALIDADO");
+    expect(text).toContain("Decisão final validada: PULAR");
+    expect(text).not.toContain("Status do árbitro: APPROVED");
   });
 });

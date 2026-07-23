@@ -1,6 +1,6 @@
 import { parseLegacyAiDecision } from "./legacy-parser";
 import { AiOperationalOutputSchema } from "./schema";
-import { AI_VALIDATION_SCHEMA_VERSION, type AiOperationalOutput } from "./types";
+import { AI_VALIDATION_SCHEMA_VERSION, type AiGateName, type AiOperationalOutput } from "./types";
 
 type LegacySource = {
   titulo: string;
@@ -15,6 +15,7 @@ type LegacyAdapterInput = {
 
 const LEGACY_GATE_REASON =
   "Gate narrativo não estruturado no formato legado; o árbitro determinístico revalida o estado operacional atual.";
+const MISSING_SECTION = "Não informado pelo modelo no parecer legado.";
 
 function extractSingleLine(text: string, labels: RegExp[]): string | null {
   for (const label of labels) {
@@ -35,29 +36,92 @@ function extractSection(text: string, start: RegExp, end: RegExp): string | null
   return value || null;
 }
 
+function normalize(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function extractBulletItems(section: string | null): string[] {
+  if (!section) return [];
+  return section
+    .split(/\r?\n/)
+    .map((item) =>
+      item
+        .replace(/^\s*[-*•\d.)]+\s*/, "")
+        .trim()
+        .slice(0, 2_000),
+    )
+    .filter(Boolean);
+}
+
 function extractRisks(text: string): string[] {
+  const sectionRisks = extractBulletItems(
+    extractSection(text, /^\s*E\)\s*Riscos principais\s*$/im, /^\s*F\)/im),
+  );
   const inline = extractSingleLine(text, [/^\s*riscos\s*:\s*(.+)$/im]);
-  if (inline) {
-    return inline
-      .split(/\s*[;|]\s*/)
-      .map((item) => item.trim().slice(0, 2_000))
-      .filter(Boolean)
-      .slice(0, 10);
+  const inlineRisks = inline
+    ? inline
+        .split(/\s*[;|]\s*/)
+        .map((item) => item.trim().slice(0, 2_000))
+        .filter(Boolean)
+    : [];
+  const risks = Array.from(new Set([...sectionRisks, ...inlineRisks])).slice(0, 10);
+  return risks.length
+    ? risks
+    : ["Riscos descritos apenas no parecer legado; revisar o texto auditável de origem."];
+}
+
+const GATE_LABELS: Array<{ name: AiGateName; aliases: string[] }> = [
+  { name: "technical_consistency", aliases: ["coerencia tecnica"] },
+  { name: "critical_information", aliases: ["informacao critica"] },
+  { name: "structural_risk", aliases: ["risco estrutural"] },
+  { name: "context", aliases: ["contexto", "contexto online/manual", "contexto online"] },
+  {
+    name: "correlation",
+    aliases: ["duplicidade/correlacao", "duplicidade e correlacao", "correlacao"],
+  },
+];
+
+function extractGates(text: string): AiOperationalOutput["gates"] {
+  const fallback = { status: "UNKNOWN" as const, reason: LEGACY_GATE_REASON };
+  const gates: AiOperationalOutput["gates"] = {
+    technical_consistency: fallback,
+    critical_information: fallback,
+    structural_risk: fallback,
+    context: fallback,
+    correlation: fallback,
+  };
+  const section = extractSection(text, /^\s*D\)\s*Gates de validação\s*$/im, /^\s*E\)/im);
+  if (!section) return gates;
+
+  for (const line of section.split(/\r?\n/)) {
+    const match = line
+      .trim()
+      .match(/^([^:]+):\s*(aprovado|reprovado|unknown|desconhecido)\b\s*(?:[-—:]\s*)?(.*)$/i);
+    if (!match) continue;
+    const label = normalize(match[1]);
+    const gate = GATE_LABELS.find(({ aliases }) => aliases.includes(label));
+    if (!gate) continue;
+    const declaredStatus = normalize(match[2]);
+    const reason =
+      match[3]
+        ?.replace(/^motivo\s*:\s*/i, "")
+        .trim()
+        .slice(0, 2_000) || "Gate declarado sem justificativa detalhada.";
+    gates[gate.name] = {
+      status:
+        declaredStatus === "aprovado"
+          ? "APPROVED"
+          : declaredStatus === "reprovado"
+            ? "REJECTED"
+            : "UNKNOWN",
+      reason,
+    };
   }
-  const section = extractSection(text, /^\s*E\)\s*Riscos principais\s*$/im, /^\s*F\)/im);
-  if (section) {
-    return section
-      .split(/\r?\n/)
-      .map((item) =>
-        item
-          .replace(/^\s*[-*•\d.)]+\s*/, "")
-          .trim()
-          .slice(0, 2_000),
-      )
-      .filter(Boolean)
-      .slice(0, 10);
-  }
-  return ["Riscos descritos apenas no parecer legado; revisar o texto auditável de origem."];
+  return gates;
 }
 
 export function adaptLegacyAiResponse({
@@ -75,12 +139,27 @@ export function adaptLegacyAiResponse({
     /^\s*justificativa_pick\s*:\s*(.+)$/im,
     /^\s*justificativa da pick escolhida\s*:\s*(.+)$/im,
   ]);
+  const evaluatedEntry =
+    extractSection(text, /^\s*A\)\s*Entrada avaliada\s*$/im, /^\s*B\)/im)?.slice(0, 5_000) ??
+    MISSING_SECTION;
+  const thesisForSection = extractSection(text, /^\s*B\)\s*Tese a favor\s*$/im, /^\s*C\)/im)?.slice(
+    0,
+    10_000,
+  );
+  const thesisFor = thesisForSection ?? MISSING_SECTION;
+  const thesisAgainstSection = extractSection(
+    text,
+    /^\s*C\)\s*Tese contra a entrada\s*$/im,
+    /^\s*D\)/im,
+  )?.slice(0, 10_000);
+  const thesisAgainst = thesisAgainstSection ?? MISSING_SECTION;
+  const internalHistory =
+    extractSection(text, /^\s*F\)\s*Histórico interno semelhante\s*$/im, /^\s*G\)/im)?.slice(
+      0,
+      5_000,
+    ) ?? MISSING_SECTION;
   const rationale =
-    [
-      extractSection(text, /^\s*B\)\s*Tese a favor\s*$/im, /^\s*C\)/im),
-      extractSection(text, /^\s*C\)\s*Tese contra a entrada\s*$/im, /^\s*D\)/im),
-      finalRationale,
-    ]
+    [thesisForSection, thesisAgainstSection, finalRationale]
       .filter((value): value is string => Boolean(value))
       .join("\n\n")
       .slice(0, 10_000) ||
@@ -97,6 +176,10 @@ export function adaptLegacyAiResponse({
       /^\s*condicao que faria mudar a decisao\s*:\s*(.+)$/im,
     ])?.slice(0, 5_000) ??
     "Reavaliar diante de alteração de odd, edge, lineup, starter, preview ou contexto.";
+  const decisionChangeCondition = extractSingleLine(text, [
+    /^\s*condição que faria mudar a decisão\s*:\s*(.+)$/im,
+    /^\s*condicao que faria mudar a decisao\s*:\s*(.+)$/im,
+  ])?.slice(0, 5_000);
 
   return AiOperationalOutputSchema.parse({
     schema_version: AI_VALIDATION_SCHEMA_VERSION,
@@ -104,12 +187,16 @@ export function adaptLegacyAiResponse({
     stake: allowedStake,
     selected_prediction_id: parsed.prognostico_id_escolhido?.slice(0, 200) ?? null,
     selected_pick: parsed.pick_escolhida?.slice(0, 1_000) ?? null,
-    gates: {
-      technical_consistency: { status: "UNKNOWN", reason: LEGACY_GATE_REASON },
-      critical_information: { status: "UNKNOWN", reason: LEGACY_GATE_REASON },
-      structural_risk: { status: "UNKNOWN", reason: LEGACY_GATE_REASON },
-      context: { status: "UNKNOWN", reason: LEGACY_GATE_REASON },
-      correlation: { status: "UNKNOWN", reason: LEGACY_GATE_REASON },
+    gates: extractGates(text),
+    narrative: {
+      evaluated_entry: evaluatedEntry,
+      thesis_for: thesisFor,
+      thesis_against: thesisAgainst,
+      internal_history: internalHistory,
+      final_justification:
+        finalRationale?.slice(0, 5_000) ??
+        "A decisão final não trouxe justificativa objetiva separada.",
+      decision_change_condition: decisionChangeCondition ?? null,
     },
     rationale,
     risks: extractRisks(text),
