@@ -6566,6 +6566,10 @@ export type Database = {
           sport: string
         }[]
       }
+      get_highlightly_match_lifecycle_operational_report: {
+        Args: { p_from?: string; p_to?: string }
+        Returns: Json
+      }
       get_highlightly_match_lifecycle_report: {
         Args: { p_from?: string; p_to?: string }
         Returns: Json
@@ -6753,6 +6757,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      set_highlightly_match_lifecycle_policy: {
+        Args: { p_enabled: boolean; p_sport_code: string }
+        Returns: Json
       }
       upsert_sports_odds_quote: {
         Args: {
