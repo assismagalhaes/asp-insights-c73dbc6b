@@ -281,7 +281,7 @@ ${aspScreenerInstrucao}
 
     try {
       const { text } = await generateText({
-        model: google(GOOGLE_MODEL_ID),
+        model: gateway(GATEWAY_MODEL_ID),
         system: SYSTEM_PROMPT,
         prompt: userPayload,
       });
