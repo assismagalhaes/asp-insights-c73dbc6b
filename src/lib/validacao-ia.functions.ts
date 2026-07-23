@@ -220,13 +220,8 @@ export const analisarValidacao = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) {
-      throw new Error("LOVABLE_API_KEY não configurada no servidor.");
-    }
-
-    const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
-    const gateway = createLovableAiGatewayProvider(key);
+    const { createGoogleProvider, GOOGLE_MODEL_ID } = await import("@/lib/google-ai.server");
+    const google = createGoogleProvider();
 
     const p = data.prognostico;
     const oddFinal = p.odd_ajustada ?? p.odd_original;
@@ -311,7 +306,7 @@ ${aspScreenerInstrucao}
 
     try {
       const { text } = await generateText({
-        model: gateway("google/gemini-3-flash-preview"),
+        model: google(GOOGLE_MODEL_ID),
         system: SYSTEM_PROMPT,
         prompt: userPayload,
       });
