@@ -37,7 +37,7 @@ Fase 8E não consulta standings.
 
 Aplicar exatamente:
 
-1. `supabase/migrations/20260723190000_create_highlightly_phase8e_match_lifecycle.sql`;
+1. `supabase/migrations/20260723183721_6981c84a-126e-4be9-ac87-6161b89369e4.sql`;
 2. `supabase/tests/highlightly_phase8e_match_lifecycle_smoke.sql`.
 
 Depois publicar o backend para disponibilizar no bridge:
