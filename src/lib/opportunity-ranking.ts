@@ -268,7 +268,11 @@ export async function applyCriticalValidationToOpportunityRanking({
   if (prognosticoError) throw prognosticoError;
   const currentPrognostico = prognosticoRow as unknown as Prognostico;
   const mlbGate = evaluateMlbOperationalGate(currentPrognostico);
-  if (normalizeValidationDecision(decisao) === "CONFIRMA" && mlbGate.applicable && !mlbGate.approved) {
+  if (
+    normalizeValidationDecision(decisao) === "CONFIRMA" &&
+    mlbGate.applicable &&
+    !mlbGate.approved
+  ) {
     throw new Error(mlbGate.reasons.join(" "));
   }
   const matchMatrixGate = evaluateMatchMatrixOperationalGate(currentPrognostico);
