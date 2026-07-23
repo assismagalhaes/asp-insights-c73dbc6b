@@ -80,6 +80,7 @@ export const HIGHLIGHTLY_BRIDGE_RPCS = new Set([
   "accept_highlightly_unavailable_odds_issues",
   "accept_highlightly_quarantined_wnba_standings_issues",
   "requeue_highlightly_dead_521_jobs",
+  "requeue_highlightly_dead_basketball_identity_jobs",
   "finalize_highlightly_shadow_window",
 ]);
 

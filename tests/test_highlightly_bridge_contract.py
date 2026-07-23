@@ -30,6 +30,7 @@ class HighlightlyBridgeContractTests(unittest.TestCase):
         self.assertIn('"get_highlightly_daily_request_usage"', verifier)
         self.assertIn('"hl_highlightly_future_gate_v"', verifier)
         self.assertIn('"requeue_highlightly_dead_521_jobs"', verifier)
+        self.assertIn('"requeue_highlightly_dead_basketball_identity_jobs"', verifier)
         self.assertIn('"accept_highlightly_quarantined_wnba_standings_issues"', verifier)
         self.assertIn('"finalize_highlightly_shadow_window"', verifier)
         self.assertIn('/storage/v1/object/highlightly-raw/', verifier)
