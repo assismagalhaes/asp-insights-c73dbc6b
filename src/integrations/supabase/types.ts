@@ -1468,6 +1468,50 @@ export type Database = {
           },
         ]
       }
+      hl_odds_quality_targets: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          metadata: Json
+          minimum_availability_pct: number
+          sport_id: string
+          t24_freshness_seconds: number
+          t6_freshness_seconds: number
+          t60_freshness_seconds: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          metadata?: Json
+          minimum_availability_pct: number
+          sport_id: string
+          t24_freshness_seconds?: number
+          t6_freshness_seconds?: number
+          t60_freshness_seconds?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          metadata?: Json
+          minimum_availability_pct?: number
+          sport_id?: string
+          t24_freshness_seconds?: number
+          t6_freshness_seconds?: number
+          t60_freshness_seconds?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_odds_quality_targets_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: true
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hl_rate_limit_usage: {
         Row: {
           created_at: string
@@ -6246,6 +6290,10 @@ export type Database = {
         Args: { p_scope?: string }
         Returns: Json
       }
+      get_highlightly_daily_request_usage: {
+        Args: { p_provider_id: string; p_request_date: string }
+        Returns: number
+      }
       get_highlightly_odds_quality_report: {
         Args: { p_from?: string; p_to?: string }
         Returns: Json
@@ -6261,10 +6309,6 @@ export type Database = {
           refresh_horizon: string
           sport: string
         }[]
-      }
-      get_highlightly_daily_request_usage: {
-        Args: { p_provider_id: string; p_request_date: string }
-        Returns: number
       }
       has_role: {
         Args: {
