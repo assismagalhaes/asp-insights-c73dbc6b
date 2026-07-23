@@ -1,10 +1,17 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/lib/auth-middleware-public";
+import {
+  createAiGenerationFailure,
+  createLegacyRollbackResult,
+  parseStructuredAiOutput,
+} from "@/lib/ai-validation/generation-result";
 import { adaptLegacyAiResponse } from "@/lib/ai-validation/legacy-adapter";
-import { generateText } from "ai";
+import { AiOperationalOutputSchema } from "@/lib/ai-validation/schema";
+import { createGoogleProvider, GOOGLE_MODEL_ID } from "@/lib/google-ai.server";
+import { generateText, Output } from "ai";
 import { z } from "zod";
 
-export const PROMPT_VERSAO = "validacao-critica-v12-memoria-operacional";
+export const PROMPT_VERSAO = "validacao-critica-v13-structured-output-local";
 
 const CorrelatedPickSchema = z.object({
   mercado: z.string(),
@@ -138,7 +145,28 @@ Gates obrigatórios:
 - Gate 5 — Risco > benefício: se houver 2 ou mais riscos relevantes, PULAR.
 - Gate 6 — Duplicidade/correlação: se houver outras picks do mesmo jogo e mesmo grupo de mercado, trate como opções concorrentes. Você deve escolher no máximo uma opção para CONFIRMAR ou recomendar PULAR o grupo inteiro. Nunca sugira confirmar mais de uma opção do grupo.
 
-Formato OBRIGATÓRIO da resposta (use exatamente estes cabeçalhos em texto puro, sem markdown):
+Contrato estruturado obrigatório:
+- Preencha exclusivamente o objeto solicitado pelo schema 1.1.0. Não devolva markdown nem tente escrever JSON manualmente.
+- decision: use CONFIRMA ou PULAR.
+- stake: use 0, 0.5, 1 ou 1.5. PULAR exige stake 0.
+- selected_prediction_id e selected_pick: para CONFIRMA, use exatamente uma opção do grupo; para PULAR, use null.
+- gates: classifique technical_consistency, critical_information, structural_risk, context e correlation como APPROVED, REJECTED ou UNKNOWN, sempre com motivo concreto.
+- narrative.evaluated_entry: preserve jogo, mercado, pick, odd, probabilidade e edge.
+- narrative.thesis_for: argumentos concretos favoráveis.
+- narrative.thesis_against: ao menos dois pontos críticos reais ou os principais riscos residuais.
+- narrative.internal_history: amostra, greens/reds, ROI/Yield e conclusão. Com menos de 10 casos, inclua "Histórico interno insuficiente para conclusão estatística."
+- narrative.final_justification: justificativa objetiva da decisão.
+- narrative.decision_change_condition: condição que faria mudar a decisão, ou null.
+- rationale: síntese auditável que sustenta a decisão.
+- risks: liste de 3 a 5 riscos objetivos.
+- invalidation_condition: condição operacional que invalida a recomendação.
+- limitations: limitações reais do modo local, sem reprovar por ausência de pesquisa online.
+- sources e searches: devem ser arrays vazios no modo IA Local.
+
+O objeto será novamente validado por Zod e por um árbitro determinístico. Qualquer inconsistência será convertida para PULAR.`;
+
+const LEGACY_ROLLBACK_FORMAT = `ROLLBACK LEGADO EXPLÍCITO:
+Ignore apenas a instrução de devolver objeto estruturado e responda em texto puro com estes cabeçalhos:
 
 A) Entrada avaliada
 Jogo:
@@ -149,37 +177,21 @@ Probabilidade:
 Edge:
 
 B) Tese a favor
-Liste os principais argumentos concretos que sustentam a entrada. Não use frases genéricas sem evidência.
-
 C) Tese contra a entrada
-Liste os principais argumentos contra a entrada. É obrigatório ter pelo menos 2 pontos críticos reais ou escrever claramente:
-"Nenhum ponto crítico forte encontrado, mas estes são os principais riscos residuais."
-
 D) Gates de validação
-Coerência técnica: aprovado/reprovado - motivo:
-Informação crítica: aprovado/reprovado - motivo:
-Risco estrutural: aprovado/reprovado - motivo:
-Contexto interno/manual: aprovado/reprovado - motivo:
-Duplicidade/correlação: aprovado/reprovado - motivo:
+Coerência técnica: aprovado/reprovado - motivo
+Informação crítica: aprovado/reprovado - motivo
+Risco estrutural: aprovado/reprovado - motivo
+Contexto interno/manual: aprovado/reprovado - motivo
+Duplicidade/correlação: aprovado/reprovado - motivo
 
 E) Riscos principais
-Liste de 3 a 5 riscos objetivos.
-
 F) Histórico interno semelhante
-Amostra:
-Greens/Reds:
-ROI/Yield:
-Conclusão:
-Se houver menos de 10 casos semelhantes, escreva exatamente:
-"Histórico interno insuficiente para conclusão estatística."
-
 G) Decisão final
-Decisão: CONFIRMAR | PULAR
 decisao_grupo: CONFIRMA | PULAR
-prognostico_id_escolhido: id exato da opção escolhida ou null
-pick_escolhida: pick da opção escolhida ou null
-stake_confirmada: 0.5 | 1.0 | 1.5 | 0
-Stake sugerida: 0.5u | 1.0u | 1.5u, apenas se CONFIRMAR
+prognostico_id_escolhido: id exato ou null
+pick_escolhida: pick exata ou null
+stake_confirmada: 0 | 0.5 | 1.0 | 1.5
 justificativa_pick:
 riscos:
 condicao_invalidacao:
@@ -190,14 +202,6 @@ export const analisarValidacao = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data }) => {
-    const lovableApiKey = process.env.LOVABLE_API_KEY;
-    if (!lovableApiKey) {
-      throw new Error("LOVABLE_API_KEY não configurada.");
-    }
-    const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
-    const gateway = createLovableAiGatewayProvider(lovableApiKey);
-    const GATEWAY_MODEL_ID = "google/gemini-2.5-pro";
-
     const p = data.prognostico;
     const oddFinal = p.odd_ajustada ?? p.odd_original;
     const edgeFinal = p.edge_ajustado ?? p.edge_original;
@@ -279,27 +283,62 @@ Se sugerir CONFIRMA, devolva obrigatoriamente o campo prognostico_id_escolhido c
 ${aspScreenerInstrucao}
 `;
 
+    const startedAt = Date.now();
+    const legacyRollbackEnabled =
+      process.env.AI_VALIDATION_LOCAL_LEGACY_ROLLBACK?.trim().toLowerCase() === "true";
+
     try {
-      const { text } = await generateText({
-        model: gateway(GATEWAY_MODEL_ID),
+      const google = createGoogleProvider();
+      const model = google(GOOGLE_MODEL_ID);
+
+      if (legacyRollbackEnabled) {
+        const { text } = await generateText({
+          model,
+          system: `${SYSTEM_PROMPT}\n\n${LEGACY_ROLLBACK_FORMAT}`,
+          prompt: userPayload,
+        });
+        const generation = createLegacyRollbackResult({
+          output: adaptLegacyAiResponse({ text }),
+          rawModelText: text,
+          latencyMs: Date.now() - startedAt,
+        });
+        return {
+          ...generation,
+          prompt_versao: PROMPT_VERSAO,
+          provider: "google",
+          model: GOOGLE_MODEL_ID,
+        };
+      }
+
+      const result = await generateText({
+        model,
         system: SYSTEM_PROMPT,
         prompt: userPayload,
+        output: Output.object({
+          schema: AiOperationalOutputSchema,
+          name: "asp_insights_local_validation",
+          description:
+            "Parecer operacional estruturado do modo IA Local, sujeito ao árbitro determinístico.",
+        }),
       });
-
-      const modelOutput = adaptLegacyAiResponse({ text });
+      const generation = parseStructuredAiOutput({
+        output: result.output,
+        rawModelText: result.text,
+        latencyMs: Date.now() - startedAt,
+      });
       return {
-        model_output: modelOutput,
-        raw_model_text: text,
+        ...generation,
         prompt_versao: PROMPT_VERSAO,
+        provider: "google",
+        model: GOOGLE_MODEL_ID,
+        usage: result.usage,
       };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Erro desconhecido";
-      if (/402|payment|credits/i.test(msg)) {
-        throw new Error("Créditos da IA esgotados. Adicione créditos no workspace para continuar.");
-      }
-      if (/429|rate/i.test(msg)) {
-        throw new Error("Limite de requisições da IA atingido. Tente novamente em instantes.");
-      }
-      throw new Error(`Falha ao gerar análise: ${msg}`);
+      return {
+        ...createAiGenerationFailure(err, Date.now() - startedAt),
+        prompt_versao: PROMPT_VERSAO,
+        provider: "google",
+        model: GOOGLE_MODEL_ID,
+      };
     }
   });
