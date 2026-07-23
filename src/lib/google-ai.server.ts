@@ -14,4 +14,4 @@ export function createGoogleProvider() {
   return createGoogleGenerativeAI({ apiKey });
 }
 
-export const GOOGLE_MODEL_ID = "gemini-2.5-pro";
+export const GOOGLE_MODEL_ID = "gemini-3.6-flash";
