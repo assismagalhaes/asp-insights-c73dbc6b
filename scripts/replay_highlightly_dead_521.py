@@ -137,6 +137,7 @@ def main() -> int:
         repository.ingestion_context("football")["provider"].get("enabled")
     )
 
+    observation_refresh_error: dict[str, Any] | None = None
     finalization_error: dict[str, Any] | None = None
     windows = repository.select_rows(
         "hl_shadow_windows",
@@ -152,18 +153,26 @@ def main() -> int:
             order="observed_on.desc",
             limit=1,
         )
-        repository.rpc(
-            "refresh_highlightly_shadow_observation",
-            {
-                "p_window_id": windows[0]["id"],
-                "p_observed_on": usage_date,
-                "p_sport": "football",
-                "p_scope": args.scope,
-                "p_matches_expected": int(observations[0].get("matches_expected") or 0)
-                if observations
-                else 0,
-            },
-        )
+        try:
+            repository.rpc(
+                "refresh_highlightly_shadow_observation",
+                {
+                    "p_window_id": windows[0]["id"],
+                    "p_observed_on": usage_date,
+                    "p_sport": "football",
+                    "p_scope": args.scope,
+                    "p_matches_expected": int(
+                        observations[0].get("matches_expected") or 0
+                    )
+                    if observations
+                    else 0,
+                },
+            )
+        except HighlightlyRepositoryError as exc:
+            observation_refresh_error = {
+                "status": exc.status,
+                "body": exc.body,
+            }
         try:
             repository.rpc("finalize_highlightly_shadow_window", {"p_scope": args.scope})
         except HighlightlyRepositoryError as exc:
@@ -183,6 +192,7 @@ def main() -> int:
             "remaining_dead_521": len(remaining_dead),
             "highlightly_requests_recorded": usage_after - usage_before,
             "provider_restored_disabled": provider_disabled,
+            "observation_refresh_error": observation_refresh_error,
             "finalization_error": finalization_error,
             "recommended_action": (
                 "continue_bounded_replay"

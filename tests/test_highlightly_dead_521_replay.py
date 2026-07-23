@@ -172,6 +172,73 @@ class HighlightlyDead521ReplayTests(unittest.TestCase):
         self.assertEqual(report["recommended_action"], "stop_and_escalate_provider")
         repository.set_provider_enabled.assert_any_call("highlightly", False)
 
+    @patch.object(replay, "HighlightlyWorker")
+    @patch.object(replay, "HighlightlyClient")
+    @patch.object(replay.HighlightlyRepository, "from_environment")
+    def test_observation_timeout_is_reported_without_discarding_successful_replay(
+        self, repository_factory, client_factory, worker_factory
+    ):
+        repository = Mock()
+        repository_factory.return_value = repository
+        repository.ingestion_context.return_value = {
+            "provider": {"id": "provider-1", "enabled": False}
+        }
+        candidate = {
+            "id": "job-1",
+            "status": "dead",
+            "sport": "football",
+            "endpoint_key": replay.ENDPOINT,
+            "last_error": replay.ERROR,
+            "attempts": 5,
+            "max_attempts": 5,
+        }
+        repository.select_rows.side_effect = [
+            [],
+            [],
+            [],
+            [candidate],
+            [{"id": "window-1"}],
+            [{"matches_expected": 21}],
+            [],
+        ]
+        repository.daily_request_usage.side_effect = [100, 101]
+        repository.rpc.side_effect = [
+            [candidate],
+            HighlightlyRepositoryError(
+                "Supabase returned HTTP 500",
+                status=500,
+                body={
+                    "code": "57014",
+                    "message": "canceling statement due to statement timeout",
+                },
+            ),
+            {"scope": "phase7-history", "status": "passed"},
+        ]
+        worker_factory.return_value.run_once.return_value = WorkerResult(
+            status="succeeded", job_id="job-1", run_id="run-1"
+        )
+
+        with patch(
+            "sys.argv",
+            [
+                "replay",
+                "--scope",
+                "phase7-history",
+                "--max-jobs",
+                "1",
+                "--confirm-dead-521-replay",
+            ],
+        ), patch("builtins.print") as output:
+            exit_code = replay.main()
+
+        self.assertEqual(exit_code, 0)
+        report = json.loads(output.call_args.args[0])
+        self.assertEqual(report["success_rate"], 1.0)
+        self.assertEqual(report["observation_refresh_error"]["status"], 500)
+        self.assertIsNone(report["finalization_error"])
+        self.assertEqual(report["recommended_action"], "continue_bounded_replay")
+        repository.set_provider_enabled.assert_any_call("highlightly", False)
+
 
 if __name__ == "__main__":
     unittest.main()
