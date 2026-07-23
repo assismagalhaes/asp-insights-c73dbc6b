@@ -341,14 +341,30 @@ def _normalize_matches(payload: Any, ctx: NormalizationContext) -> NormalizedBat
             batch.rejected += 1
             batch.issue("MATCH_ID_MISSING", "Basketball match payload has no provider id.", context={"match": match})
             continue
+        home = match.get("homeTeam") if isinstance(match.get("homeTeam"), Mapping) else {}
+        away = match.get("awayTeam") if isinstance(match.get("awayTeam"), Mapping) else {}
+        home_external = _external(home.get("id"), f"name:{slug(home.get('name'))}") if home else None
+        away_external = _external(away.get("id"), f"name:{slug(away.get('name'))}") if away else None
+        if home_external and away_external and home_external == away_external:
+            batch.rejected += 1
+            batch.issue(
+                "BASKETBALL_MATCH_PARTICIPANT_IDENTITY_COLLISION",
+                "Basketball match maps home and away to the same provider team and was not persisted.",
+                context={
+                    "matchId": external_id,
+                    "homeTeamId": home.get("id"),
+                    "homeTeamName": home.get("name"),
+                    "awayTeamId": away.get("id"),
+                    "awayTeamName": away.get("name"),
+                },
+            )
+            continue
         country = match.get("country") if isinstance(match.get("country"), Mapping) else {}
         country_id = _ensure_country(batch, ctx, country) if country else None
         league = match.get("league") if isinstance(match.get("league"), Mapping) else {"name": match.get("league")}
         competition_id, season_id = _ensure_competition(
             batch, ctx, league, match.get("season"), country_id=country_id
         )
-        home = match.get("homeTeam") if isinstance(match.get("homeTeam"), Mapping) else {}
-        away = match.get("awayTeam") if isinstance(match.get("awayTeam"), Mapping) else {}
         home_id = _ensure_team(batch, ctx, home) if home else None
         away_id = _ensure_team(batch, ctx, away) if away else None
         match_id = stable_id(ctx.provider_id, ctx.sport_id, "match", external_id)

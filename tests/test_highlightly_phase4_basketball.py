@@ -70,6 +70,28 @@ class HighlightlyPhaseFourBasketballTests(unittest.TestCase):
         self.assertEqual(home["score_data"]["current"], 90)
         self.assertEqual(home["score_data"]["periods"]["q1"], 22)
 
+    def test_match_rejects_same_provider_team_on_both_sides(self):
+        payload = [{
+            "id": 101,
+            "date": "2026-07-25T22:00:00Z",
+            "league": {"id": 11847, "name": "NBA Women", "season": 2026},
+            "homeTeam": {"id": 7, "name": "Provider Home"},
+            "awayTeam": {"id": 7, "name": "Provider Away"},
+            "state": {"description": "Scheduled"},
+        }]
+
+        batch = normalize_basketball(payload, context("basketball.matches"))
+
+        self.assertEqual(batch.rejected, 1)
+        self.assertEqual(batch.table_rows("sports_matches"), [])
+        self.assertEqual(batch.table_rows("sports_match_participants"), [])
+        self.assertEqual(batch.table_rows("sports_teams"), [])
+        self.assertEqual(
+            [issue["code"] for issue in batch.issues],
+            ["BASKETBALL_MATCH_PARTICIPANT_IDENTITY_COLLISION"],
+        )
+        self.assertEqual(batch.issues[0]["context"]["matchId"], 101)
+
     def test_wnba_names_are_canonical_without_losing_provider_payload(self):
         payload = [{
             "id": 100,
