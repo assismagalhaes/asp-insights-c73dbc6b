@@ -350,7 +350,7 @@ Faça pesquisas online conforme a política descrita e produza o parecer no form
 
     try {
       const { text } = await generateText({
-        model: google(GOOGLE_MODEL_ID),
+        model: gateway(GATEWAY_MODEL_ID),
         system: SYSTEM_PROMPT,
         prompt: userPayload,
         stopWhen: stepCountIs(50),
