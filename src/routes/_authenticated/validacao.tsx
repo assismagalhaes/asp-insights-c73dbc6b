@@ -128,12 +128,23 @@ interface IAResult {
   odd_analisada_por_opcao?: Record<string, number>;
   blocking_codes?: string[];
   model_output?: AiOperationalOutput;
+  parse_status?: "VALID" | "FAILED" | "LEGACY_ROLLBACK";
+  parse_error?: string | null;
+  provider?: string;
+  model?: string;
+  latency_ms?: number;
 }
 
 interface ServerAiResult {
   model_output: unknown;
   raw_model_text: string;
   prompt_versao: string;
+  parse_status?: "VALID" | "FAILED" | "LEGACY_ROLLBACK";
+  parse_error?: string | null;
+  error_code?: string | null;
+  provider?: string;
+  model?: string;
+  latency_ms?: number;
   fontes_consultadas?: { titulo: string; url: string }[];
   buscas_realizadas?: string[];
 }
@@ -824,8 +835,12 @@ function Validacao() {
         const o = getOddAjustadaNum(option);
         if (o != null) oddsAnalisadasMap[option.id] = o;
       }
+      const parseFailureNote =
+        raw.parse_status === "FAILED" && raw.parse_error
+          ? `\n\nFalha de Structured Output:\n- ${raw.parse_error}`
+          : "";
       const r: IAResult = {
-        parecer: formatArbitratedAiValidation(arbitration),
+        parecer: `${formatArbitratedAiValidation(arbitration)}${parseFailureNote}`,
         decisao_sugerida: arbitration.output.decision,
         stake_sugerida: arbitration.output.stake,
         prognostico_id_escolhido: arbitration.output.selected_prediction_id,
@@ -836,8 +851,16 @@ function Validacao() {
         modo,
         odd_analisada: oddAj,
         odd_analisada_por_opcao: oddsAnalisadasMap,
-        blocking_codes: arbitration.blocks.map((block) => block.code),
+        blocking_codes: [
+          ...arbitration.blocks.map((block) => block.code),
+          ...(raw.error_code ? [raw.error_code] : []),
+        ],
         model_output: arbitration.output,
+        parse_status: raw.parse_status,
+        parse_error: raw.parse_error,
+        provider: raw.provider,
+        model: raw.model,
+        latency_ms: raw.latency_ms,
       };
       const chosenByIa = r.decisao_sugerida === "CONFIRMA" ? findAiChosenOption(g, r) : null;
       const rWithAviso: IAResult = {
