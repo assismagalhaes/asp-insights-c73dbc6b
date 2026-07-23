@@ -261,9 +261,14 @@ export const analisarValidacaoOnline = createServerFn({ method: "POST" })
       );
     }
 
-    const { createGoogleProvider, GOOGLE_MODEL_ID } = await import("@/lib/google-ai.server");
+    const lovableApiKey = process.env.LOVABLE_API_KEY;
+    if (!lovableApiKey) {
+      throw new Error("LOVABLE_API_KEY não configurada.");
+    }
+    const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
     const { firecrawlSearch, firecrawlScrape } = await import("@/lib/firecrawl.server");
-    const google = createGoogleProvider();
+    const gateway = createLovableAiGatewayProvider(lovableApiKey);
+    const GATEWAY_MODEL_ID = "google/gemini-2.5-pro";
 
     const buscasRealizadas: string[] = [];
     const fontesConsultadas: { titulo: string; url: string }[] = [];
@@ -345,7 +350,7 @@ Faça pesquisas online conforme a política descrita e produza o parecer no form
 
     try {
       const { text } = await generateText({
-        model: google(GOOGLE_MODEL_ID),
+        model: gateway(GATEWAY_MODEL_ID),
         system: SYSTEM_PROMPT,
         prompt: userPayload,
         stopWhen: stepCountIs(50),
