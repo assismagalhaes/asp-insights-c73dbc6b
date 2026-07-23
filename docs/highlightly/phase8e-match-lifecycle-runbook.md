@@ -91,7 +91,7 @@ sudo install -o root -g root -m 0644 \
   config/systemd/highlightly-match-lifecycle.timer \
   /etc/systemd/system/highlightly-match-lifecycle.timer
 sudo systemctl daemon-reload
-sudo systemctl enable --now highlightly-match-lifecycle.timer
+sudo systemctl disable --now highlightly-match-lifecycle.timer
 ```
 
 O serviço usa `/run/lock/asp-highlightly-future.lock`, a mesma trava da janela futura,
@@ -121,12 +121,7 @@ Validar no JSON:
 Depois de pelo menos 24 horas saudáveis da Fase 8D, ativar somente Football:
 
 ```sql
-UPDATE public.hl_match_lifecycle_policies AS lifecycle_policy
-SET enabled = true,
-    updated_at = now()
-FROM public.sports AS sport
-WHERE sport.id = lifecycle_policy.sport_id
-  AND sport.code = 'football';
+SELECT public.set_highlightly_match_lifecycle_policy('football', true);
 ```
 
 Observar por 24 horas antes de habilitar Baseball e Basketball. A ativação deve ser feita no
@@ -167,3 +162,86 @@ sudo systemctl disable --now highlightly-match-lifecycle.timer
 
 Nenhum dado canônico é removido. Estados e recursos já coletados permanecem disponíveis para
 auditoria e reprocessamento.
+
+## Fase 8E.1 — endurecimento operacional
+
+A Fase 8E.1 adiciona controle administrativo, limites conservadores e recuperação defensiva.
+Aplicar, sem executar nenhuma RPC de alteração:
+
+1. `supabase/migrations/20260723224500_create_highlightly_phase8e1_operational_hardening.sql`;
+2. `supabase/tests/highlightly_phase8e1_operational_hardening_smoke.sql`;
+3. publicar o backend para liberar as duas RPCs novas no bridge.
+
+Contratos:
+
+- `set_highlightly_match_lifecycle_policy(text, boolean)` é `SECURITY INVOKER` e executável
+  somente por `service_role`;
+- habilitar uma política é rejeitado se o provider estiver ligado;
+- `get_highlightly_match_lifecycle_operational_report(timestamptz, timestamptz)` aceita
+  no máximo sete dias e expõe o relatório apenas ao administrador autenticado ou
+  `service_role`;
+- a migration não habilita provider, política, timer ou worker.
+
+O canário passa a usar, por padrão:
+
+- no máximo 200 jobs por ciclo;
+- no máximo 300 chamadas por ciclo;
+- reserva diária mínima de 750 chamadas.
+
+Os limites ficam explícitos no unit systemd para impedir aumento acidental por variável de
+ambiente. Uma alteração futura exige revisão e versionamento do unit. Execuções manuais podem
+usar limites menores, mas nunca devem superar o canário durante esta fase.
+
+Para instalar os units sem ativar coleta:
+
+```bash
+cd /home/ubuntu/asp-insights-c73dbc6b
+git pull --ff-only origin main
+sudo install -o root -g root -m 0644 \
+  config/systemd/highlightly-match-lifecycle.service \
+  /etc/systemd/system/highlightly-match-lifecycle.service
+sudo install -o root -g root -m 0644 \
+  config/systemd/highlightly-match-lifecycle.timer \
+  /etc/systemd/system/highlightly-match-lifecycle.timer
+sudo install -o root -g root -m 0644 \
+  config/systemd/highlightly-match-lifecycle-report.service \
+  /etc/systemd/system/highlightly-match-lifecycle-report.service
+sudo install -o root -g root -m 0644 \
+  config/systemd/highlightly-match-lifecycle-report.timer \
+  /etc/systemd/system/highlightly-match-lifecycle-report.timer
+sudo systemctl daemon-reload
+sudo systemctl disable --now highlightly-match-lifecycle.timer
+sudo systemctl enable --now highlightly-match-lifecycle-report.timer
+```
+
+O `ExecStopPost` do coletor tenta obter a trava global antes de restaurar
+`sports_providers.enabled=false`. Assim, ele corrige encerramentos anormais sem desligar o
+provider durante outra coleta legítima.
+
+Controle gradual, somente depois de autorização operacional:
+
+```sql
+SELECT public.set_highlightly_match_lifecycle_policy('football', true);
+SELECT public.set_highlightly_match_lifecycle_policy('football', false);
+```
+
+Relatório manual, sem consumir cota da Highlightly:
+
+```bash
+cd /home/ubuntu/asp-insights-c73dbc6b
+PYTHONPATH=. /home/ubuntu/asp-scraper-api/.venv/bin/python \
+  -m scripts.report_highlightly_phase8e_operational \
+  --hours 24 \
+  --require-provider-disabled
+```
+
+Validação de repouso:
+
+```bash
+systemctl is-enabled highlightly-match-lifecycle.timer
+systemctl is-enabled highlightly-match-lifecycle-report.timer
+journalctl -u highlightly-match-lifecycle-report.service -n 50 --no-pager
+```
+
+Resultado esperado nesta implantação: timer de coleta `disabled`, timer de relatório
+`enabled`, provider desligado e as três políticas desligadas.

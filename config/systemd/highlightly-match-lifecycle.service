@@ -9,6 +9,8 @@ User=root
 WorkingDirectory=/home/ubuntu/asp-insights-c73dbc6b
 EnvironmentFile=/etc/asp-scraper-api.env
 Environment=PYTHONDONTWRITEBYTECODE=1
-ExecStart=/usr/bin/flock --exclusive --nonblock --conflict-exit-code 0 /run/lock/asp-highlightly-future.lock /home/ubuntu/asp-scraper-api/.venv/bin/python -m scripts.run_highlightly_phase8e_match_lifecycle --request-budget 1500 --max-jobs 1000 --confirm-lifecycle
+ExecStart=/usr/bin/flock --exclusive --nonblock --conflict-exit-code 0 /run/lock/asp-highlightly-future.lock /home/ubuntu/asp-scraper-api/.venv/bin/python -m scripts.run_highlightly_phase8e_match_lifecycle --request-budget 300 --max-jobs 200 --confirm-lifecycle
+ExecStopPost=/usr/bin/flock --exclusive --nonblock --conflict-exit-code 0 /run/lock/asp-highlightly-future.lock /home/ubuntu/asp-scraper-api/.venv/bin/python -m scripts.ensure_highlightly_provider_disabled --reason phase8e-systemd-stop
 TimeoutStartSec=infinity
+TimeoutStopSec=120
 Nice=0

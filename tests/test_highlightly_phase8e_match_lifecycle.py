@@ -4,6 +4,8 @@ import unittest
 from unittest.mock import Mock, patch
 
 from api.highlightly.worker import WorkerResult
+from scripts import ensure_highlightly_provider_disabled as phase8e_cleanup
+from scripts import report_highlightly_phase8e_operational as phase8e_report
 from scripts import run_highlightly_phase8e_match_lifecycle as phase8e
 
 
@@ -41,8 +43,25 @@ class HighlightlyPhaseEightEMatchLifecycleTests(unittest.TestCase):
         self.assertIn("*:00/5:00 America/Sao_Paulo", timer)
         self.assertIn("/run/lock/asp-highlightly-future.lock", service)
         self.assertIn("--confirm-lifecycle", service)
-        self.assertIn("--request-budget 1500", service)
-        self.assertIn("--max-jobs 1000", service)
+        self.assertIn("--request-budget 300", service)
+        self.assertIn("--max-jobs 200", service)
+        self.assertIn("ExecStopPost=/usr/bin/flock", service)
+        self.assertIn("scripts.ensure_highlightly_provider_disabled", service)
+        self.assertEqual(phase8e.DEFAULT_REQUEST_BUDGET, 300)
+        self.assertEqual(phase8e.DEFAULT_MAX_JOBS, 200)
+
+    def test_daily_report_timer_is_read_only_and_does_not_activate_collection(self):
+        timer = (
+            ROOT / "config/systemd/highlightly-match-lifecycle-report.timer"
+        ).read_text(encoding="utf-8")
+        service = (
+            ROOT / "config/systemd/highlightly-match-lifecycle-report.service"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("23:55:00 America/Sao_Paulo", timer)
+        self.assertIn("scripts.report_highlightly_phase8e_operational", service)
+        self.assertIn("--require-provider-disabled", service)
+        self.assertNotIn("--confirm-lifecycle", service)
 
     def test_bridge_allowlists_only_the_phase8e_tables_and_rpcs(self):
         bridge = (
@@ -58,8 +77,68 @@ class HighlightlyPhaseEightEMatchLifecycleTests(unittest.TestCase):
             "refresh_highlightly_match_lifecycle_states",
             "get_highlightly_match_lifecycle_report",
             "get_highlightly_match_lifecycle_report_v2",
+            "set_highlightly_match_lifecycle_policy",
+            "get_highlightly_match_lifecycle_operational_report",
         ):
             self.assertIn(f'"{token}"', bridge)
+
+    def test_phase8e1_migration_is_invoker_only_and_disabled_by_default(self):
+        migration = (
+            ROOT
+            / "supabase/migrations/"
+            "20260723224500_create_highlightly_phase8e1_operational_hardening.sql"
+        ).read_text(encoding="utf-8")
+        normalized = migration.casefold()
+
+        self.assertIn("set_highlightly_match_lifecycle_policy", migration)
+        self.assertIn("get_highlightly_match_lifecycle_operational_report", migration)
+        self.assertEqual(normalized.count("security invoker"), 2)
+        self.assertNotIn("security definer", normalized)
+        self.assertNotIn("set enabled = true", normalized)
+        self.assertIn("'max_jobs', 200", normalized)
+        self.assertIn("'request_budget', 300", normalized)
+        self.assertIn("'daily_reserve', 750", normalized)
+
+    @patch.object(phase8e_cleanup.HighlightlyRepository, "from_environment")
+    def test_systemd_cleanup_forces_provider_disabled(self, repository_factory):
+        repository = Mock()
+        repository_factory.return_value = repository
+        repository.set_provider_enabled.return_value = {"enabled": False}
+
+        with patch("builtins.print") as output:
+            exit_code = phase8e_cleanup.main(["--reason", "unit-test"])
+
+        self.assertEqual(exit_code, 0)
+        repository.set_provider_enabled.assert_called_once_with("highlightly", False)
+        report = json.loads(output.call_args.args[0])
+        self.assertEqual(report["reason"], "unit-test")
+        self.assertTrue(report["provider_restored_disabled"])
+
+    @patch.object(phase8e_report.HighlightlyRepository, "from_environment")
+    def test_operational_report_does_not_call_the_provider(self, repository_factory):
+        repository = Mock()
+        repository_factory.return_value = repository
+        repository.rpc.return_value = {
+            "provider": {"enabled": False},
+            "safe_at_rest": True,
+        }
+
+        with patch("builtins.print") as output:
+            exit_code = phase8e_report.main(
+                ["--hours", "24", "--require-provider-disabled"]
+            )
+
+        self.assertEqual(exit_code, 0)
+        repository.rpc.assert_called_once()
+        rpc_name, payload = repository.rpc.call_args.args
+        self.assertEqual(
+            rpc_name,
+            "get_highlightly_match_lifecycle_operational_report",
+        )
+        self.assertEqual(set(payload), {"p_from", "p_to"})
+        repository.set_provider_enabled.assert_not_called()
+        report = json.loads(output.call_args.args[0])
+        self.assertEqual(report["report_status"], "ok")
 
     @patch.object(phase8e.HighlightlyRepository, "from_environment")
     def test_dry_run_previews_disabled_policies_without_enqueuing(
@@ -169,7 +248,7 @@ class HighlightlyPhaseEightEMatchLifecycleTests(unittest.TestCase):
         )
         repository.set_provider_enabled.assert_any_call("highlightly", True)
         repository.set_provider_enabled.assert_any_call("highlightly", False)
-        self.assertEqual(worker_factory.call_args.kwargs["daily_quota_ceiling"], 1_600)
+        self.assertEqual(worker_factory.call_args.kwargs["daily_quota_ceiling"], 400)
 
     @patch.object(phase8e, "_active_jobs")
     @patch.object(phase8e.HighlightlyRepository, "from_environment")

@@ -92,6 +92,8 @@ export const HIGHLIGHTLY_BRIDGE_RPCS = new Set([
   "refresh_highlightly_match_lifecycle_states",
   "get_highlightly_match_lifecycle_report",
   "get_highlightly_match_lifecycle_report_v2",
+  "set_highlightly_match_lifecycle_policy",
+  "get_highlightly_match_lifecycle_operational_report",
 ]);
 
 export type HighlightlyBridgeTarget = {

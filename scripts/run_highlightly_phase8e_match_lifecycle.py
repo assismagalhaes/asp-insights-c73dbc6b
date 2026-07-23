@@ -21,7 +21,24 @@ from scripts.run_highlightly_phase7_shadow import (
 )
 
 
-DEFAULT_REQUEST_BUDGET = 1_500
+def _environment_int(name: str, default: int) -> int:
+    raw_value = os.environ.get(name, "").strip()
+    if not raw_value:
+        return default
+    try:
+        value = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    if value < 1:
+        raise ValueError(f"{name} must be greater than zero")
+    return value
+
+
+DEFAULT_MAX_JOBS = _environment_int("HIGHLIGHTLY_PHASE8E_MAX_JOBS", 200)
+DEFAULT_REQUEST_BUDGET = _environment_int(
+    "HIGHLIGHTLY_PHASE8E_REQUEST_BUDGET",
+    300,
+)
 MAX_REQUEST_BUDGET = 2_000
 PHASE8E_SCOPE_PREFIX = "phase8e-lifecycle-"
 REQUIRED_RESOURCES_BY_SPORT = {
@@ -54,7 +71,7 @@ def _phase8e_job(row: Mapping[str, Any]) -> bool:
 def _parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--at", type=datetime.fromisoformat)
-    parser.add_argument("--max-jobs", type=int, default=1_000)
+    parser.add_argument("--max-jobs", type=int, default=DEFAULT_MAX_JOBS)
     parser.add_argument("--request-budget", type=int, default=DEFAULT_REQUEST_BUDGET)
     parser.add_argument("--confirm-lifecycle", action="store_true")
     args = parser.parse_args(argv)
