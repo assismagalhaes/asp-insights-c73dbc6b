@@ -6294,31 +6294,6 @@ export type Database = {
         Args: { p_provider_id: string; p_request_date: string }
         Returns: number
       }
-      get_highlightly_match_lifecycle_candidates: {
-        Args: {
-          p_at?: string
-          p_include_disabled?: boolean
-          p_limit?: number
-        }
-        Returns: {
-          cadence_key: string
-          dedupe_key: string
-          endpoint_key: string
-          external_match_id: string
-          kickoff_at: string
-          lifecycle_stage: string
-          match_id: string
-          match_status: string
-          priority: number
-          request_params: Json
-          resource: string
-          sport: string
-        }[]
-      }
-      get_highlightly_match_lifecycle_report: {
-        Args: { p_from?: string; p_to?: string }
-        Returns: Json
-      }
       get_highlightly_odds_quality_report: {
         Args: { p_from?: string; p_to?: string }
         Returns: Json
@@ -6345,10 +6320,6 @@ export type Database = {
       prune_highlightly_ingestion_bridge_nonces: {
         Args: { p_before?: string; p_limit?: number }
         Returns: number
-      }
-      refresh_highlightly_match_lifecycle_states: {
-        Args: { p_at?: string }
-        Returns: Json
       }
       refresh_highlightly_shadow_observation: {
         Args: {
