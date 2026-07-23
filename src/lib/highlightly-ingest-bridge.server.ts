@@ -62,6 +62,9 @@ export const HIGHLIGHTLY_BRIDGE_TABLES = new Set([
   "hl_shadow_windows",
   "hl_shadow_observations",
   "hl_source_reconciliations",
+  "hl_match_lifecycle_policies",
+  "hl_match_lifecycle_states",
+  "hl_match_lifecycle_resources",
   "hl_phase7_window_health_v",
   "hl_highlightly_future_gate_v",
 ]);
@@ -84,6 +87,9 @@ export const HIGHLIGHTLY_BRIDGE_RPCS = new Set([
   "finalize_highlightly_shadow_window",
   "get_highlightly_odds_refresh_candidates",
   "get_highlightly_odds_quality_report",
+  "get_highlightly_match_lifecycle_candidates",
+  "refresh_highlightly_match_lifecycle_states",
+  "get_highlightly_match_lifecycle_report",
 ]);
 
 export type HighlightlyBridgeTarget = {

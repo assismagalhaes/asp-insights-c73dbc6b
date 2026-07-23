@@ -33,8 +33,10 @@ import {
   fetchHighlightlyCollectionMonitor,
   type HighlightlyCollectionMonitor,
 } from "@/lib/highlightly-monitor";
+import { fetchHighlightlyMatchLifecycleReport } from "@/lib/highlightly-match-lifecycle";
 import { fetchHighlightlyOddsQualityReport } from "@/lib/highlightly-odds-quality";
 import { cn } from "@/lib/utils";
+import { MatchLifecycleMonitor } from "./match-lifecycle-monitor";
 import { OddsQualityMonitor } from "./odds-quality-monitor";
 
 const SPORT_LABELS: Record<string, string> = {
@@ -232,6 +234,13 @@ export function HighlightlyCollectionMonitorView() {
     staleTime: 30_000,
     retry: 1,
   });
+  const lifecycleQuery = useQuery({
+    queryKey: ["highlightly-match-lifecycle"],
+    queryFn: fetchHighlightlyMatchLifecycleReport,
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+    retry: 1,
+  });
   const monitor = monitorQuery.data;
   const selectedScope = scope ?? monitor?.scope ?? "";
 
@@ -300,6 +309,15 @@ export function HighlightlyCollectionMonitorView() {
               <AlertTriangle />
               <AlertTitle>Diagnóstico de odds temporariamente indisponível</AlertTitle>
               <AlertDescription>{oddsQualityQuery.error.message}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          {lifecycleQuery.data ? <MatchLifecycleMonitor report={lifecycleQuery.data} /> : null}
+          {lifecycleQuery.error ? (
+            <Alert>
+              <AlertTriangle />
+              <AlertTitle>Ciclo das partidas temporariamente indisponível</AlertTitle>
+              <AlertDescription>{lifecycleQuery.error.message}</AlertDescription>
             </Alert>
           ) : null}
 

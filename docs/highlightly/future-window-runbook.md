@@ -67,6 +67,16 @@ Ao zerar a fila, o continuador chama `finalize_highlightly_shadow_window` e publ
 da janela. Se houver retries ainda não elegíveis ou cota insuficiente, o timer mantém a retomada
 autônoma sem depender de uma sessão do operador.
 
+## Ciclo das partidas (Fase 8E)
+
+Depois da descoberta e das capturas de odds, a Fase 8E acompanha as partidas em pré-jogo, ao
+vivo e pós-jogo. Ela coleta escalações quando suportadas, atualiza status/eventos/estatísticas
+durante jogos ativos e busca somente recursos finais faltantes em T+15m, T+2h e T+24h.
+
+O timer da Fase 8E compartilha a trava global das coletas futuras. As políticas são publicadas
+desligadas e a ativação ocorre gradualmente por esporte. O runbook completo está em
+`docs/highlightly/phase8e-match-lifecycle-runbook.md`.
+
 ## Preview sem consumir cota
 
 ```bash
