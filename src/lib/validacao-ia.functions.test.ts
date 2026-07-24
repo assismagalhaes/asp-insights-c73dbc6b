@@ -3,10 +3,10 @@ import { AiLocalGenerationOutputSchema, AiOperationalOutputSchema } from "./ai-v
 import { LOCAL_STRUCTURED_OUTPUT_PROVIDER_OPTIONS } from "./validacao-ia.functions";
 
 describe("configuração do Structured Output local", () => {
-  it("mantém desativado apenas o responseSchema incompatível do Gemini", () => {
+  it("envia ao Gemini apenas o schema de geração compatível", () => {
     expect(LOCAL_STRUCTURED_OUTPUT_PROVIDER_OPTIONS).toEqual({
       google: {
-        structuredOutputs: false,
+        structuredOutputs: true,
       },
     });
   });
