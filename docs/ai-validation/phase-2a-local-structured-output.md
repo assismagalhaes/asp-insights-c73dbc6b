@@ -25,28 +25,21 @@ com o bloqueio `SCHEMA_INVALID`; uma falha nunca confirma uma entrada.
 
 ## Provider
 
-- Secret: `GOOGLE_GENERATIVE_AI_API_KEY`
-- Modelo: `GOOGLE_MODEL_ID` em `src/lib/google-ai.server.ts`
+- Secret: `LOVABLE_API_KEY`
+- Modelo: `google/gemini-2.5-pro`
 - Prompt: `validacao-critica-v13-structured-output-local`
 
-O modo Local não depende de `LOVABLE_API_KEY`.
+O modo Local não depende de `GOOGLE_GENERATIVE_AI_API_KEY`.
 
 ### Compatibilidade do schema com Gemini
 
-O contrato operacional completo contém literais, uniões e validação de URL.
-Como o `responseSchema` do Google aceita somente um subconjunto de OpenAPI, a
-chamada envia ao Gemini apenas o schema de geração simplificado, com
-`providerOptions.google.structuredOutputs=true`.
+O Lovable AI Gateway não declara suporte confiável a `Output.object`. O modo
+Local solicita exclusivamente JSON em texto, extrai o primeiro objeto retornado
+e o valida com o schema de geração simplificado.
 
 O objeto retornado continua sendo validado integralmente pelo
 `AiOperationalOutputSchema` antes de chegar ao árbitro. Não existe fallback
 automático para texto legado.
-
-Antes dessa validação integral, um schema de geração aceita somente omissões
-formais seguras (`sources`, `searches`, listas de riscos/limitações e campos
-anuláveis), preenchendo defaults locais. Se o JSON nem sequer passar nesse
-schema, o sistema permite uma única tentativa de reparo estrutural com o mesmo
-Gemini. Uma segunda falha continua fechada em `PULAR`.
 
 Antes dessa validação integral, um schema de geração aceita somente omissões
 formais seguras (`sources`, `searches`, listas de riscos/limitações e campos
