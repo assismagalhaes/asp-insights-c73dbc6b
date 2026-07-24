@@ -172,8 +172,8 @@ export function computeValidationMetrics(
     bancaAtual: bancaInicial + lucroR,
     drawdown: 0,
     oddMediaGreens,
-    puladas: rows.filter((p) => p.status_validacao === "PULAR").length,
-    confirmadas: rows.filter((p) => p.status_validacao === "CONFIRMA").length,
+    puladas: rows.filter((p) => isStatusPular(p.status_validacao)).length,
+    confirmadas: rows.filter((p) => isStatusConfirma(p.status_validacao)).length,
   };
 }
 
