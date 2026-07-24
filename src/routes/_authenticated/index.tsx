@@ -44,6 +44,7 @@ import {
   lucroUnidades,
   lucroUnidadesAnalitico,
   matchesValidationFilter,
+  isStatusPular,
   rangeFromPeriodo,
   dateInRange,
   type ValidationMetricsFilter,
