@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/lib/auth-middleware-public";
+import { requireSupabaseAdmin } from "@/lib/auth-middleware-public";
 import {
   createAiGenerationFailure,
   createLegacyRollbackResult,
@@ -7,6 +7,7 @@ import {
 } from "@/lib/ai-validation/generation-result";
 import { adaptLegacyAiResponse } from "@/lib/ai-validation/legacy-adapter";
 import { sumAiTokenUsage } from "@/lib/ai-validation/observability";
+import { resolveAiValidationRollout, rolloutTelemetry } from "@/lib/ai-validation/rollout";
 import { AiLocalGenerationOutputSchema } from "@/lib/ai-validation/schema";
 import { generateText, type LanguageModel } from "ai";
 import { z } from "zod";
@@ -300,9 +301,9 @@ Justificativa final objetiva:
 Condição que faria mudar a decisão:`;
 
 export const analisarValidacao = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAdmin])
   .inputValidator((input: unknown) => InputSchema.parse(input))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const p = data.prognostico;
     const oddFinal = p.odd_ajustada ?? p.odd_original;
     const edgeFinal = p.edge_ajustado ?? p.edge_original;
@@ -388,8 +389,12 @@ ${aspScreenerInstrucao}
     const startedAtIso = new Date(startedAt).toISOString();
     const runId = crypto.randomUUID();
     let repairAttempted = false;
-    const legacyRollbackEnabled =
-      process.env.AI_VALIDATION_LOCAL_LEGACY_ROLLBACK?.trim().toLowerCase() === "true";
+    const rollout = resolveAiValidationRollout({
+      mode: "local",
+      userId: context.userId,
+    });
+    const rolloutSnapshot = rolloutTelemetry(rollout);
+    const legacyRollbackEnabled = rollout.variant === "legacy";
 
     try {
       const lovableApiKey = process.env.LOVABLE_API_KEY;
@@ -422,6 +427,7 @@ ${aspScreenerInstrucao}
           finish_reason: legacyResult.finishReason,
           usage: sumAiTokenUsage(legacyResult.usage),
           repair_attempted: false,
+          ...rolloutSnapshot,
         };
       }
 
@@ -454,6 +460,7 @@ ${aspScreenerInstrucao}
         finish_reason: finishReason,
         usage,
         repair_attempted: repairAttempted,
+        ...rolloutSnapshot,
       };
     } catch (err: unknown) {
       return {
@@ -465,6 +472,7 @@ ${aspScreenerInstrucao}
         started_at: startedAtIso,
         finished_at: new Date().toISOString(),
         repair_attempted: repairAttempted,
+        ...rolloutSnapshot,
       };
     }
   });

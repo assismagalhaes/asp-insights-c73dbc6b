@@ -25,6 +25,9 @@ export type AiObservabilityRun = Pick<
   | "final_decision"
   | "blocking_codes"
   | "repair_attempted"
+  | "rollout_stage"
+  | "rollout_variant"
+  | "rollout_reason"
   | "search_count"
   | "scrape_count"
   | "source_count"
@@ -81,6 +84,8 @@ export interface AiObservabilityDimensionRow {
   promptVersion: string;
   mode: string;
   sport: string;
+  rolloutStage: string;
+  rolloutVariant: string;
   runs: number;
   validSchemaRate: number | null;
   errorRate: number | null;
@@ -151,6 +156,8 @@ function dimensionKey(run: AiObservabilityRun) {
     fallbackLabel(run.prompt_versao, "Prompt não informado"),
     fallbackLabel(run.modo_ia, "Modo não informado"),
     fallbackLabel(run.esporte, "Esporte não informado"),
+    fallbackLabel(run.rollout_stage, "Pré-Fase 6"),
+    fallbackLabel(run.rollout_variant, "Contrato não informado"),
   ].join("\u001f");
 }
 
@@ -289,6 +296,8 @@ export function buildAiObservabilityDashboard(
         promptVersion: fallbackLabel(sampleRun.prompt_versao, "Prompt não informado"),
         mode: fallbackLabel(sampleRun.modo_ia, "Modo não informado"),
         sport: fallbackLabel(sampleRun.esporte, "Esporte não informado"),
+        rolloutStage: fallbackLabel(sampleRun.rollout_stage, "Pré-Fase 6"),
+        rolloutVariant: fallbackLabel(sampleRun.rollout_variant, "Contrato não informado"),
         runs: dimensionRuns.length,
         validSchemaRate: rate(
           dimensionRuns.filter((run) => run.parse_status === "VALID").length,

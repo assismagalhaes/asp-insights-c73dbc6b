@@ -1,4 +1,9 @@
 import type { ArbitratedAiValidation } from "./types";
+import type {
+  AiValidationRolloutReason,
+  AiValidationRolloutStage,
+  AiValidationRolloutVariant,
+} from "./rollout";
 
 export const AI_ARBITER_VERSION = "deterministic-arbiter-v1" as const;
 
@@ -26,6 +31,9 @@ export type AiServerRunTelemetry = {
   parse_status?: "VALID" | "FAILED" | "LEGACY_ROLLBACK";
   error_code?: string | null;
   repair_attempted?: boolean;
+  rollout_stage?: AiValidationRolloutStage;
+  rollout_variant?: AiValidationRolloutVariant;
+  rollout_reason?: AiValidationRolloutReason;
 };
 
 function finiteNonnegative(value: unknown): number | null {
@@ -87,6 +95,9 @@ export function buildAiObservabilitySnapshot({
     final_decision: arbitration.output.decision,
     blocking_codes: blockingCodes,
     repair_attempted: telemetry.repair_attempted ?? false,
+    rollout_stage: telemetry.rollout_stage ?? null,
+    rollout_variant: telemetry.rollout_variant ?? null,
+    rollout_reason: telemetry.rollout_reason ?? null,
     search_count: searches.length,
     scrape_count: sourceTraces.filter((source) => source.consultada).length,
     source_count: sourceTraces.length,

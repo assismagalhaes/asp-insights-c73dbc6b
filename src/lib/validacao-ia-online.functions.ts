@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/lib/auth-middleware-public";
+import { requireSupabaseAdmin } from "@/lib/auth-middleware-public";
 import {
   createAiGenerationFailure,
   createLegacyRollbackResult,
@@ -7,6 +7,7 @@ import {
 } from "@/lib/ai-validation/generation-result";
 import { adaptLegacyAiResponse } from "@/lib/ai-validation/legacy-adapter";
 import { sumAiTokenUsage } from "@/lib/ai-validation/observability";
+import { resolveAiValidationRollout, rolloutTelemetry } from "@/lib/ai-validation/rollout";
 import { AiLocalGenerationOutputSchema } from "@/lib/ai-validation/schema";
 import { generateText, tool, stepCountIs } from "ai";
 import { z } from "zod";
@@ -391,9 +392,9 @@ Checklist online por esporte:
 Ao longo das seções B, C, D e E, inclua resumidamente os itens do checklist online mais relevantes, com informação encontrada, fonte, impacto e status. Não omita informações críticas não encontradas.`;
 
 export const analisarValidacaoOnline = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAdmin])
   .inputValidator((input: unknown) => InputSchema.parse(input))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const startedAt = Date.now();
     const startedAtIso = new Date(startedAt).toISOString();
     const runId = crypto.randomUUID();
@@ -533,8 +534,12 @@ Para PULAR, use ID/pick null e stake 0. Os campos sources e searches devem ser a
 vazios: o servidor os preencherá exclusivamente com a telemetria real das ferramentas.
 
 ${ONLINE_GATEWAY_JSON_TEMPLATE}`;
-      const legacyRollbackEnabled =
-        process.env.AI_VALIDATION_ONLINE_LEGACY_ROLLBACK?.trim().toLowerCase() === "true";
+      const rollout = resolveAiValidationRollout({
+        mode: "online",
+        userId: context.userId,
+      });
+      const rolloutSnapshot = rolloutTelemetry(rollout);
+      const legacyRollbackEnabled = rollout.variant === "legacy";
 
       const researchTools = {
         web_search: tool({
@@ -647,6 +652,7 @@ ${ONLINE_GATEWAY_JSON_TEMPLATE}`;
           fontes_consultadas: fontesRastreaveis,
           buscas_realizadas: buscasRealizadas,
           repair_attempted: false,
+          ...rolloutSnapshot,
         };
       }
 
@@ -697,8 +703,13 @@ ${firstResult.text.slice(0, 40_000)}`,
         repair_attempted: repairAttempted,
         fontes_consultadas: fontesRastreaveis,
         buscas_realizadas: buscasRealizadas,
+        ...rolloutSnapshot,
       };
     } catch (err: unknown) {
+      const rollout = resolveAiValidationRollout({
+        mode: "online",
+        userId: context.userId,
+      });
       return {
         ...createAiGenerationFailure(err, Date.now() - startedAt),
         run_id: runId,
@@ -710,6 +721,7 @@ ${firstResult.text.slice(0, 40_000)}`,
         repair_attempted: repairAttempted,
         fontes_consultadas: fontesRastreaveis,
         buscas_realizadas: buscasRealizadas,
+        ...rolloutTelemetry(rollout),
       };
     }
   });
