@@ -14,7 +14,7 @@ para o árbitro determinístico.
 
 1. O payload autenticado é validado.
 2. O prompt recebe apenas dados internos e contexto manual.
-3. `generateText` chama o provider Google com `Output.object`.
+3. `generateText` chama o provider Google com `Output.object` e JSON obrigatório.
 4. A saída é novamente validada por Zod.
 5. O árbitro determinístico verifica invariantes, gates e regras operacionais.
 6. A apresentação A–G é reconstruída apenas a partir do resultado arbitrado.
@@ -30,6 +30,17 @@ com o bloqueio `SCHEMA_INVALID`; uma falha nunca confirma uma entrada.
 - Prompt: `validacao-critica-v13-structured-output-local`
 
 O modo Local não depende de `LOVABLE_API_KEY`.
+
+### Compatibilidade do schema com Gemini
+
+O contrato operacional completo contém literais, uniões, campos anuláveis e
+validação de URL. Como o `responseSchema` do Google aceita somente um subconjunto
+de OpenAPI, a chamada usa `providerOptions.google.structuredOutputs=false`.
+
+Essa opção remove apenas o `responseSchema` incompatível da requisição ao
+provider. `Output.object` continua exigindo JSON, e o objeto retornado continua
+sendo validado integralmente pelo `AiOperationalOutputSchema` antes de chegar ao
+árbitro. Não existe fallback automático para texto legado.
 
 ## Rollback
 
