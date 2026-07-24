@@ -7,20 +7,26 @@ import {
 } from "@/lib/ai-validation/generation-result";
 import { adaptLegacyAiResponse } from "@/lib/ai-validation/legacy-adapter";
 import { AiLocalGenerationOutputSchema } from "@/lib/ai-validation/schema";
-import { generateText, NoObjectGeneratedError, Output, type LanguageModel } from "ai";
+import { generateText, type LanguageModel } from "ai";
 import { z } from "zod";
 
 export const PROMPT_VERSAO = "validacao-critica-v13-structured-output-local";
 export const LOCAL_GATEWAY_MODEL_ID = "google/gemini-2.5-pro";
 
-/**
- * Lovable AI Gateway roteia Gemini via OpenRouter. O contrato operacional
- * completo continua sendo revalidado localmente pelo Zod após a geração; o
- * schema enviado ao provider é apenas o simplificado (AiLocalGenerationOutputSchema).
- */
-export const LOCAL_STRUCTURED_OUTPUT_PROVIDER_OPTIONS = {
-  lovable: {},
-} as const;
+export function parseLocalGatewayJson(text: string) {
+  const withoutFence = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+  const firstBrace = withoutFence.indexOf("{");
+  const lastBrace = withoutFence.lastIndexOf("}");
+  if (firstBrace < 0 || lastBrace <= firstBrace) {
+    throw new Error("JSON object não encontrado na resposta do Lovable AI Gateway.");
+  }
+  const parsed: unknown = JSON.parse(withoutFence.slice(firstBrace, lastBrace + 1));
+  return AiLocalGenerationOutputSchema.parse(parsed);
+}
 
 async function generateLocalStructuredOutput({
   model,
@@ -29,27 +35,24 @@ async function generateLocalStructuredOutput({
   model: LanguageModel;
   prompt: string;
 }) {
-  const generate = (repairPrompt: string) =>
+  const generate = (generationPrompt: string) =>
     generateText({
       model,
-      system: SYSTEM_PROMPT,
-      prompt: repairPrompt,
-      providerOptions: LOCAL_STRUCTURED_OUTPUT_PROVIDER_OPTIONS,
-      output: Output.object({
-        schema: AiLocalGenerationOutputSchema,
-        name: "asp_insights_local_validation",
-        description:
-          "Parecer operacional estruturado do modo IA Local, sujeito ao árbitro determinístico.",
-      }),
+      system: `${SYSTEM_PROMPT}
+
+FORMATO PARA O LOVABLE AI GATEWAY:
+Retorne somente um objeto JSON válido, sem markdown, comentários ou texto antes/depois.
+O JSON deve conter todos os campos do contrato estruturado descrito acima.`,
+      prompt: generationPrompt,
     });
 
+  const firstResult = await generate(prompt);
   try {
-    return { result: await generate(prompt), repairAttempted: false };
-  } catch (error: unknown) {
-    if (!NoObjectGeneratedError.isInstance(error) || !error.text?.trim()) {
-      throw error;
-    }
-
+    return {
+      result: { ...firstResult, output: parseLocalGatewayJson(firstResult.text) },
+      repairAttempted: false,
+    };
+  } catch {
     const repairPrompt = `${prompt}
 
 REPARO CONTROLADO ÚNICO:
@@ -59,9 +62,13 @@ adicionar markdown. Preencha todos os gates e campos narrativos. Use arrays
 vazios em sources e searches.
 
 SAÍDA ANTERIOR A CORRIGIR:
-${error.text.slice(0, 40_000)}`;
+${firstResult.text.slice(0, 40_000)}`;
 
-    return { result: await generate(repairPrompt), repairAttempted: true };
+    const repairedResult = await generate(repairPrompt);
+    return {
+      result: { ...repairedResult, output: parseLocalGatewayJson(repairedResult.text) },
+      repairAttempted: true,
+    };
   }
 }
 
