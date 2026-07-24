@@ -42,9 +42,10 @@ export function StatCard({
 }: StatCardProps) {
   const effectiveTone = tone ?? (trend === "up" ? "up" : trend === "down" ? "down" : "off");
   return (
-    <div
+    <section
+      aria-label={label}
       className={cn(
-        "group relative overflow-hidden rounded-lg border border-border/90 bg-card p-4 shadow-[0_14px_32px_rgb(0_0_0/0.12)] transition-[border-color,transform,box-shadow] hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgb(0_0_0/0.18)]",
+        "group relative overflow-hidden rounded-lg border border-border/90 bg-card p-4 shadow-[0_14px_32px_rgb(0_0_0/0.12)] transition-[border-color,transform,box-shadow] motion-safe:hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgb(0_0_0/0.18)]",
         borderToneClass[effectiveTone],
       )}
     >
@@ -59,7 +60,7 @@ export function StatCard({
               iconToneClass[effectiveTone],
             )}
           >
-            <Icon className="size-4" />
+            <Icon aria-hidden="true" className="size-4" />
           </span>
         ) : null}
       </div>
@@ -83,6 +84,6 @@ export function StatCard({
           {delta}
         </div>
       ) : null}
-    </div>
+    </section>
   );
 }

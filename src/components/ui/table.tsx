@@ -2,11 +2,34 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
-  ({ className, ...props }, ref) => (
-    <div className="relative w-full overflow-auto">
+type TableProps = React.HTMLAttributes<HTMLTableElement> & {
+  scrollLabel?: string;
+  containerClassName?: string;
+};
+
+const Table = React.forwardRef<HTMLTableElement, TableProps>(
+  (
+    {
+      className,
+      scrollLabel = "Tabela de dados",
+      containerClassName,
+      "aria-label": ariaLabel,
+      ...props
+    },
+    ref,
+  ) => (
+    <div
+      role="region"
+      aria-label={`${scrollLabel}. Use as setas para navegar horizontalmente quando necessário.`}
+      tabIndex={0}
+      className={cn(
+        "relative w-full overflow-auto rounded-[inherit] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70",
+        containerClassName,
+      )}
+    >
       <table
         ref={ref}
+        aria-label={ariaLabel ?? scrollLabel}
         className={cn("w-full caption-bottom text-sm tabular-nums", className)}
         {...props}
       />

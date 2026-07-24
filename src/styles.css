@@ -135,11 +135,33 @@
   }
 
   :focus-visible {
-    outline-color: var(--color-ring);
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
   }
 }
 
 @layer components {
+  .skip-link {
+    position: fixed;
+    top: 0.75rem;
+    left: 0.75rem;
+    z-index: 100;
+    transform: translateY(calc(-100% - 1rem));
+    border: 2px solid var(--color-primary);
+    border-radius: var(--radius-md);
+    background: var(--color-background);
+    color: var(--color-foreground);
+    padding: 0.625rem 0.875rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    box-shadow: 0 12px 28px rgb(0 0 0 / 0.35);
+    transition: transform 150ms ease;
+  }
+
+  .skip-link:focus {
+    transform: translateY(0);
+  }
+
   .app-shell-header {
     border-bottom: 1px solid color-mix(in oklab, var(--color-border) 80%, transparent);
     background: color-mix(in oklab, var(--color-background) 94%, transparent);
@@ -248,5 +270,26 @@
     .surface-panel {
       padding: 0.75rem;
     }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid CanvasText;
+  }
+
+  .skip-link {
+    border-color: CanvasText;
   }
 }

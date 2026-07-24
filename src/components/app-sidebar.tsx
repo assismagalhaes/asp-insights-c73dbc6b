@@ -123,7 +123,11 @@ export function AppSidebar() {
                         tooltip={item.title}
                         className="relative h-9 rounded px-3 text-[13px] font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-primary/12 data-[active=true]:text-sidebar-primary data-[active=true]:before:absolute data-[active=true]:before:inset-y-1.5 data-[active=true]:before:left-0 data-[active=true]:before:w-0.5 data-[active=true]:before:rounded-full data-[active=true]:before:bg-sidebar-primary"
                       >
-                        <Link to={item.url} onClick={closeMobileMenu}>
+                        <Link
+                          to={item.url}
+                          onClick={closeMobileMenu}
+                          aria-current={active ? "page" : undefined}
+                        >
                           <item.icon />
                           <span>{item.title}</span>
                         </Link>
@@ -157,7 +161,11 @@ export function AppSidebar() {
               tooltip={settingsItem.title}
               className="h-9 rounded px-3 text-[13px] text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-primary/12 data-[active=true]:text-sidebar-primary"
             >
-              <Link to={settingsItem.url} onClick={closeMobileMenu}>
+              <Link
+                to={settingsItem.url}
+                onClick={closeMobileMenu}
+                aria-current={pathname === settingsItem.url ? "page" : undefined}
+              >
                 <settingsItem.icon />
                 <span>{settingsItem.title}</span>
               </Link>

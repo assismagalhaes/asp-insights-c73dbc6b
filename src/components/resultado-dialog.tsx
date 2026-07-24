@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -52,8 +53,7 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
         .order("created_at", { ascending: false })
         .limit(1);
       const ownLast = (own ?? [])[0] as
-        | { placar_final: string | null; resultado: Resultado }
-        | undefined;
+        { placar_final: string | null; resultado: Resultado } | undefined;
       if (ownLast?.placar_final) setPlacar(ownLast.placar_final);
       if (ownLast && (ownLast.resultado === "GREEN" || ownLast.resultado === "RED")) {
         setManual(ownLast.resultado);
@@ -165,6 +165,9 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
               : "Registrar resultado"}{" "}
             — {prognostico.jogo}
           </DialogTitle>
+          <DialogDescription>
+            Informe o resultado final para calcular e registrar o desempenho desta entrada.
+          </DialogDescription>
         </DialogHeader>
         <div className="text-xs text-muted-foreground">Odd usada {oddEfetiva.toFixed(2)}</div>
         <div className="text-xs text-muted-foreground">
