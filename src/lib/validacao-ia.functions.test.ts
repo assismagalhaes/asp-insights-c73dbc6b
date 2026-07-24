@@ -3,11 +3,9 @@ import { AiLocalGenerationOutputSchema, AiOperationalOutputSchema } from "./ai-v
 import { LOCAL_STRUCTURED_OUTPUT_PROVIDER_OPTIONS } from "./validacao-ia.functions";
 
 describe("configuração do Structured Output local", () => {
-  it("envia ao Gemini apenas o schema de geração compatível", () => {
+  it("não envia opções específicas de provider ao Lovable AI Gateway", () => {
     expect(LOCAL_STRUCTURED_OUTPUT_PROVIDER_OPTIONS).toEqual({
-      google: {
-        structuredOutputs: true,
-      },
+      lovable: {},
     });
   });
 
