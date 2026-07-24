@@ -42,6 +42,12 @@ provider. `Output.object` continua exigindo JSON, e o objeto retornado continua
 sendo validado integralmente pelo `AiOperationalOutputSchema` antes de chegar ao
 árbitro. Não existe fallback automático para texto legado.
 
+Antes dessa validação integral, um schema de geração aceita somente omissões
+formais seguras (`sources`, `searches`, listas de riscos/limitações e campos
+anuláveis), preenchendo defaults locais. Se o JSON nem sequer passar nesse
+schema, o sistema permite uma única tentativa de reparo estrutural com o mesmo
+Gemini. Uma segunda falha continua fechada em `PULAR`.
+
 ## Rollback
 
 O parser legado só pode ser ativado explicitamente:
