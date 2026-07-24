@@ -93,8 +93,9 @@ export function computeMetrics(
   const bancaInicial = cfg?.banca_inicial ?? 0;
   const valorUnidade = cfg?.valor_unidade_padrao ?? 0;
 
-  const confirma = prognosticos.filter((p) => p.status_validacao === "CONFIRMA");
+  const confirma = prognosticos.filter((p) => isStatusConfirma(p.status_validacao));
   const resolvidas = confirma.filter((p) => PICK_RESOLVIDA.includes(p.resultado));
+
 
   const greens = confirma.filter((p) => PICK_GREEN.includes(p.resultado)).length;
   const reds = confirma.filter((p) => PICK_RED.includes(p.resultado)).length;
