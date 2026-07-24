@@ -134,7 +134,7 @@ function Dashboard() {
         cur.stake +=
           validacao === "confirmadas"
             ? p.stake
-            : p.status_validacao === "PULAR" && p.stake <= 0
+            : isStatusPular(p.status_validacao) && p.stake <= 0
               ? 1
               : p.stake;
         map.set(p.esporte, cur);
