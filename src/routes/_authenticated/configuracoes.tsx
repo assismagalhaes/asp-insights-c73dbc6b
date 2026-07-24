@@ -64,12 +64,14 @@ function Configuracoes() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Configurações</h1>
-        <p className="text-sm text-muted-foreground">
-          Parâmetros gerais da plataforma e ativação de esportes/mercados.
-        </p>
+    <div className="page-stack">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Configurações</h1>
+          <p className="page-description">
+            Parâmetros gerais da plataforma e ativação de esportes/mercados.
+          </p>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

@@ -230,14 +230,14 @@ function AiObservabilityPage() {
   const summary = dashboard.summary;
 
   return (
-    <div className="mx-auto flex min-w-0 w-full max-w-[1700px] flex-col gap-5 overflow-x-hidden">
-      <header className="flex flex-col gap-3 border-b border-border pb-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="page-stack min-w-0 overflow-x-hidden">
+      <header className="page-header border-b border-border pb-4">
         <div>
           <div className="flex items-center gap-2">
             <Activity className="size-5 text-primary" aria-hidden="true" />
-            <h1 className="text-xl font-semibold tracking-tight">Observabilidade da IA</h1>
+            <h1 className="page-title">Observabilidade da IA</h1>
           </div>
-          <p className="mt-1 max-w-3xl text-xs text-muted-foreground">
+          <p className="page-description">
             Saúde estrutural, arbitragem determinística, custo, latência e feedback humano das
             validações. Este painel é analítico e não altera prognósticos.
           </p>

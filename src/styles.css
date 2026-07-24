@@ -53,49 +53,46 @@
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
-/* Dark by default - ASP Insights brand: deep navy + electric blue + neon green */
+/* Fase 5B: command-center visual system, dark by default. */
 :root {
-  --radius: 0.625rem;
+  --radius: 0.5rem;
 
-  /* Background — deep brand navy (matches logo backdrop) */
-  --background: oklch(0.14 0.04 255);
+  --background: oklch(0.105 0.028 255);
   --foreground: oklch(0.97 0.005 250);
 
-  --card: oklch(0.19 0.045 255);
+  --card: oklch(0.145 0.034 255);
   --card-foreground: oklch(0.97 0.005 250);
 
-  --popover: oklch(0.19 0.045 255);
+  --popover: oklch(0.16 0.036 255);
   --popover-foreground: oklch(0.97 0.005 250);
 
-  /* Primary — electric blue (brain in the logo) */
-  --primary: oklch(0.65 0.21 255);
+  --primary: oklch(0.67 0.205 255);
   --primary-foreground: oklch(0.98 0.005 250);
 
-  --secondary: oklch(0.26 0.04 255);
+  --secondary: oklch(0.205 0.036 255);
   --secondary-foreground: oklch(0.97 0.005 250);
 
-  --muted: oklch(0.22 0.035 255);
-  --muted-foreground: oklch(0.7 0.025 250);
+  --muted: oklch(0.185 0.03 255);
+  --muted-foreground: oklch(0.72 0.022 250);
 
-  /* Accent — neon green (tagline + circuit lines) */
-  --accent: oklch(0.82 0.22 145);
-  --accent-foreground: oklch(0.14 0.04 255);
+  --accent: oklch(0.81 0.21 145);
+  --accent-foreground: oklch(0.11 0.028 255);
 
   --destructive: oklch(0.62 0.23 25);
   --destructive-foreground: oklch(0.98 0 0);
 
-  --success: oklch(0.82 0.22 145);
-  --success-foreground: oklch(0.14 0.04 255);
+  --success: oklch(0.81 0.21 145);
+  --success-foreground: oklch(0.11 0.028 255);
 
   --warning: oklch(0.85 0.17 90);
-  --warning-foreground: oklch(0.14 0.04 255);
+  --warning-foreground: oklch(0.11 0.028 255);
 
   --caution: oklch(0.74 0.19 55);
-  --caution-foreground: oklch(0.14 0.04 255);
+  --caution-foreground: oklch(0.11 0.028 255);
 
-  --border: oklch(0.28 0.04 255);
-  --input: oklch(0.26 0.04 255);
-  --ring: oklch(0.65 0.21 255);
+  --border: oklch(0.245 0.035 255);
+  --input: oklch(0.23 0.035 255);
+  --ring: oklch(0.67 0.205 255);
 
   --chart-1: oklch(0.65 0.21 255);
   --chart-2: oklch(0.82 0.22 145);
@@ -103,14 +100,14 @@
   --chart-4: oklch(0.74 0.19 55);
   --chart-5: oklch(0.62 0.23 25);
 
-  --sidebar: oklch(0.11 0.04 255);
+  --sidebar: oklch(0.085 0.027 255);
   --sidebar-foreground: oklch(0.92 0.01 250);
-  --sidebar-primary: oklch(0.65 0.21 255);
+  --sidebar-primary: oklch(0.67 0.205 255);
   --sidebar-primary-foreground: oklch(0.98 0.005 250);
-  --sidebar-accent: oklch(0.2 0.04 255);
+  --sidebar-accent: oklch(0.16 0.042 255);
   --sidebar-accent-foreground: oklch(0.97 0.005 250);
-  --sidebar-border: oklch(0.22 0.04 255);
-  --sidebar-ring: oklch(0.65 0.21 255);
+  --sidebar-border: oklch(0.205 0.034 255);
+  --sidebar-ring: oklch(0.67 0.205 255);
 
   /* Central Esportiva — superfícies abertas do terminal analítico */
   --analysis-toolbar: oklch(0.125 0.038 255);
@@ -124,9 +121,132 @@
 
   html,
   body {
+    min-width: 320px;
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-primary) 35%, transparent);
+    color: var(--color-foreground);
+  }
+
+  :focus-visible {
+    outline-color: var(--color-ring);
+  }
+}
+
+@layer components {
+  .app-shell-header {
+    border-bottom: 1px solid color-mix(in oklab, var(--color-border) 80%, transparent);
+    background: color-mix(in oklab, var(--color-background) 94%, transparent);
+    box-shadow: 0 1px 0 rgb(255 255 255 / 0.015);
+  }
+
+  .app-main {
+    min-width: 0;
+    isolation: isolate;
+  }
+
+  .app-main > * {
+    width: 100%;
+    max-width: 100rem;
+    margin-inline: auto;
+  }
+
+  .page-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .page-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-block: 0.125rem 0.25rem;
+  }
+
+  .page-title {
+    font-size: clamp(1.5rem, 2vw, 2rem);
+    line-height: 1.15;
+    font-weight: 700;
+    letter-spacing: -0.035em;
+  }
+
+  .page-description {
+    margin-top: 0.35rem;
+    max-width: 52rem;
+    color: var(--color-muted-foreground);
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  .filter-surface {
+    border: 1px solid color-mix(in oklab, var(--color-border) 86%, transparent);
+    border-radius: var(--radius-lg);
+    background: color-mix(in oklab, var(--color-card) 90%, var(--color-background));
+    padding: 0.875rem;
+    box-shadow: 0 12px 32px rgb(0 0 0 / 0.12);
+  }
+
+  .surface-panel {
+    border: 1px solid color-mix(in oklab, var(--color-border) 86%, transparent);
+    border-radius: var(--radius-lg);
+    background: var(--color-card);
+    padding: 1rem;
+    box-shadow: 0 16px 38px rgb(0 0 0 / 0.14);
+  }
+
+  .data-surface {
+    overflow: hidden;
+    border: 1px solid color-mix(in oklab, var(--color-border) 90%, transparent);
+    border-radius: var(--radius-lg);
+    background: var(--color-card);
+    box-shadow: 0 16px 38px rgb(0 0 0 / 0.14);
+  }
+
+  .selection-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border: 1px solid color-mix(in oklab, var(--color-primary) 35%, var(--color-border));
+    border-radius: var(--radius-lg);
+    background: color-mix(in oklab, var(--color-primary) 8%, var(--color-card));
+    padding: 0.625rem 0.75rem;
+  }
+
+  .section-title {
+    color: var(--color-foreground);
+    font-size: 0.875rem;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+  }
+
+  .numeric-value {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  * {
+    scrollbar-color: color-mix(in oklab, var(--color-muted-foreground) 45%, transparent) transparent;
+    scrollbar-width: thin;
+  }
+
+  @media (max-width: 767px) {
+    .page-stack {
+      gap: 1rem;
+    }
+
+    .filter-surface,
+    .surface-panel {
+      padding: 0.75rem;
+    }
   }
 }

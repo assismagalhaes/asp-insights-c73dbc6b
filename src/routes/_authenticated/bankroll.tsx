@@ -102,12 +102,12 @@ function Bankroll() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Bankroll</h1>
-        <p className="text-sm text-muted-foreground">
-          Gestão de banca, unidades e controle de risco.
-        </p>
+    <div className="page-stack">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Bankroll</h1>
+          <p className="page-description">Gestão de banca, unidades e controle de risco.</p>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">

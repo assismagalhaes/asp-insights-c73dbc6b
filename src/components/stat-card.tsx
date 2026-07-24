@@ -19,17 +19,17 @@ const toneClass = {
 } as const;
 
 const iconToneClass = {
-  up: "text-success/70",
-  down: "text-destructive/70",
-  neutral: "text-muted-foreground",
-  off: "text-muted-foreground",
+  up: "border-success/30 bg-success/10 text-success",
+  down: "border-destructive/30 bg-destructive/10 text-destructive",
+  neutral: "border-border/80 bg-background/40 text-muted-foreground",
+  off: "border-border/80 bg-background/40 text-muted-foreground",
 } as const;
 
 const borderToneClass = {
-  up: "border-success/30 hover:border-success/60",
-  down: "border-destructive/30 hover:border-destructive/60",
-  neutral: "border-border hover:border-primary/40",
-  off: "border-border hover:border-primary/40",
+  up: "hover:border-success/45",
+  down: "hover:border-destructive/45",
+  neutral: "hover:border-primary/35",
+  off: "hover:border-primary/35",
 } as const;
 
 export function StatCard({
@@ -44,22 +44,34 @@ export function StatCard({
   return (
     <div
       className={cn(
-        "rounded-lg border bg-card p-4 transition-colors",
+        "group relative overflow-hidden rounded-lg border border-border/90 bg-card p-4 shadow-[0_14px_32px_rgb(0_0_0/0.12)] transition-[border-color,transform,box-shadow] hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgb(0_0_0/0.18)]",
         borderToneClass[effectiveTone],
       )}
     >
       <div className="flex items-start justify-between">
-        <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">
           {label}
         </span>
-        {Icon && <Icon className={cn("h-4 w-4", iconToneClass[effectiveTone])} />}
+        {Icon ? (
+          <span
+            className={cn(
+              "flex size-9 items-center justify-center rounded-md border",
+              iconToneClass[effectiveTone],
+            )}
+          >
+            <Icon className="size-4" />
+          </span>
+        ) : null}
       </div>
       <div
-        className={cn("mt-2 font-mono text-2xl font-bold tracking-tight", toneClass[effectiveTone])}
+        className={cn(
+          "mt-2 font-mono text-2xl font-bold tracking-[-0.035em] tabular-nums",
+          toneClass[effectiveTone],
+        )}
       >
         {value}
       </div>
-      {delta && (
+      {delta ? (
         <div
           className={cn(
             "mt-1 text-xs font-medium",
@@ -70,7 +82,7 @@ export function StatCard({
         >
           {delta}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -279,11 +279,11 @@ function Prognosticos() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="page-stack">
+      <div className="page-header">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Prognósticos</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="page-title">Prognósticos</h1>
+          <p className="page-description">
             Cadastro, edição e gerenciamento dos prognósticos gerados.
           </p>
         </div>
@@ -299,12 +299,12 @@ function Prognosticos() {
               }
             }}
           >
-            <Plus className="h-4 w-4" /> Novo Prognóstico
+            <Plus data-icon="inline-start" /> Novo Prognóstico
           </Button>
         </div>
       </div>
 
-      <div className="rounded-lg border border-border bg-card p-3 space-y-3">
+      <div className="filter-surface flex flex-col gap-3">
         <PeriodFilter
           periodo={periodo}
           onPeriodoChange={setPeriodo}
@@ -388,7 +388,7 @@ function Prognosticos() {
       </div>
 
       {selected.size > 0 && (
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm">
+        <div className="selection-toolbar text-sm">
           <span>{selected.size} selecionado(s)</span>
           <div className="flex gap-2">
             <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
@@ -401,7 +401,7 @@ function Prognosticos() {
         </div>
       )}
 
-      <div className="rounded-lg border border-border bg-card overflow-hidden">
+      <div className="data-surface">
         {/* Top horizontal scrollbar */}
         <div
           ref={topScrollRef}

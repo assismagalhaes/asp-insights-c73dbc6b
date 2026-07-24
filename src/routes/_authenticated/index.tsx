@@ -179,16 +179,16 @@ function Dashboard() {
   }, [filtrados, validacao]);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard Executivo</h1>
-        <p className="text-sm text-muted-foreground">
-          Visão geral do desempenho dos modelos de previsão.
-        </p>
+    <div className="page-stack">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Dashboard Executivo</h1>
+          <p className="page-description">Visão geral do desempenho dos modelos de previsão.</p>
+        </div>
       </div>
 
       {/* Filtros */}
-      <div className="rounded-lg border border-border bg-card p-3">
+      <div className="filter-surface">
         <div className="flex flex-wrap items-end gap-3">
           <PeriodFilter
             periodo={periodo}
@@ -300,11 +300,9 @@ function Dashboard() {
       </div>
 
       <div className="flex flex-col gap-4">
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="surface-panel">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              Evolução da Banca
-            </h3>
+            <h3 className="section-title">Evolução da Banca</h3>
             <span
               className="font-mono text-xs"
               style={{
@@ -381,11 +379,9 @@ function Dashboard() {
           </ResponsiveContainer>
         </div>
 
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="surface-panel">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              Evolução do ROI
-            </h3>
+            <h3 className="section-title">Evolução do ROI</h3>
             <span className="font-mono text-xs" style={{ color: signColor(metrics.roi) }}>
               {withSign(metrics.roi)}%
             </span>
@@ -425,10 +421,8 @@ function Dashboard() {
           </ResponsiveContainer>
         </div>
 
-        <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Resultado por Esporte (u)
-          </h3>
+        <div className="surface-panel">
+          <h3 className="section-title mb-3">Resultado por Esporte (u)</h3>
           <ResponsiveContainer width="100%" height={340}>
             <BarChart data={sportPerf} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
@@ -462,10 +456,8 @@ function Dashboard() {
           </ResponsiveContainer>
         </div>
 
-        <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Resultado por Mercado (u)
-          </h3>
+        <div className="surface-panel">
+          <h3 className="section-title mb-3">Resultado por Mercado (u)</h3>
           <ResponsiveContainer width="100%" height={Math.max(340, marketPerf.length * 44 + 60)}>
             <BarChart
               data={marketPerf}
@@ -509,10 +501,8 @@ function Dashboard() {
           </ResponsiveContainer>
         </div>
 
-        <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            ROI por Esporte (%)
-          </h3>
+        <div className="surface-panel">
+          <h3 className="section-title mb-3">ROI por Esporte (%)</h3>
           <ResponsiveContainer width="100%" height={340}>
             <BarChart data={sportPerfRoi} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
@@ -546,10 +536,8 @@ function Dashboard() {
           </ResponsiveContainer>
         </div>
 
-        <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Resultado por Mês (u)
-          </h3>
+        <div className="surface-panel">
+          <h3 className="section-title mb-3">Resultado por Mês (u)</h3>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={monthlyResults} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
