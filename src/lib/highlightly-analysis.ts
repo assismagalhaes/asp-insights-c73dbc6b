@@ -78,7 +78,14 @@ const WNBA_TEAM_NAMES: Record<string, string> = {
 };
 
 export type AnalysisDetailTab =
-  "summary" | "odds" | "statistics" | "form" | "lineups" | "events" | "standings" | "source";
+  | "summary"
+  | "odds"
+  | "statistics"
+  | "form"
+  | "lineups"
+  | "events"
+  | "standings"
+  | "source";
 
 export type AnalysisDataSource = "statistics" | "form" | "startingPitchers";
 

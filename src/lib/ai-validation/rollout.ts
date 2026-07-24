@@ -2,7 +2,11 @@ export type AiValidationMode = "local" | "online";
 export type AiValidationRolloutStage = "legacy" | "canary" | "full";
 export type AiValidationRolloutVariant = "legacy" | "structured";
 export type AiValidationRolloutReason =
-  "explicit_rollback" | "stage_legacy" | "canary_allowlist" | "canary_holdback" | "stage_full";
+  | "explicit_rollback"
+  | "stage_legacy"
+  | "canary_allowlist"
+  | "canary_holdback"
+  | "stage_full";
 
 export type AiValidationRolloutDecision = {
   stage: AiValidationRolloutStage;

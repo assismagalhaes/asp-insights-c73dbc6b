@@ -53,7 +53,8 @@ export function ResultadoDialog({ open, onOpenChange, prognostico, valorUnidade 
         .order("created_at", { ascending: false })
         .limit(1);
       const ownLast = (own ?? [])[0] as
-        { placar_final: string | null; resultado: Resultado } | undefined;
+        | { placar_final: string | null; resultado: Resultado }
+        | undefined;
       if (ownLast?.placar_final) setPlacar(ownLast.placar_final);
       if (ownLast && (ownLast.resultado === "GREEN" || ownLast.resultado === "RED")) {
         setManual(ownLast.resultado);

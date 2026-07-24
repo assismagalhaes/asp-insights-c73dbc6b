@@ -9,10 +9,15 @@ const CORNERMATRIX_UNCALIBRATED_MAX_STAKE = 0.5;
 const CORNERMATRIX_DIVERGENCE_THRESHOLD = 12;
 
 export type PackballPriceFeasibility =
-  "ODD_APROVADA" | "AGUARDAR_ODD" | "ODD_POUCO_PROVAVEL" | "SEM_PRECO";
+  | "ODD_APROVADA"
+  | "AGUARDAR_ODD"
+  | "ODD_POUCO_PROVAVEL"
+  | "SEM_PRECO";
 
 export type PackballOperationalPriceStatus =
-  "AGUARDANDO_ODD_EXECUTAVEL" | "ODD_APROVADA" | "SEM_VALOR";
+  | "AGUARDANDO_ODD_EXECUTAVEL"
+  | "ODD_APROVADA"
+  | "SEM_VALOR";
 
 type PackballFields = Pick<
   Prognostico,

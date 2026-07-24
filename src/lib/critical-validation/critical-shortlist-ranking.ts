@@ -7,7 +7,10 @@ import {
 
 export type CriticalShortlistStatus = "CANDIDATA" | "MONITORAR" | "RESERVA" | "BLOQUEADA";
 export type CriticalShortlistFinalStatus =
-  "TOP_FINAL" | "RESERVA_CONFIRMADA" | "PULAR" | "RESERVA_NAO_ANALISADA";
+  | "TOP_FINAL"
+  | "RESERVA_CONFIRMADA"
+  | "PULAR"
+  | "RESERVA_NAO_ANALISADA";
 export type CriticalRiskSeverity = "low" | "medium" | "high" | "critical" | "hard_block";
 
 export type CriticalShortlistRiskFlag = {

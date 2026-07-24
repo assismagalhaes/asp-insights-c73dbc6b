@@ -3,7 +3,12 @@ import { standardizePredictionContract } from "@/lib/market-contract";
 import { supabase } from "@/lib/supabase-public";
 
 export type Status =
-  "PENDENTE" | "CONFIRMA" | "CONFIRMA_CAUTELA" | "PASS" | "AGUARDAR_NOTICIA" | "PULAR"; // legado
+  | "PENDENTE"
+  | "CONFIRMA"
+  | "CONFIRMA_CAUTELA"
+  | "PASS"
+  | "AGUARDAR_NOTICIA"
+  | "PULAR"; // legado
 export type Resultado = "PENDENTE" | "GREEN" | "RED" | "PUSH" | "VOID" | "HALF GREEN" | "HALF RED";
 
 export type StatusPublicacao = "NAO_PUBLICADO" | "PUBLICADO" | "FINALIZADO" | "CANCELADO";
@@ -174,7 +179,12 @@ export interface FeedbackIaResultado {
 export type OpportunityRankingRunStatus = "draft" | "computed" | "applied" | "archived";
 export type OpportunityRankingSourceStage = "pre_ai_shortlist" | "post_ai_final" | "manual";
 export type OpportunityRankingStatus =
-  "CANDIDATA" | "CONFIRMA_IA" | "TOP_FINAL" | "RESERVA" | "PULAR" | "BLOQUEADA";
+  | "CANDIDATA"
+  | "CONFIRMA_IA"
+  | "TOP_FINAL"
+  | "RESERVA"
+  | "PULAR"
+  | "BLOQUEADA";
 
 export interface OpportunityRankingRun {
   id: string;
