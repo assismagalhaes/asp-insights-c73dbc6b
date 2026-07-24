@@ -1,10 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { AiLocalGenerationOutputSchema, AiOperationalOutputSchema } from "./ai-validation/schema";
-import { LOCAL_GATEWAY_MODEL_ID, parseLocalGatewayJson } from "./validacao-ia.functions";
+import {
+  LOCAL_GATEWAY_JSON_TEMPLATE,
+  LOCAL_GATEWAY_MODEL_ID,
+  parseLocalGatewayJson,
+} from "./validacao-ia.functions";
 
 describe("configuração do Structured Output local", () => {
   it("usa o Lovable AI Gateway com Gemini 2.5 Pro", () => {
     expect(LOCAL_GATEWAY_MODEL_ID).toBe("google/gemini-2.5-pro");
+    expect(parseLocalGatewayJson(LOCAL_GATEWAY_JSON_TEMPLATE)).toMatchObject({
+      schema_version: "1.1.0",
+      decision: "PULAR",
+      stake: 0,
+    });
   });
 
   it("normaliza apenas omissões formais antes do contrato operacional estrito", () => {
@@ -73,5 +82,12 @@ describe("configuração do Structured Output local", () => {
       sources: [],
       searches: [],
     });
+  });
+
+  it("rejeita aliases narrativos antes do contrato operacional", () => {
+    const invalid = JSON.parse(LOCAL_GATEWAY_JSON_TEMPLATE) as Record<string, unknown>;
+    invalid.decision = "CONFIRMAR";
+
+    expect(() => parseLocalGatewayJson(JSON.stringify(invalid))).toThrow();
   });
 });

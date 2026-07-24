@@ -13,6 +13,35 @@ import { z } from "zod";
 export const PROMPT_VERSAO = "validacao-critica-v13-structured-output-local";
 export const LOCAL_GATEWAY_MODEL_ID = "google/gemini-2.5-pro";
 
+export const LOCAL_GATEWAY_JSON_TEMPLATE = `{
+  "schema_version": "1.1.0",
+  "decision": "PULAR",
+  "stake": 0,
+  "selected_prediction_id": null,
+  "selected_pick": null,
+  "gates": {
+    "technical_consistency": { "status": "APPROVED", "reason": "motivo concreto" },
+    "critical_information": { "status": "APPROVED", "reason": "motivo concreto" },
+    "structural_risk": { "status": "APPROVED", "reason": "motivo concreto" },
+    "context": { "status": "APPROVED", "reason": "motivo concreto" },
+    "correlation": { "status": "APPROVED", "reason": "motivo concreto" }
+  },
+  "narrative": {
+    "evaluated_entry": "jogo, mercado, pick, odd, probabilidade e edge",
+    "thesis_for": "argumentos concretos favoráveis",
+    "thesis_against": "argumentos concretos contrários",
+    "internal_history": "amostra, greens/reds, ROI/Yield e conclusão",
+    "final_justification": "justificativa objetiva",
+    "decision_change_condition": null
+  },
+  "rationale": "síntese auditável",
+  "risks": ["risco objetivo"],
+  "invalidation_condition": "condição operacional de invalidação",
+  "limitations": ["limitação real do modo local"],
+  "sources": [],
+  "searches": []
+}`;
+
 export function parseLocalGatewayJson(text: string) {
   const withoutFence = text
     .trim()
@@ -42,7 +71,11 @@ async function generateLocalStructuredOutput({
 
 FORMATO PARA O LOVABLE AI GATEWAY:
 Retorne somente um objeto JSON válido, sem markdown, comentários ou texto antes/depois.
-O JSON deve conter todos os campos do contrato estruturado descrito acima.`,
+Use exatamente os nomes de campos, enums e tipos do template abaixo. Substitua os
+textos de exemplo pela análise. Para CONFIRMA, use um ID/pick exatos do payload e
+stake 0.5, 1 ou 1.5. Para PULAR, mantenha ID/pick null e stake 0.
+
+${LOCAL_GATEWAY_JSON_TEMPLATE}`,
       prompt: generationPrompt,
     });
 
@@ -58,8 +91,9 @@ O JSON deve conter todos os campos do contrato estruturado descrito acima.`,
 REPARO CONTROLADO ÚNICO:
 A tentativa anterior produziu um JSON que não pôde ser validado. Corrija somente
 a estrutura e os tipos para o contrato solicitado, preservando a análise e sem
-adicionar markdown. Preencha todos os gates e campos narrativos. Use arrays
-vazios em sources e searches.
+adicionar markdown. Copie exatamente os nomes de campos e os enums do template
+fornecido no system prompt. Preencha todos os gates e campos narrativos. Use
+arrays vazios em sources e searches.
 
 SAÍDA ANTERIOR A CORRIGIR:
 ${firstResult.text.slice(0, 40_000)}`;
@@ -205,7 +239,7 @@ Gates obrigatórios:
 - Gate 6 — Duplicidade/correlação: se houver outras picks do mesmo jogo e mesmo grupo de mercado, trate como opções concorrentes. Você deve escolher no máximo uma opção para CONFIRMAR ou recomendar PULAR o grupo inteiro. Nunca sugira confirmar mais de uma opção do grupo.
 
 Contrato estruturado obrigatório:
-- Preencha exclusivamente o objeto solicitado pelo schema 1.1.0. Não devolva markdown nem tente escrever JSON manualmente.
+- Preencha exclusivamente o objeto JSON solicitado pelo schema 1.1.0. Não devolva markdown nem texto fora do JSON.
 - decision: use CONFIRMA ou PULAR.
 - stake: use 0, 0.5, 1 ou 1.5. PULAR exige stake 0.
 - selected_prediction_id e selected_pick: para CONFIRMA, use exatamente uma opção do grupo; para PULAR, use null.
