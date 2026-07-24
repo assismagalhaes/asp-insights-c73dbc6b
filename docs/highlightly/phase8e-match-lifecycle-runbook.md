@@ -218,6 +218,11 @@ O `ExecStopPost` do coletor tenta obter a trava global antes de restaurar
 `sports_providers.enabled=false`. Assim, ele corrige encerramentos anormais sem desligar o
 provider durante outra coleta legítima.
 
+O relatório diário também adquire essa trava e aguarda por até quatro horas. Ele só avalia o
+estado de repouso depois que qualquer coleta legítima terminar. Se encontrar o provider ligado
+sem nenhum coletor dono da trava, restaura `enabled=false` e marca o relatório como `recovered`.
+Um relatório `recovered` não autoriza rollout: é necessário aguardar o próximo relatório `ok`.
+
 Controle gradual, somente depois de autorização operacional:
 
 ```sql
@@ -234,6 +239,9 @@ PYTHONPATH=. /home/ubuntu/asp-scraper-api/.venv/bin/python \
   --hours 24 \
   --require-provider-disabled
 ```
+
+O uso de `--recover-provider` é reservado ao unit systemd, que mantém a trava global durante
+toda a recuperação. Não use essa opção manualmente sem o mesmo `flock`.
 
 Validação de repouso:
 

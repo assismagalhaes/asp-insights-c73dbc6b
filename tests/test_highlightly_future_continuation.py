@@ -25,6 +25,10 @@ class HighlightlyFutureContinuationTests(unittest.TestCase):
         self.assertIn(lock_path, continuation_service)
         self.assertIn("--conflict-exit-code 0", window_service)
         self.assertIn("--conflict-exit-code 0", continuation_service)
+        for service in (window_service, continuation_service):
+            self.assertIn("ExecStopPost=/usr/bin/flock", service)
+            self.assertIn("--wait 300", service)
+            self.assertIn("scripts.ensure_highlightly_provider_disabled", service)
         self.assertIn("OnUnitInactiveSec=5min", continuation_timer)
 
     def test_available_requests_preserves_contractual_reserve(self):

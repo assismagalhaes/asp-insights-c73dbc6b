@@ -75,6 +75,8 @@ sudo systemctl enable --now highlightly-odds-refresh.timer
 
 O serviço usa o mesmo `flock` da janela futura. Se a descoberta ou o continuador estiverem
 rodando, a atualização de odds encerra sem concorrência e volta no próximo intervalo.
+Ao encerrar, um `ExecStopPost` aguarda a mesma trava antes de restaurar defensivamente o provider
+para `enabled=false`, sem interferir em outra coleta legítima.
 
 ## Preview e validação
 

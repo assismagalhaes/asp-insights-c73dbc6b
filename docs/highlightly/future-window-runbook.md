@@ -53,6 +53,8 @@ Quando existe uma única fila `future-*`, o scheduler chama o continuador em vez
 O continuador recusa locks válidos, múltiplos escopos e filas históricas. Os dois serviços usam o
 mesmo `flock` em `/run/lock/asp-highlightly-future.lock`, portanto não executam chamadas concorrentes.
 O provider é ligado apenas pelo runner isolado e restaurado para `enabled=false` em `finally`.
+Os dois units também executam um cleanup defensivo em `ExecStopPost`; ele aguarda a trava global
+por até cinco minutos e nunca desliga o provider enquanto outro coletor legítimo estiver ativo.
 
 ## Atualização incremental de odds (Fase 8D)
 

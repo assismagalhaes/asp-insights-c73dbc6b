@@ -46,6 +46,7 @@ class HighlightlyPhaseEightEMatchLifecycleTests(unittest.TestCase):
         self.assertIn("--request-budget 300", service)
         self.assertIn("--max-jobs 200", service)
         self.assertIn("ExecStopPost=/usr/bin/flock", service)
+        self.assertIn("--wait 300", service)
         self.assertIn("scripts.ensure_highlightly_provider_disabled", service)
         self.assertEqual(phase8e.DEFAULT_REQUEST_BUDGET, 300)
         self.assertEqual(phase8e.DEFAULT_MAX_JOBS, 200)
@@ -60,7 +61,11 @@ class HighlightlyPhaseEightEMatchLifecycleTests(unittest.TestCase):
 
         self.assertIn("23:55:00 America/Sao_Paulo", timer)
         self.assertIn("scripts.report_highlightly_phase8e_operational", service)
+        self.assertIn("/run/lock/asp-highlightly-future.lock", service)
+        self.assertIn("--wait 14400", service)
+        self.assertIn("--recover-provider", service)
         self.assertIn("--require-provider-disabled", service)
+        self.assertIn("TimeoutStartSec=18000", service)
         self.assertNotIn("--confirm-lifecycle", service)
 
     def test_bridge_allowlists_only_the_phase8e_tables_and_rpcs(self):
@@ -139,6 +144,39 @@ class HighlightlyPhaseEightEMatchLifecycleTests(unittest.TestCase):
         repository.set_provider_enabled.assert_not_called()
         report = json.loads(output.call_args.args[0])
         self.assertEqual(report["report_status"], "ok")
+        self.assertFalse(report["provider_recovery"]["attempted"])
+
+    @patch.object(phase8e_report.HighlightlyRepository, "from_environment")
+    def test_operational_report_recovers_stale_provider_and_requires_clean_followup(
+        self,
+        repository_factory,
+    ):
+        repository = Mock()
+        repository_factory.return_value = repository
+        repository.rpc.side_effect = [
+            {"provider": {"enabled": True}, "safe_at_rest": False},
+            {"provider": {"enabled": False}, "safe_at_rest": True},
+        ]
+        repository.set_provider_enabled.return_value = {"enabled": False}
+
+        with patch("builtins.print") as output:
+            exit_code = phase8e_report.main(
+                [
+                    "--hours",
+                    "24",
+                    "--recover-provider",
+                    "--require-provider-disabled",
+                ]
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(repository.rpc.call_count, 2)
+        repository.set_provider_enabled.assert_called_once_with("highlightly", False)
+        report = json.loads(output.call_args.args[0])
+        self.assertEqual(report["report_status"], "recovered")
+        self.assertTrue(report["provider_recovery"]["attempted"])
+        self.assertTrue(report["provider_recovery"]["was_enabled"])
+        self.assertTrue(report["provider_recovery"]["restored_disabled"])
 
     @patch.object(phase8e.HighlightlyRepository, "from_environment")
     def test_dry_run_previews_disabled_policies_without_enqueuing(

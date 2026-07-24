@@ -44,6 +44,9 @@ class HighlightlyPhaseEightDOddsQualityTests(unittest.TestCase):
         self.assertIn("/run/lock/asp-highlightly-future.lock", service)
         self.assertIn("--confirm-odds-refresh", service)
         self.assertIn("--request-budget 750", service)
+        self.assertIn("ExecStopPost=/usr/bin/flock", service)
+        self.assertIn("--wait 300", service)
+        self.assertIn("scripts.ensure_highlightly_provider_disabled", service)
 
     def test_empty_provider_payload_is_classified_for_every_sport(self):
         for sport, normalizer in (
