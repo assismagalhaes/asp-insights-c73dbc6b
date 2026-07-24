@@ -32,12 +32,7 @@ export const PRELIMINARY_SCORE_WEIGHTS = {
 } as const;
 
 export type OpportunityRankingStatus =
-  | "CANDIDATA"
-  | "CONFIRMA_IA"
-  | "TOP_FINAL"
-  | "RESERVA"
-  | "PULAR"
-  | "BLOQUEADA";
+  "CANDIDATA" | "CONFIRMA_IA" | "TOP_FINAL" | "RESERVA" | "PULAR" | "BLOQUEADA";
 
 export type MatchupPreviewStatus = "not_requested" | "queued" | "loaded" | "missing" | "error";
 

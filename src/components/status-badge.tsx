@@ -1,12 +1,7 @@
 import { cn } from "@/lib/utils";
 
 export type Status =
-  | "PENDENTE"
-  | "CONFIRMA"
-  | "CONFIRMA_CAUTELA"
-  | "PASS"
-  | "AGUARDAR_NOTICIA"
-  | "PULAR";
+  "PENDENTE" | "CONFIRMA" | "CONFIRMA_CAUTELA" | "PASS" | "AGUARDAR_NOTICIA" | "PULAR";
 export type Result = "PENDENTE" | "GREEN" | "RED" | "PUSH";
 
 const statusStyles: Record<string, string> = {

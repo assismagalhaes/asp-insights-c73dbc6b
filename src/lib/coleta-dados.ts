@@ -49,14 +49,7 @@ export interface ImportResult {
 }
 
 export type OddsTimingBucket =
-  | "D2_PLUS"
-  | "D1"
-  | "H6_24"
-  | "H3_6"
-  | "H1_3"
-  | "H0_1"
-  | "POS_INICIO"
-  | "UNKNOWN";
+  "D2_PLUS" | "D1" | "H6_24" | "H3_6" | "H1_3" | "H0_1" | "POS_INICIO" | "UNKNOWN";
 
 export interface OddsMarketSnapshot {
   coleta_id: string;
