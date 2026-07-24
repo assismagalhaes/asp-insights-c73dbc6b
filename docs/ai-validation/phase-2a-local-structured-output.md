@@ -26,7 +26,7 @@ com o bloqueio `SCHEMA_INVALID`; uma falha nunca confirma uma entrada.
 ## Provider
 
 - Secret: `LOVABLE_API_KEY`
-- Modelo: `google/gemini-2.5-pro`
+- Modelo atual: `google/gemini-3.6-flash`
 - Prompt: `validacao-critica-v13-structured-output-local`
 
 O modo Local não depende de `GOOGLE_GENERATIVE_AI_API_KEY`.

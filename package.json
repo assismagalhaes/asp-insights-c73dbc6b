@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "eval:ai": "bun evals/ai-validation/run.ts",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write ."
   },

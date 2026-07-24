@@ -7,7 +7,7 @@ import {
 } from "./validacao-ia.functions";
 
 describe("configuração do Structured Output local", () => {
-  it("usa o Lovable AI Gateway com Gemini 2.5 Pro", () => {
+  it("usa o Lovable AI Gateway com Gemini 3.6 Flash", () => {
     expect(LOCAL_GATEWAY_MODEL_ID).toBe("google/gemini-3.6-flash");
     expect(parseLocalGatewayJson(LOCAL_GATEWAY_JSON_TEMPLATE)).toMatchObject({
       schema_version: "1.1.0",

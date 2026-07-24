@@ -50,6 +50,9 @@ jobs:
       - name: Unit tests
         run: bun run test:unit
 
+      - name: AI validation release gates
+        run: bun run eval:ai
+
       - name: Production build
         run: bun run build
 

@@ -10,7 +10,7 @@ import {
 } from "./validacao-ia-online.functions";
 
 describe("Structured Output online", () => {
-  it("usa o Lovable AI Gateway com Gemini 2.5 Pro e contrato 1.1.0", () => {
+  it("usa o Lovable AI Gateway com Gemini 3.6 Flash e contrato 1.1.0", () => {
     const output = parseOnlineGatewayJson(ONLINE_GATEWAY_JSON_TEMPLATE, {
       sourceTraces: [],
       searches: [],
