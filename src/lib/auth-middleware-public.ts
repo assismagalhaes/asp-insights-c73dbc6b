@@ -40,3 +40,20 @@ export const requireSupabaseAuth = createMiddleware({ type: "function" }).server
     });
   },
 );
+
+export const requireSupabaseAdmin = createMiddleware({ type: "function" })
+  .middleware([requireSupabaseAuth])
+  .server(async ({ next, context }) => {
+    const { data: role, error } = await context.supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", context.userId)
+      .eq("role", "admin")
+      .maybeSingle();
+
+    if (error || !role) {
+      throw new Error("Forbidden: admin role required");
+    }
+
+    return next({ context });
+  });

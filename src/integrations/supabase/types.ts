@@ -52,6 +52,9 @@ export type Database = {
           provider: string | null
           repair_attempted: boolean
           riscos_identificados: string | null
+          rollout_reason: string | null
+          rollout_stage: string | null
+          rollout_variant: string | null
           run_id: string
           schema_version: string | null
           scrape_count: number
@@ -101,6 +104,9 @@ export type Database = {
           provider?: string | null
           repair_attempted?: boolean
           riscos_identificados?: string | null
+          rollout_reason?: string | null
+          rollout_stage?: string | null
+          rollout_variant?: string | null
           run_id?: string
           schema_version?: string | null
           scrape_count?: number
@@ -150,6 +156,9 @@ export type Database = {
           provider?: string | null
           repair_attempted?: boolean
           riscos_identificados?: string | null
+          rollout_reason?: string | null
+          rollout_stage?: string | null
+          rollout_variant?: string | null
           run_id?: string
           schema_version?: string | null
           scrape_count?: number

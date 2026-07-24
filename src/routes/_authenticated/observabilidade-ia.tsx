@@ -61,7 +61,7 @@ export const Route = createFileRoute("/_authenticated/observabilidade-ia")({
 
 const QUERY_LIMIT = 5_000;
 const RUN_COLUMNS =
-  "id, run_id, created_at, modo_ia, esporte, liga, prompt_versao, schema_version, arbiter_version, provider, model_id, latency_ms, finish_reason, total_tokens, parse_status, error_code, model_decision, final_decision, blocking_codes, repair_attempted, search_count, scrape_count, source_count";
+  "id, run_id, created_at, modo_ia, esporte, liga, prompt_versao, schema_version, arbiter_version, provider, model_id, latency_ms, finish_reason, total_tokens, parse_status, error_code, model_decision, final_decision, blocking_codes, repair_attempted, rollout_stage, rollout_variant, rollout_reason, search_count, scrape_count, source_count";
 const FEEDBACK_COLUMNS =
   "analise_ia_id, modo_ia, esporte, decisao_ia_sugerida, decisao_humana_final, divergencia_ia_humano, resultado_teorico, stake_ia_sugerida, lucro_teorico_unidades, acertou_ia, created_at";
 const EMPTY_RUNS: AiObservabilityRun[] = [];
@@ -186,6 +186,7 @@ function AiObservabilityPage() {
   const [sport, setSport] = useState("all");
   const [mode, setMode] = useState("all");
   const [model, setModel] = useState("all");
+  const [rollout, setRollout] = useState("all");
   const { ini, fim } = rangeFromPeriodo(periodo, customIni, customFim);
 
   const observabilityQuery = useQuery({
@@ -200,6 +201,10 @@ function AiObservabilityPage() {
   const sports = useMemo(() => uniqueOptions(periodRuns.map((run) => run.esporte)), [periodRuns]);
   const modes = useMemo(() => uniqueOptions(periodRuns.map((run) => run.modo_ia)), [periodRuns]);
   const models = useMemo(() => uniqueOptions(periodRuns.map((run) => run.model_id)), [periodRuns]);
+  const rollouts = useMemo(
+    () => uniqueOptions(periodRuns.map((run) => run.rollout_stage)),
+    [periodRuns],
+  );
 
   const filteredRuns = useMemo(
     () =>
@@ -207,9 +212,10 @@ function AiObservabilityPage() {
         if (sport !== "all" && run.esporte !== sport) return false;
         if (mode !== "all" && run.modo_ia !== mode) return false;
         if (model !== "all" && run.model_id !== model) return false;
+        if (rollout !== "all" && run.rollout_stage !== rollout) return false;
         return true;
       }),
-    [periodRuns, sport, mode, model],
+    [periodRuns, sport, mode, model, rollout],
   );
   const filteredFeedback = useMemo(() => {
     const analysisIds = new Set(filteredRuns.map((run) => run.id));
@@ -279,6 +285,13 @@ function AiObservabilityPage() {
             onChange={setModel}
             options={models}
             allLabel="Todos os modelos"
+          />
+          <FilterSelect
+            label="Rollout"
+            value={rollout}
+            onChange={setRollout}
+            options={rollouts}
+            allLabel="Todos os estágios"
           />
         </div>
       </section>
@@ -496,7 +509,7 @@ function AiObservabilityPage() {
           <Card className="min-w-0">
             <CardHeader>
               <CardTitle className="text-sm">
-                Comparativo por modelo, prompt, modo e esporte
+                Comparativo por modelo, prompt, modo, esporte e rollout
               </CardTitle>
             </CardHeader>
             <CardContent className="overflow-x-auto p-0">
@@ -532,6 +545,9 @@ function AiObservabilityPage() {
                       <TableCell>
                         <p className="text-xs">{row.mode}</p>
                         <p className="text-[10px] text-muted-foreground">{row.sport}</p>
+                        <p className="mt-1 font-mono text-[10px] text-muted-foreground">
+                          {row.rolloutStage} / {row.rolloutVariant}
+                        </p>
                       </TableCell>
                       <TableCell className="text-right font-mono">{row.runs}</TableCell>
                       <TableCell className="text-right font-mono">
