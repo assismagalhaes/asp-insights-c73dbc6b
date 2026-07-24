@@ -1,4 +1,4 @@
-import type { Prognostico, Resultado, Configuracao } from "./db";
+import type { Prognostico, Resultado, Status } from "./db";
 
 // Picks consideradas "resolvidas" para win-rate (somente GREEN/RED)
 export const PICK_RESOLVIDA: Resultado[] = ["GREEN", "RED"];
@@ -7,17 +7,30 @@ export const PICK_RED: Resultado[] = ["RED"];
 
 export type ValidationMetricsFilter = "confirmadas" | "puladas" | "todas";
 
+// Buckets de decisão de validação:
+// - CONFIRMA / CONFIRMA_CAUTELA → entram na banca oficial.
+// - PULAR / PASS / AGUARDAR_NOTICIA → analíticos (contam como "puladas").
+const CONFIRMA_STATUSES: string[] = ["CONFIRMA", "CONFIRMA_CAUTELA"];
+const PULAR_STATUSES: string[] = ["PULAR", "PASS", "AGUARDAR_NOTICIA"];
+
+export function isStatusConfirma(s: Status | null | undefined): boolean {
+  return !!s && CONFIRMA_STATUSES.includes(s);
+}
+export function isStatusPular(s: Status | null | undefined): boolean {
+  return !!s && PULAR_STATUSES.includes(s);
+}
+
 export function matchesValidationFilter(
   p: Pick<Prognostico, "status_validacao">,
   filter: ValidationMetricsFilter,
 ): boolean {
-  if (filter === "confirmadas") return p.status_validacao === "CONFIRMA";
-  if (filter === "puladas") return p.status_validacao === "PULAR";
-  return p.status_validacao === "CONFIRMA" || p.status_validacao === "PULAR";
+  if (filter === "confirmadas") return isStatusConfirma(p.status_validacao);
+  if (filter === "puladas") return isStatusPular(p.status_validacao);
+  return isStatusConfirma(p.status_validacao) || isStatusPular(p.status_validacao);
 }
 
 export function stakeAnalitica(p: Pick<Prognostico, "status_validacao" | "stake">): number {
-  if (p.status_validacao === "PULAR") return p.stake > 0 ? p.stake : 1;
+  if (isStatusPular(p.status_validacao)) return p.stake > 0 ? p.stake : 1;
   return p.stake;
 }
 
@@ -80,8 +93,9 @@ export function computeMetrics(
   const bancaInicial = cfg?.banca_inicial ?? 0;
   const valorUnidade = cfg?.valor_unidade_padrao ?? 0;
 
-  const confirma = prognosticos.filter((p) => p.status_validacao === "CONFIRMA");
+  const confirma = prognosticos.filter((p) => isStatusConfirma(p.status_validacao));
   const resolvidas = confirma.filter((p) => PICK_RESOLVIDA.includes(p.resultado));
+
 
   const greens = confirma.filter((p) => PICK_GREEN.includes(p.resultado)).length;
   const reds = confirma.filter((p) => PICK_RED.includes(p.resultado)).length;
@@ -158,8 +172,8 @@ export function computeValidationMetrics(
     bancaAtual: bancaInicial + lucroR,
     drawdown: 0,
     oddMediaGreens,
-    puladas: rows.filter((p) => p.status_validacao === "PULAR").length,
-    confirmadas: rows.filter((p) => p.status_validacao === "CONFIRMA").length,
+    puladas: rows.filter((p) => isStatusPular(p.status_validacao)).length,
+    confirmadas: rows.filter((p) => isStatusConfirma(p.status_validacao)).length,
   };
 }
 
@@ -169,7 +183,7 @@ export function bankrollTimeline(
   bancaInicial: number,
   valorUnidade: number,
 ): { data: string; banca: number; lucroAcum: number; roi: number }[] {
-  const confirma = prognosticos.filter((p) => p.status_validacao === "CONFIRMA");
+  const confirma = prognosticos.filter((p) => isStatusConfirma(p.status_validacao));
   // agrupa por data
   const byDate = new Map<string, number>();
   for (const p of confirma) {
