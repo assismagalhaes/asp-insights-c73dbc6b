@@ -183,7 +183,7 @@ export function bankrollTimeline(
   bancaInicial: number,
   valorUnidade: number,
 ): { data: string; banca: number; lucroAcum: number; roi: number }[] {
-  const confirma = prognosticos.filter((p) => p.status_validacao === "CONFIRMA");
+  const confirma = prognosticos.filter((p) => isStatusConfirma(p.status_validacao));
   // agrupa por data
   const byDate = new Map<string, number>();
   for (const p of confirma) {
