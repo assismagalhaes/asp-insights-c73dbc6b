@@ -1,4 +1,4 @@
-import type { Prognostico, Resultado, Status, Configuracao } from "./db";
+import type { Prognostico, Resultado, Status } from "./db";
 
 // Picks consideradas "resolvidas" para win-rate (somente GREEN/RED)
 export const PICK_RESOLVIDA: Resultado[] = ["GREEN", "RED"];
