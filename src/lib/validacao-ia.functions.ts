@@ -6,6 +6,7 @@ import {
   parseStructuredAiOutput,
 } from "@/lib/ai-validation/generation-result";
 import { adaptLegacyAiResponse } from "@/lib/ai-validation/legacy-adapter";
+import { sumAiTokenUsage } from "@/lib/ai-validation/observability";
 import { AiLocalGenerationOutputSchema } from "@/lib/ai-validation/schema";
 import { generateText, type LanguageModel } from "ai";
 import { z } from "zod";
@@ -60,9 +61,11 @@ export function parseLocalGatewayJson(text: string) {
 async function generateLocalStructuredOutput({
   model,
   prompt,
+  onRepairAttempt,
 }: {
   model: LanguageModel;
   prompt: string;
+  onRepairAttempt?: () => void;
 }) {
   const generate = (generationPrompt: string) =>
     generateText({
@@ -84,8 +87,11 @@ ${LOCAL_GATEWAY_JSON_TEMPLATE}`,
     return {
       result: { ...firstResult, output: parseLocalGatewayJson(firstResult.text) },
       repairAttempted: false,
+      usage: sumAiTokenUsage(firstResult.usage),
+      finishReason: firstResult.finishReason,
     };
   } catch {
+    onRepairAttempt?.();
     const repairPrompt = `${prompt}
 
 REPARO CONTROLADO ÚNICO:
@@ -102,6 +108,8 @@ ${firstResult.text.slice(0, 40_000)}`;
     return {
       result: { ...repairedResult, output: parseLocalGatewayJson(repairedResult.text) },
       repairAttempted: true,
+      usage: sumAiTokenUsage(firstResult.usage, repairedResult.usage),
+      finishReason: repairedResult.finishReason,
     };
   }
 }
@@ -377,6 +385,9 @@ ${aspScreenerInstrucao}
 `;
 
     const startedAt = Date.now();
+    const startedAtIso = new Date(startedAt).toISOString();
+    const runId = crypto.randomUUID();
+    let repairAttempted = false;
     const legacyRollbackEnabled =
       process.env.AI_VALIDATION_LOCAL_LEGACY_ROLLBACK?.trim().toLowerCase() === "true";
 
@@ -390,28 +401,43 @@ ${aspScreenerInstrucao}
       const model = gateway(LOCAL_GATEWAY_MODEL_ID);
 
       if (legacyRollbackEnabled) {
-        const { text } = await generateText({
+        const legacyResult = await generateText({
           model,
           system: `${SYSTEM_PROMPT}\n\n${LEGACY_ROLLBACK_FORMAT}`,
           prompt: userPayload,
         });
         const generation = createLegacyRollbackResult({
-          output: adaptLegacyAiResponse({ text }),
-          rawModelText: text,
+          output: adaptLegacyAiResponse({ text: legacyResult.text }),
+          rawModelText: legacyResult.text,
           latencyMs: Date.now() - startedAt,
         });
         return {
           ...generation,
+          run_id: runId,
           prompt_versao: PROMPT_VERSAO,
           provider: "lovable-ai-gateway",
           model: LOCAL_GATEWAY_MODEL_ID,
+          started_at: startedAtIso,
+          finished_at: new Date().toISOString(),
+          finish_reason: legacyResult.finishReason,
+          usage: sumAiTokenUsage(legacyResult.usage),
+          repair_attempted: false,
         };
       }
 
-      const { result, repairAttempted } = await generateLocalStructuredOutput({
+      const {
+        result,
+        repairAttempted: structuredRepairAttempted,
+        usage,
+        finishReason,
+      } = await generateLocalStructuredOutput({
         model,
         prompt: userPayload,
+        onRepairAttempt: () => {
+          repairAttempted = true;
+        },
       });
+      repairAttempted = structuredRepairAttempted;
       const generation = parseStructuredAiOutput({
         output: result.output,
         rawModelText: result.text,
@@ -419,18 +445,26 @@ ${aspScreenerInstrucao}
       });
       return {
         ...generation,
+        run_id: runId,
         prompt_versao: PROMPT_VERSAO,
         provider: "lovable-ai-gateway",
         model: LOCAL_GATEWAY_MODEL_ID,
-        usage: result.usage,
+        started_at: startedAtIso,
+        finished_at: new Date().toISOString(),
+        finish_reason: finishReason,
+        usage,
         repair_attempted: repairAttempted,
       };
     } catch (err: unknown) {
       return {
         ...createAiGenerationFailure(err, Date.now() - startedAt),
+        run_id: runId,
         prompt_versao: PROMPT_VERSAO,
         provider: "lovable-ai-gateway",
         model: LOCAL_GATEWAY_MODEL_ID,
+        started_at: startedAtIso,
+        finished_at: new Date().toISOString(),
+        repair_attempted: repairAttempted,
       };
     }
   });
