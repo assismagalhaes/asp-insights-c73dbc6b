@@ -26,10 +26,12 @@ export function parseStructuredAiOutput({
   output,
   rawModelText,
   latencyMs,
+  mode = "local",
 }: {
   output: unknown;
   rawModelText?: string;
   latencyMs: number;
+  mode?: "local" | "online";
 }): AiGenerationResult {
   const parsed = AiOperationalOutputSchema.safeParse(output);
   if (!parsed.success) {
@@ -43,7 +45,7 @@ export function parseStructuredAiOutput({
     };
   }
 
-  if (parsed.data.sources.length || parsed.data.searches.length) {
+  if (mode === "local" && (parsed.data.sources.length || parsed.data.searches.length)) {
     return {
       model_output: null,
       raw_model_text: rawModelText?.slice(0, 50_000) ?? "",

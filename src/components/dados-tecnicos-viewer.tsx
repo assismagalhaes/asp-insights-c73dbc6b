@@ -121,7 +121,7 @@ export function DadosTecnicosViewer({ prognostico, variant = "icon", className }
                   <ListBlock title="Buscas realizadas" items={validacao?.buscas_realizadas ?? []} />
                   <div className="rounded-md border border-border bg-muted/20 p-3">
                     <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      Fontes consultadas
+                      Rastreabilidade de fontes
                     </div>
                     {validacao?.fontes_consultadas?.length ? (
                       <ul className="space-y-1 text-xs">
@@ -135,6 +135,11 @@ export function DadosTecnicosViewer({ prognostico, variant = "icon", className }
                             >
                               {fonte.titulo || fonte.url}
                             </a>
+                            <span className="ml-1 text-[10px] text-muted-foreground">
+                              {fonte.tipo === "SEARCH_RESULT" && fonte.consultada === false
+                                ? "resultado de busca"
+                                : "página consultada"}
+                            </span>
                           </li>
                         ))}
                       </ul>

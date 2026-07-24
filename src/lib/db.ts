@@ -13,6 +13,15 @@ export type Resultado = "PENDENTE" | "GREEN" | "RED" | "PUSH" | "VOID" | "HALF G
 
 export type StatusPublicacao = "NAO_PUBLICADO" | "PUBLICADO" | "FINALIZADO" | "CANCELADO";
 
+export interface FonteIa {
+  [key: string]: string | boolean | undefined;
+  titulo: string;
+  url: string;
+  consultada_em?: string;
+  tipo?: "SEARCH_RESULT" | "SCRAPED";
+  consultada?: boolean;
+}
+
 export interface Prognostico {
   id: string;
   data: string;
@@ -76,7 +85,7 @@ export interface Validacao {
   data_analise_ia: string | null;
   prompt_versao: string | null;
   modo_ia: string | null;
-  fontes_consultadas: { titulo: string; url: string }[] | null;
+  fontes_consultadas: FonteIa[] | null;
   buscas_realizadas: string[] | null;
   created_at: string;
 }
@@ -103,7 +112,7 @@ export interface AnaliseIa {
   stake_sugerida: number | null;
   riscos_identificados: string | null;
   tags_risco: string[] | null;
-  fontes_consultadas: { titulo: string; url: string }[] | null;
+  fontes_consultadas: FonteIa[] | null;
   buscas_realizadas: string[] | null;
   prompt_versao: string | null;
   created_at: string;
@@ -137,7 +146,7 @@ export interface FeedbackIaResultado {
   probabilidade_final: number | null;
   edge_usado: number | null;
   tags_risco: string[] | null;
-  fontes_consultadas: { titulo: string; url: string }[] | null;
+  fontes_consultadas: FonteIa[] | null;
   buscas_realizadas: string[] | null;
   acertou_ia: boolean | null;
   acertou_humano: boolean | null;
