@@ -20,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -841,6 +842,9 @@ function BaseDadosPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Adicionar Nova Temporada</DialogTitle>
+            <DialogDescription>
+              Configure a temporada de origem e o ano de destino antes de iniciar a atualização.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">

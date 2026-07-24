@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -186,6 +187,9 @@ export function PrognosticoDialog({
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{prognostico ? "Editar Prognóstico" : "Novo Prognóstico"}</DialogTitle>
+          <DialogDescription>
+            Revise os dados esportivos, a precificação e a gestão de risco antes de salvar.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-3 md:grid-cols-3">

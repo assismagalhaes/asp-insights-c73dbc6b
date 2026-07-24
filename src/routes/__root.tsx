@@ -17,6 +17,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
+import { SkipLink } from "@/components/skip-link";
 import { LogOut } from "lucide-react";
 import { supabase } from "@/lib/supabase-public";
 import { toast } from "sonner";
@@ -213,6 +214,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <SidebarProvider>
         <div className="flex min-h-screen w-full bg-background text-foreground">
+          <SkipLink />
           <AppSidebar />
           <div className="flex flex-1 flex-col min-w-0">
             <header className="app-shell-header sticky top-0 z-30 flex h-16 items-center gap-3 px-3 backdrop-blur-xl md:px-5">
@@ -227,8 +229,15 @@ function RootComponent() {
                 </span>
               </div>
               <div className="ml-auto flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded border border-success/30 bg-success/10 px-2 py-1 text-[10px] font-bold tracking-[0.08em] text-success">
-                  <span className="size-1.5 rounded-full bg-success motion-safe:animate-pulse" />
+                <span
+                  role="status"
+                  aria-label="Status do sistema: online"
+                  className="inline-flex items-center gap-1.5 rounded border border-success/30 bg-success/10 px-2 py-1 text-[10px] font-bold tracking-[0.08em] text-success"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="size-1.5 rounded-full bg-success motion-safe:animate-pulse"
+                  />
                   ONLINE
                 </span>
                 {email ? (
@@ -248,6 +257,9 @@ function RootComponent() {
               </div>
             </header>
             <main
+              id="conteudo-principal"
+              tabIndex={-1}
+              aria-label={currentRouteLabel}
               className={
                 isAnalysisRoute
                   ? "app-main min-h-0 flex-1"
