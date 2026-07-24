@@ -16,6 +16,7 @@ import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedValidacaoRouteImport } from './routes/_authenticated/validacao'
 import { Route as AuthenticatedPublicacaoRouteImport } from './routes/_authenticated/publicacao'
 import { Route as AuthenticatedPrognosticosRouteImport } from './routes/_authenticated/prognosticos'
+import { Route as AuthenticatedObservabilidadeIaRouteImport } from './routes/_authenticated/observabilidade-ia'
 import { Route as AuthenticatedMonitorHighlightlyRouteImport } from './routes/_authenticated/monitor-highlightly'
 import { Route as AuthenticatedModelosPreditivosRouteImport } from './routes/_authenticated/modelos-preditivos'
 import { Route as AuthenticatedImportarRouteImport } from './routes/_authenticated/importar'
@@ -67,6 +68,12 @@ const AuthenticatedPrognosticosRoute =
   AuthenticatedPrognosticosRouteImport.update({
     id: '/prognosticos',
     path: '/prognosticos',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedObservabilidadeIaRoute =
+  AuthenticatedObservabilidadeIaRouteImport.update({
+    id: '/observabilidade-ia',
+    path: '/observabilidade-ia',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedMonitorHighlightlyRoute =
@@ -183,6 +190,7 @@ export interface FileRoutesByFullPath {
   '/importar': typeof AuthenticatedImportarRoute
   '/modelos-preditivos': typeof AuthenticatedModelosPreditivosRoute
   '/monitor-highlightly': typeof AuthenticatedMonitorHighlightlyRoute
+  '/observabilidade-ia': typeof AuthenticatedObservabilidadeIaRoute
   '/prognosticos': typeof AuthenticatedPrognosticosRoute
   '/publicacao': typeof AuthenticatedPublicacaoRoute
   '/validacao': typeof AuthenticatedValidacaoRoute
@@ -207,6 +215,7 @@ export interface FileRoutesByTo {
   '/importar': typeof AuthenticatedImportarRoute
   '/modelos-preditivos': typeof AuthenticatedModelosPreditivosRoute
   '/monitor-highlightly': typeof AuthenticatedMonitorHighlightlyRoute
+  '/observabilidade-ia': typeof AuthenticatedObservabilidadeIaRoute
   '/prognosticos': typeof AuthenticatedPrognosticosRoute
   '/publicacao': typeof AuthenticatedPublicacaoRoute
   '/validacao': typeof AuthenticatedValidacaoRoute
@@ -234,6 +243,7 @@ export interface FileRoutesById {
   '/_authenticated/importar': typeof AuthenticatedImportarRoute
   '/_authenticated/modelos-preditivos': typeof AuthenticatedModelosPreditivosRoute
   '/_authenticated/monitor-highlightly': typeof AuthenticatedMonitorHighlightlyRoute
+  '/_authenticated/observabilidade-ia': typeof AuthenticatedObservabilidadeIaRoute
   '/_authenticated/prognosticos': typeof AuthenticatedPrognosticosRoute
   '/_authenticated/publicacao': typeof AuthenticatedPublicacaoRoute
   '/_authenticated/validacao': typeof AuthenticatedValidacaoRoute
@@ -262,6 +272,7 @@ export interface FileRouteTypes {
     | '/importar'
     | '/modelos-preditivos'
     | '/monitor-highlightly'
+    | '/observabilidade-ia'
     | '/prognosticos'
     | '/publicacao'
     | '/validacao'
@@ -286,6 +297,7 @@ export interface FileRouteTypes {
     | '/importar'
     | '/modelos-preditivos'
     | '/monitor-highlightly'
+    | '/observabilidade-ia'
     | '/prognosticos'
     | '/publicacao'
     | '/validacao'
@@ -312,6 +324,7 @@ export interface FileRouteTypes {
     | '/_authenticated/importar'
     | '/_authenticated/modelos-preditivos'
     | '/_authenticated/monitor-highlightly'
+    | '/_authenticated/observabilidade-ia'
     | '/_authenticated/prognosticos'
     | '/_authenticated/publicacao'
     | '/_authenticated/validacao'
@@ -385,6 +398,13 @@ declare module '@tanstack/react-router' {
       path: '/prognosticos'
       fullPath: '/prognosticos'
       preLoaderRoute: typeof AuthenticatedPrognosticosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/observabilidade-ia': {
+      id: '/_authenticated/observabilidade-ia'
+      path: '/observabilidade-ia'
+      fullPath: '/observabilidade-ia'
+      preLoaderRoute: typeof AuthenticatedObservabilidadeIaRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/monitor-highlightly': {
@@ -520,6 +540,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedImportarRoute: typeof AuthenticatedImportarRoute
   AuthenticatedModelosPreditivosRoute: typeof AuthenticatedModelosPreditivosRoute
   AuthenticatedMonitorHighlightlyRoute: typeof AuthenticatedMonitorHighlightlyRoute
+  AuthenticatedObservabilidadeIaRoute: typeof AuthenticatedObservabilidadeIaRoute
   AuthenticatedPrognosticosRoute: typeof AuthenticatedPrognosticosRoute
   AuthenticatedPublicacaoRoute: typeof AuthenticatedPublicacaoRoute
   AuthenticatedValidacaoRoute: typeof AuthenticatedValidacaoRoute
@@ -537,6 +558,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedImportarRoute: AuthenticatedImportarRoute,
   AuthenticatedModelosPreditivosRoute: AuthenticatedModelosPreditivosRoute,
   AuthenticatedMonitorHighlightlyRoute: AuthenticatedMonitorHighlightlyRoute,
+  AuthenticatedObservabilidadeIaRoute: AuthenticatedObservabilidadeIaRoute,
   AuthenticatedPrognosticosRoute: AuthenticatedPrognosticosRoute,
   AuthenticatedPublicacaoRoute: AuthenticatedPublicacaoRoute,
   AuthenticatedValidacaoRoute: AuthenticatedValidacaoRoute,
