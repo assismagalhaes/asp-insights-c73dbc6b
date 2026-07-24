@@ -12,6 +12,7 @@ export default tseslint.config(
       "dist",
       "build",
       "coverage",
+      "storybook-static",
       ".output",
       ".vinxi",
       ".codex_tmp",

@@ -12,6 +12,7 @@ node_modules
 dist
 dist-ssr
 coverage
+storybook-static
 .codex_tmp/
 .pnpm-store/
 .output
