@@ -33,14 +33,14 @@ O modo Local não depende de `LOVABLE_API_KEY`.
 
 ### Compatibilidade do schema com Gemini
 
-O contrato operacional completo contém literais, uniões, campos anuláveis e
-validação de URL. Como o `responseSchema` do Google aceita somente um subconjunto
-de OpenAPI, a chamada usa `providerOptions.google.structuredOutputs=false`.
+O contrato operacional completo contém literais, uniões e validação de URL.
+Como o `responseSchema` do Google aceita somente um subconjunto de OpenAPI, a
+chamada envia ao Gemini apenas o schema de geração simplificado, com
+`providerOptions.google.structuredOutputs=true`.
 
-Essa opção remove apenas o `responseSchema` incompatível da requisição ao
-provider. `Output.object` continua exigindo JSON, e o objeto retornado continua
-sendo validado integralmente pelo `AiOperationalOutputSchema` antes de chegar ao
-árbitro. Não existe fallback automático para texto legado.
+O objeto retornado continua sendo validado integralmente pelo
+`AiOperationalOutputSchema` antes de chegar ao árbitro. Não existe fallback
+automático para texto legado.
 
 Antes dessa validação integral, um schema de geração aceita somente omissões
 formais seguras (`sources`, `searches`, listas de riscos/limitações e campos

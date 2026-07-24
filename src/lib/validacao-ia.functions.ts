@@ -19,12 +19,12 @@ export const PROMPT_VERSAO = "validacao-critica-v13-structured-output-local";
  * stay enforced by Zod after generation, but cannot safely be sent as the
  * provider's responseSchema.
  *
- * We still request JSON through Output.object; this option only prevents the
- * incompatible OpenAPI responseSchema from being attached to the Gemini call.
+ * Output.object sends only the reduced generation schema to Gemini. The full
+ * operational contract remains enforced locally after generation.
  */
 export const LOCAL_STRUCTURED_OUTPUT_PROVIDER_OPTIONS = {
   google: {
-    structuredOutputs: false,
+    structuredOutputs: true,
   },
 } as const;
 
