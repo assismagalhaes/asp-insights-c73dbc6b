@@ -90,18 +90,18 @@ export function createAiGenerationFailure(error: unknown, latencyMs: number): Ai
   let safeMessage =
     "O provider de IA não concluiu a saída estruturada. A recomendação foi convertida para PULAR.";
 
-  if (/GOOGLE_GENERATIVE_AI_API_KEY|api.?key|authentication|unauthorized|401/i.test(message)) {
+  if (/LOVABLE_API_KEY|api.?key|authentication|unauthorized|401/i.test(message)) {
     errorCode = "PROVIDER_AUTH_ERROR";
     safeMessage =
-      "A configuração da API Google está indisponível. A recomendação foi convertida para PULAR.";
+      "A configuração do Lovable AI Gateway está indisponível. A recomendação foi convertida para PULAR.";
   } else if (/429|rate.?limit|quota|resource.?exhausted/i.test(message)) {
     errorCode = "PROVIDER_RATE_LIMIT";
     safeMessage =
-      "A cota ou o limite da API Google foi atingido. A recomendação foi convertida para PULAR.";
+      "A cota ou o limite do Lovable AI Gateway foi atingido. A recomendação foi convertida para PULAR.";
   } else if (/402|payment|billing|credits/i.test(message)) {
     errorCode = "PROVIDER_BILLING_ERROR";
     safeMessage =
-      "A API Google recusou a geração por cobrança ou créditos. A recomendação foi convertida para PULAR.";
+      "O Lovable AI Gateway recusou a geração por cobrança ou créditos. A recomendação foi convertida para PULAR.";
   } else if (/timeout|timed.?out|abort/i.test(message)) {
     errorCode = "PROVIDER_TIMEOUT";
     safeMessage = "A geração estruturada excedeu o tempo limite e foi convertida para PULAR.";
