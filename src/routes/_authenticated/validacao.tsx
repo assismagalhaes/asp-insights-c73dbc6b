@@ -5,14 +5,8 @@ import {
   AlertTriangle,
   Sparkles,
   ShieldAlert,
-  Brain,
   Loader2,
-  Copy,
-  Wand2,
   RefreshCw,
-  X,
-  Globe,
-  ExternalLink,
   Trash2,
   Trophy,
 } from "lucide-react";
@@ -41,6 +35,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { StatusBadge } from "@/components/status-badge";
 import { LeagueFilter } from "@/components/league-filter";
 import { PeriodFilter } from "@/components/period-filter";
+import { AiAnalysisPanel } from "@/components/ai-validation/ai-analysis-panel";
 import { rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
 import {
   usePrognosticos,
@@ -327,26 +322,6 @@ function extractMatchupPreviewContext(context: string): string {
   return markerIndex >= 0 ? context.slice(markerIndex).trim() : "";
 }
 
-function formatIaParecerForDisplay(parecer: string): string {
-  return parecer
-    .split(/\r?\n/)
-    .filter((line) => !/^\s*"?decis[aã]o_grupo"?\s*:/i.test(line))
-    .filter((line) => !/^\s*"?prognostico_id_escolhido"?\s*:/i.test(line))
-    .filter((line) => !/^\s*"?stake_confirmada"?\s*:/i.test(line))
-    .map((line) =>
-      line
-        .replace(/^\s*"?pick_escolhida"?\s*:/i, "Pick escolhida:")
-        .replace(/^\s*"?justificativa_(?:linha|pick)"?\s*:/i, "Justificativa da pick escolhida:")
-        .replace(/^\s*"?riscos"?\s*:/i, "Principais riscos:")
-        .replace(/^\s*"?condicao_invalidacao"?\s*:/i, "Condição de invalidação:")
-        .replace(/\bCONFIRMA\b/g, "CONFIRMAR")
-        .replace(/\bPASS\b/g, "PULAR"),
-    )
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
 function getIaResumo(ia: IAResult): string {
   const decisao = ia.decisao_sugerida === "CONFIRMA" ? "CONFIRMAR" : "PULAR";
   const pick =
@@ -356,30 +331,6 @@ function getIaResumo(ia: IAResult): string {
       ? ` - ${ia.stake_sugerida.toFixed(1)}u`
       : "";
   return `${decisao}${pick}${stake}`;
-}
-
-function getOnlineAlertas(parecer: string): string[] {
-  const text = parecer.toLowerCase();
-  const alertas: string[] = [];
-  if (
-    /aguardar confirma|não confirmad|nao confirmad|incert|não encontrado|nao encontrado/.test(text)
-  ) {
-    alertas.push("Informação crítica não confirmada");
-  }
-  if (/risco alto|impacto na aposta:\s*alto/.test(text)) {
-    alertas.push("Risco alto");
-  }
-  if (
-    /fonte insuficiente|sem fonte confiável|sem fonte confiavel|fonte não confiável|fonte nao confiavel/.test(
-      text,
-    )
-  ) {
-    alertas.push("Fonte insuficiente");
-  }
-  if (/desatualizad|notícia antiga|noticia antiga|sem data/.test(text)) {
-    alertas.push("Possível dado desatualizado");
-  }
-  return Array.from(new Set(alertas));
 }
 
 function autoCheck(p: Prognostico, edgeFinal: number | null, executableOdd: number | null) {
@@ -1236,7 +1187,6 @@ function Validacao() {
           const contextoAnalise = getContextoGrupo(g);
           const parecerCurrent = pareceres[g.key] ?? "";
           const ia = iaResults[g.key];
-          const iaParecerDisplay = ia ? formatIaParecerForDisplay(ia.parecer) : "";
 
           return (
             <div
@@ -1546,189 +1496,23 @@ function Validacao() {
               </div>
 
               {/* IA */}
-              <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-primary">
-                    <Wand2 className="h-4 w-4" />
-                    Análise sugerida pela IA
-                    {ia?.modo === "online" && (
-                      <span className="flex items-center gap-1 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-primary">
-                        <Globe className="h-3 w-3" /> online
-                      </span>
-                    )}
-                    {ia?.modo === "local" && (
-                      <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                        local
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => rodarIA(g, "local")}
-                      disabled={!!iaLoading[g.key]}
-                    >
-                      {iaLoading[g.key] === "local" ? (
-                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                      ) : (
-                        <Brain className="h-3 w-3 mr-1" />
-                      )}
-                      IA Local
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => rodarIA(g, "online")}
-                      disabled={!!iaLoading[g.key]}
-                      title="Usa Gemini com pesquisa online (Firecrawl) - consome créditos extras"
-                    >
-                      {iaLoading[g.key] === "online" ? (
-                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                      ) : (
-                        <Globe className="h-3 w-3 mr-1" />
-                      )}
-                      IA Local + Pesquisa
-                    </Button>
-                    {ia && (
-                      <>
-                        <Button size="sm" variant="outline" onClick={() => aplicarIA(g)}>
-                          Aplicar
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={async () => {
-                            await navigator.clipboard.writeText(iaParecerDisplay);
-                            toast.success("Copiado para a área de transferência");
-                          }}
-                        >
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() =>
-                            setIaResults((s) => {
-                              const n = { ...s };
-                              delete n[g.key];
-                              return n;
-                            })
-                          }
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-                {iaLoading[g.key] === "online" && (
-                  <p className="text-xs text-primary/80">
-                    Pesquisando notícias, lineups e contexto na web; pode levar 15-40s.
-                  </p>
-                )}
-                {ia ? (
-                  <>
-                    <div className="flex flex-wrap gap-2 text-xs">
-                      {ia.decisao_sugerida && (
-                        <span className="rounded border border-border bg-background px-2 py-0.5">
-                          Decisão:{" "}
-                          <strong>
-                            {ia.decisao_sugerida === "CONFIRMA" ? "CONFIRMAR" : "PULAR"}
-                          </strong>
-                        </span>
-                      )}
-                      {ia.stake_sugerida != null && (
-                        <span className="rounded border border-border bg-background px-2 py-0.5">
-                          Stake sugerida: <strong>{ia.stake_sugerida}u</strong>
-                        </span>
-                      )}
-                      {ia.pick_escolhida && (
-                        <span className="rounded border border-border bg-background px-2 py-0.5">
-                          Pick escolhida: <strong>{ia.pick_escolhida}</strong>
-                        </span>
-                      )}
-                    </div>
-                    {ia.aviso_opcao && (
-                      <div className="rounded border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
-                        {ia.aviso_opcao}
-                      </div>
-                    )}
-                    {ia.modo === "online" && getOnlineAlertas(ia.parecer).length > 0 && (
-                      <div className="rounded border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
-                        <div className="mb-1 flex items-center gap-1 font-semibold">
-                          <AlertTriangle className="h-3.5 w-3.5" />
-                          Alertas da pesquisa online
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {getOnlineAlertas(ia.parecer).map((alerta) => (
-                            <span
-                              key={alerta}
-                              className="rounded border border-warning/30 bg-background/50 px-2 py-0.5"
-                            >
-                              {alerta}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded border border-border bg-background/60 p-2 font-mono text-xs">
-                      {iaParecerDisplay}
-                    </pre>
-                    {ia.modo === "online" &&
-                    (ia.fontes_consultadas?.length || ia.buscas_realizadas?.length) ? (
-                      <div className="rounded border border-border bg-background/60 p-2 space-y-1.5">
-                        {ia.buscas_realizadas && ia.buscas_realizadas.length > 0 && (
-                          <div>
-                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                              Buscas realizadas
-                            </div>
-                            <ul className="mt-0.5 space-y-0.5 text-xs">
-                              {ia.buscas_realizadas.map((q, i) => (
-                                <li key={i} className="text-muted-foreground">
-                                  - {q}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                        {ia.fontes_consultadas && ia.fontes_consultadas.length > 0 && (
-                          <div>
-                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                              Rastreabilidade de fontes
-                            </div>
-                            <ul className="mt-0.5 space-y-0.5 text-xs">
-                              {ia.fontes_consultadas.map((f, i) => (
-                                <li key={i} className="flex flex-wrap items-center gap-1">
-                                  <a
-                                    href={f.url}
-                                    target="_blank"
-                                    rel="noreferrer noopener"
-                                    className="inline-flex items-center gap-1 text-primary hover:underline"
-                                  >
-                                    <ExternalLink className="h-3 w-3" />
-                                    {f.titulo}
-                                  </a>
-                                  <span className="text-[10px] text-muted-foreground">
-                                    {f.tipo === "SEARCH_RESULT" && f.consultada === false
-                                      ? "resultado de busca"
-                                      : "página consultada"}
-                                  </span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    ) : null}
-                  </>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    <strong>IA Local</strong>: analisa apenas dados internos e contexto
-                    local/manual. <strong>IA Local + Pesquisa</strong>: usa os dados internos e
-                    adiciona notícias, lineups, lesões e contexto online pesquisado.
-                  </p>
-                )}
-              </div>
+              <AiAnalysisPanel
+                result={ia}
+                loadingMode={iaLoading[g.key] ?? undefined}
+                onRun={(mode) => rodarIA(g, mode)}
+                onApply={() => aplicarIA(g)}
+                onCopy={async (text) => {
+                  await navigator.clipboard.writeText(text);
+                  toast.success("Copiado para a área de transferência");
+                }}
+                onDismiss={() =>
+                  setIaResults((current) => {
+                    const next = { ...current };
+                    delete next[g.key];
+                    return next;
+                  })
+                }
+              />
 
               {/* Resumo + decisão */}
               <div className="grid gap-3 md:grid-cols-3">
