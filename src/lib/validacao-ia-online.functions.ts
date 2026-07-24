@@ -11,7 +11,7 @@ import { generateText, tool, stepCountIs } from "ai";
 import { z } from "zod";
 
 export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v10-structured-output";
-export const ONLINE_GATEWAY_MODEL_ID = "google/gemini-2.5-pro";
+export const ONLINE_GATEWAY_MODEL_ID = "google/gemini-3.6-flash";
 
 export const ONLINE_GATEWAY_JSON_TEMPLATE = `{
   "schema_version": "1.1.0",

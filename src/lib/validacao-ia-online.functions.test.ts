@@ -16,7 +16,7 @@ describe("Structured Output online", () => {
       searches: [],
     });
 
-    expect(ONLINE_GATEWAY_MODEL_ID).toBe("google/gemini-2.5-pro");
+    expect(ONLINE_GATEWAY_MODEL_ID).toBe("google/gemini-3.6-flash");
     expect(output).toMatchObject({
       schema_version: "1.1.0",
       decision: "PULAR",
