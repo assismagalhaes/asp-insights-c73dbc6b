@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   BrainCircuit,
   ChartNoAxesCombined,
+  ChartSpline,
   Cpu,
   Database,
   DownloadCloud,
@@ -58,6 +59,7 @@ const navigationGroups = [
         : []),
       { title: "Modelos Preditivos", url: "/modelos-preditivos", icon: Cpu },
       { title: "Aprendizado da IA", url: "/aprendizado-ia", icon: BrainCircuit },
+      { title: "Observabilidade da IA", url: "/observabilidade-ia", icon: ChartSpline },
     ],
   },
   {
