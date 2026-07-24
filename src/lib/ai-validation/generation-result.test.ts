@@ -76,6 +76,22 @@ describe("resultado da geração estruturada", () => {
     expect(result.error_code).toBe("LOCAL_EXTERNAL_TRACE_FORBIDDEN");
   });
 
+  it("aceita fontes e buscas rastreáveis no modo online", () => {
+    const output = {
+      ...validOutput(),
+      sources: [{ title: "MLB.com", url: "https://www.mlb.com/news/example" }],
+      searches: ["confirmed starters baseball today"],
+    };
+    const result = parseStructuredAiOutput({
+      output,
+      latencyMs: 20,
+      mode: "online",
+    });
+
+    expect(result.parse_status).toBe("VALID");
+    expect(result.model_output).toEqual(output);
+  });
+
   it("classifica erros do provider sem expor a mensagem original", () => {
     const result = createAiGenerationFailure(
       new Error("429 RESOURCE_EXHAUSTED secret-provider-detail"),

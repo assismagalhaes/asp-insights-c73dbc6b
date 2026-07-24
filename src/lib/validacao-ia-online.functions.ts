@@ -1,10 +1,148 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/lib/auth-middleware-public";
+import {
+  createAiGenerationFailure,
+  createLegacyRollbackResult,
+  parseStructuredAiOutput,
+} from "@/lib/ai-validation/generation-result";
 import { adaptLegacyAiResponse } from "@/lib/ai-validation/legacy-adapter";
+import { AiLocalGenerationOutputSchema } from "@/lib/ai-validation/schema";
 import { generateText, tool, stepCountIs } from "ai";
 import { z } from "zod";
 
-export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v9-memoria-operacional";
+export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v10-structured-output";
+export const ONLINE_GATEWAY_MODEL_ID = "google/gemini-2.5-pro";
+
+export const ONLINE_GATEWAY_JSON_TEMPLATE = `{
+  "schema_version": "1.1.0",
+  "decision": "PULAR",
+  "stake": 0,
+  "selected_prediction_id": null,
+  "selected_pick": null,
+  "gates": {
+    "technical_consistency": { "status": "APPROVED", "reason": "motivo concreto" },
+    "critical_information": { "status": "APPROVED", "reason": "motivo concreto" },
+    "structural_risk": { "status": "APPROVED", "reason": "motivo concreto" },
+    "context": { "status": "APPROVED", "reason": "motivo concreto" },
+    "correlation": { "status": "APPROVED", "reason": "motivo concreto" }
+  },
+  "narrative": {
+    "evaluated_entry": "jogo, mercado, pick, odd, probabilidade e edge",
+    "thesis_for": "argumentos concretos favoráveis, separando fatos e inferências",
+    "thesis_against": "argumentos concretos contrários e informações não encontradas",
+    "internal_history": "amostra, greens/reds, ROI/Yield e conclusão",
+    "final_justification": "justificativa objetiva",
+    "decision_change_condition": null
+  },
+  "rationale": "síntese auditável",
+  "risks": ["risco objetivo"],
+  "invalidation_condition": "condição operacional de invalidação",
+  "limitations": ["limitação real da pesquisa online"],
+  "sources": [],
+  "searches": []
+}`;
+
+export type OnlineSourceTrace = {
+  titulo: string;
+  url: string;
+  consultada_em: string;
+  tipo: "SEARCH_RESULT" | "SCRAPED";
+  consultada: boolean;
+};
+
+export function normalizeOnlineHttpUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+export function recordOnlineSource(
+  traces: OnlineSourceTrace[],
+  {
+    titulo,
+    url,
+    tipo,
+    consultadaEm = new Date().toISOString(),
+  }: {
+    titulo?: string | null;
+    url: string;
+    tipo: OnlineSourceTrace["tipo"];
+    consultadaEm?: string;
+  },
+): string | null {
+  const normalizedUrl = normalizeOnlineHttpUrl(url);
+  if (!normalizedUrl) return null;
+
+  const existing = traces.find((source) => source.url === normalizedUrl);
+  const consulted = tipo === "SCRAPED";
+  if (existing) {
+    if (consulted) {
+      existing.tipo = "SCRAPED";
+      existing.consultada = true;
+      existing.consultada_em = consultadaEm;
+    }
+    if (titulo?.trim()) existing.titulo = titulo.trim().slice(0, 500);
+    return normalizedUrl;
+  }
+
+  traces.push({
+    titulo: titulo?.trim().slice(0, 500) || normalizedUrl,
+    url: normalizedUrl,
+    consultada_em: consultadaEm,
+    tipo,
+    consultada: consulted,
+  });
+  return normalizedUrl;
+}
+
+function extractGatewayJson(text: string): unknown {
+  const withoutFence = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+  const firstBrace = withoutFence.indexOf("{");
+  const lastBrace = withoutFence.lastIndexOf("}");
+  if (firstBrace < 0 || lastBrace <= firstBrace) {
+    throw new Error("JSON object não encontrado na resposta do Lovable AI Gateway.");
+  }
+  return JSON.parse(withoutFence.slice(firstBrace, lastBrace + 1)) as unknown;
+}
+
+export function parseOnlineGatewayJson(
+  text: string,
+  {
+    sourceTraces,
+    searches,
+  }: {
+    sourceTraces: OnlineSourceTrace[];
+    searches: string[];
+  },
+) {
+  const raw = extractGatewayJson(text);
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("Objeto JSON online inválido.");
+  }
+
+  const canonicalSearches = Array.from(
+    new Set(searches.map((query) => query.trim().slice(0, 1_000)).filter(Boolean)),
+  ).slice(0, 50);
+  const canonicalSources = sourceTraces
+    .filter((source) => source.consultada)
+    .slice(0, 50)
+    .map((source) => ({ title: source.titulo, url: source.url }));
+
+  return AiLocalGenerationOutputSchema.parse({
+    ...(raw as Record<string, unknown>),
+    sources: canonicalSources,
+    searches: canonicalSearches,
+  });
+}
 
 const CorrelatedPickSchema = z.object({
   mercado: z.string(),
@@ -69,7 +207,7 @@ const InputSchema = z.object({
 const MAX_BUSCAS_ONLINE = 5;
 const MAX_SCRAPES_ONLINE = 3;
 
-function getSportChecklist(esporte: string): string {
+export function getSportChecklist(esporte: string): string {
   const normalized = esporte.toLowerCase();
   if (/baseball|mlb/.test(normalized)) {
     return `Baseball / MLB:
@@ -268,10 +406,10 @@ export const analisarValidacaoOnline = createServerFn({ method: "POST" })
     const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
     const { firecrawlSearch, firecrawlScrape } = await import("@/lib/firecrawl.server");
     const gateway = createLovableAiGatewayProvider(lovableApiKey);
-    const GATEWAY_MODEL_ID = "google/gemini-2.5-pro";
+    const model = gateway(ONLINE_GATEWAY_MODEL_ID);
 
     const buscasRealizadas: string[] = [];
-    const fontesConsultadas: { titulo: string; url: string }[] = [];
+    const fontesRastreaveis: OnlineSourceTrace[] = [];
     let scrapeCount = 0;
 
     const p = data.prognostico;
@@ -348,95 +486,184 @@ Se sugerir CONFIRMA, devolva obrigatoriamente o campo prognostico_id_escolhido c
 
 Faça pesquisas online conforme a política descrita e produza o parecer no formato exigido.`;
 
+    const structuredSystemPrompt = `${SYSTEM_PROMPT}
+
+FORMATO PARA O LOVABLE AI GATEWAY:
+As instruções JSON abaixo substituem qualquer formato textual legado descrito anteriormente.
+Depois de concluir as pesquisas, retorne somente um objeto JSON válido, sem markdown,
+comentários ou texto antes/depois. Use exatamente os nomes de campos, enums e tipos
+do template. Para CONFIRMA, use um ID/pick exatos do payload e stake 0.5, 1 ou 1.5.
+Para PULAR, use ID/pick null e stake 0. Os campos sources e searches devem ser arrays
+vazios: o servidor os preencherá exclusivamente com a telemetria real das ferramentas.
+
+${ONLINE_GATEWAY_JSON_TEMPLATE}`;
+    const startedAt = Date.now();
+    const legacyRollbackEnabled =
+      process.env.AI_VALIDATION_ONLINE_LEGACY_ROLLBACK?.trim().toLowerCase() === "true";
+
     try {
-      const { text } = await generateText({
-        model: gateway(GATEWAY_MODEL_ID),
-        system: SYSTEM_PROMPT,
+      const researchTools = {
+        web_search: tool({
+          description:
+            "Busca páginas relevantes na web. Use recency='day' para lineups/lesões do dia, 'week' para forma recente, 'month' para contexto geral.",
+          inputSchema: z.object({
+            query: z
+              .string()
+              .describe(
+                "Consulta de busca (em inglês para esportes US, no idioma local para outros)",
+              ),
+            recency: z.enum(["day", "week", "month"]).optional(),
+          }),
+          execute: async ({ query, recency }) => {
+            if (buscasRealizadas.length >= MAX_BUSCAS_ONLINE) {
+              return [
+                {
+                  url: "",
+                  title: "Limite de buscas atingido",
+                  snippet: `Limite de ${MAX_BUSCAS_ONLINE} buscas online por análise atingido. Continue com as fontes já coletadas e sinalize informações ausentes.`,
+                },
+              ];
+            }
+            buscasRealizadas.push(query);
+            const results = await firecrawlSearch(query, { limit: 5, recency });
+            return results.flatMap((result) => {
+              const url = recordOnlineSource(fontesRastreaveis, {
+                titulo: result.title,
+                url: result.url,
+                tipo: "SEARCH_RESULT",
+              });
+              return url
+                ? [
+                    {
+                      url,
+                      title: result.title,
+                      snippet: result.description?.slice(0, 300) ?? "",
+                    },
+                  ]
+                : [];
+            });
+          },
+        }),
+        web_scrape: tool({
+          description: "Lê o conteúdo completo de uma URL HTTP(S) específica em markdown.",
+          inputSchema: z.object({
+            url: z
+              .string()
+              .url()
+              .refine((value) => normalizeOnlineHttpUrl(value) !== null, "URL HTTP(S) inválida"),
+          }),
+          execute: async ({ url }) => {
+            const normalizedUrl = normalizeOnlineHttpUrl(url);
+            if (!normalizedUrl) {
+              return {
+                url: "",
+                title: "URL inválida bloqueada",
+                markdown: "A URL solicitada não usa HTTP(S) e não foi consultada.",
+              };
+            }
+            if (scrapeCount >= MAX_SCRAPES_ONLINE) {
+              return {
+                url: normalizedUrl,
+                title: "Limite de páginas aprofundadas atingido",
+                markdown: `Limite de ${MAX_SCRAPES_ONLINE} páginas aprofundadas por análise atingido. Use os snippets e fontes já coletados; sinalize se faltar informação crítica.`,
+              };
+            }
+            scrapeCount += 1;
+            const { markdown, title } = await firecrawlScrape(normalizedUrl);
+            recordOnlineSource(fontesRastreaveis, {
+              titulo: title,
+              url: normalizedUrl,
+              tipo: "SCRAPED",
+            });
+            return { url: normalizedUrl, title, markdown };
+          },
+        }),
+      };
+
+      const firstResult = await generateText({
+        model,
+        system: legacyRollbackEnabled ? SYSTEM_PROMPT : structuredSystemPrompt,
         prompt: userPayload,
         stopWhen: stepCountIs(50),
-        tools: {
-          web_search: tool({
-            description:
-              "Busca páginas relevantes na web. Use recency='day' para lineups/lesões do dia, 'week' para forma recente, 'month' para contexto geral.",
-            inputSchema: z.object({
-              query: z
-                .string()
-                .describe(
-                  "Consulta de busca (em inglês para esportes US, no idioma local para outros)",
-                ),
-              recency: z.enum(["day", "week", "month"]).optional(),
-            }),
-            execute: async ({ query, recency }) => {
-              if (buscasRealizadas.length >= MAX_BUSCAS_ONLINE) {
-                return [
-                  {
-                    url: "",
-                    title: "Limite de buscas atingido",
-                    snippet: `Limite de ${MAX_BUSCAS_ONLINE} buscas online por análise atingido. Continue com as fontes já coletadas e sinalize informações ausentes.`,
-                  },
-                ];
-              }
-              buscasRealizadas.push(query);
-              const results = await firecrawlSearch(query, { limit: 5, recency });
-              for (const r of results) {
-                if (!fontesConsultadas.some((f) => f.url === r.url)) {
-                  fontesConsultadas.push({ titulo: r.title || r.url, url: r.url });
-                }
-              }
-              return results.map((r) => ({
-                url: r.url,
-                title: r.title,
-                snippet: r.description?.slice(0, 300) ?? "",
-              }));
-            },
-          }),
-          web_scrape: tool({
-            description: "Lê o conteúdo completo de uma URL específica em markdown.",
-            inputSchema: z.object({
-              url: z.string().url(),
-            }),
-            execute: async ({ url }) => {
-              if (scrapeCount >= MAX_SCRAPES_ONLINE) {
-                return {
-                  url,
-                  title: "Limite de páginas aprofundadas atingido",
-                  markdown: `Limite de ${MAX_SCRAPES_ONLINE} páginas aprofundadas por análise atingido. Use os snippets e fontes já coletados; sinalize se faltar informação crítica.`,
-                };
-              }
-              scrapeCount += 1;
-              const { markdown, title } = await firecrawlScrape(url);
-              if (!fontesConsultadas.some((f) => f.url === url)) {
-                fontesConsultadas.push({ titulo: title || url, url });
-              }
-              return { url, title, markdown };
-            },
-          }),
-        },
+        tools: researchTools,
       });
 
-      const modelOutput = adaptLegacyAiResponse({
-        text,
-        sources: fontesConsultadas,
-        searches: buscasRealizadas,
+      if (legacyRollbackEnabled) {
+        const generation = createLegacyRollbackResult({
+          output: adaptLegacyAiResponse({
+            text: firstResult.text,
+            sources: fontesRastreaveis
+              .filter((source) => source.consultada)
+              .map((source) => ({ titulo: source.titulo, url: source.url })),
+            searches: buscasRealizadas,
+          }),
+          rawModelText: firstResult.text,
+          latencyMs: Date.now() - startedAt,
+        });
+        return {
+          ...generation,
+          prompt_versao: PROMPT_VERSAO_ONLINE,
+          provider: "lovable-ai-gateway",
+          model: ONLINE_GATEWAY_MODEL_ID,
+          fontes_consultadas: fontesRastreaveis,
+          buscas_realizadas: buscasRealizadas,
+          repair_attempted: false,
+        };
+      }
+
+      let finalResult = firstResult;
+      let repairAttempted = false;
+      let parsedOutput;
+      try {
+        parsedOutput = parseOnlineGatewayJson(firstResult.text, {
+          sourceTraces: fontesRastreaveis,
+          searches: buscasRealizadas,
+        });
+      } catch {
+        repairAttempted = true;
+        finalResult = await generateText({
+          model,
+          system: structuredSystemPrompt,
+          prompt: `${userPayload}
+
+REPARO CONTROLADO ÚNICO:
+A tentativa anterior produziu um JSON incompatível com o contrato 1.1.0. Corrija
+somente estrutura, tipos e enums, preservando a análise já realizada. Não faça
+novas pesquisas. Retorne apenas JSON e mantenha sources e searches como arrays vazios.
+
+SAÍDA ANTERIOR A CORRIGIR:
+${firstResult.text.slice(0, 40_000)}`,
+        });
+        parsedOutput = parseOnlineGatewayJson(finalResult.text, {
+          sourceTraces: fontesRastreaveis,
+          searches: buscasRealizadas,
+        });
+      }
+
+      const generation = parseStructuredAiOutput({
+        output: parsedOutput,
+        rawModelText: finalResult.text,
+        latencyMs: Date.now() - startedAt,
+        mode: "online",
       });
       return {
-        model_output: modelOutput,
-        raw_model_text: text,
+        ...generation,
         prompt_versao: PROMPT_VERSAO_ONLINE,
-        fontes_consultadas: fontesConsultadas,
+        provider: "lovable-ai-gateway",
+        model: ONLINE_GATEWAY_MODEL_ID,
+        usage: finalResult.usage,
+        repair_attempted: repairAttempted,
+        fontes_consultadas: fontesRastreaveis,
         buscas_realizadas: buscasRealizadas,
       };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Erro desconhecido";
-      if (/402|payment|credits/i.test(msg)) {
-        throw new Error("Créditos da IA esgotados. Adicione créditos no workspace para continuar.");
-      }
-      if (/429|rate/i.test(msg)) {
-        throw new Error("Limite de requisições atingido. Tente novamente em instantes.");
-      }
-      if (/firecrawl/i.test(msg)) {
-        throw new Error(`Pesquisa online falhou: ${msg}`);
-      }
-      throw new Error(`Falha na análise online: ${msg}`);
+      return {
+        ...createAiGenerationFailure(err, Date.now() - startedAt),
+        prompt_versao: PROMPT_VERSAO_ONLINE,
+        provider: "lovable-ai-gateway",
+        model: ONLINE_GATEWAY_MODEL_ID,
+        fontes_consultadas: fontesRastreaveis,
+        buscas_realizadas: buscasRealizadas,
+      };
     }
   });

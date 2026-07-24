@@ -54,6 +54,7 @@ import {
   ESPORTES_DEFAULT,
   MERCADOS_DEFAULT,
   type Prognostico,
+  type FonteIa,
   type Status,
 } from "@/lib/db";
 import { analisarValidacao } from "@/lib/validacao-ia.functions";
@@ -122,7 +123,7 @@ interface IAResult {
   prognostico_id_escolhido?: string | null;
   pick_escolhida?: string | null;
   aviso_opcao?: string | null;
-  fontes_consultadas?: { titulo: string; url: string }[];
+  fontes_consultadas?: FonteIa[];
   buscas_realizadas?: string[];
   odd_analisada?: number | null;
   odd_analisada_por_opcao?: Record<string, number>;
@@ -145,7 +146,7 @@ interface ServerAiResult {
   provider?: string;
   model?: string;
   latency_ms?: number;
-  fontes_consultadas?: { titulo: string; url: string }[];
+  fontes_consultadas?: FonteIa[];
   buscas_realizadas?: string[];
 }
 
@@ -1676,11 +1677,11 @@ function Validacao() {
                         {ia.fontes_consultadas && ia.fontes_consultadas.length > 0 && (
                           <div>
                             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                              Fontes consultadas
+                              Rastreabilidade de fontes
                             </div>
                             <ul className="mt-0.5 space-y-0.5 text-xs">
                               {ia.fontes_consultadas.map((f, i) => (
-                                <li key={i}>
+                                <li key={i} className="flex flex-wrap items-center gap-1">
                                   <a
                                     href={f.url}
                                     target="_blank"
@@ -1690,6 +1691,11 @@ function Validacao() {
                                     <ExternalLink className="h-3 w-3" />
                                     {f.titulo}
                                   </a>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {f.tipo === "SEARCH_RESULT" && f.consultada === false
+                                      ? "resultado de busca"
+                                      : "página consultada"}
+                                  </span>
                                 </li>
                               ))}
                             </ul>
