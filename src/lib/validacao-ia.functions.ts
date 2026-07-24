@@ -13,6 +13,21 @@ import { z } from "zod";
 
 export const PROMPT_VERSAO = "validacao-critica-v13-structured-output-local";
 
+/**
+ * Google Generative AI only accepts a subset of OpenAPI schemas. The complete
+ * operational contract includes unions, literals and URL validation that must
+ * stay enforced by Zod after generation, but cannot safely be sent as the
+ * provider's responseSchema.
+ *
+ * We still request JSON through Output.object; this option only prevents the
+ * incompatible OpenAPI responseSchema from being attached to the Gemini call.
+ */
+export const LOCAL_STRUCTURED_OUTPUT_PROVIDER_OPTIONS = {
+  google: {
+    structuredOutputs: false,
+  },
+} as const;
+
 const CorrelatedPickSchema = z.object({
   mercado: z.string(),
   pick: z.string(),
@@ -314,6 +329,7 @@ ${aspScreenerInstrucao}
         model,
         system: SYSTEM_PROMPT,
         prompt: userPayload,
+        providerOptions: LOCAL_STRUCTURED_OUTPUT_PROVIDER_OPTIONS,
         output: Output.object({
           schema: AiOperationalOutputSchema,
           name: "asp_insights_local_validation",
