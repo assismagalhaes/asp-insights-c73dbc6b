@@ -6,6 +6,7 @@ import {
   parseStructuredAiOutput,
 } from "@/lib/ai-validation/generation-result";
 import { adaptLegacyAiResponse } from "@/lib/ai-validation/legacy-adapter";
+import { sumAiTokenUsage } from "@/lib/ai-validation/observability";
 import { AiLocalGenerationOutputSchema } from "@/lib/ai-validation/schema";
 import { generateText, tool, stepCountIs } from "ai";
 import { z } from "zod";
@@ -393,51 +394,86 @@ export const analisarValidacaoOnline = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data }) => {
+    const startedAt = Date.now();
+    const startedAtIso = new Date(startedAt).toISOString();
+    const runId = crypto.randomUUID();
+    const buscasRealizadas: string[] = [];
+    const fontesRastreaveis: OnlineSourceTrace[] = [];
+    let repairAttempted = false;
+
     if (!process.env.FIRECRAWL_API_KEY) {
-      throw new Error(
-        "Firecrawl não está conectado. Conecte-o em Conectores para usar a pesquisa online.",
-      );
+      return {
+        ...createAiGenerationFailure(
+          new Error(
+            "Firecrawl não está conectado. Conecte-o em Conectores para usar a pesquisa online.",
+          ),
+          Date.now() - startedAt,
+        ),
+        run_id: runId,
+        prompt_versao: PROMPT_VERSAO_ONLINE,
+        provider: "lovable-ai-gateway",
+        model: ONLINE_GATEWAY_MODEL_ID,
+        started_at: startedAtIso,
+        finished_at: new Date().toISOString(),
+        repair_attempted: false,
+        fontes_consultadas: fontesRastreaveis,
+        buscas_realizadas: buscasRealizadas,
+      };
     }
 
     const lovableApiKey = process.env.LOVABLE_API_KEY;
     if (!lovableApiKey) {
-      throw new Error("LOVABLE_API_KEY não configurada.");
+      return {
+        ...createAiGenerationFailure(
+          new Error("LOVABLE_API_KEY não configurada."),
+          Date.now() - startedAt,
+        ),
+        run_id: runId,
+        prompt_versao: PROMPT_VERSAO_ONLINE,
+        provider: "lovable-ai-gateway",
+        model: ONLINE_GATEWAY_MODEL_ID,
+        started_at: startedAtIso,
+        finished_at: new Date().toISOString(),
+        repair_attempted: false,
+        fontes_consultadas: fontesRastreaveis,
+        buscas_realizadas: buscasRealizadas,
+      };
     }
-    const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
-    const { firecrawlSearch, firecrawlScrape } = await import("@/lib/firecrawl.server");
-    const gateway = createLovableAiGatewayProvider(lovableApiKey);
-    const model = gateway(ONLINE_GATEWAY_MODEL_ID);
 
-    const buscasRealizadas: string[] = [];
-    const fontesRastreaveis: OnlineSourceTrace[] = [];
-    let scrapeCount = 0;
+    try {
+      const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
+      const { firecrawlSearch, firecrawlScrape } = await import("@/lib/firecrawl.server");
+      const gateway = createLovableAiGatewayProvider(lovableApiKey);
+      const model = gateway(ONLINE_GATEWAY_MODEL_ID);
 
-    const p = data.prognostico;
-    const oddFinal = p.odd_ajustada ?? p.odd_original;
-    const edgeFinal = p.edge_ajustado ?? p.edge_original;
-    const checklistEsporte = getSportChecklist(p.esporte);
-    const opcoesMesmoMercado = data.opcoes_mesmo_mercado ?? [];
-    const opcoesMesmoMercadoTexto = opcoesMesmoMercado.length
-      ? opcoesMesmoMercado
-          .map((c, index) => {
-            const odd = c.odd_ajustada ?? c.odd_original;
-            const edge = c.edge_ajustado ?? c.edge_original;
-            return `${index + 1}. ID: ${c.prognostico_id} | Mercado: ${c.mercado ?? p.mercado} | Pick: ${c.pick} | Odd ofertada: ${c.odd_original.toFixed(3)} | Odd usada: ${odd.toFixed(3)} | Odd mediana: ${formatNullableOdd(c.odd_mediana)} | Odd mercado base: ${formatNullableOdd(c.odd_mercado_base)} | Odd melhor: ${formatNullableOdd(c.odd_melhor)} | Bookmaker melhor: ${c.bookmaker_melhor ?? "-"} | Odd valor: ${c.odd_valor.toFixed(3)} | Prob: ${c.probabilidade.toFixed(2)}% | Edge: ${edge.toFixed(2)}%`;
-          })
-          .join("\n")
-      : "(nenhuma lista explicita de opcoes do grupo foi informada)";
-    const correlacionados = data.prognosticos_correlacionados ?? [];
-    const correlacionadosTexto = correlacionados.length
-      ? correlacionados
-          .map((c, index) => {
-            const odd = c.odd_ajustada ?? c.odd_original;
-            const edge = c.edge_ajustado ?? c.edge_original;
-            return `${index + 1}. Mercado: ${c.mercado} | Pick: ${c.pick} | Odd ofertada: ${c.odd_original.toFixed(3)} | Odd usada: ${odd.toFixed(3)} | Odd mediana: ${formatNullableOdd(c.odd_mediana)} | Odd mercado base: ${formatNullableOdd(c.odd_mercado_base)} | Odd melhor: ${formatNullableOdd(c.odd_melhor)} | Bookmaker melhor: ${c.bookmaker_melhor ?? "-"} | Prob: ${c.probabilidade_final.toFixed(2)}% | Edge: ${edge.toFixed(2)}%`;
-          })
-          .join("\n")
-      : "(nenhuma outra pick pendente do mesmo jogo informada)";
+      let scrapeCount = 0;
 
-    const userPayload = `DADOS DO PROGNÓSTICO:
+      const p = data.prognostico;
+      const oddFinal = p.odd_ajustada ?? p.odd_original;
+      const edgeFinal = p.edge_ajustado ?? p.edge_original;
+      const checklistEsporte = getSportChecklist(p.esporte);
+      const opcoesMesmoMercado = data.opcoes_mesmo_mercado ?? [];
+      const opcoesMesmoMercadoTexto = opcoesMesmoMercado.length
+        ? opcoesMesmoMercado
+            .map((c, index) => {
+              const odd = c.odd_ajustada ?? c.odd_original;
+              const edge = c.edge_ajustado ?? c.edge_original;
+              return `${index + 1}. ID: ${c.prognostico_id} | Mercado: ${c.mercado ?? p.mercado} | Pick: ${c.pick} | Odd ofertada: ${c.odd_original.toFixed(3)} | Odd usada: ${odd.toFixed(3)} | Odd mediana: ${formatNullableOdd(c.odd_mediana)} | Odd mercado base: ${formatNullableOdd(c.odd_mercado_base)} | Odd melhor: ${formatNullableOdd(c.odd_melhor)} | Bookmaker melhor: ${c.bookmaker_melhor ?? "-"} | Odd valor: ${c.odd_valor.toFixed(3)} | Prob: ${c.probabilidade.toFixed(2)}% | Edge: ${edge.toFixed(2)}%`;
+            })
+            .join("\n")
+        : "(nenhuma lista explicita de opcoes do grupo foi informada)";
+      const correlacionados = data.prognosticos_correlacionados ?? [];
+      const correlacionadosTexto = correlacionados.length
+        ? correlacionados
+            .map((c, index) => {
+              const odd = c.odd_ajustada ?? c.odd_original;
+              const edge = c.edge_ajustado ?? c.edge_original;
+              return `${index + 1}. Mercado: ${c.mercado} | Pick: ${c.pick} | Odd ofertada: ${c.odd_original.toFixed(3)} | Odd usada: ${odd.toFixed(3)} | Odd mediana: ${formatNullableOdd(c.odd_mediana)} | Odd mercado base: ${formatNullableOdd(c.odd_mercado_base)} | Odd melhor: ${formatNullableOdd(c.odd_melhor)} | Bookmaker melhor: ${c.bookmaker_melhor ?? "-"} | Prob: ${c.probabilidade_final.toFixed(2)}% | Edge: ${edge.toFixed(2)}%`;
+            })
+            .join("\n")
+        : "(nenhuma outra pick pendente do mesmo jogo informada)";
+
+      const userPayload = `DADOS DO PROGNÓSTICO:
 
 Data: ${p.data}${p.hora ? ` ${p.hora}` : ""}
 Esporte: ${p.esporte}
@@ -486,7 +522,7 @@ Se sugerir CONFIRMA, devolva obrigatoriamente o campo prognostico_id_escolhido c
 
 Faça pesquisas online conforme a política descrita e produza o parecer no formato exigido.`;
 
-    const structuredSystemPrompt = `${SYSTEM_PROMPT}
+      const structuredSystemPrompt = `${SYSTEM_PROMPT}
 
 FORMATO PARA O LOVABLE AI GATEWAY:
 As instruções JSON abaixo substituem qualquer formato textual legado descrito anteriormente.
@@ -497,11 +533,9 @@ Para PULAR, use ID/pick null e stake 0. Os campos sources e searches devem ser a
 vazios: o servidor os preencherá exclusivamente com a telemetria real das ferramentas.
 
 ${ONLINE_GATEWAY_JSON_TEMPLATE}`;
-    const startedAt = Date.now();
-    const legacyRollbackEnabled =
-      process.env.AI_VALIDATION_ONLINE_LEGACY_ROLLBACK?.trim().toLowerCase() === "true";
+      const legacyRollbackEnabled =
+        process.env.AI_VALIDATION_ONLINE_LEGACY_ROLLBACK?.trim().toLowerCase() === "true";
 
-    try {
       const researchTools = {
         web_search: tool({
           description:
@@ -602,9 +636,14 @@ ${ONLINE_GATEWAY_JSON_TEMPLATE}`;
         });
         return {
           ...generation,
+          run_id: runId,
           prompt_versao: PROMPT_VERSAO_ONLINE,
           provider: "lovable-ai-gateway",
           model: ONLINE_GATEWAY_MODEL_ID,
+          started_at: startedAtIso,
+          finished_at: new Date().toISOString(),
+          finish_reason: firstResult.finishReason,
+          usage: sumAiTokenUsage(firstResult.usage),
           fontes_consultadas: fontesRastreaveis,
           buscas_realizadas: buscasRealizadas,
           repair_attempted: false,
@@ -612,7 +651,6 @@ ${ONLINE_GATEWAY_JSON_TEMPLATE}`;
       }
 
       let finalResult = firstResult;
-      let repairAttempted = false;
       let parsedOutput;
       try {
         parsedOutput = parseOnlineGatewayJson(firstResult.text, {
@@ -648,10 +686,14 @@ ${firstResult.text.slice(0, 40_000)}`,
       });
       return {
         ...generation,
+        run_id: runId,
         prompt_versao: PROMPT_VERSAO_ONLINE,
         provider: "lovable-ai-gateway",
         model: ONLINE_GATEWAY_MODEL_ID,
-        usage: finalResult.usage,
+        started_at: startedAtIso,
+        finished_at: new Date().toISOString(),
+        finish_reason: finalResult.finishReason,
+        usage: sumAiTokenUsage(firstResult.usage, repairAttempted ? finalResult.usage : undefined),
         repair_attempted: repairAttempted,
         fontes_consultadas: fontesRastreaveis,
         buscas_realizadas: buscasRealizadas,
@@ -659,9 +701,13 @@ ${firstResult.text.slice(0, 40_000)}`,
     } catch (err: unknown) {
       return {
         ...createAiGenerationFailure(err, Date.now() - startedAt),
+        run_id: runId,
         prompt_versao: PROMPT_VERSAO_ONLINE,
         provider: "lovable-ai-gateway",
         model: ONLINE_GATEWAY_MODEL_ID,
+        started_at: startedAtIso,
+        finished_at: new Date().toISOString(),
+        repair_attempted: repairAttempted,
         fontes_consultadas: fontesRastreaveis,
         buscas_realizadas: buscasRealizadas,
       };

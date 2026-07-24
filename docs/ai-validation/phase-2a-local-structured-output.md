@@ -2,9 +2,9 @@
 
 ## Escopo
 
-O modo IA Local usa a API Google diretamente, com o modelo definido por
-`GOOGLE_MODEL_ID`, e solicita um objeto compatível com
-`AiOperationalOutputSchema` por meio de `Output.object`.
+O modo IA Local usa o Lovable AI Gateway com o modelo definido por
+`LOCAL_GATEWAY_MODEL_ID`. O Gateway recebe um template JSON estrito e a resposta
+é validada pelo `AiOperationalOutputSchema`.
 
 O texto livre não participa mais do caminho operacional padrão. Decisão, stake,
 ID, pick, gates e narrativa vêm do objeto validado pelo schema `1.1.0` e seguem
@@ -14,7 +14,7 @@ para o árbitro determinístico.
 
 1. O payload autenticado é validado.
 2. O prompt recebe apenas dados internos e contexto manual.
-3. `generateText` chama o provider Google com `Output.object` e JSON obrigatório.
+3. `generateText` chama o Lovable AI Gateway e exige JSON compatível com o template.
 4. A saída é novamente validada por Zod.
 5. O árbitro determinístico verifica invariantes, gates e regras operacionais.
 6. A apresentação A–G é reconstruída apenas a partir do resultado arbitrado.

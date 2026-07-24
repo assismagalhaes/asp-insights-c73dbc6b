@@ -16,86 +16,149 @@ export type Database = {
     Tables: {
       analises_ia: {
         Row: {
+          arbiter_version: string | null
+          blocking_codes: string[]
           buscas_realizadas: Json | null
           contexto_analisado: string | null
           created_at: string
           data_evento: string | null
           decisao_sugerida: string | null
           edge_usado: number | null
+          error_code: string | null
           esporte: string | null
+          final_decision: string | null
+          finish_reason: string | null
+          finished_at: string | null
           fontes_consultadas: Json | null
           hora_evento: string | null
           id: string
+          input_tokens: number | null
           jogo: string | null
+          latency_ms: number | null
           liga: string | null
           linha: string | null
           mercado: string | null
+          model_decision: string | null
+          model_id: string | null
           modo_ia: string
           odd_usada: number | null
+          output_tokens: number | null
           parecer_ia: string | null
+          parse_status: string | null
           pick: string | null
           probabilidade_final: number | null
           prognostico_id: string | null
           prompt_versao: string | null
+          provider: string | null
+          repair_attempted: boolean
           riscos_identificados: string | null
+          run_id: string
+          schema_version: string | null
+          scrape_count: number
+          search_count: number
+          source_count: number
           stake_sugerida: number | null
+          started_at: string | null
           tags_risco: Json | null
+          total_tokens: number | null
           updated_at: string
           validacao_id: string | null
         }
         Insert: {
+          arbiter_version?: string | null
+          blocking_codes?: string[]
           buscas_realizadas?: Json | null
           contexto_analisado?: string | null
           created_at?: string
           data_evento?: string | null
           decisao_sugerida?: string | null
           edge_usado?: number | null
+          error_code?: string | null
           esporte?: string | null
+          final_decision?: string | null
+          finish_reason?: string | null
+          finished_at?: string | null
           fontes_consultadas?: Json | null
           hora_evento?: string | null
           id?: string
+          input_tokens?: number | null
           jogo?: string | null
+          latency_ms?: number | null
           liga?: string | null
           linha?: string | null
           mercado?: string | null
+          model_decision?: string | null
+          model_id?: string | null
           modo_ia?: string
           odd_usada?: number | null
+          output_tokens?: number | null
           parecer_ia?: string | null
+          parse_status?: string | null
           pick?: string | null
           probabilidade_final?: number | null
           prognostico_id?: string | null
           prompt_versao?: string | null
+          provider?: string | null
+          repair_attempted?: boolean
           riscos_identificados?: string | null
+          run_id?: string
+          schema_version?: string | null
+          scrape_count?: number
+          search_count?: number
+          source_count?: number
           stake_sugerida?: number | null
+          started_at?: string | null
           tags_risco?: Json | null
+          total_tokens?: number | null
           updated_at?: string
           validacao_id?: string | null
         }
         Update: {
+          arbiter_version?: string | null
+          blocking_codes?: string[]
           buscas_realizadas?: Json | null
           contexto_analisado?: string | null
           created_at?: string
           data_evento?: string | null
           decisao_sugerida?: string | null
           edge_usado?: number | null
+          error_code?: string | null
           esporte?: string | null
+          final_decision?: string | null
+          finish_reason?: string | null
+          finished_at?: string | null
           fontes_consultadas?: Json | null
           hora_evento?: string | null
           id?: string
+          input_tokens?: number | null
           jogo?: string | null
+          latency_ms?: number | null
           liga?: string | null
           linha?: string | null
           mercado?: string | null
+          model_decision?: string | null
+          model_id?: string | null
           modo_ia?: string
           odd_usada?: number | null
+          output_tokens?: number | null
           parecer_ia?: string | null
+          parse_status?: string | null
           pick?: string | null
           probabilidade_final?: number | null
           prognostico_id?: string | null
           prompt_versao?: string | null
+          provider?: string | null
+          repair_attempted?: boolean
           riscos_identificados?: string | null
+          run_id?: string
+          schema_version?: string | null
+          scrape_count?: number
+          search_count?: number
+          source_count?: number
           stake_sugerida?: number | null
+          started_at?: string | null
           tags_risco?: Json | null
+          total_tokens?: number | null
           updated_at?: string
           validacao_id?: string | null
         }

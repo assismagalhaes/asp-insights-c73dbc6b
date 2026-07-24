@@ -60,6 +60,10 @@ import {
 import { analisarValidacao } from "@/lib/validacao-ia.functions";
 import { analisarValidacaoOnline } from "@/lib/validacao-ia-online.functions";
 import { getAiCalibrationSummary } from "@/lib/ai-learning";
+import {
+  buildAiObservabilitySnapshot,
+  type AiServerRunTelemetry,
+} from "@/lib/ai-validation/observability";
 import { formatBR, formatHora } from "@/lib/date-br";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -114,7 +118,7 @@ const STAKES = ["0.5", "1.0", "1.5"];
 const PARECER_TEMPLATE = "PULAR - risco/contexto insuficiente";
 const MATCHUP_PREVIEW_CONTEXT_MARKER = "[MATCHUPS / PREVIEW ENRIQUECIDO]";
 
-interface IAResult {
+interface IAResult extends AiServerRunTelemetry {
   parecer: string;
   decisao_sugerida: string | null;
   stake_sugerida: number | null;
@@ -134,9 +138,10 @@ interface IAResult {
   provider?: string;
   model?: string;
   latency_ms?: number;
+  observability: ReturnType<typeof buildAiObservabilitySnapshot>;
 }
 
-interface ServerAiResult {
+interface ServerAiResult extends AiServerRunTelemetry {
   model_output: unknown;
   raw_model_text: string;
   prompt_versao: string;
@@ -840,6 +845,12 @@ function Validacao() {
         raw.parse_status === "FAILED" && raw.parse_error
           ? `\n\nFalha de Structured Output:\n- ${raw.parse_error}`
           : "";
+      const observability = buildAiObservabilitySnapshot({
+        telemetry: raw,
+        arbitration,
+        sourceTraces: raw.fontes_consultadas ?? [],
+        searches: raw.buscas_realizadas ?? [],
+      });
       const r: IAResult = {
         parecer: `${formatArbitratedAiValidation(arbitration)}${parseFailureNote}`,
         decisao_sugerida: arbitration.output.decision,
@@ -852,16 +863,21 @@ function Validacao() {
         modo,
         odd_analisada: oddAj,
         odd_analisada_por_opcao: oddsAnalisadasMap,
-        blocking_codes: [
-          ...arbitration.blocks.map((block) => block.code),
-          ...(raw.error_code ? [raw.error_code] : []),
-        ],
+        blocking_codes: observability.blocking_codes,
         model_output: arbitration.output,
         parse_status: raw.parse_status,
         parse_error: raw.parse_error,
         provider: raw.provider,
         model: raw.model,
         latency_ms: raw.latency_ms,
+        run_id: raw.run_id,
+        started_at: raw.started_at,
+        finished_at: raw.finished_at,
+        finish_reason: raw.finish_reason,
+        usage: raw.usage,
+        error_code: raw.error_code,
+        repair_attempted: raw.repair_attempted,
+        observability,
       };
       const chosenByIa = r.decisao_sugerida === "CONFIRMA" ? findAiChosenOption(g, r) : null;
       const rWithAviso: IAResult = {
@@ -912,6 +928,7 @@ function Validacao() {
         fontes_consultadas: rWithAviso.fontes_consultadas ?? null,
         buscas_realizadas: rWithAviso.buscas_realizadas ?? null,
         prompt_versao: rWithAviso.prompt_versao,
+        ...rWithAviso.observability,
       });
       setIaResults((s) => ({ ...s, [g.key]: rWithAviso }));
       toast.success(modo === "online" ? "Análise online concluída" : "Análise local gerada");

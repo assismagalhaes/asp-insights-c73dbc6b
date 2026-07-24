@@ -92,6 +92,7 @@ export interface Validacao {
 
 export interface AnaliseIa {
   id: string;
+  run_id: string;
   prognostico_id: string | null;
   validacao_id: string | null;
   modo_ia: "local" | "online" | string;
@@ -115,6 +116,26 @@ export interface AnaliseIa {
   fontes_consultadas: FonteIa[] | null;
   buscas_realizadas: string[] | null;
   prompt_versao: string | null;
+  schema_version: string | null;
+  arbiter_version: string | null;
+  provider: string | null;
+  model_id: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  latency_ms: number | null;
+  finish_reason: string | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  total_tokens: number | null;
+  parse_status: "VALID" | "FAILED" | "LEGACY_ROLLBACK" | null;
+  error_code: string | null;
+  model_decision: "CONFIRMA" | "PULAR" | null;
+  final_decision: "CONFIRMA" | "PULAR" | null;
+  blocking_codes: string[];
+  repair_attempted: boolean;
+  search_count: number;
+  scrape_count: number;
+  source_count: number;
   created_at: string;
   updated_at: string | null;
 }
