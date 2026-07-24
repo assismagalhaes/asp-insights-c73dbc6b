@@ -8,7 +8,7 @@ import {
 
 describe("configuração do Structured Output local", () => {
   it("usa o Lovable AI Gateway com Gemini 2.5 Pro", () => {
-    expect(LOCAL_GATEWAY_MODEL_ID).toBe("google/gemini-2.5-pro");
+    expect(LOCAL_GATEWAY_MODEL_ID).toBe("google/gemini-3.6-flash");
     expect(parseLocalGatewayJson(LOCAL_GATEWAY_JSON_TEMPLATE)).toMatchObject({
       schema_version: "1.1.0",
       decision: "PULAR",

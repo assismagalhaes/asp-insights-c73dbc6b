@@ -11,7 +11,7 @@ import { generateText, type LanguageModel } from "ai";
 import { z } from "zod";
 
 export const PROMPT_VERSAO = "validacao-critica-v13-structured-output-local";
-export const LOCAL_GATEWAY_MODEL_ID = "google/gemini-2.5-pro";
+export const LOCAL_GATEWAY_MODEL_ID = "google/gemini-3.6-flash";
 
 export const LOCAL_GATEWAY_JSON_TEMPLATE = `{
   "schema_version": "1.1.0",
