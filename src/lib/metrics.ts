@@ -1,4 +1,4 @@
-import type { Prognostico, Resultado, Configuracao } from "./db";
+import type { Prognostico, Resultado, Status, Configuracao } from "./db";
 
 // Picks consideradas "resolvidas" para win-rate (somente GREEN/RED)
 export const PICK_RESOLVIDA: Resultado[] = ["GREEN", "RED"];
@@ -7,17 +7,30 @@ export const PICK_RED: Resultado[] = ["RED"];
 
 export type ValidationMetricsFilter = "confirmadas" | "puladas" | "todas";
 
+// Buckets de decisão de validação:
+// - CONFIRMA / CONFIRMA_CAUTELA → entram na banca oficial.
+// - PULAR / PASS / AGUARDAR_NOTICIA → analíticos (contam como "puladas").
+const CONFIRMA_STATUSES: string[] = ["CONFIRMA", "CONFIRMA_CAUTELA"];
+const PULAR_STATUSES: string[] = ["PULAR", "PASS", "AGUARDAR_NOTICIA"];
+
+export function isStatusConfirma(s: Status | null | undefined): boolean {
+  return !!s && CONFIRMA_STATUSES.includes(s);
+}
+export function isStatusPular(s: Status | null | undefined): boolean {
+  return !!s && PULAR_STATUSES.includes(s);
+}
+
 export function matchesValidationFilter(
   p: Pick<Prognostico, "status_validacao">,
   filter: ValidationMetricsFilter,
 ): boolean {
-  if (filter === "confirmadas") return p.status_validacao === "CONFIRMA";
-  if (filter === "puladas") return p.status_validacao === "PULAR";
-  return p.status_validacao === "CONFIRMA" || p.status_validacao === "PULAR";
+  if (filter === "confirmadas") return isStatusConfirma(p.status_validacao);
+  if (filter === "puladas") return isStatusPular(p.status_validacao);
+  return isStatusConfirma(p.status_validacao) || isStatusPular(p.status_validacao);
 }
 
 export function stakeAnalitica(p: Pick<Prognostico, "status_validacao" | "stake">): number {
-  if (p.status_validacao === "PULAR") return p.stake > 0 ? p.stake : 1;
+  if (isStatusPular(p.status_validacao)) return p.stake > 0 ? p.stake : 1;
   return p.stake;
 }
 
