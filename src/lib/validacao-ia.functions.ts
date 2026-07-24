@@ -7,25 +7,19 @@ import {
 } from "@/lib/ai-validation/generation-result";
 import { adaptLegacyAiResponse } from "@/lib/ai-validation/legacy-adapter";
 import { AiLocalGenerationOutputSchema } from "@/lib/ai-validation/schema";
-import { createGoogleProvider, GOOGLE_MODEL_ID } from "@/lib/google-ai.server";
 import { generateText, NoObjectGeneratedError, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 
 export const PROMPT_VERSAO = "validacao-critica-v13-structured-output-local";
+export const LOCAL_GATEWAY_MODEL_ID = "google/gemini-2.5-pro";
 
 /**
- * Google Generative AI only accepts a subset of OpenAPI schemas. The complete
- * operational contract includes unions, literals and URL validation that must
- * stay enforced by Zod after generation, but cannot safely be sent as the
- * provider's responseSchema.
- *
- * Output.object sends only the reduced generation schema to Gemini. The full
- * operational contract remains enforced locally after generation.
+ * Lovable AI Gateway roteia Gemini via OpenRouter. O contrato operacional
+ * completo continua sendo revalidado localmente pelo Zod após a geração; o
+ * schema enviado ao provider é apenas o simplificado (AiLocalGenerationOutputSchema).
  */
 export const LOCAL_STRUCTURED_OUTPUT_PROVIDER_OPTIONS = {
-  google: {
-    structuredOutputs: true,
-  },
+  lovable: {},
 } as const;
 
 async function generateLocalStructuredOutput({
