@@ -340,8 +340,13 @@ ${aspScreenerInstrucao}
       process.env.AI_VALIDATION_LOCAL_LEGACY_ROLLBACK?.trim().toLowerCase() === "true";
 
     try {
-      const google = createGoogleProvider();
-      const model = google(GOOGLE_MODEL_ID);
+      const lovableApiKey = process.env.LOVABLE_API_KEY;
+      if (!lovableApiKey) {
+        throw new Error("LOVABLE_API_KEY não configurada.");
+      }
+      const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
+      const gateway = createLovableAiGatewayProvider(lovableApiKey);
+      const model = gateway(LOCAL_GATEWAY_MODEL_ID);
 
       if (legacyRollbackEnabled) {
         const { text } = await generateText({
@@ -357,8 +362,8 @@ ${aspScreenerInstrucao}
         return {
           ...generation,
           prompt_versao: PROMPT_VERSAO,
-          provider: "google",
-          model: GOOGLE_MODEL_ID,
+          provider: "lovable-ai-gateway",
+          model: LOCAL_GATEWAY_MODEL_ID,
         };
       }
 
@@ -374,8 +379,8 @@ ${aspScreenerInstrucao}
       return {
         ...generation,
         prompt_versao: PROMPT_VERSAO,
-        provider: "google",
-        model: GOOGLE_MODEL_ID,
+        provider: "lovable-ai-gateway",
+        model: LOCAL_GATEWAY_MODEL_ID,
         usage: result.usage,
         repair_attempted: repairAttempted,
       };
@@ -383,8 +388,8 @@ ${aspScreenerInstrucao}
       return {
         ...createAiGenerationFailure(err, Date.now() - startedAt),
         prompt_versao: PROMPT_VERSAO,
-        provider: "google",
-        model: GOOGLE_MODEL_ID,
+        provider: "lovable-ai-gateway",
+        model: LOCAL_GATEWAY_MODEL_ID,
       };
     }
   });
