@@ -359,18 +359,20 @@ function ColetaDadosPage() {
   const visibleCollections = filteredCollections.slice(0, 10);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-bold tracking-tight">Coleta de Dados</h1>
-          <Badge variant="outline">Manual</Badge>
-          <Badge variant="outline">VM</Badge>
-          <Badge variant="outline">OddsAgora</Badge>
+    <div className="page-stack">
+      <div className="page-header">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="page-title">Coleta de Dados</h1>
+            <Badge variant="outline">Manual</Badge>
+            <Badge variant="outline">VM</Badge>
+            <Badge variant="outline">OddsAgora</Badge>
+          </div>
+          <p className="page-description">
+            Upload manual de JSON dos scrapers Python para normalização, exportação e persistência
+            de odds.
+          </p>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Upload manual de JSON dos scrapers Python para normalização, exportação e persistência de
-          odds.
-        </p>
       </div>
 
       <Card>

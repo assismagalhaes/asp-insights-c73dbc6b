@@ -69,11 +69,11 @@ function Historico() {
   const exportFilename = `asp_insights_resultados_${todayBR()}.csv`;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+    <div className="page-stack">
+      <div className="page-header">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Histórico</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="page-title">Histórico</h1>
+          <p className="page-description">
             Todos os prognósticos com filtros e resultados consolidados.
           </p>
         </div>

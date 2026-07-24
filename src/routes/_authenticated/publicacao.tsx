@@ -108,13 +108,11 @@ function PublicacaoPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="page-stack">
+      <div className="page-header">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Publicação</h1>
-          <p className="text-sm text-muted-foreground">
-            Transforme prognósticos validados em picks oficiais.
-          </p>
+          <h1 className="page-title">Publicação</h1>
+          <p className="page-description">Transforme prognósticos validados em picks oficiais.</p>
         </div>
         <div className="flex items-end gap-2">
           <div>

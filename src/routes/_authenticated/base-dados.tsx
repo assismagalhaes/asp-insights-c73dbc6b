@@ -559,14 +559,16 @@ function BaseDadosPage() {
           </div>
         </div>
       )}
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-          <Database className="h-6 w-6 text-primary" />
-          Base de Dados
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Atualização e consulta das bases históricas dos modelos esportivos via API da VM.
-        </p>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title flex items-center gap-2">
+            <Database className="h-6 w-6 text-primary" />
+            Base de Dados
+          </h1>
+          <p className="page-description">
+            Atualização e consulta das bases históricas dos modelos esportivos via API da VM.
+          </p>
+        </div>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(320px,420px)_1fr]">

@@ -623,11 +623,11 @@ function ImportarPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+    <div className="page-stack">
+      <div className="page-header">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Importar Prognósticos</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="page-title">Importar Prognósticos</h1>
+          <p className="page-description">
             Faça upload de CSV ou XLSX. Datas no formato brasileiro <strong>DD/MM/AAAA</strong>.
           </p>
         </div>

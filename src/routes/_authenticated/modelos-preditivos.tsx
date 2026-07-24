@@ -279,15 +279,17 @@ function ModelosPreditivosPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-bold tracking-tight">Modelos Preditivos</h1>
-          <Badge variant="outline">VM</Badge>
+    <div className="page-stack">
+      <div className="page-header">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="page-title">Modelos Preditivos</h1>
+            <Badge variant="outline">VM</Badge>
+          </div>
+          <p className="page-description">
+            Use uma coleta concluída como base para executar modelos preditivos na VM.
+          </p>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Use uma coleta concluída como base para executar modelos preditivos na VM.
-        </p>
       </div>
 
       <Card>

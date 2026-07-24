@@ -154,6 +154,23 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+const routeLabels: Record<string, string> = {
+  "/": "Dashboard Executivo",
+  "/prognosticos": "Prognósticos",
+  "/validacao": "Validação Crítica",
+  "/publicacao": "Publicação",
+  "/coleta-dados": "Coleta de Odds",
+  "/base-dados": "Base de Dados",
+  "/central-esportiva": "Central Esportiva",
+  "/monitor-highlightly": "Monitor Highlightly",
+  "/modelos-preditivos": "Modelos Preditivos",
+  "/aprendizado-ia": "Aprendizado da IA",
+  "/observabilidade-ia": "Observabilidade da IA",
+  "/historico": "Histórico",
+  "/bankroll": "Bankroll",
+  "/configuracoes": "Configurações",
+};
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
@@ -162,6 +179,7 @@ function RootComponent() {
   const [email, setEmail] = useState<string | null>(null);
   const isAuthRoute = pathname === "/auth";
   const isAnalysisRoute = pathname === "/central-esportiva";
+  const currentRouteLabel = routeLabels[pathname] ?? "ASP Insights";
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setEmail(data.session?.user.email ?? null));
@@ -197,31 +215,45 @@ function RootComponent() {
         <div className="flex min-h-screen w-full bg-background text-foreground">
           <AppSidebar />
           <div className="flex flex-1 flex-col min-w-0">
-            <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur">
-              <SidebarTrigger />
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold tracking-tight">ASP Insights</span>
-                <span className="text-xs text-muted-foreground hidden sm:inline">
-                  / AI Sports Predictions
+            <header className="app-shell-header sticky top-0 z-30 flex h-16 items-center gap-3 px-3 backdrop-blur-xl md:px-5">
+              <SidebarTrigger className="size-10 border border-border/80 bg-background/35 hover:bg-primary/10" />
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="hidden text-sm font-semibold tracking-tight text-foreground sm:inline">
+                  ASP Insights
+                </span>
+                <span className="hidden text-xs text-muted-foreground sm:inline">/</span>
+                <span className="truncate text-sm font-medium text-muted-foreground sm:text-xs">
+                  {currentRouteLabel}
                 </span>
               </div>
               <div className="ml-auto flex items-center gap-2">
-                <span className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[10px] font-medium text-success">
-                  <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+                <span className="inline-flex items-center gap-1.5 rounded border border-success/30 bg-success/10 px-2 py-1 text-[10px] font-bold tracking-[0.08em] text-success">
+                  <span className="size-1.5 rounded-full bg-success motion-safe:animate-pulse" />
                   ONLINE
                 </span>
-                {email && (
-                  <span className="hidden sm:inline text-xs text-muted-foreground max-w-[180px] truncate">
+                {email ? (
+                  <span className="hidden max-w-[180px] truncate text-xs text-muted-foreground lg:inline">
                     {email}
                   </span>
-                )}
-                <Button variant="ghost" size="sm" onClick={handleLogout} title="Sair">
-                  <LogOut className="h-4 w-4" />
-                  <span className="hidden sm:inline ml-1.5">Sair</span>
+                ) : null}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleLogout}
+                  title="Sair"
+                  aria-label="Sair"
+                >
+                  <LogOut data-icon="inline-start" />
                 </Button>
               </div>
             </header>
-            <main className={isAnalysisRoute ? "min-h-0 flex-1" : "flex-1 p-4 md:p-6"}>
+            <main
+              className={
+                isAnalysisRoute
+                  ? "app-main min-h-0 flex-1"
+                  : "app-main flex-1 px-4 py-5 md:px-6 md:py-6 lg:px-8"
+              }
+            >
               <Outlet />
             </main>
           </div>

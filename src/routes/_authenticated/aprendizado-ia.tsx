@@ -336,13 +336,15 @@ function AprendizadoIaPage() {
   const hasData = filteredAnalises.length > 0 || filteredFeedback.length > 0;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Aprendizado da IA</h1>
-        <p className="text-sm text-muted-foreground">
-          Memória operacional entre análise da IA, decisão humana e resultados GREEN/RED.
-          Confirmadas medem banca; puladas medem qualidade da decisão de recusa.
-        </p>
+    <div className="page-stack">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Aprendizado da IA</h1>
+          <p className="page-description">
+            Memória operacional entre análise da IA, decisão humana e resultados GREEN/RED.
+            Confirmadas medem banca; puladas medem qualidade da decisão de recusa.
+          </p>
+        </div>
       </div>
 
       <Card>

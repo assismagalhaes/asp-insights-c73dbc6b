@@ -1076,16 +1076,18 @@ function Validacao() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Validação Crítica</h1>
-        <p className="text-sm text-muted-foreground">
-          Segunda camada analítica dos prognósticos gerados pelos modelos.
-        </p>
+    <div className="page-stack">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Validação Crítica</h1>
+          <p className="page-description">
+            Segunda camada analítica dos prognósticos gerados pelos modelos.
+          </p>
+        </div>
       </div>
 
       {/* Filtros */}
-      <div className="rounded-lg border border-border bg-card p-3">
+      <div className="filter-surface">
         <div className="flex flex-wrap items-end gap-3">
           <PeriodFilter
             periodo={periodo}
@@ -1160,7 +1162,7 @@ function Validacao() {
       />
 
       {grupos.length === 0 && (
-        <div className="rounded-lg border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+        <div className="surface-panel p-8 text-center text-sm text-muted-foreground">
           Não há prognósticos pendentes de validação.
         </div>
       )}
