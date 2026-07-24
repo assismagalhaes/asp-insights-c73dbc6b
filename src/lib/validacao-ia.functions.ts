@@ -6,9 +6,9 @@ import {
   parseStructuredAiOutput,
 } from "@/lib/ai-validation/generation-result";
 import { adaptLegacyAiResponse } from "@/lib/ai-validation/legacy-adapter";
-import { AiOperationalOutputSchema } from "@/lib/ai-validation/schema";
+import { AiLocalGenerationOutputSchema } from "@/lib/ai-validation/schema";
 import { createGoogleProvider, GOOGLE_MODEL_ID } from "@/lib/google-ai.server";
-import { generateText, Output } from "ai";
+import { generateText, NoObjectGeneratedError, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 
 export const PROMPT_VERSAO = "validacao-critica-v13-structured-output-local";
@@ -27,6 +27,49 @@ export const LOCAL_STRUCTURED_OUTPUT_PROVIDER_OPTIONS = {
     structuredOutputs: false,
   },
 } as const;
+
+async function generateLocalStructuredOutput({
+  model,
+  prompt,
+}: {
+  model: LanguageModel;
+  prompt: string;
+}) {
+  const generate = (repairPrompt: string) =>
+    generateText({
+      model,
+      system: SYSTEM_PROMPT,
+      prompt: repairPrompt,
+      providerOptions: LOCAL_STRUCTURED_OUTPUT_PROVIDER_OPTIONS,
+      output: Output.object({
+        schema: AiLocalGenerationOutputSchema,
+        name: "asp_insights_local_validation",
+        description:
+          "Parecer operacional estruturado do modo IA Local, sujeito ao árbitro determinístico.",
+      }),
+    });
+
+  try {
+    return { result: await generate(prompt), repairAttempted: false };
+  } catch (error: unknown) {
+    if (!NoObjectGeneratedError.isInstance(error) || !error.text?.trim()) {
+      throw error;
+    }
+
+    const repairPrompt = `${prompt}
+
+REPARO CONTROLADO ÚNICO:
+A tentativa anterior produziu um JSON que não pôde ser validado. Corrija somente
+a estrutura e os tipos para o contrato solicitado, preservando a análise e sem
+adicionar markdown. Preencha todos os gates e campos narrativos. Use arrays
+vazios em sources e searches.
+
+SAÍDA ANTERIOR A CORRIGIR:
+${error.text.slice(0, 40_000)}`;
+
+    return { result: await generate(repairPrompt), repairAttempted: true };
+  }
+}
 
 const CorrelatedPickSchema = z.object({
   mercado: z.string(),
@@ -325,17 +368,9 @@ ${aspScreenerInstrucao}
         };
       }
 
-      const result = await generateText({
+      const { result, repairAttempted } = await generateLocalStructuredOutput({
         model,
-        system: SYSTEM_PROMPT,
         prompt: userPayload,
-        providerOptions: LOCAL_STRUCTURED_OUTPUT_PROVIDER_OPTIONS,
-        output: Output.object({
-          schema: AiOperationalOutputSchema,
-          name: "asp_insights_local_validation",
-          description:
-            "Parecer operacional estruturado do modo IA Local, sujeito ao árbitro determinístico.",
-        }),
       });
       const generation = parseStructuredAiOutput({
         output: result.output,
@@ -348,6 +383,7 @@ ${aspScreenerInstrucao}
         provider: "google",
         model: GOOGLE_MODEL_ID,
         usage: result.usage,
+        repair_attempted: repairAttempted,
       };
     } catch (err: unknown) {
       return {
