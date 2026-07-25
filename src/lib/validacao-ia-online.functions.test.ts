@@ -60,6 +60,35 @@ describe("Structured Output online", () => {
     });
   });
 
+  it("normaliza decision reparável sem aceitar enum desconhecido", () => {
+    const reparavel = JSON.parse(ONLINE_GATEWAY_JSON_TEMPLATE) as Record<string, unknown>;
+    reparavel.decision = "PULAR VALIDADO";
+    expect(
+      parseOnlineGatewayJson(JSON.stringify(reparavel), {
+        sourceTraces: [],
+        searches: [],
+      }).decision,
+    ).toBe("PULAR");
+
+    reparavel.decision = "AGUARDAR";
+    expect(() =>
+      parseOnlineGatewayJson(JSON.stringify(reparavel), {
+        sourceTraces: [],
+        searches: [],
+      }),
+    ).toThrow();
+  });
+
+  it("mantém a síntese final online dentro de um orçamento previsível", () => {
+    const prompt = buildOnlineFinalSynthesisPrompt({
+      userPayload: "U".repeat(30_000),
+      preliminarySynthesis: "P".repeat(20_000),
+      researchNarrative: "R".repeat(20_000),
+      researchEvidence: ["E".repeat(40_000)],
+    });
+    expect(prompt.length).toBeLessThan(28_000);
+  });
+
   it("reconstrói fontes e buscas somente pela telemetria real", () => {
     const modelJson = JSON.parse(ONLINE_GATEWAY_JSON_TEMPLATE) as Record<string, unknown>;
     modelJson.sources = [{ title: "Fonte inventada", url: "javascript:alert(1)" }];

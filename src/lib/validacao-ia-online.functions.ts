@@ -14,7 +14,7 @@ import { AiLocalGenerationOutputSchema } from "@/lib/ai-validation/schema";
 import { generateText, tool, stepCountIs } from "ai";
 import { z } from "zod";
 
-export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v12-repair-fallback";
+export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v13-mlb-evidence-gates";
 export const ONLINE_GATEWAY_MODEL_ID = "google/gemini-3.6-flash";
 export const ONLINE_REPAIR_MODEL_ID = "google/gemini-2.5-flash";
 
@@ -46,16 +46,16 @@ export function buildOnlineFinalSynthesisPrompt({
   researchEvidence: string[];
 }): string {
   return `CONTEXTO OPERACIONAL:
-${userPayload.slice(0, 20_000)}
+${userPayload.slice(0, 10_000)}
 
 HIPÓTESE PRELIMINAR NÃO OPERACIONAL:
-${preliminarySynthesis.trim().slice(0, 10_000) || "(indisponível)"}
+${preliminarySynthesis.trim().slice(0, 3_000) || "(indisponível)"}
 
 EVIDÊNCIAS COLETADAS PELAS FERRAMENTAS:
-${researchEvidence.join("\n\n").slice(0, 30_000) || "(nenhuma evidência coletada)"}
+${researchEvidence.join("\n\n").slice(0, 10_000) || "(nenhuma evidência coletada)"}
 
 RESUMO DA ETAPA DE PESQUISA:
-${researchNarrative.trim().slice(0, 10_000) || "(a pesquisa não produziu resumo textual)"}
+${researchNarrative.trim().slice(0, 3_000) || "(a pesquisa não produziu resumo textual)"}
 
 Reavalie a hipótese preliminar à luz das evidências, inclusive evidências
 contrárias e informações ausentes. Somente agora produza a decisão operacional.
@@ -371,14 +371,15 @@ Regras para grupo de opções concorrentes:
 
 Gates obrigatórios:
 - Gate 1 — Coerência técnica: tese precisa estar coerente com mercado, pick, probabilidade, edge ajustado/original, contexto informado, esporte e liga. Conflito técnico relevante = PULAR.
-- Gate 2 — Risco estrutural: risco estrutural alto = PULAR. Exemplos: MLB starter incerto/bullpen desgastado/lineup alternativo; NBA/WNBA estrela questionável/rotação incerta/back-to-back forte; NHL goalie não confirmado em pick sensível; NFL QB questionável/clima forte/desfalques OL/defesa; Futebol escalação rodada/mata-mata incerto/desfalques-chave.
-- Gate 3 — Informação crítica ausente: se informação crítica necessária não estiver disponível = PULAR; no máximo CONFIRMA 0.5u apenas se a informação ausente não for determinante.
-- Gate 4 — Fonte online fraca: se fontes forem antigas, genéricas ou não confirmarem o ponto crítico, sinalize e tenda para PULAR.
-- Gate 5 — Risco > benefício: se houver 2 ou mais riscos relevantes, PULAR.
+- Gate 2 — Risco estrutural: reprove apenas quando houver evidência atual, diretamente ligada ao mercado, de que uma premissa do modelo foi invalidada ou de que o edge deixou de ser executável. Risco normal do esporte pode limitar a stake, mas não é veto automático.
+- Gate 3 — Informação crítica ausente: reprove apenas se o dado ausente for indispensável para interpretar a pick ou tornar o preço executável. Lineup definitivo, vetor exato do vento, umpire e pitch count não são vetos automáticos quando starters, mercado, odd, probabilidade e edge já estão confirmados; trate-os como limitação ou limite a stake.
+- Gate 4 — Fonte online fraca: fonte fraca impede usar aquela alegação como fato. Não transforme ausência de confirmação de um fator auxiliar em evidência contrária à entrada.
+- Gate 5 — Risco > benefício: conte somente riscos independentes, materiais e sustentados por evidência. Não some descrições correlatas do mesmo fator para fabricar um veto.
 - Gate 6 — Duplicidade/correlação: se houver outras picks do mesmo jogo e mesmo grupo de mercado, trate como opções concorrentes. Você deve escolher no máximo uma opção para CONFIRMAR ou recomendar PULAR o grupo inteiro. Nunca sugira confirmar mais de uma opção do grupo.
 
 Regras por informação crítica:
 - MLB: starter não confirmado → se muito crítico, PULAR; se não, destacar AGUARDAR CONFIRMAÇÃO. Bullpen muito usado e pick depende de under → risco alto.
+- MLB: starter confirmado de alta qualidade, H2H curto e campanha geral casa/fora não reprovam sozinhos o risco estrutural. Para usá-los como veto, demonstre a ligação direcional com o mercado e por que ela invalida uma premissa não incorporada pelo modelo. H2H e recordes agregados são contexto auxiliar e podem duplicar informação histórica já usada.
 - NBA/WNBA: estrela questionável em spread/total → se muito crítico, PULAR; se não, destacar AGUARDAR CONFIRMAÇÃO.
 - NHL: goalie não confirmado → se muito crítico, PULAR; se não, destacar AGUARDAR CONFIRMAÇÃO.
 - NFL/NCAA: QB questionável ou clima extremo → se muito crítico, PULAR; se não, destacar AGUARDAR CONFIRMAÇÃO.

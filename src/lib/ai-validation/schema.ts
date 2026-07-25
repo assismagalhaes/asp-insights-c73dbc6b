@@ -2,6 +2,28 @@ import { z } from "zod";
 import { AI_VALIDATION_SCHEMA_VERSION } from "./types";
 
 export const AiDecisionSchema = z.enum(["CONFIRMA", "PULAR"]);
+const PROVIDER_DECISION_ALIASES: Record<string, z.infer<typeof AiDecisionSchema>> = {
+  CONFIRMA: "CONFIRMA",
+  CONFIRMAR: "CONFIRMA",
+  "CONFIRMA VALIDADO": "CONFIRMA",
+  "CONFIRMAR VALIDADO": "CONFIRMA",
+  PULAR: "PULAR",
+  "PULAR VALIDADO": "PULAR",
+};
+
+export function normalizeProviderDecision(input: unknown): unknown {
+  if (typeof input !== "string") return input;
+  const normalized = input
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .toUpperCase();
+  return PROVIDER_DECISION_ALIASES[normalized] ?? input;
+}
+
+export const AiProviderDecisionSchema = z.preprocess(normalizeProviderDecision, AiDecisionSchema);
 export const AiStakeSchema = z.union([z.literal(0), z.literal(0.5), z.literal(1), z.literal(1.5)]);
 
 export const AiGateResultSchema = z
@@ -36,7 +58,7 @@ export const AiNarrativeSectionsSchema = z
  */
 export const AiLocalGenerationOutputSchema = z.object({
   schema_version: z.literal(AI_VALIDATION_SCHEMA_VERSION).default(AI_VALIDATION_SCHEMA_VERSION),
-  decision: AiDecisionSchema,
+  decision: AiProviderDecisionSchema,
   stake: AiStakeSchema,
   selected_prediction_id: z.string().trim().min(1).max(200).nullable().default(null),
   selected_pick: z.string().trim().min(1).max(1_000).nullable().default(null),

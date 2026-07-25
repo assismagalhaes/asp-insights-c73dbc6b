@@ -36,19 +36,21 @@ export function buildStructuredRepairPrompt({
 }): string {
   const sanitizedPreviousOutput = previousOutput.trim() || "(EMPTY_INITIAL_OUTPUT)";
   const researchSection = researchContext?.trim()
-    ? `\n\nPESQUISAS E FONTES JÁ COLETADAS:\n${researchContext.trim().slice(0, 8_000)}`
+    ? `\n\nPESQUISAS E FONTES JÁ COLETADAS:\n${researchContext.trim().slice(0, 4_000)}`
     : "";
 
   return `REPARO CONTROLADO ÚNICO:
 Converta a saída anterior para o contrato JSON do system prompt. Corrija apenas
 estrutura, tipos e enums; preserve a análise e os dados operacionais. Retorne
 somente JSON, sem markdown ou comentários. Não refaça pesquisas.
+Normalize decision estritamente assim: CONFIRMAR, CONFIRMA VALIDADO ou
+CONFIRMAR VALIDADO -> CONFIRMA; PULAR VALIDADO -> PULAR. Não crie outro enum.
 
 CONTEXTO OPERACIONAL MÍNIMO:
-${operationalContext.trim().slice(0, 20_000)}${researchSection}
+${operationalContext.trim().slice(0, 6_000)}${researchSection}
 
 SAÍDA ANTERIOR A CORRIGIR:
-${sanitizedPreviousOutput.slice(0, 20_000)}`;
+${sanitizedPreviousOutput.slice(0, 16_000)}`;
 }
 
 function structuralFailureCode(error: unknown): string {

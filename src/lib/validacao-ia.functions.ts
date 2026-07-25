@@ -14,7 +14,7 @@ import { AiLocalGenerationOutputSchema } from "@/lib/ai-validation/schema";
 import { generateText, type LanguageModel } from "ai";
 import { z } from "zod";
 
-export const PROMPT_VERSAO = "validacao-critica-v14-repair-fallback";
+export const PROMPT_VERSAO = "validacao-critica-v15-mlb-evidence-gates";
 export const LOCAL_GATEWAY_MODEL_ID = "google/gemini-3.6-flash";
 export const LOCAL_REPAIR_MODEL_ID = "google/gemini-2.5-flash";
 
@@ -266,10 +266,10 @@ Regras para grupo de opções concorrentes:
 
 Gates obrigatórios:
 - Gate 1 — Coerência técnica: tese precisa estar coerente com mercado, pick, probabilidade, edge ajustado/original, contexto informado, esporte e liga. Conflito técnico relevante = PULAR.
-- Gate 2 — Risco estrutural interno: risco estrutural alto identificado nos dados fornecidos = PULAR. Exemplos válidos no modo local: conflito forte entre projeção e H2H/forma recente, edge fraco ou negativo, odd sem valor, pick incompatível com a projeção, amostra inconsistente, baixa consistência do modelo, indicadores internos contraditórios, exposição duplicada/correlata.
+- Gate 2 — Risco estrutural interno: reprove apenas quando os dados fornecidos demonstrarem que uma premissa do modelo foi invalidada ou que o edge deixou de ser executável. H2H curto, campanha geral casa/fora ou qualidade isolada de um starter são contexto auxiliar, não veto automático.
 - Gate 3 — Informação crítica no modo local: não reprove por ausência de informação externa pesquisável. Se faltar pitcher, lineup, escalação, lesão, clima, goalie, QB status, bullpen pesquisado, notícias ou odds movement, escreva "não aplicável ao modo local / dado externo não informado" e avalie apenas como limitação. Reprove este gate somente quando faltar dado interno essencial para interpretar o próprio prognóstico, como mercado, pick, odd, probabilidade, edge ou contexto técnico mínimo.
 - Gate 4 — Contexto interno/manual: aprove quando a tese for sustentada pelos dados internos e pelo contexto manual disponível. Não reprove por ausência de fonte online, notícia, escalação, lesão ou confirmação externa; esses fatores pertencem apenas ao modo IA Local + Pesquisa, salvo se estiverem explicitamente colados no contexto manual.
-- Gate 5 — Risco > benefício: se houver 2 ou mais riscos relevantes, PULAR.
+- Gate 5 — Risco > benefício: conte somente riscos independentes, materiais e sustentados pelos dados. Não some descrições correlatas do mesmo fator para fabricar um veto.
 - Gate 6 — Duplicidade/correlação: se houver outras picks do mesmo jogo e mesmo grupo de mercado, trate como opções concorrentes. Você deve escolher no máximo uma opção para CONFIRMAR ou recomendar PULAR o grupo inteiro. Nunca sugira confirmar mais de uma opção do grupo.
 
 Contrato estruturado obrigatório:

@@ -86,10 +86,18 @@ describe("configuração do Structured Output local", () => {
     });
   });
 
-  it("rejeita aliases narrativos antes do contrato operacional", () => {
-    const invalid = JSON.parse(LOCAL_GATEWAY_JSON_TEMPLATE) as Record<string, unknown>;
-    invalid.decision = "CONFIRMAR";
+  it("normaliza aliases conhecidos do provider antes do contrato operacional estrito", () => {
+    for (const alias of ["CONFIRMAR", "CONFIRMA VALIDADO", "PULAR VALIDADO"]) {
+      const generated = JSON.parse(LOCAL_GATEWAY_JSON_TEMPLATE) as Record<string, unknown>;
+      generated.decision = alias;
+      const output = parseLocalGatewayJson(JSON.stringify(generated));
+      expect(output.decision).toBe(alias.startsWith("PULAR") ? "PULAR" : "CONFIRMA");
+    }
+  });
 
+  it("continua rejeitando decisões ambíguas ou desconhecidas", () => {
+    const invalid = JSON.parse(LOCAL_GATEWAY_JSON_TEMPLATE) as Record<string, unknown>;
+    invalid.decision = "TALVEZ";
     expect(() => parseLocalGatewayJson(JSON.stringify(invalid))).toThrow();
   });
 
