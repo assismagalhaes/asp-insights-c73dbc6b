@@ -2,7 +2,19 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { AlertTriangle, CheckCircle2, Database, Loader2, RotateCcw, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarDays,
+  CheckCircle2,
+  Database,
+  Loader2,
+  Plus,
+  RotateCcw,
+  ShieldCheck,
+  Trash2,
+  Trophy,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -17,6 +29,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AmbientBackdrop, PageIntro } from "@/components/command-center";
+import { SportMark } from "@/components/sport-filter-select";
+import { StatCard } from "@/components/stat-card";
 import {
   Dialog,
   DialogContent,
@@ -544,8 +559,11 @@ function BaseDadosPage() {
     }
   }
 
+  const selectedSportLabel = SPORTS.find((item) => item.value === sport)?.label ?? "—";
+
   return (
-    <div className="space-y-6">
+    <div className="page-stack relative isolate">
+      <AmbientBackdrop />
       {scraperUnavailable && (
         <div className="flex items-start gap-3 rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
@@ -560,7 +578,19 @@ function BaseDadosPage() {
           </div>
         </div>
       )}
-      <div className="page-header">
+      <PageIntro
+        title="Base de Dados"
+        description="Consulte e mantenha as bases históricas dos modelos esportivos."
+        icon={Database}
+        status={
+          scraperUnavailable
+            ? "Conexão com a VM indisponível"
+            : busy
+              ? "Operação em andamento"
+              : "Base operacional"
+        }
+      />
+      <div className="hidden">
         <div>
           <h1 className="page-title flex items-center gap-2">
             <Database className="h-6 w-6 text-primary" />
@@ -572,8 +602,47 @@ function BaseDadosPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(320px,420px)_1fr]">
-        <Card>
+      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4 lg:gap-3">
+        <StatCard
+          label="Esporte"
+          value={selectedSportLabel}
+          meta={sport ? "Modelo selecionado" : "Selecione um modelo"}
+          icon={Trophy}
+          accent="blue"
+          tone="off"
+          className="[&_div.font-mono]:truncate [&_div.font-mono]:text-base sm:[&_div.font-mono]:text-lg"
+        />
+        <StatCard
+          label="Liga"
+          value={league || "—"}
+          meta={league ? "Competição em contexto" : "Aguardando seleção"}
+          icon={ShieldCheck}
+          accent="violet"
+          tone="off"
+          className="[&_div.font-mono]:truncate [&_div.font-mono]:text-base sm:[&_div.font-mono]:text-lg"
+        />
+        <StatCard
+          label="Temporada"
+          value={year || "—"}
+          meta={isHistoricalYear ? "Base histórica" : year ? "Base selecionada" : "Sem período"}
+          icon={CalendarDays}
+          accent={isHistoricalYear ? "amber" : "cyan"}
+          tone="off"
+          className="[&_div.font-mono]:text-base sm:[&_div.font-mono]:text-lg"
+        />
+        <StatCard
+          label="Time selecionado"
+          value={selectedTeam?.sigla || team || "—"}
+          meta={selectedTeam?.nome || "Nenhum time selecionado"}
+          icon={Users}
+          accent="green"
+          tone="off"
+          className="[&_div.font-mono]:truncate [&_div.font-mono]:text-base sm:[&_div.font-mono]:text-lg"
+        />
+      </div>
+
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(300px,380px)_minmax(0,1fr)]">
+        <Card className="overflow-hidden border-primary/15 bg-card/90 shadow-[0_18px_50px_rgb(0_0_0/0.18)]">
           <CardHeader>
             <CardTitle className="text-base">Filtros e operação</CardTitle>
           </CardHeader>
@@ -596,7 +665,10 @@ function BaseDadosPage() {
                   <SelectContent>
                     {SPORTS.map((item) => (
                       <SelectItem key={item.value} value={item.value}>
-                        {item.label}
+                        <span className="flex items-center gap-2">
+                          <SportMark sport={item.label} />
+                          {item.label}
+                        </span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -667,7 +739,8 @@ function BaseDadosPage() {
                           setSeasonDialog(true);
                         }}
                       >
-                        + Nova Temporada
+                        <Plus className="mr-2 h-4 w-4 text-primary" />
+                        Nova Temporada
                       </Button>
                     </div>
                   </Field>
@@ -719,6 +792,7 @@ function BaseDadosPage() {
                       setValidation(null);
                       setOperation(null);
                     }}
+                    className="resize-y font-mono text-xs"
                     placeholder={getLinePlaceholder(isBasketball, league)}
                   />
                 </Field>
@@ -754,8 +828,8 @@ function BaseDadosPage() {
           </CardContent>
         </Card>
 
-        <div className="space-y-4">
-          <Card>
+        <div className="min-w-0 space-y-4">
+          <Card className="min-w-0 overflow-hidden border-primary/15 bg-card/90 shadow-[0_18px_50px_rgb(0_0_0/0.18)]">
             <CardHeader className="flex-row items-center justify-between gap-3">
               <CardTitle className="text-base">Últimas linhas do time</CardTitle>
               <Button
@@ -774,13 +848,14 @@ function BaseDadosPage() {
             </CardHeader>
             <CardContent>
               {selectedTeam && (
-                <div className="mb-3 flex flex-wrap gap-2 text-sm">
+                <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+                  <SportMark sport={selectedSportLabel} />
                   <Badge variant="outline">{selectedTeam.sigla}</Badge>
                   <span className="text-muted-foreground">{selectedTeam.nome}</span>
                 </div>
               )}
               {lastLines.length ? (
-                <div className="max-h-[420px] space-y-2 overflow-auto rounded-md border border-border bg-background/50 p-3">
+                <div className="max-h-[520px] min-w-0 space-y-2 overflow-auto rounded-lg border border-border bg-background/50 p-3">
                   {lastLinesHeader && (
                     <pre className="whitespace-pre-wrap rounded border border-border/70 bg-muted/60 p-2 font-mono text-xs text-muted-foreground">
                       {lastLinesHeader}
@@ -796,7 +871,7 @@ function BaseDadosPage() {
                   ))}
                 </div>
               ) : (
-                <div className="rounded-md border border-border bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+                <div className="min-h-56 rounded-lg border border-dashed border-border bg-muted/20 p-8 text-center text-sm text-muted-foreground">
                   {team
                     ? "Nenhuma linha carregada para este time."
                     : "Selecione um time para consultar as últimas linhas."}
@@ -805,7 +880,7 @@ function BaseDadosPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="overflow-hidden border-primary/15 bg-card/90">
             <CardHeader>
               <CardTitle className="text-base">Resultado da operação</CardTitle>
             </CardHeader>
