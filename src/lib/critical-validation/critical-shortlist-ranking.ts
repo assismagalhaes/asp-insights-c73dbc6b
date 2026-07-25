@@ -7,10 +7,7 @@ import {
 
 export type CriticalShortlistStatus = "CANDIDATA" | "MONITORAR" | "RESERVA" | "BLOQUEADA";
 export type CriticalShortlistFinalStatus =
-  | "TOP_FINAL"
-  | "RESERVA_CONFIRMADA"
-  | "PULAR"
-  | "RESERVA_NAO_ANALISADA";
+  "TOP_FINAL" | "RESERVA_CONFIRMADA" | "PULAR" | "RESERVA_NAO_ANALISADA";
 export type CriticalRiskSeverity = "low" | "medium" | "high" | "critical" | "hard_block";
 
 export type CriticalShortlistRiskFlag = {
@@ -602,8 +599,7 @@ export function detectCriticalShortlistRiskFlags(
   const awayVenueGap = extractContextNumber(text, "away_venue_gap_days");
   const venueGaps = [homeVenueGap, awayVenueGap].filter(isFiniteNumber);
   const maximumVenueGap = venueGaps.length ? Math.max(...venueGaps) : null;
-  const venueGapSeverity: CriticalRiskSeverity =
-    (maximumVenueGap ?? 0) > 45 ? "high" : "medium";
+  const venueGapSeverity: CriticalRiskSeverity = (maximumVenueGap ?? 0) > 45 ? "high" : "medium";
   const bothVenueGapsCritical =
     isFiniteNumber(homeVenueGap) &&
     isFiniteNumber(awayVenueGap) &&
