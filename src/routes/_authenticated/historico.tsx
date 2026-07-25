@@ -7,6 +7,7 @@ import {
   useConfiguracao,
   ESPORTES_DEFAULT,
   MERCADOS_DEFAULT,
+  getOddEfetiva,
   type Prognostico,
 } from "@/lib/db";
 import { Button } from "@/components/ui/button";
@@ -180,8 +181,13 @@ function Historico() {
                 <th className="px-3 py-2 text-left">Placar</th>
                 <th className="px-3 py-2 text-left">Mercado</th>
                 <th className="px-3 py-2 text-left">Pick</th>
-                <th className="px-3 py-2 text-right font-mono">Odd</th>
-                <th className="px-3 py-2 text-right font-mono">Stake</th>
+                <th className="px-3 py-2 text-right font-mono">Odd usada</th>
+                <th
+                  className="px-3 py-2 text-right font-mono"
+                  title="Stake analítica: apostas PULAR usam 1u contrafactual para avaliar a decisão."
+                >
+                  Stake analítica
+                </th>
                 <th className="px-3 py-2 text-left">Validação</th>
                 <th className="px-3 py-2 text-left">Resultado</th>
                 <th className="px-3 py-2 text-right font-mono">Lucro</th>
@@ -203,8 +209,25 @@ function Historico() {
                   <td className="px-3 py-2 font-mono text-xs">{p.placar_final ?? "-"}</td>
                   <td className="px-3 py-2 text-muted-foreground">{p.mercado}</td>
                   <td className="px-3 py-2">{p.pick}</td>
-                  <td className="px-3 py-2 text-right font-mono">{p.odd_ofertada.toFixed(2)}</td>
                   <td className="px-3 py-2 text-right font-mono">
+                    <div>{getOddEfetiva(p).toFixed(2)}</div>
+                    {p.odd_ajustada != null && p.odd_ajustada !== p.odd_ofertada ? (
+                      <div
+                        className="text-[10px] text-muted-foreground"
+                        title="Odd originalmente ofertada"
+                      >
+                        ofertada {p.odd_ofertada.toFixed(2)}
+                      </div>
+                    ) : null}
+                  </td>
+                  <td
+                    className="px-3 py-2 text-right font-mono"
+                    title={
+                      p.status_validacao === "PULAR"
+                        ? "1u contrafactual para simular o resultado da oportunidade pulada."
+                        : "Stake registrada para a aposta confirmada."
+                    }
+                  >
                     {stakeAnalitica(p).toFixed(1)}u
                   </td>
                   <td className="px-3 py-2">
@@ -253,11 +276,17 @@ function toHistoricoCsv(rows: Prognostico[]): string {
     { label: "pick", value: (p) => p.pick },
     { label: "odd_ofertada", value: (p) => p.odd_ofertada },
     { label: "odd_ajustada", value: (p) => p.odd_ajustada },
+    { label: "odd_usada", value: (p) => getOddEfetiva(p) },
     { label: "odd_valor", value: (p) => p.odd_valor },
     { label: "probabilidade_final", value: (p) => p.probabilidade_final },
     { label: "edge", value: (p) => p.edge },
     { label: "edge_ajustado", value: (p) => p.edge_ajustado },
     { label: "stake", value: (p) => stakeAnalitica(p) },
+    { label: "stake_analitica", value: (p) => stakeAnalitica(p) },
+    {
+      label: "stake_natureza",
+      value: (p) => (p.status_validacao === "PULAR" ? "contrafactual_pular" : "registrada"),
+    },
     { label: "status_validacao", value: (p) => p.status_validacao },
     { label: "resultado", value: (p) => p.resultado },
     { label: "lucro_prejuizo", value: (p) => lucroUnidadesAnalitico(p) },

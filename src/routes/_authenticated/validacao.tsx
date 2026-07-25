@@ -77,6 +77,7 @@ import {
   useApplyCriticalValidationToOpportunityRanking,
   useGeneratePreAiOpportunityShortlist,
   useEnrichOpportunityRankingItemPreview,
+  useRefreshOpportunityRankingForPrognostico,
   usePreAiOpportunityShortlistHistory,
   type PersistedOpportunityRankingRun,
   type RankedOpportunityAlternative,
@@ -418,6 +419,7 @@ function Validacao() {
     null;
   const generatePreAiShortlist = useGeneratePreAiOpportunityShortlist();
   const enrichPreview = useEnrichOpportunityRankingItemPreview();
+  const refreshRanking = useRefreshOpportunityRankingForPrognostico();
   const applyRankingValidation = useApplyCriticalValidationToOpportunityRanking();
   const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
   const mercados = useMemo(
@@ -592,6 +594,10 @@ function Validacao() {
             previewContext,
           );
           await updateProg.mutateAsync({ id: option.id, dados_tecnicos: persistedContext });
+          await refreshRanking.mutateAsync({
+            ...option,
+            dados_tecnicos: persistedContext,
+          });
         }
         setContextos((prev) => {
           const next = { ...prev };
@@ -661,6 +667,11 @@ function Validacao() {
     try {
       await updateProg.mutateAsync({
         id: p.id,
+        odd_ajustada: odd,
+        edge_ajustado: edgeAjustado,
+      });
+      await refreshRanking.mutateAsync({
+        ...p,
         odd_ajustada: odd,
         edge_ajustado: edgeAjustado,
       });
@@ -1670,6 +1681,14 @@ function PreAiShortlistPanel({
   const loadedPreviewCount = savedItems.filter(
     (item) => item.matchup_preview_status === "loaded",
   ).length;
+  const decisionCounts = {
+    confirmed: savedItems.filter((item) =>
+      ["CONFIRMA_IA", "TOP_FINAL", "RESERVA"].includes(item.ranking_status),
+    ).length,
+    skipped: savedItems.filter((item) => item.ranking_status === "PULAR").length,
+    pending: savedItems.filter((item) => item.ranking_status === "CANDIDATA").length,
+    blocked: savedItems.filter((item) => item.ranking_status === "BLOQUEADA").length,
+  };
   const finalItems = savedItems
     .filter((item) => ["TOP_FINAL", "RESERVA", "CONFIRMA_IA"].includes(item.ranking_status))
     .slice()
@@ -1725,6 +1744,10 @@ function PreAiShortlistPanel({
               <div>{formatShortlistScope(latest.run)}</div>
               <div className="mt-1 font-mono text-[10px]">
                 {latest.run.top_final_count} top final de {latest.run.candidate_count} candidata(s)
+              </div>
+              <div className="mt-1 font-mono text-[10px]">
+                {decisionCounts.confirmed} confirmada(s) · {decisionCounts.skipped} pulada(s) ·{" "}
+                {decisionCounts.pending} pendente(s) · {decisionCounts.blocked} bloqueada(s)
               </div>
             </div>
           )}

@@ -173,6 +173,16 @@ export function useEnrichOpportunityRankingItemPreview() {
   });
 }
 
+export function useRefreshOpportunityRankingForPrognostico() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: refreshOpportunityRankingForPrognostico,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["opportunity-ranking"] });
+    },
+  });
+}
+
 export function useApplyCriticalValidationToOpportunityRanking() {
   const qc = useQueryClient();
   return useMutation({
@@ -349,6 +359,63 @@ export async function enrichOpportunityRankingItemPreview({
       metadata: metadata as Json,
     })
     .eq("id", itemId)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as OpportunityRankingItem;
+}
+
+export async function refreshOpportunityRankingForPrognostico(
+  prognostico: Prognostico,
+): Promise<OpportunityRankingItem | null> {
+  const { data: rows, error: itemError } = await supabase
+    .from("opportunity_ranking_items")
+    .select("*")
+    .eq("prognostico_id", prognostico.id)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (itemError) throw itemError;
+
+  const item = (rows?.[0] as OpportunityRankingItem | undefined) ?? null;
+  if (!item) return null;
+
+  const current = calculatePreliminaryOpportunityScore(prognostico);
+  const mlbGate = evaluateMlbOperationalGate(prognostico);
+  const canReclassify = ["CANDIDATA", "BLOQUEADA"].includes(item.ranking_status);
+  const rankingStatus = canReclassify ? current.ranking_status : item.ranking_status;
+  const requalifiedAt = new Date().toISOString();
+  const metadata = {
+    ...asRecord(item.metadata),
+    last_requalified_at: requalifiedAt,
+    requalification: {
+      trigger: "odds_or_preview_update",
+      odd_used: getOddEfetiva(prognostico),
+      edge_used: getEdgeEfetivo(prognostico),
+      ranking_status: rankingStatus,
+      probability_adjustment: "identity_no_validated_preview_calibration",
+    },
+    mlb_post_preview_gate: mlbGate.applicable
+      ? {
+          approved: mlbGate.approved,
+          minimum_edge: mlbGate.minimumEdge,
+          effective_edge: mlbGate.effectiveEdge,
+          reasons: mlbGate.reasons,
+        }
+      : null,
+  };
+
+  const { data, error } = await supabase
+    .from("opportunity_ranking_items")
+    .update({
+      ranking_status: rankingStatus,
+      opportunity_score_pre: current.opportunity_score_pre,
+      confidence_score: current.confidence_score,
+      score_components: current.score_components as unknown as Json,
+      risk_flags: current.risk_flags,
+      reasons: current.reasons,
+      metadata: metadata as Json,
+    })
+    .eq("id", item.id)
     .select("*")
     .single();
   if (error) throw error;
