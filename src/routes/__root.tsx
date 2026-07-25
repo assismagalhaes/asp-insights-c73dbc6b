@@ -215,16 +215,38 @@ function RootComponent() {
       <SidebarProvider>
         <div className="flex min-h-screen w-full bg-background text-foreground">
           <SkipLink />
-          <AppSidebar />
+          <AppSidebar commandMode={!isAnalysisRoute} />
           <div className="flex flex-1 flex-col min-w-0">
-            <header className="app-shell-header sticky top-0 z-30 flex h-16 items-center gap-3 px-3 backdrop-blur-xl md:px-5">
-              <SidebarTrigger className="size-10 border border-border/80 bg-background/35 hover:bg-primary/10" />
+            <header
+              className={`${isAnalysisRoute ? "" : "app-shell-header"} sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border/80 bg-background/95 px-3 backdrop-blur-xl md:px-5`}
+            >
+              <SidebarTrigger
+                className={
+                  isAnalysisRoute
+                    ? "size-10 border border-border/80 bg-background/35 hover:bg-primary/10"
+                    : "size-10 border border-primary/20 bg-primary/5 text-primary shadow-[inset_0_0_18px_color-mix(in_oklab,var(--color-primary)_6%,transparent)] hover:bg-primary/10"
+                }
+              />
               <div className="flex min-w-0 items-center gap-2">
-                <span className="hidden text-sm font-semibold tracking-tight text-foreground sm:inline">
+                <span className="whitespace-nowrap text-sm font-semibold tracking-tight text-foreground">
                   ASP Insights
                 </span>
-                <span className="hidden text-xs text-muted-foreground sm:inline">/</span>
-                <span className="truncate text-sm font-medium text-muted-foreground sm:text-xs">
+                <span
+                  className={
+                    isAnalysisRoute
+                      ? "hidden text-xs text-muted-foreground sm:inline"
+                      : "hidden size-1 rounded-full bg-primary shadow-[0_0_8px_var(--color-primary)] sm:inline"
+                  }
+                >
+                  {isAnalysisRoute ? "/" : null}
+                </span>
+                <span
+                  className={
+                    isAnalysisRoute
+                      ? "truncate text-sm font-medium text-muted-foreground sm:text-xs"
+                      : "hidden truncate rounded border border-border/70 bg-card/60 px-2 py-1 text-sm font-medium text-muted-foreground sm:inline sm:text-xs"
+                  }
+                >
                   {currentRouteLabel}
                 </span>
               </div>
@@ -241,7 +263,13 @@ function RootComponent() {
                   ONLINE
                 </span>
                 {email ? (
-                  <span className="hidden max-w-[180px] truncate text-xs text-muted-foreground lg:inline">
+                  <span
+                    className={
+                      isAnalysisRoute
+                        ? "hidden max-w-[180px] truncate text-xs text-muted-foreground lg:inline"
+                        : "hidden max-w-[180px] truncate rounded border border-border/60 bg-card/40 px-2 py-1 text-xs text-muted-foreground lg:inline"
+                    }
+                  >
                     {email}
                   </span>
                 ) : null}

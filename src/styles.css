@@ -49,6 +49,8 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --color-analysis-toolbar: var(--analysis-toolbar);
   --color-analysis-rail: var(--analysis-rail);
+  --color-ai: var(--ai);
+  --color-info: var(--info);
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
@@ -89,6 +91,8 @@
 
   --caution: oklch(0.74 0.19 55);
   --caution-foreground: oklch(0.11 0.028 255);
+  --ai: oklch(0.7 0.2 295);
+  --info: oklch(0.74 0.16 220);
 
   --border: oklch(0.245 0.035 255);
   --input: oklch(0.23 0.035 255);
@@ -112,6 +116,12 @@
   /* Central Esportiva — superfícies abertas do terminal analítico */
   --analysis-toolbar: oklch(0.125 0.038 255);
   --analysis-rail: oklch(0.155 0.042 255);
+
+  --elevation-panel: 0 18px 48px rgb(0 0 0 / 0.2);
+  --elevation-panel-hover: 0 24px 58px rgb(0 0 0 / 0.28);
+  --motion-fast: 160ms;
+  --motion-base: 260ms;
+  --motion-ambient: 14s;
 }
 
 @layer base {
@@ -163,14 +173,78 @@
   }
 
   .app-shell-header {
+    position: relative;
     border-bottom: 1px solid color-mix(in oklab, var(--color-border) 80%, transparent);
-    background: color-mix(in oklab, var(--color-background) 94%, transparent);
+    background:
+      radial-gradient(circle at 75% 0%, color-mix(in oklab, var(--color-primary) 7%, transparent), transparent 20rem),
+      color-mix(in oklab, var(--color-background) 92%, transparent);
     box-shadow: 0 1px 0 rgb(255 255 255 / 0.015);
+  }
+
+  .app-shell-header::after {
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    left: 0;
+    height: 1px;
+    content: "";
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklab, var(--color-primary) 55%, transparent) 28%,
+      color-mix(in oklab, var(--color-ai) 45%, transparent) 72%,
+      transparent
+    );
+  }
+
+  .app-sidebar {
+    background:
+      radial-gradient(circle at 10% 4%, color-mix(in oklab, var(--color-primary) 9%, transparent), transparent 14rem),
+      var(--color-sidebar);
+  }
+
+  .app-sidebar-header {
+    background: linear-gradient(
+      135deg,
+      color-mix(in oklab, var(--color-primary) 5%, transparent),
+      transparent 65%
+    );
+  }
+
+  .nav-command-icon {
+    display: flex;
+    width: 1rem;
+    height: 1rem;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .nav-command-icon > svg {
+    width: 1rem;
+    height: 1rem;
+    transition:
+      filter var(--motion-fast) ease,
+      transform var(--motion-fast) ease;
+  }
+
+  .nav-command:hover .nav-command-icon > svg,
+  .nav-command[data-active="true"] .nav-command-icon > svg {
+    filter: drop-shadow(0 0 5px var(--nav-tone));
+    transform: scale(1.06);
+  }
+
+  .system-status-card {
+    background:
+      radial-gradient(circle at 10% 50%, color-mix(in oklab, var(--color-success) 10%, transparent), transparent 5rem),
+      color-mix(in oklab, var(--color-success) 4%, var(--color-sidebar));
   }
 
   .app-main {
     min-width: 0;
     isolation: isolate;
+    position: relative;
+    overflow: clip;
   }
 
   .app-main > * {
@@ -210,11 +284,31 @@
   }
 
   .filter-surface {
+    position: relative;
+    overflow: hidden;
     border: 1px solid color-mix(in oklab, var(--color-border) 86%, transparent);
     border-radius: var(--radius-lg);
-    background: color-mix(in oklab, var(--color-card) 90%, var(--color-background));
+    background:
+      linear-gradient(90deg, color-mix(in oklab, var(--color-primary) 4%, transparent), transparent 34%),
+      color-mix(in oklab, var(--color-card) 90%, var(--color-background));
     padding: 0.875rem;
     box-shadow: 0 12px 32px rgb(0 0 0 / 0.12);
+  }
+
+  .filter-surface::before {
+    position: absolute;
+    inset-block: 0.65rem;
+    left: 0;
+    width: 2px;
+    border-radius: 999px;
+    background: linear-gradient(var(--color-primary), var(--color-ai));
+    box-shadow: 0 0 12px color-mix(in oklab, var(--color-primary) 55%, transparent);
+    content: "";
+  }
+
+  .filter-surface label {
+    font-family: var(--font-mono);
+    letter-spacing: 0.1em;
   }
 
   .surface-panel {
@@ -222,7 +316,16 @@
     border-radius: var(--radius-lg);
     background: var(--color-card);
     padding: 1rem;
-    box-shadow: 0 16px 38px rgb(0 0 0 / 0.14);
+    box-shadow: var(--elevation-panel);
+    transition:
+      border-color var(--motion-fast) ease,
+      box-shadow var(--motion-base) ease,
+      transform var(--motion-base) ease;
+  }
+
+  .surface-panel:hover {
+    border-color: color-mix(in oklab, var(--color-primary) 24%, var(--color-border));
+    box-shadow: var(--elevation-panel-hover);
   }
 
   .data-surface {
@@ -256,6 +359,88 @@
     font-variant-numeric: tabular-nums;
   }
 
+  .command-surface {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .command-surface::before {
+    position: fixed;
+    inset: 4rem 0 0 var(--sidebar-width, 0);
+    z-index: -2;
+    pointer-events: none;
+    content: "";
+    background:
+      radial-gradient(circle at 78% 8%, color-mix(in oklab, var(--color-ai) 10%, transparent), transparent 24rem),
+      radial-gradient(circle at 12% 72%, color-mix(in oklab, var(--color-primary) 9%, transparent), transparent 30rem),
+      linear-gradient(color-mix(in oklab, var(--color-primary) 3%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in oklab, var(--color-primary) 3%, transparent) 1px, transparent 1px);
+    background-size: auto, auto, 44px 44px, 44px 44px;
+    mask-image: linear-gradient(to bottom, black, transparent 92%);
+  }
+
+  .ambient-orbit {
+    position: absolute;
+    z-index: -1;
+    width: 28rem;
+    height: 10rem;
+    border: 1px solid color-mix(in oklab, var(--color-primary) 20%, transparent);
+    border-radius: 50%;
+    pointer-events: none;
+    opacity: 0.55;
+    transform: rotate(-11deg);
+  }
+
+  .ambient-orbit::before,
+  .ambient-orbit::after {
+    position: absolute;
+    border-radius: 999px;
+    content: "";
+  }
+
+  .ambient-orbit::before {
+    top: 46%;
+    left: 12%;
+    width: 0.45rem;
+    height: 0.45rem;
+    background: var(--color-primary);
+    box-shadow: 0 0 22px 5px color-mix(in oklab, var(--color-primary) 55%, transparent);
+    animation: ambient-drift var(--motion-ambient) ease-in-out infinite alternate;
+  }
+
+  .ambient-orbit::after {
+    right: 10%;
+    bottom: 18%;
+    width: 0.3rem;
+    height: 0.3rem;
+    background: var(--color-ai);
+    box-shadow: 0 0 18px 4px color-mix(in oklab, var(--color-ai) 55%, transparent);
+  }
+
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(20rem, 0.65fr);
+    gap: 1rem;
+    align-items: start;
+  }
+
+  .panel-kicker {
+    font-family: var(--font-mono);
+    color: var(--color-muted-foreground);
+    font-size: 0.625rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  @keyframes ambient-drift {
+    from {
+      transform: translate3d(0, 0, 0);
+    }
+    to {
+      transform: translate3d(17rem, -1.25rem, 0);
+    }
+  }
+
   * {
     scrollbar-color: color-mix(in oklab, var(--color-muted-foreground) 45%, transparent) transparent;
     scrollbar-width: thin;
@@ -269,6 +454,28 @@
     .filter-surface,
     .surface-panel {
       padding: 0.75rem;
+    }
+
+    .dashboard-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .ambient-orbit {
+      display: none;
+    }
+
+    .command-surface::before {
+      inset: 4rem 0 0;
+      background-size: auto, auto, 36px 36px, 36px 36px;
+    }
+
+    .app-shell-header {
+      gap: 0.5rem;
+    }
+
+    .filter-surface > * {
+      position: relative;
+      z-index: 1;
     }
   }
 }

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { SkipLink } from "./skip-link";
 import { StatCard } from "./stat-card";
+import { PageIntro, PanelHeading } from "./command-center";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 
 describe("accessibility foundations", () => {
@@ -42,5 +43,24 @@ describe("accessibility foundations", () => {
     expect(markup).toContain('role="region"');
     expect(markup).toContain('tabindex="0"');
     expect(markup).toContain('aria-label="Prognósticos disponíveis');
+  });
+
+  it("keeps command-center page and panel headings semantic", () => {
+    const markup = renderToStaticMarkup(
+      <>
+        <PageIntro
+          title="Dashboard Executivo"
+          description="Visão estratégica da operação."
+          status="Dados atualizados"
+        />
+        <PanelHeading title="Evolução da banca" eyebrow="Performance financeira" />
+      </>,
+    );
+
+    expect(markup).toContain("<h1");
+    expect(markup).toContain("Dashboard Executivo");
+    expect(markup).toContain('role="status"');
+    expect(markup).toContain("<h2");
+    expect(markup).toContain("Evolução da banca");
   });
 });

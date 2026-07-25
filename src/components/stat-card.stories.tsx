@@ -26,6 +26,7 @@ export const Positivo: Story = {
     delta: "+1,2 p.p. no período",
     trend: "up",
     icon: Target,
+    accent: "blue",
   },
 };
 
@@ -36,6 +37,7 @@ export const Risco: Story = {
     delta: "Limite operacional: -5u",
     trend: "down",
     icon: Activity,
+    accent: "red",
   },
 };
 
@@ -55,6 +57,7 @@ export const GradeResponsiva: Story = {
         delta="+R$ 680 no período"
         trend="up"
         icon={Banknote}
+        accent="green"
       />
       <StatCard
         label="ROI confirmado"
@@ -62,6 +65,7 @@ export const GradeResponsiva: Story = {
         delta="+1,2 p.p. no período"
         trend="up"
         icon={Target}
+        accent="blue"
       />
       <StatCard
         label="Win rate"
@@ -69,6 +73,7 @@ export const GradeResponsiva: Story = {
         delta="14 de 22 entradas"
         trend="neutral"
         icon={CircleCheck}
+        accent="violet"
       />
       <StatCard
         label="Drawdown"
@@ -76,6 +81,7 @@ export const GradeResponsiva: Story = {
         delta="Limite operacional: -5u"
         trend="down"
         icon={Activity}
+        accent="red"
       />
     </div>
   ),
