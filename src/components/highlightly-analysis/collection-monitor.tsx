@@ -114,12 +114,14 @@ function MetricCard({
   detail,
   icon: Icon,
   tone = "default",
+  compact = false,
 }: {
   label: string;
   value: string;
   detail: string;
   icon: typeof Activity;
   tone?: "default" | "success" | "warning";
+  compact?: boolean;
 }) {
   return (
     <StatCard
@@ -129,7 +131,10 @@ function MetricCard({
       icon={Icon}
       accent={tone === "success" ? "green" : tone === "warning" ? "amber" : "blue"}
       tone={tone === "success" ? "up" : tone === "warning" ? "neutral" : "off"}
-      className="[&_div.font-mono]:text-xl sm:[&_div.font-mono]:text-2xl"
+      className={cn(
+        "[&_div.font-mono]:text-xl sm:[&_div.font-mono]:text-2xl",
+        compact && "[&_div.font-mono]:text-base sm:[&_div.font-mono]:text-lg",
+      )}
     />
   );
 }
@@ -140,6 +145,8 @@ function QueueSummary({ monitor }: { monitor: HighlightlyCollectionMonitor }) {
   const slice = monitor.window.current_slice;
   const healthStatus = String(monitor.health.gate_status ?? "collecting");
   const collecting = monitor.provider_enabled || queue.running > 0;
+  const openIssues = monitor.quality.reduce((sum, row) => sum + number(row.open_issues), 0);
+  const quotaExhausted = usage.remaining_before_reserve <= 0;
 
   return (
     <>
@@ -172,14 +179,18 @@ function QueueSummary({ monitor }: { monitor: HighlightlyCollectionMonitor }) {
         <MetricCard
           label="Gate de qualidade"
           value={statusLabel(healthStatus).toUpperCase()}
-          detail={`${number(queue.dead)} jobs dead · ${monitor.quality.reduce((sum, row) => sum + number(row.open_issues), 0)} issues abertas`}
+          detail={`${number(queue.dead)} jobs dead · ${openIssues} issues abertas`}
           icon={ShieldCheck}
           tone={healthStatus === "ready" ? "success" : "warning"}
+          compact
         />
       </div>
 
       <section
-        className="overflow-hidden rounded-lg border border-primary/20 bg-[linear-gradient(135deg,color-mix(in_oklab,var(--color-primary)_7%,var(--color-card)),var(--color-card)_75%)] p-4 shadow-[0_18px_44px_rgb(0_0_0/0.16)]"
+        className={cn(
+          "overflow-hidden rounded-lg border bg-[linear-gradient(135deg,color-mix(in_oklab,var(--color-primary)_7%,var(--color-card)),var(--color-card)_75%)] p-4 shadow-[0_18px_44px_rgb(0_0_0/0.16)]",
+          quotaExhausted ? "border-warning/45" : "border-primary/20",
+        )}
         aria-labelledby="quota-title"
       >
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -192,19 +203,32 @@ function QueueSummary({ monitor }: { monitor: HighlightlyCollectionMonitor }) {
               {usage.reserve_requests.toLocaleString("pt-BR")} chamadas
             </p>
           </div>
-          <p className="font-mono text-sm">
-            <strong>{usage.requests_used.toLocaleString("pt-BR")}</strong>
-            <span className="text-muted-foreground">
-              {" "}
-              / {usage.usable_ceiling.toLocaleString("pt-BR")}
-            </span>
-          </p>
+          <div className="flex items-center gap-2">
+            {quotaExhausted ? (
+              <Badge variant="outline" className="border-warning/45 text-warning">
+                <AlertTriangle className="size-3" aria-hidden="true" />
+                Limite atingido
+              </Badge>
+            ) : null}
+            <p className="font-mono text-sm">
+              <strong>{usage.requests_used.toLocaleString("pt-BR")}</strong>
+              <span className="text-muted-foreground">
+                {" "}
+                / {usage.usable_ceiling.toLocaleString("pt-BR")}
+              </span>
+            </p>
+          </div>
         </div>
         <Progress
           value={percentage(usage.requests_used, usage.usable_ceiling)}
           className="mt-3 h-2"
         />
-        <p className="mt-2 text-[10px] text-muted-foreground">
+        <p
+          className={cn(
+            "mt-2 text-[10px]",
+            quotaExhausted ? "font-medium text-warning" : "text-muted-foreground",
+          )}
+        >
           {usage.remaining_before_reserve.toLocaleString("pt-BR")} chamadas disponíveis antes da
           reserva.
         </p>
@@ -253,40 +277,35 @@ export function HighlightlyCollectionMonitorView() {
               ? "Coleta em execução"
               : "Monitor operacional"
         }
+        actions={
+          <>
+            <Select
+              value={selectedScope}
+              onValueChange={setScope}
+              disabled={!monitor?.scopes.length}
+            >
+              <SelectTrigger className="w-full sm:w-[280px]" aria-label="Escopo da coleta">
+                <SelectValue placeholder="Último escopo" />
+              </SelectTrigger>
+              <SelectContent>
+                {(monitor?.scopes ?? []).map((option) => (
+                  <SelectItem key={option.scope} value={option.scope}>
+                    {option.scope}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              onClick={() => monitorQuery.refetch()}
+              disabled={monitorQuery.isFetching}
+            >
+              <RefreshCw className={cn("size-4", monitorQuery.isFetching && "animate-spin")} />
+              Atualizar
+            </Button>
+          </>
+        }
       />
-      <header className="flex flex-col gap-3 rounded-lg border border-primary/15 bg-card/80 p-3 lg:flex-row lg:items-center lg:justify-end">
-        <div className="hidden">
-          <div className="flex items-center gap-2">
-            <DatabaseZap className="size-5 text-primary" aria-hidden="true" />
-            <h1 className="text-xl font-semibold tracking-tight">Monitor da Coleta Highlightly</h1>
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Fila, fatia ativa, cota, qualidade e saúde operacional em uma única visão.
-          </p>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <Select value={selectedScope} onValueChange={setScope} disabled={!monitor?.scopes.length}>
-            <SelectTrigger className="w-full sm:w-[330px]" aria-label="Escopo da coleta">
-              <SelectValue placeholder="Último escopo" />
-            </SelectTrigger>
-            <SelectContent>
-              {(monitor?.scopes ?? []).map((option) => (
-                <SelectItem key={option.scope} value={option.scope}>
-                  {option.scope}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            variant="outline"
-            onClick={() => monitorQuery.refetch()}
-            disabled={monitorQuery.isFetching}
-          >
-            <RefreshCw className={cn("size-4", monitorQuery.isFetching && "animate-spin")} />
-            Atualizar
-          </Button>
-        </div>
-      </header>
 
       {monitorQuery.isLoading ? <MonitorSkeleton /> : null}
       {monitorQuery.error ? (
@@ -307,6 +326,16 @@ export function HighlightlyCollectionMonitorView() {
             <span>Escopo: {monitor.scope ?? "—"}</span>
             <span>·</span>
             <span>Atualizado {formatDateTime(monitor.generated_at)}</span>
+            {monitor.daily_usage.remaining_before_reserve <= 0 ? (
+              <Badge variant="outline" className="border-warning/45 text-warning">
+                Cota diária esgotada
+              </Badge>
+            ) : null}
+            {monitor.quality.reduce((sum, row) => sum + number(row.open_issues), 0) > 0 ? (
+              <Badge variant="outline" className="border-destructive/45 text-destructive">
+                {monitor.quality.reduce((sum, row) => sum + number(row.open_issues), 0)} alertas
+              </Badge>
+            ) : null}
           </div>
 
           <QueueSummary monitor={monitor} />

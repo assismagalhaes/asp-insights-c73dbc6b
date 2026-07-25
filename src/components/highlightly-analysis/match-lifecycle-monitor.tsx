@@ -122,7 +122,7 @@ export function MatchLifecycleMonitor({ report }: { report: HighlightlyMatchLife
         })}
       </div>
 
-      <div className="border-t border-border px-4 py-3">
+      <div className="hidden border-t border-border px-4 py-3 md:block">
         <p className="text-xs font-semibold">Recursos processados na janela</p>
         <div className="mt-3 flex flex-wrap gap-2">
           {report.by_resource.map((row) => (
@@ -144,6 +144,33 @@ export function MatchLifecycleMonitor({ report }: { report: HighlightlyMatchLife
           ) : null}
         </div>
       </div>
+      <details className="group border-t border-border px-4 py-3 md:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold">
+          Recursos processados na janela
+          <Badge variant="outline" className="font-mono font-normal">
+            {report.by_resource.length}
+          </Badge>
+        </summary>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {report.by_resource.map((row) => (
+            <Badge
+              key={`${row.sport}:${row.resource}:${row.status}`}
+              variant={row.status === "succeeded" ? "default" : "outline"}
+              className="gap-1.5 whitespace-normal font-normal"
+            >
+              {SPORT_LABELS[row.sport] ?? row.sport} ·{" "}
+              {RESOURCE_LABELS[row.resource] ?? row.resource} ·{" "}
+              {RESOURCE_STATUS_LABELS[row.status] ?? row.status}:{" "}
+              <span className="font-mono">{row.matches}</span>
+            </Badge>
+          ))}
+          {!report.by_resource.length ? (
+            <span className="text-[10px] text-muted-foreground">
+              Nenhum recurso processado nesta janela.
+            </span>
+          ) : null}
+        </div>
+      </details>
 
       <div className="grid border-t border-border xl:grid-cols-2">
         <div className="overflow-x-auto xl:border-r xl:border-border">
