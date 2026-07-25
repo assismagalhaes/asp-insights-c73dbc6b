@@ -13,6 +13,9 @@ import {
   Coins,
   RotateCcw,
   RadioTower,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import {
   usePrognosticos,
@@ -37,7 +40,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -63,7 +65,7 @@ export const Route = createFileRoute("/_authenticated/publicacao")({
 });
 
 function PublicacaoPage() {
-  const { data: prognosticos = [] } = usePrognosticos();
+  const { data: prognosticos = [], isLoading: loadingPrognosticos } = usePrognosticos();
   const { data: cfg } = useConfiguracao();
   const publicar = usePublicarPrognostico();
   const cancelar = useCancelarPrognostico();
@@ -77,6 +79,7 @@ function PublicacaoPage() {
   const [periodo, setPeriodo] = useState<PeriodoFiltro>("tudo");
   const [customIni, setCustomIni] = useState("");
   const [customFim, setCustomFim] = useState("");
+  const [showAllEligible, setShowAllEligible] = useState(false);
 
   const esportes = cfg?.esportes_ativos ?? ESPORTES_DEFAULT;
   const mercados = cfg?.mercados_ativos ?? MERCADOS_DEFAULT;
@@ -98,6 +101,7 @@ function PublicacaoPage() {
   );
 
   const podePublicar = (p: Prognostico) => p.status_validacao === "CONFIRMA";
+  const visibleElegiveis = showAllEligible ? elegiveis : elegiveis.slice(0, 8);
 
   const publicadasHoje = useMemo(() => {
     const hoje = new Intl.DateTimeFormat("en-CA", {
@@ -164,7 +168,9 @@ function PublicacaoPage() {
       <PageIntro
         title="Publicação"
         description="Transforme prognósticos validados em picks oficiais."
-        status={`${elegiveis.length} pick(s) elegível(is)`}
+        status={
+          loadingPrognosticos ? "Carregando fila..." : `${elegiveis.length} pick(s) elegível(is)`
+        }
         icon={Megaphone}
         actions={
           <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-[11rem_auto]">
@@ -176,17 +182,25 @@ function PublicacaoPage() {
               <Label htmlFor="canal-publicacao" className="sr-only">
                 Canal de publicação
               </Label>
-              <Input
-                id="canal-publicacao"
-                value={canal}
-                onChange={(e) => setCanal(e.target.value)}
-                className="h-10 w-full pl-9 sm:w-44"
-              />
+              <Select value={canal} onValueChange={setCanal}>
+                <SelectTrigger
+                  id="canal-publicacao"
+                  aria-label="Canal de publicação"
+                  className="h-10 w-full pl-9 sm:w-44"
+                >
+                  <SelectValue placeholder="Canal" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Telegram">Telegram</SelectItem>
+                  <SelectItem value="WhatsApp">WhatsApp</SelectItem>
+                  <SelectItem value="Manual">Manual</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <Button
               className="h-10 shadow-[0_0_24px_rgb(59_130_246/0.16)]"
               onClick={publicarLote}
-              disabled={selected.size === 0 || publicar.isPending}
+              disabled={loadingPrognosticos || selected.size === 0 || publicar.isPending}
             >
               <Send className="mr-2 size-4" /> Publicar em lote ({selected.size})
             </Button>
@@ -266,7 +280,7 @@ function PublicacaoPage() {
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard
           label="Elegíveis"
-          value={String(elegiveis.length)}
+          value={loadingPrognosticos ? "—" : String(elegiveis.length)}
           icon={FileCheck2}
           accent="blue"
           meta="Validadas e não publicadas"
@@ -274,7 +288,7 @@ function PublicacaoPage() {
         />
         <StatCard
           label="Selecionadas"
-          value={String(selected.size)}
+          value={loadingPrognosticos ? "—" : String(selected.size)}
           icon={ListChecks}
           accent="green"
           tone={selected.size > 0 ? "up" : "off"}
@@ -283,7 +297,7 @@ function PublicacaoPage() {
         />
         <StatCard
           label="Publicadas hoje"
-          value={String(publicadasHoje)}
+          value={loadingPrognosticos ? "—" : String(publicadasHoje)}
           icon={Send}
           accent="cyan"
           tone={publicadasHoje > 0 ? "up" : "off"}
@@ -292,7 +306,7 @@ function PublicacaoPage() {
         />
         <StatCard
           label="Stake elegível"
-          value={`${stakeElegivel.toFixed(1)}u`}
+          value={loadingPrognosticos ? "—" : `${stakeElegivel.toFixed(1)}u`}
           icon={Coins}
           accent="amber"
           meta="Soma do recorte selecionado"
@@ -318,26 +332,36 @@ function PublicacaoPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="hidden overflow-x-auto md:block">
-            <table className="w-full text-sm">
+          <div className="hidden md:block">
+            <table className="w-full table-fixed text-[12px]">
               <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
                 <tr>
-                  <th className="px-3 py-2 w-8"></th>
-                  <th className="px-3 py-2 text-left">Data</th>
-                  <th className="px-3 py-2 text-left">Hora</th>
-                  <th className="px-3 py-2 text-left">Esporte</th>
-                  <th className="px-3 py-2 text-left">Liga</th>
-                  <th className="px-3 py-2 text-left">Jogo</th>
-                  <th className="px-3 py-2 text-left">Mercado</th>
-                  <th className="px-3 py-2 text-left">Pick</th>
-                  <th className="px-3 py-2 text-right font-mono">Odd</th>
-                  <th className="px-3 py-2 text-right font-mono">Stake</th>
-                  <th className="px-3 py-2 text-left">Validação</th>
-                  <th className="px-3 py-2 text-right">Ações</th>
+                  <th className="w-9 px-2 py-2"></th>
+                  <th className="w-[76px] px-2 py-2 text-left">Data</th>
+                  <th className="w-[52px] px-2 py-2 text-left">Hora</th>
+                  <th className="w-[94px] px-2 py-2 text-left">Esporte</th>
+                  <th className="w-[10%] px-2 py-2 text-left">Liga</th>
+                  <th className="w-[17%] px-2 py-2 text-left">Jogo</th>
+                  <th className="w-[10%] px-2 py-2 text-left">Mercado</th>
+                  <th className="w-[10%] px-2 py-2 text-left">Pick</th>
+                  <th className="w-[52px] px-2 py-2 text-right font-mono">Odd</th>
+                  <th className="w-[58px] px-2 py-2 text-right font-mono">Stake</th>
+                  <th className="w-[86px] px-2 py-2 text-left">Validação</th>
+                  <th className="w-[142px] px-2 py-2 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody>
-                {elegiveis.length === 0 && (
+                {loadingPrognosticos && (
+                  <tr>
+                    <td colSpan={12} className="px-4 py-10 text-center text-muted-foreground">
+                      <span className="inline-flex items-center gap-2">
+                        <Loader2 className="size-4 animate-spin text-primary" />
+                        Carregando picks elegíveis...
+                      </span>
+                    </td>
+                  </tr>
+                )}
+                {!loadingPrognosticos && elegiveis.length === 0 && (
                   <tr>
                     <td
                       colSpan={12}
@@ -347,164 +371,207 @@ function PublicacaoPage() {
                     </td>
                   </tr>
                 )}
-                {elegiveis.map((p) => {
-                  const canSelect = podePublicar(p);
-                  return (
-                    <tr
-                      key={p.id}
-                      className="border-t border-border transition-colors hover:bg-primary/[0.035]"
-                    >
-                      <td className="px-3 py-2">
-                        <button
-                          disabled={!canSelect}
-                          onClick={() => toggle(p.id)}
-                          className="text-muted-foreground hover:text-foreground disabled:opacity-30"
-                        >
-                          {selected.has(p.id) ? (
-                            <CheckSquare className="h-4 w-4 text-primary" />
-                          ) : (
-                            <Square className="h-4 w-4" />
-                          )}
-                        </button>
-                      </td>
-                      <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">
-                        {formatBR(p.data)}
-                      </td>
-                      <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">
-                        {p.hora ? formatHora(p.hora) : "—"}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        <span className="inline-flex items-center gap-2">
-                          <SportMark sport={p.esporte} />
-                          {p.esporte}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
-                        {p.liga}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap">{p.jogo}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
-                        {p.mercado}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap">{p.pick}</td>
-                      <td className="px-3 py-2 text-right font-mono">
-                        {p.odd_ofertada.toFixed(2)}
-                      </td>
-                      <td className="px-3 py-2 text-right font-mono">{p.stake.toFixed(1)}u</td>
-                      <td className="px-3 py-2">
-                        <StatusBadge status={p.status_validacao} />
-                      </td>
-                      <td className="px-3 py-2 text-right whitespace-nowrap">
-                        <div className="flex justify-end gap-1">
-                          <DadosTecnicosViewer prognostico={p} />
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setPreviewFor(p)}
-                            title="Pré-visualizar TIP"
+                {!loadingPrognosticos &&
+                  visibleElegiveis.map((p) => {
+                    const canSelect = podePublicar(p);
+                    return (
+                      <tr
+                        key={p.id}
+                        className="border-t border-border transition-colors hover:bg-primary/[0.035]"
+                      >
+                        <td className="px-2 py-2">
+                          <button
+                            disabled={!canSelect}
+                            onClick={() => toggle(p.id)}
+                            className="text-muted-foreground hover:text-foreground disabled:opacity-30"
                           >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => cancelar.mutate(p.id)}
-                            title="Cancelar pick"
-                          >
-                            <Ban className="h-4 w-4 text-destructive" />
-                          </Button>
-                          <Button size="sm" onClick={() => setPreviewFor(p)}>
-                            <Megaphone className="h-4 w-4 mr-1" /> Publicar
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                            {selected.has(p.id) ? (
+                              <CheckSquare className="h-4 w-4 text-primary" />
+                            ) : (
+                              <Square className="h-4 w-4" />
+                            )}
+                          </button>
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-2 font-mono text-[11px]">
+                          {formatBR(p.data)}
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-2 font-mono text-[11px]">
+                          {p.hora ? formatHora(p.hora) : "—"}
+                        </td>
+                        <td className="px-2 py-2">
+                          <span className="inline-flex max-w-full items-center gap-1.5">
+                            <SportMark sport={p.esporte} />
+                            <span className="truncate">{p.esporte}</span>
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 text-muted-foreground">
+                          <span className="block truncate" title={p.liga}>
+                            {p.liga}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2">
+                          <span className="block truncate font-medium" title={p.jogo}>
+                            {p.jogo}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 text-muted-foreground">
+                          <span className="block truncate" title={p.mercado}>
+                            {p.mercado}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2">
+                          <span className="block truncate" title={p.pick}>
+                            {p.pick}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono">
+                          {p.odd_ofertada.toFixed(2)}
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono">{p.stake.toFixed(1)}u</td>
+                        <td className="px-2 py-2">
+                          <StatusBadge status={p.status_validacao} />
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-2 text-right">
+                          <div className="flex justify-end gap-0.5">
+                            <DadosTecnicosViewer prognostico={p} />
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => setPreviewFor(p)}
+                              title="Pré-visualizar TIP"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => cancelar.mutate(p.id)}
+                              title="Cancelar pick"
+                            >
+                              <Ban className="h-4 w-4 text-destructive" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              onClick={() => setPreviewFor(p)}
+                              title="Publicar pick"
+                              aria-label={`Publicar ${p.jogo}`}
+                            >
+                              <Send className="size-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
           </div>
           <div className="divide-y divide-border md:hidden">
-            {elegiveis.length === 0 ? (
+            {loadingPrognosticos ? (
+              <p className="flex items-center justify-center gap-2 px-4 py-10 text-center text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin text-primary" />
+                Carregando picks elegíveis...
+              </p>
+            ) : null}
+            {!loadingPrognosticos && elegiveis.length === 0 ? (
               <p className="px-4 py-10 text-center text-sm text-muted-foreground">
                 Nenhum prognóstico aguardando publicação no momento.
               </p>
             ) : null}
-            {elegiveis.map((p) => (
-              <article
-                key={p.id}
-                className="relative grid grid-cols-[auto_1fr] gap-3 px-4 py-4 transition-colors hover:bg-primary/[0.035]"
-              >
-                <button
-                  type="button"
-                  disabled={!podePublicar(p)}
-                  onClick={() => toggle(p.id)}
-                  className="mt-0.5 flex size-10 items-center justify-center rounded-md border border-border bg-background/45 text-muted-foreground disabled:opacity-30"
-                  aria-label={`${selected.has(p.id) ? "Remover" : "Selecionar"} ${p.jogo}`}
+            {!loadingPrognosticos &&
+              visibleElegiveis.map((p) => (
+                <article
+                  key={p.id}
+                  className="relative grid grid-cols-[auto_1fr] gap-2.5 px-3 py-3 transition-colors hover:bg-primary/[0.035]"
                 >
-                  {selected.has(p.id) ? (
-                    <CheckSquare className="size-5 text-success" />
-                  ) : (
-                    <SportMark sport={p.esporte} size="md" />
-                  )}
-                </button>
-                <div className="min-w-0">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <h3 className="truncate text-sm font-semibold">{p.jogo}</h3>
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                        {p.liga} · {formatBR(p.data)} {p.hora ? formatHora(p.hora) : ""}
-                      </p>
+                  <button
+                    type="button"
+                    disabled={!podePublicar(p)}
+                    onClick={() => toggle(p.id)}
+                    className="mt-0.5 flex size-10 items-center justify-center rounded-md border border-border bg-background/45 text-muted-foreground disabled:opacity-30"
+                    aria-label={`${selected.has(p.id) ? "Remover" : "Selecionar"} ${p.jogo}`}
+                  >
+                    {selected.has(p.id) ? (
+                      <CheckSquare className="size-5 text-success" />
+                    ) : (
+                      <SportMark sport={p.esporte} size="md" />
+                    )}
+                  </button>
+                  <div className="min-w-0">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="line-clamp-2 text-sm font-semibold leading-tight">
+                          {p.jogo}
+                        </h3>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {p.liga} · {formatBR(p.data)} {p.hora ? formatHora(p.hora) : ""}
+                        </p>
+                      </div>
+                      <StatusBadge status={p.status_validacao} />
                     </div>
-                    <StatusBadge status={p.status_validacao} />
+                    <div className="mt-2 grid grid-cols-3 gap-2 border-y border-border/70 py-1.5">
+                      <div>
+                        <p className="text-[9px] uppercase tracking-wider text-muted-foreground">
+                          Pick
+                        </p>
+                        <p className="truncate text-xs font-semibold text-success">{p.pick}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] uppercase tracking-wider text-muted-foreground">
+                          Odd
+                        </p>
+                        <p className="font-mono text-sm">{p.odd_ofertada.toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] uppercase tracking-wider text-muted-foreground">
+                          Stake
+                        </p>
+                        <p className="font-mono text-sm">{p.stake.toFixed(1)}u</p>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <span className="truncate text-xs text-muted-foreground">{p.mercado}</span>
+                      <div className="flex shrink-0 gap-1">
+                        <DadosTecnicosViewer prognostico={p} />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setPreviewFor(p)}
+                          aria-label={`Pré-visualizar ${p.jogo}`}
+                        >
+                          <Eye className="size-4" />
+                        </Button>
+                        <Button size="sm" onClick={() => setPreviewFor(p)}>
+                          <Send className="mr-1 size-4" /> Publicar
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="mt-3 grid grid-cols-3 gap-2 border-y border-border/70 py-2">
-                    <div>
-                      <p className="text-[9px] uppercase tracking-wider text-muted-foreground">
-                        Pick
-                      </p>
-                      <p className="truncate text-xs font-semibold text-success">{p.pick}</p>
-                    </div>
-                    <div>
-                      <p className="text-[9px] uppercase tracking-wider text-muted-foreground">
-                        Odd
-                      </p>
-                      <p className="font-mono text-sm">{p.odd_ofertada.toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[9px] uppercase tracking-wider text-muted-foreground">
-                        Stake
-                      </p>
-                      <p className="font-mono text-sm">{p.stake.toFixed(1)}u</p>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between gap-2">
-                    <span className="truncate text-xs text-muted-foreground">{p.mercado}</span>
-                    <div className="flex shrink-0 gap-1">
-                      <DadosTecnicosViewer prognostico={p} />
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setPreviewFor(p)}
-                        aria-label={`Pré-visualizar ${p.jogo}`}
-                      >
-                        <Eye className="size-4" />
-                      </Button>
-                      <Button size="sm" onClick={() => setPreviewFor(p)}>
-                        <Send className="mr-1 size-4" /> Publicar
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              ))}
           </div>
+          {elegiveis.length > 8 && (
+            <div className="border-t border-border/80 p-2 text-center">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAllEligible((value) => !value)}
+              >
+                {showAllEligible ? (
+                  <ChevronUp className="mr-1.5 size-4" />
+                ) : (
+                  <ChevronDown className="mr-1.5 size-4" />
+                )}
+                {showAllEligible ? "Mostrar resumo" : `Ver todas as ${elegiveis.length} picks`}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       <PublishDialog prognostico={previewFor} canal={canal} onClose={() => setPreviewFor(null)} />
 
-      <PublicadasRecentes prognosticos={prognosticos} />
+      <PublicadasRecentes prognosticos={prognosticos} loading={loadingPrognosticos} />
     </div>
   );
 }
@@ -584,17 +651,28 @@ function PublishDialog({
   );
 }
 
-function PublicadasRecentes({ prognosticos }: { prognosticos: Prognostico[] }) {
+function PublicadasRecentes({
+  prognosticos,
+  loading,
+}: {
+  prognosticos: Prognostico[];
+  loading: boolean;
+}) {
+  const [showAll, setShowAll] = useState(false);
   const publicadas = prognosticos
     .filter(
       (p) =>
-        p.status_publicacao === "PUBLICADO" ||
-        p.status_publicacao === "FINALIZADO" ||
-        p.status_publicacao === "CANCELADO",
+        Boolean(p.data_publicacao) &&
+        (p.status_publicacao === "PUBLICADO" ||
+          p.status_publicacao === "FINALIZADO" ||
+          p.status_publicacao === "CANCELADO"),
     )
-    .slice(0, 20);
-
-  if (!publicadas.length) return null;
+    .sort(
+      (a, b) =>
+        new Date(b.data_publicacao as string).getTime() -
+        new Date(a.data_publicacao as string).getTime(),
+    );
+  const visiblePublicadas = showAll ? publicadas : publicadas.slice(0, 5);
 
   return (
     <Card className="overflow-hidden">
@@ -605,7 +683,7 @@ function PublicadasRecentes({ prognosticos }: { prognosticos: Prognostico[] }) {
           icon={Send}
           value={
             <span className="rounded border border-success/30 bg-success/8 px-2 py-1 font-mono text-xs text-success">
-              {publicadas.length}
+              {loading ? "—" : publicadas.length}
             </span>
           }
           className="mb-0"
@@ -624,57 +702,99 @@ function PublicadasRecentes({ prognosticos }: { prognosticos: Prognostico[] }) {
               </tr>
             </thead>
             <tbody>
-              {publicadas.map((p) => (
-                <tr
-                  key={p.id}
-                  className="border-t border-border transition-colors hover:bg-success/[0.025]"
-                >
-                  <td className="px-3 py-2 font-mono text-xs">
+              {loading && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2 className="size-4 animate-spin text-success" />
+                      Carregando atividade de publicação...
+                    </span>
+                  </td>
+                </tr>
+              )}
+              {!loading && visiblePublicadas.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
+                    Nenhuma publicação com data registrada neste recorte.
+                  </td>
+                </tr>
+              )}
+              {!loading &&
+                visiblePublicadas.map((p) => (
+                  <tr
+                    key={p.id}
+                    className="border-t border-border transition-colors hover:bg-success/[0.025]"
+                  >
+                    <td className="px-3 py-2 font-mono text-xs">
+                      {p.data_publicacao
+                        ? new Date(p.data_publicacao).toLocaleString("pt-BR", {
+                            timeZone: "America/Sao_Paulo",
+                          })
+                        : "—"}
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className="inline-flex items-center gap-2">
+                        <SportMark sport={p.esporte} />
+                        {p.jogo}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2">{p.pick}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{p.canal_publicacao ?? "—"}</td>
+                    <td className="px-3 py-2">
+                      <PublicacaoBadge status={p.status_publicacao} />
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="divide-y divide-border sm:hidden">
+          {loading && (
+            <p className="flex items-center justify-center gap-2 px-4 py-10 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin text-success" />
+              Carregando atividade de publicação...
+            </p>
+          )}
+          {!loading && visiblePublicadas.length === 0 && (
+            <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+              Nenhuma publicação com data registrada neste recorte.
+            </p>
+          )}
+          {!loading &&
+            visiblePublicadas.map((p) => (
+              <article key={p.id} className="flex gap-3 px-3 py-3">
+                <SportMark sport={p.esporte} size="md" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="truncate text-sm font-semibold">{p.jogo}</p>
+                    <PublicacaoBadge status={p.status_publicacao} />
+                  </div>
+                  <p className="mt-1 truncate text-xs text-muted-foreground">
+                    {p.pick} · {p.canal_publicacao ?? "—"}
+                  </p>
+                  <p className="mt-1 font-mono text-[10px] text-muted-foreground">
                     {p.data_publicacao
                       ? new Date(p.data_publicacao).toLocaleString("pt-BR", {
                           timeZone: "America/Sao_Paulo",
                         })
                       : "—"}
-                  </td>
-                  <td className="px-3 py-2">
-                    <span className="inline-flex items-center gap-2">
-                      <SportMark sport={p.esporte} />
-                      {p.jogo}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2">{p.pick}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{p.canal_publicacao ?? "—"}</td>
-                  <td className="px-3 py-2">
-                    <PublicacaoBadge status={p.status_publicacao} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="divide-y divide-border sm:hidden">
-          {publicadas.map((p) => (
-            <article key={p.id} className="flex gap-3 px-4 py-3">
-              <SportMark sport={p.esporte} size="md" />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="truncate text-sm font-semibold">{p.jogo}</p>
-                  <PublicacaoBadge status={p.status_publicacao} />
+                  </p>
                 </div>
-                <p className="mt-1 truncate text-xs text-muted-foreground">
-                  {p.pick} · {p.canal_publicacao ?? "—"}
-                </p>
-                <p className="mt-1 font-mono text-[10px] text-muted-foreground">
-                  {p.data_publicacao
-                    ? new Date(p.data_publicacao).toLocaleString("pt-BR", {
-                        timeZone: "America/Sao_Paulo",
-                      })
-                    : "—"}
-                </p>
-              </div>
-            </article>
-          ))}
+              </article>
+            ))}
         </div>
+        {publicadas.length > 5 && (
+          <div className="border-t border-border/80 p-2 text-center">
+            <Button variant="ghost" size="sm" onClick={() => setShowAll((value) => !value)}>
+              {showAll ? (
+                <ChevronUp className="mr-1.5 size-4" />
+              ) : (
+                <ChevronDown className="mr-1.5 size-4" />
+              )}
+              {showAll ? "Mostrar recentes" : `Ver todas as ${publicadas.length} publicações`}
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
