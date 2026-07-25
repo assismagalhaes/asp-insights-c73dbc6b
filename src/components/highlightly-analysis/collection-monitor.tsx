@@ -111,7 +111,7 @@ function MonitorSkeleton() {
 function OddsQualitySkeleton() {
   return (
     <section
-      className="min-h-[690px] overflow-hidden rounded-lg border border-primary/15 bg-card/90 md:min-h-[640px]"
+      className="min-h-[720px] overflow-hidden rounded-lg border border-primary/15 bg-card/90 md:min-h-[640px]"
       aria-label="Carregando qualidade e atualização das odds"
       aria-busy="true"
     >
