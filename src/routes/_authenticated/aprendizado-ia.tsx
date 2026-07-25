@@ -1,7 +1,29 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BrainCircuit, TrendingUp, Scale, Target, Split, Activity } from "lucide-react";
+import {
+  Activity,
+  BrainCircuit,
+  CheckCircle2,
+  CircleDollarSign,
+  Database,
+  GitCompareArrows,
+  ShieldCheck,
+  Sparkles,
+  Split,
+  Target,
+  TrendingUp,
+  XCircle,
+} from "lucide-react";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { supabase } from "@/lib/supabase-public";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -15,7 +37,6 @@ import {
 import { PeriodFilter } from "@/components/period-filter";
 import { LeagueFilter } from "@/components/league-filter";
 import { SportFilterSelect } from "@/components/sport-filter-select";
-import { StatCard } from "@/components/stat-card";
 import { rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
 import {
   ESPORTES_DEFAULT,
@@ -334,23 +355,48 @@ function AprendizadoIaPage() {
   const lucroPorMercado = sumFinancialBy(confirmadasConcordantes, "mercado");
   const modoComparativo = rateBy(filteredFeedback, "modo_ia");
   const tagsRed = tagsByRed(filteredFeedback);
+  const learningTrend = learningTrendByDay(filteredFeedback);
+  const recentMemory = [...filteredFeedback]
+    .sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")))
+    .slice(0, 8);
   const hasData = filteredAnalises.length > 0 || filteredFeedback.length > 0;
+  const matrixTotal =
+    stats.confirmarCorreto + stats.confirmarIncorreto + stats.pularCorreto + stats.pularIncorreto;
 
   return (
-    <div className="page-stack">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Aprendizado da IA</h1>
-          <p className="page-description">
-            Memória operacional entre análise da IA, decisão humana e resultados GREEN/RED.
-            Confirmadas medem banca; puladas medem qualidade da decisão de recusa.
-          </p>
+    <div className="page-stack pb-8">
+      <section className="relative overflow-hidden rounded-2xl border border-primary/20 bg-[radial-gradient(circle_at_88%_18%,hsl(var(--primary)/0.24),transparent_34%),linear-gradient(135deg,hsl(var(--card)),hsl(var(--background)))] px-5 py-6 shadow-[0_18px_60px_-30px_hsl(var(--primary)/0.55)] sm:px-7">
+        <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full border border-primary/20 bg-primary/5 blur-sm" />
+        <div className="pointer-events-none absolute right-20 top-8 h-2 w-2 rounded-full bg-primary shadow-[0_0_22px_6px_hsl(var(--primary)/0.5)]" />
+        <div className="relative flex items-start gap-4">
+          <div className="hidden h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-primary/35 bg-primary/10 shadow-[inset_0_0_24px_hsl(var(--primary)/0.14)] sm:flex">
+            <BrainCircuit className="h-8 w-8 text-primary" />
+          </div>
+          <div className="max-w-3xl">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-success/25 bg-success/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-success">
+                <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                IA operacional
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-400/25 bg-violet-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-violet-300">
+                <Database className="h-3 w-3" />
+                Memória ativa
+              </span>
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+              Aprendizado da IA
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+              Memória operacional que compara análise da IA, decisão humana e resultado GREEN/RED
+              para aprimorar o aprendizado contínuo.
+            </p>
+          </div>
         </div>
-      </div>
+      </section>
 
-      <Card>
-        <CardContent className="pt-4">
-          <div className="flex flex-wrap items-end gap-3">
+      <Card className="border-border/70 bg-card/75 shadow-sm backdrop-blur">
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex items-end gap-3 overflow-x-auto pb-1">
             <PeriodFilter
               periodo={periodo}
               onPeriodoChange={setPeriodo}
@@ -436,103 +482,484 @@ function AprendizadoIaPage() {
         </Card>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Prognósticos analisados" value={String(stats.total)} icon={BrainCircuit} />
-        <StatCard label="IA local" value={String(stats.local)} icon={Activity} />
-        <StatCard label="IA online" value={String(stats.online)} icon={Activity} />
-        <StatCard
-          label="Taxa de confirmação IA"
-          value={`${stats.taxaConfirmacao.toFixed(1)}%`}
-          icon={Target}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+        <LearningKpi
+          label="Decisões avaliadas"
+          value={String(stats.total)}
+          icon={BrainCircuit}
+          tone="blue"
+          detail={`${stats.local} local · ${stats.online} online`}
         />
-        <StatCard
+        <LearningKpi
           label="Acerto decisório IA"
           value={`${stats.taxaAcerto.toFixed(1)}%`}
-          icon={TrendingUp}
+          icon={ShieldCheck}
+          tone="violet"
+          detail={`${feedbackComAcertoIa.length} decisões concluídas`}
         />
-        <StatCard
-          label="Confirmadas IA GREEN/RED"
-          value={`${stats.confirmadasGreen}/${stats.confirmadasRed}`}
+        <LearningKpi
+          label="Taxa de confirmação"
+          value={`${stats.taxaConfirmacao.toFixed(1)}%`}
           icon={Target}
+          tone="green"
+          detail={`${rowsConfirmadasIa.length} entradas confirmadas`}
         />
-        <StatCard
-          label="ROI teórico confirmações IA"
+        <LearningKpi
+          label="ROI teórico IA"
           value={`${stats.roiTeoricoIa.toFixed(1)}%`}
           icon={TrendingUp}
-          trend={stats.roiTeoricoIa >= 0 ? "up" : "down"}
+          tone={stats.roiTeoricoIa >= 0 ? "blue" : "red"}
+          detail={`${stats.lucroTeoricoIa.toFixed(2)}u teóricas`}
         />
-        <StatCard
-          label="ROI financeiro IA + humano"
+        <LearningKpi
+          label="ROI concordante"
           value={`${stats.roiFinanceiroConcordante.toFixed(1)}%`}
-          icon={TrendingUp}
-          trend={stats.roiFinanceiroConcordante >= 0 ? "up" : "down"}
+          icon={CircleDollarSign}
+          tone={stats.roiFinanceiroConcordante >= 0 ? "amber" : "red"}
+          detail={`R$ ${stats.lucroRealConcordante.toFixed(2)} realizados`}
         />
-        <StatCard
-          label="Puladas IA GREEN/RED"
-          value={`${stats.puladasGreen}/${stats.puladasRed}`}
-          icon={Split}
-        />
-        <StatCard
-          label="Pular correto"
-          value={String(stats.pularCorreto)}
-          icon={Split}
-          trend="up"
-        />
-        <StatCard
-          label="Pular incorreto"
-          value={String(stats.pularIncorreto)}
-          icon={Split}
-          trend={stats.pularIncorreto > 0 ? "down" : "neutral"}
-        />
-        <StatCard
-          label="Confirmar correto"
-          value={String(stats.confirmarCorreto)}
-          icon={Target}
-          trend="up"
-        />
-        <StatCard
-          label="Confirmar incorreto"
-          value={String(stats.confirmarIncorreto)}
-          icon={Target}
-          trend={stats.confirmarIncorreto > 0 ? "down" : "neutral"}
-        />
-        <StatCard
-          label="Lucro real IA + humano"
-          value={`R$ ${stats.lucroRealConcordante.toFixed(2)}`}
-          icon={Scale}
-          trend={stats.lucroRealConcordante >= 0 ? "up" : "down"}
-        />
-        <StatCard
-          label="Lucro teórico IA"
-          value={`${stats.lucroTeoricoIa.toFixed(2)}u`}
-          icon={Scale}
-          trend={stats.lucroTeoricoIa >= 0 ? "up" : "down"}
-        />
-        <StatCard
-          label="Divergências IA x humano"
+        <LearningKpi
+          label="Divergências IA × humano"
           value={String(stats.divergencias)}
-          icon={Split}
+          icon={GitCompareArrows}
+          tone="red"
+          detail={`${filteredFeedback.length ? ((stats.divergencias / filteredFeedback.length) * 100).toFixed(1) : "0.0"}% da amostra`}
         />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <ChartCard title="Acerto da IA por esporte (%)" rows={acertoPorEsporte} suffix="%" />
-        <ChartCard title="Acerto da IA por mercado (%)" rows={acertoPorMercado} suffix="%" />
+      <div className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
+        <DecisionMatrix stats={stats} total={matrixTotal} />
+        <LearningTrend rows={learningTrend} />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-3">
         <ChartCard
-          title="Resultado financeiro IA + humano por esporte (u)"
+          title="Acerto da IA por esporte"
+          rows={acertoPorEsporte}
+          suffix="%"
+          accent="blue"
+        />
+        <ChartCard
+          title="Acerto da IA por mercado"
+          rows={acertoPorMercado}
+          suffix="%"
+          accent="violet"
+        />
+        <ChartCard title="Causas de RED" rows={tagsRed} suffix="" accent="red" />
+        <ModeComparison rows={modoComparativo} totalRate={stats.taxaAcerto} />
+        <ChartCard
+          title="ROI financeiro por esporte"
           rows={lucroPorEsporte}
           suffix="u"
           diverging
+          accent="green"
         />
         <ChartCard
-          title="Resultado financeiro IA + humano por mercado (u)"
+          title="ROI financeiro por mercado"
           rows={lucroPorMercado}
           suffix="u"
           diverging
+          accent="amber"
         />
-        <ChartCard title="IA local vs IA online (%)" rows={modoComparativo} suffix="%" />
-        <ChartCard title="Tags de risco mais associadas a RED" rows={tagsRed} suffix="" />
       </div>
+
+      <RecentMemory rows={recentMemory} />
+    </div>
+  );
+}
+
+type KpiTone = "blue" | "violet" | "green" | "amber" | "red";
+
+const toneClasses: Record<KpiTone, { icon: string; glow: string; bar: string }> = {
+  blue: {
+    icon: "border-primary/30 bg-primary/10 text-primary",
+    glow: "from-primary/14",
+    bar: "bg-primary",
+  },
+  violet: {
+    icon: "border-violet-400/30 bg-violet-500/10 text-violet-300",
+    glow: "from-violet-500/14",
+    bar: "bg-violet-400",
+  },
+  green: {
+    icon: "border-success/30 bg-success/10 text-success",
+    glow: "from-success/14",
+    bar: "bg-success",
+  },
+  amber: {
+    icon: "border-amber-400/30 bg-amber-500/10 text-amber-300",
+    glow: "from-amber-500/14",
+    bar: "bg-amber-400",
+  },
+  red: {
+    icon: "border-destructive/30 bg-destructive/10 text-destructive",
+    glow: "from-destructive/14",
+    bar: "bg-destructive",
+  },
+};
+
+function LearningKpi({
+  label,
+  value,
+  detail,
+  icon: Icon,
+  tone,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  icon: typeof BrainCircuit;
+  tone: KpiTone;
+}) {
+  const colors = toneClasses[tone];
+  return (
+    <Card className="group relative min-h-32 overflow-hidden border-border/70 bg-card/85 transition-colors hover:border-primary/30">
+      <div
+        className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${colors.glow} via-transparent to-transparent opacity-70`}
+      />
+      <div className={`absolute inset-x-0 top-0 h-0.5 ${colors.bar}`} />
+      <CardContent className="relative flex h-full items-start gap-3 p-4">
+        <div
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${colors.icon}`}
+        >
+          <Icon className="h-5 w-5" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+            {label}
+          </p>
+          <p className="mt-1 font-mono text-2xl font-semibold tracking-tight text-foreground">
+            {value}
+          </p>
+          <p className="mt-1 truncate text-[11px] text-muted-foreground">{detail}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+type LearningStats = {
+  confirmarCorreto: number;
+  confirmarIncorreto: number;
+  pularCorreto: number;
+  pularIncorreto: number;
+  taxaAcerto: number;
+};
+
+function DecisionMatrix({ stats, total }: { stats: LearningStats; total: number }) {
+  const cells = [
+    {
+      label: "Confirmar correto",
+      value: stats.confirmarCorreto,
+      tone: "green" as const,
+      icon: CheckCircle2,
+    },
+    {
+      label: "Confirmar incorreto",
+      value: stats.confirmarIncorreto,
+      tone: "red" as const,
+      icon: XCircle,
+    },
+    { label: "Pular correto", value: stats.pularCorreto, tone: "blue" as const, icon: ShieldCheck },
+    { label: "Pular incorreto", value: stats.pularIncorreto, tone: "amber" as const, icon: Split },
+  ];
+  return (
+    <Card className="overflow-hidden border-border/70 bg-card/85">
+      <CardHeader className="border-b border-border/60 pb-3">
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle className="flex items-center gap-2 text-sm uppercase tracking-[0.12em] text-primary">
+            <GitCompareArrows className="h-4 w-4" />
+            Matriz de decisão
+          </CardTitle>
+          <span className="font-mono text-xs text-muted-foreground">Total: {total}</span>
+        </div>
+      </CardHeader>
+      <CardContent className="p-4">
+        <div className="mb-2 grid grid-cols-[58px_1fr_1fr] text-center text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <span />
+          <span>Decisão correta</span>
+          <span>Decisão incorreta</span>
+        </div>
+        <div className="grid grid-cols-[58px_1fr_1fr] gap-2">
+          <div className="flex items-center justify-center text-[9px] font-semibold uppercase tracking-wider text-muted-foreground [writing-mode:vertical-rl]">
+            IA confirma
+          </div>
+          {cells.slice(0, 2).map((cell) => (
+            <MatrixCell key={cell.label} {...cell} total={total} />
+          ))}
+          <div className="flex items-center justify-center text-[9px] font-semibold uppercase tracking-wider text-muted-foreground [writing-mode:vertical-rl]">
+            IA pula
+          </div>
+          {cells.slice(2).map((cell) => (
+            <MatrixCell key={cell.label} {...cell} total={total} />
+          ))}
+        </div>
+        <div className="mt-4 flex items-center justify-center gap-2 border-t border-border/60 pt-3 text-xs text-muted-foreground">
+          <Sparkles className="h-3.5 w-3.5 text-success" />
+          Acerto global da IA:
+          <strong className="font-mono text-success">{stats.taxaAcerto.toFixed(1)}%</strong>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MatrixCell({
+  label,
+  value,
+  tone,
+  icon: Icon,
+  total,
+}: {
+  label: string;
+  value: number;
+  tone: KpiTone;
+  icon: typeof BrainCircuit;
+  total: number;
+}) {
+  const colors = toneClasses[tone];
+  return (
+    <div className={`rounded-xl border p-3 ${colors.icon}`}>
+      <div className="flex items-center gap-1.5 text-[10px] font-medium">
+        <Icon className="h-3.5 w-3.5 shrink-0" />
+        <span className="truncate">{label}</span>
+      </div>
+      <p className="mt-2 font-mono text-xl font-semibold text-foreground">
+        {total ? ((value / total) * 100).toFixed(1) : "0.0"}%
+      </p>
+      <p className="font-mono text-[10px] opacity-80">{value} casos</p>
+    </div>
+  );
+}
+
+interface TrendRow {
+  date: string;
+  label: string;
+  local: number | null;
+  online: number | null;
+}
+
+function LearningTrend({ rows }: { rows: TrendRow[] }) {
+  const latest = rows.at(-1);
+  return (
+    <Card className="overflow-hidden border-border/70 bg-card/85">
+      <CardHeader className="border-b border-border/60 pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <CardTitle className="flex items-center gap-2 text-sm uppercase tracking-[0.12em] text-primary">
+            <Activity className="h-4 w-4" />
+            Evolução do aprendizado
+          </CardTitle>
+          <div className="flex gap-3 text-[10px] text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <i className="h-0.5 w-4 bg-primary" /> IA local
+            </span>
+            <span className="flex items-center gap-1">
+              <i className="h-0.5 w-4 bg-violet-400" /> IA online
+            </span>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="p-4">
+        {rows.length ? (
+          <>
+            <div className="h-60 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.45} />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 10 }}
+                    stroke="hsl(var(--muted-foreground))"
+                  />
+                  <YAxis
+                    domain={[0, 100]}
+                    tick={{ fontSize: 10 }}
+                    stroke="hsl(var(--muted-foreground))"
+                    tickFormatter={(v) => `${v}%`}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "hsl(var(--popover))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: 10,
+                      fontSize: 12,
+                    }}
+                    formatter={(value: number) => [`${value.toFixed(1)}%`]}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="local"
+                    connectNulls
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={2.5}
+                    dot={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="online"
+                    connectNulls
+                    stroke="#a78bfa"
+                    strokeWidth={2.5}
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="mt-3 grid grid-cols-3 divide-x divide-border rounded-xl border border-border/60 bg-background/35 py-3 text-center">
+              <TrendSummary label="Último ponto" value={latest?.label ?? "—"} />
+              <TrendSummary
+                label="IA local"
+                value={latest?.local == null ? "—" : `${latest.local.toFixed(1)}%`}
+                tone="text-primary"
+              />
+              <TrendSummary
+                label="IA online"
+                value={latest?.online == null ? "—" : `${latest.online.toFixed(1)}%`}
+                tone="text-violet-300"
+              />
+            </div>
+          </>
+        ) : (
+          <EmptyChart />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function TrendSummary({
+  label,
+  value,
+  tone = "text-foreground",
+}: {
+  label: string;
+  value: string;
+  tone?: string;
+}) {
+  return (
+    <div className="px-2">
+      <p className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={`mt-1 font-mono text-sm font-semibold ${tone}`}>{value}</p>
+    </div>
+  );
+}
+
+function ModeComparison({ rows, totalRate }: { rows: BarRow[]; totalRate: number }) {
+  const local = rows.find((row) => row.label === "local")?.value ?? 0;
+  const online = rows.find((row) => row.label === "online")?.value ?? 0;
+  return (
+    <Card className="overflow-hidden border-border/70 bg-card/85">
+      <CardHeader className="border-b border-border/60 pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm uppercase tracking-[0.12em] text-primary">
+          <BrainCircuit className="h-4 w-4" /> IA local × IA online
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex min-h-64 flex-col justify-center p-5">
+        <div className="relative mx-auto flex h-36 w-36 items-center justify-center rounded-full bg-[conic-gradient(hsl(var(--primary))_0_50%,#a78bfa_50%_100%)] shadow-[0_0_38px_-14px_hsl(var(--primary))]">
+          <div className="flex h-28 w-28 flex-col items-center justify-center rounded-full bg-card">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Acerto IA
+            </span>
+            <strong className="font-mono text-2xl">{totalRate.toFixed(1)}%</strong>
+            <span className="text-[10px] text-muted-foreground">global</span>
+          </div>
+        </div>
+        <div className="mt-5 grid grid-cols-2 gap-3 text-center">
+          <TrendSummary label="IA local" value={`${local.toFixed(1)}%`} tone="text-primary" />
+          <TrendSummary label="IA online" value={`${online.toFixed(1)}%`} tone="text-violet-300" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function RecentMemory({ rows }: { rows: LearningRow[] }) {
+  return (
+    <Card className="overflow-hidden border-border/70 bg-card/85">
+      <CardHeader className="border-b border-border/60 pb-3">
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle className="flex items-center gap-2 text-sm uppercase tracking-[0.12em] text-primary">
+            <Database className="h-4 w-4" /> Memória operacional recente
+          </CardTitle>
+          <span className="hidden text-[10px] text-muted-foreground sm:block">
+            Resultados mais recentes da seleção atual
+          </span>
+        </div>
+      </CardHeader>
+      <CardContent className="p-4">
+        {rows.length ? (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {rows.map((row) => {
+              const outcome = getOutcome(row);
+              const decision = normalizeAiDecision(row.decisao_ia_sugerida);
+              return (
+                <div
+                  key={`${row.prognostico_id}-${row.created_at}`}
+                  className="rounded-xl border border-border/70 bg-background/35 p-3 transition-colors hover:border-primary/35"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-foreground">
+                        {row.esporte ?? "Sem esporte"}
+                      </p>
+                      <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                        {row.mercado ?? row.pick ?? "Sem mercado"}
+                      </p>
+                    </div>
+                    <span
+                      className={`rounded border px-1.5 py-0.5 font-mono text-[9px] font-semibold ${outcome === "GREEN" ? "border-success/40 bg-success/10 text-success" : "border-destructive/40 bg-destructive/10 text-destructive"}`}
+                    >
+                      {outcome ?? "—"}
+                    </span>
+                  </div>
+                  <div className="mt-3 space-y-1.5 border-t border-border/60 pt-2 text-[10px]">
+                    <MemoryLine label="Decisão IA" value={decision ?? "—"} ok={row.acertou_ia} />
+                    <MemoryLine
+                      label="Decisão humana"
+                      value={normalizeAiDecision(row.decisao_humana_final) ?? "—"}
+                      ok={row.acertou_humano}
+                    />
+                    <MemoryLine label="Modo" value={row.modo_ia ?? "—"} />
+                    <MemoryLine
+                      label="Odd usada"
+                      value={row.odd_usada ? Number(row.odd_usada).toFixed(2) : "—"}
+                    />
+                  </div>
+                  <p className="mt-2 border-t border-border/60 pt-2 font-mono text-[9px] text-muted-foreground">
+                    {formatMemoryDate(row.created_at)}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <EmptyChart />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function MemoryLine({ label, value, ok }: { label: string; value: string; ok?: boolean | null }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="flex items-center gap-1 font-medium text-foreground">
+        {value}
+        {ok === true ? (
+          <CheckCircle2 className="h-3 w-3 text-success" />
+        ) : ok === false ? (
+          <XCircle className="h-3 w-3 text-destructive" />
+        ) : null}
+      </span>
+    </div>
+  );
+}
+
+function EmptyChart() {
+  return (
+    <div className="flex min-h-40 items-center justify-center text-center text-sm text-muted-foreground">
+      Nenhum resultado encontrado para os filtros selecionados.
     </div>
   );
 }
@@ -588,26 +1015,30 @@ function ChartCard({
   rows,
   suffix,
   diverging = false,
+  accent = "blue",
 }: {
   title: string;
   rows: BarRow[];
   suffix: string;
   diverging?: boolean;
+  accent?: KpiTone;
 }) {
+  const colors = toneClasses[accent];
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-sm uppercase tracking-wider text-muted-foreground">
+    <Card className="overflow-hidden border-border/70 bg-card/85">
+      <CardHeader className="border-b border-border/60 pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm uppercase tracking-[0.12em] text-primary">
+          <span className={`h-2 w-2 rounded-full ${colors.bar}`} />
           {title}
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="min-h-64 p-4">
         {rows.length ? (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {rows.slice(0, 10).map((row) => (
               <div key={row.label} className="space-y-1">
                 <div className="flex items-center justify-between gap-3 text-xs">
-                  <span className="truncate text-muted-foreground">{row.label}</span>
+                  <span className="truncate text-foreground/85">{row.label}</span>
                   <span
                     className={
                       row.value > 0
@@ -621,14 +1052,14 @@ function ChartCard({
                     {suffix}
                   </span>
                 </div>
-                <div className="h-2 rounded bg-muted">
+                <div className="h-1.5 rounded-full bg-muted/80">
                   <div
                     className={
                       diverging
                         ? row.value >= 0
-                          ? "h-2 rounded bg-success"
-                          : "h-2 rounded bg-destructive"
-                        : "h-2 rounded bg-primary"
+                          ? "h-1.5 rounded-full bg-success shadow-[0_0_10px_hsl(var(--success)/0.35)]"
+                          : "h-1.5 rounded-full bg-destructive shadow-[0_0_10px_hsl(var(--destructive)/0.35)]"
+                        : `h-1.5 rounded-full ${colors.bar}`
                     }
                     style={{ width: `${Math.max(4, Math.min(100, row.percent))}%` }}
                   />
@@ -637,9 +1068,7 @@ function ChartCard({
             ))}
           </div>
         ) : (
-          <div className="py-12 text-center text-sm text-muted-foreground">
-            Nenhum resultado encontrado para os filtros selecionados.
-          </div>
+          <EmptyChart />
         )}
       </CardContent>
     </Card>
@@ -650,6 +1079,50 @@ interface BarRow {
   label: string;
   value: number;
   percent: number;
+}
+
+function learningTrendByDay(rows: LearningRow[]): TrendRow[] {
+  const map = new Map<
+    string,
+    { local: { ok: number; total: number }; online: { ok: number; total: number } }
+  >();
+  for (const row of rows) {
+    if (row.acertou_ia == null || !row.created_at) continue;
+    const date = row.created_at.slice(0, 10);
+    const mode = row.modo_ia === "online" ? "online" : row.modo_ia === "local" ? "local" : null;
+    if (!mode) continue;
+    const current = map.get(date) ?? {
+      local: { ok: 0, total: 0 },
+      online: { ok: 0, total: 0 },
+    };
+    current[mode].total += 1;
+    if (row.acertou_ia) current[mode].ok += 1;
+    map.set(date, current);
+  }
+  return [...map.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-30)
+    .map(([date, value]) => ({
+      date,
+      label: new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(
+        new Date(`${date}T12:00:00`),
+      ),
+      local: value.local.total ? (value.local.ok / value.local.total) * 100 : null,
+      online: value.online.total ? (value.online.ok / value.online.total) * 100 : null,
+    }));
+}
+
+function formatMemoryDate(value: string | null | undefined): string {
+  if (!value) return "Data não informada";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 function rateBy(rows: LearningRow[], field: keyof LearningRow): BarRow[] {
