@@ -44,7 +44,7 @@ class FootballValidationTest(unittest.TestCase):
         self.assertEqual(canonical_market("Resultado Final"), "1x2")
         self.assertEqual(canonical_market("Total de Gols"), "total_goals")
         self.assertEqual(canonical_market("Ambas Marcam"), "btts")
-        self.assertEqual(canonical_market("Handicap Asiático"), "asian_handicap")
+        self.assertEqual(canonical_market("Handicap Asiático"), "handicap")
 
     def test_ranked_probability_score_is_zero_for_perfect_1x2_forecast(self):
         frame = pd.DataFrame({

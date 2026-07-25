@@ -1,0 +1,45 @@
+{
+  "version": "FOOTBALL_V1_5",
+  "markets": {
+    "1x2": {
+      "active": false,
+      "out_of_sample": true,
+      "sample_size": 0,
+      "intercept": 0.0,
+      "slope": 1.0,
+      "status": "identity_pending_walk_forward"
+    },
+    "double_chance": {
+      "active": false,
+      "out_of_sample": true,
+      "sample_size": 0,
+      "intercept": 0.0,
+      "slope": 1.0,
+      "status": "identity_pending_walk_forward"
+    },
+    "total_goals": {
+      "active": false,
+      "out_of_sample": true,
+      "sample_size": 0,
+      "intercept": 0.0,
+      "slope": 1.0,
+      "status": "identity_pending_walk_forward"
+    },
+    "btts": {
+      "active": false,
+      "out_of_sample": true,
+      "sample_size": 0,
+      "intercept": 0.0,
+      "slope": 1.0,
+      "status": "identity_pending_walk_forward"
+    },
+    "handicap": {
+      "active": false,
+      "out_of_sample": true,
+      "sample_size": 0,
+      "intercept": 0.0,
+      "slope": 1.0,
+      "status": "identity_pending_walk_forward"
+    }
+  }
+}

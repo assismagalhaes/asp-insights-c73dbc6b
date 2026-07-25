@@ -17,6 +17,7 @@ from football_probability import (
     asian_expected_value,
     asian_fair_odd,
     asian_handicap_settlement,
+    calibrate_binary,
 )
 
 try:
@@ -30,8 +31,8 @@ MODELOS_DIR = BASE_DIR / "modelos"
 REAL_MODEL_PATH = MODELOS_DIR / "prognosticos_football_real.py"
 
 MODEL_NAME = "ASP MatchMatrix"
-MODEL_VERSION = "FOOTBALL_V1_4"
-FOOTBALL_STAT_AUDIT_VERSION = "FOOTBALL_V1_4_A"
+MODEL_VERSION = "FOOTBALL_V1_5"
+FOOTBALL_STAT_AUDIT_VERSION = "FOOTBALL_V1_5_A"
 HANDICAP_ENABLED_FOOTBALL_V1_1 = True
 HANDICAP_ASIAN_ENABLED_FOOTBALL_V1_1 = True
 HANDICAP_EUROPEAN_ENABLED_FOOTBALL_V1_1 = False
@@ -48,11 +49,21 @@ OVERDISPERSION_MIN_EDGE_FOOTBALL_V1_3 = 0.05
 DOUBLE_CHANCE_COMPLEMENT_MIN_SUM = 0.95
 MAX_SELECTIONS_PER_MATCH_FOOTBALL_V1_3 = 2
 MARKET_DIVERGENCE_HAIRCUT_THRESHOLD = 0.12
+MARKET_DIVERGENCE_RISK_HAIRCUT_THRESHOLD = 0.10
 MARKET_DIVERGENCE_REVIEW_THRESHOLD = 0.15
 MARKET_DIVERGENCE_STRONG_THRESHOLD = 0.20
 MARKET_DIVERGENCE_HAIRCUT_SHARE = 0.25
 SOURCE_BASE_STALE_DAYS = 30
 VENUE_SAMPLE_GAP_DAYS = 30
+VENUE_SAMPLE_HIGH_GAP_DAYS = 45
+VENUE_SAMPLE_CRITICAL_GAP_DAYS = 60
+VENUE_MARKET_BLEND_30D = 0.10
+VENUE_MARKET_BLEND_45D = 0.20
+VENUE_MARKET_BLEND_60D = 0.30
+VENUE_MARKET_BLEND_BOTH_60D = 0.40
+OVERDISPERSION_MARKET_BLEND = 0.20
+HIGH_PROBABILITY_EXCESS_SHRINK_SHARE = 0.50
+CORRELATION_PORTFOLIO_EDGE_FACTOR = 0.75
 PRIOR_PROBABILITY = 0.50
 PRIOR_STRENGTH = 10.0
 SHRINKAGE_K_FOOTBALL_V1_1 = 10.0
@@ -61,6 +72,9 @@ SCORE_MATRIX_MIN_MAX_GOALS = 10
 SCORE_MATRIX_MAX_CAP = 15
 FOOTBALL_NBD_ENABLED_V1_1 = False
 N_SIMULATIONS_FOOTBALL_V1_1 = 0
+CALIBRATION_PATH = Path(
+    os.getenv("FOOTBALL_CALIBRATION_PATH", Path(__file__).with_name("football_calibration.json"))
+)
 
 LAST_V1_1_DISCARDED = pd.DataFrame()
 
@@ -571,11 +585,20 @@ def _build_v1_1_note(debug: dict) -> str:
         "simulation_enabled",
         "n_simulations",
         "prob_original",
+        "prob_calibrated",
         "prob_hist",
         "prob_no_vig",
+        "calibration_status",
         "market_divergence_pp",
+        "market_divergence_haircut_threshold",
         "market_conflict_status",
         "haircut_pp",
+        "probability_before_risk_adjustments",
+        "probability_after_risk_adjustments",
+        "venue_probability_blend_share",
+        "venue_probability_haircut_pp",
+        "overdispersion_probability_haircut_pp",
+        "high_probability_haircut_pp",
         "prob_final",
         "odd_justa",
         "odd_ofertada",
@@ -598,7 +621,11 @@ def _build_v1_1_note(debug: dict) -> str:
     return " | ".join(parts)
 
 
-def _market_conflict_control(prob_original: float, prob_no_vig: float | None) -> dict:
+def _market_conflict_control(
+    prob_original: float,
+    prob_no_vig: float | None,
+    haircut_threshold: float = MARKET_DIVERGENCE_HAIRCUT_THRESHOLD,
+) -> dict:
     if prob_no_vig is None:
         return {
             "probability": prob_original,
@@ -625,7 +652,7 @@ def _market_conflict_control(prob_original: float, prob_no_vig: float | None) ->
             "status": "REVISAO_OBRIGATORIA_MERCADO",
             "discard_reason": "MARKET_CONFLICT_REVIEW_REQUIRED",
         }
-    if divergence >= MARKET_DIVERGENCE_HAIRCUT_THRESHOLD:
+    if divergence >= haircut_threshold:
         adjusted = prob_no_vig + (prob_original - prob_no_vig) * (1.0 - MARKET_DIVERGENCE_HAIRCUT_SHARE)
         return {
             "probability": adjusted,
@@ -641,6 +668,101 @@ def _market_conflict_control(prob_original: float, prob_no_vig: float | None) ->
         "status": "ALINHADO",
         "discard_reason": None,
     }
+
+
+def _blend_toward_reference(probability: float, reference: float | None, share: float) -> float:
+    target = reference if reference is not None else PRIOR_PROBABILITY
+    return min(max(probability + (target - probability) * share, 0.01), 0.99)
+
+
+def _venue_probability_blend_share(home_gap, away_gap) -> float:
+    gaps = [value for value in (_to_float(home_gap), _to_float(away_gap)) if value is not None]
+    if not gaps:
+        return 0.0
+    if len(gaps) == 2 and min(gaps) > VENUE_SAMPLE_CRITICAL_GAP_DAYS:
+        return VENUE_MARKET_BLEND_BOTH_60D
+    maximum = max(gaps)
+    if maximum > VENUE_SAMPLE_CRITICAL_GAP_DAYS:
+        return VENUE_MARKET_BLEND_60D
+    if maximum > VENUE_SAMPLE_HIGH_GAP_DAYS:
+        return VENUE_MARKET_BLEND_45D
+    if maximum > VENUE_SAMPLE_GAP_DAYS:
+        return VENUE_MARKET_BLEND_30D
+    return 0.0
+
+
+def _load_probability_calibration() -> dict:
+    try:
+        payload = json.loads(CALIBRATION_PATH.read_text(encoding="utf-8"))
+        return payload if isinstance(payload, dict) else {}
+    except (OSError, ValueError, TypeError):
+        return {}
+
+
+def _apply_oos_calibration(market_type: str, probability: float) -> tuple[float, str]:
+    config = _load_probability_calibration().get("markets", {}).get(market_type, {})
+    if not isinstance(config, dict) or not config.get("active"):
+        status = config.get("status") if isinstance(config, dict) else None
+        return probability, str(status or "identity_pending_walk_forward")
+    calibrated = calibrate_binary(
+        probability,
+        {
+            "slope": _to_float(config.get("slope"), 1.0),
+            "intercept": _to_float(config.get("intercept"), 0.0),
+        },
+    )
+    return calibrated, str(config.get("status") or "active_oos_calibration")
+
+
+def _apply_probability_risk_adjustments(
+    probability: float,
+    prob_no_vig: float | None,
+    warnings: list[str],
+    home_venue_gap_days,
+    away_venue_gap_days,
+) -> tuple[float, dict]:
+    adjusted = probability
+    debug = {
+        "probability_before_risk_adjustments": round(probability, 6),
+        "venue_probability_blend_share": 0.0,
+        "venue_probability_haircut_pp": 0.0,
+        "overdispersion_probability_haircut_pp": 0.0,
+        "high_probability_haircut_pp": 0.0,
+    }
+
+    venue_share = _venue_probability_blend_share(
+        home_venue_gap_days,
+        away_venue_gap_days,
+    )
+    if venue_share > 0:
+        before = adjusted
+        adjusted = _blend_toward_reference(adjusted, prob_no_vig, venue_share)
+        debug["venue_probability_blend_share"] = venue_share
+        debug["venue_probability_haircut_pp"] = round((before - adjusted) * 100.0, 2)
+        warnings.append("VENUE_STALENESS_PROBABILITY_HAIRCUT")
+
+    if "OVERDISPERSION_POISSON" in warnings:
+        before = adjusted
+        adjusted = _blend_toward_reference(
+            adjusted,
+            prob_no_vig,
+            OVERDISPERSION_MARKET_BLEND,
+        )
+        debug["overdispersion_probability_haircut_pp"] = round(
+            (before - adjusted) * 100.0,
+            2,
+        )
+        warnings.append("OVERDISPERSION_CONSERVATIVE_MIXTURE")
+
+    if adjusted * 100.0 >= OVERCONFIDENCE_CUTOFF_PCT:
+        before = adjusted
+        cutoff = OVERCONFIDENCE_CUTOFF_PCT / 100.0
+        adjusted = cutoff + (adjusted - cutoff) * (1.0 - HIGH_PROBABILITY_EXCESS_SHRINK_SHARE)
+        debug["high_probability_haircut_pp"] = round((before - adjusted) * 100.0, 2)
+        warnings.append("HIGH_PROBABILITY_REVIEW_FOOTBALL_V1_5")
+
+    debug["probability_after_risk_adjustments"] = round(adjusted, 6)
+    return adjusted, debug
 
 
 def _build_readable_model_context(debug: dict) -> str:
@@ -667,6 +789,7 @@ def _build_readable_model_context(debug: dict) -> str:
         ),
         (
             f"Probabilidade do modelo: {fmt_probability(debug.get('prob_original'))} | "
+            f"calibrada: {fmt_probability(debug.get('prob_calibrated'))} | "
             f"no-vig: {fmt_probability(debug.get('prob_no_vig'))} | "
             f"final: {fmt_probability(debug.get('prob_final'))}"
         ),
@@ -700,6 +823,11 @@ def _build_readable_model_context(debug: dict) -> str:
         )
     if debug.get("warnings"):
         lines.append(f"Alertas: {debug['warnings']}")
+    lines.append(
+        "Calibracao: "
+        f"{debug.get('calibration_status', 'identity_pending_walk_forward')} | "
+        f"Brier/log loss/ECE: monitorados por mercado no walk-forward"
+    )
     return "\n".join(lines)
 
 
@@ -719,7 +847,8 @@ def _minimum_edge_required(market_type: str, warnings: list[str]) -> float:
 
 
 def _overconfidence_decision(market_type: str, row: pd.Series, prob_final_pct: float, warnings: list[str]) -> str | None:
-    if prob_final_pct < OVERCONFIDENCE_CUTOFF_PCT:
+    already_flagged = "HIGH_PROBABILITY_REVIEW_FOOTBALL_V1_5" in warnings
+    if prob_final_pct < OVERCONFIDENCE_CUTOFF_PCT and not already_flagged:
         return None
 
     line = _line_to_float(row.get("linha"))
@@ -728,7 +857,8 @@ def _overconfidence_decision(market_type: str, row: pd.Series, prob_final_pct: f
         or (market_type == "total_goals" and line is not None and line <= 0.5)
     )
 
-    warnings.append("HIGH_PROBABILITY_REVIEW_FOOTBALL_V1_1")
+    if not already_flagged:
+        warnings.append("HIGH_PROBABILITY_REVIEW_FOOTBALL_V1_5")
     if "LOW_SAMPLE" in warnings:
         return "LOW_SAMPLE_HIGH_PROBABILITY_REVIEW_REQUIRED"
     if naturally_high:
@@ -972,7 +1102,30 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
     debug["bookmaker_melhor"] = bookmaker_melhor
 
     if discard_reason is None:
-        market_control = _market_conflict_control(original_prob, prob_no_vig)
+        calibrated_prob, calibration_status = _apply_oos_calibration(
+            market_type,
+            original_prob,
+        )
+        debug["prob_calibrated"] = round(calibrated_prob, 4)
+        debug["calibration_status"] = calibration_status
+        dynamic_haircut_threshold = (
+            MARKET_DIVERGENCE_RISK_HAIRCUT_THRESHOLD
+            if any(
+                warning in warnings
+                for warning in (
+                    "LOW_SAMPLE",
+                    "OVERDISPERSION_POISSON",
+                    "VENUE_SAMPLE_GAP_30D",
+                )
+            )
+            else MARKET_DIVERGENCE_HAIRCUT_THRESHOLD
+        )
+        debug["market_divergence_haircut_threshold"] = dynamic_haircut_threshold
+        market_control = _market_conflict_control(
+            calibrated_prob,
+            prob_no_vig,
+            haircut_threshold=dynamic_haircut_threshold,
+        )
         prob_final = market_control["probability"]
         market_conflict_reason = market_control["discard_reason"]
         debug["market_divergence_pp"] = (
@@ -984,13 +1137,21 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
         debug["haircut_pp"] = round(market_control["haircut"] * 100.0, 2)
         if market_control["status"] != "ALINHADO":
             warnings.append(market_control["status"])
+        prob_final, risk_adjustment_debug = _apply_probability_risk_adjustments(
+            prob_final,
+            prob_no_vig,
+            warnings,
+            home_venue_gap_days,
+            away_venue_gap_days,
+        )
+        debug.update(risk_adjustment_debug)
 
         if market_type == "handicap":
             prob_win = handicap_settlement_values["win"]
             prob_push = handicap_settlement_values["push"]
             prob_loss = handicap_settlement_values["loss"]
             original_equivalent = asian_equivalent_probability(prob_win, prob_loss)
-            if market_control["haircut"] > 0:
+            if abs(prob_final - original_equivalent) > 1e-4:
                 decisive_mass = prob_win + prob_loss
                 prob_win = decisive_mass * prob_final
                 prob_loss = decisive_mass * (1.0 - prob_final)
@@ -1190,6 +1351,11 @@ def _apply_operational_controls(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Data
     selected = work.drop(index=list(drop_reasons)).copy()
     if not selected.empty:
         selected["selection_role"] = "ALTERNATIVA"
+        selected["correlation_penalty_factor"] = CORRELATION_PORTFOLIO_EDGE_FACTOR
+        selected["portfolio_edge_adjusted"] = (
+            pd.to_numeric(selected["edge"], errors="coerce").fillna(0.0)
+            * CORRELATION_PORTFOLIO_EDGE_FACTOR
+        ).round(2)
         for _, indices in selected.groupby(selected.apply(_game_group_key, axis=1)).groups.items():
             ranked = sorted(
                 list(indices),
@@ -1201,6 +1367,26 @@ def _apply_operational_controls(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Data
             )
             if ranked:
                 selected.loc[ranked[0], "selection_role"] = "PRINCIPAL"
+                selected.loc[ranked[0], "correlation_penalty_factor"] = 1.0
+                selected.loc[ranked[0], "portfolio_edge_adjusted"] = round(
+                    _to_float(selected.loc[ranked[0]].get("edge"), 0.0),
+                    2,
+                )
+        for idx, row in selected.iterrows():
+            correlation_note = (
+                f"selection_role={row['selection_role']}; "
+                f"correlation_penalty_factor={row['correlation_penalty_factor']}; "
+                f"portfolio_edge_adjusted={row['portfolio_edge_adjusted']}"
+            )
+            selected.at[idx, "observacoes"] = "; ".join(
+                [str(row.get("observacoes") or "").strip(), correlation_note]
+            ).strip("; ")
+            if row["selection_role"] == "ALTERNATIVA":
+                selected.at[idx, "contexto_modelo"] = (
+                    f"{str(row.get('contexto_modelo') or '').strip()}\n"
+                    "Correlacao de portfolio: alternativa do mesmo jogo com edge operacional "
+                    f"reduzido para {row['portfolio_edge_adjusted']:.2f}%."
+                ).strip()
     return selected.reset_index(drop=True), pd.DataFrame(discarded_rows)
 
 

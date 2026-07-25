@@ -166,8 +166,16 @@ export function evaluateMatchMatrixOperationalGate(
         ? configuredMinimumNumber * 100
         : configuredMinimumNumber
       : null;
-  const riskRequiresFivePercent = /low_sample|overdispersion_poisson/.test(normalizedText);
-  const minimumEdge = Math.max(parsedMinimum ?? 3, riskRequiresFivePercent ? 5 : 3);
+  const riskRequiresFivePercent =
+    /low_sample|overdispersion_poisson|high_probability_review_football/.test(normalizedText);
+  const riskRequiresSixPercent =
+    /venue_sample_gap_30d|venue_staleness_probability_haircut|selection_role\s*[=:]\s*alternativa/.test(
+      normalizedText,
+    );
+  const minimumEdge = Math.max(
+    parsedMinimum ?? 3,
+    riskRequiresSixPercent ? 6 : riskRequiresFivePercent ? 5 : 3,
+  );
   const diagnosticsPresent =
     /football_v1_\d/.test(normalizedText) &&
     /market_conflict_status|min_edge_required/.test(normalizedText);
@@ -175,6 +183,14 @@ export function evaluateMatchMatrixOperationalGate(
     /market_conflict_review_required|conflito_forte|market_conflict_status\s*[=:]\s*(?:conflito|review)/.test(
       normalizedText,
     );
+  const homeVenueGap = extractContextNumber(text, "home_venue_gap_days");
+  const awayVenueGap = extractContextNumber(text, "away_venue_gap_days");
+  const bothVenueSamplesCritical =
+    isFiniteNumber(homeVenueGap) &&
+    isFiniteNumber(awayVenueGap) &&
+    homeVenueGap > 60 &&
+    awayVenueGap > 60;
+  const enrichedPreview = text.includes("[MATCHUPS / PREVIEW ENRIQUECIDO]");
   const reasons: string[] = [];
 
   if (!diagnosticsPresent) {
@@ -190,6 +206,11 @@ export function evaluateMatchMatrixOperationalGate(
   if (marketConflict) {
     reasons.push(
       "ASP MatchMatrix com conflito relevante contra o mercado; requer nova analise antes da confirmacao.",
+    );
+  }
+  if (bothVenueSamplesCritical && !enrichedPreview) {
+    reasons.push(
+      "ASP MatchMatrix com os dois recortes por mando acima de 60 dias; aplique Preview enriquecido atual antes da confirmacao.",
     );
   }
 
@@ -574,8 +595,21 @@ export function detectCriticalShortlistRiskFlags(
   const timing = calculateTimingScore(prognostico, now);
   const data = calculateDataReadinessScore(prognostico);
   const text = combinedContext(prognostico);
+  const normalizedText = normalized(text);
   const mlbGate = evaluateMlbOperationalGate(prognostico);
   const matchMatrixGate = evaluateMatchMatrixOperationalGate(prognostico);
+  const homeVenueGap = extractContextNumber(text, "home_venue_gap_days");
+  const awayVenueGap = extractContextNumber(text, "away_venue_gap_days");
+  const venueGaps = [homeVenueGap, awayVenueGap].filter(isFiniteNumber);
+  const maximumVenueGap = venueGaps.length ? Math.max(...venueGaps) : null;
+  const venueGapSeverity: CriticalRiskSeverity =
+    (maximumVenueGap ?? 0) > 45 ? "high" : "medium";
+  const bothVenueGapsCritical =
+    isFiniteNumber(homeVenueGap) &&
+    isFiniteNumber(awayVenueGap) &&
+    homeVenueGap > 60 &&
+    awayVenueGap > 60;
+  const hasEnrichedPreview = text.includes("[MATCHUPS / PREVIEW ENRIQUECIDO]");
   const packballAwaitingOdd =
     isPackballMatrixPrognostico(prognostico) && !hasPackballExecutableOdd(prognostico);
   const packballMatrix = isPackballMatrixPrognostico(prognostico);
@@ -619,6 +653,57 @@ export function detectCriticalShortlistRiskFlags(
     "matchmatrix_market_conflict",
     "hard_block",
     "MatchMatrix com conflito relevante contra o mercado.",
+  );
+  pushIf(
+    flags,
+    matchMatrixGate.applicable && bothVenueGapsCritical && !hasEnrichedPreview,
+    "matchmatrix_both_venue_samples_stale_60d",
+    "hard_block",
+    "MatchMatrix com os dois recortes por mando acima de 60 dias; exige Preview enriquecido atual.",
+  );
+  pushIf(
+    flags,
+    matchMatrixGate.applicable &&
+      (!bothVenueGapsCritical || hasEnrichedPreview) &&
+      isFiniteNumber(maximumVenueGap) &&
+      maximumVenueGap > 60,
+    "matchmatrix_venue_sample_stale_60d",
+    "high",
+    "MatchMatrix com recorte por mando acima de 60 dias; probabilidade requer penalizacao reforcada.",
+  );
+  pushIf(
+    flags,
+    matchMatrixGate.applicable &&
+      isFiniteNumber(maximumVenueGap) &&
+      maximumVenueGap > 30 &&
+      maximumVenueGap <= 60,
+    "matchmatrix_venue_sample_stale_30d",
+    venueGapSeverity,
+    "MatchMatrix com recorte por mando acima de 30 dias.",
+  );
+  pushIf(
+    flags,
+    matchMatrixGate.applicable && /overdispersion_poisson/.test(normalizedText),
+    "matchmatrix_overdispersion",
+    /overdispersion_conservative_mixture/.test(normalizedText) ? "medium" : "high",
+    "MatchMatrix detectou overdispersion; aplicada mistura conservadora quando disponível.",
+  );
+  pushIf(
+    flags,
+    matchMatrixGate.applicable && /high_probability_review_football/.test(normalizedText),
+    "matchmatrix_high_probability_review",
+    "medium",
+    "Probabilidade MatchMatrix acima da faixa de revisão; exige confirmação de calibração.",
+  );
+  pushIf(
+    flags,
+    matchMatrixGate.applicable &&
+      /selection_role\s*[=:]\s*alternativa|correlation_penalty_factor\s*[=:]\s*0\./.test(
+        normalizedText,
+      ),
+    "matchmatrix_correlated_alternative",
+    "medium",
+    "Seleção alternativa correlacionada a outra tese do mesmo jogo.",
   );
   pushIf(
     flags,
@@ -1213,6 +1298,14 @@ function combinedContext(prognostico: Prognostico): string {
   return [prognostico.dados_tecnicos, prognostico.contexto_modelo, prognostico.observacoes]
     .filter(Boolean)
     .join("\n");
+}
+
+function extractContextNumber(text: string, key: string): number | null {
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = text.match(new RegExp(`${escapedKey}\\s*[=:]\\s*(-?\\d+(?:[.,]\\d+)?)`, "i"));
+  if (!match) return null;
+  const value = Number(match[1].replace(",", "."));
+  return Number.isFinite(value) ? value : null;
 }
 
 function textHasUsefulContent(text: string): boolean {

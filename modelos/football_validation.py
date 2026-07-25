@@ -12,7 +12,7 @@ from football_probability import calibrate_binary, clamp_probability
 def canonical_market(value) -> str:
     text = unicodedata.normalize("NFKD", str(value)).encode("ascii", "ignore").decode("ascii").lower()
     if "handicap" in text:
-        return "asian_handicap"
+        return "handicap"
     if "ambas" in text or "btts" in text or "both" in text:
         return "btts"
     if "total" in text or "over" in text or "under" in text or "gols" in text:
@@ -171,6 +171,23 @@ def evaluate_market(frame: pd.DataFrame, probability_col: str = "probabilidade_f
     return report
 
 
+def evaluate_probability_band(
+    frame: pd.DataFrame,
+    minimum_probability: float = 70.0,
+    probability_col: str = "probabilidade_final",
+) -> dict:
+    band = frame.loc[pd.to_numeric(frame[probability_col], errors="coerce") >= minimum_probability]
+    if band.empty:
+        return {"n": 0, "brier": None, "log_loss": None, "ece": None}
+    report = evaluate_market(band, probability_col=probability_col)
+    return {
+        "n": report["n"],
+        "brier": report["brier"],
+        "log_loss": report["log_loss"],
+        "ece": report["ece"],
+    }
+
+
 def run_validation(input_csv: Path, output_dir: Path, min_train: int = 100) -> dict:
     frame = pd.read_csv(input_csv)
     required = {"data", "mercado", "probabilidade_final", "resultado_binario", "odd_ofertada"}
@@ -179,7 +196,14 @@ def run_validation(input_csv: Path, output_dir: Path, min_train: int = 100) -> d
         raise ValueError(f"CSV de validacao sem colunas obrigatorias: {sorted(missing)}")
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    summary = {"overall": evaluate_market(frame), "markets": {}}
+    summary = {
+        "overall": evaluate_market(frame),
+        "probability_bands": {
+            "70_plus": evaluate_probability_band(frame, 70.0),
+            "75_plus": evaluate_probability_band(frame, 75.0),
+        },
+        "markets": {},
+    }
     if "modelo_variante" in frame.columns:
         summary["model_variants"] = {
             str(variant): evaluate_market(group)
@@ -192,19 +216,69 @@ def run_validation(input_csv: Path, output_dir: Path, min_train: int = 100) -> d
         calibrated = walk_forward_calibration(group, min_train=min_train)
         valid_calibrated = calibrated.dropna()
         market_report = evaluate_market(group)
+        calibration_status = "identity_insufficient_walk_forward_sample"
+        calibration_active = False
+        raw_walk_forward = None
+        calibrated_walk_forward = None
         if not valid_calibrated.empty:
             aligned = group.loc[valid_calibrated.index]
-            market_report["walk_forward"] = {
-                "n": len(aligned),
+            raw_walk_forward = {
+                "brier": brier_score(
+                    aligned["probabilidade_final"].astype(float) / 100.0,
+                    aligned["resultado_binario"],
+                ),
+                "log_loss": log_loss(
+                    aligned["probabilidade_final"].astype(float) / 100.0,
+                    aligned["resultado_binario"],
+                ),
+                "ece": expected_calibration_error(
+                    aligned["probabilidade_final"].astype(float) / 100.0,
+                    aligned["resultado_binario"],
+                ),
+            }
+            calibrated_walk_forward = {
                 "brier": brier_score(valid_calibrated, aligned["resultado_binario"]),
                 "log_loss": log_loss(valid_calibrated, aligned["resultado_binario"]),
                 "ece": expected_calibration_error(valid_calibrated, aligned["resultado_binario"]),
             }
+            market_report["walk_forward"] = {
+                "n": len(aligned),
+                "raw": raw_walk_forward,
+                "calibrated": calibrated_walk_forward,
+            }
+            calibration_active = (
+                len(aligned) >= min_train
+                and calibrated_walk_forward["brier"] < raw_walk_forward["brier"]
+                and calibrated_walk_forward["log_loss"] < raw_walk_forward["log_loss"]
+            )
+            calibration_status = (
+                "active_oos_calibration"
+                if calibration_active
+                else "identity_no_oos_improvement"
+            )
         summary["markets"][market_key] = market_report
-        calibration_config[market_key] = fit_platt_scaling(
+        fitted = fit_platt_scaling(
             group["probabilidade_final"].astype(float) / 100.0,
             group["resultado_binario"].astype(int),
         )
+        calibration_config[market_key] = {
+            "active": calibration_active,
+            "out_of_sample": True,
+            "sample_size": int(len(valid_calibrated)),
+            "intercept": fitted["intercept"],
+            "slope": fitted["slope"],
+            "status": calibration_status,
+            "raw_brier": None if raw_walk_forward is None else raw_walk_forward["brier"],
+            "calibrated_brier": (
+                None if calibrated_walk_forward is None else calibrated_walk_forward["brier"]
+            ),
+            "raw_log_loss": (
+                None if raw_walk_forward is None else raw_walk_forward["log_loss"]
+            ),
+            "calibrated_log_loss": (
+                None if calibrated_walk_forward is None else calibrated_walk_forward["log_loss"]
+            ),
+        }
         table = calibration_table(group["probabilidade_final"] / 100.0, group["resultado_binario"])
         table.insert(0, "mercado", market)
         tables.append(table)
@@ -214,7 +288,11 @@ def run_validation(input_csv: Path, output_dir: Path, min_train: int = 100) -> d
         encoding="utf-8",
     )
     (output_dir / "football_calibration.json").write_text(
-        json.dumps(calibration_config, ensure_ascii=False, indent=2),
+        json.dumps(
+            {"version": "FOOTBALL_V1_5", "markets": calibration_config},
+            ensure_ascii=False,
+            indent=2,
+        ),
         encoding="utf-8",
     )
     if tables:

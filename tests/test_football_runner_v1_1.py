@@ -99,7 +99,7 @@ def output_row_with_core_debug(**overrides):
 
 class FootballRunnerV11Test(unittest.TestCase):
     def test_model_version_is_set(self):
-        self.assertEqual(runner.MODEL_VERSION, "FOOTBALL_V1_4")
+        self.assertEqual(runner.MODEL_VERSION, "FOOTBALL_V1_5")
 
     def test_no_vig_three_way_sums_to_one(self):
         probs = runner.no_vig_probability_three(2.0, 3.0, 4.0)
@@ -112,8 +112,8 @@ class FootballRunnerV11Test(unittest.TestCase):
         selected, discarded = runner._evaluate_row_v1_1(output_row(), wide_row())
         self.assertIsNone(discarded)
         self.assertIsNotNone(selected)
-        self.assertEqual(selected["modelo_versao"], "FOOTBALL_V1_4")
-        self.assertIn("modelo_versao=FOOTBALL_V1_4", selected["observacoes"])
+        self.assertEqual(selected["modelo_versao"], "FOOTBALL_V1_5")
+        self.assertIn("modelo_versao=FOOTBALL_V1_5", selected["observacoes"])
 
     def test_core_lambda_debug_is_exposed_when_available(self):
         selected, discarded = runner._evaluate_row_v1_1(output_row_with_core_debug(), wide_row())
@@ -315,7 +315,9 @@ Data/Horario: 14/07/2026
         selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
         self.assertIsNone(discarded)
         self.assertIsNotNone(selected)
-        self.assertIn("HIGH_PROBABILITY_REVIEW_FOOTBALL_V1_1", selected["observacoes"])
+        self.assertIn("HIGH_PROBABILITY_REVIEW_FOOTBALL_V1_5", selected["observacoes"])
+        self.assertLess(selected["probabilidade_final"], 85.0)
+        self.assertIn("high_probability_haircut_pp=7.5", selected["observacoes"])
 
     def test_low_sample_high_probability_is_blocked_for_review(self):
         row = output_row_with_core_debug(
@@ -440,7 +442,7 @@ Data/Horario: 14/07/2026
     def test_handicap_pair_is_found_beyond_legacy_slot_nineteen(self):
         row = output_row(
             mercado="Handicap Asiatico", pick="Away FC +2.5", linha=2.5,
-            odd_ofertada=1.40, probabilidade_final=74.0,
+            odd_ofertada=1.40, probabilidade_final=78.0,
         )
         wide = wide_row(
             odds_Asian_handicap_Full_Time_Linha26_HANDICAP=-2.5,
@@ -469,6 +471,45 @@ Data/Horario: 14/07/2026
         self.assertEqual(selected["market_conflict_status"], "DIVERGENTE_COM_HAIRCUT")
         self.assertAlmostEqual(selected["probabilidade_final"], 59.75, places=2)
         self.assertIn("haircut_pp=3.25", selected["observacoes"])
+
+    def test_stale_venue_sample_applies_progressive_probability_haircut(self):
+        row = output_row_with_core_debug(
+            mercado="Total de Gols",
+            pick="Over 2.5 gols",
+            linha=2.5,
+            odd_ofertada=2.00,
+            probabilidade_final=64.0,
+        )
+        row["observacoes"] = row["observacoes"].replace(
+            "home_venue_gap_days=51",
+            "home_venue_gap_days=65",
+        )
+
+        selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
+
+        self.assertIsNone(discarded)
+        self.assertLess(selected["probabilidade_final"], 64.0)
+        self.assertIn("venue_probability_blend_share=0.3", selected["observacoes"])
+        self.assertIn("VENUE_STALENESS_PROBABILITY_HAIRCUT", selected["observacoes"])
+
+    def test_overdispersion_uses_conservative_market_mixture(self):
+        row = output_row_with_core_debug(
+            mercado="Total de Gols",
+            pick="Over 2.5 gols",
+            linha=2.5,
+            odd_ofertada=2.00,
+            probabilidade_final=64.0,
+        )
+        row["observacoes"] = row["observacoes"].replace(
+            "overdispersion_ratio=1.2200",
+            "overdispersion_ratio=1.4700",
+        )
+
+        selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
+
+        self.assertIsNone(discarded)
+        self.assertLess(selected["probabilidade_final"], 64.0)
+        self.assertIn("OVERDISPERSION_CONSERVATIVE_MIXTURE", selected["observacoes"])
 
     def test_market_divergence_above_fifteen_points_requires_review(self):
         row = output_row(
@@ -642,6 +683,10 @@ Data/Horario: 14/07/2026
         self.assertEqual(len(selected), 2)
         self.assertEqual(discarded.iloc[0]["motivo_descarte_v1_1"], "MATCH_SELECTION_LIMIT")
         self.assertEqual(set(selected["selection_role"]), {"PRINCIPAL", "ALTERNATIVA"})
+        alternative = selected.loc[selected["selection_role"] == "ALTERNATIVA"].iloc[0]
+        self.assertEqual(alternative["correlation_penalty_factor"], 0.75)
+        self.assertLess(alternative["portfolio_edge_adjusted"], alternative["edge"])
+        self.assertIn("correlation_penalty_factor=0.75", alternative["observacoes"])
 
     def test_adapter_skips_market_row_marked_inconsistent(self):
         base = {
