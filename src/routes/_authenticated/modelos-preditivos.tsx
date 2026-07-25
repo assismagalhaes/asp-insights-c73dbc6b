@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
   BrainCircuit,
+  ChevronLeft,
+  ChevronRight,
   Cpu,
   FileOutput,
   FolderOpen,
@@ -141,6 +143,7 @@ const MODEL_CATALOG: Array<{
 
 function ModelosPreditivosPage() {
   const qc = useQueryClient();
+  const catalogRef = useRef<HTMLDivElement>(null);
   const [selectedColetaId, setSelectedColetaId] = useState("");
   const [modelo, setModelo] = useState<ModeloDisponivel>("ASP MatchMatrix");
   const [running, setRunning] = useState(false);
@@ -316,6 +319,13 @@ function ModelosPreditivosPage() {
     }
   };
 
+  const scrollCatalog = (direction: -1 | 1) => {
+    catalogRef.current?.scrollBy({
+      left: direction * Math.min(catalogRef.current.clientWidth * 0.8, 560),
+      behavior: "smooth",
+    });
+  };
+
   return (
     <div className="page-stack relative isolate mx-auto min-w-0 w-full max-w-[1600px] overflow-x-hidden">
       <AmbientBackdrop />
@@ -334,7 +344,7 @@ function ModelosPreditivosPage() {
       />
 
       <section
-        className="overflow-hidden rounded-lg border border-primary/15 bg-card/85 shadow-[0_18px_44px_rgb(0_0_0/0.16)]"
+        className="order-1 overflow-hidden rounded-lg border border-primary/15 bg-card/85 shadow-[0_18px_44px_rgb(0_0_0/0.16)] lg:order-2"
         aria-labelledby="catalog-title"
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
@@ -344,9 +354,38 @@ function ModelosPreditivosPage() {
           >
             Catálogo de modelos
           </h2>
-          <span className="text-[10px] text-muted-foreground">Selecione uma família</span>
+          <div className="flex items-center gap-2">
+            <span className="hidden text-[10px] text-muted-foreground sm:inline">
+              Selecione uma família
+            </span>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-7 border border-border bg-background/45"
+                aria-label="Ver modelos anteriores"
+                onClick={() => scrollCatalog(-1)}
+              >
+                <ChevronLeft className="size-3.5" aria-hidden="true" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-7 border border-border bg-background/45"
+                aria-label="Ver próximos modelos"
+                onClick={() => scrollCatalog(1)}
+              >
+                <ChevronRight className="size-3.5" aria-hidden="true" />
+              </Button>
+            </div>
+          </div>
         </div>
-        <div className="flex gap-2 overflow-x-auto p-3">
+        <div
+          ref={catalogRef}
+          className="flex snap-x snap-mandatory gap-2 overflow-x-auto scroll-smooth p-3"
+        >
           {MODEL_CATALOG.map((item) => {
             const selected = item.name === modelo;
             return (
@@ -356,7 +395,7 @@ function ModelosPreditivosPage() {
                 onClick={() => selecionarModelo(item.name)}
                 aria-pressed={selected}
                 className={cn(
-                  "flex min-w-[170px] items-center gap-3 rounded-lg border px-3 py-3 text-left transition-colors",
+                  "flex min-w-[156px] snap-start items-center gap-3 rounded-lg border px-3 py-3 text-left transition-colors sm:min-w-[164px]",
                   selected
                     ? "border-primary/55 bg-primary/10 shadow-[0_0_22px_rgb(37_99_235/0.12)]"
                     : "border-border bg-background/35 hover:border-primary/30 hover:bg-primary/5",
@@ -377,7 +416,7 @@ function ModelosPreditivosPage() {
         </div>
       </section>
 
-      <Card className="overflow-hidden border-primary/20 bg-[linear-gradient(135deg,color-mix(in_oklab,var(--color-primary)_5%,var(--color-card)),var(--color-card)_72%)] shadow-[0_18px_44px_rgb(0_0_0/0.16)]">
+      <Card className="order-2 overflow-hidden border-primary/20 bg-[linear-gradient(135deg,color-mix(in_oklab,var(--color-primary)_5%,var(--color-card)),var(--color-card)_72%)] shadow-[0_18px_44px_rgb(0_0_0/0.16)] lg:order-1">
         <CardHeader className="border-b border-border">
           <CardTitle className="flex items-center gap-2 text-base">
             <Activity className="h-4 w-4 text-primary" /> Console de execução
@@ -488,6 +527,30 @@ function ModelosPreditivosPage() {
             </div>
           )}
 
+          <div
+            role="status"
+            aria-live="polite"
+            className="grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-3"
+          >
+            <Info
+              icon={Activity}
+              label="Status da execução"
+              value={
+                running
+                  ? "Executando na VM"
+                  : resultado
+                    ? "Execução concluída"
+                    : "Aguardando entrada"
+              }
+            />
+            <Info icon={BrainCircuit} label="Modelo ativo" value={modelo.replace("ASP ", "")} />
+            <Info
+              icon={Cpu}
+              label="Proteção operacional"
+              value={canExecute ? "Entrada pronta" : "Execução bloqueada"}
+            />
+          </div>
+
           {packballMode && (
             <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
               <Upload className="mr-2 inline h-4 w-4" />
@@ -500,14 +563,14 @@ function ModelosPreditivosPage() {
         </CardContent>
       </Card>
 
-      <Card className="overflow-hidden border-primary/15 bg-card/90 shadow-[0_18px_44px_rgb(0_0_0/0.16)]">
+      <Card className="order-3 overflow-hidden border-primary/15 bg-card/90 shadow-[0_18px_44px_rgb(0_0_0/0.16)]">
         <CardHeader className="border-b border-border">
           <CardTitle className="flex items-center gap-2 text-base">
             <Sparkles className="h-4 w-4 text-ai" /> Resultado do modelo
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2 xl:grid-cols-5">
+          <div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2 md:grid-cols-5">
             <Info
               icon={Target}
               label="Job"
@@ -530,37 +593,68 @@ function ModelosPreditivosPage() {
             </div>
           )}
 
-          {resultado?.diagnostico_funil && (
-            <Accordion type="single" collapsible className="rounded-md border px-3">
-              <AccordionItem value="diagnostico-funil" className="border-0">
-                <AccordionTrigger className="text-sm font-semibold">
-                  Diagnostico do Funil
-                </AccordionTrigger>
-                <AccordionContent>
+          <Accordion type="single" collapsible className="rounded-md border px-3">
+            <AccordionItem value="diagnostico-funil" className="border-0">
+              <AccordionTrigger className="text-sm font-semibold">
+                Diagnóstico do Funil
+              </AccordionTrigger>
+              <AccordionContent>
+                {resultado?.diagnostico_funil ? (
                   <pre className="max-h-[42vh] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 font-mono text-xs">
                     {JSON.stringify(resultado.diagnostico_funil, null, 2)}
                   </pre>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          )}
+                ) : (
+                  <div className="rounded-md border border-dashed px-3 py-4 text-sm text-muted-foreground">
+                    O funil será disponibilizado após a primeira execução concluída.
+                  </div>
+                )}
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
 
-          {(resultado?.contexto_modelo || resultado?.dados_tecnicos) && (
-            <Accordion type="single" collapsible className="rounded-md border px-3">
-              <AccordionItem value="dados-tecnicos" className="border-0">
-                <AccordionTrigger className="text-sm font-semibold">
-                  Dados Técnicos do Modelo
-                </AccordionTrigger>
-                <AccordionContent>
+          <Accordion type="single" collapsible className="rounded-md border px-3">
+            <AccordionItem value="dados-tecnicos" className="border-0">
+              <AccordionTrigger className="text-sm font-semibold">
+                Dados Técnicos do Modelo
+              </AccordionTrigger>
+              <AccordionContent>
+                {resultado?.contexto_modelo || resultado?.dados_tecnicos ? (
                   <pre className="max-h-[42vh] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 font-mono text-xs">
                     {resultado.contexto_modelo?.trim() || resultado.dados_tecnicos?.trim()}
                   </pre>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
+                ) : (
+                  <div className="rounded-md border border-dashed px-3 py-4 text-sm text-muted-foreground">
+                    Contexto, parâmetros e observações aparecerão após a execução.
+                  </div>
+                )}
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+
+          {!prognosticos.length && (
+            <div className="flex flex-col items-center rounded-lg border border-dashed border-primary/20 bg-primary/[0.025] px-5 py-12 text-center md:hidden">
+              <span className="mb-4 flex size-12 items-center justify-center rounded-lg border border-primary/20 bg-primary/5 text-primary">
+                <FolderOpen className="size-5" aria-hidden="true" />
+              </span>
+              <strong className="text-sm text-foreground">
+                {resultado
+                  ? "Nenhuma oportunidade EV+ encontrada"
+                  : "Nenhum modelo executado ainda"}
+              </strong>
+              <span className="mt-2 max-w-xs text-xs text-muted-foreground">
+                {resultado
+                  ? "Consulte o diagnóstico do funil para entender as rejeições."
+                  : "Selecione um modelo e uma entrada compatível para iniciar a execução."}
+              </span>
+            </div>
           )}
 
-          <div className="overflow-auto rounded-lg border border-primary/15">
+          <div
+            className={cn(
+              "overflow-auto rounded-lg border border-primary/15",
+              !prognosticos.length && "hidden md:block",
+            )}
+          >
             <Table>
               <TableHeader>
                 <TableRow>
