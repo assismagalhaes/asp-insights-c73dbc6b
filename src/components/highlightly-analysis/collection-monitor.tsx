@@ -108,6 +108,57 @@ function MonitorSkeleton() {
   );
 }
 
+function OddsQualitySkeleton() {
+  return (
+    <section
+      className="min-h-[690px] overflow-hidden rounded-lg border border-primary/15 bg-card/90 md:min-h-[640px]"
+      aria-label="Carregando qualidade e atualização das odds"
+      aria-busy="true"
+    >
+      <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-56" />
+          <Skeleton className="h-3 w-72 max-w-full" />
+        </div>
+        <Skeleton className="hidden h-6 w-32 sm:block" />
+      </div>
+      <div className="flex gap-3 border-b border-warning/20 bg-warning/[0.04] px-4 py-3">
+        <Skeleton className="size-4 shrink-0 rounded-full" />
+        <div className="w-full space-y-2">
+          <Skeleton className="h-3 w-52" />
+          <Skeleton className="h-3 w-full max-w-xl" />
+        </div>
+      </div>
+      <div className="grid gap-px bg-border md:grid-cols-3">
+        {Array.from({ length: 3 }, (_, index) => (
+          <div key={index} className="space-y-3 bg-card p-4">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-8 w-20" />
+            <Skeleton className="h-1.5 w-full" />
+            <div className="grid grid-cols-3 gap-2">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="hidden space-y-px border-t border-border bg-border md:block">
+        {Array.from({ length: 7 }, (_, index) => (
+          <div key={index} className="grid grid-cols-[0.7fr_1.5fr_0.3fr] gap-4 bg-card px-4 py-3">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-4 w-48 max-w-full" />
+            <Skeleton className="ml-auto h-4 w-8" />
+          </div>
+        ))}
+      </div>
+      <div className="border-t border-border px-4 py-3 md:hidden">
+        <Skeleton className="h-4 w-44" />
+      </div>
+    </section>
+  );
+}
+
 function MetricCard({
   label,
   value,
@@ -341,6 +392,7 @@ export function HighlightlyCollectionMonitorView() {
 
           <QueueSummary monitor={monitor} />
 
+          {oddsQualityQuery.isLoading ? <OddsQualitySkeleton /> : null}
           {oddsQualityQuery.data ? <OddsQualityMonitor report={oddsQualityQuery.data} /> : null}
           {oddsQualityQuery.error ? (
             <Alert>
