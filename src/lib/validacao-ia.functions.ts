@@ -14,8 +14,9 @@ import { AiLocalGenerationOutputSchema } from "@/lib/ai-validation/schema";
 import { generateText, type LanguageModel } from "ai";
 import { z } from "zod";
 
-export const PROMPT_VERSAO = "validacao-critica-v13-structured-output-local";
+export const PROMPT_VERSAO = "validacao-critica-v14-repair-fallback";
 export const LOCAL_GATEWAY_MODEL_ID = "google/gemini-3.6-flash";
+export const LOCAL_REPAIR_MODEL_ID = "google/gemini-2.5-flash";
 
 export const LOCAL_GATEWAY_JSON_TEMPLATE = `{
   "schema_version": "1.1.0",
@@ -64,10 +65,12 @@ export function parseLocalGatewayJson(text: string) {
 
 async function generateLocalStructuredOutput({
   model,
+  repairModel,
   prompt,
   onRepairAttempt,
 }: {
   model: LanguageModel;
+  repairModel: LanguageModel;
   prompt: string;
   onRepairAttempt?: () => void;
 }) {
@@ -103,7 +106,14 @@ ${LOCAL_GATEWAY_JSON_TEMPLATE}`,
 
     let repairedResult;
     try {
-      repairedResult = await generate(repairPrompt);
+      repairedResult = await generateText({
+        model: repairModel,
+        system: `Você atua somente como formatador do contrato JSON. Retorne exclusivamente o
+objeto JSON solicitado, sem markdown ou comentários.
+
+${LOCAL_GATEWAY_JSON_TEMPLATE}`,
+        prompt: repairPrompt,
+      });
     } catch (repairError: unknown) {
       throw new AiStructuredRepairFailure({
         stage: "REQUEST",
@@ -419,6 +429,7 @@ ${aspScreenerInstrucao}
       const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
       const gateway = createLovableAiGatewayProvider(lovableApiKey);
       const model = gateway(LOCAL_GATEWAY_MODEL_ID);
+      const repairModel = gateway(LOCAL_REPAIR_MODEL_ID);
 
       if (legacyRollbackEnabled) {
         const legacyResult = await generateText({
@@ -453,6 +464,7 @@ ${aspScreenerInstrucao}
         finishReason,
       } = await generateLocalStructuredOutput({
         model,
+        repairModel,
         prompt: userPayload,
         onRepairAttempt: () => {
           repairAttempted = true;

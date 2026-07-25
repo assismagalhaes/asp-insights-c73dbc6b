@@ -14,8 +14,9 @@ import { AiLocalGenerationOutputSchema } from "@/lib/ai-validation/schema";
 import { generateText, tool, stepCountIs } from "ai";
 import { z } from "zod";
 
-export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v11-three-stage";
+export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v12-repair-fallback";
 export const ONLINE_GATEWAY_MODEL_ID = "google/gemini-3.6-flash";
+export const ONLINE_REPAIR_MODEL_ID = "google/gemini-2.5-flash";
 
 export function buildOnlineResearchPrompt(
   userPayload: string,
@@ -503,6 +504,7 @@ export const analisarValidacaoOnline = createServerFn({ method: "POST" })
       const { firecrawlSearch, firecrawlScrape } = await import("@/lib/firecrawl.server");
       const gateway = createLovableAiGatewayProvider(lovableApiKey);
       const model = gateway(ONLINE_GATEWAY_MODEL_ID);
+      const repairModel = gateway(ONLINE_REPAIR_MODEL_ID);
 
       let scrapeCount = 0;
 
@@ -778,8 +780,13 @@ informações ausentes. Não produza decisão operacional nem JSON final.`,
         generationPhase = "REPAIR_GENERATION";
         try {
           finalResult = await generateText({
-            model,
-            system: structuredSystemPrompt,
+            model: repairModel,
+            system: `Você atua somente como formatador do contrato JSON. Retorne
+exclusivamente o objeto JSON solicitado, sem markdown, comentários ou texto
+adicional. Preserve o conteúdo analítico recebido e ajuste apenas estrutura,
+tipos e enums.
+
+${ONLINE_GATEWAY_JSON_TEMPLATE}`,
             prompt: buildStructuredRepairPrompt({
               operationalContext: finalSynthesisPrompt,
               previousOutput: finalResult.text,
