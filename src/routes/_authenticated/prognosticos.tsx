@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Plus,
   Pencil,
@@ -10,6 +10,12 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
+  Activity,
+  ShieldCheck,
+  Clock3,
+  CircleCheckBig,
+  TrendingUp,
+  RotateCcw,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -26,7 +32,15 @@ import {
 import { StatusBadge, ResultBadge } from "@/components/status-badge";
 import { LeagueFilter } from "@/components/league-filter";
 import { PeriodFilter } from "@/components/period-filter";
-import { rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
+import {
+  rangeFromPeriodo,
+  dateInRange,
+  computeMetrics,
+  isStatusConfirma,
+  type PeriodoFiltro,
+} from "@/lib/metrics";
+import { StatCard } from "@/components/stat-card";
+import { AmbientBackdrop, PageIntro } from "@/components/command-center";
 import {
   usePrognosticos,
   useDeletePrognostico,
@@ -179,6 +193,29 @@ function Prognosticos() {
     return sorted.slice(start, start + pageSize);
   }, [sorted, currentPage, pageSize]);
 
+  const summary = useMemo(() => {
+    const metrics = computeMetrics(sorted, cfg);
+    return {
+      total: sorted.length,
+      confirmed: sorted.filter((p) => isStatusConfirma(p.status_validacao)).length,
+      pending: sorted.filter((p) => p.status_validacao === "PENDENTE").length,
+      greens: metrics.greens,
+      roi: metrics.roi,
+    };
+  }, [sorted, cfg]);
+
+  const clearFilters = () => {
+    setPeriodo("tudo");
+    setCustomIni("");
+    setCustomFim("");
+    setFEsporte("all");
+    setFLiga("all");
+    setFMercado("all");
+    setFValidacao("all");
+    setFResultado("all");
+    setFTopFinal("all");
+  };
+
   useEffect(() => {
     setPage(1);
   }, [ini, fim, fEsporte, fLiga, fMercado, fValidacao, fResultado, pageSize]);
@@ -279,16 +316,15 @@ function Prognosticos() {
   };
 
   return (
-    <div className="page-stack">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Prognósticos</h1>
-          <p className="page-description">
-            Cadastro, edição e gerenciamento dos prognósticos gerados.
-          </p>
-        </div>
-        <div className="flex gap-2">
+    <div className="page-stack relative">
+      <AmbientBackdrop />
+      <PageIntro
+        title="Prognósticos"
+        description="Visualize, filtre e gerencie todos os prognósticos gerados."
+        status="Operação preditiva"
+        actions={
           <Button
+            className="w-full sm:w-auto"
             onClick={() => {
               setEditing(null);
               if (prognosticos.length > 0) {
@@ -301,10 +337,53 @@ function Prognosticos() {
           >
             <Plus data-icon="inline-start" /> Novo Prognóstico
           </Button>
-        </div>
+        }
+      />
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
+        <StatCard
+          label="Total"
+          value={String(summary.total)}
+          icon={Activity}
+          accent="blue"
+          meta="No recorte selecionado"
+        />
+        <StatCard
+          label="Confirmados"
+          value={String(summary.confirmed)}
+          icon={ShieldCheck}
+          tone="up"
+          accent="green"
+          meta={`${summary.total ? ((summary.confirmed / summary.total) * 100).toFixed(1) : "0.0"}% do total`}
+        />
+        <StatCard
+          label="Pendentes"
+          value={String(summary.pending)}
+          icon={Clock3}
+          tone="neutral"
+          accent="amber"
+          meta="Aguardando validação"
+        />
+        <StatCard
+          label="Green"
+          value={String(summary.greens)}
+          icon={CircleCheckBig}
+          tone="up"
+          accent="violet"
+          meta="Picks confirmadas resolvidas"
+        />
+        <StatCard
+          className="col-span-2 lg:col-span-1"
+          label="ROI"
+          value={`${summary.roi >= 0 ? "+" : ""}${summary.roi.toFixed(2)}%`}
+          icon={TrendingUp}
+          tone={summary.roi > 0 ? "up" : summary.roi < 0 ? "down" : "neutral"}
+          accent="cyan"
+          meta="Retorno das picks confirmadas"
+        />
       </div>
 
-      <div className="filter-surface flex flex-col gap-3">
+      <div className="filter-surface flex flex-col gap-3" aria-label="Filtros de prognósticos">
         <PeriodFilter
           periodo={periodo}
           onPeriodoChange={setPeriodo}
@@ -313,84 +392,106 @@ function Prognosticos() {
           onCustomIniChange={setCustomIni}
           onCustomFimChange={setCustomFim}
         />
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          <Select
-            value={fEsporte}
-            onValueChange={(v) => {
-              setFEsporte(v);
-              setFLiga("all");
-            }}
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <FilterField label="Esporte" htmlFor="prognosticos-esporte">
+            <Select
+              value={fEsporte}
+              onValueChange={(v) => {
+                setFEsporte(v);
+                setFLiga("all");
+              }}
+            >
+              <SelectTrigger id="prognosticos-esporte" className="h-10 w-full">
+                <SelectValue placeholder="Esporte" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os esportes</SelectItem>
+                {esportes.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterField>
+          <FilterField label="Liga" htmlFor="prognosticos-liga">
+            <LeagueFilter
+              sport={fEsporte}
+              value={fLiga}
+              onChange={setFLiga}
+              id="prognosticos-liga"
+              className="h-10 w-full"
+            />
+          </FilterField>
+          <FilterField label="Mercado" htmlFor="prognosticos-mercado">
+            <Select value={fMercado} onValueChange={setFMercado}>
+              <SelectTrigger id="prognosticos-mercado" className="h-10 w-full">
+                <SelectValue placeholder="Mercado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os mercados</SelectItem>
+                {mercados.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {m}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterField>
+          <FilterField label="Validação" htmlFor="prognosticos-validacao">
+            <Select value={fValidacao} onValueChange={setFValidacao}>
+              <SelectTrigger id="prognosticos-validacao" className="h-10 w-full">
+                <SelectValue placeholder="Validação" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as validações</SelectItem>
+                <SelectItem value="CONFIRMA">CONFIRMA</SelectItem>
+                <SelectItem value="PULAR">PULAR</SelectItem>
+                <SelectItem value="PENDENTE">PENDENTE</SelectItem>
+              </SelectContent>
+            </Select>
+          </FilterField>
+          <FilterField label="Resultado" htmlFor="prognosticos-resultado">
+            <Select value={fResultado} onValueChange={setFResultado}>
+              <SelectTrigger id="prognosticos-resultado" className="h-10 w-full">
+                <SelectValue placeholder="Resultado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os resultados</SelectItem>
+                <SelectItem value="GREEN">GREEN</SelectItem>
+                <SelectItem value="RED">RED</SelectItem>
+                <SelectItem value="PENDENTE">PENDENTE</SelectItem>
+              </SelectContent>
+            </Select>
+          </FilterField>
+          <FilterField label="Origem shortlist" htmlFor="prognosticos-origem">
+            <Select value={fTopFinal} onValueChange={setFTopFinal}>
+              <SelectTrigger id="prognosticos-origem" className="h-10 w-full">
+                <SelectValue placeholder="Origem shortlist" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos: Top Final</SelectItem>
+                <SelectItem value="yes">Somente Top Final</SelectItem>
+                <SelectItem value="no">Fora do Top Final</SelectItem>
+              </SelectContent>
+            </Select>
+          </FilterField>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={clearFilters}
+            className="h-10 self-end sm:col-span-2 xl:justify-self-end"
           >
-            <SelectTrigger className="h-10 w-full">
-              <SelectValue placeholder="Esporte" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os esportes</SelectItem>
-              {esportes.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {s}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <LeagueFilter
-            sport={fEsporte}
-            value={fLiga}
-            onChange={setFLiga}
-            className="h-10 w-full"
-          />
-          <Select value={fMercado} onValueChange={setFMercado}>
-            <SelectTrigger className="h-10 w-full">
-              <SelectValue placeholder="Mercado" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os mercados</SelectItem>
-              {mercados.map((m) => (
-                <SelectItem key={m} value={m}>
-                  {m}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={fValidacao} onValueChange={setFValidacao}>
-            <SelectTrigger>
-              <SelectValue placeholder="Validação" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas as validações</SelectItem>
-              <SelectItem value="CONFIRMA">CONFIRMA</SelectItem>
-              <SelectItem value="PULAR">PULAR</SelectItem>
-              <SelectItem value="PENDENTE">PENDENTE</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={fResultado} onValueChange={setFResultado}>
-            <SelectTrigger className="h-10 w-full">
-              <SelectValue placeholder="Resultado" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os resultados</SelectItem>
-              <SelectItem value="GREEN">GREEN</SelectItem>
-              <SelectItem value="RED">RED</SelectItem>
-              <SelectItem value="PENDENTE">PENDENTE</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={fTopFinal} onValueChange={setFTopFinal}>
-            <SelectTrigger className="h-10 w-full">
-              <SelectValue placeholder="Origem shortlist" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos: Top Final</SelectItem>
-              <SelectItem value="yes">Somente Top Final</SelectItem>
-              <SelectItem value="no">Fora do Top Final</SelectItem>
-            </SelectContent>
-          </Select>
+            <RotateCcw data-icon="inline-start" />
+            Limpar filtros
+          </Button>
         </div>
       </div>
 
       {selected.size > 0 && (
-        <div className="selection-toolbar text-sm">
-          <span>{selected.size} selecionado(s)</span>
-          <div className="flex gap-2">
+        <div className="selection-toolbar flex-col items-stretch text-sm sm:flex-row sm:items-center">
+          <span className="font-mono">{selected.size} selecionado(s)</span>
+          <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
               Limpar seleção
             </Button>
@@ -401,7 +502,7 @@ function Prognosticos() {
         </div>
       )}
 
-      <div className="data-surface">
+      <div className="data-surface" role="region" aria-label="Tabela de prognósticos" tabIndex={0}>
         {/* Top horizontal scrollbar */}
         <div
           ref={topScrollRef}
@@ -569,7 +670,10 @@ function Prognosticos() {
                   const oddEfetiva = getOddEfetiva(p);
                   const edgeEfetivo = getEdgeEfetivo(p);
                   return (
-                    <tr key={p.id} className="border-t border-border hover:bg-muted/30">
+                    <tr
+                      key={p.id}
+                      className="border-t border-border transition-colors hover:bg-primary/[0.035] [content-visibility:auto] [contain-intrinsic-size:0_48px]"
+                    >
                       <td className="px-3 py-2">
                         <Checkbox
                           checked={selected.has(p.id)}
@@ -890,5 +994,24 @@ function SortableTh({
         <Icon className={`h-3 w-3 ${active ? "opacity-100" : "opacity-40"}`} />
       </button>
     </th>
+  );
+}
+
+function FilterField({
+  label,
+  htmlFor,
+  children,
+}: {
+  label: string;
+  htmlFor: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="min-w-0">
+      <label htmlFor={htmlFor} className="panel-kicker mb-1 block">
+        {label}
+      </label>
+      {children}
+    </div>
   );
 }
