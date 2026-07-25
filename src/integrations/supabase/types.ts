@@ -6600,6 +6600,10 @@ export type Database = {
         Args: { p_scope?: string }
         Returns: Json
       }
+      get_highlightly_collection_monitor_v2: {
+        Args: { p_scope?: string }
+        Returns: Json
+      }
       get_highlightly_daily_request_usage: {
         Args: { p_provider_id: string; p_request_date: string }
         Returns: number
@@ -6642,6 +6646,10 @@ export type Database = {
         Args: { p_from?: string; p_to?: string }
         Returns: Json
       }
+      get_highlightly_match_lifecycle_operational_report_v2: {
+        Args: { p_from?: string; p_to?: string }
+        Returns: Json
+      }
       get_highlightly_match_lifecycle_report: {
         Args: { p_from?: string; p_to?: string }
         Returns: Json
@@ -6665,6 +6673,10 @@ export type Database = {
           refresh_horizon: string
           sport: string
         }[]
+      }
+      get_highlightly_phase8e_daily_request_usage: {
+        Args: { p_request_date?: string }
+        Returns: number
       }
       has_role: {
         Args: {
@@ -6799,6 +6811,39 @@ export type Database = {
       }
       requeue_highlightly_dead_basketball_identity_jobs: {
         Args: { p_limit?: number; p_scope: string }
+        Returns: {
+          attempts: number
+          created_at: string
+          cursor_data: Json
+          dedupe_key: string
+          endpoint_key: string
+          finished_at: string | null
+          id: string
+          last_error: string | null
+          lock_expires_at: string | null
+          locked_at: string | null
+          max_attempts: number
+          priority: number
+          reprocess_raw_object_id: string | null
+          request_params: Json
+          resource: string
+          scheduled_at: string
+          shadow_scope: string | null
+          sport: string
+          started_at: string | null
+          status: string
+          updated_at: string
+          worker_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "hl_ingestion_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      requeue_highlightly_dead_phase8e_missing_match_id_jobs: {
+        Args: { p_limit?: number }
         Returns: {
           attempts: number
           created_at: string
