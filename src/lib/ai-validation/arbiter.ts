@@ -68,6 +68,51 @@ function fallbackOutput(reason: string): AiOperationalOutput {
   };
 }
 
+export function arbitrateAiGenerationFailure({
+  errorCode,
+  reason,
+}: {
+  errorCode?: string | null;
+  reason?: string | null;
+}): ArbitratedAiValidation {
+  const primaryCode = errorCode?.trim() || "PROVIDER_ERROR";
+  const detail = reason?.trim() || "O provider de IA não concluiu a geração da saída estruturada.";
+  const failureReason = `Falha de geração da IA [${primaryCode}]: ${detail}`;
+  const output = fallbackOutput(failureReason);
+
+  return {
+    status: "BLOCKED",
+    output: {
+      ...output,
+      narrative: {
+        ...output.narrative,
+        evaluated_entry: "Entrada não avaliada porque a IA não concluiu a geração.",
+        final_justification:
+          "Nenhuma saída estruturada chegou ao árbitro determinístico; a decisão segura é PULAR.",
+      },
+      rationale:
+        "A geração da IA falhou antes da arbitragem. A recomendação foi convertida para PULAR.",
+      invalidation_condition:
+        "Executar novamente a análise após restabelecer a geração estruturada do provider.",
+    },
+    model_output: null,
+    blocks: [{ code: "GENERATION_FAILED", reason: failureReason }],
+  };
+}
+
+export function arbitrateAiSchemaFailure(reason?: string | null): ArbitratedAiValidation {
+  const schemaReason =
+    reason?.trim() || "A resposta recebida da IA é incompatível com o contrato vigente.";
+  const output = fallbackOutput(schemaReason);
+
+  return {
+    status: "BLOCKED",
+    output,
+    model_output: null,
+    blocks: [{ code: "SCHEMA_INVALID", reason: schemaReason }],
+  };
+}
+
 function blockedOutput(modelOutput: AiOperationalOutput, blocks: AiValidationBlock[]) {
   return {
     ...modelOutput,

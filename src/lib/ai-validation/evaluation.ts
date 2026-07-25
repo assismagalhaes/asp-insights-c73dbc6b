@@ -1,4 +1,9 @@
-import { arbitrateAiOutput, type AiArbiterContext } from "./arbiter";
+import {
+  arbitrateAiGenerationFailure,
+  arbitrateAiOutput,
+  arbitrateAiSchemaFailure,
+  type AiArbiterContext,
+} from "./arbiter";
 import {
   createAiGenerationFailure,
   parseStructuredAiOutput,
@@ -123,7 +128,15 @@ function requiredBlocksPresent(
 export function evaluateAiValidationCases(cases: AiEvaluationCase[]): AiEvaluationReport {
   const results = cases.map((testCase): AiEvaluationCaseResult => {
     const generation = generationFor(testCase);
-    const final = arbitrateAiOutput(generation.model_output, testCase.context);
+    const final =
+      generation.parse_status === "FAILED" && generation.model_output == null
+        ? generation.error_code === "SCHEMA_INVALID"
+          ? arbitrateAiSchemaFailure(generation.parse_error)
+          : arbitrateAiGenerationFailure({
+              errorCode: generation.error_code,
+              reason: generation.parse_error,
+            })
+        : arbitrateAiOutput(generation.model_output, testCase.context);
     const blockCodes = final.blocks.map((block) => block.code);
     const invariant_violations = invariantViolations(generation, final);
     const local_trace_violation =

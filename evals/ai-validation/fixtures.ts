@@ -264,7 +264,7 @@ function casesFor(profile: Profile): AiEvaluationCase[] {
         generation_valid: false,
         final_decision: "PULAR",
         arbiter_status: "BLOCKED",
-        required_blocks: ["SCHEMA_INVALID"],
+        required_blocks: ["GENERATION_FAILED"],
       },
     },
     {
@@ -347,7 +347,7 @@ function casesFor(profile: Profile): AiEvaluationCase[] {
               generation_valid: false,
               final_decision: "PULAR",
               arbiter_status: "BLOCKED",
-              required_blocks: ["SCHEMA_INVALID"],
+              required_blocks: ["GENERATION_FAILED"],
             },
     },
   ];

@@ -96,7 +96,6 @@ export function computeMetrics(
   const confirma = prognosticos.filter((p) => isStatusConfirma(p.status_validacao));
   const resolvidas = confirma.filter((p) => PICK_RESOLVIDA.includes(p.resultado));
 
-
   const greens = confirma.filter((p) => PICK_GREEN.includes(p.resultado)).length;
   const reds = confirma.filter((p) => PICK_RED.includes(p.resultado)).length;
 

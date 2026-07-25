@@ -86,7 +86,11 @@ import {
   evaluateMatchMatrixOperationalGate,
   evaluateMlbOperationalGate,
 } from "@/lib/critical-validation/critical-shortlist-ranking";
-import { arbitrateAiOutput } from "@/lib/ai-validation/arbiter";
+import {
+  arbitrateAiGenerationFailure,
+  arbitrateAiOutput,
+  arbitrateAiSchemaFailure,
+} from "@/lib/ai-validation/arbiter";
 import { formatArbitratedAiValidation } from "@/lib/ai-validation/presentation";
 import type { AiOperationalOutput } from "@/lib/ai-validation/types";
 
@@ -775,18 +779,26 @@ function Validacao() {
       const raw = (
         modo === "online" ? await callIAOnline(payload) : await callIA(payload)
       ) as ServerAiResult;
-      const arbitration = arbitrateAiOutput(raw.model_output, {
-        mode: modo,
-        options: g.opcoes.map((option) => ({
-          prediction: {
-            ...option,
-            odd_ajustada: getOddAjustadaNum(option),
-            edge_ajustado: getEdgeAjustado(option),
-            dados_tecnicos: contextoAnalise,
-          },
-          pick: getOpportunityPickLabel(option),
-        })),
-      });
+      const arbitration =
+        raw.parse_status === "FAILED" && raw.model_output == null
+          ? raw.error_code === "SCHEMA_INVALID"
+            ? arbitrateAiSchemaFailure(raw.parse_error)
+            : arbitrateAiGenerationFailure({
+                errorCode: raw.error_code,
+                reason: raw.parse_error,
+              })
+          : arbitrateAiOutput(raw.model_output, {
+              mode: modo,
+              options: g.opcoes.map((option) => ({
+                prediction: {
+                  ...option,
+                  odd_ajustada: getOddAjustadaNum(option),
+                  edge_ajustado: getEdgeAjustado(option),
+                  dados_tecnicos: contextoAnalise,
+                },
+                pick: getOpportunityPickLabel(option),
+              })),
+            });
       const oddsAnalisadasMap: Record<string, number> = {};
       for (const option of g.opcoes) {
         const o = getOddAjustadaNum(option);
@@ -835,9 +847,13 @@ function Validacao() {
         ...r,
         aviso_opcao:
           arbitration.blocks.length > 0
-            ? `Árbitro determinístico bloqueou a sugestão: ${arbitration.blocks
-                .map((block) => block.code)
-                .join(", ")}.`
+            ? raw.parse_status === "FAILED" &&
+              raw.model_output == null &&
+              raw.error_code !== "SCHEMA_INVALID"
+              ? `Geração da IA falhou: ${raw.error_code || "PROVIDER_ERROR"}. Sem saída para arbitrar; decisão segura PULAR.`
+              : `Árbitro determinístico bloqueou a sugestão: ${arbitration.blocks
+                  .map((block) => block.code)
+                  .join(", ")}.`
             : null,
       };
       if (chosenByIa) {
