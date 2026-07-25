@@ -10,6 +10,7 @@ import {
   Download,
   FileJson,
   FileSpreadsheet,
+  Filter as FilterIcon,
   History,
   RefreshCw,
   RotateCcw,
@@ -90,6 +91,7 @@ function ColetaDadosPage() {
   const [fLiga, setFLiga] = useState("all");
   const [fStatus, setFStatus] = useState("all");
   const [showAllCollections, setShowAllCollections] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const { ini, fim } = rangeFromPeriodo(periodo, customIni, customFim);
 
   const { data: coletas = [], isLoading: loadingCollections } = useQuery({
@@ -407,7 +409,7 @@ function ColetaDadosPage() {
         icon={Database}
         actions={
           <Button
-            className="h-10 shadow-[0_0_24px_rgb(59_130_246/0.18)]"
+            className="h-10 w-full shadow-[0_0_24px_rgb(59_130_246/0.18)] sm:w-auto"
             onClick={executarColeta}
             disabled={remoteBusy === "pipeline" || !remoteParams.esporte}
           >
@@ -422,7 +424,27 @@ function ColetaDadosPage() {
           aria-hidden="true"
           className="absolute inset-y-0 left-0 w-0.5 bg-[linear-gradient(var(--color-primary),var(--color-ai))]"
         />
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_1.1fr_1.1fr_1fr_auto] xl:items-end">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between rounded-md px-1 py-1 text-sm font-semibold md:hidden"
+          onClick={() => setMobileFiltersOpen((value) => !value)}
+          aria-expanded={mobileFiltersOpen}
+          aria-controls="coleta-filtros"
+        >
+          <span className="inline-flex items-center gap-2">
+            <FilterIcon className="size-4 text-primary" />
+            Filtros e comandos
+          </span>
+          {mobileFiltersOpen ? (
+            <ChevronUp className="size-4 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="size-4 text-muted-foreground" />
+          )}
+        </button>
+        <div
+          id="coleta-filtros"
+          className={`${mobileFiltersOpen ? "mt-3 grid" : "hidden"} gap-3 sm:grid-cols-2 md:grid md:mt-0 xl:grid-cols-[1fr_1.1fr_1.1fr_1fr_auto] xl:items-end`}
+        >
           <PeriodFilter
             periodo={periodo}
             onPeriodoChange={setPeriodo}
@@ -489,12 +511,17 @@ function ColetaDadosPage() {
             loadingCollections
               ? "—"
               : latestCollection
-                ? new Date(latestCollection.created_at).toLocaleDateString("pt-BR")
+                ? new Intl.DateTimeFormat("pt-BR", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "2-digit",
+                  }).format(new Date(latestCollection.created_at))
                 : "—"
           }
           icon={History}
           accent="green"
           tone={latestCollection ? "up" : "off"}
+          className="[&_.font-mono]:text-[1.15rem] sm:[&_.font-mono]:text-[1.7rem]"
           meta={
             latestCollection
               ? new Date(latestCollection.created_at).toLocaleTimeString("pt-BR", {
@@ -509,7 +536,7 @@ function ColetaDadosPage() {
 
       <div className="grid gap-4 xl:grid-cols-[1.45fr_1fr]">
         <Card className="overflow-hidden border-primary/20">
-          <CardHeader className="border-b border-border/80 pb-3">
+          <CardHeader className="border-b border-border/80 p-4 pb-3">
             <PanelHeading
               title="Coleta na VM"
               eyebrow="Pipeline remoto"
@@ -520,7 +547,7 @@ function ColetaDadosPage() {
               Configure o recorte e envie um job controlado para o scraper.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4 p-4">
+          <CardContent className="space-y-3 p-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <Label>Esporte</Label>
@@ -586,7 +613,7 @@ function ColetaDadosPage() {
         </Card>
 
         <Card className="overflow-hidden border-ai/20">
-          <CardHeader className="border-b border-border/80 pb-3">
+          <CardHeader className="border-b border-border/80 p-4 pb-3">
             <PanelHeading
               title="Importação manual"
               eyebrow="Arquivo JSON"
@@ -597,31 +624,33 @@ function ColetaDadosPage() {
               Normalize, revise e persista um arquivo produzido externamente.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3 p-4">
-            <Label
-              htmlFor="coleta-json"
-              className="group flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-primary/35 bg-primary/[0.035] p-4 text-center transition-colors hover:border-primary/60 hover:bg-primary/[0.06]"
-            >
-              <Upload className="mb-2 size-6 text-primary transition-transform group-hover:-translate-y-0.5" />
-              <span className="text-sm font-semibold">Selecione um arquivo JSON</span>
-              <span className="mt-1 text-xs text-muted-foreground">
-                {fileName || "Arquivo normalizado do scraper"}
-              </span>
-            </Label>
-            <Input
-              id="coleta-json"
-              type="file"
-              accept="application/json,.json"
-              onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
-              className="sr-only"
-            />
-            <div className="grid grid-cols-2 gap-2 text-sm">
+          <CardContent className="space-y-2.5 p-4">
+            <div className="relative">
+              <Label
+                htmlFor="coleta-json"
+                className="group flex min-h-20 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-primary/35 bg-primary/[0.035] p-3 text-center transition-colors hover:border-primary/60 hover:bg-primary/[0.06]"
+              >
+                <Upload className="mb-1.5 size-5 text-primary transition-transform group-hover:-translate-y-0.5" />
+                <span className="text-sm font-semibold">Selecione um arquivo JSON</span>
+                <span className="mt-0.5 text-xs text-muted-foreground">
+                  {fileName || "Arquivo normalizado do scraper"}
+                </span>
+              </Label>
+              <Input
+                id="coleta-json"
+                type="file"
+                accept="application/json,.json"
+                onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
               <Info label="Jogos" value={normalized?.total_jogos ?? 0} />
               <Info label="Odds" value={normalized?.total_odds ?? 0} />
               <Info label="Esporte" value={normalized?.esporte ?? "—"} />
               <Info label="Liga" value={normalized?.liga ?? "—"} />
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <Button onClick={salvar} disabled={!normalized || saving || collectionPersisted}>
                 <Save className="mr-2 size-4" />
                 {collectionPersisted ? "Já salva" : "Salvar"}
@@ -635,7 +664,6 @@ function ColetaDadosPage() {
               </Button>
               <Button
                 variant="outline"
-                className="col-span-2"
                 disabled={!exportRows.length}
                 onClick={() => exportXlsx(exportRows, fileName)}
               >
@@ -790,7 +818,7 @@ function ColetaDadosPage() {
 
 function Info({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-md border p-3">
+    <div className="min-w-0 rounded-md border p-2">
       <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className="mt-1 truncate font-mono font-semibold">{value}</div>
     </div>
