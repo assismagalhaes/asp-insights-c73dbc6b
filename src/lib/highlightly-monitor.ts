@@ -136,9 +136,13 @@ export interface HighlightlyCollectionMonitor {
 export async function fetchHighlightlyCollectionMonitor(
   scope?: string | null,
 ): Promise<HighlightlyCollectionMonitor> {
-  const { data, error } = await supabase.rpc("get_highlightly_collection_monitor_v2", {
-    p_scope: scope || undefined,
-  });
+  const { data, error } = await (supabase.rpc as unknown as (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message: string } | null }>)(
+    "get_highlightly_collection_monitor_v2",
+    { p_scope: scope || undefined },
+  );
   if (error) throw new Error(error.message);
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new Error("O monitor Highlightly retornou um payload inválido.");
