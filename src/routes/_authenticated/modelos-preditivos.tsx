@@ -1,7 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BrainCircuit, Play, Send, Sparkles, Upload } from "lucide-react";
+import {
+  Activity,
+  BrainCircuit,
+  Cpu,
+  FileOutput,
+  FolderOpen,
+  Play,
+  Send,
+  Sparkles,
+  Target,
+  Upload,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +51,9 @@ import { supabase } from "@/lib/supabase-public";
 import { normalizeEsporteLiga } from "@/lib/db";
 import { parseBrazilianDate, formatDateTimeBR } from "@/lib/date-br";
 import { standardizePredictionContract } from "@/lib/market-contract";
+import { AmbientBackdrop, PageIntro } from "@/components/command-center";
+import { SportMark } from "@/components/sport-filter-select";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/modelos-preditivos")({
   component: ModelosPreditivosPage,
@@ -110,6 +125,20 @@ interface ModeloResultado {
 
 const LAST_PACKBALL_RESULT_KEY = "asp-insights:last-packball-model-result";
 
+const MODEL_CATALOG: Array<{
+  name: ModeloDisponivel;
+  sport: string;
+  family: string;
+}> = [
+  { name: "ASP MatchMatrix", sport: "Football", family: "Coletas da VM" },
+  { name: "ASP Diamond", sport: "Baseball", family: "MLB" },
+  { name: "ASP Court", sport: "Basketball", family: "NBA" },
+  { name: "ASP Court W", sport: "Basketball", family: "WNBA" },
+  { name: "ASP GoalMatrix", sport: "Football", family: "PackBall" },
+  { name: "ASP CornerMatrix", sport: "Football", family: "PackBall" },
+  { name: "ASP BackMatrix", sport: "Football", family: "PackBall" },
+];
+
 function ModelosPreditivosPage() {
   const qc = useQueryClient();
   const [selectedColetaId, setSelectedColetaId] = useState("");
@@ -160,6 +189,15 @@ function ModelosPreditivosPage() {
   const canExecute = packballMode
     ? Boolean(packballFile5 && packballFile20) && !running
     : Boolean(coletaSelecionada) && !running;
+
+  const selecionarModelo = (value: ModeloDisponivel) => {
+    setModelo(value);
+    setSelectedColetaId("");
+    setResultado(null);
+    setPackballFile5(null);
+    setPackballFile20(null);
+    setPackballRunMode("prognostico");
+  };
 
   const executarModelo = async () => {
     if (packballMode) {
@@ -279,23 +317,70 @@ function ModelosPreditivosPage() {
   };
 
   return (
-    <div className="page-stack">
-      <div className="page-header">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="page-title">Modelos Preditivos</h1>
-            <Badge variant="outline">VM</Badge>
-          </div>
-          <p className="page-description">
-            Use uma coleta concluída como base para executar modelos preditivos na VM.
-          </p>
-        </div>
-      </div>
+    <div className="page-stack relative isolate mx-auto min-w-0 w-full max-w-[1600px] overflow-x-hidden">
+      <AmbientBackdrop />
+      <PageIntro
+        title="Modelos Preditivos"
+        description="Execute modelos preditivos sobre coletas concluídas e acompanhe o resultado antes do envio."
+        icon={BrainCircuit}
+        iconTone="ai"
+        status="VM operacional"
+        actions={
+          <Badge variant="outline" className="border-ai/30 bg-ai/5 text-ai">
+            <Cpu className="size-3.5" aria-hidden="true" />
+            Execução protegida
+          </Badge>
+        }
+      />
 
-      <Card>
-        <CardHeader>
+      <section
+        className="overflow-hidden rounded-lg border border-primary/15 bg-card/85 shadow-[0_18px_44px_rgb(0_0_0/0.16)]"
+        aria-labelledby="catalog-title"
+      >
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <h2
+            id="catalog-title"
+            className="text-xs font-semibold uppercase tracking-[0.14em] text-primary"
+          >
+            Catálogo de modelos
+          </h2>
+          <span className="text-[10px] text-muted-foreground">Selecione uma família</span>
+        </div>
+        <div className="flex gap-2 overflow-x-auto p-3">
+          {MODEL_CATALOG.map((item) => {
+            const selected = item.name === modelo;
+            return (
+              <button
+                key={item.name}
+                type="button"
+                onClick={() => selecionarModelo(item.name)}
+                aria-pressed={selected}
+                className={cn(
+                  "flex min-w-[170px] items-center gap-3 rounded-lg border px-3 py-3 text-left transition-colors",
+                  selected
+                    ? "border-primary/55 bg-primary/10 shadow-[0_0_22px_rgb(37_99_235/0.12)]"
+                    : "border-border bg-background/35 hover:border-primary/30 hover:bg-primary/5",
+                )}
+              >
+                <SportMark sport={item.sport} size="md" />
+                <span className="min-w-0">
+                  <strong className={cn("block truncate text-xs", selected && "text-primary")}>
+                    {item.name.replace("ASP ", "")}
+                  </strong>
+                  <span className="mt-0.5 block text-[10px] text-muted-foreground">
+                    {item.family}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <Card className="overflow-hidden border-primary/20 bg-[linear-gradient(135deg,color-mix(in_oklab,var(--color-primary)_5%,var(--color-card)),var(--color-card)_72%)] shadow-[0_18px_44px_rgb(0_0_0/0.16)]">
+        <CardHeader className="border-b border-border">
           <CardTitle className="flex items-center gap-2 text-base">
-            <BrainCircuit className="h-4 w-4" /> Executar Modelo
+            <Activity className="h-4 w-4 text-primary" /> Console de execução
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -310,14 +395,7 @@ function ModelosPreditivosPage() {
               <label className="text-sm font-medium">Modelo</label>
               <Select
                 value={modelo}
-                onValueChange={(value) => {
-                  setModelo(value as ModeloDisponivel);
-                  setSelectedColetaId("");
-                  setResultado(null);
-                  setPackballFile5(null);
-                  setPackballFile20(null);
-                  setPackballRunMode("prognostico");
-                }}
+                onValueChange={(value) => selecionarModelo(value as ModeloDisponivel)}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -391,14 +469,21 @@ function ModelosPreditivosPage() {
                 </Select>
               </div>
             )}
-            <Button onClick={executarModelo} disabled={!canExecute}>
+            <Button
+              onClick={executarModelo}
+              disabled={!canExecute}
+              className="shadow-[0_0_24px_rgb(37_99_235/0.18)]"
+            >
               <Play className="mr-2 h-4 w-4" />
               {running ? "Executando..." : "Executar Modelo"}
             </Button>
           </div>
 
           {running && (
-            <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">
+            <div
+              role="status"
+              className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary"
+            >
               Executando modelo preditivo na VM...
             </div>
           )}
@@ -415,22 +500,24 @@ function ModelosPreditivosPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
+      <Card className="overflow-hidden border-primary/15 bg-card/90 shadow-[0_18px_44px_rgb(0_0_0/0.16)]">
+        <CardHeader className="border-b border-border">
           <CardTitle className="flex items-center gap-2 text-base">
-            <Sparkles className="h-4 w-4" /> Resultado do Modelo
+            <Sparkles className="h-4 w-4 text-ai" /> Resultado do modelo
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-5">
+          <div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2 xl:grid-cols-5">
             <Info
+              icon={Target}
               label="Job"
               value={resultado?.job_id ?? resultado?.input_id ?? coletaSelecionada?.job_id ?? "-"}
             />
-            <Info label="Modelo" value={resultado?.modelo ?? modelo} />
-            <Info label="CSV coleta" value={resultado?.csv_coleta ?? "-"} />
-            <Info label="Arquivo" value={resultado?.arquivo_saida ?? "-"} />
+            <Info icon={BrainCircuit} label="Modelo" value={resultado?.modelo ?? modelo} />
+            <Info icon={FolderOpen} label="CSV coleta" value={resultado?.csv_coleta ?? "-"} />
+            <Info icon={FileOutput} label="Arquivo" value={resultado?.arquivo_saida ?? "-"} />
             <Info
+              icon={Sparkles}
               label="Prognósticos"
               value={resultado?.total_prognosticos ?? prognosticos.length}
             />
@@ -473,7 +560,7 @@ function ModelosPreditivosPage() {
             </Accordion>
           )}
 
-          <div className="overflow-auto rounded-md border">
+          <div className="overflow-auto rounded-lg border border-primary/15">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -545,10 +632,22 @@ function ModelosPreditivosPage() {
                 ))}
                 {!prognosticos.length && (
                   <TableRow>
-                    <TableCell colSpan={17} className="py-12 text-center text-muted-foreground">
-                      {resultado
-                        ? "Nenhuma oportunidade EV+ encontrada para esta coleta."
-                        : "Nenhum modelo executado ainda."}
+                    <TableCell colSpan={17} className="py-16 text-center text-muted-foreground">
+                      <div className="mx-auto flex max-w-md flex-col items-center">
+                        <span className="mb-4 flex size-12 items-center justify-center rounded-lg border border-primary/20 bg-primary/5 text-primary">
+                          <FolderOpen className="size-5" aria-hidden="true" />
+                        </span>
+                        <strong className="text-sm text-foreground">
+                          {resultado
+                            ? "Nenhuma oportunidade EV+ encontrada"
+                            : "Nenhum modelo executado ainda"}
+                        </strong>
+                        <span className="mt-2 text-xs">
+                          {resultado
+                            ? "Consulte o diagnóstico do funil para entender as rejeições."
+                            : "Selecione um modelo e uma coleta compatível para iniciar a execução."}
+                        </span>
+                      </div>
                     </TableCell>
                   </TableRow>
                 )}
@@ -572,8 +671,8 @@ function ModelosPreditivosPage() {
 
 function ColetaResumo({ coleta }: { coleta: ColetaOdds }) {
   return (
-    <div className="grid gap-3 rounded-md border p-3 text-sm sm:grid-cols-5">
-      <Info label="Job" value={coleta.job_id ?? "-"} />
+    <div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border text-sm sm:grid-cols-5">
+      <Info icon={Target} label="Job" value={coleta.job_id ?? "-"} />
       <Info label="Coleta" value={formatDateTimeBR(coleta.created_at)} />
       <Info label="Esporte" value={coleta.esporte ?? "-"} />
       <Info label="Ligas" value={formatColetaLigas(coleta)} />
@@ -607,11 +706,24 @@ function PackballFileInput({
   );
 }
 
-function Info({ label, value }: { label: string; value: string | number }) {
+function Info({
+  label,
+  value,
+  icon: Icon,
+}: {
+  label: string;
+  value: string | number;
+  icon?: LucideIcon;
+}) {
   return (
-    <div>
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="mt-1 truncate font-mono text-sm font-semibold">{value}</div>
+    <div className="min-w-0 bg-card px-3 py-3">
+      <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+        {Icon ? <Icon className="size-3.5 text-primary" aria-hidden="true" /> : null}
+        {label}
+      </div>
+      <div className="mt-1.5 truncate font-mono text-sm font-semibold" title={String(value)}>
+        {value}
+      </div>
     </div>
   );
 }
