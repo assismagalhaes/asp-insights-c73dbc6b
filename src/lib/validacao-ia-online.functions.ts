@@ -14,9 +14,11 @@ import { AiLocalGenerationOutputSchema } from "@/lib/ai-validation/schema";
 import { generateText, tool, stepCountIs } from "ai";
 import { z } from "zod";
 
-export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v13-mlb-evidence-gates";
+export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v14-compact-research";
 export const ONLINE_GATEWAY_MODEL_ID = "google/gemini-3.6-flash";
 export const ONLINE_REPAIR_MODEL_ID = "google/gemini-2.5-flash";
+export const MAX_ONLINE_GATEWAY_STEPS = 3;
+export const MAX_ONLINE_CONTEXT_CHARACTERS = 10_000;
 
 export function buildOnlineResearchPrompt(
   userPayload: string,
@@ -32,6 +34,39 @@ Faça pesquisas direcionadas para confirmar ou refutar as teses acima. Procure
 ativamente evidências contrárias, confirme informações críticas e use as
 ferramentas disponíveis. Não produza decisão operacional nem JSON final nesta
 etapa. Ao terminar, resuma fatos confirmados, fatos refutados e lacunas.`;
+}
+
+export function compactOnlineContext(
+  value: string | null | undefined,
+  maxCharacters = MAX_ONLINE_CONTEXT_CHARACTERS,
+): string {
+  const text = value?.trim() ?? "";
+  if (!text || text.length <= maxCharacters) return text;
+
+  const priorityLines = Array.from(
+    new Set(
+      text
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) =>
+          /starter|pitcher|bullpen|lineup|weather|clima|vento|park factor|umpire|odd|edge|probabilidade|expectativa|lambda|warning|alerta/i.test(
+            line,
+          ),
+        ),
+    ),
+  )
+    .slice(0, 35)
+    .join("\n");
+  const reserved = Math.min(3_000, Math.floor(maxCharacters * 0.3));
+  const headLength = Math.max(1_000, maxCharacters - reserved - 120);
+  return [
+    text.slice(0, headLength),
+    "[CONTEXTO EXTENSO TRUNCADO]",
+    priorityLines.slice(0, reserved),
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .slice(0, maxCharacters);
 }
 
 export function buildOnlineFinalSynthesisPrompt({
@@ -256,8 +291,10 @@ const InputSchema = z.object({
   calibracao_interna: z.string().nullable().optional(),
 });
 
-const MAX_BUSCAS_ONLINE = 5;
-const MAX_SCRAPES_ONLINE = 3;
+const MAX_BUSCAS_ONLINE = 2;
+const MAX_SCRAPES_ONLINE = 1;
+const MAX_SEARCH_RESULTS_PER_QUERY = 3;
+const MAX_SCRAPE_CHARACTERS_FOR_MODEL = 2_500;
 
 export function getSportChecklist(esporte: string): string {
   const normalized = esporte.toLowerCase();
@@ -451,7 +488,6 @@ export const analisarValidacaoOnline = createServerFn({ method: "POST" })
     const runId = crypto.randomUUID();
     const buscasRealizadas: string[] = [];
     const fontesRastreaveis: OnlineSourceTrace[] = [];
-    const evidenciasPesquisa: string[] = [];
     let repairAttempted = false;
     let promptCharacters = 0;
     let generationPhase:
@@ -555,10 +591,10 @@ Edge: ${edgeFinal.toFixed(2)}%
 Stake sugerida: ${p.stake_sugerida}u
 
 CONTEXTO LOCAL / DADOS TÉCNICOS MANUAIS:
-${data.contexto_local?.trim() || data.dados_tecnicos?.trim() || "(nenhum)"}
+${compactOnlineContext(data.contexto_local || data.dados_tecnicos) || "(nenhum)"}
 
 CONTEXTO ONLINE PRÉ-CARREGADO, SE HOUVER:
-${data.contexto_online?.trim() || data.contexto_adicional?.trim() || "(nenhum contexto online pré-carregado; use as ferramentas de pesquisa quando necessário)"}
+${compactOnlineContext(data.contexto_online || data.contexto_adicional, 4_000) || "(nenhum contexto online pré-carregado; use as ferramentas de pesquisa quando necessário)"}
 
 CALIBRAÇÃO INTERNA ASP INSIGHTS:
 ${data.calibracao_interna?.trim() || "(histórico interno insuficiente ou indisponível)"}
@@ -624,22 +660,16 @@ ${ONLINE_GATEWAY_JSON_TEMPLATE}`;
               ];
             }
             buscasRealizadas.push(query);
-            const results = await firecrawlSearch(query, { limit: 5, recency });
+            const results = await firecrawlSearch(query, {
+              limit: MAX_SEARCH_RESULTS_PER_QUERY,
+              recency,
+            });
             return results.flatMap((result) => {
               const url = recordOnlineSource(fontesRastreaveis, {
                 titulo: result.title,
                 url: result.url,
                 tipo: "SEARCH_RESULT",
               });
-              if (url && evidenciasPesquisa.length < 50) {
-                evidenciasPesquisa.push(
-                  [
-                    `[BUSCA] ${result.title || url}`,
-                    `URL: ${url}`,
-                    `Trecho: ${result.description?.slice(0, 1_000) || "(sem trecho)"}`,
-                  ].join("\n"),
-                );
-              }
               return url
                 ? [
                     {
@@ -683,16 +713,12 @@ ${ONLINE_GATEWAY_JSON_TEMPLATE}`;
               url: normalizedUrl,
               tipo: "SCRAPED",
             });
-            if (evidenciasPesquisa.length < 50) {
-              evidenciasPesquisa.push(
-                [
-                  `[PÁGINA] ${title || normalizedUrl}`,
-                  `URL: ${normalizedUrl}`,
-                  markdown.slice(0, 5_000),
-                ].join("\n"),
-              );
-            }
-            return { url: normalizedUrl, title, markdown };
+            return {
+              url: normalizedUrl,
+              title,
+              markdown: markdown.slice(0, MAX_SCRAPE_CHARACTERS_FOR_MODEL),
+              truncated: markdown.length > MAX_SCRAPE_CHARACTERS_FOR_MODEL,
+            };
           },
         }),
       };
@@ -703,7 +729,7 @@ ${ONLINE_GATEWAY_JSON_TEMPLATE}`;
           model,
           system: SYSTEM_PROMPT,
           prompt: userPayload,
-          stopWhen: stepCountIs(50),
+          stopWhen: stepCountIs(MAX_ONLINE_GATEWAY_STEPS),
           tools: researchTools,
         });
         const generation = createLegacyRollbackResult({
@@ -734,41 +760,22 @@ ${ONLINE_GATEWAY_JSON_TEMPLATE}`;
         };
       }
 
-      generationPhase = "PRELIMINARY_SYNTHESIS";
-      const preliminaryResult = await generateText({
-        model,
-        system: `Você produz uma hipótese analítica preliminar e não operacional.
-Analise somente o payload fornecido. Estruture: tese favorável, tese contrária,
-informações críticas ausentes, condições que derrubariam a tese e perguntas de
-pesquisa. Não use ferramentas, não produza JSON final e não decida stake.`,
-        prompt: userPayload,
-      });
-
       generationPhase = "ONLINE_RESEARCH";
-      const researchResult = await generateText({
+      const synthesisResult = await generateText({
         model,
-        system: `Você é a etapa de pesquisa adversarial da validação crítica.
-Use as ferramentas para confirmar ou refutar a hipótese preliminar. Procure
-evidências contrárias, não invente dados e diferencie fatos, inferências e
-informações ausentes. Não produza decisão operacional nem JSON final.`,
-        prompt: buildOnlineResearchPrompt(userPayload, preliminaryResult.text),
-        stopWhen: stepCountIs(50),
+        system: `${structuredSystemPrompt}
+
+ORÇAMENTO OPERACIONAL:
+- Faça no máximo duas buscas e aprofunde no máximo uma página.
+- Use ferramentas somente para uma lacuna material e diretamente ligada ao mercado.
+- Não pesquise novamente dados já confirmados no Preview enriquecido.
+- Depois das ferramentas, produza imediatamente o JSON final do contrato.`,
+        prompt: userPayload,
+        stopWhen: stepCountIs(MAX_ONLINE_GATEWAY_STEPS),
         tools: researchTools,
       });
 
-      const finalSynthesisPrompt = buildOnlineFinalSynthesisPrompt({
-        userPayload,
-        preliminarySynthesis: preliminaryResult.text,
-        researchNarrative: researchResult.text,
-        researchEvidence: evidenciasPesquisa,
-      });
-      promptCharacters = finalSynthesisPrompt.length;
       generationPhase = "FINAL_SYNTHESIS";
-      const synthesisResult = await generateText({
-        model,
-        system: structuredSystemPrompt,
-        prompt: finalSynthesisPrompt,
-      });
       let finalResult = synthesisResult;
       let parsedOutput;
       try {
@@ -789,7 +796,7 @@ tipos e enums.
 
 ${ONLINE_GATEWAY_JSON_TEMPLATE}`,
             prompt: buildStructuredRepairPrompt({
-              operationalContext: finalSynthesisPrompt,
+              operationalContext: userPayload,
               previousOutput: finalResult.text,
               researchContext: [
                 `Buscas: ${buscasRealizadas.join(" | ") || "(nenhuma)"}`,
@@ -839,8 +846,6 @@ ${ONLINE_GATEWAY_JSON_TEMPLATE}`,
         finished_at: new Date().toISOString(),
         finish_reason: finalResult.finishReason,
         usage: sumAiTokenUsage(
-          preliminaryResult.usage,
-          researchResult.usage,
           synthesisResult.usage,
           repairAttempted ? finalResult.usage : undefined,
         ),

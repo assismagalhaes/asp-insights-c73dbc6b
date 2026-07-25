@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   buildOnlineFinalSynthesisPrompt,
   buildOnlineResearchPrompt,
+  compactOnlineContext,
   getSportChecklist,
+  MAX_ONLINE_CONTEXT_CHARACTERS,
+  MAX_ONLINE_GATEWAY_STEPS,
   normalizeOnlineHttpUrl,
   ONLINE_GATEWAY_JSON_TEMPLATE,
   ONLINE_GATEWAY_MODEL_ID,
@@ -87,6 +90,26 @@ describe("Structured Output online", () => {
       researchEvidence: ["E".repeat(40_000)],
     });
     expect(prompt.length).toBeLessThan(28_000);
+  });
+
+  it("compacta Preview extenso preservando linhas operacionais prioritárias", () => {
+    const context = [
+      "Resumo inicial",
+      "x".repeat(14_000),
+      "Starter visitante: Bryan Woo RHP ERA 4.16",
+      "Starter mandante: Nathan Eovaldi RHP ERA 4.21",
+      "Edge ajustado: 8.72%",
+    ].join("\n");
+    const compacted = compactOnlineContext(context);
+
+    expect(compacted.length).toBeLessThanOrEqual(MAX_ONLINE_CONTEXT_CHARACTERS);
+    expect(compacted).toContain("[CONTEXTO EXTENSO TRUNCADO]");
+    expect(compacted).toContain("Starter visitante: Bryan Woo");
+    expect(compacted).toContain("Edge ajustado: 8.72%");
+  });
+
+  it("limita o loop online a três passos de Gateway", () => {
+    expect(MAX_ONLINE_GATEWAY_STEPS).toBe(3);
   });
 
   it("reconstrói fontes e buscas somente pela telemetria real", () => {
