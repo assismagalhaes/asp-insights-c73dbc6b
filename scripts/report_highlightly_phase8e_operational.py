@@ -35,7 +35,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         "p_to": report_to.isoformat(),
     }
     result = repository.rpc(
-        "get_highlightly_match_lifecycle_operational_report",
+        "get_highlightly_match_lifecycle_operational_report_v2",
         rpc_payload,
     )
     report: dict[str, Any] = (
@@ -59,7 +59,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         )
         if provider_recovery["restored_disabled"]:
             refreshed_result = repository.rpc(
-                "get_highlightly_match_lifecycle_operational_report",
+                "get_highlightly_match_lifecycle_operational_report_v2",
                 rpc_payload,
             )
             report = (

@@ -34,10 +34,14 @@ def _environment_int(name: str, default: int) -> int:
     return value
 
 
-DEFAULT_MAX_JOBS = _environment_int("HIGHLIGHTLY_PHASE8E_MAX_JOBS", 200)
+DEFAULT_MAX_JOBS = _environment_int("HIGHLIGHTLY_PHASE8E_MAX_JOBS", 100)
 DEFAULT_REQUEST_BUDGET = _environment_int(
     "HIGHLIGHTLY_PHASE8E_REQUEST_BUDGET",
-    300,
+    200,
+)
+DEFAULT_DAILY_REQUEST_BUDGET = _environment_int(
+    "HIGHLIGHTLY_PHASE8E_DAILY_REQUEST_BUDGET",
+    1_500,
 )
 MAX_REQUEST_BUDGET = 2_000
 PHASE8E_SCOPE_PREFIX = "phase8e-lifecycle-"
@@ -73,12 +77,22 @@ def _parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--at", type=datetime.fromisoformat)
     parser.add_argument("--max-jobs", type=int, default=DEFAULT_MAX_JOBS)
     parser.add_argument("--request-budget", type=int, default=DEFAULT_REQUEST_BUDGET)
+    parser.add_argument(
+        "--daily-request-budget",
+        type=int,
+        default=DEFAULT_DAILY_REQUEST_BUDGET,
+    )
     parser.add_argument("--confirm-lifecycle", action="store_true")
     args = parser.parse_args(argv)
     if not 1 <= args.max_jobs <= 3_000:
         parser.error("--max-jobs must be between 1 and 3000")
     if not 1 <= args.request_budget <= MAX_REQUEST_BUDGET:
         parser.error(f"--request-budget must be between 1 and {MAX_REQUEST_BUDGET}")
+    if not 1 <= args.daily_request_budget <= DAILY_LIMIT - RESERVE_REQUESTS:
+        parser.error(
+            f"--daily-request-budget must be between 1 and "
+            f"{DAILY_LIMIT - RESERVE_REQUESTS}"
+        )
     if args.at is not None and (args.at.tzinfo is None or args.at.utcoffset() is None):
         parser.error("--at must include a timezone")
     return args
@@ -125,6 +139,24 @@ def _resource_status(
             return "provider_unavailable"
         return "dead"
     return "pending"
+
+
+def _canonical_request_params(candidate: Mapping[str, Any]) -> dict[str, Any]:
+    params = dict(candidate.get("request_params") or {})
+    endpoint_key = str(candidate.get("endpoint_key") or "")
+    if endpoint_key == (
+        "football.FootballPlayerBoxScoreController_getPlayerBoxScores"
+    ):
+        match_id = (
+            params.get("matchId")
+            or params.get("id")
+            or candidate.get("external_match_id")
+        )
+        if not match_id:
+            raise ValueError("Football player box score candidate requires matchId")
+        params.pop("id", None)
+        params["matchId"] = match_id
+    return params
 
 
 def _resource_error(status: str, result: WorkerResult) -> str | None:
@@ -266,6 +298,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                     by_stage=by_stage,
                     by_resource=by_resource,
                     request_budget=args.request_budget,
+                    daily_request_budget=args.daily_request_budget,
                     max_jobs=args.max_jobs,
                     includes_disabled_policies=True,
                 ),
@@ -342,8 +375,12 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     usage_date = at.date().isoformat()
     usage_before = repository.daily_request_usage(str(provider["id"]), usage_date)
+    phase_usage_result = repository.rpc(
+        "get_highlightly_phase8e_daily_request_usage",
+        {"p_request_date": usage_date},
+    )
+    phase_usage_before = int(phase_usage_result or 0)
     hard_ceiling = DAILY_LIMIT - RESERVE_REQUESTS
-    quota_ceiling = min(hard_ceiling, usage_before + args.request_budget)
     if usage_before >= hard_ceiling:
         print(
             json.dumps(
@@ -359,6 +396,28 @@ def main(argv: Iterable[str] | None = None) -> int:
             )
         )
         return 0
+    if phase_usage_before >= args.daily_request_budget:
+        print(
+            json.dumps(
+                _report(
+                    mode=mode,
+                    event="phase8e_lifecycle_skipped",
+                    at=at,
+                    scope=scope,
+                    reason="phase8e_daily_budget",
+                    phase8e_requests_used=phase_usage_before,
+                    phase8e_daily_request_budget=args.daily_request_budget,
+                ),
+                ensure_ascii=False,
+            )
+        )
+        return 0
+    cycle_budget = min(
+        args.request_budget,
+        hard_ceiling - usage_before,
+        args.daily_request_budget - phase_usage_before,
+    )
+    quota_ceiling = usage_before + cycle_budget
 
     candidate_by_job: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {}
     pending_rows: list[dict[str, Any]] = []
@@ -388,7 +447,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         candidate_by_job[str(existing_job["id"])] = (existing_candidate, pending)
 
     for candidate in candidates:
-        request_params = dict(candidate.get("request_params") or {})
+        request_params = _canonical_request_params(candidate)
         request_params.update(
             {
                 "_shadow_scope": scope,
@@ -493,6 +552,9 @@ def main(argv: Iterable[str] | None = None) -> int:
                 by_stage=by_stage,
                 by_resource=by_resource,
                 usage_before=usage_before,
+                phase8e_usage_before=phase_usage_before,
+                phase8e_daily_request_budget=args.daily_request_budget,
+                cycle_request_budget=cycle_budget,
                 quota_ceiling=quota_ceiling,
                 processed=sum(result.status != "idle" for result in results),
                 statuses=dict(statuses),

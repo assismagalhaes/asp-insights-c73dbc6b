@@ -253,3 +253,38 @@ journalctl -u highlightly-match-lifecycle-report.service -n 50 --no-pager
 
 Resultado esperado nesta implantação: timer de coleta `disabled`, timer de relatório
 `enabled`, provider desligado e as três políticas desligadas.
+
+## Fase 8E.3 — orçamento, recuperação e monitor
+
+A Fase 8E.3 mantém o lifecycle desligado por padrão e reduz os limites operacionais:
+
+- até 100 jobs por ciclo;
+- até 200 chamadas por ciclo;
+- até 1.500 chamadas de lifecycle por dia UTC;
+- reserva global de 750 chamadas preservada.
+
+O runner consulta `get_highlightly_phase8e_daily_request_usage(date)` antes de enfileirar ou
+ligar o provider. Quando o orçamento próprio chega a 1.500, o ciclo termina com
+`reason=phase8e_daily_budget`, mesmo que ainda exista cota global.
+
+Os candidatos de `FootballPlayerBoxScoreController_getPlayerBoxScores` são normalizados para
+`{"matchId": ...}` antes do enqueue. A RPC
+`requeue_highlightly_dead_phase8e_missing_match_id_jobs(integer)` apenas prepara lotes
+explicitamente autorizados; a migration não a executa. Ela exige provider desligado, três
+políticas desligadas e ausência de jobs `running`.
+
+O monitor usa `get_highlightly_collection_monitor_v2(text)` e passa a:
+
+- unir janelas futuras/históricas com escopos `phase8e-lifecycle-*`;
+- identificar o tipo do escopo;
+- mostrar consumo diário por coletor;
+- separar o horário dos dados do horário de atualização da tela.
+
+Ordem de implantação:
+
+1. aplicar `20260725160000_create_highlightly_phase8e3_budget_and_monitor.sql`;
+2. executar `highlightly_phase8e3_budget_monitor_smoke.sql`;
+3. publicar o backend para liberar as novas RPCs no bridge;
+4. sincronizar a VM e instalar o unit atualizado;
+5. manter `highlightly-match-lifecycle.timer` desativado;
+6. executar qualquer replay somente em lote pequeno e com autorização explícita.

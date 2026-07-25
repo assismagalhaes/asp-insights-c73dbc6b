@@ -3,11 +3,17 @@ import { supabase } from "@/lib/supabase-public";
 
 export interface MonitorScope {
   scope: string;
+  kind?: "window" | "lifecycle";
   status: string;
   sports: string[];
   started_at: string | null;
   ended_at: string | null;
   updated_at: string | null;
+}
+
+export interface MonitorCollectorUsage {
+  collector: "future_window" | "odds" | "lifecycle" | "historical" | "other";
+  requests_used: number;
 }
 
 export interface MonitorDailyUsage {
@@ -100,8 +106,10 @@ export interface MonitorCurrentSlice {
 export interface HighlightlyCollectionMonitor {
   generated_at: string;
   scope: string | null;
+  scope_kind?: "window" | "lifecycle";
   provider_enabled: boolean;
   daily_usage: MonitorDailyUsage;
+  collector_usage?: MonitorCollectorUsage[];
   scopes: MonitorScope[];
   window: {
     id?: string;
@@ -128,7 +136,7 @@ export interface HighlightlyCollectionMonitor {
 export async function fetchHighlightlyCollectionMonitor(
   scope?: string | null,
 ): Promise<HighlightlyCollectionMonitor> {
-  const { data, error } = await supabase.rpc("get_highlightly_collection_monitor", {
+  const { data, error } = await supabase.rpc("get_highlightly_collection_monitor_v2", {
     p_scope: scope || undefined,
   });
   if (error) throw new Error(error.message);

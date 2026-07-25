@@ -50,6 +50,14 @@ const SPORT_LABELS: Record<string, string> = {
   hockey: "Hockey",
 };
 
+const COLLECTOR_LABELS: Record<string, string> = {
+  future_window: "Partidas futuras",
+  odds: "Odds",
+  lifecycle: "Ciclo das partidas",
+  historical: "Histórico",
+  other: "Outros",
+};
+
 function number(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
@@ -283,6 +291,23 @@ function QueueSummary({ monitor }: { monitor: HighlightlyCollectionMonitor }) {
           {usage.remaining_before_reserve.toLocaleString("pt-BR")} chamadas disponíveis antes da
           reserva.
         </p>
+        {monitor.collector_usage?.length ? (
+          <div className="mt-3 grid gap-2 border-t border-border/70 pt-3 sm:grid-cols-2 xl:grid-cols-4">
+            {monitor.collector_usage.map((collector) => (
+              <div
+                key={collector.collector}
+                className="flex items-center justify-between gap-3 rounded-md border border-border/70 bg-background/35 px-3 py-2"
+              >
+                <span className="text-xs text-muted-foreground">
+                  {COLLECTOR_LABELS[collector.collector] ?? collector.collector}
+                </span>
+                <strong className="font-mono text-xs">
+                  {number(collector.requests_used).toLocaleString("pt-BR")}
+                </strong>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </section>
     </>
   );
@@ -341,6 +366,7 @@ export function HighlightlyCollectionMonitorView() {
               <SelectContent>
                 {(monitor?.scopes ?? []).map((option) => (
                   <SelectItem key={option.scope} value={option.scope}>
+                    {option.kind === "lifecycle" ? "Lifecycle · " : "Janela · "}
                     {option.scope}
                   </SelectItem>
                 ))}
@@ -376,7 +402,11 @@ export function HighlightlyCollectionMonitorView() {
             </Badge>
             <span>Escopo: {monitor.scope ?? "—"}</span>
             <span>·</span>
-            <span>Atualizado {formatDateTime(monitor.generated_at)}</span>
+            <span>
+              Dados até {formatDateTime(monitor.window.updated_at ?? monitor.generated_at)}
+            </span>
+            <span>·</span>
+            <span>Tela atualizada {formatDateTime(monitor.generated_at)}</span>
             {monitor.daily_usage.remaining_before_reserve <= 0 ? (
               <Badge variant="outline" className="border-warning/45 text-warning">
                 Cota diária esgotada

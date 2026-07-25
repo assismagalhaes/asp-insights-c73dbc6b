@@ -43,13 +43,15 @@ class HighlightlyPhaseEightEMatchLifecycleTests(unittest.TestCase):
         self.assertIn("*:00/5:00 America/Sao_Paulo", timer)
         self.assertIn("/run/lock/asp-highlightly-future.lock", service)
         self.assertIn("--confirm-lifecycle", service)
-        self.assertIn("--request-budget 300", service)
-        self.assertIn("--max-jobs 200", service)
+        self.assertIn("--daily-request-budget 1500", service)
+        self.assertIn("--request-budget 200", service)
+        self.assertIn("--max-jobs 100", service)
         self.assertIn("ExecStopPost=/usr/bin/flock", service)
         self.assertIn("--wait 300", service)
         self.assertIn("scripts.ensure_highlightly_provider_disabled", service)
-        self.assertEqual(phase8e.DEFAULT_REQUEST_BUDGET, 300)
-        self.assertEqual(phase8e.DEFAULT_MAX_JOBS, 200)
+        self.assertEqual(phase8e.DEFAULT_DAILY_REQUEST_BUDGET, 1_500)
+        self.assertEqual(phase8e.DEFAULT_REQUEST_BUDGET, 200)
+        self.assertEqual(phase8e.DEFAULT_MAX_JOBS, 100)
 
     def test_daily_report_timer_is_read_only_and_does_not_activate_collection(self):
         timer = (
@@ -83,7 +85,9 @@ class HighlightlyPhaseEightEMatchLifecycleTests(unittest.TestCase):
             "get_highlightly_match_lifecycle_report",
             "get_highlightly_match_lifecycle_report_v2",
             "set_highlightly_match_lifecycle_policy",
-            "get_highlightly_match_lifecycle_operational_report",
+            "get_highlightly_match_lifecycle_operational_report_v2",
+            "get_highlightly_phase8e_daily_request_usage",
+            "requeue_highlightly_dead_phase8e_missing_match_id_jobs",
         ):
             self.assertIn(f'"{token}"', bridge)
 
@@ -138,7 +142,7 @@ class HighlightlyPhaseEightEMatchLifecycleTests(unittest.TestCase):
         rpc_name, payload = repository.rpc.call_args.args
         self.assertEqual(
             rpc_name,
-            "get_highlightly_match_lifecycle_operational_report",
+            "get_highlightly_match_lifecycle_operational_report_v2",
         )
         self.assertEqual(set(payload), {"p_from", "p_to"})
         repository.set_provider_enabled.assert_not_called()
@@ -230,6 +234,7 @@ class HighlightlyPhaseEightEMatchLifecycleTests(unittest.TestCase):
         }
         repository.rpc.side_effect = [
             [candidate()],
+            0,
             {"refreshed_at": "2026-07-23T17:00:00+00:00", "matches_affected": 1},
             {"by_stage": [{"sport": "football", "lifecycle_stage": "live", "matches": 1}]},
         ]
@@ -272,7 +277,7 @@ class HighlightlyPhaseEightEMatchLifecycleTests(unittest.TestCase):
         self.assertEqual(final_rows[0]["status"], "succeeded")
         self.assertEqual(final_rows[0]["metadata"]["recordsReceived"], 3)
         self.assertFalse(final_rows[0]["metadata"]["emptyResponse"])
-        report_call = repository.rpc.call_args_list[2]
+        report_call = repository.rpc.call_args_list[3]
         self.assertEqual(
             report_call.args[0],
             "get_highlightly_match_lifecycle_report_v2",
@@ -286,7 +291,76 @@ class HighlightlyPhaseEightEMatchLifecycleTests(unittest.TestCase):
         )
         repository.set_provider_enabled.assert_any_call("highlightly", True)
         repository.set_provider_enabled.assert_any_call("highlightly", False)
-        self.assertEqual(worker_factory.call_args.kwargs["daily_quota_ceiling"], 400)
+        self.assertEqual(worker_factory.call_args.kwargs["daily_quota_ceiling"], 300)
+
+    def test_football_player_box_score_always_uses_match_id(self):
+        params = phase8e._canonical_request_params(
+            candidate(
+                endpoint_key=(
+                    "football.FootballPlayerBoxScoreController_"
+                    "getPlayerBoxScores"
+                ),
+                external_match_id="991",
+                request_params={"id": "991"},
+            )
+        )
+
+        self.assertEqual(params["matchId"], "991")
+        self.assertNotIn("id", params)
+
+    @patch.object(phase8e, "_active_jobs")
+    @patch.object(phase8e.HighlightlyRepository, "from_environment")
+    def test_daily_lifecycle_budget_stops_before_enqueuing(
+        self,
+        repository_factory,
+        active_jobs,
+    ):
+        repository = Mock()
+        repository_factory.return_value = repository
+        repository.ingestion_context.return_value = {
+            "provider": {"id": "provider-1", "enabled": False}
+        }
+        repository.rpc.side_effect = [[candidate()], 1_500]
+        repository.daily_request_usage.return_value = 2_000
+        active_jobs.return_value = []
+
+        with patch("builtins.print") as output:
+            exit_code = phase8e.main(
+                ["--at", "2026-07-23T17:00:00+00:00", "--confirm-lifecycle"]
+            )
+
+        self.assertEqual(exit_code, 0)
+        repository.enqueue_job.assert_not_called()
+        repository.set_provider_enabled.assert_not_called()
+        report = json.loads(output.call_args.args[0])
+        self.assertEqual(report["reason"], "phase8e_daily_budget")
+        self.assertEqual(report["phase8e_requests_used"], 1_500)
+
+    def test_phase8e3_migration_is_invoker_only_and_does_not_requeue(self):
+        migration = (
+            ROOT
+            / "supabase/migrations/"
+            "20260725160000_create_highlightly_phase8e3_budget_and_monitor.sql"
+        ).read_text(encoding="utf-8")
+        normalized = migration.casefold()
+
+        for function_name in (
+            "get_highlightly_phase8e_daily_request_usage",
+            "requeue_highlightly_dead_phase8e_missing_match_id_jobs",
+            "get_highlightly_match_lifecycle_operational_report_v2",
+            "get_highlightly_collection_monitor_v2",
+        ):
+            self.assertIn(function_name, migration)
+        self.assertEqual(normalized.count("security invoker"), 4)
+        self.assertNotIn("security definer", normalized)
+        self.assertIn("'daily_request_budget', 1500", normalized)
+        self.assertIn("'max_jobs', 100", normalized)
+        self.assertIn("'request_budget', 200", normalized)
+        self.assertIn("http_status is not null", normalized)
+        self.assertNotIn(
+            "select public.requeue_highlightly_dead_phase8e_missing_match_id_jobs",
+            normalized,
+        )
 
     @patch.object(phase8e, "_active_jobs")
     @patch.object(phase8e.HighlightlyRepository, "from_environment")
