@@ -177,9 +177,9 @@ function QueueSummary({ monitor }: { monitor: HighlightlyCollectionMonitor }) {
           tone="success"
         />
         <MetricCard
-          label="Gate de qualidade"
+          label="Gate operacional"
           value={statusLabel(healthStatus).toUpperCase()}
-          detail={`${number(queue.dead)} jobs dead · ${openIssues} issues abertas`}
+          detail={`${number(queue.dead)} jobs dead · processamento do escopo`}
           icon={ShieldCheck}
           tone={healthStatus === "ready" ? "success" : "warning"}
           compact
@@ -332,8 +332,9 @@ export function HighlightlyCollectionMonitorView() {
               </Badge>
             ) : null}
             {monitor.quality.reduce((sum, row) => sum + number(row.open_issues), 0) > 0 ? (
-              <Badge variant="outline" className="border-destructive/45 text-destructive">
-                {monitor.quality.reduce((sum, row) => sum + number(row.open_issues), 0)} alertas
+              <Badge variant="outline" className="border-warning/45 text-warning">
+                {monitor.quality.reduce((sum, row) => sum + number(row.open_issues), 0)} pendências
+                de dados
               </Badge>
             ) : null}
           </div>

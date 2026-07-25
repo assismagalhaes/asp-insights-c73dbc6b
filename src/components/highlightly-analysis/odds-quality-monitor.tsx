@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/table";
 import type { HighlightlyOddsQualityReport } from "@/lib/highlightly-odds-quality";
 import { cn } from "@/lib/utils";
+import { SportMark } from "@/components/sport-filter-select";
 
 const SPORT_LABELS: Record<string, string> = {
   football: "Football",
@@ -56,6 +57,9 @@ export function OddsQualityMonitor({ report }: { report: HighlightlyOddsQualityR
   const relevantCauses = report.by_cause.filter(
     (row) => row.cause !== "available" && row.cause !== "not_yet_due",
   );
+  const totalDue = report.by_sport.reduce((sum, row) => sum + row.matches_due, 0);
+  const totalAvailable = report.by_sport.reduce((sum, row) => sum + row.matches_available, 0);
+  const noOddsAvailable = totalDue > 0 && totalAvailable === 0;
 
   return (
     <section
@@ -74,13 +78,29 @@ export function OddsQualityMonitor({ report }: { report: HighlightlyOddsQualityR
         <Badge variant="outline">Atualizado {dateTime(report.generated_at)}</Badge>
       </div>
 
+      {noOddsAvailable ? (
+        <div className="flex items-start gap-3 border-b border-warning/25 bg-warning/[0.06] px-4 py-3">
+          <AlertCircle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
+          <div>
+            <p className="text-xs font-semibold text-warning">Odds indisponíveis na janela atual</p>
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              Nenhuma das {totalDue.toLocaleString("pt-BR")} partidas devidas possui cotação
+              disponível. Consulte abaixo as causas determinísticas por esporte.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       <div className="grid gap-px bg-border md:grid-cols-3">
         {report.by_sport.map((row) => {
           const ready = row.gate_status === "ready";
           return (
             <article key={row.sport} className="bg-card p-4">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-semibold">{SPORT_LABELS[row.sport] ?? row.sport}</p>
+                <p className="flex items-center gap-2 text-xs font-semibold">
+                  <SportMark sport={SPORT_LABELS[row.sport] ?? row.sport} />
+                  {SPORT_LABELS[row.sport] ?? row.sport}
+                </p>
                 {ready ? (
                   <CheckCircle2 className="size-4 text-success" aria-label="Meta atingida" />
                 ) : (
@@ -121,38 +141,61 @@ export function OddsQualityMonitor({ report }: { report: HighlightlyOddsQualityR
         })}
       </div>
 
-      <div className="overflow-x-auto border-t border-border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Esporte</TableHead>
-              <TableHead>Motivo determinístico</TableHead>
-              <TableHead className="text-right">Partidas</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {relevantCauses.map((row) => (
-              <TableRow key={`${row.sport}:${row.cause}`}>
-                <TableCell>{SPORT_LABELS[row.sport] ?? row.sport}</TableCell>
-                <TableCell>
-                  <span className="flex items-center gap-2">
-                    <Clock3 className="size-3.5 text-muted-foreground" aria-hidden="true" />
-                    {CAUSE_LABELS[row.cause] ?? row.cause}
-                  </span>
-                </TableCell>
-                <TableCell className="text-right font-mono">{row.matches}</TableCell>
-              </TableRow>
-            ))}
-            {!relevantCauses.length ? (
-              <TableRow>
-                <TableCell colSpan={3} className="h-20 text-center text-muted-foreground">
-                  Nenhuma indisponibilidade detectada na janela atual.
-                </TableCell>
-              </TableRow>
-            ) : null}
-          </TableBody>
-        </Table>
+      <details className="group border-t border-border md:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-xs font-semibold">
+          Motivos determinísticos
+          <Badge variant="outline" className="font-mono font-normal">
+            {relevantCauses.length}
+          </Badge>
+        </summary>
+        <div className="overflow-x-auto border-t border-border">
+          <CausesTable causes={relevantCauses} />
+        </div>
+      </details>
+
+      <div className="hidden overflow-x-auto border-t border-border md:block">
+        <CausesTable causes={relevantCauses} />
       </div>
     </section>
+  );
+}
+
+function CausesTable({ causes }: { causes: HighlightlyOddsQualityReport["by_cause"] }) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Esporte</TableHead>
+          <TableHead>Motivo determinístico</TableHead>
+          <TableHead className="text-right">Partidas</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {causes.map((row) => (
+          <TableRow key={`${row.sport}:${row.cause}`}>
+            <TableCell>
+              <span className="flex items-center gap-2">
+                <SportMark sport={SPORT_LABELS[row.sport] ?? row.sport} />
+                {SPORT_LABELS[row.sport] ?? row.sport}
+              </span>
+            </TableCell>
+            <TableCell>
+              <span className="flex items-center gap-2">
+                <Clock3 className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                {CAUSE_LABELS[row.cause] ?? row.cause}
+              </span>
+            </TableCell>
+            <TableCell className="text-right font-mono">{row.matches}</TableCell>
+          </TableRow>
+        ))}
+        {!causes.length ? (
+          <TableRow>
+            <TableCell colSpan={3} className="h-20 text-center text-muted-foreground">
+              Nenhuma indisponibilidade detectada na janela atual.
+            </TableCell>
+          </TableRow>
+        ) : null}
+      </TableBody>
+    </Table>
   );
 }

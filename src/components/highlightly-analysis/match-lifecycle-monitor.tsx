@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/table";
 import type { HighlightlyMatchLifecycleReport } from "@/lib/highlightly-match-lifecycle";
 import { cn } from "@/lib/utils";
+import { SportMark } from "@/components/sport-filter-select";
 
 const SPORT_LABELS: Record<string, string> = {
   football: "Football",
@@ -72,8 +73,22 @@ function completedForSport(report: HighlightlyMatchLifecycleReport, sport: strin
     .reduce((total, row) => total + row.matches, 0);
 }
 
+function safeTeamName(value: string | null | undefined, fallback: string): string {
+  const normalized = value?.trim();
+  if (
+    !normalized ||
+    /^https?:\/\//i.test(normalized) ||
+    /\.(png|jpe?g|webp|svg)(\?.*)?$/i.test(normalized)
+  ) {
+    return fallback;
+  }
+  return normalized;
+}
+
 export function MatchLifecycleMonitor({ report }: { report: HighlightlyMatchLifecycleReport }) {
   const exceptions = report.matches.filter((match) => match.missing_resources.length > 0);
+  const allRolloutsDisabled =
+    report.policies.length > 0 && report.policies.every((policy) => !policy.enabled);
 
   return (
     <section
@@ -99,7 +114,8 @@ export function MatchLifecycleMonitor({ report }: { report: HighlightlyMatchLife
           return (
             <article key={policy.sport} className="bg-card p-4">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-semibold">
+                <p className="flex items-center gap-2 text-xs font-semibold">
+                  <SportMark sport={SPORT_LABELS[policy.sport] ?? policy.sport} />
                   {SPORT_LABELS[policy.sport] ?? policy.sport}
                 </p>
                 <Badge variant={policy.enabled ? "default" : "outline"}>
@@ -121,6 +137,12 @@ export function MatchLifecycleMonitor({ report }: { report: HighlightlyMatchLife
           );
         })}
       </div>
+      {allRolloutsDisabled ? (
+        <div className="border-t border-primary/15 bg-primary/[0.04] px-4 py-2.5 text-[10px] text-muted-foreground">
+          A telemetria histórica permanece visível. “Rollout desligado” indica apenas que não há
+          coleta automática ativa para estes esportes neste momento.
+        </div>
+      ) : null}
 
       <div className="hidden border-t border-border px-4 py-3 md:block">
         <p className="text-xs font-semibold">Recursos processados na janela</p>
@@ -223,10 +245,14 @@ export function MatchLifecycleMonitor({ report }: { report: HighlightlyMatchLife
             >
               <div className="min-w-0">
                 <p className="truncate font-medium">
-                  {match.home_team_name ?? "Mandante"} × {match.away_team_name ?? "Visitante"}
+                  {safeTeamName(match.home_team_name, "Equipe mandante não identificada")} ×{" "}
+                  {safeTeamName(match.away_team_name, "Equipe visitante não identificada")}
                 </p>
                 <p className="mt-1 truncate text-[10px] text-muted-foreground">
-                  {SPORT_LABELS[match.sport] ?? match.sport} · {dateTime(match.kickoff_at)}
+                  <span className="inline-flex items-center gap-1.5">
+                    <SportMark sport={SPORT_LABELS[match.sport] ?? match.sport} />
+                    {SPORT_LABELS[match.sport] ?? match.sport} · {dateTime(match.kickoff_at)}
+                  </span>
                 </p>
                 <p className="mt-1 text-[10px] text-muted-foreground">
                   {match.missing_resources
