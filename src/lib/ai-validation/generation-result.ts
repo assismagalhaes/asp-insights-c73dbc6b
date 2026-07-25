@@ -13,7 +13,13 @@ export type AiGenerationResult = {
 };
 
 export type AiGenerationFailureContext = {
-  phase?: "CONFIGURATION" | "INITIAL_GENERATION" | "REPAIR_GENERATION" | "ONLINE_RESEARCH";
+  phase?:
+    | "CONFIGURATION"
+    | "INITIAL_GENERATION"
+    | "PRELIMINARY_SYNTHESIS"
+    | "ONLINE_RESEARCH"
+    | "FINAL_SYNTHESIS"
+    | "REPAIR_GENERATION";
   promptCharacters?: number;
 };
 

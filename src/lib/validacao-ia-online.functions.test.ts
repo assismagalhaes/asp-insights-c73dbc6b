@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildOnlineFinalSynthesisPrompt,
+  buildOnlineResearchPrompt,
   getSportChecklist,
   normalizeOnlineHttpUrl,
   ONLINE_GATEWAY_JSON_TEMPLATE,
@@ -10,6 +12,27 @@ import {
 } from "./validacao-ia-online.functions";
 
 describe("Structured Output online", () => {
+  it("separa hipótese, pesquisa adversarial e síntese final", () => {
+    const researchPrompt = buildOnlineResearchPrompt(
+      "Jogo: Portland vs Real Salt Lake\nOdd: 1.48",
+      "Tese: favoritismo do Portland. Lacuna: escalações.",
+    );
+    const finalPrompt = buildOnlineFinalSynthesisPrompt({
+      userPayload: "Jogo: Portland vs Real Salt Lake\nOdd: 1.48",
+      preliminarySynthesis: "Tese preliminar favorável ao Portland.",
+      researchNarrative: "A escalação ainda não foi confirmada.",
+      researchEvidence: ["[BUSCA] Injury report\nTrecho: dúvida no ataque"],
+    });
+
+    expect(researchPrompt).toContain("confirmar ou refutar");
+    expect(researchPrompt).toContain("escalações");
+    expect(researchPrompt).toContain("Não produza decisão operacional");
+    expect(finalPrompt).toContain("HIPÓTESE PRELIMINAR NÃO OPERACIONAL");
+    expect(finalPrompt).toContain("dúvida no ataque");
+    expect(finalPrompt).toContain("Somente agora produza a decisão operacional");
+    expect(finalPrompt).toContain("contrato 1.1.0");
+  });
+
   it("identifica saída inicial vazia antes do reparo", () => {
     expect(() =>
       parseOnlineGatewayJson("   ", {
