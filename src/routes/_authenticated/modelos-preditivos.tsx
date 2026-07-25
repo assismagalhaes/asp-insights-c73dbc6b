@@ -329,19 +329,36 @@ function ModelosPreditivosPage() {
   return (
     <div className="page-stack relative isolate mx-auto min-w-0 w-full max-w-[1600px] overflow-x-hidden">
       <AmbientBackdrop />
-      <PageIntro
-        title="Modelos Preditivos"
-        description="Execute modelos preditivos sobre coletas concluídas e acompanhe o resultado antes do envio."
-        icon={BrainCircuit}
-        iconTone="ai"
-        status="VM operacional"
-        actions={
-          <Badge variant="outline" className="border-ai/30 bg-ai/5 text-ai">
-            <Cpu className="size-3.5" aria-hidden="true" />
-            Execução protegida
-          </Badge>
-        }
-      />
+      <div className="relative order-0 overflow-hidden rounded-xl border border-primary/15 bg-[radial-gradient(circle_at_86%_18%,rgb(37_99_235/0.13),transparent_34%),linear-gradient(135deg,rgb(9_18_34/0.88),rgb(7_13_25/0.64))] px-4 py-5 shadow-[0_20px_60px_rgb(0_0_0/0.2)] sm:px-5">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-14 -top-24 hidden size-72 rounded-full border border-primary/20 bg-[radial-gradient(circle_at_35%_30%,rgb(96_165_250/0.3),rgb(37_99_235/0.08)_36%,transparent_68%)] shadow-[0_0_80px_rgb(37_99_235/0.16)] sm:block"
+        >
+          <span className="absolute inset-7 rounded-full border border-primary/15" />
+          <span className="absolute inset-14 rounded-full border border-ai/20" />
+          <span className="absolute -inset-x-10 inset-y-24 rotate-[-12deg] rounded-[50%] border border-primary/20" />
+          <span className="absolute inset-x-6 -inset-y-4 rotate-[24deg] rounded-[50%] border border-ai/15" />
+        </div>
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute right-5 top-4 hidden h-24 w-40 opacity-35 [background-image:radial-gradient(circle,rgb(96_165_250/0.8)_1px,transparent_1px)] [background-size:13px_13px] lg:block"
+        />
+        <div className="relative z-10">
+          <PageIntro
+            title="Modelos Preditivos"
+            description="Execute modelos preditivos sobre coletas concluídas e acompanhe o resultado antes do envio."
+            icon={BrainCircuit}
+            iconTone="ai"
+            status="VM operacional"
+            actions={
+              <Badge variant="outline" className="border-ai/30 bg-ai/5 text-ai">
+                <Cpu className="size-3.5" aria-hidden="true" />
+                Execução protegida
+              </Badge>
+            }
+          />
+        </div>
+      </div>
 
       <section
         className="order-1 overflow-hidden rounded-lg border border-primary/15 bg-card/85 shadow-[0_18px_44px_rgb(0_0_0/0.16)] lg:order-2"
@@ -384,7 +401,7 @@ function ModelosPreditivosPage() {
         </div>
         <div
           ref={catalogRef}
-          className="flex snap-x snap-mandatory gap-2 overflow-x-auto scroll-smooth p-3"
+          className="flex snap-x snap-mandatory gap-2 overflow-x-auto scroll-smooth p-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {MODEL_CATALOG.map((item) => {
             const selected = item.name === modelo;
@@ -527,30 +544,6 @@ function ModelosPreditivosPage() {
             </div>
           )}
 
-          <div
-            role="status"
-            aria-live="polite"
-            className="grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-3"
-          >
-            <Info
-              icon={Activity}
-              label="Status da execução"
-              value={
-                running
-                  ? "Executando na VM"
-                  : resultado
-                    ? "Execução concluída"
-                    : "Aguardando entrada"
-              }
-            />
-            <Info icon={BrainCircuit} label="Modelo ativo" value={modelo.replace("ASP ", "")} />
-            <Info
-              icon={Cpu}
-              label="Proteção operacional"
-              value={canExecute ? "Entrada pronta" : "Execução bloqueada"}
-            />
-          </div>
-
           {packballMode && (
             <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
               <Upload className="mr-2 inline h-4 w-4" />
@@ -563,7 +556,60 @@ function ModelosPreditivosPage() {
         </CardContent>
       </Card>
 
-      <Card className="order-3 overflow-hidden border-primary/15 bg-card/90 shadow-[0_18px_44px_rgb(0_0_0/0.16)]">
+      <section
+        className="order-3 overflow-hidden rounded-lg border border-primary/20 bg-[linear-gradient(110deg,rgb(37_99_235/0.055),transparent_46%),color-mix(in_oklab,var(--color-card)_92%,transparent)] shadow-[0_18px_44px_rgb(0_0_0/0.14)]"
+        aria-labelledby="execution-status-title"
+      >
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <h2
+            id="execution-status-title"
+            className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-primary"
+          >
+            <Activity className="size-4" aria-hidden="true" />
+            Status da execução
+          </h2>
+          <span
+            className={cn(
+              "flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-medium",
+              running
+                ? "border-primary/30 bg-primary/10 text-primary"
+                : resultado
+                  ? "border-success/30 bg-success/10 text-success"
+                  : "border-border bg-background/45 text-muted-foreground",
+            )}
+          >
+            <span
+              aria-hidden="true"
+              className={cn(
+                "size-1.5 rounded-full",
+                running
+                  ? "animate-pulse bg-primary"
+                  : resultado
+                    ? "bg-success"
+                    : "bg-muted-foreground/70",
+              )}
+            />
+            {running ? "Em processamento" : resultado ? "Concluída" : "Em espera"}
+          </span>
+        </div>
+        <div role="status" aria-live="polite" className="grid gap-px bg-border sm:grid-cols-3">
+          <Info
+            icon={Activity}
+            label="Estado operacional"
+            value={
+              running ? "Executando na VM" : resultado ? "Execução concluída" : "Aguardando entrada"
+            }
+          />
+          <Info icon={BrainCircuit} label="Modelo ativo" value={modelo.replace("ASP ", "")} />
+          <Info
+            icon={Cpu}
+            label="Proteção operacional"
+            value={canExecute ? "Entrada pronta" : "Execução bloqueada"}
+          />
+        </div>
+      </section>
+
+      <Card className="order-4 overflow-hidden border-primary/15 bg-card/90 shadow-[0_18px_44px_rgb(0_0_0/0.16)]">
         <CardHeader className="border-b border-border">
           <CardTitle className="flex items-center gap-2 text-base">
             <Sparkles className="h-4 w-4 text-ai" /> Resultado do modelo
