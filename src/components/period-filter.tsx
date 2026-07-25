@@ -56,7 +56,7 @@ function DateField({
   }
 
   return (
-    <div className="flex flex-col">
+    <div className="flex min-w-0 flex-1 flex-col sm:flex-none">
       <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
         {label}
       </label>
@@ -76,7 +76,7 @@ function DateField({
               setText(formatBR(value));
             }
           }}
-          className="h-9 w-32 rounded-r-none font-mono text-sm"
+          className="h-9 min-w-0 flex-1 rounded-r-none font-mono text-sm sm:w-32"
         />
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
@@ -121,13 +121,13 @@ export function PeriodFilter({
   className,
 }: Props) {
   return (
-    <div className={`flex flex-wrap items-end gap-3 ${className ?? ""}`}>
-      <div className="flex flex-col">
+    <div className={`flex min-w-0 flex-1 flex-wrap items-end gap-3 ${className ?? ""}`}>
+      <div className="flex min-w-[12rem] flex-1 flex-col sm:flex-none">
         <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
           Período
         </label>
         <Select value={periodo} onValueChange={(v) => onPeriodoChange(v as PeriodoFiltro)}>
-          <SelectTrigger className="h-9 w-48">
+          <SelectTrigger className="h-9 w-full sm:w-48">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -139,22 +139,26 @@ export function PeriodFilter({
           </SelectContent>
         </Select>
       </div>
-      <DateField
-        label="De"
-        value={customIni}
-        onChange={(v) => {
-          onCustomIniChange(v);
-          if (v) onPeriodoChange("custom");
-        }}
-      />
-      <DateField
-        label="Até"
-        value={customFim}
-        onChange={(v) => {
-          onCustomFimChange(v);
-          if (v) onPeriodoChange("custom");
-        }}
-      />
+      {periodo === "custom" ? (
+        <>
+          <DateField
+            label="De"
+            value={customIni}
+            onChange={(v) => {
+              onCustomIniChange(v);
+              if (v) onPeriodoChange("custom");
+            }}
+          />
+          <DateField
+            label="Até"
+            value={customFim}
+            onChange={(v) => {
+              onCustomFimChange(v);
+              if (v) onPeriodoChange("custom");
+            }}
+          />
+        </>
+      ) : null}
     </div>
   );
 }
