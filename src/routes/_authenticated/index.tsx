@@ -295,7 +295,7 @@ function Dashboard() {
 
       {/* Filtros */}
       <div className="filter-surface">
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:items-end">
           <PeriodFilter
             periodo={periodo}
             onPeriodoChange={setPeriodo}
@@ -304,12 +304,15 @@ function Dashboard() {
             onCustomIniChange={setCustomIni}
             onCustomFimChange={setCustomFim}
           />
-          <div className="min-w-[9rem] flex-1 sm:flex-none">
-            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
+          <div className="min-w-0 sm:w-44">
+            <label
+              htmlFor="dashboard-esporte"
+              className="block text-[10px] uppercase tracking-wider text-muted-foreground"
+            >
               Esporte
             </label>
             <Select value={esporte} onValueChange={setEsporte}>
-              <SelectTrigger className="h-9 w-full sm:w-44">
+              <SelectTrigger id="dashboard-esporte" className="h-9 w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -321,23 +324,30 @@ function Dashboard() {
               </SelectContent>
             </Select>
           </div>
-          <div className="min-w-[9rem] flex-1 sm:flex-none">
-            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
+          <div className="min-w-0 sm:w-48">
+            <label
+              htmlFor="dashboard-liga"
+              className="block text-[10px] uppercase tracking-wider text-muted-foreground"
+            >
               Liga
             </label>
             <LeagueFilter
               sport={esporte === "Todos" ? "all" : esporte}
               value={liga}
               onChange={setLiga}
-              className="h-9 w-full sm:w-48"
+              id="dashboard-liga"
+              className="h-9 w-full"
             />
           </div>
-          <div className="min-w-[9rem] flex-1 sm:flex-none">
-            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
+          <div className="min-w-0 sm:w-52">
+            <label
+              htmlFor="dashboard-mercado"
+              className="block text-[10px] uppercase tracking-wider text-muted-foreground"
+            >
               Mercado
             </label>
             <Select value={mercado} onValueChange={setMercado}>
-              <SelectTrigger className="h-9 w-full sm:w-52">
+              <SelectTrigger id="dashboard-mercado" className="h-9 w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -349,15 +359,18 @@ function Dashboard() {
               </SelectContent>
             </Select>
           </div>
-          <div className="min-w-[9rem] flex-1 sm:flex-none">
-            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
+          <div className="min-w-0 sm:w-44">
+            <label
+              htmlFor="dashboard-validacao"
+              className="block text-[10px] uppercase tracking-wider text-muted-foreground"
+            >
               Validação
             </label>
             <Select
               value={validacao}
               onValueChange={(v) => setValidacao(v as ValidationMetricsFilter)}
             >
-              <SelectTrigger className="h-9 w-full sm:w-44">
+              <SelectTrigger id="dashboard-validacao" className="h-9 w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -418,6 +431,7 @@ function Dashboard() {
           meta={`${metrics.greens} GREEN / ${metrics.reds} RED`}
         />
         <StatCard
+          className="col-span-2 lg:col-span-1"
           label="ROI"
           value={`${withSign(metrics.roi)}%`}
           icon={TrendingUp}
@@ -428,7 +442,7 @@ function Dashboard() {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
         <div className="surface-panel">
           <PanelHeading
             eyebrow="Performance financeira"
@@ -605,7 +619,10 @@ function Dashboard() {
           />
           <ResponsiveContainer
             width="100%"
-            height={Math.max(isMobile ? 300 : 340, marketPerf.length * 44 + 60)}
+            height={Math.min(
+              isMobile ? 420 : 500,
+              Math.max(isMobile ? 300 : 340, marketPerf.length * 38 + 56),
+            )}
           >
             <BarChart
               data={marketPerf}
@@ -728,8 +745,8 @@ function Dashboard() {
         </div>
       </div>
 
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.55fr)]">
-        <div className="data-surface xl:row-span-2">
+      <section className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.55fr)]">
+        <div className="data-surface">
           <div className="flex items-center justify-between gap-3 border-b border-border/80 px-4 py-3">
             <div>
               <p className="panel-kicker">Fluxo do sistema</p>
@@ -788,91 +805,93 @@ function Dashboard() {
           </div>
         </div>
 
-        <div className="surface-panel">
-          <PanelHeading
-            eyebrow="Governança"
-            title="Status de validação"
-            icon={ShieldCheck}
-            value={
-              <span className="numeric-value text-xs text-success">
-                {validationSummary.approvedPct.toFixed(1)}%
-              </span>
-            }
-          />
-          <div className="grid grid-cols-[8rem_1fr] items-center gap-4">
-            <div
-              role="img"
-              aria-label={`${validationSummary.approvedPct.toFixed(1)}% aprovados, ${validationSummary.skippedPct.toFixed(1)}% pulados e ${validationSummary.pendingPct.toFixed(1)}% pendentes`}
-              className="relative mx-auto aspect-square w-28 rounded-full"
-              style={{
-                background: `conic-gradient(var(--color-success) 0 ${validationSummary.approvedPct}%, var(--color-destructive) ${validationSummary.approvedPct}% ${validationSummary.approvedPct + validationSummary.skippedPct}%, var(--color-warning) ${validationSummary.approvedPct + validationSummary.skippedPct}% 100%)`,
-              }}
-            >
-              <div className="absolute inset-4 flex flex-col items-center justify-center rounded-full border border-border/70 bg-card">
-                <strong className="numeric-value text-lg">
+        <div className="grid gap-4">
+          <div className="surface-panel">
+            <PanelHeading
+              eyebrow="Governança"
+              title="Status de validação"
+              icon={ShieldCheck}
+              value={
+                <span className="numeric-value text-xs text-success">
                   {validationSummary.approvedPct.toFixed(1)}%
-                </strong>
-                <span className="text-[9px] uppercase tracking-wider text-muted-foreground">
-                  aprovados
                 </span>
-              </div>
-            </div>
-            <dl className="space-y-2 text-xs">
-              <ValidationLegend
-                label="Aprovados"
-                value={validationSummary.approved}
-                color="bg-success"
-              />
-              <ValidationLegend
-                label="Pulados"
-                value={validationSummary.skipped}
-                color="bg-destructive"
-              />
-              <ValidationLegend
-                label="Pendentes"
-                value={validationSummary.pending}
-                color="bg-warning"
-              />
-              <div className="flex items-center justify-between border-t border-border/70 pt-2 font-medium">
-                <dt>Total</dt>
-                <dd className="numeric-value">{validationSummary.total}</dd>
-              </div>
-            </dl>
-          </div>
-          <Button asChild variant="outline" size="sm" className="mt-4 w-full">
-            <Link to="/validacao">Ver validação crítica</Link>
-          </Button>
-        </div>
-
-        <div className="surface-panel">
-          <PanelHeading eyebrow="Confiabilidade" title="Saúde operacional" icon={BrainCircuit} />
-          <div className="divide-y divide-border/60">
-            {operationalHealth.map((item) => (
-              <div key={item.label} className="flex items-center gap-3 py-2.5">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded border border-primary/20 bg-primary/5 text-primary">
-                  <item.icon aria-hidden="true" className="size-4" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-medium">{item.label}</p>
-                  <p className="truncate text-[10px] text-muted-foreground">{item.detail}</p>
+              }
+            />
+            <div className="grid grid-cols-[8rem_1fr] items-center gap-4">
+              <div
+                role="img"
+                aria-label={`${validationSummary.approvedPct.toFixed(1)}% aprovados, ${validationSummary.skippedPct.toFixed(1)}% pulados e ${validationSummary.pendingPct.toFixed(1)}% pendentes`}
+                className="relative mx-auto aspect-square w-28 rounded-full"
+                style={{
+                  background: `conic-gradient(var(--color-success) 0 ${validationSummary.approvedPct}%, var(--color-destructive) ${validationSummary.approvedPct}% ${validationSummary.approvedPct + validationSummary.skippedPct}%, var(--color-warning) ${validationSummary.approvedPct + validationSummary.skippedPct}% 100%)`,
+                }}
+              >
+                <div className="absolute inset-4 flex flex-col items-center justify-center rounded-full border border-border/70 bg-card">
+                  <strong className="numeric-value text-lg">
+                    {validationSummary.approvedPct.toFixed(1)}%
+                  </strong>
+                  <span className="text-[9px] uppercase tracking-wider text-muted-foreground">
+                    aprovados
+                  </span>
                 </div>
-                <span
-                  className={
-                    item.tone === "success"
-                      ? "text-[10px] font-semibold uppercase text-success"
-                      : item.tone === "warning"
-                        ? "text-[10px] font-semibold uppercase text-warning"
-                        : "text-[10px] font-semibold uppercase text-muted-foreground"
-                  }
-                >
-                  {item.state}
-                </span>
               </div>
-            ))}
+              <dl className="space-y-2 text-xs">
+                <ValidationLegend
+                  label="Aprovados"
+                  value={validationSummary.approved}
+                  color="bg-success"
+                />
+                <ValidationLegend
+                  label="Pulados"
+                  value={validationSummary.skipped}
+                  color="bg-destructive"
+                />
+                <ValidationLegend
+                  label="Pendentes"
+                  value={validationSummary.pending}
+                  color="bg-warning"
+                />
+                <div className="flex items-center justify-between border-t border-border/70 pt-2 font-medium">
+                  <dt>Total</dt>
+                  <dd className="numeric-value">{validationSummary.total}</dd>
+                </div>
+              </dl>
+            </div>
+            <Button asChild variant="outline" size="sm" className="mt-4 w-full">
+              <Link to="/validacao">Ver validação crítica</Link>
+            </Button>
           </div>
-          <Button asChild variant="outline" size="sm" className="mt-3 w-full">
-            <Link to="/observabilidade-ia">Ver observabilidade da IA</Link>
-          </Button>
+
+          <div className="surface-panel">
+            <PanelHeading eyebrow="Confiabilidade" title="Saúde operacional" icon={BrainCircuit} />
+            <div className="divide-y divide-border/60">
+              {operationalHealth.map((item) => (
+                <div key={item.label} className="flex items-center gap-3 py-2.5">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded border border-primary/20 bg-primary/5 text-primary">
+                    <item.icon aria-hidden="true" className="size-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-medium">{item.label}</p>
+                    <p className="truncate text-[10px] text-muted-foreground">{item.detail}</p>
+                  </div>
+                  <span
+                    className={
+                      item.tone === "success"
+                        ? "text-[10px] font-semibold uppercase text-success"
+                        : item.tone === "warning"
+                          ? "text-[10px] font-semibold uppercase text-warning"
+                          : "text-[10px] font-semibold uppercase text-muted-foreground"
+                    }
+                  >
+                    {item.state}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <Button asChild variant="outline" size="sm" className="mt-3 w-full">
+              <Link to="/observabilidade-ia">Ver observabilidade da IA</Link>
+            </Button>
+          </div>
         </div>
       </section>
     </div>

@@ -12,6 +12,7 @@ interface StatCardProps {
   accent?: "blue" | "green" | "amber" | "violet" | "cyan" | "red";
   sparkline?: number[];
   meta?: string;
+  className?: string;
 }
 
 const toneClass = {
@@ -57,6 +58,7 @@ export function StatCard({
   accent,
   sparkline,
   meta,
+  className,
 }: StatCardProps) {
   const effectiveTone = tone ?? (trend === "up" ? "up" : trend === "down" ? "down" : "off");
   return (
@@ -66,6 +68,7 @@ export function StatCard({
         "group relative overflow-hidden rounded-lg border border-border/90 bg-card p-4 shadow-[0_14px_32px_rgb(0_0_0/0.12)] transition-[border-color,transform,box-shadow] before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-[linear-gradient(90deg,transparent,var(--stat-accent,transparent),transparent)] motion-safe:hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgb(0_0_0/0.18)]",
         borderToneClass[effectiveTone],
         accent && accentClass[accent],
+        className,
       )}
     >
       <div className="flex items-start justify-between">
