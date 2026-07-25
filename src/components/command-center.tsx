@@ -20,14 +20,37 @@ interface PageIntroProps {
   description?: string;
   actions?: ReactNode;
   status?: string;
+  icon?: LucideIcon;
+  iconTone?: "primary" | "ai" | "success";
 }
 
-export function PageIntro({ title, description, actions, status }: PageIntroProps) {
+export function PageIntro({
+  title,
+  description,
+  actions,
+  status,
+  icon: Icon,
+  iconTone = "primary",
+}: PageIntroProps) {
   return (
     <header className="page-header">
-      <div>
-        <h1 className="page-title">{title}</h1>
-        {description ? <p className="page-description">{description}</p> : null}
+      <div className="flex min-w-0 items-start gap-3">
+        {Icon ? (
+          <span
+            className={cn(
+              "mt-0.5 flex size-11 shrink-0 items-center justify-center rounded-lg border shadow-[0_0_24px_currentColor]",
+              iconTone === "primary" && "border-primary/35 bg-primary/10 text-primary",
+              iconTone === "ai" && "border-ai/35 bg-ai/10 text-ai",
+              iconTone === "success" && "border-success/35 bg-success/10 text-success",
+            )}
+          >
+            <Icon aria-hidden="true" className="size-5" />
+          </span>
+        ) : null}
+        <div className="min-w-0">
+          <h1 className="page-title">{title}</h1>
+          {description ? <p className="page-description">{description}</p> : null}
+        </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {status ? (

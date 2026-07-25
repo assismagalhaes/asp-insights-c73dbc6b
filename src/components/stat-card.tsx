@@ -13,6 +13,7 @@ interface StatCardProps {
   sparkline?: number[];
   meta?: string;
   className?: string;
+  layout?: "stacked" | "horizontal";
 }
 
 const toneClass = {
@@ -59,6 +60,7 @@ export function StatCard({
   sparkline,
   meta,
   className,
+  layout = "stacked",
 }: StatCardProps) {
   const effectiveTone = tone ?? (trend === "up" ? "up" : trend === "down" ? "down" : "off");
   return (
@@ -71,42 +73,59 @@ export function StatCard({
         className,
       )}
     >
-      <div className="flex items-start justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">
-          {label}
-        </span>
-        {Icon ? (
+      <div className={cn(layout === "horizontal" && "flex items-center gap-4")}>
+        {Icon && layout === "horizontal" ? (
           <span
             className={cn(
-              "flex size-9 items-center justify-center rounded-md border",
+              "flex size-12 shrink-0 items-center justify-center rounded-lg border shadow-[0_0_22px_currentColor]",
               iconToneClass[effectiveTone],
             )}
           >
-            <Icon aria-hidden="true" className="size-4" />
+            <Icon aria-hidden="true" className="size-5" />
           </span>
         ) : null}
-      </div>
-      <div
-        className={cn(
-          "mt-2 font-mono text-2xl font-bold tracking-[-0.035em] tabular-nums",
-          toneClass[effectiveTone],
-        )}
-      >
-        {value}
-      </div>
-      {delta ? (
-        <div
-          className={cn(
-            "mt-1 text-xs font-medium",
-            trend === "up" && "text-success",
-            trend === "down" && "text-destructive",
-            trend === "neutral" && "text-muted-foreground",
-          )}
-        >
-          {delta}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">
+              {label}
+            </span>
+            {Icon && layout === "stacked" ? (
+              <span
+                className={cn(
+                  "flex size-9 items-center justify-center rounded-md border",
+                  iconToneClass[effectiveTone],
+                )}
+              >
+                <Icon aria-hidden="true" className="size-4" />
+              </span>
+            ) : null}
+          </div>
+          <div
+            className={cn(
+              layout === "horizontal" ? "mt-1 text-[1.7rem]" : "mt-2 text-2xl",
+              "font-mono font-bold tracking-[-0.035em] tabular-nums",
+              toneClass[effectiveTone],
+            )}
+          >
+            {value}
+          </div>
+          {delta ? (
+            <div
+              className={cn(
+                "mt-1 text-xs font-medium",
+                trend === "up" && "text-success",
+                trend === "down" && "text-destructive",
+                trend === "neutral" && "text-muted-foreground",
+              )}
+            >
+              {delta}
+            </div>
+          ) : null}
+          {meta ? (
+            <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{meta}</p>
+          ) : null}
         </div>
-      ) : null}
-      {meta ? <p className="mt-1 text-[10px] text-muted-foreground">{meta}</p> : null}
+      </div>
       {sparkline && sparkline.length > 1 ? (
         <svg
           aria-hidden="true"
