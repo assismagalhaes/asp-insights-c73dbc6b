@@ -12,6 +12,11 @@ export type AiGenerationResult = {
   latency_ms: number;
 };
 
+export type AiGenerationFailureContext = {
+  phase?: "CONFIGURATION" | "INITIAL_GENERATION" | "REPAIR_GENERATION" | "ONLINE_RESEARCH";
+  promptCharacters?: number;
+};
+
 function formatSchemaIssues(error: {
   issues: Array<{ path: PropertyKey[]; message: string }>;
 }): string {
@@ -86,28 +91,132 @@ export function createLegacyRollbackResult({
   };
 }
 
-export function createAiGenerationFailure(error: unknown, latencyMs: number): AiGenerationResult {
-  const message = error instanceof Error ? error.message : String(error ?? "");
+function extractErrorFacts(error: unknown): { diagnosticText: string; httpStatus: number | null } {
+  const fragments: string[] = [];
+  let httpStatus: number | null = null;
+  const visited = new Set<unknown>();
+
+  const visit = (value: unknown, depth: number) => {
+    if (value == null || depth > 5 || visited.has(value)) return;
+    if (typeof value === "string" || typeof value === "number") {
+      fragments.push(String(value));
+      return;
+    }
+    if (typeof value !== "object") return;
+    visited.add(value);
+    if (Array.isArray(value)) {
+      for (const item of value.slice(0, 10)) visit(item, depth + 1);
+      return;
+    }
+
+    const record = value as Record<string, unknown>;
+    for (const key of ["statusCode", "status", "httpStatus", "http_status"]) {
+      const candidate = Number(record[key]);
+      if (
+        httpStatus == null &&
+        Number.isInteger(candidate) &&
+        candidate >= 100 &&
+        candidate <= 599
+      ) {
+        httpStatus = candidate;
+      }
+    }
+    for (const key of [
+      "name",
+      "message",
+      "code",
+      "responseBody",
+      "body",
+      "cause",
+      "lastError",
+      "errors",
+    ]) {
+      visit(record[key], depth + 1);
+    }
+  };
+
+  visit(error, 0);
+  return {
+    diagnosticText: fragments.join(" ").slice(0, 20_000),
+    httpStatus,
+  };
+}
+
+function failureContextSuffix(
+  context: AiGenerationFailureContext,
+  httpStatus: number | null,
+): string {
+  const details: string[] = [];
+  if (context.phase) details.push(`fase ${context.phase}`);
+  if (httpStatus != null) details.push(`HTTP ${httpStatus}`);
+  if (
+    context.promptCharacters != null &&
+    Number.isFinite(context.promptCharacters) &&
+    context.promptCharacters >= 0
+  ) {
+    details.push(`prompt ~${Math.round(context.promptCharacters)} caracteres`);
+  }
+  return details.length ? ` Diagnóstico: ${details.join("; ")}.` : "";
+}
+
+export function createAiGenerationFailure(
+  error: unknown,
+  latencyMs: number,
+  context: AiGenerationFailureContext = {},
+): AiGenerationResult {
+  const { diagnosticText, httpStatus } = extractErrorFacts(error);
   let errorCode = "PROVIDER_ERROR";
   let safeMessage =
     "O provider de IA não concluiu a saída estruturada. A recomendação foi convertida para PULAR.";
 
-  if (/LOVABLE_API_KEY|api.?key|authentication|unauthorized|401/i.test(message)) {
+  if (
+    httpStatus === 401 ||
+    httpStatus === 403 ||
+    /LOVABLE_API_KEY|api.?key|authentication|unauthorized|forbidden/i.test(diagnosticText)
+  ) {
     errorCode = "PROVIDER_AUTH_ERROR";
     safeMessage =
       "A configuração do Lovable AI Gateway está indisponível. A recomendação foi convertida para PULAR.";
-  } else if (/429|rate.?limit|quota|resource.?exhausted/i.test(message)) {
+  } else if (
+    httpStatus === 429 ||
+    /rate.?limit|quota|resource.?exhausted|too many requests/i.test(diagnosticText)
+  ) {
     errorCode = "PROVIDER_RATE_LIMIT";
     safeMessage =
       "A cota ou o limite do Lovable AI Gateway foi atingido. A recomendação foi convertida para PULAR.";
-  } else if (/402|payment|billing|credits/i.test(message)) {
+  } else if (
+    httpStatus === 402 ||
+    /payment|billing|insufficient.?credits|credit balance/i.test(diagnosticText)
+  ) {
     errorCode = "PROVIDER_BILLING_ERROR";
     safeMessage =
       "O Lovable AI Gateway recusou a geração por cobrança ou créditos. A recomendação foi convertida para PULAR.";
-  } else if (/timeout|timed.?out|abort/i.test(message)) {
+  } else if (
+    httpStatus === 413 ||
+    /payload too large|request too large|context length|context window|maximum context|max.?tokens|too many tokens/i.test(
+      diagnosticText,
+    )
+  ) {
+    errorCode = "PROVIDER_PAYLOAD_TOO_LARGE";
+    safeMessage =
+      "O Lovable AI Gateway recusou a geração pelo tamanho do payload ou limite de contexto. A recomendação foi convertida para PULAR.";
+  } else if (/timeout|timed.?out|abort|ETIMEDOUT/i.test(diagnosticText)) {
     errorCode = "PROVIDER_TIMEOUT";
     safeMessage = "A geração estruturada excedeu o tempo limite e foi convertida para PULAR.";
-  } else if (/NoObjectGenerated|schema|parse|json|validation|structured output/i.test(message)) {
+  } else if (
+    (httpStatus != null && httpStatus >= 500) ||
+    /bad gateway|service unavailable|gateway timeout|internal server error/i.test(diagnosticText)
+  ) {
+    errorCode = "PROVIDER_SERVER_ERROR";
+    safeMessage =
+      "O Lovable AI Gateway ou o provider ficou temporariamente indisponível. A recomendação foi convertida para PULAR.";
+  } else if (/ECONNRESET|ECONNREFUSED|ENOTFOUND|network|fetch failed/i.test(diagnosticText)) {
+    errorCode = "PROVIDER_NETWORK_ERROR";
+    safeMessage =
+      "A conexão com o Lovable AI Gateway falhou. A recomendação foi convertida para PULAR.";
+  } else if (
+    /NoObjectGenerated|schema|parse|json|validation|structured output/i.test(diagnosticText)
+  ) {
     errorCode = "SCHEMA_GENERATION_FAILED";
     safeMessage =
       "O Gemini não produziu uma resposta compatível com o contrato 1.1.0. A recomendação foi convertida para PULAR.";
@@ -117,7 +226,7 @@ export function createAiGenerationFailure(error: unknown, latencyMs: number): Ai
     model_output: null,
     raw_model_text: "",
     parse_status: "FAILED",
-    parse_error: safeMessage,
+    parse_error: `${safeMessage}${failureContextSuffix(context, httpStatus)}`,
     error_code: errorCode,
     latency_ms: latencyMs,
   };
