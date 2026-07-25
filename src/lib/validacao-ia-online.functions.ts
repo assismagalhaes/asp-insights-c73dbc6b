@@ -11,6 +11,7 @@ import { adaptLegacyAiResponse } from "@/lib/ai-validation/legacy-adapter";
 import { sumAiTokenUsage } from "@/lib/ai-validation/observability";
 import { resolveAiValidationRollout, rolloutTelemetry } from "@/lib/ai-validation/rollout";
 import { AiLocalGenerationOutputSchema } from "@/lib/ai-validation/schema";
+import { applyAiSemanticPolicy } from "@/lib/ai-validation/semantic-policy";
 import { generateText, tool, stepCountIs } from "ai";
 import { z } from "zod";
 
@@ -224,11 +225,13 @@ export function parseOnlineGatewayJson(
     .slice(0, 50)
     .map((source) => ({ title: source.titulo, url: source.url }));
 
-  return AiLocalGenerationOutputSchema.parse({
-    ...(raw as Record<string, unknown>),
-    sources: canonicalSources,
-    searches: canonicalSearches,
-  });
+  return applyAiSemanticPolicy(
+    AiLocalGenerationOutputSchema.parse({
+      ...(raw as Record<string, unknown>),
+      sources: canonicalSources,
+      searches: canonicalSearches,
+    }),
+  );
 }
 
 const CorrelatedPickSchema = z.object({

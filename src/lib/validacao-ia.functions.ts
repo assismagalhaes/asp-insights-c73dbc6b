@@ -11,6 +11,7 @@ import { adaptLegacyAiResponse } from "@/lib/ai-validation/legacy-adapter";
 import { sumAiTokenUsage } from "@/lib/ai-validation/observability";
 import { resolveAiValidationRollout, rolloutTelemetry } from "@/lib/ai-validation/rollout";
 import { AiLocalGenerationOutputSchema } from "@/lib/ai-validation/schema";
+import { applyAiSemanticPolicy } from "@/lib/ai-validation/semantic-policy";
 import { generateText, type LanguageModel } from "ai";
 import { z } from "zod";
 
@@ -60,7 +61,7 @@ export function parseLocalGatewayJson(text: string) {
     throw new Error("JSON object não encontrado na resposta do Lovable AI Gateway.");
   }
   const parsed: unknown = JSON.parse(withoutFence.slice(firstBrace, lastBrace + 1));
-  return AiLocalGenerationOutputSchema.parse(parsed);
+  return applyAiSemanticPolicy(parsed);
 }
 
 async function generateLocalStructuredOutput({
