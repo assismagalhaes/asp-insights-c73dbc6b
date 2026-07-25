@@ -165,6 +165,7 @@ function PublicacaoPage() {
         title="Publicação"
         description="Transforme prognósticos validados em picks oficiais."
         status={`${elegiveis.length} pick(s) elegível(is)`}
+        icon={Megaphone}
         actions={
           <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-[11rem_auto]">
             <div className="relative">
@@ -269,6 +270,7 @@ function PublicacaoPage() {
           icon={FileCheck2}
           accent="blue"
           meta="Validadas e não publicadas"
+          layout="horizontal"
         />
         <StatCard
           label="Selecionadas"
@@ -277,6 +279,7 @@ function PublicacaoPage() {
           accent="green"
           tone={selected.size > 0 ? "up" : "off"}
           meta="Prontas para o lote atual"
+          layout="horizontal"
         />
         <StatCard
           label="Publicadas hoje"
@@ -285,6 +288,7 @@ function PublicacaoPage() {
           accent="cyan"
           tone={publicadasHoje > 0 ? "up" : "off"}
           meta="Horário de Brasília"
+          layout="horizontal"
         />
         <StatCard
           label="Stake elegível"
@@ -292,6 +296,7 @@ function PublicacaoPage() {
           icon={Coins}
           accent="amber"
           meta="Soma do recorte selecionado"
+          layout="horizontal"
         />
       </div>
 

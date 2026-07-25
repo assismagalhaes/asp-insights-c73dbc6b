@@ -12,6 +12,7 @@ import {
   ClipboardList,
   BrainCircuit,
   CircleCheckBig,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -1144,6 +1145,8 @@ function Validacao() {
         title="Validação Crítica"
         description="Segunda camada analítica: somente entradas aprovadas seguem para publicação."
         status={`${validationSummary.pending} grupo(s) aguardando decisão`}
+        icon={ShieldCheck}
+        iconTone="ai"
       />
 
       {/* Filtros */}
@@ -1210,6 +1213,7 @@ function Validacao() {
           icon={ClipboardList}
           accent="blue"
           meta="Grupos aguardando triagem"
+          layout="horizontal"
         />
         <StatCard
           label="Analisadas pela IA"
@@ -1217,6 +1221,7 @@ function Validacao() {
           icon={BrainCircuit}
           accent="violet"
           meta="Nesta sessão operacional"
+          layout="horizontal"
         />
         <StatCard
           label="Confirmadas"
@@ -1225,6 +1230,7 @@ function Validacao() {
           tone="up"
           accent="green"
           meta="No recorte selecionado"
+          layout="horizontal"
         />
         <StatCard
           label="Risco estrutural"
@@ -1233,6 +1239,7 @@ function Validacao() {
           tone={validationSummary.structuralRisk > 0 ? "down" : "neutral"}
           accent={validationSummary.structuralRisk > 0 ? "red" : "amber"}
           meta="Alertas ou bloqueios prévios"
+          layout="horizontal"
         />
       </div>
 
@@ -1249,13 +1256,7 @@ function Validacao() {
         onEnrichPreview={aplicarMatchupPreview}
       />
 
-      {grupos.length === 0 && (
-        <div className="surface-panel p-8 text-center text-sm text-muted-foreground">
-          Não há prognósticos pendentes de validação.
-        </div>
-      )}
-
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 border-b border-border/70 pb-3">
         <div>
           <p className="panel-kicker">Fila operacional</p>
           <h2 className="section-title mt-1">Candidatas para validação crítica</h2>
@@ -1264,6 +1265,17 @@ function Validacao() {
           {grupos.length}
         </span>
       </div>
+
+      {grupos.length === 0 && (
+        <div className="surface-panel relative overflow-hidden p-8 text-center text-sm text-muted-foreground">
+          <div
+            aria-hidden="true"
+            className="absolute inset-x-[20%] top-0 h-px bg-[linear-gradient(90deg,transparent,var(--color-primary),transparent)]"
+          />
+          <ShieldCheck aria-hidden="true" className="mx-auto mb-3 size-7 text-success/70" />
+          Não há prognósticos pendentes de validação.
+        </div>
+      )}
 
       <div className="flex flex-col gap-4">
         {grupos.map((g) => {
@@ -1339,6 +1351,22 @@ function Validacao() {
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
                 </div>
+              </div>
+
+              <div className="relative grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border/80 bg-border/70 sm:grid-cols-3 xl:grid-cols-6">
+                <Metric
+                  label={packballRequirements ? "Odd referência" : "Odd ofertada"}
+                  value={p.odd_ofertada.toFixed(2)}
+                />
+                <Metric label="Odd ajustada" value={oddAj != null ? oddAj.toFixed(2) : "-"} />
+                <Metric label="Odd justa" value={p.odd_valor.toFixed(2)} tone="warn" />
+                <Metric label="Probabilidade" value={`${p.probabilidade_final.toFixed(1)}%`} />
+                <Metric
+                  label="Edge"
+                  value={edgeAj != null ? `${edgeAj.toFixed(1)}%` : "-"}
+                  tone={edgeAj != null && edgeAj > 0 ? "good" : "bad"}
+                />
+                <Metric label="Stake sugerida" value={`${p.stake.toFixed(1)}u`} />
               </div>
 
               <div className="relative flex flex-col gap-3 rounded-lg border border-border/80 bg-background/35 p-3 sm:p-4">
@@ -1796,23 +1824,38 @@ function PreAiShortlistPanel({
         aria-hidden="true"
         className="pointer-events-none absolute -left-16 -top-20 size-44 rounded-full bg-ai/[0.06] blur-3xl"
       />
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="relative">
+      <div className="relative grid gap-4 xl:grid-cols-[minmax(240px,0.8fr)_minmax(0,2fr)] xl:items-center">
+        <div>
           <div className="flex items-center gap-2 text-sm font-semibold">
-            <span className="flex size-8 items-center justify-center rounded border border-ai/30 bg-ai/10 text-ai">
-              <Trophy className="size-4" />
+            <span className="flex size-10 items-center justify-center rounded-lg border border-ai/35 bg-ai/10 text-ai shadow-[0_0_22px_currentColor]">
+              <Trophy className="size-5" />
             </span>
             Shortlist Pré-IA
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Triagem operacional dos prognósticos pendentes. Esta etapa apenas ranqueia candidatas
-            para análise; ainda não confirma entrada, publicação ou bankroll.
+          <p className="mt-2 max-w-sm text-xs leading-relaxed text-muted-foreground">
+            Triagem operacional. O ranking não confirma entrada, publicação ou bankroll.
           </p>
+          <Button
+            size="sm"
+            onClick={onGenerate}
+            disabled={generating}
+            className="mt-3 w-full shadow-[0_0_22px_rgb(59_130_246/0.14)] sm:w-auto"
+          >
+            {generating ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
+            Gerar shortlist
+          </Button>
         </div>
-        <Button size="sm" onClick={onGenerate} disabled={generating} className="w-full sm:w-auto">
-          {generating ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
-          Gerar shortlist
-        </Button>
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+          <Metric label="Candidatas" value={String(candidates.length)} />
+          <Metric label="Limite pré-IA" value={String(DEFAULT_PRE_AI_SHORTLIST_LIMIT)} />
+          <Metric label="Último run" value={loadingLatest ? "..." : (latestDate ?? "-")} />
+          <Metric
+            label="Preview"
+            value={
+              loadingLatest ? "..." : `${String(latest?.items.length ?? 0)} / ${loadedPreviewCount}`
+            }
+          />
+        </div>
       </div>
 
       {history.length > 0 && (
@@ -1848,20 +1891,6 @@ function PreAiShortlistPanel({
           )}
         </div>
       )}
-
-      <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
-        <Metric label="Candidatas agora" value={String(candidates.length)} />
-        <Metric label="Limite pré-IA" value={String(DEFAULT_PRE_AI_SHORTLIST_LIMIT)} />
-        <Metric label="Último run" value={loadingLatest ? "..." : (latestDate ?? "-")} />
-        <Metric
-          label="Itens salvos"
-          value={
-            loadingLatest
-              ? "..."
-              : `${String(latest?.items.length ?? 0)} / ${loadedPreviewCount} preview`
-          }
-        />
-      </div>
 
       {savedItems.length > 0 && (
         <div className="relative flex flex-col gap-3 rounded-lg border border-border/80 bg-background/35 p-3">
