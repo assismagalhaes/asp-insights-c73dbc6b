@@ -1,10 +1,25 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CloudDownload, Download, FileSpreadsheet, RefreshCw, Save, Upload } from "lucide-react";
+import {
+  Activity,
+  ChevronDown,
+  ChevronUp,
+  CloudDownload,
+  Database,
+  Download,
+  FileJson,
+  FileSpreadsheet,
+  History,
+  RefreshCw,
+  RotateCcw,
+  Save,
+  Server,
+  Upload,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +33,9 @@ import {
 } from "@/components/ui/select";
 import { PeriodFilter } from "@/components/period-filter";
 import { SportFilterSelect } from "@/components/sport-filter-select";
+import { SportMark } from "@/components/sport-filter-select";
+import { AmbientBackdrop, PageIntro, PanelHeading } from "@/components/command-center";
+import { StatCard } from "@/components/stat-card";
 import { dateInRange, rangeFromPeriodo, type PeriodoFiltro } from "@/lib/metrics";
 import {
   downloadText,
@@ -71,9 +89,10 @@ function ColetaDadosPage() {
   const [fEsporte, setFEsporte] = useState("all");
   const [fLiga, setFLiga] = useState("all");
   const [fStatus, setFStatus] = useState("all");
+  const [showAllCollections, setShowAllCollections] = useState(false);
   const { ini, fim } = rangeFromPeriodo(periodo, customIni, customFim);
 
-  const { data: coletas = [] } = useQuery({
+  const { data: coletas = [], isLoading: loadingCollections } = useQuery({
     queryKey: ["coletas-odds"],
     queryFn: fetchCollections,
   });
@@ -357,268 +376,411 @@ function ColetaDadosPage() {
   };
 
   const exportRows: NormalizedOdd[] = normalized?.rows ?? [];
-  const visibleCollections = filteredCollections.slice(0, 10);
+  const visibleCollections = showAllCollections
+    ? filteredCollections
+    : filteredCollections.slice(0, 8);
+  const runningCollections = coletas.filter((coleta) => isRunningStatus(coleta.status)).length;
+  const totalCollectedOdds = coletas.reduce((total, coleta) => total + coleta.total_odds, 0);
+  const latestCollection = coletas.reduce<ColetaOdds | null>((latest, coleta) => {
+    if (!latest) return coleta;
+    return new Date(coleta.created_at).getTime() > new Date(latest.created_at).getTime()
+      ? coleta
+      : latest;
+  }, null);
+
+  const limparFiltros = () => {
+    setPeriodo("tudo");
+    setCustomIni("");
+    setCustomFim("");
+    setFEsporte("all");
+    setFLiga("all");
+    setFStatus("all");
+  };
 
   return (
-    <div className="page-stack">
-      <div className="page-header">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="page-title">Coleta de Dados</h1>
-            <Badge variant="outline">Manual</Badge>
-            <Badge variant="outline">VM</Badge>
-            <Badge variant="outline">OddsAgora</Badge>
-          </div>
-          <p className="page-description">
-            Upload manual de JSON dos scrapers Python para normalização, exportação e persistência
-            de odds.
-          </p>
+    <div className="page-stack relative isolate">
+      <AmbientBackdrop />
+      <PageIntro
+        title="Coleta de Odds"
+        description="Orquestre coletas remotas, importe arquivos e acompanhe a qualidade dos dados."
+        status={remoteBusy ? "Operação em andamento" : "Pipeline disponível"}
+        icon={Database}
+        actions={
+          <Button
+            className="h-10 shadow-[0_0_24px_rgb(59_130_246/0.18)]"
+            onClick={executarColeta}
+            disabled={remoteBusy === "pipeline" || !remoteParams.esporte}
+          >
+            <CloudDownload className="mr-2 size-4" />
+            {remoteBusy === "pipeline" ? "Coletando..." : "Executar coleta"}
+          </Button>
+        }
+      />
+
+      <section className="relative overflow-hidden rounded-lg border border-border/90 bg-card/80 p-3 shadow-[0_16px_36px_rgb(0_0_0/0.12)]">
+        <div
+          aria-hidden="true"
+          className="absolute inset-y-0 left-0 w-0.5 bg-[linear-gradient(var(--color-primary),var(--color-ai))]"
+        />
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_1.1fr_1.1fr_1fr_auto] xl:items-end">
+          <PeriodFilter
+            periodo={periodo}
+            onPeriodoChange={setPeriodo}
+            customIni={customIni}
+            customFim={customFim}
+            onCustomIniChange={setCustomIni}
+            onCustomFimChange={setCustomFim}
+          />
+          <Filter
+            label="Esporte"
+            value={fEsporte}
+            onChange={setFEsporte}
+            options={filterOptions.esportes}
+            sportIcons
+          />
+          <Filter label="Liga" value={fLiga} onChange={setFLiga} options={filterOptions.ligas} />
+          <Filter
+            label="Status"
+            value={fStatus}
+            onChange={setFStatus}
+            options={filterOptions.status}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            className="h-9 sm:col-span-2 xl:col-span-1"
+            onClick={limparFiltros}
+          >
+            <RotateCcw className="mr-2 size-3.5" />
+            Limpar filtros
+          </Button>
         </div>
+      </section>
+
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <StatCard
+          label="Coletas"
+          value={loadingCollections ? "—" : String(coletas.length)}
+          icon={Database}
+          accent="blue"
+          meta="Total registrado"
+          layout="horizontal"
+        />
+        <StatCard
+          label="Em andamento"
+          value={loadingCollections ? "—" : String(runningCollections)}
+          icon={Activity}
+          accent="amber"
+          tone={runningCollections > 0 ? "neutral" : "off"}
+          meta="Jobs pendentes ou ativos"
+          layout="horizontal"
+        />
+        <StatCard
+          label="Odds coletadas"
+          value={loadingCollections ? "—" : totalCollectedOdds.toLocaleString("pt-BR")}
+          icon={CloudDownload}
+          accent="cyan"
+          meta="Volume acumulado"
+          layout="horizontal"
+        />
+        <StatCard
+          label="Última coleta"
+          value={
+            loadingCollections
+              ? "—"
+              : latestCollection
+                ? new Date(latestCollection.created_at).toLocaleDateString("pt-BR")
+                : "—"
+          }
+          icon={History}
+          accent="green"
+          tone={latestCollection ? "up" : "off"}
+          meta={
+            latestCollection
+              ? new Date(latestCollection.created_at).toLocaleTimeString("pt-BR", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : "Nenhuma execução"
+          }
+          layout="horizontal"
+        />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <CloudDownload className="h-4 w-4" /> Executar Coleta na VM
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div>
-              <Label>Esporte</Label>
-              <Select
-                value={remoteParams.esporte}
-                onValueChange={(v) =>
-                  setRemoteParams((p) => ({ ...p, esporte: v, leagues: ["Todos"] }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Futebol">Futebol</SelectItem>
-                  <SelectItem value="Basketball">Basketball</SelectItem>
-                  <SelectItem value="Baseball">Baseball</SelectItem>
-                  <SelectItem value="American Football">American Football</SelectItem>
-                  <SelectItem value="Hockey">Hockey</SelectItem>
-                </SelectContent>
-              </Select>
+      <div className="grid gap-4 xl:grid-cols-[1.45fr_1fr]">
+        <Card className="overflow-hidden border-primary/20">
+          <CardHeader className="border-b border-border/80 pb-3">
+            <PanelHeading
+              title="Coleta na VM"
+              eyebrow="Pipeline remoto"
+              icon={Server}
+              className="mb-0"
+            />
+            <CardDescription>
+              Configure o recorte e envie um job controlado para o scraper.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 p-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label>Esporte</Label>
+                <Select
+                  value={remoteParams.esporte}
+                  onValueChange={(v) =>
+                    setRemoteParams((p) => ({ ...p, esporte: v, leagues: ["Todos"] }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Futebol">Futebol</SelectItem>
+                    <SelectItem value="Basketball">Basketball</SelectItem>
+                    <SelectItem value="Baseball">Baseball</SelectItem>
+                    <SelectItem value="American Football">American Football</SelectItem>
+                    <SelectItem value="Hockey">Hockey</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <LeagueSelector
+                esporte={remoteParams.esporte}
+                selected={remoteParams.leagues}
+                onChange={(leagues) => setRemoteParams((p) => ({ ...p, leagues }))}
+              />
+              <Field
+                label="Data início"
+                type="date"
+                value={remoteParams.data_inicio}
+                onChange={(data_inicio) => setRemoteParams((p) => ({ ...p, data_inicio }))}
+              />
+              <Field
+                label="Data fim"
+                type="date"
+                value={remoteParams.data_fim}
+                onChange={(data_fim) => setRemoteParams((p) => ({ ...p, data_fim }))}
+              />
             </div>
-            <LeagueSelector
-              esporte={remoteParams.esporte}
-              selected={remoteParams.leagues}
-              onChange={(leagues) => setRemoteParams((p) => ({ ...p, leagues }))}
-            />
-            <Field
-              label="Data início"
-              type="date"
-              value={remoteParams.data_inicio}
-              onChange={(data_inicio) => setRemoteParams((p) => ({ ...p, data_inicio }))}
-            />
-            <Field
-              label="Data fim"
-              type="date"
-              value={remoteParams.data_fim}
-              onChange={(data_fim) => setRemoteParams((p) => ({ ...p, data_fim }))}
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
             <Button
+              className="w-full sm:w-auto"
               onClick={executarColeta}
               disabled={remoteBusy === "pipeline" || !remoteParams.esporte}
             >
-              <CloudDownload className="mr-2 h-4 w-4" />
-              {remoteBusy === "pipeline" ? "Coletando..." : "Executar Coleta"}
+              <CloudDownload className="mr-2 size-4" />
+              {remoteBusy === "pipeline" ? "Coletando..." : "Executar coleta na VM"}
             </Button>
-            <p className="text-xs text-muted-foreground">
-              A chave da VM fica protegida no servidor via SCRAPER_API_URL e SCRAPER_API_KEY.
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Credenciais da VM permanecem protegidas no servidor. A operação pode continuar em
+              segundo plano.
             </p>
-          </div>
-          {remoteStatus && (
-            <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">
-              {remoteStatus}
-            </div>
-          )}
-          {erro && (
-            <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {erro}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            {remoteStatus && (
+              <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">
+                {remoteStatus}
+              </div>
+            )}
+            {erro && (
+              <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {erro}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Upload className="h-4 w-4" /> Upload JSON
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-3">
-            <Label>Arquivo JSON</Label>
+        <Card className="overflow-hidden border-ai/20">
+          <CardHeader className="border-b border-border/80 pb-3">
+            <PanelHeading
+              title="Importação manual"
+              eyebrow="Arquivo JSON"
+              icon={FileJson}
+              className="mb-0"
+            />
+            <CardDescription>
+              Normalize, revise e persista um arquivo produzido externamente.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 p-4">
+            <Label
+              htmlFor="coleta-json"
+              className="group flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-primary/35 bg-primary/[0.035] p-4 text-center transition-colors hover:border-primary/60 hover:bg-primary/[0.06]"
+            >
+              <Upload className="mb-2 size-6 text-primary transition-transform group-hover:-translate-y-0.5" />
+              <span className="text-sm font-semibold">Selecione um arquivo JSON</span>
+              <span className="mt-1 text-xs text-muted-foreground">
+                {fileName || "Arquivo normalizado do scraper"}
+              </span>
+            </Label>
             <Input
+              id="coleta-json"
               type="file"
               accept="application/json,.json"
               onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
+              className="sr-only"
             />
-            {fileName && <Badge variant="outline">{fileName}</Badge>}
-            {erro && <p className="text-sm text-destructive">{erro}</p>}
             <div className="grid grid-cols-2 gap-2 text-sm">
               <Info label="Jogos" value={normalized?.total_jogos ?? 0} />
               <Info label="Odds" value={normalized?.total_odds ?? 0} />
-              <Info label="Esporte" value={normalized?.esporte ?? "-"} />
-              <Info label="Liga" value={normalized?.liga ?? "múltiplas"} />
+              <Info label="Esporte" value={normalized?.esporte ?? "—"} />
+              <Info label="Liga" value={normalized?.liga ?? "—"} />
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <Button onClick={salvar} disabled={!normalized || saving || collectionPersisted}>
-                <Save className="mr-2 h-4 w-4" />
-                {collectionPersisted ? "Coleta já salva" : "Salvar coleta"}
+                <Save className="mr-2 size-4" />
+                {collectionPersisted ? "Já salva" : "Salvar"}
               </Button>
               <Button
                 variant="outline"
                 disabled={!exportRows.length}
                 onClick={() => downloadText(csvName(fileName), toCsv(exportRows))}
               >
-                <Download className="mr-2 h-4 w-4" /> Exportar CSV
+                <Download className="mr-2 size-4" /> CSV
               </Button>
               <Button
                 variant="outline"
+                className="col-span-2"
                 disabled={!exportRows.length}
                 onClick={() => exportXlsx(exportRows, fileName)}
               >
-                <FileSpreadsheet className="mr-2 h-4 w-4" /> Exportar XLSX
+                <FileSpreadsheet className="mr-2 size-4" /> Exportar XLSX
               </Button>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Filtros</CardTitle>
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b border-border/80 pb-3">
+          <PanelHeading
+            title="Histórico de coletas"
+            eyebrow="Atividade operacional"
+            icon={History}
+            value={
+              <span className="rounded border border-primary/30 bg-primary/8 px-2 py-1 font-mono text-xs text-primary">
+                {loadingCollections ? "—" : filteredCollections.length}
+              </span>
+            }
+            className="mb-0"
+          />
         </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap items-end gap-3">
-            <PeriodFilter
-              periodo={periodo}
-              onPeriodoChange={setPeriodo}
-              customIni={customIni}
-              customFim={customFim}
-              onCustomIniChange={setCustomIni}
-              onCustomFimChange={setCustomFim}
-            />
-            <Filter
-              label="Esporte"
-              value={fEsporte}
-              onChange={setFEsporte}
-              options={filterOptions.esportes}
-              sportIcons
-            />
-            <Filter label="Liga" value={fLiga} onChange={setFLiga} options={filterOptions.ligas} />
-            <Filter
-              label="Status"
-              value={fStatus}
-              onChange={setFStatus}
-              options={filterOptions.status}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Histórico de coletas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-auto rounded-md border">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-card text-xs uppercase text-muted-foreground">
+        <CardContent className="p-0">
+          <div className="hidden overflow-x-auto lg:block">
+            <table className="w-full table-fixed text-xs">
+              <thead className="bg-muted/40 uppercase tracking-wider text-muted-foreground">
                 <tr>
-                  <th className="px-3 py-2 text-left">Data</th>
-                  <th className="px-3 py-2 text-left">Status</th>
-                  <th className="px-3 py-2 text-left">Esporte/Liga</th>
+                  <th className="w-[105px] px-3 py-2 text-left">Data</th>
+                  <th className="w-[100px] px-3 py-2 text-left">Status</th>
+                  <th className="w-[20%] px-3 py-2 text-left">Esporte / Liga</th>
                   <th className="px-3 py-2 text-left">Job</th>
-                  <th className="px-3 py-2 text-right">Jogos</th>
-                  <th className="px-3 py-2 text-right">Odds</th>
-                  <th className="px-3 py-2 text-right">Ações</th>
+                  <th className="w-[68px] px-3 py-2 text-right">Jogos</th>
+                  <th className="w-[72px] px-3 py-2 text-right">Odds</th>
+                  <th className="w-[170px] px-3 py-2 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {visibleCollections.map((coleta) => (
-                  <tr key={coleta.id} className="border-t">
-                    <td className="px-3 py-2 font-mono text-xs">
-                      {coleta.created_at.slice(0, 10)}
-                    </td>
+                  <tr
+                    key={coleta.id}
+                    className="border-t border-border transition-colors hover:bg-primary/[0.03]"
+                  >
+                    <td className="px-3 py-2 font-mono">{coleta.created_at.slice(0, 10)}</td>
                     <td className="px-3 py-2">
                       <Badge variant={coleta.erro ? "destructive" : "outline"}>
                         {coleta.status}
                       </Badge>
                     </td>
                     <td className="px-3 py-2">
-                      {coleta.esporte ?? "-"} /{" "}
-                      <span className="text-muted-foreground">{coleta.liga ?? "múltiplas"}</span>
+                      <span className="flex min-w-0 items-center gap-2">
+                        <SportMark sport={coleta.esporte ?? ""} />
+                        <span className="min-w-0 truncate">
+                          {coleta.esporte ?? "—"}{" "}
+                          <span className="text-muted-foreground">
+                            / {coleta.liga ?? "múltiplas"}
+                          </span>
+                        </span>
+                      </span>
                     </td>
-                    <td className="px-3 py-2 font-mono text-xs">{coleta.job_id ?? "-"}</td>
+                    <td className="px-3 py-2 font-mono text-[11px] text-primary">
+                      <span className="block truncate" title={coleta.job_id ?? "Sem job"}>
+                        {coleta.job_id ?? "—"}
+                      </span>
+                    </td>
                     <td className="px-3 py-2 text-right font-mono">{coleta.total_jogos}</td>
                     <td className="px-3 py-2 text-right font-mono">{coleta.total_odds}</td>
                     <td className="px-3 py-2">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={!coleta.job_id || remoteBusy === `status:${coleta.id}`}
-                          onClick={() => atualizarStatus(coleta)}
-                        >
-                          <RefreshCw className="mr-1 h-3 w-3" /> Status
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={
-                            !coleta.job_id ||
-                            !isRunningStatus(coleta.status) ||
-                            remoteBusy === `resume:${coleta.id}`
-                          }
-                          onClick={() => retomarColeta(coleta)}
-                        >
-                          <RefreshCw className="mr-1 h-3 w-3" /> Retomar
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={
-                            !coleta.job_id ||
-                            coleta.status !== "CONCLUIDA" ||
-                            remoteBusy === `normalized:${coleta.id}`
-                          }
-                          onClick={() => importarResultadoVm(coleta)}
-                        >
-                          <CloudDownload className="mr-1 h-3 w-3" /> Importar
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={
-                            !coleta.job_id ||
-                            coleta.status !== "CONCLUIDA" ||
-                            remoteBusy === `csv:${coleta.id}`
-                          }
-                          onClick={() => baixarCsvVm(coleta)}
-                        >
-                          <Download className="mr-1 h-3 w-3" /> Baixar CSV
-                        </Button>
-                      </div>
+                      <CollectionActions
+                        coleta={coleta}
+                        remoteBusy={remoteBusy}
+                        onStatus={atualizarStatus}
+                        onResume={retomarColeta}
+                        onImport={importarResultadoVm}
+                        onCsv={baixarCsvVm}
+                      />
                     </td>
                   </tr>
                 ))}
-                {!filteredCollections.length && <EmptyRow cols={8} />}
+                {!loadingCollections && !filteredCollections.length && <EmptyRow cols={7} />}
               </tbody>
             </table>
           </div>
-          {filteredCollections.length > 10 && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Exibindo 10 de {filteredCollections.length} coletas filtradas.
-            </p>
+
+          <div className="divide-y divide-border lg:hidden">
+            {visibleCollections.map((coleta) => (
+              <article key={coleta.id} className="grid grid-cols-[auto_1fr] gap-3 px-3 py-3">
+                <SportMark sport={coleta.esporte ?? ""} size="md" />
+                <div className="min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <h3 className="truncate text-sm font-semibold">
+                        {coleta.liga ?? coleta.esporte ?? "Coleta"}
+                      </h3>
+                      <p className="font-mono text-[10px] text-muted-foreground">
+                        {new Date(coleta.created_at).toLocaleString("pt-BR")}
+                      </p>
+                    </div>
+                    <Badge variant={coleta.erro ? "destructive" : "outline"}>{coleta.status}</Badge>
+                  </div>
+                  <p className="mt-2 truncate font-mono text-[10px] text-primary">
+                    Job: {coleta.job_id ?? "—"}
+                  </p>
+                  <div className="mt-2 flex items-center justify-between gap-3 border-t border-border/70 pt-2">
+                    <div className="flex gap-5">
+                      <CollectionMetric label="Jogos" value={coleta.total_jogos} />
+                      <CollectionMetric label="Odds" value={coleta.total_odds} />
+                    </div>
+                    <CollectionActions
+                      coleta={coleta}
+                      remoteBusy={remoteBusy}
+                      onStatus={atualizarStatus}
+                      onResume={retomarColeta}
+                      onImport={importarResultadoVm}
+                      onCsv={baixarCsvVm}
+                    />
+                  </div>
+                </div>
+              </article>
+            ))}
+            {!loadingCollections && !filteredCollections.length && (
+              <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+                Nenhuma coleta encontrada.
+              </p>
+            )}
+          </div>
+
+          {filteredCollections.length > 8 && (
+            <div className="border-t border-border/80 p-2 text-center">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAllCollections((value) => !value)}
+              >
+                {showAllCollections ? (
+                  <ChevronUp className="mr-1.5 size-4" />
+                ) : (
+                  <ChevronDown className="mr-1.5 size-4" />
+                )}
+                {showAllCollections
+                  ? "Mostrar recentes"
+                  : `Ver todas as ${filteredCollections.length} coletas`}
+              </Button>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -631,6 +793,86 @@ function Info({ label, value }: { label: string; value: string | number }) {
     <div className="rounded-md border p-3">
       <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className="mt-1 truncate font-mono font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function CollectionMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div>
+      <p className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="font-mono text-sm font-semibold tabular-nums">
+        {value.toLocaleString("pt-BR")}
+      </p>
+    </div>
+  );
+}
+
+function CollectionActions({
+  coleta,
+  remoteBusy,
+  onStatus,
+  onResume,
+  onImport,
+  onCsv,
+}: {
+  coleta: ColetaOdds;
+  remoteBusy: string | null;
+  onStatus: (coleta: ColetaOdds) => void;
+  onResume: (coleta: ColetaOdds) => void;
+  onImport: (coleta: ColetaOdds) => void;
+  onCsv: (coleta: ColetaOdds) => void;
+}) {
+  return (
+    <div className="flex flex-wrap justify-end gap-1">
+      <Button
+        size="icon"
+        variant="ghost"
+        disabled={!coleta.job_id || remoteBusy === `status:${coleta.id}`}
+        onClick={() => onStatus(coleta)}
+        title="Atualizar status"
+        aria-label={`Atualizar status da coleta ${coleta.id}`}
+      >
+        <RefreshCw className="size-3.5" />
+      </Button>
+      <Button
+        size="icon"
+        variant="ghost"
+        disabled={
+          !coleta.job_id || !isRunningStatus(coleta.status) || remoteBusy === `resume:${coleta.id}`
+        }
+        onClick={() => onResume(coleta)}
+        title="Retomar acompanhamento"
+        aria-label={`Retomar acompanhamento da coleta ${coleta.id}`}
+      >
+        <Activity className="size-3.5" />
+      </Button>
+      <Button
+        size="icon"
+        variant="ghost"
+        disabled={
+          !coleta.job_id ||
+          coleta.status !== "CONCLUIDA" ||
+          remoteBusy === `normalized:${coleta.id}`
+        }
+        onClick={() => onImport(coleta)}
+        title="Importar resultado"
+        aria-label={`Importar resultado da coleta ${coleta.id}`}
+      >
+        <CloudDownload className="size-3.5 text-primary" />
+      </Button>
+      <Button
+        size="icon"
+        variant="ghost"
+        disabled={
+          !coleta.job_id || coleta.status !== "CONCLUIDA" || remoteBusy === `csv:${coleta.id}`
+        }
+        onClick={() => onCsv(coleta)}
+        title="Baixar CSV"
+        aria-label={`Baixar CSV da coleta ${coleta.id}`}
+      >
+        <Download className="size-3.5" />
+      </Button>
     </div>
   );
 }
@@ -1012,11 +1254,11 @@ function Filter({
           onValueChange={onChange}
           options={options}
           allLabel="Todos os esportes"
-          className="h-9 w-44"
+          className="h-9 w-full"
         />
       ) : (
         <Select value={value} onValueChange={onChange}>
-          <SelectTrigger className="h-9 w-44">
+          <SelectTrigger className="h-9 w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
