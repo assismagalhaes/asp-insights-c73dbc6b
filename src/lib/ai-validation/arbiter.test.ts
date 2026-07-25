@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Prognostico } from "@/lib/db";
-import { arbitrateAiOutput, type AiArbiterContext } from "./arbiter";
+import {
+  arbitrateAiGenerationFailure,
+  arbitrateAiOutput,
+  type AiArbiterContext,
+} from "./arbiter";
 import { adaptLegacyAiResponse } from "./legacy-adapter";
 import { formatArbitratedAiValidation } from "./presentation";
 import { AiOperationalOutputSchema } from "./schema";
@@ -161,6 +165,26 @@ describe("AiOperationalOutputSchema", () => {
 });
 
 describe("arbitrateAiOutput", () => {
+  it("classifica ausência de saída como falha de geração, sem mascarar como schema inválido", () => {
+    const result = arbitrateAiGenerationFailure({
+      errorCode: "PROVIDER_TIMEOUT",
+      reason: "A geração estruturada excedeu o tempo limite.",
+    });
+
+    expect(result.status).toBe("BLOCKED");
+    expect(result.output.decision).toBe("PULAR");
+    expect(result.output.stake).toBe(0);
+    expect(result.model_output).toBeNull();
+    expect(result.blocks).toEqual([
+      {
+        code: "GENERATION_FAILED",
+        reason:
+          "Falha de geração da IA [PROVIDER_TIMEOUT]: A geração estruturada excedeu o tempo limite.",
+      },
+    ]);
+    expect(result.blocks.map((block) => block.code)).not.toContain("SCHEMA_INVALID");
+  });
+
   it("aprova uma confirmação consistente", () => {
     const result = arbitrateAiOutput(output(), context(prediction()));
     expect(result.status).toBe("APPROVED");

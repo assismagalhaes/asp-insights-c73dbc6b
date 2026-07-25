@@ -17,6 +17,7 @@ export type AiOperationalOutput = z.infer<typeof AiOperationalOutputSchema>;
 export type AiValidationMode = "local" | "online";
 
 export type AiValidationBlockingCode =
+  | "GENERATION_FAILED"
   | "SCHEMA_INVALID"
   | "MODEL_GATE_REJECTED"
   | "PULAR_STAKE_NON_ZERO"
