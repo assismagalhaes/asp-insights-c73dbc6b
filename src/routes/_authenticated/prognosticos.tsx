@@ -98,6 +98,20 @@ function formatDateBR(iso: string): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
 }
 
+function sportVisual(sport: string) {
+  const normalized = sport.toLocaleLowerCase("pt-BR");
+  if (normalized.includes("baseball") || normalized.includes("beisebol")) {
+    return { symbol: "⚾", className: "bg-red-500/10 text-red-400" };
+  }
+  if (normalized.includes("basket") || normalized.includes("basquete")) {
+    return { symbol: "🏀", className: "bg-orange-500/10 text-orange-400" };
+  }
+  if (normalized.includes("futebol") || normalized.includes("football")) {
+    return { symbol: "⚽", className: "bg-emerald-500/10 text-emerald-400" };
+  }
+  return { symbol: "◆", className: "bg-primary/10 text-primary" };
+}
+
 function Prognosticos() {
   const { data: prognosticos = [], isLoading } = usePrognosticos();
   const { data: cfg } = useConfiguracao();
@@ -201,6 +215,9 @@ function Prognosticos() {
       pending: sorted.filter((p) => p.status_validacao === "PENDENTE").length,
       greens: metrics.greens,
       roi: metrics.roi,
+      averageOdd: sorted.length
+        ? sorted.reduce((sum, p) => sum + getOddEfetiva(p), 0) / sorted.length
+        : 0,
     };
   }, [sorted, cfg]);
 
@@ -323,24 +340,26 @@ function Prognosticos() {
         description="Visualize, filtre e gerencie todos os prognósticos gerados."
         status="Operação preditiva"
         actions={
-          <Button
-            className="w-full sm:w-auto"
-            onClick={() => {
-              setEditing(null);
-              if (prognosticos.length > 0) {
-                setAskRepeat(true);
-              } else {
-                setTemplate(null);
-                setOpenForm(true);
-              }
-            }}
-          >
-            <Plus data-icon="inline-start" /> Novo Prognóstico
-          </Button>
+          <div className="w-full sm:w-auto">
+            <Button
+              className="w-full sm:w-auto"
+              onClick={() => {
+                setEditing(null);
+                if (prognosticos.length > 0) {
+                  setAskRepeat(true);
+                } else {
+                  setTemplate(null);
+                  setOpenForm(true);
+                }
+              }}
+            >
+              <Plus data-icon="inline-start" /> Novo Prognóstico
+            </Button>
+          </div>
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         <StatCard
           label="Total"
           value={String(summary.total)}
@@ -373,13 +392,21 @@ function Prognosticos() {
           meta="Picks confirmadas resolvidas"
         />
         <StatCard
-          className="col-span-2 lg:col-span-1"
           label="ROI"
           value={`${summary.roi >= 0 ? "+" : ""}${summary.roi.toFixed(2)}%`}
           icon={TrendingUp}
           tone={summary.roi > 0 ? "up" : summary.roi < 0 ? "down" : "neutral"}
           accent="cyan"
           meta="Retorno das picks confirmadas"
+        />
+        <StatCard
+          className="col-span-2 lg:col-span-1"
+          label="Odd média"
+          value={summary.averageOdd.toFixed(2)}
+          icon={TrendingUp}
+          tone="neutral"
+          accent="blue"
+          meta="Odd efetiva do recorte"
         />
       </div>
 
@@ -502,7 +529,120 @@ function Prognosticos() {
         </div>
       )}
 
-      <div className="data-surface" role="region" aria-label="Tabela de prognósticos" tabIndex={0}>
+      <div className="space-y-3 md:hidden" aria-label="Lista móvel de prognósticos">
+        {isLoading ? (
+          <div className="surface-panel py-10 text-center text-sm text-muted-foreground">
+            Carregando...
+          </div>
+        ) : null}
+        {!isLoading && sorted.length === 0 ? (
+          <div className="surface-panel py-10 text-center text-sm text-muted-foreground">
+            Nenhum prognóstico encontrado.
+          </div>
+        ) : null}
+        {paginated.map((p) => {
+          const oddEfetiva = getOddEfetiva(p);
+          const edgeEfetivo = getEdgeEfetivo(p);
+          return (
+            <article key={p.id} className="surface-panel overflow-hidden p-0">
+              <div className="flex items-start gap-3 border-b border-border/70 p-3">
+                <Checkbox
+                  checked={selected.has(p.id)}
+                  onCheckedChange={() => toggleOne(p.id)}
+                  aria-label={`Selecionar ${p.jogo}`}
+                  className="mt-1"
+                />
+                <SportMark sport={p.esporte} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-mono text-[10px] text-muted-foreground">
+                      {formatDateBR(p.data)} · {p.hora ? p.hora.slice(0, 5) : "-"}
+                    </span>
+                    <StatusBadge status={p.status_validacao} />
+                  </div>
+                  <h2 className="mt-1 text-sm font-semibold leading-snug">{p.jogo}</h2>
+                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                    {p.esporte} · {p.liga}
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 p-3 text-xs">
+                <MobileDatum label="Mercado / Pick" value={`${p.mercado} · ${p.pick}`} />
+                <MobileDatum label="Placar" value={p.placar_final ?? "-"} />
+                <MobileDatum label="Odd efetiva" value={oddEfetiva.toFixed(2)} mono />
+                <MobileDatum label="Odd de valor" value={p.odd_valor.toFixed(2)} mono />
+                <MobileDatum
+                  label="Probabilidade"
+                  value={`${p.probabilidade_final.toFixed(1)}%`}
+                  mono
+                />
+                <MobileDatum
+                  label="Edge"
+                  value={`${edgeEfetivo >= 0 ? "+" : ""}${edgeEfetivo.toFixed(1)}%`}
+                  mono
+                  tone={edgeEfetivo >= 0 ? "success" : "danger"}
+                />
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 bg-background/20 px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <ResultBadge result={p.resultado} />
+                  <span className="font-mono text-xs">{p.stake.toFixed(1)}u</span>
+                </div>
+                <div className="flex items-center gap-0.5">
+                  <DadosTecnicosViewer prognostico={p} />
+                  {podePublicar(p) ? (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      title="Publicar"
+                      onClick={() => handlePublicar(p)}
+                    >
+                      <Megaphone className="size-4 text-primary" />
+                    </Button>
+                  ) : null}
+                  <Button size="icon" variant="ghost" title="Copiar TIP" onClick={() => copyTip(p)}>
+                    <Copy className="size-4" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    title="Registrar resultado"
+                    onClick={() => setResultadoFor(p)}
+                  >
+                    <Trophy className="size-4 text-warning" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    title="Editar"
+                    onClick={() => {
+                      setEditing(p);
+                      setOpenForm(true);
+                    }}
+                  >
+                    <Pencil className="size-4" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    title="Excluir"
+                    onClick={() => setConfirmDelete(p)}
+                  >
+                    <Trash2 className="size-4 text-destructive" />
+                  </Button>
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      <div
+        className="data-surface hidden md:block"
+        role="region"
+        aria-label="Tabela de prognósticos"
+        tabIndex={0}
+      >
         {/* Top horizontal scrollbar */}
         <div
           ref={topScrollRef}
@@ -687,7 +827,12 @@ function Prognosticos() {
                       <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">
                         {p.hora ? p.hora.slice(0, 5) : "-"}
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap">{p.esporte}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-2">
+                          <SportMark sport={p.esporte} />
+                          {p.esporte}
+                        </span>
+                      </td>
                       <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
                         {p.liga}
                       </td>
@@ -1012,6 +1157,43 @@ function FilterField({
         {label}
       </label>
       {children}
+    </div>
+  );
+}
+
+function SportMark({ sport }: { sport: string }) {
+  const visual = sportVisual(sport);
+  return (
+    <span
+      aria-hidden="true"
+      className={`inline-flex size-7 shrink-0 items-center justify-center rounded-md text-sm ${visual.className}`}
+    >
+      {visual.symbol}
+    </span>
+  );
+}
+
+function MobileDatum({
+  label,
+  value,
+  mono,
+  tone,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  tone?: "success" | "danger";
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="panel-kicker">{label}</p>
+      <p
+        className={`mt-1 break-words ${mono ? "font-mono tabular-nums" : ""} ${
+          tone === "success" ? "text-success" : tone === "danger" ? "text-destructive" : ""
+        }`}
+      >
+        {value}
+      </p>
     </div>
   );
 }
