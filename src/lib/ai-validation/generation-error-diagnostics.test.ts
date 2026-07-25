@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createAiGenerationFailure } from "./generation-result";
+import { AiStructuredRepairFailure, createAiGenerationFailure } from "./generation-result";
 
 describe("diagnóstico de falhas do provider", () => {
   it("extrai status de uma causa aninhada sem expor detalhes do provider", () => {
@@ -36,5 +36,39 @@ describe("diagnóstico de falhas do provider", () => {
     expect(serverFailure.error_code).toBe("PROVIDER_SERVER_ERROR");
     expect(serverFailure.parse_error).toContain("HTTP 503");
     expect(serverFailure.parse_error).not.toContain("private-detail");
+  });
+
+  it("preserva a falha inicial e distingue erro na chamada de reparo", () => {
+    const repairFailure = new AiStructuredRepairFailure({
+      stage: "REQUEST",
+      initialError: new SyntaxError("Unexpected token in JSON"),
+      repairError: { statusCode: 429, body: "private-rate-limit-detail" },
+    });
+    const result = createAiGenerationFailure(repairFailure, 140, {
+      phase: "REPAIR_GENERATION",
+      promptCharacters: 7_761,
+    });
+
+    expect(result.error_code).toBe("REPAIR_GENERATION_FAILED");
+    expect(result.parse_error).toContain("JSON_PARSE_FAILED");
+    expect(result.parse_error).toContain("provider não concluiu a chamada de reparo");
+    expect(result.parse_error).toContain("HTTP 429");
+    expect(result.parse_error).not.toContain("private-rate-limit-detail");
+  });
+
+  it("distingue reparo concluído com segundo parse inválido", () => {
+    const repairFailure = new AiStructuredRepairFailure({
+      stage: "PARSE",
+      initialError: new Error("JSON object não encontrado"),
+      repairError: new Error("schema validation failed private-schema-detail"),
+    });
+    const result = createAiGenerationFailure(repairFailure, 80, {
+      phase: "REPAIR_GENERATION",
+    });
+
+    expect(result.error_code).toBe("REPAIR_GENERATION_FAILED");
+    expect(result.parse_error).toContain("JSON_OBJECT_MISSING");
+    expect(result.parse_error).toContain("saída reparada continuou incompatível");
+    expect(result.parse_error).not.toContain("private-schema-detail");
   });
 });
