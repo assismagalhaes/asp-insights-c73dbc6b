@@ -401,6 +401,7 @@ export const analisarValidacaoOnline = createServerFn({ method: "POST" })
     const buscasRealizadas: string[] = [];
     const fontesRastreaveis: OnlineSourceTrace[] = [];
     let repairAttempted = false;
+    let promptCharacters = 0;
 
     if (!process.env.FIRECRAWL_API_KEY) {
       return {
@@ -619,6 +620,7 @@ ${ONLINE_GATEWAY_JSON_TEMPLATE}`;
         }),
       };
 
+      promptCharacters = userPayload.length;
       const firstResult = await generateText({
         model,
         system: legacyRollbackEnabled ? SYSTEM_PROMPT : structuredSystemPrompt,
@@ -711,7 +713,10 @@ ${firstResult.text.slice(0, 40_000)}`,
         userId: context.userId,
       });
       return {
-        ...createAiGenerationFailure(err, Date.now() - startedAt),
+        ...createAiGenerationFailure(err, Date.now() - startedAt, {
+          phase: repairAttempted ? "REPAIR_GENERATION" : "INITIAL_GENERATION",
+          promptCharacters,
+        }),
         run_id: runId,
         prompt_versao: PROMPT_VERSAO_ONLINE,
         provider: "lovable-ai-gateway",

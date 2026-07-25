@@ -464,7 +464,10 @@ ${aspScreenerInstrucao}
       };
     } catch (err: unknown) {
       return {
-        ...createAiGenerationFailure(err, Date.now() - startedAt),
+        ...createAiGenerationFailure(err, Date.now() - startedAt, {
+          phase: repairAttempted ? "REPAIR_GENERATION" : "INITIAL_GENERATION",
+          promptCharacters: userPayload.length,
+        }),
         run_id: runId,
         prompt_versao: PROMPT_VERSAO,
         provider: "lovable-ai-gateway",
