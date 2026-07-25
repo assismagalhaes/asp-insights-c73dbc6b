@@ -76,9 +76,7 @@ export function arbitrateAiGenerationFailure({
   reason?: string | null;
 }): ArbitratedAiValidation {
   const primaryCode = errorCode?.trim() || "PROVIDER_ERROR";
-  const detail =
-    reason?.trim() ||
-    "O provider de IA não concluiu a geração da saída estruturada.";
+  const detail = reason?.trim() || "O provider de IA não concluiu a geração da saída estruturada.";
   const failureReason = `Falha de geração da IA [${primaryCode}]: ${detail}`;
   const output = fallbackOutput(failureReason);
 

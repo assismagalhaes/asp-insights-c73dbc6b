@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Prognostico } from "@/lib/db";
-import {
-  arbitrateAiGenerationFailure,
-  arbitrateAiOutput,
-  type AiArbiterContext,
-} from "./arbiter";
+import { arbitrateAiGenerationFailure, arbitrateAiOutput, type AiArbiterContext } from "./arbiter";
 import { adaptLegacyAiResponse } from "./legacy-adapter";
 import { formatArbitratedAiValidation } from "./presentation";
 import { AiOperationalOutputSchema } from "./schema";
