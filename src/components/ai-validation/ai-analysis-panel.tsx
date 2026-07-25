@@ -40,12 +40,16 @@ export function AiAnalysisPanel({
   return (
     <section
       aria-labelledby="ai-analysis-title"
-      className="space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3"
+      className="relative flex flex-col gap-3 overflow-hidden rounded-lg border border-ai/35 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--color-ai)_7%,var(--color-card)),var(--color-card)_74%)] p-3 shadow-[0_12px_30px_rgb(0_0_0/0.12)]"
     >
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-12 -top-16 size-36 rounded-full bg-ai/[0.06] blur-3xl"
+      />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div
           id="ai-analysis-title"
-          className="flex items-center gap-2 text-sm font-semibold text-primary"
+          className="relative flex items-center gap-2 text-sm font-semibold text-ai"
         >
           <Wand2 aria-hidden="true" className="h-4 w-4" />
           Análise sugerida pela IA
@@ -61,10 +65,11 @@ export function AiAnalysisPanel({
           ) : null}
         </div>
 
-        <div className="flex flex-wrap gap-1">
+        <div className="relative grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
           <Button
             size="sm"
             variant="outline"
+            className="border-ai/30 text-ai hover:bg-ai/10"
             onClick={() => onRun("local")}
             disabled={Boolean(loadingMode)}
           >
@@ -77,7 +82,7 @@ export function AiAnalysisPanel({
           </Button>
           <Button
             size="sm"
-            className="text-slate-950"
+            className="border-primary/40 bg-primary/15 text-primary hover:bg-primary/25"
             onClick={() => onRun("online")}
             disabled={Boolean(loadingMode)}
             title="Usa Gemini com pesquisa online (Firecrawl) - consome créditos extras"
@@ -91,7 +96,12 @@ export function AiAnalysisPanel({
           </Button>
           {result ? (
             <>
-              <Button size="sm" variant="outline" onClick={onApply}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onApply}
+                className="col-span-2 sm:col-span-1"
+              >
                 Aplicar
               </Button>
               <Button

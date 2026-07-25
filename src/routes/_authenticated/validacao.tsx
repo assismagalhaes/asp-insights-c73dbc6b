@@ -9,6 +9,9 @@ import {
   RefreshCw,
   Trash2,
   Trophy,
+  ClipboardList,
+  BrainCircuit,
+  CircleCheckBig,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -35,9 +38,12 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { StatusBadge } from "@/components/status-badge";
 import { LeagueFilter } from "@/components/league-filter";
 import { SportFilterSelect } from "@/components/sport-filter-select";
+import { SportMark } from "@/components/sport-filter-select";
+import { AmbientBackdrop, PageIntro } from "@/components/command-center";
+import { StatCard } from "@/components/stat-card";
 import { PeriodFilter } from "@/components/period-filter";
 import { AiAnalysisPanel } from "@/components/ai-validation/ai-analysis-panel";
-import { rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
+import { rangeFromPeriodo, dateInRange, isStatusConfirma, type PeriodoFiltro } from "@/lib/metrics";
 import {
   usePrognosticos,
   useCreateValidacao,
@@ -464,17 +470,22 @@ function Validacao() {
 
   const { ini, fim } = rangeFromPeriodo(periodo, customIni, customFim);
 
+  const scopePrognosticos = useMemo(
+    () =>
+      prognosticos.filter((p) => {
+        if (!dateInRange(p.data, ini, fim)) return false;
+        if (fEsporte !== "all" && p.esporte !== fEsporte) return false;
+        if (fLiga !== "all" && p.liga !== fLiga) return false;
+        if (fMercado !== "all" && !matchesMercadoOuModelo(p, fMercado)) return false;
+        return true;
+      }),
+    [prognosticos, ini, fim, fEsporte, fLiga, fMercado],
+  );
+
   const pendentes = useMemo(
     () =>
-      prognosticos
+      scopePrognosticos
         .filter((p) => p.resultado === "PENDENTE" && p.status_validacao === "PENDENTE")
-        .filter((p) => {
-          if (!dateInRange(p.data, ini, fim)) return false;
-          if (fEsporte !== "all" && p.esporte !== fEsporte) return false;
-          if (fLiga !== "all" && p.liga !== fLiga) return false;
-          if (fMercado !== "all" && !matchesMercadoOuModelo(p, fMercado)) return false;
-          return true;
-        })
         .slice()
         .sort((a, b) => {
           if (a.data !== b.data) return a.data < b.data ? -1 : 1;
@@ -482,7 +493,7 @@ function Validacao() {
           const hb = b.hora ?? "99:99";
           return ha < hb ? -1 : ha > hb ? 1 : 0;
         }),
-    [prognosticos, ini, fim, fEsporte, fLiga, fMercado],
+    [scopePrognosticos],
   );
 
   const preliminaryCandidateById = useMemo(
@@ -512,6 +523,29 @@ function Validacao() {
     () => buildPreAiShortlist(pendentes, DEFAULT_PRE_AI_SHORTLIST_LIMIT),
     [pendentes],
   );
+  const validationSummary = useMemo(() => {
+    const structuralRisk = grupos.filter((group) => {
+      const candidate = getBestGroupCandidate(group, preliminaryCandidateById);
+      if (!candidate) return false;
+      const prognostico = group.opcoes.find((option) => option.id === candidate.prognostico.id);
+      if (!prognostico) return false;
+      const persistedOdd = isPackballMatrixPrognostico(prognostico)
+        ? (prognostico.odd_ajustada ?? null)
+        : (prognostico.odd_ajustada ?? prognostico.odd_ofertada);
+      const persistedEdge = persistedOdd
+        ? calcEdge(prognostico.probabilidade_final, persistedOdd)
+        : prognostico.edge_ajustado;
+      const check = autoCheck(prognostico, persistedEdge, persistedOdd);
+      return check?.auto === "PULAR" || check?.auto === "ALERTA";
+    }).length;
+
+    return {
+      pending: grupos.length,
+      analyzed: Object.keys(iaResults).length,
+      confirmed: scopePrognosticos.filter((p) => isStatusConfirma(p.status_validacao)).length,
+      structuralRisk,
+    };
+  }, [grupos, preliminaryCandidateById, iaResults, scopePrognosticos]);
 
   const gerarShortlistPreIa = async () => {
     try {
@@ -1104,19 +1138,17 @@ function Validacao() {
   };
 
   return (
-    <div className="page-stack">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Validação Crítica</h1>
-          <p className="page-description">
-            Segunda camada analítica dos prognósticos gerados pelos modelos.
-          </p>
-        </div>
-      </div>
+    <div className="page-stack relative isolate">
+      <AmbientBackdrop />
+      <PageIntro
+        title="Validação Crítica"
+        description="Segunda camada analítica: somente entradas aprovadas seguem para publicação."
+        status={`${validationSummary.pending} grupo(s) aguardando decisão`}
+      />
 
       {/* Filtros */}
       <div className="filter-surface">
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <PeriodFilter
             periodo={periodo}
             onPeriodoChange={setPeriodo}
@@ -1125,7 +1157,7 @@ function Validacao() {
             onCustomIniChange={setCustomIni}
             onCustomFimChange={setCustomFim}
           />
-          <div>
+          <div className="min-w-0">
             <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
               Esporte
             </Label>
@@ -1136,21 +1168,26 @@ function Validacao() {
                 setFLiga("all");
               }}
               options={esportes}
-              className="h-9 w-44"
+              className="h-10 w-full"
             />
           </div>
-          <div>
+          <div className="min-w-0">
             <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
               Liga
             </Label>
-            <LeagueFilter sport={fEsporte} value={fLiga} onChange={setFLiga} className="h-9 w-48" />
+            <LeagueFilter
+              sport={fEsporte}
+              value={fLiga}
+              onChange={setFLiga}
+              className="h-10 w-full"
+            />
           </div>
-          <div>
+          <div className="min-w-0">
             <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
               Mercado / modelo
             </Label>
             <Select value={fMercado} onValueChange={setFMercado}>
-              <SelectTrigger className="h-9 w-52">
+              <SelectTrigger className="h-10 w-full">
                 <SelectValue placeholder="Mercado" />
               </SelectTrigger>
               <SelectContent>
@@ -1164,6 +1201,39 @@ function Validacao() {
             </Select>
           </div>
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <StatCard
+          label="Fila pendente"
+          value={String(validationSummary.pending)}
+          icon={ClipboardList}
+          accent="blue"
+          meta="Grupos aguardando triagem"
+        />
+        <StatCard
+          label="Analisadas pela IA"
+          value={String(validationSummary.analyzed)}
+          icon={BrainCircuit}
+          accent="violet"
+          meta="Nesta sessão operacional"
+        />
+        <StatCard
+          label="Confirmadas"
+          value={String(validationSummary.confirmed)}
+          icon={CircleCheckBig}
+          tone="up"
+          accent="green"
+          meta="No recorte selecionado"
+        />
+        <StatCard
+          label="Risco estrutural"
+          value={String(validationSummary.structuralRisk)}
+          icon={ShieldAlert}
+          tone={validationSummary.structuralRisk > 0 ? "down" : "neutral"}
+          accent={validationSummary.structuralRisk > 0 ? "red" : "amber"}
+          meta="Alertas ou bloqueios prévios"
+        />
       </div>
 
       <PreAiShortlistPanel
@@ -1185,7 +1255,17 @@ function Validacao() {
         </div>
       )}
 
-      <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="panel-kicker">Fila operacional</p>
+          <h2 className="section-title mt-1">Candidatas para validação crítica</h2>
+        </div>
+        <span className="rounded border border-primary/20 bg-primary/5 px-2.5 py-1 font-mono text-xs text-primary">
+          {grupos.length}
+        </span>
+      </div>
+
+      <div className="flex flex-col gap-4">
         {grupos.map((g) => {
           const selectedOptionId =
             selectedByGroup[g.key] ?? (g.opcoes.length === 1 ? g.opcoes[0].id : "");
@@ -1207,38 +1287,45 @@ function Validacao() {
           const contextoAnalise = getContextoGrupo(g);
           const parecerCurrent = pareceres[g.key] ?? "";
           const ia = iaResults[g.key];
+          const rankedCandidate = preliminaryCandidateById.get(p.id);
 
           return (
             <div
               key={g.key}
               className={cn(
-                "rounded-lg border bg-card p-5 space-y-4",
+                "group relative flex flex-col gap-4 overflow-hidden rounded-xl border bg-[linear-gradient(145deg,color-mix(in_oklab,var(--color-primary)_4%,var(--color-card)),var(--color-card)_72%)] p-4 shadow-[0_18px_44px_rgb(0_0_0/0.16)] transition-[border-color,box-shadow] sm:p-5",
                 check?.auto === "PULAR" && "border-destructive/40",
                 check?.auto === "DESTAQUE" && "border-success/40",
                 check?.auto === "ALERTA" && "border-warning/40",
                 !check && "border-border",
               )}
             >
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute -right-16 -top-20 size-48 rounded-full bg-primary/[0.035] blur-3xl"
+              />
               {/* Cabeçalho */}
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="font-mono text-muted-foreground">{formatBR(p.data)}</span>
-                    {p.hora && (
-                      <span className="font-mono text-muted-foreground">
-                        às {formatHora(p.hora)}
+              <div className="relative flex flex-wrap items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <SportMark sport={p.esporte} size="md" />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <span className="font-mono text-muted-foreground">{formatBR(p.data)}</span>
+                      {p.hora && (
+                        <span className="font-mono text-muted-foreground">
+                          às {formatHora(p.hora)}
+                        </span>
+                      )}
+                      <span className="font-semibold uppercase tracking-wider text-primary">
+                        {p.esporte}
                       </span>
-                    )}
-                    <span className="text-muted-foreground">-</span>
-                    <span className="font-semibold uppercase tracking-wider text-primary">
-                      {p.esporte}
-                    </span>
-                    <span className="text-muted-foreground">- {p.liga}</span>
-                  </div>
-                  <h3 className="mt-1 text-lg font-semibold">{p.jogo}</h3>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    Grupo: <span className="font-semibold text-foreground">{g.mercado}</span> -{" "}
-                    {formatOptionCount(g.opcoes.length)}
+                      <span className="text-muted-foreground">{p.liga}</span>
+                    </div>
+                    <h3 className="mt-1 text-lg font-semibold tracking-[-0.02em]">{p.jogo}</h3>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Grupo: <span className="font-semibold text-foreground">{g.mercado}</span> ·{" "}
+                      {formatOptionCount(g.opcoes.length)}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1254,7 +1341,7 @@ function Validacao() {
                 </div>
               </div>
 
-              <div className="rounded-md border border-border bg-background/50 p-4 space-y-3">
+              <div className="relative flex flex-col gap-3 rounded-lg border border-border/80 bg-background/35 p-3 sm:p-4">
                 <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Opções disponíveis neste grupo
                 </div>
@@ -1275,7 +1362,7 @@ function Validacao() {
                       <label
                         key={opcao.id}
                         className={cn(
-                          "flex cursor-pointer gap-3 rounded-md border p-3 transition-colors hover:bg-muted/40",
+                          "flex cursor-pointer gap-3 rounded-lg border p-3 transition-[border-color,background-color,transform] hover:-translate-y-px hover:bg-muted/40",
                           selectedOptionId === opcao.id
                             ? "border-primary bg-primary/5"
                             : "border-border bg-background/40",
@@ -1346,7 +1433,7 @@ function Validacao() {
               </div>
 
               {/* Bloco de entrada */}
-              <div className="rounded-md border border-border bg-background/50 p-4 space-y-3">
+              <div className="relative flex flex-col gap-3 rounded-lg border border-border/80 bg-background/35 p-3 sm:p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Dados do prognóstico
@@ -1451,6 +1538,14 @@ function Validacao() {
                   />
                 </div>
 
+                {rankedCandidate ? (
+                  <ValidationSignalBar
+                    score={rankedCandidate.opportunity_score_pre}
+                    confidence={rankedCandidate.confidence_score}
+                    riskCount={rankedCandidate.risk_flags.length}
+                  />
+                ) : null}
+
                 {packballRequirements && (
                   <div className="grid gap-2 rounded-md border border-primary/30 bg-primary/5 p-3 sm:grid-cols-2 xl:grid-cols-6">
                     <Metric
@@ -1535,7 +1630,10 @@ function Validacao() {
               />
 
               {/* Resumo + decisão */}
-              <div className="grid gap-3 md:grid-cols-3">
+              <section
+                aria-label="Decisão final determinística"
+                className="grid gap-3 rounded-lg border border-success/20 bg-success/[0.035] p-3 md:grid-cols-3"
+              >
                 <div className="md:col-span-2">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs uppercase tracking-wider text-muted-foreground">
@@ -1601,7 +1699,7 @@ function Validacao() {
                     ))}
                   </div>
                 </div>
-              </div>
+              </section>
             </div>
           );
         })}
@@ -1693,11 +1791,17 @@ function PreAiShortlistPanel({
     : null;
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+    <section className="relative flex flex-col gap-3 overflow-hidden rounded-xl border border-ai/35 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--color-ai)_6%,var(--color-card)),var(--color-card)_72%)] p-4 shadow-[0_16px_40px_rgb(0_0_0/0.14)]">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -left-16 -top-20 size-44 rounded-full bg-ai/[0.06] blur-3xl"
+      />
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="relative">
           <div className="flex items-center gap-2 text-sm font-semibold">
-            <Trophy className="h-4 w-4 text-primary" />
+            <span className="flex size-8 items-center justify-center rounded border border-ai/30 bg-ai/10 text-ai">
+              <Trophy className="size-4" />
+            </span>
             Shortlist Pré-IA
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -1705,14 +1809,14 @@ function PreAiShortlistPanel({
             para análise; ainda não confirma entrada, publicação ou bankroll.
           </p>
         </div>
-        <Button size="sm" onClick={onGenerate} disabled={generating}>
+        <Button size="sm" onClick={onGenerate} disabled={generating} className="w-full sm:w-auto">
           {generating ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
           Gerar shortlist
         </Button>
       </div>
 
       {history.length > 0 && (
-        <div className="flex flex-wrap items-end gap-3 rounded-md border border-border bg-background/50 p-3">
+        <div className="relative grid items-end gap-3 rounded-lg border border-border/80 bg-background/35 p-3 lg:grid-cols-[minmax(0,1fr)_auto]">
           <div className="min-w-[280px] flex-1">
             <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Histórico salvo por período e modalidade
@@ -1745,7 +1849,7 @@ function PreAiShortlistPanel({
         </div>
       )}
 
-      <div className="grid gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
         <Metric label="Candidatas agora" value={String(candidates.length)} />
         <Metric label="Limite pré-IA" value={String(DEFAULT_PRE_AI_SHORTLIST_LIMIT)} />
         <Metric label="Último run" value={loadingLatest ? "..." : (latestDate ?? "-")} />
@@ -1760,7 +1864,7 @@ function PreAiShortlistPanel({
       </div>
 
       {savedItems.length > 0 && (
-        <div className="rounded-md border border-border bg-background/50 p-3 space-y-3">
+        <div className="relative flex flex-col gap-3 rounded-lg border border-border/80 bg-background/35 p-3">
           <div className="flex flex-wrap items-end gap-3">
             <div className="min-w-[260px] flex-1">
               <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -1932,7 +2036,7 @@ function PreAiShortlistPanel({
           Nenhuma candidata elegível com os filtros atuais.
         </div>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -2021,6 +2125,59 @@ function asRankingItemMetadata(
   return item.metadata && typeof item.metadata === "object" && !Array.isArray(item.metadata)
     ? (item.metadata as Record<string, unknown>)
     : {};
+}
+
+function ValidationSignalBar({
+  score,
+  confidence,
+  riskCount,
+}: {
+  score: number;
+  confidence: number;
+  riskCount: number;
+}) {
+  const normalizedScore = Math.max(0, Math.min(100, score));
+  const level = normalizedScore >= 70 ? "Alta" : normalizedScore >= 50 ? "Média" : "Baixa";
+
+  return (
+    <div className="rounded-lg border border-border/80 bg-card/45 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="panel-kicker">Confiança / oportunidade</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Score pré-IA combinado com confiança do modelo
+          </p>
+        </div>
+        <span
+          className={cn(
+            "rounded border px-2 py-1 font-mono text-xs font-semibold",
+            level === "Alta" && "border-success/30 bg-success/10 text-success",
+            level === "Média" && "border-warning/30 bg-warning/10 text-warning",
+            level === "Baixa" && "border-destructive/30 bg-destructive/10 text-destructive",
+          )}
+        >
+          {level} · {normalizedScore.toFixed(1)}
+        </span>
+      </div>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+        <div
+          className="h-full rounded-full bg-[linear-gradient(90deg,var(--color-destructive),var(--color-warning),var(--color-success))] transition-[width]"
+          style={{ width: `${normalizedScore}%` }}
+        />
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] text-muted-foreground sm:grid-cols-3">
+        <span>
+          Score: <strong className="font-mono text-foreground">{score.toFixed(1)}</strong>
+        </span>
+        <span>
+          Confiança: <strong className="font-mono text-foreground">{confidence.toFixed(1)}</strong>
+        </span>
+        <span className="col-span-2 sm:col-span-1">
+          Riscos: <strong className="font-mono text-foreground">{riskCount}</strong>
+        </span>
+      </div>
+    </div>
+  );
 }
 
 function Metric({
