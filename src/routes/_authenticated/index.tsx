@@ -25,6 +25,7 @@ import {
   withSign,
 } from "@/lib/chart-colors";
 import { StatCard } from "@/components/stat-card";
+import { AmbientBackdrop, PageIntro, PanelHeading } from "@/components/command-center";
 
 import {
   Select,
@@ -180,13 +181,13 @@ function Dashboard() {
   }, [filtrados, validacao]);
 
   return (
-    <div className="page-stack">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Dashboard Executivo</h1>
-          <p className="page-description">Visão geral do desempenho dos modelos de previsão.</p>
-        </div>
-      </div>
+    <div className="command-surface page-stack">
+      <AmbientBackdrop />
+      <PageIntro
+        title="Dashboard Executivo"
+        description="Visão estratégica do desempenho e da operação do sistema de previsões."
+        status="Dados operacionais atualizados"
+      />
 
       {/* Filtros */}
       <div className="filter-surface">
@@ -266,53 +267,74 @@ function Dashboard() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-7">
-        <StatCard label="Greens" value={String(metrics.greens)} icon={CheckCircle2} tone="up" />
-        <StatCard label="Reds" value={String(metrics.reds)} icon={XCircle} tone="down" />
+        <StatCard
+          label="Greens"
+          value={String(metrics.greens)}
+          icon={CheckCircle2}
+          tone="up"
+          accent="green"
+        />
+        <StatCard
+          label="Reds"
+          value={String(metrics.reds)}
+          icon={XCircle}
+          tone="down"
+          accent="red"
+        />
         <StatCard
           label="ODD MÉDIA"
           value={metrics.oddMediaGreens ? metrics.oddMediaGreens.toFixed(2) : "-"}
           icon={Target}
           tone="neutral"
+          accent="amber"
         />
         <StatCard
           label="Lucro (u)"
           value={`${withSign(metrics.lucroU)}u`}
           icon={Activity}
           tone={metrics.lucroU > 0 ? "up" : metrics.lucroU < 0 ? "down" : "neutral"}
+          accent="blue"
         />
         <StatCard
           label="Lucro Real"
           value={`${metrics.lucroReais >= 0 ? "+" : "-"}R$ ${Math.abs(metrics.lucroReais).toFixed(2)}`}
           icon={DollarSign}
           tone={metrics.lucroReais > 0 ? "up" : metrics.lucroReais < 0 ? "down" : "neutral"}
+          accent="green"
         />
         <StatCard
           label="ROI"
           value={`${withSign(metrics.roi)}%`}
           icon={TrendingUp}
           tone={metrics.roi > 0 ? "up" : metrics.roi < 0 ? "down" : "neutral"}
+          accent="cyan"
         />
         <StatCard
           label="Win Rate"
           value={`${metrics.winRate.toFixed(1)}%`}
           icon={Target}
           tone={metrics.winRate >= 50 ? "up" : metrics.winRate > 0 ? "down" : "neutral"}
+          accent="violet"
         />
       </div>
 
-      <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <div className="surface-panel">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="section-title">Evolução da Banca</h3>
-            <span
-              className="font-mono text-xs"
-              style={{
-                color: signColor(officialMetrics.bancaAtual - officialMetrics.bancaInicial),
-              }}
-            >
-              R$ {officialMetrics.bancaAtual.toFixed(2)}
-            </span>
-          </div>
+          <PanelHeading
+            eyebrow="Performance financeira"
+            title="Evolução da Banca"
+            icon={DollarSign}
+            value={
+              <span
+                className="numeric-value text-xs"
+                style={{
+                  color: signColor(officialMetrics.bancaAtual - officialMetrics.bancaInicial),
+                }}
+              >
+                R$ {officialMetrics.bancaAtual.toFixed(2)}
+              </span>
+            }
+          />
           <ResponsiveContainer width="100%" height={340}>
             <LineChart data={timeline}>
               <defs>
@@ -381,12 +403,16 @@ function Dashboard() {
         </div>
 
         <div className="surface-panel">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="section-title">Evolução do ROI</h3>
-            <span className="font-mono text-xs" style={{ color: signColor(metrics.roi) }}>
-              {withSign(metrics.roi)}%
-            </span>
-          </div>
+          <PanelHeading
+            eyebrow="Eficiência operacional"
+            title="Evolução do ROI"
+            icon={TrendingUp}
+            value={
+              <span className="numeric-value text-xs" style={{ color: signColor(metrics.roi) }}>
+                {withSign(metrics.roi)}%
+              </span>
+            }
+          />
           <ResponsiveContainer width="100%" height={340}>
             <LineChart data={timeline}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
@@ -423,7 +449,11 @@ function Dashboard() {
         </div>
 
         <div className="surface-panel">
-          <h3 className="section-title mb-3">Resultado por Esporte (u)</h3>
+          <PanelHeading
+            eyebrow="Distribuição esportiva"
+            title="Resultado por Esporte (u)"
+            icon={Activity}
+          />
           <ResponsiveContainer width="100%" height={340}>
             <BarChart data={sportPerf} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
@@ -458,7 +488,11 @@ function Dashboard() {
         </div>
 
         <div className="surface-panel">
-          <h3 className="section-title mb-3">Resultado por Mercado (u)</h3>
+          <PanelHeading
+            eyebrow="Inteligência de mercado"
+            title="Resultado por Mercado (u)"
+            icon={Target}
+          />
           <ResponsiveContainer width="100%" height={Math.max(340, marketPerf.length * 44 + 60)}>
             <BarChart
               data={marketPerf}
@@ -503,7 +537,11 @@ function Dashboard() {
         </div>
 
         <div className="surface-panel">
-          <h3 className="section-title mb-3">ROI por Esporte (%)</h3>
+          <PanelHeading
+            eyebrow="Retorno comparativo"
+            title="ROI por Esporte (%)"
+            icon={TrendingUp}
+          />
           <ResponsiveContainer width="100%" height={340}>
             <BarChart data={sportPerfRoi} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
@@ -538,7 +576,11 @@ function Dashboard() {
         </div>
 
         <div className="surface-panel">
-          <h3 className="section-title mb-3">Resultado por Mês (u)</h3>
+          <PanelHeading
+            eyebrow="Tendência temporal"
+            title="Resultado por Mês (u)"
+            icon={Activity}
+          />
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={monthlyResults} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
