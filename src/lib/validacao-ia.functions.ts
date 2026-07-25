@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAdmin } from "@/lib/auth-middleware-public";
 import {
   AiStructuredRepairFailure,
+  buildStructuredRepairPrompt,
   createAiGenerationFailure,
   createLegacyRollbackResult,
   parseStructuredAiOutput,
@@ -46,6 +47,7 @@ export const LOCAL_GATEWAY_JSON_TEMPLATE = `{
 }`;
 
 export function parseLocalGatewayJson(text: string) {
+  if (!text.trim()) throw new Error("EMPTY_INITIAL_OUTPUT");
   const withoutFence = text
     .trim()
     .replace(/^```(?:json)?\s*/i, "")
@@ -94,15 +96,10 @@ ${LOCAL_GATEWAY_JSON_TEMPLATE}`,
     };
   } catch (initialError: unknown) {
     onRepairAttempt?.();
-    const repairPrompt = `REPARO CONTROLADO ÚNICO:
-Converta a saída anterior para o contrato JSON do system prompt. Corrija apenas
-estrutura, tipos e enums; preserve a análise existente. Retorne somente JSON,
-sem markdown ou comentários. Preencha todos os gates e campos narrativos. Use
-arrays vazios em sources e searches. Não refaça a análise e não repita o contexto
-original.
-
-SAÍDA ANTERIOR A CORRIGIR:
-${firstResult.text.slice(0, 40_000)}`;
+    const repairPrompt = buildStructuredRepairPrompt({
+      operationalContext: prompt,
+      previousOutput: firstResult.text,
+    });
 
     let repairedResult;
     try {

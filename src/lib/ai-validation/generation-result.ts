@@ -19,9 +19,36 @@ export type AiGenerationFailureContext = {
 
 export type AiRepairFailureStage = "REQUEST" | "PARSE";
 
+export function buildStructuredRepairPrompt({
+  operationalContext,
+  previousOutput,
+  researchContext,
+}: {
+  operationalContext: string;
+  previousOutput: string;
+  researchContext?: string;
+}): string {
+  const sanitizedPreviousOutput = previousOutput.trim() || "(EMPTY_INITIAL_OUTPUT)";
+  const researchSection = researchContext?.trim()
+    ? `\n\nPESQUISAS E FONTES JÁ COLETADAS:\n${researchContext.trim().slice(0, 8_000)}`
+    : "";
+
+  return `REPARO CONTROLADO ÚNICO:
+Converta a saída anterior para o contrato JSON do system prompt. Corrija apenas
+estrutura, tipos e enums; preserve a análise e os dados operacionais. Retorne
+somente JSON, sem markdown ou comentários. Não refaça pesquisas.
+
+CONTEXTO OPERACIONAL MÍNIMO:
+${operationalContext.trim().slice(0, 20_000)}${researchSection}
+
+SAÍDA ANTERIOR A CORRIGIR:
+${sanitizedPreviousOutput.slice(0, 20_000)}`;
+}
+
 function structuralFailureCode(error: unknown): string {
   const name = error instanceof Error ? error.name : "";
   const message = error instanceof Error ? error.message : String(error ?? "");
+  if (/EMPTY_INITIAL_OUTPUT/i.test(message)) return "EMPTY_INITIAL_OUTPUT";
   if (/JSON object/i.test(message)) return "JSON_OBJECT_MISSING";
   if (name === "SyntaxError" || /JSON/i.test(message)) return "JSON_PARSE_FAILED";
   if (name === "ZodError" || /schema|validation|contract|contrato/i.test(message)) {

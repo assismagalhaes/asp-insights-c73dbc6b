@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAdmin } from "@/lib/auth-middleware-public";
 import {
   AiStructuredRepairFailure,
+  buildStructuredRepairPrompt,
   createAiGenerationFailure,
   createLegacyRollbackResult,
   parseStructuredAiOutput,
@@ -104,6 +105,7 @@ export function recordOnlineSource(
 }
 
 function extractGatewayJson(text: string): unknown {
+  if (!text.trim()) throw new Error("EMPTY_INITIAL_OUTPUT");
   const withoutFence = text
     .trim()
     .replace(/^```(?:json)?\s*/i, "")
@@ -672,14 +674,19 @@ ${ONLINE_GATEWAY_JSON_TEMPLATE}`;
           finalResult = await generateText({
             model,
             system: structuredSystemPrompt,
-            prompt: `REPARO CONTROLADO ÚNICO:
-Converta a saída anterior para o contrato JSON do system prompt. Corrija apenas
-estrutura, tipos e enums, preservando a análise já realizada. Não faça novas
-pesquisas, não repita o contexto original e retorne somente JSON. Mantenha
-sources e searches como arrays vazios.
-
-SAÍDA ANTERIOR A CORRIGIR:
-${firstResult.text.slice(0, 40_000)}`,
+            prompt: buildStructuredRepairPrompt({
+              operationalContext: userPayload,
+              previousOutput: firstResult.text,
+              researchContext: [
+                `Buscas: ${buscasRealizadas.join(" | ") || "(nenhuma)"}`,
+                `Fontes: ${
+                  fontesRastreaveis
+                    .filter((source) => source.consultada)
+                    .map((source) => `${source.titulo} — ${source.url}`)
+                    .join(" | ") || "(nenhuma)"
+                }`,
+              ].join("\n"),
+            }),
           });
         } catch (repairError: unknown) {
           throw new AiStructuredRepairFailure({
