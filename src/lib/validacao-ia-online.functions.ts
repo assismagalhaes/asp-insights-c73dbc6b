@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAdmin } from "@/lib/auth-middleware-public";
 import {
+  AiStructuredRepairFailure,
   createAiGenerationFailure,
   createLegacyRollbackResult,
   parseStructuredAiOutput,
@@ -665,25 +666,40 @@ ${ONLINE_GATEWAY_JSON_TEMPLATE}`;
           sourceTraces: fontesRastreaveis,
           searches: buscasRealizadas,
         });
-      } catch {
+      } catch (initialError: unknown) {
         repairAttempted = true;
-        finalResult = await generateText({
-          model,
-          system: structuredSystemPrompt,
-          prompt: `${userPayload}
-
-REPARO CONTROLADO ÚNICO:
-A tentativa anterior produziu um JSON incompatível com o contrato 1.1.0. Corrija
-somente estrutura, tipos e enums, preservando a análise já realizada. Não faça
-novas pesquisas. Retorne apenas JSON e mantenha sources e searches como arrays vazios.
+        try {
+          finalResult = await generateText({
+            model,
+            system: structuredSystemPrompt,
+            prompt: `REPARO CONTROLADO ÚNICO:
+Converta a saída anterior para o contrato JSON do system prompt. Corrija apenas
+estrutura, tipos e enums, preservando a análise já realizada. Não faça novas
+pesquisas, não repita o contexto original e retorne somente JSON. Mantenha
+sources e searches como arrays vazios.
 
 SAÍDA ANTERIOR A CORRIGIR:
 ${firstResult.text.slice(0, 40_000)}`,
-        });
-        parsedOutput = parseOnlineGatewayJson(finalResult.text, {
-          sourceTraces: fontesRastreaveis,
-          searches: buscasRealizadas,
-        });
+          });
+        } catch (repairError: unknown) {
+          throw new AiStructuredRepairFailure({
+            stage: "REQUEST",
+            initialError,
+            repairError,
+          });
+        }
+        try {
+          parsedOutput = parseOnlineGatewayJson(finalResult.text, {
+            sourceTraces: fontesRastreaveis,
+            searches: buscasRealizadas,
+          });
+        } catch (repairError: unknown) {
+          throw new AiStructuredRepairFailure({
+            stage: "PARSE",
+            initialError,
+            repairError,
+          });
+        }
       }
 
       const generation = parseStructuredAiOutput({

@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAdmin } from "@/lib/auth-middleware-public";
 import {
+  AiStructuredRepairFailure,
   createAiGenerationFailure,
   createLegacyRollbackResult,
   parseStructuredAiOutput,
@@ -91,23 +92,40 @@ ${LOCAL_GATEWAY_JSON_TEMPLATE}`,
       usage: sumAiTokenUsage(firstResult.usage),
       finishReason: firstResult.finishReason,
     };
-  } catch {
+  } catch (initialError: unknown) {
     onRepairAttempt?.();
-    const repairPrompt = `${prompt}
-
-REPARO CONTROLADO ÚNICO:
-A tentativa anterior produziu um JSON que não pôde ser validado. Corrija somente
-a estrutura e os tipos para o contrato solicitado, preservando a análise e sem
-adicionar markdown. Copie exatamente os nomes de campos e os enums do template
-fornecido no system prompt. Preencha todos os gates e campos narrativos. Use
-arrays vazios em sources e searches.
+    const repairPrompt = `REPARO CONTROLADO ÚNICO:
+Converta a saída anterior para o contrato JSON do system prompt. Corrija apenas
+estrutura, tipos e enums; preserve a análise existente. Retorne somente JSON,
+sem markdown ou comentários. Preencha todos os gates e campos narrativos. Use
+arrays vazios em sources e searches. Não refaça a análise e não repita o contexto
+original.
 
 SAÍDA ANTERIOR A CORRIGIR:
 ${firstResult.text.slice(0, 40_000)}`;
 
-    const repairedResult = await generate(repairPrompt);
+    let repairedResult;
+    try {
+      repairedResult = await generate(repairPrompt);
+    } catch (repairError: unknown) {
+      throw new AiStructuredRepairFailure({
+        stage: "REQUEST",
+        initialError,
+        repairError,
+      });
+    }
+    let repairedOutput;
+    try {
+      repairedOutput = parseLocalGatewayJson(repairedResult.text);
+    } catch (repairError: unknown) {
+      throw new AiStructuredRepairFailure({
+        stage: "PARSE",
+        initialError,
+        repairError,
+      });
+    }
     return {
-      result: { ...repairedResult, output: parseLocalGatewayJson(repairedResult.text) },
+      result: { ...repairedResult, output: repairedOutput },
       repairAttempted: true,
       usage: sumAiTokenUsage(firstResult.usage, repairedResult.usage),
       finishReason: repairedResult.finishReason,

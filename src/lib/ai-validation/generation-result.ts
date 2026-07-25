@@ -17,6 +17,43 @@ export type AiGenerationFailureContext = {
   promptCharacters?: number;
 };
 
+export type AiRepairFailureStage = "REQUEST" | "PARSE";
+
+function structuralFailureCode(error: unknown): string {
+  const name = error instanceof Error ? error.name : "";
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (/JSON object/i.test(message)) return "JSON_OBJECT_MISSING";
+  if (name === "SyntaxError" || /JSON/i.test(message)) return "JSON_PARSE_FAILED";
+  if (name === "ZodError" || /schema|validation|contract|contrato/i.test(message)) {
+    return "SCHEMA_INVALID";
+  }
+  return "STRUCTURED_OUTPUT_INVALID";
+}
+
+export class AiStructuredRepairFailure extends Error {
+  readonly code = "REPAIR_GENERATION_FAILED";
+  readonly repairStage: AiRepairFailureStage;
+  readonly initialFailureCode: string;
+  readonly repairError: unknown;
+
+  constructor({
+    stage,
+    initialError,
+    repairError,
+  }: {
+    stage: AiRepairFailureStage;
+    initialError: unknown;
+    repairError: unknown;
+  }) {
+    super(`Structured output repair failed at ${stage}`);
+    this.name = "AiStructuredRepairFailure";
+    this.repairStage = stage;
+    this.initialFailureCode = structuralFailureCode(initialError);
+    this.repairError = repairError;
+    this.cause = repairError;
+  }
+}
+
 function formatSchemaIssues(error: {
   issues: Array<{ path: PropertyKey[]; message: string }>;
 }): string {
@@ -128,6 +165,7 @@ function extractErrorFacts(error: unknown): { diagnosticText: string; httpStatus
       "responseBody",
       "body",
       "cause",
+      "repairError",
       "lastError",
       "errors",
     ]) {
@@ -169,7 +207,13 @@ export function createAiGenerationFailure(
   let safeMessage =
     "O provider de IA não concluiu a saída estruturada. A recomendação foi convertida para PULAR.";
 
-  if (
+  if (error instanceof AiStructuredRepairFailure) {
+    errorCode = "REPAIR_GENERATION_FAILED";
+    safeMessage =
+      error.repairStage === "REQUEST"
+        ? `A resposta inicial falhou em ${error.initialFailureCode} e o provider não concluiu a chamada de reparo. A recomendação foi convertida para PULAR.`
+        : `A resposta inicial falhou em ${error.initialFailureCode} e a saída reparada continuou incompatível com o contrato. A recomendação foi convertida para PULAR.`;
+  } else if (
     httpStatus === 401 ||
     httpStatus === 403 ||
     /LOVABLE_API_KEY|api.?key|authentication|unauthorized|forbidden/i.test(diagnosticText)
