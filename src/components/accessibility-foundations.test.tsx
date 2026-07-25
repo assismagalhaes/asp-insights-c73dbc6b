@@ -17,11 +17,18 @@ describe("accessibility foundations", () => {
 
   it("exposes metric cards as named sections and hides decorative icons", () => {
     const markup = renderToStaticMarkup(
-      <StatCard label="Banca" value="R$ 12.480" trend="up" icon={Banknote} />,
+      <StatCard
+        label="Banca"
+        value="R$ 12.480"
+        trend="up"
+        icon={Banknote}
+        sparkline={[1, 3, 2, 5]}
+      />,
     );
 
     expect(markup).toContain('<section aria-label="Banca"');
     expect(markup).toContain('aria-hidden="true"');
+    expect(markup).toContain("<svg");
   });
 
   it("makes horizontally scrollable tables keyboard reachable and named", () => {

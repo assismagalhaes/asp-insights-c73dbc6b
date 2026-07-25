@@ -10,6 +10,8 @@ interface StatCardProps {
   /** Pinta o VALOR principal (não só o delta). Padrão: segue trend. */
   tone?: "up" | "down" | "neutral" | "off";
   accent?: "blue" | "green" | "amber" | "violet" | "cyan" | "red";
+  sparkline?: number[];
+  meta?: string;
 }
 
 const toneClass = {
@@ -53,6 +55,8 @@ export function StatCard({
   icon: Icon,
   tone,
   accent,
+  sparkline,
+  meta,
 }: StatCardProps) {
   const effectiveTone = tone ?? (trend === "up" ? "up" : trend === "down" ? "down" : "off");
   return (
@@ -99,6 +103,46 @@ export function StatCard({
           {delta}
         </div>
       ) : null}
+      {meta ? <p className="mt-1 text-[10px] text-muted-foreground">{meta}</p> : null}
+      {sparkline && sparkline.length > 1 ? (
+        <svg
+          aria-hidden="true"
+          className="mt-3 h-8 w-full overflow-visible text-[var(--stat-accent)]"
+          viewBox="0 0 100 28"
+          preserveAspectRatio="none"
+        >
+          <defs>
+            <linearGradient id={`spark-${label.replace(/\W+/g, "-")}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="currentColor" stopOpacity="0.22" />
+              <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <path
+            d={`${sparklinePath(sparkline)} L 100 28 L 0 28 Z`}
+            fill={`url(#spark-${label.replace(/\W+/g, "-")})`}
+          />
+          <path
+            d={sparklinePath(sparkline)}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+      ) : null}
     </section>
   );
+}
+
+function sparklinePath(values: number[]) {
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  return values
+    .map((value, index) => {
+      const x = (index / (values.length - 1)) * 100;
+      const y = 25 - ((value - min) / range) * 22;
+      return `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
+    })
+    .join(" ");
 }

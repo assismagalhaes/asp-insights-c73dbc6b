@@ -1,6 +1,19 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { CheckCircle2, XCircle, TrendingUp, Target, DollarSign, Activity } from "lucide-react";
+import {
+  Activity,
+  BrainCircuit,
+  CheckCircle2,
+  CircleAlert,
+  Clock3,
+  Database,
+  DollarSign,
+  RotateCcw,
+  ShieldCheck,
+  Target,
+  TrendingUp,
+  XCircle,
+} from "lucide-react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -26,6 +39,9 @@ import {
 } from "@/lib/chart-colors";
 import { StatCard } from "@/components/stat-card";
 import { AmbientBackdrop, PageIntro, PanelHeading } from "@/components/command-center";
+import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/status-badge";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 import {
   Select,
@@ -69,6 +85,7 @@ const ESPORTES = ["Todos", ...ESPORTES_DEFAULT];
 const MERCADOS = ["Todos", ...MERCADOS_DEFAULT];
 
 function Dashboard() {
+  const isMobile = useIsMobile();
   const { data: prognosticos = [] } = usePrognosticos();
   const { data: cfg } = useConfiguracao();
 
@@ -180,6 +197,93 @@ function Dashboard() {
     }));
   }, [filtrados, validacao]);
 
+  const validationSummary = useMemo(() => {
+    let approved = 0;
+    let skipped = 0;
+    let pending = 0;
+
+    for (const prognostico of filtrados) {
+      const status = String(prognostico.status_validacao ?? "PENDENTE").toUpperCase();
+      if (status === "PENDENTE") pending += 1;
+      else if (isStatusPular(prognostico.status_validacao)) skipped += 1;
+      else approved += 1;
+    }
+
+    const total = approved + skipped + pending;
+    return {
+      approved,
+      skipped,
+      pending,
+      total,
+      approvedPct: total ? (approved / total) * 100 : 0,
+      skippedPct: total ? (skipped / total) * 100 : 0,
+      pendingPct: total ? (pending / total) * 100 : 0,
+    };
+  }, [filtrados]);
+
+  const recentActivity = useMemo(
+    () =>
+      [...filtrados]
+        .sort((a, b) => b.data.localeCompare(a.data))
+        .slice(0, 6)
+        .map((prognostico) => ({
+          id: prognostico.id,
+          data: prognostico.data,
+          evento: prognostico.jogo,
+          esporte: prognostico.esporte,
+          liga: prognostico.liga,
+          mercado: prognostico.mercado,
+          status: String(prognostico.status_validacao ?? "PENDENTE"),
+        })),
+    [filtrados],
+  );
+
+  const bankrollSparkline = timeline.slice(-12).map((point) => Number(point.banca));
+  const roiSparkline = timeline.slice(-12).map((point) => Number(point.roi));
+  const resultSparkline = monthlyResults.slice(-12).map((point) => point.lucro);
+
+  const operationalHealth = [
+    {
+      label: "Modelo preditivo",
+      detail: `${filtrados.length} prognósticos no recorte`,
+      icon: BrainCircuit,
+      state: filtrados.length ? "Saudável" : "Sem amostra",
+      tone: filtrados.length ? "success" : "neutral",
+    },
+    {
+      label: "Calibração de probabilidades",
+      detail: `${metrics.greens + metrics.reds} resultados avaliados`,
+      icon: Target,
+      state: metrics.greens + metrics.reds >= 20 ? "Saudável" : "Atenção",
+      tone: metrics.greens + metrics.reds >= 20 ? "success" : "warning",
+    },
+    {
+      label: "Detecção de risco",
+      detail: `ROI atual ${withSign(metrics.roi)}%`,
+      icon: CircleAlert,
+      state: metrics.roi >= 0 ? "Saudável" : "Atenção",
+      tone: metrics.roi >= 0 ? "success" : "warning",
+    },
+    {
+      label: "Pipeline de dados",
+      detail: `${timeline.length} pontos na série`,
+      icon: Database,
+      state: timeline.length ? "Saudável" : "Sem dados",
+      tone: timeline.length ? "success" : "neutral",
+    },
+  ] as const;
+  const chartHeight = isMobile ? 260 : 340;
+
+  function clearFilters() {
+    setPeriodo("tudo");
+    setCustomIni("");
+    setCustomFim("");
+    setEsporte("Todos");
+    setLiga("all");
+    setMercado("Todos");
+    setValidacao("confirmadas");
+  }
+
   return (
     <div className="command-surface page-stack">
       <AmbientBackdrop />
@@ -200,12 +304,12 @@ function Dashboard() {
             onCustomIniChange={setCustomIni}
             onCustomFimChange={setCustomFim}
           />
-          <div>
+          <div className="min-w-[9rem] flex-1 sm:flex-none">
             <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
               Esporte
             </label>
             <Select value={esporte} onValueChange={setEsporte}>
-              <SelectTrigger className="h-9 w-44">
+              <SelectTrigger className="h-9 w-full sm:w-44">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -217,7 +321,7 @@ function Dashboard() {
               </SelectContent>
             </Select>
           </div>
-          <div>
+          <div className="min-w-[9rem] flex-1 sm:flex-none">
             <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
               Liga
             </label>
@@ -225,15 +329,15 @@ function Dashboard() {
               sport={esporte === "Todos" ? "all" : esporte}
               value={liga}
               onChange={setLiga}
-              className="h-9 w-48"
+              className="h-9 w-full sm:w-48"
             />
           </div>
-          <div>
+          <div className="min-w-[9rem] flex-1 sm:flex-none">
             <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
               Mercado
             </label>
             <Select value={mercado} onValueChange={setMercado}>
-              <SelectTrigger className="h-9 w-52">
+              <SelectTrigger className="h-9 w-full sm:w-52">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -245,7 +349,7 @@ function Dashboard() {
               </SelectContent>
             </Select>
           </div>
-          <div>
+          <div className="min-w-[9rem] flex-1 sm:flex-none">
             <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
               Validação
             </label>
@@ -253,7 +357,7 @@ function Dashboard() {
               value={validacao}
               onValueChange={(v) => setValidacao(v as ValidationMetricsFilter)}
             >
-              <SelectTrigger className="h-9 w-44">
+              <SelectTrigger className="h-9 w-full sm:w-44">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -263,51 +367,46 @@ function Dashboard() {
               </SelectContent>
             </Select>
           </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={clearFilters}
+            className="h-9 w-full border-primary/20 bg-primary/5 text-xs text-muted-foreground hover:bg-primary/10 hover:text-primary sm:ml-auto sm:w-auto"
+          >
+            <RotateCcw data-icon="inline-start" />
+            Limpar filtros
+          </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-7">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
         <StatCard
-          label="Greens"
-          value={String(metrics.greens)}
-          icon={CheckCircle2}
+          label="Prognósticos"
+          value={String(filtrados.length)}
+          icon={Activity}
+          tone="off"
+          accent="blue"
+          sparkline={resultSparkline}
+          meta="No recorte selecionado"
+        />
+        <StatCard
+          label="Aprovados"
+          value={String(validationSummary.approved)}
+          icon={ShieldCheck}
           tone="up"
           accent="green"
+          sparkline={bankrollSparkline}
+          meta={`${validationSummary.approvedPct.toFixed(1)}% do total`}
         />
         <StatCard
-          label="Reds"
-          value={String(metrics.reds)}
-          icon={XCircle}
-          tone="down"
-          accent="red"
-        />
-        <StatCard
-          label="ODD MÉDIA"
-          value={metrics.oddMediaGreens ? metrics.oddMediaGreens.toFixed(2) : "-"}
-          icon={Target}
+          label="Pendentes"
+          value={String(validationSummary.pending)}
+          icon={Clock3}
           tone="neutral"
           accent="amber"
-        />
-        <StatCard
-          label="Lucro (u)"
-          value={`${withSign(metrics.lucroU)}u`}
-          icon={Activity}
-          tone={metrics.lucroU > 0 ? "up" : metrics.lucroU < 0 ? "down" : "neutral"}
-          accent="blue"
-        />
-        <StatCard
-          label="Lucro Real"
-          value={`${metrics.lucroReais >= 0 ? "+" : "-"}R$ ${Math.abs(metrics.lucroReais).toFixed(2)}`}
-          icon={DollarSign}
-          tone={metrics.lucroReais > 0 ? "up" : metrics.lucroReais < 0 ? "down" : "neutral"}
-          accent="green"
-        />
-        <StatCard
-          label="ROI"
-          value={`${withSign(metrics.roi)}%`}
-          icon={TrendingUp}
-          tone={metrics.roi > 0 ? "up" : metrics.roi < 0 ? "down" : "neutral"}
-          accent="cyan"
+          sparkline={resultSparkline.map((value) => Math.abs(value))}
+          meta={`${validationSummary.pendingPct.toFixed(1)}% aguardando análise`}
         />
         <StatCard
           label="Win Rate"
@@ -315,6 +414,17 @@ function Dashboard() {
           icon={Target}
           tone={metrics.winRate >= 50 ? "up" : metrics.winRate > 0 ? "down" : "neutral"}
           accent="violet"
+          sparkline={resultSparkline}
+          meta={`${metrics.greens} GREEN / ${metrics.reds} RED`}
+        />
+        <StatCard
+          label="ROI"
+          value={`${withSign(metrics.roi)}%`}
+          icon={TrendingUp}
+          tone={metrics.roi > 0 ? "up" : metrics.roi < 0 ? "down" : "neutral"}
+          accent="cyan"
+          sparkline={roiSparkline}
+          meta={`${withSign(metrics.lucroU)}u no período`}
         />
       </div>
 
@@ -335,7 +445,7 @@ function Dashboard() {
               </span>
             }
           />
-          <ResponsiveContainer width="100%" height={340}>
+          <ResponsiveContainer width="100%" height={chartHeight}>
             <LineChart data={timeline}>
               <defs>
                 <linearGradient id="bancaPos" x1="0" y1="0" x2="0" y2="1">
@@ -413,7 +523,7 @@ function Dashboard() {
               </span>
             }
           />
-          <ResponsiveContainer width="100%" height={340}>
+          <ResponsiveContainer width="100%" height={chartHeight}>
             <LineChart data={timeline}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis
@@ -454,7 +564,7 @@ function Dashboard() {
             title="Resultado por Esporte (u)"
             icon={Activity}
           />
-          <ResponsiveContainer width="100%" height={340}>
+          <ResponsiveContainer width="100%" height={chartHeight}>
             <BarChart data={sportPerf} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis dataKey="esporte" stroke={axisColor} fontSize={10} />
@@ -493,7 +603,10 @@ function Dashboard() {
             title="Resultado por Mercado (u)"
             icon={Target}
           />
-          <ResponsiveContainer width="100%" height={Math.max(340, marketPerf.length * 44 + 60)}>
+          <ResponsiveContainer
+            width="100%"
+            height={Math.max(isMobile ? 300 : 340, marketPerf.length * 44 + 60)}
+          >
             <BarChart
               data={marketPerf}
               layout="vertical"
@@ -542,7 +655,7 @@ function Dashboard() {
             title="ROI por Esporte (%)"
             icon={TrendingUp}
           />
-          <ResponsiveContainer width="100%" height={340}>
+          <ResponsiveContainer width="100%" height={chartHeight}>
             <BarChart data={sportPerfRoi} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis dataKey="esporte" stroke={axisColor} fontSize={10} />
@@ -581,7 +694,7 @@ function Dashboard() {
             title="Resultado por Mês (u)"
             icon={Activity}
           />
-          <ResponsiveContainer width="100%" height={260}>
+          <ResponsiveContainer width="100%" height={isMobile ? 220 : 260}>
             <BarChart data={monthlyResults} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
               <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" />
               <XAxis dataKey="mes" stroke={axisColor} fontSize={10} />
@@ -614,6 +727,174 @@ function Dashboard() {
           </ResponsiveContainer>
         </div>
       </div>
+
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.55fr)]">
+        <div className="data-surface xl:row-span-2">
+          <div className="flex items-center justify-between gap-3 border-b border-border/80 px-4 py-3">
+            <div>
+              <p className="panel-kicker">Fluxo do sistema</p>
+              <h2 className="section-title mt-1">Atividade operacional recente</h2>
+            </div>
+            <Button asChild variant="ghost" size="sm" className="text-xs text-muted-foreground">
+              <Link to="/historico">Ver histórico</Link>
+            </Button>
+          </div>
+          <div
+            className="overflow-x-auto"
+            role="region"
+            aria-label="Atividade operacional recente"
+            tabIndex={0}
+          >
+            <table className="w-full min-w-[760px] text-left text-xs">
+              <thead className="border-b border-border/70 bg-background/35 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-2.5 font-medium">Data</th>
+                  <th className="px-4 py-2.5 font-medium">Evento</th>
+                  <th className="px-4 py-2.5 font-medium">Esporte</th>
+                  <th className="px-4 py-2.5 font-medium">Liga</th>
+                  <th className="px-4 py-2.5 font-medium">Mercado</th>
+                  <th className="px-4 py-2.5 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {recentActivity.length ? (
+                  recentActivity.map((item) => (
+                    <tr key={item.id} className="transition-colors hover:bg-primary/[0.035]">
+                      <td className="numeric-value whitespace-nowrap px-4 py-3 text-muted-foreground">
+                        {formatBR(item.data)}
+                      </td>
+                      <td className="max-w-64 truncate px-4 py-3 font-medium">{item.evento}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{item.esporte}</td>
+                      <td className="max-w-40 truncate px-4 py-3 text-muted-foreground">
+                        {item.liga}
+                      </td>
+                      <td className="max-w-40 truncate px-4 py-3 text-muted-foreground">
+                        {item.mercado}
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={item.status} />
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
+                      Nenhuma atividade encontrada para os filtros atuais.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="surface-panel">
+          <PanelHeading
+            eyebrow="Governança"
+            title="Status de validação"
+            icon={ShieldCheck}
+            value={
+              <span className="numeric-value text-xs text-success">
+                {validationSummary.approvedPct.toFixed(1)}%
+              </span>
+            }
+          />
+          <div className="grid grid-cols-[8rem_1fr] items-center gap-4">
+            <div
+              role="img"
+              aria-label={`${validationSummary.approvedPct.toFixed(1)}% aprovados, ${validationSummary.skippedPct.toFixed(1)}% pulados e ${validationSummary.pendingPct.toFixed(1)}% pendentes`}
+              className="relative mx-auto aspect-square w-28 rounded-full"
+              style={{
+                background: `conic-gradient(var(--color-success) 0 ${validationSummary.approvedPct}%, var(--color-destructive) ${validationSummary.approvedPct}% ${validationSummary.approvedPct + validationSummary.skippedPct}%, var(--color-warning) ${validationSummary.approvedPct + validationSummary.skippedPct}% 100%)`,
+              }}
+            >
+              <div className="absolute inset-4 flex flex-col items-center justify-center rounded-full border border-border/70 bg-card">
+                <strong className="numeric-value text-lg">
+                  {validationSummary.approvedPct.toFixed(1)}%
+                </strong>
+                <span className="text-[9px] uppercase tracking-wider text-muted-foreground">
+                  aprovados
+                </span>
+              </div>
+            </div>
+            <dl className="space-y-2 text-xs">
+              <ValidationLegend
+                label="Aprovados"
+                value={validationSummary.approved}
+                color="bg-success"
+              />
+              <ValidationLegend
+                label="Pulados"
+                value={validationSummary.skipped}
+                color="bg-destructive"
+              />
+              <ValidationLegend
+                label="Pendentes"
+                value={validationSummary.pending}
+                color="bg-warning"
+              />
+              <div className="flex items-center justify-between border-t border-border/70 pt-2 font-medium">
+                <dt>Total</dt>
+                <dd className="numeric-value">{validationSummary.total}</dd>
+              </div>
+            </dl>
+          </div>
+          <Button asChild variant="outline" size="sm" className="mt-4 w-full">
+            <Link to="/validacao">Ver validação crítica</Link>
+          </Button>
+        </div>
+
+        <div className="surface-panel">
+          <PanelHeading eyebrow="Confiabilidade" title="Saúde operacional" icon={BrainCircuit} />
+          <div className="divide-y divide-border/60">
+            {operationalHealth.map((item) => (
+              <div key={item.label} className="flex items-center gap-3 py-2.5">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded border border-primary/20 bg-primary/5 text-primary">
+                  <item.icon aria-hidden="true" className="size-4" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-medium">{item.label}</p>
+                  <p className="truncate text-[10px] text-muted-foreground">{item.detail}</p>
+                </div>
+                <span
+                  className={
+                    item.tone === "success"
+                      ? "text-[10px] font-semibold uppercase text-success"
+                      : item.tone === "warning"
+                        ? "text-[10px] font-semibold uppercase text-warning"
+                        : "text-[10px] font-semibold uppercase text-muted-foreground"
+                  }
+                >
+                  {item.state}
+                </span>
+              </div>
+            ))}
+          </div>
+          <Button asChild variant="outline" size="sm" className="mt-3 w-full">
+            <Link to="/observabilidade-ia">Ver observabilidade da IA</Link>
+          </Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ValidationLegend({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: number;
+  color: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <dt className="flex items-center gap-2 text-muted-foreground">
+        <span className={`size-2 rounded-sm ${color}`} aria-hidden="true" />
+        {label}
+      </dt>
+      <dd className="numeric-value font-medium">{value}</dd>
     </div>
   );
 }
