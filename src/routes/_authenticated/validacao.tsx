@@ -13,6 +13,10 @@ import {
   BrainCircuit,
   CircleCheckBig,
   ShieldCheck,
+  CheckCircle2,
+  XCircle,
+  ChevronDown,
+  Gauge,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -1317,7 +1321,7 @@ function Validacao() {
                 className="pointer-events-none absolute -right-16 -top-20 size-48 rounded-full bg-primary/[0.035] blur-3xl"
               />
               {/* Cabeçalho */}
-              <div className="relative flex flex-wrap items-start justify-between gap-3">
+              <div className="relative flex flex-wrap items-start justify-between gap-3 xl:flex-nowrap">
                 <div className="flex min-w-0 items-start gap-3">
                   <SportMark sport={p.esporte} size="md" />
                   <div className="min-w-0">
@@ -1367,6 +1371,28 @@ function Validacao() {
                   tone={edgeAj != null && edgeAj > 0 ? "good" : "bad"}
                 />
                 <Metric label="Stake sugerida" value={`${p.stake.toFixed(1)}u`} />
+              </div>
+
+              <div className="relative grid gap-3 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-stretch">
+                <ValidationGateStrip
+                  hasPrice={oddAj != null}
+                  hasPositiveEdge={edgeAj != null && edgeAj > 0}
+                  hasContext={Boolean(contextoAnalise.trim())}
+                  isOperational={check?.auto !== "PULAR"}
+                />
+                {rankedCandidate ? (
+                  <ValidationSignalBar
+                    score={rankedCandidate.opportunity_score_pre}
+                    confidence={rankedCandidate.confidence_score}
+                    riskCount={rankedCandidate.risk_flags.length}
+                    compact
+                  />
+                ) : (
+                  <div className="flex items-center gap-3 rounded-lg border border-border/80 bg-card/45 p-3 text-xs text-muted-foreground">
+                    <Gauge className="size-5 text-primary" />
+                    Score pré-IA indisponível
+                  </div>
+                )}
               </div>
 
               <div className="relative flex flex-col gap-3 rounded-lg border border-border/80 bg-background/35 p-3 sm:p-4">
@@ -1460,183 +1486,184 @@ function Validacao() {
                 </RadioGroup>
               </div>
 
-              {/* Bloco de entrada */}
-              <div className="relative flex flex-col gap-3 rounded-lg border border-border/80 bg-background/35 p-3 sm:p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Dados do prognóstico
-                  </div>
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                    {packballRequirements ? "Odd executavel:" : "Odd em uso:"}{" "}
-                    <span className="font-mono font-semibold text-foreground">
-                      {oddAj != null ? oddAj.toFixed(2) : "aguardando"}
-                    </span>
-                  </div>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                  <KV label="Mercado" value={marketLabel} />
-                  <KV label="Pick" value={pickLabel} />
-                  <KV label="Origem" value={sourceLabel} />
-                </div>
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-8">
-                  <Metric
-                    label={packballRequirements ? "Odd referencia PackBall" : "Odd ofertada"}
-                    value={p.odd_ofertada.toFixed(2)}
-                  />
-                  <div>
-                    <div className="flex items-center justify-between gap-2">
-                      <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        Odd ajustada
-                      </Label>
-                      <span
-                        className={`text-[10px] ${
-                          oddSaveStatus[p.id] === "error"
-                            ? "text-destructive"
-                            : "text-muted-foreground"
-                        }`}
-                      >
-                        {oddSaveStatus[p.id] === "saving"
-                          ? "Salvando..."
-                          : oddSaveStatus[p.id] === "saved"
-                            ? "Salva"
-                            : oddSaveStatus[p.id] === "error"
-                              ? "Erro"
-                              : ""}
-                      </span>
+              <details className="group/details relative rounded-lg border border-border/80 bg-background/30">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground marker:content-none">
+                  Dados detalhados e contexto local
+                  <ChevronDown className="size-4 transition-transform group-open/details:rotate-180" />
+                </summary>
+                <div className="flex flex-col gap-3 border-t border-border/70 p-3 sm:p-4">
+                  {/* Bloco de entrada */}
+                  <div className="relative flex flex-col gap-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Dados do prognóstico
+                      </div>
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        {packballRequirements ? "Odd executavel:" : "Odd em uso:"}{" "}
+                        <span className="font-mono font-semibold text-foreground">
+                          {oddAj != null ? oddAj.toFixed(2) : "aguardando"}
+                        </span>
+                      </div>
                     </div>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="1.01"
-                      placeholder={p.odd_ofertada.toFixed(2)}
-                      value={
-                        oddsAj[p.id] ??
-                        (p.odd_ajustada != null
-                          ? p.odd_ajustada
-                          : packballRequirements
-                            ? ""
-                            : p.odd_ofertada)
-                      }
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setOddsAj((prev) => ({ ...prev, [p.id]: value }));
-                        setOddSaveStatus((prev) => {
-                          const next = { ...prev };
-                          delete next[p.id];
-                          return next;
-                        });
-                      }}
-                      onBlur={() => void persistirOddAjustada(p)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          e.currentTarget.blur();
+                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                      <KV label="Mercado" value={marketLabel} />
+                      <KV label="Pick" value={pickLabel} />
+                      <KV label="Origem" value={sourceLabel} />
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-8">
+                      <Metric
+                        label={packballRequirements ? "Odd referencia PackBall" : "Odd ofertada"}
+                        value={p.odd_ofertada.toFixed(2)}
+                      />
+                      <div>
+                        <div className="flex items-center justify-between gap-2">
+                          <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            Odd ajustada
+                          </Label>
+                          <span
+                            className={`text-[10px] ${
+                              oddSaveStatus[p.id] === "error"
+                                ? "text-destructive"
+                                : "text-muted-foreground"
+                            }`}
+                          >
+                            {oddSaveStatus[p.id] === "saving"
+                              ? "Salvando..."
+                              : oddSaveStatus[p.id] === "saved"
+                                ? "Salva"
+                                : oddSaveStatus[p.id] === "error"
+                                  ? "Erro"
+                                  : ""}
+                          </span>
+                        </div>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="1.01"
+                          placeholder={p.odd_ofertada.toFixed(2)}
+                          value={
+                            oddsAj[p.id] ??
+                            (p.odd_ajustada != null
+                              ? p.odd_ajustada
+                              : packballRequirements
+                                ? ""
+                                : p.odd_ofertada)
+                          }
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setOddsAj((prev) => ({ ...prev, [p.id]: value }));
+                            setOddSaveStatus((prev) => {
+                              const next = { ...prev };
+                              delete next[p.id];
+                              return next;
+                            });
+                          }}
+                          onBlur={() => void persistirOddAjustada(p)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              e.currentTarget.blur();
+                            }
+                          }}
+                          className="mt-1 h-[51px] rounded-md border-border bg-background/50 font-mono text-base font-bold"
+                        />
+                      </div>
+                      <Metric label="Odd mediana" value={formatOptionalOdd(p.odd_mediana)} />
+                      <Metric
+                        label="Odd mercado base"
+                        value={formatOptionalOdd(getOddMercadoBase(p))}
+                      />
+
+                      <Metric label="Odd valor" value={p.odd_valor.toFixed(2)} />
+                      <Metric
+                        label="Probabilidade"
+                        value={`${p.probabilidade_final.toFixed(2)}%`}
+                        tone={
+                          p.probabilidade_final > 60
+                            ? "good"
+                            : p.probabilidade_final < 55
+                              ? "warn"
+                              : undefined
                         }
-                      }}
-                      className="mt-1 h-[51px] rounded-md border-border bg-background/50 font-mono text-base font-bold"
+                      />
+                      <Metric
+                        label="Edge original"
+                        value={`${p.edge.toFixed(2)}%`}
+                        tone={p.edge < 0 ? "bad" : "good"}
+                      />
+                      <Metric
+                        label="Edge ajustado"
+                        value={edgeAj != null ? `${edgeAj.toFixed(2)}%` : "-"}
+                        tone={edgeAj == null ? undefined : edgeAj < 0 ? "bad" : "good"}
+                      />
+                    </div>
+
+                    {packballRequirements && (
+                      <div className="grid gap-2 rounded-md border border-primary/30 bg-primary/5 p-3 sm:grid-cols-2 xl:grid-cols-6">
+                        <Metric
+                          label="Odd minima para publicar"
+                          value={packballRequirements.minimumExecutableOdd.toFixed(2)}
+                        />
+                        <Metric
+                          label="Edge minimo"
+                          value={`${packballRequirements.requiredEdge.toFixed(2)}%`}
+                        />
+                        <Metric
+                          label="Status do preco"
+                          value={packballRequirements.operationalPriceStatus.replaceAll("_", " ")}
+                        />
+                        <Metric label="Kelly conservador" value={`${packballKelly.toFixed(2)}u`} />
+                        <Metric
+                          label="Teto por incerteza"
+                          value={`${packballRequirements.maxStake.toFixed(2)}u`}
+                        />
+                        <Metric
+                          label="Conflito dos componentes"
+                          value={packballRequirements.componentConflictStatus.replaceAll("_", " ")}
+                        />
+                      </div>
+                    )}
+
+                    {check && (
+                      <div
+                        className={cn(
+                          "flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-medium",
+                          check.auto === "PULAR" &&
+                            "border-destructive/40 bg-destructive/10 text-destructive",
+                          check.auto === "ALERTA" && "border-warning/40 bg-warning/10 text-warning",
+                          check.auto === "DESTAQUE" &&
+                            "border-success/40 bg-success/10 text-success",
+                        )}
+                      >
+                        {check.auto === "DESTAQUE" ? (
+                          <Sparkles className="h-3.5 w-3.5" />
+                        ) : check.auto === "ALERTA" ? (
+                          <ShieldAlert className="h-3.5 w-3.5" />
+                        ) : (
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                        )}
+                        <span className="uppercase tracking-wider">{check.auto}</span>
+                        <span className="text-foreground/80 normal-case tracking-normal">
+                          - {check.reason}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Contexto da analise */}
+                  <div>
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                      Dados Técnicos / Contexto Local
+                    </Label>
+                    <Textarea
+                      rows={6}
+                      placeholder="Cole dados internos do prognóstico: H2H, últimos jogos, projeções, odds, picks, splits, dados técnicos do modelo ou observações manuais. IA Local usará somente este contexto e os dados internos."
+                      value={contextoAnalise}
+                      onChange={(e) => setContextoGrupo(g, e.target.value)}
                     />
                   </div>
-                  <Metric label="Odd mediana" value={formatOptionalOdd(p.odd_mediana)} />
-                  <Metric
-                    label="Odd mercado base"
-                    value={formatOptionalOdd(getOddMercadoBase(p))}
-                  />
-
-                  <Metric label="Odd valor" value={p.odd_valor.toFixed(2)} />
-                  <Metric
-                    label="Probabilidade"
-                    value={`${p.probabilidade_final.toFixed(2)}%`}
-                    tone={
-                      p.probabilidade_final > 60
-                        ? "good"
-                        : p.probabilidade_final < 55
-                          ? "warn"
-                          : undefined
-                    }
-                  />
-                  <Metric
-                    label="Edge original"
-                    value={`${p.edge.toFixed(2)}%`}
-                    tone={p.edge < 0 ? "bad" : "good"}
-                  />
-                  <Metric
-                    label="Edge ajustado"
-                    value={edgeAj != null ? `${edgeAj.toFixed(2)}%` : "-"}
-                    tone={edgeAj == null ? undefined : edgeAj < 0 ? "bad" : "good"}
-                  />
                 </div>
-
-                {rankedCandidate ? (
-                  <ValidationSignalBar
-                    score={rankedCandidate.opportunity_score_pre}
-                    confidence={rankedCandidate.confidence_score}
-                    riskCount={rankedCandidate.risk_flags.length}
-                  />
-                ) : null}
-
-                {packballRequirements && (
-                  <div className="grid gap-2 rounded-md border border-primary/30 bg-primary/5 p-3 sm:grid-cols-2 xl:grid-cols-6">
-                    <Metric
-                      label="Odd minima para publicar"
-                      value={packballRequirements.minimumExecutableOdd.toFixed(2)}
-                    />
-                    <Metric
-                      label="Edge minimo"
-                      value={`${packballRequirements.requiredEdge.toFixed(2)}%`}
-                    />
-                    <Metric
-                      label="Status do preco"
-                      value={packballRequirements.operationalPriceStatus.replaceAll("_", " ")}
-                    />
-                    <Metric label="Kelly conservador" value={`${packballKelly.toFixed(2)}u`} />
-                    <Metric
-                      label="Teto por incerteza"
-                      value={`${packballRequirements.maxStake.toFixed(2)}u`}
-                    />
-                    <Metric
-                      label="Conflito dos componentes"
-                      value={packballRequirements.componentConflictStatus.replaceAll("_", " ")}
-                    />
-                  </div>
-                )}
-
-                {check && (
-                  <div
-                    className={cn(
-                      "flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-medium",
-                      check.auto === "PULAR" &&
-                        "border-destructive/40 bg-destructive/10 text-destructive",
-                      check.auto === "ALERTA" && "border-warning/40 bg-warning/10 text-warning",
-                      check.auto === "DESTAQUE" && "border-success/40 bg-success/10 text-success",
-                    )}
-                  >
-                    {check.auto === "DESTAQUE" ? (
-                      <Sparkles className="h-3.5 w-3.5" />
-                    ) : check.auto === "ALERTA" ? (
-                      <ShieldAlert className="h-3.5 w-3.5" />
-                    ) : (
-                      <AlertTriangle className="h-3.5 w-3.5" />
-                    )}
-                    <span className="uppercase tracking-wider">{check.auto}</span>
-                    <span className="text-foreground/80 normal-case tracking-normal">
-                      - {check.reason}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Contexto da analise */}
-              <div>
-                <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Dados Técnicos / Contexto Local
-                </Label>
-                <Textarea
-                  rows={6}
-                  placeholder="Cole dados internos do prognóstico: H2H, últimos jogos, projeções, odds, picks, splits, dados técnicos do modelo ou observações manuais. IA Local usará somente este contexto e os dados internos."
-                  value={contextoAnalise}
-                  onChange={(e) => setContextoGrupo(g, e.target.value)}
-                />
-              </div>
+              </details>
 
               {/* IA */}
               <AiAnalysisPanel
@@ -1892,179 +1919,201 @@ function PreAiShortlistPanel({
         </div>
       )}
 
-      {savedItems.length > 0 && (
-        <div className="relative flex flex-col gap-3 rounded-lg border border-border/80 bg-background/35 p-3">
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="min-w-[260px] flex-1">
-              <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Oportunidade salva para Matchups/Preview
-              </Label>
-              <Select
-                value={selectedPreviewItemIdEffective}
-                onValueChange={setSelectedPreviewItemId}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Selecione uma oportunidade" />
-                </SelectTrigger>
-                <SelectContent>
-                  {savedItems.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {formatRankingItemLabel(item)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!selectedPreviewItemIdEffective || enrichingPreview}
-              onClick={async () => {
-                if (!previewText.trim()) {
-                  toast.error("Cole o Matchups/Preview antes de aplicar.");
-                  return;
-                }
-                const applied = await onEnrichPreview(selectedPreviewItemIdEffective, previewText);
-                if (applied) setPreviewText("");
-              }}
-            >
-              {enrichingPreview ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
-              Aplicar preview
-            </Button>
-          </div>
-          <Textarea
-            rows={5}
-            placeholder="Cole aqui o Matchups/Preview do confronto selecionado. Para MLB, pode ser o texto do Baseball-Reference; para outros esportes, use preview/H2H/noticias/splits relevantes."
-            value={previewText}
-            onChange={(event) => setPreviewText(event.target.value)}
-          />
-          {selectedPreviewItem && (
-            <div className="space-y-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-              <div>
-                Status do preview:{" "}
-                <span className="font-semibold text-foreground">
-                  {formatPreviewStatus(selectedPreviewItem.matchup_preview_status)}
-                </span>
+      <details className="group/shortlist rounded-lg border border-border/80 bg-background/25">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground marker:content-none">
+          Preview, finais e ranking detalhado
+          <span className="flex items-center gap-2 font-mono text-[10px] normal-case">
+            {savedItems.length} salvos · {top.length} candidatas
+            <ChevronDown className="size-4 transition-transform group-open/shortlist:rotate-180" />
+          </span>
+        </summary>
+        <div className="flex flex-col gap-3 border-t border-border/70 p-3">
+          {savedItems.length > 0 && (
+            <div className="relative flex flex-col gap-3 rounded-lg border border-border/80 bg-background/35 p-3">
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="min-w-[260px] flex-1">
+                  <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Oportunidade salva para Matchups/Preview
+                  </Label>
+                  <Select
+                    value={selectedPreviewItemIdEffective}
+                    onValueChange={setSelectedPreviewItemId}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Selecione uma oportunidade" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {savedItems.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {formatRankingItemLabel(item)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!selectedPreviewItemIdEffective || enrichingPreview}
+                  onClick={async () => {
+                    if (!previewText.trim()) {
+                      toast.error("Cole o Matchups/Preview antes de aplicar.");
+                      return;
+                    }
+                    const applied = await onEnrichPreview(
+                      selectedPreviewItemIdEffective,
+                      previewText,
+                    );
+                    if (applied) setPreviewText("");
+                  }}
+                >
+                  {enrichingPreview ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
+                  Aplicar preview
+                </Button>
               </div>
-              {formatSavedAlternativesSummary(selectedPreviewItem) && (
-                <div className="normal-case tracking-normal">
-                  {formatSavedAlternativesSummary(selectedPreviewItem)}
+              <Textarea
+                rows={5}
+                placeholder="Cole aqui o Matchups/Preview do confronto selecionado. Para MLB, pode ser o texto do Baseball-Reference; para outros esportes, use preview/H2H/noticias/splits relevantes."
+                value={previewText}
+                onChange={(event) => setPreviewText(event.target.value)}
+              />
+              {selectedPreviewItem && (
+                <div className="space-y-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <div>
+                    Status do preview:{" "}
+                    <span className="font-semibold text-foreground">
+                      {formatPreviewStatus(selectedPreviewItem.matchup_preview_status)}
+                    </span>
+                  </div>
+                  {formatSavedAlternativesSummary(selectedPreviewItem) && (
+                    <div className="normal-case tracking-normal">
+                      {formatSavedAlternativesSummary(selectedPreviewItem)}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           )}
-        </div>
-      )}
 
-      {finalItems.length > 0 && (
-        <div className="overflow-auto rounded-md border border-border">
-          <table className="w-full min-w-[760px] text-xs">
-            <thead className="bg-primary/10 text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2 text-left font-semibold">Final</th>
-                <th className="px-3 py-2 text-left font-semibold">Jogo</th>
-                <th className="px-3 py-2 text-left font-semibold">Status</th>
-                <th className="px-3 py-2 text-right font-semibold">Score final</th>
-                <th className="px-3 py-2 text-right font-semibold">Stake</th>
-              </tr>
-            </thead>
-            <tbody>
-              {finalItems.map((item) => {
-                const metadata = asRankingItemMetadata(item);
-                return (
-                  <tr key={item.id} className="border-t border-border">
-                    <td className="px-3 py-2 font-mono">
-                      {item.ranking_status === "TOP_FINAL" ? `#${item.rank_final}` : "-"}
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="font-medium">{String(metadata.jogo ?? item.event_key)}</div>
-                      <div className="text-[10px] text-muted-foreground">
-                        {[
-                          metadata.mercado_operacional ?? metadata.mercado,
-                          metadata.pick_operacional ?? metadata.pick,
-                        ]
-                          .filter(Boolean)
-                          .join(" | ")}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={cn(
-                          "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
-                          item.ranking_status === "TOP_FINAL" && "bg-success/10 text-success",
-                          item.ranking_status === "RESERVA" && "bg-muted text-muted-foreground",
-                          item.ranking_status === "CONFIRMA_IA" && "bg-primary/10 text-primary",
-                        )}
-                      >
-                        {item.ranking_status}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono">
-                      {formatOptionalNumber(item.opportunity_score_final)}
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono">
-                      {item.final_stake != null ? `${Number(item.final_stake).toFixed(1)}u` : "-"}
-                    </td>
+          {finalItems.length > 0 && (
+            <div className="overflow-auto rounded-md border border-border">
+              <table className="w-full min-w-[760px] text-xs">
+                <thead className="bg-primary/10 text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold">Final</th>
+                    <th className="px-3 py-2 text-left font-semibold">Jogo</th>
+                    <th className="px-3 py-2 text-left font-semibold">Status</th>
+                    <th className="px-3 py-2 text-right font-semibold">Score final</th>
+                    <th className="px-3 py-2 text-right font-semibold">Stake</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+                </thead>
+                <tbody>
+                  {finalItems.map((item) => {
+                    const metadata = asRankingItemMetadata(item);
+                    return (
+                      <tr key={item.id} className="border-t border-border">
+                        <td className="px-3 py-2 font-mono">
+                          {item.ranking_status === "TOP_FINAL" ? `#${item.rank_final}` : "-"}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="font-medium">
+                            {String(metadata.jogo ?? item.event_key)}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {[
+                              metadata.mercado_operacional ?? metadata.mercado,
+                              metadata.pick_operacional ?? metadata.pick,
+                            ]
+                              .filter(Boolean)
+                              .join(" | ")}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <span
+                            className={cn(
+                              "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                              item.ranking_status === "TOP_FINAL" && "bg-success/10 text-success",
+                              item.ranking_status === "RESERVA" && "bg-muted text-muted-foreground",
+                              item.ranking_status === "CONFIRMA_IA" && "bg-primary/10 text-primary",
+                            )}
+                          >
+                            {item.ranking_status}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono">
+                          {formatOptionalNumber(item.opportunity_score_final)}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono">
+                          {item.final_stake != null
+                            ? `${Number(item.final_stake).toFixed(1)}u`
+                            : "-"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
 
-      {top.length > 0 ? (
-        <div className="overflow-auto rounded-md border border-border">
-          <table className="w-full min-w-[760px] text-xs">
-            <thead className="bg-muted/50 text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2 text-left font-semibold">Rank</th>
-                <th className="px-3 py-2 text-left font-semibold">Jogo</th>
-                <th className="px-3 py-2 text-left font-semibold">Mercado</th>
-                <th className="px-3 py-2 text-left font-semibold">Pick</th>
-                <th className="px-3 py-2 text-left font-semibold">Alternativas</th>
-                <th className="px-3 py-2 text-right font-semibold">Score</th>
-                <th className="px-3 py-2 text-right font-semibold">Conf.</th>
-                <th className="px-3 py-2 text-right font-semibold">Edge</th>
-              </tr>
-            </thead>
-            <tbody>
-              {top.map((candidate, index) => (
-                <tr key={candidate.prognostico.id} className="border-t border-border">
-                  <td className="px-3 py-2 font-mono">{index + 1}</td>
-                  <td className="px-3 py-2">
-                    <div className="font-medium">{candidate.prognostico.jogo}</div>
-                    <div className="text-[10px] text-muted-foreground">
-                      {formatBR(candidate.prognostico.data)}
-                      {candidate.prognostico.hora
-                        ? ` às ${formatHora(candidate.prognostico.hora)}`
-                        : ""}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2">{getOpportunityMarketLabel(candidate.prognostico)}</td>
-                  <td className="px-3 py-2">{getOpportunityPickLabel(candidate.prognostico)}</td>
-                  <td className="px-3 py-2 text-muted-foreground">
-                    {formatCandidateAlternativesSummary(candidate)}
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono">
-                    {candidate.opportunity_score_pre.toFixed(1)}
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono">
-                    {candidate.confidence_score.toFixed(1)}
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono">
-                    {candidate.prognostico.edge.toFixed(2)}%
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {top.length > 0 ? (
+            <div className="overflow-auto rounded-md border border-border">
+              <table className="w-full min-w-[760px] text-xs">
+                <thead className="bg-muted/50 text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold">Rank</th>
+                    <th className="px-3 py-2 text-left font-semibold">Jogo</th>
+                    <th className="px-3 py-2 text-left font-semibold">Mercado</th>
+                    <th className="px-3 py-2 text-left font-semibold">Pick</th>
+                    <th className="px-3 py-2 text-left font-semibold">Alternativas</th>
+                    <th className="px-3 py-2 text-right font-semibold">Score</th>
+                    <th className="px-3 py-2 text-right font-semibold">Conf.</th>
+                    <th className="px-3 py-2 text-right font-semibold">Edge</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {top.map((candidate, index) => (
+                    <tr key={candidate.prognostico.id} className="border-t border-border">
+                      <td className="px-3 py-2 font-mono">{index + 1}</td>
+                      <td className="px-3 py-2">
+                        <div className="font-medium">{candidate.prognostico.jogo}</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {formatBR(candidate.prognostico.data)}
+                          {candidate.prognostico.hora
+                            ? ` às ${formatHora(candidate.prognostico.hora)}`
+                            : ""}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2">
+                        {getOpportunityMarketLabel(candidate.prognostico)}
+                      </td>
+                      <td className="px-3 py-2">
+                        {getOpportunityPickLabel(candidate.prognostico)}
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">
+                        {formatCandidateAlternativesSummary(candidate)}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono">
+                        {candidate.opportunity_score_pre.toFixed(1)}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono">
+                        {candidate.confidence_score.toFixed(1)}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono">
+                        {candidate.prognostico.edge.toFixed(2)}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
+              Nenhuma candidata elegível com os filtros atuais.
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
-          Nenhuma candidata elegível com os filtros atuais.
-        </div>
-      )}
+      </details>
     </section>
   );
 }
@@ -2160,10 +2209,12 @@ function ValidationSignalBar({
   score,
   confidence,
   riskCount,
+  compact = false,
 }: {
   score: number;
   confidence: number;
   riskCount: number;
+  compact?: boolean;
 }) {
   const normalizedScore = Math.max(0, Math.min(100, score));
   const level = normalizedScore >= 70 ? "Alta" : normalizedScore >= 50 ? "Média" : "Baixa";
@@ -2173,9 +2224,11 @@ function ValidationSignalBar({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="panel-kicker">Confiança / oportunidade</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Score pré-IA combinado com confiança do modelo
-          </p>
+          {compact ? null : (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Score pré-IA combinado com confiança do modelo
+            </p>
+          )}
         </div>
         <span
           className={cn(
@@ -2188,10 +2241,11 @@ function ValidationSignalBar({
           {level} · {normalizedScore.toFixed(1)}
         </span>
       </div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
-        <div
-          className="h-full rounded-full bg-[linear-gradient(90deg,var(--color-destructive),var(--color-warning),var(--color-success))] transition-[width]"
-          style={{ width: `${normalizedScore}%` }}
+      <div className="relative mt-3 h-2 overflow-visible rounded-full bg-[linear-gradient(90deg,var(--color-destructive),var(--color-warning),var(--color-success))]">
+        <span
+          aria-hidden="true"
+          className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background bg-foreground shadow-[0_0_10px_rgb(255_255_255/0.45)]"
+          style={{ left: `${normalizedScore}%` }}
         />
       </div>
       <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] text-muted-foreground sm:grid-cols-3">
@@ -2206,6 +2260,58 @@ function ValidationSignalBar({
         </span>
       </div>
     </div>
+  );
+}
+
+function ValidationGateStrip({
+  hasPrice,
+  hasPositiveEdge,
+  hasContext,
+  isOperational,
+}: {
+  hasPrice: boolean;
+  hasPositiveEdge: boolean;
+  hasContext: boolean;
+  isOperational: boolean;
+}) {
+  const gates = [
+    { label: "Preço", passed: hasPrice },
+    { label: "Edge", passed: hasPositiveEdge },
+    { label: "Contexto", passed: hasContext },
+    { label: "Limites", passed: isOperational },
+  ];
+
+  return (
+    <section
+      aria-label="Gates determinísticos"
+      className="rounded-lg border border-border/80 bg-background/35 p-3"
+    >
+      <p className="panel-kicker">Gates determinísticos</p>
+      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {gates.map((gate) => {
+          const Icon = gate.passed ? CheckCircle2 : XCircle;
+          return (
+            <div
+              key={gate.label}
+              className={cn(
+                "flex min-h-11 items-center gap-2 rounded-md border px-2.5 py-2 text-xs font-semibold",
+                gate.passed
+                  ? "border-success/25 bg-success/[0.07] text-success"
+                  : "border-warning/25 bg-warning/[0.07] text-warning",
+              )}
+            >
+              <Icon className="size-4 shrink-0" />
+              <span>
+                {gate.label}
+                <span className="block font-mono text-[9px] opacity-75">
+                  {gate.passed ? "OK" : "ATENÇÃO"}
+                </span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

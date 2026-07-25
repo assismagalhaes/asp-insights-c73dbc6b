@@ -67,17 +67,17 @@ export function StatCard({
     <section
       aria-label={label}
       className={cn(
-        "group relative overflow-hidden rounded-lg border border-border/90 bg-card p-4 shadow-[0_14px_32px_rgb(0_0_0/0.12)] transition-[border-color,transform,box-shadow] before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-[linear-gradient(90deg,transparent,var(--stat-accent,transparent),transparent)] motion-safe:hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgb(0_0_0/0.18)]",
+        "group relative overflow-hidden rounded-lg border border-border/90 bg-card p-3 shadow-[0_14px_32px_rgb(0_0_0/0.12)] transition-[border-color,transform,box-shadow] before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-[linear-gradient(90deg,transparent,var(--stat-accent,transparent),transparent)] motion-safe:hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgb(0_0_0/0.18)] sm:p-4",
         borderToneClass[effectiveTone],
         accent && accentClass[accent],
         className,
       )}
     >
-      <div className={cn(layout === "horizontal" && "flex items-center gap-4")}>
+      <div className={cn(layout === "horizontal" && "flex items-center gap-2 sm:gap-4")}>
         {Icon && layout === "horizontal" ? (
           <span
             className={cn(
-              "flex size-12 shrink-0 items-center justify-center rounded-lg border shadow-[0_0_22px_currentColor]",
+              "flex size-10 shrink-0 items-center justify-center rounded-lg border shadow-[0_0_22px_currentColor] sm:size-12",
               iconToneClass[effectiveTone],
             )}
           >
@@ -86,7 +86,7 @@ export function StatCard({
         ) : null}
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">
+            <span className="text-[9px] font-semibold uppercase leading-tight tracking-[0.07em] text-muted-foreground sm:text-[11px] sm:tracking-[0.09em]">
               {label}
             </span>
             {Icon && layout === "stacked" ? (
@@ -102,7 +102,7 @@ export function StatCard({
           </div>
           <div
             className={cn(
-              layout === "horizontal" ? "mt-1 text-[1.7rem]" : "mt-2 text-2xl",
+              layout === "horizontal" ? "mt-1 text-[1.45rem] sm:text-[1.7rem]" : "mt-2 text-2xl",
               "font-mono font-bold tracking-[-0.035em] tabular-nums",
               toneClass[effectiveTone],
             )}
@@ -122,7 +122,9 @@ export function StatCard({
             </div>
           ) : null}
           {meta ? (
-            <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{meta}</p>
+            <p className="mt-0.5 line-clamp-2 text-[9px] leading-tight text-muted-foreground sm:text-[10px]">
+              {meta}
+            </p>
           ) : null}
         </div>
       </div>
