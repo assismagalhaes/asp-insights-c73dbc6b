@@ -13,10 +13,18 @@ interface Props {
   value: string; // "all" ou nome da liga
   onChange: (v: string) => void;
   className?: string;
+  id?: string;
   placeholder?: string;
 }
 
-export function LeagueFilter({ sport, value, onChange, className, placeholder = "Liga" }: Props) {
+export function LeagueFilter({
+  sport,
+  value,
+  onChange,
+  className,
+  id,
+  placeholder = "Liga",
+}: Props) {
   const { data: ligas = [] } = useLigas();
   const filtradas = useMemo<Liga[]>(() => {
     const arr = sport && sport !== "all" ? ligas.filter((l: Liga) => l.esporte === sport) : ligas;
@@ -25,7 +33,7 @@ export function LeagueFilter({ sport, value, onChange, className, placeholder = 
 
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className={className}>
+      <SelectTrigger id={id} className={className}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>

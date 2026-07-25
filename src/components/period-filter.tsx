@@ -38,10 +38,12 @@ function dateToIso(d: Date): string {
 }
 
 function DateField({
+  id,
   label,
   value,
   onChange,
 }: {
+  id: string;
   label: string;
   value: string;
   onChange: (iso: string) => void;
@@ -57,11 +59,15 @@ function DateField({
 
   return (
     <div className="flex min-w-0 flex-1 flex-col sm:flex-none">
-      <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
+      <label
+        htmlFor={id}
+        className="block text-[10px] uppercase tracking-wider text-muted-foreground"
+      >
         {label}
       </label>
       <div className="flex">
         <Input
+          id={id}
           value={text}
           placeholder="DD/MM/AAAA"
           onChange={(e) => setText(e.target.value)}
@@ -81,6 +87,7 @@ function DateField({
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button
+              aria-label={`Abrir calendário de ${label.toLowerCase()}`}
               type="button"
               variant="outline"
               size="icon"
@@ -121,13 +128,18 @@ export function PeriodFilter({
   className,
 }: Props) {
   return (
-    <div className={`flex min-w-0 flex-1 flex-wrap items-end gap-3 ${className ?? ""}`}>
-      <div className="flex min-w-[12rem] flex-1 flex-col sm:flex-none">
-        <label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
+    <div
+      className={`grid min-w-0 grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:items-end ${className ?? ""}`}
+    >
+      <div className="flex min-w-0 flex-col sm:w-48">
+        <label
+          htmlFor="dashboard-periodo"
+          className="block text-[10px] uppercase tracking-wider text-muted-foreground"
+        >
           Período
         </label>
         <Select value={periodo} onValueChange={(v) => onPeriodoChange(v as PeriodoFiltro)}>
-          <SelectTrigger className="h-9 w-full sm:w-48">
+          <SelectTrigger id="dashboard-periodo" className="h-9 w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -142,6 +154,7 @@ export function PeriodFilter({
       {periodo === "custom" ? (
         <>
           <DateField
+            id="dashboard-data-inicial"
             label="De"
             value={customIni}
             onChange={(v) => {
@@ -150,6 +163,7 @@ export function PeriodFilter({
             }}
           />
           <DateField
+            id="dashboard-data-final"
             label="Até"
             value={customFim}
             onChange={(v) => {
