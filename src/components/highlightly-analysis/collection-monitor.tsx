@@ -21,6 +21,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AmbientBackdrop, PageIntro } from "@/components/command-center";
+import { SportMark } from "@/components/sport-filter-select";
+import { StatCard } from "@/components/stat-card";
 import {
   Table,
   TableBody,
@@ -119,26 +122,15 @@ function MetricCard({
   tone?: "default" | "success" | "warning";
 }) {
   return (
-    <article className="border border-border bg-card p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            {label}
-          </p>
-          <p
-            className={cn(
-              "mt-2 font-mono text-2xl font-semibold",
-              tone === "success" && "text-success",
-              tone === "warning" && "text-warning",
-            )}
-          >
-            {value}
-          </p>
-        </div>
-        <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
-      </div>
-      <p className="mt-2 text-xs text-muted-foreground">{detail}</p>
-    </article>
+    <StatCard
+      label={label}
+      value={value}
+      meta={detail}
+      icon={Icon}
+      accent={tone === "success" ? "green" : tone === "warning" ? "amber" : "blue"}
+      tone={tone === "success" ? "up" : tone === "warning" ? "neutral" : "off"}
+      className="[&_div.font-mono]:text-xl sm:[&_div.font-mono]:text-2xl"
+    />
   );
 }
 
@@ -186,7 +178,10 @@ function QueueSummary({ monitor }: { monitor: HighlightlyCollectionMonitor }) {
         />
       </div>
 
-      <section className="border border-border bg-card p-4" aria-labelledby="quota-title">
+      <section
+        className="overflow-hidden rounded-lg border border-primary/20 bg-[linear-gradient(135deg,color-mix(in_oklab,var(--color-primary)_7%,var(--color-card)),var(--color-card)_75%)] p-4 shadow-[0_18px_44px_rgb(0_0_0/0.16)]"
+        aria-labelledby="quota-title"
+      >
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 id="quota-title" className="text-sm font-semibold">
@@ -245,9 +240,22 @@ export function HighlightlyCollectionMonitorView() {
   const selectedScope = scope ?? monitor?.scope ?? "";
 
   return (
-    <div className="mx-auto flex min-w-0 w-full max-w-[1600px] flex-col gap-4 overflow-x-hidden">
-      <header className="flex flex-col gap-3 border-b border-border pb-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
+    <div className="page-stack relative isolate mx-auto min-w-0 w-full max-w-[1600px] overflow-x-hidden">
+      <AmbientBackdrop />
+      <PageIntro
+        title="Monitor da Coleta Highlightly"
+        description="Fila, fatia ativa, cota, qualidade e saúde operacional em uma única visão."
+        icon={DatabaseZap}
+        status={
+          monitorQuery.isFetching
+            ? "Atualizando telemetria"
+            : monitor?.provider_enabled
+              ? "Coleta em execução"
+              : "Monitor operacional"
+        }
+      />
+      <header className="flex flex-col gap-3 rounded-lg border border-primary/15 bg-card/80 p-3 lg:flex-row lg:items-center lg:justify-end">
+        <div className="hidden">
           <div className="flex items-center gap-2">
             <DatabaseZap className="size-5 text-primary" aria-hidden="true" />
             <h1 className="text-xl font-semibold tracking-tight">Monitor da Coleta Highlightly</h1>
@@ -323,7 +331,7 @@ export function HighlightlyCollectionMonitorView() {
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(420px,0.8fr)]">
             <section
-              className="min-w-0 border border-border bg-card"
+              className="min-w-0 overflow-hidden rounded-lg border border-primary/15 bg-card/90"
               aria-labelledby="sports-title"
             >
               <div className="border-b border-border px-4 py-3">
@@ -346,7 +354,10 @@ export function HighlightlyCollectionMonitorView() {
                   {monitor.by_sport.map((row) => (
                     <TableRow key={row.sport}>
                       <TableCell className="font-medium">
-                        {SPORT_LABELS[row.sport] ?? row.sport}
+                        <span className="flex items-center gap-2">
+                          <SportMark sport={SPORT_LABELS[row.sport] ?? row.sport} />
+                          {SPORT_LABELS[row.sport] ?? row.sport}
+                        </span>
                       </TableCell>
                       <TableCell className="text-right font-mono">{row.total}</TableCell>
                       <TableCell className="text-right font-mono">
@@ -367,7 +378,10 @@ export function HighlightlyCollectionMonitorView() {
               </Table>
             </section>
 
-            <section className="min-w-0 border border-border bg-card" aria-labelledby="dates-title">
+            <section
+              className="min-w-0 overflow-hidden rounded-lg border border-primary/15 bg-card/90"
+              aria-labelledby="dates-title"
+            >
               <div className="border-b border-border px-4 py-3">
                 <h2 id="dates-title" className="text-sm font-semibold">
                   Descoberta por data
@@ -406,7 +420,7 @@ export function HighlightlyCollectionMonitorView() {
           </div>
 
           <section
-            className="min-w-0 border border-border bg-card"
+            className="min-w-0 overflow-hidden rounded-lg border border-primary/15 bg-card/90"
             aria-labelledby="endpoints-title"
           >
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
@@ -459,7 +473,10 @@ export function HighlightlyCollectionMonitorView() {
           </section>
 
           <div className="grid gap-4 xl:grid-cols-2">
-            <section className="border border-border bg-card" aria-labelledby="running-title">
+            <section
+              className="overflow-hidden rounded-lg border border-primary/15 bg-card/90"
+              aria-labelledby="running-title"
+            >
               <div className="border-b border-border px-4 py-3">
                 <h2 id="running-title" className="text-sm font-semibold">
                   Jobs em execução
@@ -492,7 +509,10 @@ export function HighlightlyCollectionMonitorView() {
               </div>
             </section>
 
-            <section className="border border-border bg-card" aria-labelledby="errors-title">
+            <section
+              className="overflow-hidden rounded-lg border border-primary/15 bg-card/90"
+              aria-labelledby="errors-title"
+            >
               <div className="border-b border-border px-4 py-3">
                 <h2 id="errors-title" className="text-sm font-semibold">
                   Erros recentes

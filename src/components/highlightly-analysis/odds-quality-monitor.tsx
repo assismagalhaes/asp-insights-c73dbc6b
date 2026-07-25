@@ -58,7 +58,10 @@ export function OddsQualityMonitor({ report }: { report: HighlightlyOddsQualityR
   );
 
   return (
-    <section className="border border-border bg-card" aria-labelledby="odds-quality-title">
+    <section
+      className="overflow-hidden rounded-lg border border-primary/15 bg-card/90 shadow-[0_18px_44px_rgb(0_0_0/0.16)]"
+      aria-labelledby="odds-quality-title"
+    >
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3">
         <div>
           <h2 id="odds-quality-title" className="text-sm font-semibold">
