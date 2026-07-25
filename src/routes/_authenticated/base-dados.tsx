@@ -560,6 +560,8 @@ function BaseDadosPage() {
   }
 
   const selectedSportLabel = SPORTS.find((item) => item.value === sport)?.label ?? "—";
+  const historyHeaders = lastLinesHeader ? parseCsvDisplayLine(lastLinesHeader) : [];
+  const historyRows = lastLines.map(parseCsvDisplayLine);
 
   return (
     <div className="page-stack relative isolate">
@@ -641,14 +643,16 @@ function BaseDadosPage() {
         />
       </div>
 
-      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(300px,380px)_minmax(0,1fr)]">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[280px_minmax(0,1.35fr)_minmax(320px,0.9fr)]">
         <Card className="overflow-hidden border-primary/15 bg-card/90 shadow-[0_18px_50px_rgb(0_0_0/0.18)]">
           <CardHeader>
-            <CardTitle className="text-base">Filtros e operação</CardTitle>
+            <CardTitle role="heading" aria-level={2} className="text-base">
+              Contexto da base
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-              <Field label="Esporte/modelo">
+            <div className="grid gap-3">
+              <Field label="Esporte/modelo" htmlFor="base-sport">
                 <Select
                   value={sport}
                   onValueChange={(value) => {
@@ -659,7 +663,7 @@ function BaseDadosPage() {
                     resetTeamState();
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="base-sport" aria-label="Esporte ou modelo">
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent>
@@ -675,9 +679,9 @@ function BaseDadosPage() {
                 </Select>
               </Field>
 
-              <Field label="Liga/modelo específico">
+              <Field label="Liga/modelo específico" htmlFor="base-league">
                 <Select value={league} onValueChange={setLeague} disabled={!sport}>
-                  <SelectTrigger>
+                  <SelectTrigger id="base-league" aria-label="Liga ou modelo específico">
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent>
@@ -697,9 +701,9 @@ function BaseDadosPage() {
               </div>
             ) : (
               <>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                  <Field label="Ano da base">
-                    <div className="flex gap-2">
+                <div className="grid gap-3">
+                  <Field label="Ano da base" htmlFor="base-year">
+                    <div className="grid gap-2">
                       <Select
                         value={year}
                         onValueChange={(value) => {
@@ -708,7 +712,7 @@ function BaseDadosPage() {
                         }}
                         disabled={busy === "years" || !years.length}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger id="base-year" aria-label="Ano da base">
                           <SelectValue
                             placeholder={
                               busy === "years"
@@ -730,7 +734,7 @@ function BaseDadosPage() {
                       <Button
                         type="button"
                         variant="outline"
-                        className="shrink-0"
+                        className="w-full justify-start"
                         onClick={() => {
                           setSeasonSport(apiSport as "baseball" | "basketball");
                           setSeasonLeague(league || (apiSport === "basketball" ? "NBA" : "MLB"));
@@ -745,13 +749,13 @@ function BaseDadosPage() {
                     </div>
                   </Field>
 
-                  <Field label={isBasketball ? `Time ${league}` : "Time MLB"}>
+                  <Field label={isBasketball ? `Time ${league}` : "Time MLB"} htmlFor="base-team">
                     <Select
                       value={team}
                       onValueChange={setTeam}
                       disabled={busy === "teams" || !teams.length}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="base-team" aria-label="Time da base">
                         <SelectValue
                           placeholder={
                             busy === "teams"
@@ -782,47 +786,6 @@ function BaseDadosPage() {
                     </span>
                   </div>
                 )}
-
-                <Field label="Linha a adicionar">
-                  <Textarea
-                    rows={6}
-                    value={line}
-                    onChange={(e) => {
-                      setLine(e.target.value);
-                      setValidation(null);
-                      setOperation(null);
-                    }}
-                    className="resize-y font-mono text-xs"
-                    placeholder={getLinePlaceholder(isBasketball, league)}
-                  />
-                </Field>
-
-                <div className="flex flex-wrap gap-2">
-                  <Button onClick={handleValidate} disabled={!canValidate}>
-                    {busy === "validate" ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="mr-2 h-4 w-4" />
-                    )}
-                    Validar Linha
-                  </Button>
-                  <Button onClick={handleAdd} disabled={!canAdd}>
-                    {busy === "add" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Adicionar Linha
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    onClick={() => setConfirmRemove(true)}
-                    disabled={!canRemove}
-                  >
-                    {busy === "remove" ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="mr-2 h-4 w-4" />
-                    )}
-                    Remover Última Linha
-                  </Button>
-                </div>
               </>
             )}
           </CardContent>
@@ -831,7 +794,9 @@ function BaseDadosPage() {
         <div className="min-w-0 space-y-4">
           <Card className="min-w-0 overflow-hidden border-primary/15 bg-card/90 shadow-[0_18px_50px_rgb(0_0_0/0.18)]">
             <CardHeader className="flex-row items-center justify-between gap-3">
-              <CardTitle className="text-base">Últimas linhas do time</CardTitle>
+              <CardTitle role="heading" aria-level={2} className="text-base">
+                Últimas linhas do time
+              </CardTitle>
               <Button
                 size="sm"
                 variant="outline"
@@ -855,20 +820,48 @@ function BaseDadosPage() {
                 </div>
               )}
               {lastLines.length ? (
-                <div className="max-h-[520px] min-w-0 space-y-2 overflow-auto rounded-lg border border-border bg-background/50 p-3">
-                  {lastLinesHeader && (
-                    <pre className="whitespace-pre-wrap rounded border border-border/70 bg-muted/60 p-2 font-mono text-xs text-muted-foreground">
-                      {lastLinesHeader}
-                    </pre>
-                  )}
-                  {lastLines.map((item, index) => (
-                    <pre
-                      key={`${index}-${item}`}
-                      className="whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-xs"
-                    >
-                      {item}
-                    </pre>
-                  ))}
+                <div className="max-h-[540px] min-w-0 overflow-auto rounded-lg border border-border bg-background/50">
+                  <table className="w-max min-w-full border-collapse font-mono text-[11px]">
+                    <thead className="sticky top-0 z-10 bg-muted/95 text-left text-primary backdrop-blur">
+                      <tr>
+                        <th className="border-b border-r border-border px-3 py-2 text-right">#</th>
+                        {(historyHeaders.length
+                          ? historyHeaders
+                          : historyRows[0]
+                            ? historyRows[0].map((_, index) => `Campo ${index + 1}`)
+                            : []
+                        ).map((header, index) => (
+                          <th
+                            key={`${index}-${header}`}
+                            className="whitespace-nowrap border-b border-r border-border px-3 py-2 font-semibold last:border-r-0"
+                          >
+                            {header || `Campo ${index + 1}`}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historyRows.map((cells, rowIndex) => (
+                        <tr
+                          key={`${rowIndex}-${lastLines[rowIndex]}`}
+                          className="border-b border-border/50 last:border-0 even:bg-muted/20 hover:bg-primary/5"
+                        >
+                          <td className="border-r border-border/60 px-3 py-2 text-right text-muted-foreground">
+                            {rowIndex + 1}
+                          </td>
+                          {cells.map((cell, cellIndex) => (
+                            <td
+                              key={`${cellIndex}-${cell}`}
+                              className="max-w-56 whitespace-nowrap border-r border-border/40 px-3 py-2 last:border-r-0"
+                              title={cell}
+                            >
+                              {cell || "—"}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               ) : (
                 <div className="min-h-56 rounded-lg border border-dashed border-border bg-muted/20 p-8 text-center text-sm text-muted-foreground">
@@ -877,18 +870,96 @@ function BaseDadosPage() {
                     : "Selecione um time para consultar as últimas linhas."}
                 </div>
               )}
+              {lastLines.length ? (
+                <p className="mt-2 text-right text-[11px] text-muted-foreground">
+                  {lastLines.length} linhas exibidas · role horizontalmente para ver todos os campos
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="min-w-0 space-y-4">
+          <Card className="overflow-hidden border-primary/15 bg-card/90 shadow-[0_18px_50px_rgb(0_0_0/0.18)]">
+            <CardHeader>
+              <CardTitle role="heading" aria-level={2} className="text-base">
+                Operação na base
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {placeholderMessage ? (
+                <div className="rounded-lg border border-dashed border-border bg-muted/20 p-5 text-sm text-muted-foreground">
+                  Selecione uma base integrada para liberar as operações.
+                </div>
+              ) : (
+                <>
+                  <Field label="Linha a adicionar" htmlFor="base-line">
+                    <Textarea
+                      id="base-line"
+                      rows={7}
+                      value={line}
+                      onChange={(e) => {
+                        setLine(e.target.value);
+                        setValidation(null);
+                        setOperation(null);
+                      }}
+                      className="resize-y font-mono text-xs"
+                      placeholder={getLinePlaceholder(isBasketball, league)}
+                    />
+                  </Field>
+
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                    <Button className="w-full" onClick={handleValidate} disabled={!canValidate}>
+                      {busy === "validate" ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                      )}
+                      Validar linha
+                    </Button>
+                    <Button
+                      className="w-full"
+                      variant="secondary"
+                      onClick={handleAdd}
+                      disabled={!canAdd}
+                    >
+                      {busy === "add" ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Plus className="mr-2 h-4 w-4" />
+                      )}
+                      Adicionar linha
+                    </Button>
+                    <Button
+                      className="w-full sm:col-span-2 xl:col-span-1"
+                      variant="destructive"
+                      onClick={() => setConfirmRemove(true)}
+                      disabled={!canRemove}
+                    >
+                      {busy === "remove" ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="mr-2 h-4 w-4" />
+                      )}
+                      Remover última linha
+                    </Button>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
           <Card className="overflow-hidden border-primary/15 bg-card/90">
             <CardHeader>
-              <CardTitle className="text-base">Resultado da operação</CardTitle>
+              <CardTitle role="heading" aria-level={2} className="text-base">
+                Resultado da operação
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {validation && <ValidationPanel validation={validation} />}
               {operation && <OperationPanel operation={operation} />}
               {!validation && !operation && (
-                <div className="rounded-md border border-border bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+                <div className="rounded-lg border border-dashed border-border bg-muted/20 p-6 text-center text-sm text-muted-foreground">
                   Valide, adicione ou remova uma linha para ver o retorno da API.
                 </div>
               )}
@@ -1017,10 +1088,20 @@ function BaseDadosPage() {
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({
+  label,
+  children,
+  htmlFor,
+}: {
+  label: string;
+  children: ReactNode;
+  htmlFor?: string;
+}) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs uppercase tracking-wider text-muted-foreground">{label}</Label>
+      <Label htmlFor={htmlFor} className="text-xs uppercase tracking-wider text-muted-foreground">
+        {label}
+      </Label>
       {children}
     </div>
   );
@@ -1409,6 +1490,32 @@ function parseCsvLine(input: string): string[] {
     .trimEnd()
     .split(",")
     .map((value) => value.trim());
+}
+
+function parseCsvDisplayLine(input: string): string[] {
+  const cells: string[] = [];
+  let current = "";
+  let quoted = false;
+
+  for (let index = 0; index < input.length; index += 1) {
+    const character = input[index];
+    if (character === '"') {
+      if (quoted && input[index + 1] === '"') {
+        current += '"';
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (character === "," && !quoted) {
+      cells.push(current.trim());
+      current = "";
+    } else {
+      current += character;
+    }
+  }
+
+  cells.push(current.trim());
+  return cells;
 }
 
 function getLinePlaceholder(isBasketball: boolean, league: string) {
