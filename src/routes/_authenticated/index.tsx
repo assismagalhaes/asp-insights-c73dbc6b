@@ -52,6 +52,7 @@ import {
 } from "@/components/ui/select";
 import { usePrognosticos, useConfiguracao, MERCADOS_DEFAULT, ESPORTES_DEFAULT } from "@/lib/db";
 import { LeagueFilter } from "@/components/league-filter";
+import { SportFilterSelect } from "@/components/sport-filter-select";
 import { PeriodFilter } from "@/components/period-filter";
 import { formatBR } from "@/lib/date-br";
 import {
@@ -81,7 +82,6 @@ export const Route = createFileRoute("/_authenticated/")({
 const chartGrid = COLOR_GRID;
 const axisColor = COLOR_AXIS;
 
-const ESPORTES = ["Todos", ...ESPORTES_DEFAULT];
 const MERCADOS = ["Todos", ...MERCADOS_DEFAULT];
 
 function Dashboard() {
@@ -311,18 +311,15 @@ function Dashboard() {
             >
               Esporte
             </label>
-            <Select value={esporte} onValueChange={setEsporte}>
-              <SelectTrigger id="dashboard-esporte" className="h-9 w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ESPORTES.map((e) => (
-                  <SelectItem key={e} value={e}>
-                    {e}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SportFilterSelect
+              value={esporte}
+              onValueChange={setEsporte}
+              options={ESPORTES_DEFAULT}
+              allValue="Todos"
+              allLabel="Todos os esportes"
+              id="dashboard-esporte"
+              className="h-9 w-full"
+            />
           </div>
           <div className="min-w-0 sm:w-48">
             <label

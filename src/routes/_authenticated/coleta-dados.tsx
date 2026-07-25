@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PeriodFilter } from "@/components/period-filter";
+import { SportFilterSelect } from "@/components/sport-filter-select";
 import { dateInRange, rangeFromPeriodo, type PeriodoFiltro } from "@/lib/metrics";
 import {
   downloadText,
@@ -511,6 +512,7 @@ function ColetaDadosPage() {
               value={fEsporte}
               onChange={setFEsporte}
               options={filterOptions.esportes}
+              sportIcons
             />
             <Filter label="Liga" value={fLiga} onChange={setFLiga} options={filterOptions.ligas} />
             <Filter
@@ -991,30 +993,42 @@ function Filter({
   value,
   onChange,
   options,
+  sportIcons = false,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: string[];
+  sportIcons?: boolean;
 }) {
   return (
     <div>
       <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
         {label}
       </Label>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="h-9 w-44">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Todos</SelectItem>
-          {options.map((option) => (
-            <SelectItem key={option} value={option}>
-              {option}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {sportIcons ? (
+        <SportFilterSelect
+          value={value}
+          onValueChange={onChange}
+          options={options}
+          allLabel="Todos os esportes"
+          className="h-9 w-44"
+        />
+      ) : (
+        <Select value={value} onValueChange={onChange}>
+          <SelectTrigger className="h-9 w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            {options.map((option) => (
+              <SelectItem key={option} value={option}>
+                {option}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
     </div>
   );
 }
