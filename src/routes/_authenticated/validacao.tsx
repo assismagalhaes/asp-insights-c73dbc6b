@@ -1309,7 +1309,7 @@ function Validacao() {
             <div
               key={g.key}
               className={cn(
-                "group relative flex flex-col gap-4 overflow-hidden rounded-xl border bg-[linear-gradient(145deg,color-mix(in_oklab,var(--color-primary)_4%,var(--color-card)),var(--color-card)_72%)] p-4 shadow-[0_18px_44px_rgb(0_0_0/0.16)] transition-[border-color,box-shadow] sm:p-5",
+                "group relative flex flex-col gap-3 overflow-hidden rounded-xl border bg-[linear-gradient(145deg,color-mix(in_oklab,var(--color-primary)_4%,var(--color-card)),var(--color-card)_72%)] p-3 shadow-[0_18px_44px_rgb(0_0_0/0.16)] transition-[border-color,box-shadow] sm:p-4 xl:gap-2.5",
                 check?.auto === "PULAR" && "border-destructive/40",
                 check?.auto === "DESTAQUE" && "border-success/40",
                 check?.auto === "ALERTA" && "border-warning/40",
@@ -1846,12 +1846,12 @@ function PreAiShortlistPanel({
     : null;
 
   return (
-    <section className="relative flex flex-col gap-3 overflow-hidden rounded-xl border border-ai/35 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--color-ai)_6%,var(--color-card)),var(--color-card)_72%)] p-4 shadow-[0_16px_40px_rgb(0_0_0/0.14)]">
+    <section className="relative flex flex-col gap-2 overflow-hidden rounded-xl border border-ai/35 bg-[linear-gradient(145deg,color-mix(in_oklab,var(--color-ai)_6%,var(--color-card)),var(--color-card)_72%)] p-3 shadow-[0_16px_40px_rgb(0_0_0/0.14)] xl:grid xl:grid-cols-[220px_minmax(0,1fr)_minmax(320px,0.85fr)] xl:items-center">
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -left-16 -top-20 size-44 rounded-full bg-ai/[0.06] blur-3xl"
       />
-      <div className="relative grid gap-4 xl:grid-cols-[minmax(240px,0.8fr)_minmax(0,2fr)] xl:items-center">
+      <div className="relative grid gap-3 xl:contents">
         <div>
           <div className="flex items-center gap-2 text-sm font-semibold">
             <span className="flex size-10 items-center justify-center rounded-lg border border-ai/35 bg-ai/10 text-ai shadow-[0_0_22px_currentColor]">
@@ -1859,14 +1859,14 @@ function PreAiShortlistPanel({
             </span>
             Shortlist Pré-IA
           </div>
-          <p className="mt-2 max-w-sm text-xs leading-relaxed text-muted-foreground">
+          <p className="mt-1 max-w-sm text-[11px] leading-relaxed text-muted-foreground">
             Triagem operacional. O ranking não confirma entrada, publicação ou bankroll.
           </p>
           <Button
             size="sm"
             onClick={onGenerate}
             disabled={generating}
-            className="mt-3 w-full shadow-[0_0_22px_rgb(59_130_246/0.14)] sm:w-auto"
+            className="mt-2 w-full shadow-[0_0_22px_rgb(59_130_246/0.14)] sm:w-auto"
           >
             {generating ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
             Gerar shortlist
@@ -1886,13 +1886,13 @@ function PreAiShortlistPanel({
       </div>
 
       {history.length > 0 && (
-        <div className="relative grid items-end gap-3 rounded-lg border border-border/80 bg-background/35 p-3 lg:grid-cols-[minmax(0,1fr)_auto]">
-          <div className="min-w-[280px] flex-1">
+        <div className="relative grid min-w-0 items-end gap-2 rounded-lg border border-border/80 bg-background/35 p-2">
+          <div className="min-w-0">
             <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Histórico salvo por período e modalidade
             </Label>
             <Select value={selectedRunId} onValueChange={onSelectRun}>
-              <SelectTrigger className="mt-1">
+              <SelectTrigger className="mt-1 h-9">
                 <SelectValue placeholder="Selecione uma shortlist salva" />
               </SelectTrigger>
               <SelectContent>
@@ -1905,12 +1905,12 @@ function PreAiShortlistPanel({
             </Select>
           </div>
           {latest && (
-            <div className="text-xs text-muted-foreground">
-              <div>{formatShortlistScope(latest.run)}</div>
-              <div className="mt-1 font-mono text-[10px]">
+            <div className="text-[10px] text-muted-foreground">
+              <div className="truncate">{formatShortlistScope(latest.run)}</div>
+              <div className="mt-0.5 font-mono">
                 {latest.run.top_final_count} top final de {latest.run.candidate_count} candidata(s)
               </div>
-              <div className="mt-1 font-mono text-[10px]">
+              <div className="mt-0.5 truncate font-mono">
                 {decisionCounts.confirmed} confirmada(s) · {decisionCounts.skipped} pulada(s) ·{" "}
                 {decisionCounts.pending} pendente(s) · {decisionCounts.blocked} bloqueada(s)
               </div>
@@ -1919,7 +1919,7 @@ function PreAiShortlistPanel({
         </div>
       )}
 
-      <details className="group/shortlist rounded-lg border border-border/80 bg-background/25">
+      <details className="group/shortlist rounded-lg border border-border/80 bg-background/25 xl:col-span-3">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground marker:content-none">
           Preview, finais e ranking detalhado
           <span className="flex items-center gap-2 font-mono text-[10px] normal-case">
@@ -2283,10 +2283,10 @@ function ValidationGateStrip({
 
   return (
     <section
-      aria-label="Gates determinísticos"
+      aria-label="Sinais operacionais"
       className="rounded-lg border border-border/80 bg-background/35 p-3"
     >
-      <p className="panel-kicker">Gates determinísticos</p>
+      <p className="panel-kicker">Sinais operacionais</p>
       <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {gates.map((gate) => {
           const Icon = gate.passed ? CheckCircle2 : XCircle;
@@ -2325,7 +2325,7 @@ function Metric({
   tone?: "good" | "bad" | "warn";
 }) {
   return (
-    <div className="min-h-[72px] rounded-md border border-border bg-background/50 p-2.5">
+    <div className="min-h-[64px] rounded-md border border-border bg-background/50 p-2">
       <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </div>
