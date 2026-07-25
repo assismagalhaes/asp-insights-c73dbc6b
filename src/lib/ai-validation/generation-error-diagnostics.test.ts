@@ -1,7 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { AiStructuredRepairFailure, createAiGenerationFailure } from "./generation-result";
+import {
+  AiStructuredRepairFailure,
+  buildStructuredRepairPrompt,
+  createAiGenerationFailure,
+} from "./generation-result";
 
 describe("diagnóstico de falhas do provider", () => {
+  it("mantém o contexto operacional quando a saída inicial está vazia", () => {
+    const prompt = buildStructuredRepairPrompt({
+      operationalContext: "Jogo: Portland Timbers vs Real Salt Lake\nOdd: 1.48\nEdge: 6.59%",
+      previousOutput: "   ",
+      researchContext: "Buscas: injury report\nFontes: MLS — https://example.com/mls",
+    });
+
+    expect(prompt).toContain("Portland Timbers vs Real Salt Lake");
+    expect(prompt).toContain("Odd: 1.48");
+    expect(prompt).toContain("injury report");
+    expect(prompt).toContain("EMPTY_INITIAL_OUTPUT");
+  });
+
   it("extrai status de uma causa aninhada sem expor detalhes do provider", () => {
     const error = Object.assign(new Error("Failed after 3 attempts"), {
       cause: {

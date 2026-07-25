@@ -90,4 +90,8 @@ describe("configuração do Structured Output local", () => {
 
     expect(() => parseLocalGatewayJson(JSON.stringify(invalid))).toThrow();
   });
+
+  it("identifica saída inicial vazia antes do reparo", () => {
+    expect(() => parseLocalGatewayJson("   ")).toThrow("EMPTY_INITIAL_OUTPUT");
+  });
 });

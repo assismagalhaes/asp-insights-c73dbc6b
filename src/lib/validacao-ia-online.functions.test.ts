@@ -10,6 +10,15 @@ import {
 } from "./validacao-ia-online.functions";
 
 describe("Structured Output online", () => {
+  it("identifica saída inicial vazia antes do reparo", () => {
+    expect(() =>
+      parseOnlineGatewayJson("   ", {
+        sourceTraces: [],
+        searches: [],
+      }),
+    ).toThrow("EMPTY_INITIAL_OUTPUT");
+  });
+
   it("usa o Lovable AI Gateway com Gemini 3.6 Flash e contrato 1.1.0", () => {
     const output = parseOnlineGatewayJson(ONLINE_GATEWAY_JSON_TEMPLATE, {
       sourceTraces: [],
