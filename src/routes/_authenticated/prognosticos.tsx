@@ -25,11 +25,11 @@ import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SportFilterSelect, SportMark } from "@/components/sport-filter-select";
 import { StatusBadge, ResultBadge } from "@/components/status-badge";
 import { LeagueFilter } from "@/components/league-filter";
 import { PeriodFilter } from "@/components/period-filter";
@@ -60,7 +60,6 @@ import { ResultadoDialog } from "@/components/resultado-dialog";
 import { DadosTecnicosViewer } from "@/components/dados-tecnicos-viewer";
 import { supabase } from "@/lib/supabase-public";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -98,20 +97,6 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 function formatDateBR(iso: string): string {
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
-}
-
-function sportVisual(sport: string) {
-  const normalized = sport.toLocaleLowerCase("pt-BR");
-  if (normalized.includes("baseball") || normalized.includes("beisebol")) {
-    return { symbol: "⚾", className: "bg-red-500/10 text-red-400" };
-  }
-  if (normalized.includes("basket") || normalized.includes("basquete")) {
-    return { symbol: "🏀", className: "bg-orange-500/10 text-orange-400" };
-  }
-  if (normalized.includes("futebol") || normalized.includes("football")) {
-    return { symbol: "⚽", className: "bg-emerald-500/10 text-emerald-400" };
-  }
-  return { symbol: "◆", className: "bg-primary/10 text-primary" };
 }
 
 function Prognosticos() {
@@ -423,42 +408,16 @@ function Prognosticos() {
         />
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <FilterField label="Esporte" htmlFor="prognosticos-esporte">
-            <Select
+            <SportFilterSelect
               value={fEsporte}
               onValueChange={(v) => {
                 setFEsporte(v);
                 setFLiga("all");
               }}
-            >
-              <SelectTrigger id="prognosticos-esporte" className="h-10 w-full">
-                <SelectValue placeholder="Esporte">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <SportMark sport={fEsporte} size="sm" />
-                    <span className="truncate">
-                      {fEsporte === "all" ? "Todos os esportes" : fEsporte}
-                    </span>
-                  </span>
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="all" textValue="Todos os esportes">
-                    <span className="flex items-center gap-2">
-                      <SportMark sport="all" size="sm" />
-                      Todos os esportes
-                    </span>
-                  </SelectItem>
-                  {esportes.map((s) => (
-                    <SelectItem key={s} value={s} textValue={s}>
-                      <span className="flex items-center gap-2">
-                        <SportMark sport={s} size="sm" />
-                        {s}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
+              options={esportes}
+              id="prognosticos-esporte"
+              className="h-10 w-full"
+            />
           </FilterField>
           <FilterField label="Liga" htmlFor="prognosticos-liga">
             <LeagueFilter
@@ -1177,22 +1136,6 @@ function FilterField({
       </label>
       {children}
     </div>
-  );
-}
-
-function SportMark({ sport, size = "md" }: { sport: string; size?: "sm" | "md" }) {
-  const visual = sportVisual(sport);
-  return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-md",
-        size === "sm" ? "size-5 text-xs" : "size-7 text-sm",
-        visual.className,
-      )}
-    >
-      {visual.symbol}
-    </span>
   );
 }
 

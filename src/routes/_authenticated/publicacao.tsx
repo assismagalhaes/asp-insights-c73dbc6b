@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LeagueFilter } from "@/components/league-filter";
+import { SportFilterSelect } from "@/components/sport-filter-select";
 import { PeriodFilter } from "@/components/period-filter";
 import { rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
 import { formatBR, formatHora } from "@/lib/date-br";
@@ -140,25 +141,15 @@ function PublicacaoPage() {
             <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
               Esporte
             </Label>
-            <Select
+            <SportFilterSelect
               value={fEsporte}
               onValueChange={(v) => {
                 setFEsporte(v);
                 setFLiga("all");
               }}
-            >
-              <SelectTrigger className="h-9 w-44">
-                <SelectValue placeholder="Esporte" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os esportes</SelectItem>
-                {esportes.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              options={esportes}
+              className="h-9 w-44"
+            />
           </div>
           <div>
             <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">

@@ -43,6 +43,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PeriodFilter } from "@/components/period-filter";
+import { SportFilterSelect } from "@/components/sport-filter-select";
 import { StatCard } from "@/components/stat-card";
 import { ChartTooltip } from "@/components/chart-tooltip";
 import {
@@ -142,29 +143,42 @@ function FilterSelect({
   onChange,
   options,
   allLabel,
+  sportIcons = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: string[];
   allLabel: string;
+  sportIcons?: boolean;
 }) {
   return (
     <div className="flex min-w-44 flex-col">
       <label className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</label>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="h-9" aria-label={label}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">{allLabel}</SelectItem>
-          {options.map((option) => (
-            <SelectItem key={option} value={option}>
-              {option}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {sportIcons ? (
+        <SportFilterSelect
+          value={value}
+          onValueChange={onChange}
+          options={options}
+          allLabel={allLabel}
+          className="h-9"
+          ariaLabel={label}
+        />
+      ) : (
+        <Select value={value} onValueChange={onChange}>
+          <SelectTrigger className="h-9" aria-label={label}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{allLabel}</SelectItem>
+            {options.map((option) => (
+              <SelectItem key={option} value={option}>
+                {option}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
     </div>
   );
 }
@@ -271,6 +285,7 @@ function AiObservabilityPage() {
             onChange={setSport}
             options={sports}
             allLabel="Todos os esportes"
+            sportIcons
           />
           <FilterSelect
             label="Modo"

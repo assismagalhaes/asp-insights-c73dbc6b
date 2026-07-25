@@ -34,6 +34,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { StatusBadge } from "@/components/status-badge";
 import { LeagueFilter } from "@/components/league-filter";
+import { SportFilterSelect } from "@/components/sport-filter-select";
 import { PeriodFilter } from "@/components/period-filter";
 import { AiAnalysisPanel } from "@/components/ai-validation/ai-analysis-panel";
 import { rangeFromPeriodo, dateInRange, type PeriodoFiltro } from "@/lib/metrics";
@@ -1128,25 +1129,15 @@ function Validacao() {
             <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
               Esporte
             </Label>
-            <Select
+            <SportFilterSelect
               value={fEsporte}
               onValueChange={(v) => {
                 setFEsporte(v);
                 setFLiga("all");
               }}
-            >
-              <SelectTrigger className="h-9 w-44">
-                <SelectValue placeholder="Esporte" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os esportes</SelectItem>
-                {esportes.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              options={esportes}
+              className="h-9 w-44"
+            />
           </div>
           <div>
             <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">

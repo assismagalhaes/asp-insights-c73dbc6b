@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LeagueFilter } from "@/components/league-filter";
+import { SportFilterSelect } from "@/components/sport-filter-select";
 import { PeriodFilter } from "@/components/period-filter";
 import {
   rangeFromPeriodo,
@@ -101,25 +102,14 @@ function Historico() {
       </div>
 
       <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
-        <Select
+        <SportFilterSelect
           value={esporte}
           onValueChange={(v) => {
             setEsporte(v);
             setLiga("all");
           }}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Esporte" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os esportes</SelectItem>
-            {esportes.map((s) => (
-              <SelectItem key={s} value={s}>
-                {s}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          options={esportes}
+        />
         <LeagueFilter sport={esporte} value={liga} onChange={setLiga} />
         <Select value={mercado} onValueChange={setMercado}>
           <SelectTrigger>
