@@ -88,4 +88,30 @@ describe("diagnóstico de falhas do provider", () => {
     expect(result.parse_error).toContain("saída reparada continuou incompatível");
     expect(result.parse_error).not.toContain("private-schema-detail");
   });
+
+  it("expõe somente caminhos e mensagens seguras das violações do schema", () => {
+    const zodLikeError = {
+      name: "ZodError",
+      issues: [
+        { path: ["gates", "context", "status"], message: "Invalid option: expected APPROVED" },
+        { path: ["narrative", "thesis_for"], message: "Too small: expected string" },
+        { path: ["stake"], message: "Invalid input" },
+        { path: ["ignored"], message: "quarta violação não deve aparecer" },
+      ],
+    };
+    const result = createAiGenerationFailure(
+      new AiStructuredRepairFailure({
+        stage: "PARSE",
+        initialError: zodLikeError,
+        repairError: zodLikeError,
+      }),
+      100,
+      { phase: "REPAIR_GENERATION" },
+    );
+
+    expect(result.parse_error).toContain("gates.context.status");
+    expect(result.parse_error).toContain("narrative.thesis_for");
+    expect(result.parse_error).toContain("stake");
+    expect(result.parse_error).not.toContain("quarta violação");
+  });
 });

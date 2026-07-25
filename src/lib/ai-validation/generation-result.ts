@@ -63,10 +63,36 @@ function structuralFailureCode(error: unknown): string {
   return "STRUCTURED_OUTPUT_INVALID";
 }
 
+function structuralFailureDetails(error: unknown): string {
+  if (!error || typeof error !== "object") return structuralFailureCode(error);
+  const issues = (error as { issues?: unknown }).issues;
+  if (!Array.isArray(issues)) return structuralFailureCode(error);
+
+  const details = issues
+    .slice(0, 3)
+    .map((issue) => {
+      if (!issue || typeof issue !== "object") return null;
+      const record = issue as { path?: unknown; message?: unknown };
+      const path = Array.isArray(record.path)
+        ? record.path.map(String).join(".") || "root"
+        : "root";
+      const message =
+        typeof record.message === "string"
+          ? record.message.replace(/\s+/g, " ").slice(0, 300)
+          : "valor incompatível";
+      return `${path}: ${message}`;
+    })
+    .filter((value): value is string => Boolean(value));
+
+  return details.length ? details.join("; ").slice(0, 1_000) : structuralFailureCode(error);
+}
+
 export class AiStructuredRepairFailure extends Error {
   readonly code = "REPAIR_GENERATION_FAILED";
   readonly repairStage: AiRepairFailureStage;
   readonly initialFailureCode: string;
+  readonly initialFailureDetails: string;
+  readonly repairFailureDetails: string;
   readonly repairError: unknown;
 
   constructor({
@@ -82,6 +108,8 @@ export class AiStructuredRepairFailure extends Error {
     this.name = "AiStructuredRepairFailure";
     this.repairStage = stage;
     this.initialFailureCode = structuralFailureCode(initialError);
+    this.initialFailureDetails = structuralFailureDetails(initialError);
+    this.repairFailureDetails = structuralFailureDetails(repairError);
     this.repairError = repairError;
     this.cause = repairError;
   }
@@ -245,7 +273,7 @@ export function createAiGenerationFailure(
     safeMessage =
       error.repairStage === "REQUEST"
         ? `A resposta inicial falhou em ${error.initialFailureCode} e o provider não concluiu a chamada de reparo. A recomendação foi convertida para PULAR.`
-        : `A resposta inicial falhou em ${error.initialFailureCode} e a saída reparada continuou incompatível com o contrato. A recomendação foi convertida para PULAR.`;
+        : `A resposta inicial falhou em ${error.initialFailureCode} e a saída reparada continuou incompatível com o contrato. Violações iniciais: ${error.initialFailureDetails}. Violações após reparo: ${error.repairFailureDetails}. A recomendação foi convertida para PULAR.`;
   } else if (
     httpStatus === 401 ||
     httpStatus === 403 ||
