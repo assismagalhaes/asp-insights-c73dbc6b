@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -59,6 +60,7 @@ import { ResultadoDialog } from "@/components/resultado-dialog";
 import { DadosTecnicosViewer } from "@/components/dados-tecnicos-viewer";
 import { supabase } from "@/lib/supabase-public";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -429,15 +431,32 @@ function Prognosticos() {
               }}
             >
               <SelectTrigger id="prognosticos-esporte" className="h-10 w-full">
-                <SelectValue placeholder="Esporte" />
+                <SelectValue placeholder="Esporte">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <SportMark sport={fEsporte} size="sm" />
+                    <span className="truncate">
+                      {fEsporte === "all" ? "Todos os esportes" : fEsporte}
+                    </span>
+                  </span>
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos os esportes</SelectItem>
-                {esportes.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
+                <SelectGroup>
+                  <SelectItem value="all" textValue="Todos os esportes">
+                    <span className="flex items-center gap-2">
+                      <SportMark sport="all" size="sm" />
+                      Todos os esportes
+                    </span>
                   </SelectItem>
-                ))}
+                  {esportes.map((s) => (
+                    <SelectItem key={s} value={s} textValue={s}>
+                      <span className="flex items-center gap-2">
+                        <SportMark sport={s} size="sm" />
+                        {s}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </FilterField>
@@ -1161,12 +1180,16 @@ function FilterField({
   );
 }
 
-function SportMark({ sport }: { sport: string }) {
+function SportMark({ sport, size = "md" }: { sport: string; size?: "sm" | "md" }) {
   const visual = sportVisual(sport);
   return (
     <span
       aria-hidden="true"
-      className={`inline-flex size-7 shrink-0 items-center justify-center rounded-md text-sm ${visual.className}`}
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center rounded-md",
+        size === "sm" ? "size-5 text-xs" : "size-7 text-sm",
+        visual.className,
+      )}
     >
       {visual.symbol}
     </span>
