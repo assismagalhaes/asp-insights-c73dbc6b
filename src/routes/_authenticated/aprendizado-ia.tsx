@@ -99,15 +99,128 @@ type LearningRow = Pick<
   | "created_at"
 >;
 
-type HistoricalPrognostico = Prognostico & {
-  resultados?: Array<{
-    resultado: string;
-    lucro_prejuizo: number | null;
-    created_at: string;
-    data_resultado: string | null;
-  }>;
-  validacoes?: Array<Partial<Validacao>>;
+type HistoricalResultado = {
+  prognostico_id: string;
+  resultado: string;
+  lucro_prejuizo: number | null;
+  created_at: string;
+  data_resultado: string | null;
 };
+
+type HistoricalValidacao = Pick<
+  Validacao,
+  | "prognostico_id"
+  | "decisao"
+  | "stake_confirmada"
+  | "parecer_validacao"
+  | "parecer_ia"
+  | "decisao_ia_sugerida"
+  | "stake_ia_sugerida"
+  | "modo_ia"
+  | "created_at"
+>;
+
+type HistoricalPrognostico = Pick<
+  Prognostico,
+  | "id"
+  | "esporte"
+  | "liga"
+  | "jogo"
+  | "mercado"
+  | "pick"
+  | "odd_ofertada"
+  | "odd_ajustada"
+  | "probabilidade_final"
+  | "edge"
+  | "edge_ajustado"
+  | "stake"
+  | "status_validacao"
+  | "resultado"
+  | "lucro_prejuizo"
+  | "observacoes"
+  | "created_at"
+  | "updated_at"
+> & {
+  resultados: HistoricalResultado[];
+  validacoes: HistoricalValidacao[];
+};
+
+const HISTORICAL_PAGE_SIZE = 250;
+const RELATED_BATCH_SIZE = 100;
+const SETTLED_RESULTS = ["GREEN", "RED", "WIN", "WINS", "LOSS", "LOSSES"];
+
+function queryErrorMessage(error: unknown): string {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    return error.message;
+  }
+  return String(error);
+}
+
+async function loadHistoricalPrognosticos(): Promise<HistoricalPrognostico[]> {
+  const prognosticos: Array<Omit<HistoricalPrognostico, "resultados" | "validacoes">> = [];
+
+  for (let from = 0; ; from += HISTORICAL_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("prognosticos")
+      .select(
+        "id, esporte, liga, jogo, mercado, pick, odd_ofertada, odd_ajustada, probabilidade_final, edge, edge_ajustado, stake, status_validacao, resultado, lucro_prejuizo, observacoes, created_at, updated_at",
+      )
+      .in("resultado", SETTLED_RESULTS)
+      .order("updated_at", { ascending: false })
+      .range(from, from + HISTORICAL_PAGE_SIZE - 1);
+
+    if (error) throw error;
+    const page = (data ?? []) as Array<Omit<HistoricalPrognostico, "resultados" | "validacoes">>;
+    prognosticos.push(...page);
+    if (page.length < HISTORICAL_PAGE_SIZE) break;
+  }
+
+  if (!prognosticos.length) return [];
+
+  const resultadosByPrognostico = new Map<string, HistoricalResultado[]>();
+  const validacoesByPrognostico = new Map<string, HistoricalValidacao[]>();
+
+  for (let from = 0; from < prognosticos.length; from += RELATED_BATCH_SIZE) {
+    const ids = prognosticos.slice(from, from + RELATED_BATCH_SIZE).map((row) => row.id);
+    const [resultadosResult, validacoesResult] = await Promise.all([
+      supabase
+        .from("resultados")
+        .select("prognostico_id, resultado, lucro_prejuizo, data_resultado, created_at")
+        .in("prognostico_id", ids),
+      supabase
+        .from("validacoes")
+        .select(
+          "prognostico_id, decisao, stake_confirmada, parecer_validacao, parecer_ia, decisao_ia_sugerida, stake_ia_sugerida, modo_ia, created_at",
+        )
+        .in("prognostico_id", ids),
+    ]);
+
+    if (resultadosResult.error) throw resultadosResult.error;
+    if (validacoesResult.error) throw validacoesResult.error;
+
+    for (const row of (resultadosResult.data ?? []) as HistoricalResultado[]) {
+      const current = resultadosByPrognostico.get(row.prognostico_id) ?? [];
+      current.push(row);
+      resultadosByPrognostico.set(row.prognostico_id, current);
+    }
+    for (const row of (validacoesResult.data ?? []) as HistoricalValidacao[]) {
+      const current = validacoesByPrognostico.get(row.prognostico_id) ?? [];
+      current.push(row);
+      validacoesByPrognostico.set(row.prognostico_id, current);
+    }
+  }
+
+  return prognosticos.map((row) => ({
+    ...row,
+    resultados: resultadosByPrognostico.get(row.id) ?? [],
+    validacoes: validacoesByPrognostico.get(row.id) ?? [],
+  }));
+}
 
 function AprendizadoIaPage() {
   const { data: cfg } = useConfiguracao();
@@ -154,17 +267,15 @@ function AprendizadoIaPage() {
   const { data: historico = [], isLoading: loadingHistorico } = useQuery({
     queryKey: ["ai-learning", "historico-retroativo"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("prognosticos")
-        .select(
-          "*, resultados(resultado, lucro_prejuizo, data_resultado, created_at), validacoes(*)",
-        )
-        .in("resultado", ["GREEN", "RED", "WIN", "WINS", "LOSS", "LOSSES"]);
-      if (error) {
-        console.warn("[Aprendizado IA] histórico retroativo indisponível:", error.message);
+      try {
+        return await loadHistoricalPrognosticos();
+      } catch (error) {
+        console.warn(
+          "[Aprendizado IA] histórico retroativo indisponível:",
+          queryErrorMessage(error),
+        );
         return [] as HistoricalPrognostico[];
       }
-      return (data ?? []) as HistoricalPrognostico[];
     },
   });
 
