@@ -138,6 +138,39 @@ class HighlightlyFutureContinuationTests(unittest.TestCase):
         self.assertEqual(report["event"], "future_continuation_waiting_quota")
         self.assertEqual(report["requests_available"], 0)
 
+    @patch.object(continuation, "_active_jobs")
+    @patch.object(continuation.HighlightlyRepository, "from_environment")
+    def test_non_future_queue_waits_without_failing_or_enabling_provider(
+        self,
+        repository_factory,
+        active_jobs,
+    ):
+        repository = Mock()
+        repository.ingestion_context.return_value = {
+            "provider": {"id": "provider-1", "enabled": False}
+        }
+        repository_factory.return_value = repository
+        active_jobs.return_value = [
+            {
+                "id": "job-1",
+                "status": "pending",
+                "shadow_scope": "phase8e-lifecycle-20260727T1153Z",
+            }
+        ]
+
+        with patch("builtins.print") as output:
+            exit_code = continuation.main(["--confirm-continuation"])
+
+        self.assertEqual(exit_code, 0)
+        repository.set_provider_enabled.assert_not_called()
+        report = json.loads(output.call_args.args[0])
+        self.assertEqual(report["event"], "future_continuation_skipped")
+        self.assertEqual(
+            report["reason"],
+            "active_foreign_or_ambiguous_queue",
+        )
+        self.assertIn("non-future scope", report["detail"])
+
     @patch.object(continuation, "HighlightlyClient")
     @patch.object(continuation, "HighlightlyWorker")
     @patch.object(continuation, "_active_jobs")

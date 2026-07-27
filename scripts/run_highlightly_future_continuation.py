@@ -148,7 +148,22 @@ def main(argv: Iterable[str] | None = None) -> int:
         )
         return 0
 
-    scope = resolve_future_scope(active_before)
+    try:
+        scope = resolve_future_scope(active_before)
+    except RuntimeError as exc:
+        print(
+            json.dumps(
+                _report(
+                    "future_continuation_skipped",
+                    reason="active_foreign_or_ambiguous_queue",
+                    active_jobs=len(active_before),
+                    detail=str(exc),
+                ),
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+        )
+        return 0
     running = [row for row in active_before if running_lock_blocks_start(row)]
     if running:
         print(

@@ -293,6 +293,155 @@ class HighlightlyPhaseEightEMatchLifecycleTests(unittest.TestCase):
         repository.set_provider_enabled.assert_any_call("highlightly", False)
         self.assertEqual(worker_factory.call_args.kwargs["daily_quota_ceiling"], 300)
 
+    @patch.object(phase8e, "_active_jobs")
+    @patch.object(phase8e, "HighlightlyWorker")
+    @patch.object(phase8e, "HighlightlyClient")
+    @patch.object(phase8e.HighlightlyRepository, "from_environment")
+    def test_existing_jobs_reduce_new_candidate_capacity(
+        self,
+        repository_factory,
+        _client_factory,
+        worker_factory,
+        active_jobs,
+    ):
+        repository = Mock()
+        repository_factory.return_value = repository
+        repository.ingestion_context.return_value = {
+            "provider": {"id": "provider-1", "enabled": False}
+        }
+        repository.rpc.side_effect = [
+            [candidate()],
+            0,
+            {"matches_affected": 1},
+            {"by_stage": []},
+        ]
+        repository.select_rows.return_value = []
+        repository.enqueue_job.return_value = {"id": "new-job", "attempts": 0}
+        repository.daily_request_usage.return_value = 0
+        active_jobs.side_effect = [
+            [
+                {
+                    "id": f"existing-{index}",
+                    "status": "pending",
+                    "shadow_scope": "phase8e-lifecycle-existing",
+                }
+                for index in range(53)
+            ],
+            [],
+        ]
+        worker_factory.return_value.run_once.return_value = WorkerResult(status="idle")
+
+        with patch("builtins.print") as output:
+            exit_code = phase8e.main(
+                [
+                    "--at",
+                    "2026-07-27T12:00:00+00:00",
+                    "--max-jobs",
+                    "100",
+                    "--confirm-lifecycle",
+                ]
+            )
+
+        self.assertEqual(exit_code, 0)
+        repository.rpc.assert_any_call(
+            "get_highlightly_match_lifecycle_candidates_v2",
+            {
+                "p_at": "2026-07-27T12:00:00+00:00",
+                "p_limit": 47,
+                "p_include_disabled": False,
+            },
+        )
+        report = json.loads(output.call_args.args[0])
+        self.assertEqual(report["active_before"], 53)
+        self.assertEqual(report["enqueue_capacity"], 47)
+
+    @patch.object(phase8e, "_active_jobs")
+    @patch.object(phase8e, "HighlightlyWorker")
+    @patch.object(phase8e, "HighlightlyClient")
+    @patch.object(phase8e.HighlightlyRepository, "from_environment")
+    def test_drain_only_processes_existing_jobs_without_candidate_lookup(
+        self,
+        repository_factory,
+        _client_factory,
+        worker_factory,
+        active_jobs,
+    ):
+        repository = Mock()
+        repository_factory.return_value = repository
+        repository.ingestion_context.return_value = {
+            "provider": {"id": "provider-1", "enabled": False}
+        }
+        repository.rpc.side_effect = [
+            0,
+            {"matches_affected": 1},
+            {"by_stage": []},
+        ]
+        repository.select_rows.return_value = [
+            {
+                "id": "existing-1",
+                "sport": "football",
+                "resource": "match_status",
+                "endpoint_key": "football.FootballMatchController_getMatchById",
+                "dedupe_key": "phase8e:existing",
+                "request_params": {
+                    "matchId": "99",
+                    "_shadow_scope": "phase8e-lifecycle-existing",
+                    "_phase8e_stage": "imminent",
+                    "_phase8e_resource": "match_status",
+                    "_canonical_match_id": "match-1",
+                    "_kickoff_at": "2026-07-27T13:00:00+00:00",
+                },
+                "priority": 1,
+                "attempts": 0,
+            }
+        ]
+        repository.daily_request_usage.return_value = 0
+        active_jobs.side_effect = [
+            [
+                {
+                    "id": "existing-1",
+                    "status": "pending",
+                    "shadow_scope": "phase8e-lifecycle-existing",
+                }
+            ],
+            [],
+        ]
+        worker_factory.return_value.run_once.side_effect = [
+            WorkerResult(
+                status="succeeded",
+                job_id="existing-1",
+                records_received=1,
+                records_normalized=1,
+            ),
+            WorkerResult(status="idle"),
+        ]
+
+        with patch("builtins.print") as output:
+            exit_code = phase8e.main(
+                [
+                    "--at",
+                    "2026-07-27T12:00:00+00:00",
+                    "--max-jobs",
+                    "100",
+                    "--drain-only",
+                    "--confirm-lifecycle",
+                ]
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertFalse(
+            any(
+                call.args
+                and call.args[0] == "get_highlightly_match_lifecycle_candidates_v2"
+                for call in repository.rpc.call_args_list
+            )
+        )
+        repository.enqueue_job.assert_not_called()
+        report = json.loads(output.call_args.args[0])
+        self.assertTrue(report["drain_only"])
+        self.assertEqual(report["active_before"], 1)
+        self.assertEqual(report["active_after"], 0)
+
     def test_football_player_box_score_always_uses_match_id(self):
         params = phase8e._canonical_request_params(
             candidate(

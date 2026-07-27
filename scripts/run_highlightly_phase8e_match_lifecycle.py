@@ -82,6 +82,11 @@ def _parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
         type=int,
         default=DEFAULT_DAILY_REQUEST_BUDGET,
     )
+    parser.add_argument(
+        "--drain-only",
+        action="store_true",
+        help="Process existing Phase 8E jobs without enqueueing new candidates.",
+    )
     parser.add_argument("--confirm-lifecycle", action="store_true")
     args = parser.parse_args(argv)
     if not 1 <= args.max_jobs <= 3_000:
@@ -95,6 +100,8 @@ def _parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
         )
     if args.at is not None and (args.at.tzinfo is None or args.at.utcoffset() is None):
         parser.error("--at must include a timezone")
+    if args.drain_only and not args.confirm_lifecycle:
+        parser.error("--drain-only requires --confirm-lifecycle")
     return args
 
 
@@ -273,15 +280,28 @@ def main(argv: Iterable[str] | None = None) -> int:
     repository = HighlightlyRepository.from_environment()
     provider = _provider(repository)
 
-    candidates = _as_rows(
-        repository.rpc(
-            "get_highlightly_match_lifecycle_candidates_v2",
-            {
-                "p_at": at.isoformat(),
-                "p_limit": args.max_jobs,
-                "p_include_disabled": not args.confirm_lifecycle,
-            },
+    active_before: list[dict[str, Any]] = []
+    enqueue_capacity = args.max_jobs
+    if args.confirm_lifecycle:
+        active_before = _active_jobs(repository, limit=3_000)
+        enqueue_capacity = max(0, args.max_jobs - len(active_before))
+
+    candidate_limit = (
+        0 if args.confirm_lifecycle and args.drain_only else enqueue_capacity
+    )
+    candidates = (
+        _as_rows(
+            repository.rpc(
+                "get_highlightly_match_lifecycle_candidates_v2",
+                {
+                    "p_at": at.isoformat(),
+                    "p_limit": candidate_limit,
+                    "p_include_disabled": not args.confirm_lifecycle,
+                },
+            )
         )
+        if candidate_limit > 0
+        else []
     )
     by_stage = dict(Counter(str(row.get("lifecycle_stage")) for row in candidates))
     by_resource = dict(Counter(str(row.get("resource")) for row in candidates))
@@ -300,6 +320,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                     request_budget=args.request_budget,
                     daily_request_budget=args.daily_request_budget,
                     max_jobs=args.max_jobs,
+                    drain_only=args.drain_only,
                     includes_disabled_policies=True,
                 ),
                 ensure_ascii=False,
@@ -323,7 +344,6 @@ def main(argv: Iterable[str] | None = None) -> int:
         )
         return 0
 
-    active_before = _active_jobs(repository, limit=args.max_jobs)
     outsiders = [row for row in active_before if not _phase8e_job(row)]
     if outsiders:
         print(
@@ -367,6 +387,9 @@ def main(argv: Iterable[str] | None = None) -> int:
                     scope=scope,
                     candidates=0,
                     reason="no_enabled_policy_candidates",
+                    active_before=0,
+                    enqueue_capacity=enqueue_capacity,
+                    drain_only=args.drain_only,
                 ),
                 ensure_ascii=False,
             )
@@ -535,7 +558,7 @@ def main(argv: Iterable[str] | None = None) -> int:
             "p_to": (at + timedelta(hours=36)).isoformat(),
         },
     )
-    active_after = _active_jobs(repository, limit=args.max_jobs)
+    active_after = _active_jobs(repository, limit=3_000)
     provider_disabled = not bool(
         repository.ingestion_context(SPORTS[0])["provider"].get("enabled")
     )
@@ -549,6 +572,9 @@ def main(argv: Iterable[str] | None = None) -> int:
                 at=at,
                 scope=scope,
                 candidates=len(candidates),
+                active_before=len(active_before),
+                enqueue_capacity=enqueue_capacity,
+                drain_only=args.drain_only,
                 by_stage=by_stage,
                 by_resource=by_resource,
                 usage_before=usage_before,

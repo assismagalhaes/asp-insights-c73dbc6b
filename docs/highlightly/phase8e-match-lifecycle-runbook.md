@@ -288,3 +288,41 @@ Ordem de implantação:
 4. sincronizar a VM e instalar o unit atualizado;
 5. manter `highlightly-match-lifecycle.timer` desativado;
 6. executar qualquer replay somente em lote pequeno e com autorização explícita.
+
+### Prevenção de starvation entre lifecycle e janela futura
+
+O runner contabiliza os jobs Phase 8E já ativos antes de consultar novos candidatos. A cada
+ciclo, a soma `jobs existentes + candidatos novos` nunca pode ultrapassar `--max-jobs`.
+Assim, um canário de 100 jobs com 53 jobs já pendentes consulta no máximo 47 candidatos novos
+e consegue terminar com a fila vazia.
+
+Para recuperar uma fila lifecycle sem criar trabalho adicional:
+
+```bash
+sudo systemctl disable --now highlightly-match-lifecycle.timer
+sudo /usr/bin/flock --exclusive --nonblock --conflict-exit-code 75 \
+  /run/lock/asp-highlightly-future.lock \
+  /bin/bash -lc '
+    cd /home/ubuntu/asp-insights-c73dbc6b
+    set -a
+    . /etc/asp-scraper-api.env
+    set +a
+    export PYTHONPATH=.
+    /home/ubuntu/asp-scraper-api/.venv/bin/python \
+      -m scripts.run_highlightly_phase8e_match_lifecycle \
+      --daily-request-budget 1500 \
+      --request-budget 200 \
+      --max-jobs 100 \
+      --drain-only \
+      --confirm-lifecycle
+  '
+```
+
+O `drain-only` exige `--confirm-lifecycle`, processa apenas jobs Phase 8E existentes e mantém
+o provider no estado de repouso ao final. Ele não habilita políticas e não executa a RPC de
+requeue.
+
+Se o continuation encontrar uma fila lifecycle ou outro escopo legítimo, registra
+`future_continuation_skipped` com `reason=active_foreign_or_ambiguous_queue` e encerra com
+sucesso. O timer volta a tentar depois de cinco minutos, sem gerar uma sequência artificial de
+falhas no systemd.
