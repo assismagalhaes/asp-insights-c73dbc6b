@@ -9,6 +9,7 @@ import {
   Database,
   GitCompareArrows,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   Split,
   Target,
@@ -123,6 +124,7 @@ function AprendizadoIaPage() {
   const [decisaoIa, setDecisaoIa] = useState("all");
   const [decisaoHumana, setDecisaoHumana] = useState("all");
   const [resultado, setResultado] = useState("all");
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
   const { ini, fim } = rangeFromPeriodo(periodo, customIni, customFim);
 
   const { data: analises = [] } = useQuery({
@@ -396,7 +398,7 @@ function AprendizadoIaPage() {
 
       <Card className="border-border/70 bg-card/75 shadow-sm backdrop-blur">
         <CardContent className="p-3 sm:p-4">
-          <div className="flex items-end gap-3 overflow-x-auto pb-1">
+          <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
             <PeriodFilter
               periodo={periodo}
               onPeriodoChange={setPeriodo}
@@ -404,6 +406,7 @@ function AprendizadoIaPage() {
               customFim={customFim}
               onCustomIniChange={setCustomIni}
               onCustomFimChange={setCustomFim}
+              className={`${periodo === "custom" ? "sm:col-span-2 xl:col-span-4" : ""} w-full [&>div]:!w-full`}
             />
             <Filter
               label="Esporte"
@@ -416,47 +419,63 @@ function AprendizadoIaPage() {
               allLabel="Todos"
               sportIcons
             />
-            <div>
+            <div className="min-w-0">
               <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
                 Liga
               </Label>
-              <LeagueFilter sport={esporte} value={liga} onChange={setLiga} className="h-9 w-48" />
+              <LeagueFilter
+                sport={esporte}
+                value={liga}
+                onChange={setLiga}
+                className="h-9 w-full"
+              />
             </div>
-            <Filter
-              label="Mercado"
-              value={mercado}
-              onChange={setMercado}
-              options={["all", ...mercados]}
-              allLabel="Todos"
-            />
-            <Filter
-              label="Modo IA"
-              value={modoIa}
-              onChange={setModoIa}
-              options={["all", "local", "online"]}
-              allLabel="Todos"
-            />
-            <Filter
-              label="Decisão IA"
-              value={decisaoIa}
-              onChange={setDecisaoIa}
-              options={["all", "CONFIRMAR", "PULAR"]}
-              allLabel="Todas"
-            />
-            <Filter
-              label="Decisão humana"
-              value={decisaoHumana}
-              onChange={setDecisaoHumana}
-              options={["all", "CONFIRMAR", "PULAR"]}
-              allLabel="Todas"
-            />
-            <Filter
-              label="Resultado"
-              value={resultado}
-              onChange={setResultado}
-              options={["all", "GREEN", "RED"]}
-              allLabel="Todos"
-            />
+            <button
+              type="button"
+              aria-expanded={moreFiltersOpen}
+              onClick={() => setMoreFiltersOpen((open) => !open)}
+              className="flex h-9 w-full items-center justify-center gap-2 rounded-md border border-primary/30 bg-primary/5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 sm:hidden"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              {moreFiltersOpen ? "Ocultar filtros" : "Mais filtros"}
+            </button>
+            <div className={moreFiltersOpen ? "contents" : "hidden sm:contents"}>
+              <Filter
+                label="Mercado"
+                value={mercado}
+                onChange={setMercado}
+                options={["all", ...mercados]}
+                allLabel="Todos"
+              />
+              <Filter
+                label="Modo IA"
+                value={modoIa}
+                onChange={setModoIa}
+                options={["all", "local", "online"]}
+                allLabel="Todos"
+              />
+              <Filter
+                label="Decisão IA"
+                value={decisaoIa}
+                onChange={setDecisaoIa}
+                options={["all", "CONFIRMAR", "PULAR"]}
+                allLabel="Todas"
+              />
+              <Filter
+                label="Decisão humana"
+                value={decisaoHumana}
+                onChange={setDecisaoHumana}
+                options={["all", "CONFIRMAR", "PULAR"]}
+                allLabel="Todas"
+              />
+              <Filter
+                label="Resultado"
+                value={resultado}
+                onChange={setResultado}
+                options={["all", "GREEN", "RED"]}
+                allLabel="Todos"
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -523,7 +542,7 @@ function AprendizadoIaPage() {
           value={String(stats.divergencias)}
           icon={GitCompareArrows}
           tone="red"
-          detail={`${filteredFeedback.length ? ((stats.divergencias / filteredFeedback.length) * 100).toFixed(1) : "0.0"}% da amostra`}
+          detail={`${rowsComDecisaoIa.length ? ((stats.divergencias / rowsComDecisaoIa.length) * 100).toFixed(1) : "0.0"}% das decisões avaliadas`}
         />
       </div>
 
@@ -674,20 +693,20 @@ function DecisionMatrix({ stats, total }: { stats: LearningStats; total: number 
           <span className="font-mono text-xs text-muted-foreground">Total: {total}</span>
         </div>
       </CardHeader>
-      <CardContent className="p-4">
-        <div className="mb-2 grid grid-cols-[58px_1fr_1fr] text-center text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <CardContent className="p-3 sm:p-4">
+        <div className="mb-2 grid grid-cols-[38px_minmax(0,1fr)_minmax(0,1fr)] text-center text-[8px] font-semibold uppercase tracking-wider text-muted-foreground sm:grid-cols-[58px_1fr_1fr] sm:text-[9px]">
           <span />
           <span>Decisão correta</span>
           <span>Decisão incorreta</span>
         </div>
-        <div className="grid grid-cols-[58px_1fr_1fr] gap-2">
-          <div className="flex items-center justify-center text-[9px] font-semibold uppercase tracking-wider text-muted-foreground [writing-mode:vertical-rl]">
+        <div className="grid grid-cols-[38px_minmax(0,1fr)_minmax(0,1fr)] gap-1.5 sm:grid-cols-[58px_1fr_1fr] sm:gap-2">
+          <div className="flex items-center justify-center text-[8px] font-semibold uppercase tracking-wider text-muted-foreground [writing-mode:vertical-rl] sm:text-[9px]">
             IA confirma
           </div>
           {cells.slice(0, 2).map((cell) => (
             <MatrixCell key={cell.label} {...cell} total={total} />
           ))}
-          <div className="flex items-center justify-center text-[9px] font-semibold uppercase tracking-wider text-muted-foreground [writing-mode:vertical-rl]">
+          <div className="flex items-center justify-center text-[8px] font-semibold uppercase tracking-wider text-muted-foreground [writing-mode:vertical-rl] sm:text-[9px]">
             IA pula
           </div>
           {cells.slice(2).map((cell) => (
@@ -719,12 +738,12 @@ function MatrixCell({
 }) {
   const colors = toneClasses[tone];
   return (
-    <div className={`rounded-xl border p-3 ${colors.icon}`}>
-      <div className="flex items-center gap-1.5 text-[10px] font-medium">
+    <div className={`min-w-0 rounded-xl border p-2 sm:p-3 ${colors.icon}`}>
+      <div className="flex items-start gap-1 text-[9px] font-medium leading-tight sm:items-center sm:gap-1.5 sm:text-[10px]">
         <Icon className="h-3.5 w-3.5 shrink-0" />
-        <span className="truncate">{label}</span>
+        <span>{label}</span>
       </div>
-      <p className="mt-2 font-mono text-xl font-semibold text-foreground">
+      <p className="mt-2 font-mono text-lg font-semibold text-foreground sm:text-xl">
         {total ? ((value / total) * 100).toFixed(1) : "0.0"}%
       </p>
       <p className="font-mono text-[10px] opacity-80">{value} casos</p>
@@ -980,7 +999,7 @@ function Filter({
   sportIcons?: boolean;
 }) {
   return (
-    <div>
+    <div className="min-w-0">
       <Label className="block text-[10px] uppercase tracking-wider text-muted-foreground">
         {label}
       </Label>
@@ -990,11 +1009,11 @@ function Filter({
           onValueChange={onChange}
           options={options.filter((option) => option !== "all")}
           allLabel={allLabel}
-          className="h-9 w-44"
+          className="h-9 w-full"
         />
       ) : (
         <Select value={value} onValueChange={onChange}>
-          <SelectTrigger className="h-9 w-44">
+          <SelectTrigger className="h-9 w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
