@@ -71,6 +71,36 @@ class HighlightlyPhaseTwoWorkerTests(unittest.TestCase):
         self.assertEqual(first.table_rows("sports_matches")[0]["id"], stable_id(PROVIDER_ID, SPORT_ID, "match", 99))
         self.assertEqual(first.table_rows("sports_countries")[0]["id"], stable_id("country", "BR"))
 
+    def test_match_rejects_same_provider_team_on_both_sides(self):
+        payload = {
+            "data": [
+                {
+                    "id": 1306633843,
+                    "date": "2026-07-31T18:45:00Z",
+                    "league": {
+                        "id": 939437,
+                        "name": "Premiership Women",
+                        "season": 2026,
+                    },
+                    "homeTeam": {"id": 19795895, "name": "Lisburn"},
+                    "awayTeam": {"id": 19795895, "name": "Lisburn"},
+                    "state": {"description": "Not started"},
+                }
+            ]
+        }
+
+        batch = normalize_football(payload, context("football.matches"))
+
+        self.assertEqual(batch.rejected, 1)
+        self.assertEqual(batch.table_rows("sports_matches"), [])
+        self.assertEqual(batch.table_rows("sports_match_participants"), [])
+        self.assertEqual(batch.table_rows("sports_teams"), [])
+        self.assertEqual(
+            [issue["code"] for issue in batch.issues],
+            ["FOOTBALL_MATCH_PARTICIPANT_IDENTITY_COLLISION"],
+        )
+        self.assertEqual(batch.issues[0]["context"]["matchId"], 1306633843)
+
     def test_sparse_match_league_does_not_overwrite_catalog_country(self):
         payload = {
             "data": [{

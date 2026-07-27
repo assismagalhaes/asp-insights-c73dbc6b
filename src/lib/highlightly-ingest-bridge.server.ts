@@ -84,6 +84,7 @@ export const HIGHLIGHTLY_BRIDGE_RPCS = new Set([
   "accept_highlightly_quarantined_wnba_standings_issues",
   "requeue_highlightly_dead_521_jobs",
   "requeue_highlightly_dead_basketball_identity_jobs",
+  "requeue_highlightly_dead_football_identity_jobs",
   "finalize_highlightly_shadow_window",
   "get_highlightly_odds_refresh_candidates",
   "get_highlightly_odds_quality_report",
