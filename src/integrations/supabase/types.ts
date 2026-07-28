@@ -1778,6 +1778,110 @@ export type Database = {
           },
         ]
       }
+      hl_odds_league_coverage_daily: {
+        Row: {
+          competition_id: string
+          country_id: string | null
+          created_at: string
+          eligible_availability_pct: number | null
+          id: string
+          matches_available: number
+          matches_due: number
+          matches_other_unavailable: number
+          matches_provider_empty: number
+          observed_on: string
+          provider_empty_pct: number | null
+          raw_availability_pct: number | null
+          refreshed_at: string
+          sport_id: string
+          updated_at: string
+        }
+        Insert: {
+          competition_id: string
+          country_id?: string | null
+          created_at?: string
+          eligible_availability_pct?: number | null
+          id?: string
+          matches_available?: number
+          matches_due?: number
+          matches_other_unavailable?: number
+          matches_provider_empty?: number
+          observed_on: string
+          provider_empty_pct?: number | null
+          raw_availability_pct?: number | null
+          refreshed_at?: string
+          sport_id: string
+          updated_at?: string
+        }
+        Update: {
+          competition_id?: string
+          country_id?: string | null
+          created_at?: string
+          eligible_availability_pct?: number | null
+          id?: string
+          matches_available?: number
+          matches_due?: number
+          matches_other_unavailable?: number
+          matches_provider_empty?: number
+          observed_on?: string
+          provider_empty_pct?: number | null
+          raw_availability_pct?: number | null
+          refreshed_at?: string
+          sport_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_odds_league_coverage_daily_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "sports_baseball_match_summary_v"
+            referencedColumns: ["competition_id"]
+          },
+          {
+            foreignKeyName: "hl_odds_league_coverage_daily_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "sports_basketball_match_summary_v"
+            referencedColumns: ["competition_id"]
+          },
+          {
+            foreignKeyName: "hl_odds_league_coverage_daily_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "sports_competitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hl_odds_league_coverage_daily_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["competition_id"]
+          },
+          {
+            foreignKeyName: "hl_odds_league_coverage_daily_country_id_fkey"
+            columns: ["country_id"]
+            isOneToOne: false
+            referencedRelation: "sports_countries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hl_odds_league_coverage_daily_country_id_fkey"
+            columns: ["country_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["country_id"]
+          },
+          {
+            foreignKeyName: "hl_odds_league_coverage_daily_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hl_odds_quality_targets: {
         Row: {
           created_at: string
@@ -6658,16 +6762,16 @@ export type Database = {
         Args: { p_from?: string; p_to?: string }
         Returns: Json
       }
+      get_highlightly_odds_league_coverage_report: {
+        Args: { p_days?: number; p_min_matches?: number }
+        Returns: Json
+      }
       get_highlightly_odds_quality_report: {
         Args: { p_from?: string; p_to?: string }
         Returns: Json
       }
       get_highlightly_odds_quality_report_v2: {
         Args: { p_from?: string; p_to?: string }
-        Returns: Json
-      }
-      get_highlightly_odds_league_coverage_report: {
-        Args: { p_days?: number; p_min_matches?: number }
         Returns: Json
       }
       get_highlightly_odds_refresh_candidates: {
@@ -6702,11 +6806,7 @@ export type Database = {
         Returns: Json
       }
       refresh_highlightly_odds_league_coverage: {
-        Args: {
-          p_from?: string
-          p_observed_on?: string
-          p_to?: string
-        }
+        Args: { p_from?: string; p_observed_on?: string; p_to?: string }
         Returns: number
       }
       refresh_highlightly_shadow_observation: {
