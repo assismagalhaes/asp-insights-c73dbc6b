@@ -116,3 +116,24 @@ Critérios do canário:
 
 Não instalar timer nesta fase. A automação só poderá ser avaliada depois do
 canário e da auditoria de cobertura.
+
+## Fase 8F.1 — auditoria de cobertura
+
+A RPC `get_highlightly_feature_store_report_v2` acrescenta:
+
+- cobertura por componente;
+- cobertura por país e liga;
+- integridade de cutoff, lineage e unicidade;
+- contagem separada de labels;
+- gates determinísticos para ampliar o canário.
+
+Gates iniciais:
+
+- mínimo de 20 snapshots para diagnosticar cobertura;
+- zero snapshots bloqueados por leakage;
+- cobertura média alvo de 70%;
+- cobertura mínima por componente de 50%;
+- expansão para 100 partidas somente após os gates anteriores.
+
+O relatório é somente leitura e não ativa treinamento, previsões, feature set,
+timer ou provider.

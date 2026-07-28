@@ -10,6 +10,25 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class HighlightlyPhaseEightFFeatureStoreTests(unittest.TestCase):
+    def test_phase8f1_report_segments_components_leagues_and_integrity(self):
+        migration = (
+            ROOT
+            / "supabase/migrations/20260728200516_create_highlightly_phase8f1_feature_coverage_report.sql"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("get_highlightly_feature_store_report_v2", migration)
+        self.assertIn("'components'", migration)
+        self.assertIn("'leagues'", migration)
+        self.assertIn("'integrity'", migration)
+        self.assertIn("'labels'", migration)
+        self.assertIn("'blocked_by_leakage'", migration)
+        self.assertIn("'improve_component_coverage'", migration)
+        self.assertIn("'ready_for_100_match_canary'", migration)
+        self.assertIn("'automatic_training', false", migration)
+        self.assertIn("'automatic_predictions', false", migration)
+        self.assertIn("SECURITY INVOKER", migration)
+        self.assertIn("FROM PUBLIC, anon", migration)
+
     def test_migration_separates_features_labels_and_enforces_cutoffs(self):
         migration = (
             ROOT
@@ -54,7 +73,7 @@ class HighlightlyPhaseEightFFeatureStoreTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         repository.rpc.assert_called_once_with(
-            "get_highlightly_feature_store_report",
+            "get_highlightly_feature_store_report_v2",
             {"p_sport": "football", "p_days": 30},
         )
         payload = json.loads(output.call_args.args[0])
@@ -105,7 +124,7 @@ class HighlightlyPhaseEightFFeatureStoreTests(unittest.TestCase):
         )
         self.assertEqual(
             repository.rpc.call_args_list[1].args[0],
-            "get_highlightly_feature_store_report",
+            "get_highlightly_feature_store_report_v2",
         )
 
     @patch.object(phase8f.HighlightlyRepository, "from_environment")
