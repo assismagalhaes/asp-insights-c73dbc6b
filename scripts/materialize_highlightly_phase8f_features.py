@@ -58,7 +58,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     }
     if not args.confirm_materialize:
         plan["current_report"] = repository.rpc(
-            "get_highlightly_feature_store_report_v4",
+            "get_highlightly_feature_store_report_v5",
             {"p_sport": "football", "p_days": 30},
         )
         print(json.dumps(plan, ensure_ascii=False, separators=(",", ":"), default=str))
@@ -74,7 +74,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         },
     )
     plan["report"] = repository.rpc(
-        "get_highlightly_feature_store_report_v4",
+        "get_highlightly_feature_store_report_v5",
         {"p_sport": "football", "p_days": 30},
     )
     print(json.dumps(plan, ensure_ascii=False, separators=(",", ":"), default=str))

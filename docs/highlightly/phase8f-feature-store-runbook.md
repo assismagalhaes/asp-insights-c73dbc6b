@@ -188,3 +188,18 @@ supabase/tests/highlightly_phase8f2_horizon_policy_smoke.sql
 A migration e o smoke nao executam o materializador. O provider deve permanecer
 desligado e o feature set `1.1.0` deve continuar sem snapshots ate autorizacao
 especifica de um novo canario.
+
+### Contrato 8F.2.1
+
+`get_highlightly_feature_store_report_v5` corrige a serializacao do campo
+`components` no relatorio ajustado por horizonte. Cada item volta a ser um
+objeto estruturado e acrescenta:
+
+- `requirement`: `required` ou `optional`;
+- `required_for_horizon`: indicador booleano;
+- `status`: `optional` para componentes que nao participam do gate daquele
+  horizonte.
+
+O v5 preserva os calculos de cobertura do v4 e reutiliza os componentes
+estruturados auditados no v3. A correcao e somente leitura e nao materializa
+snapshots.

@@ -45,6 +45,7 @@ class HighlightlyBridgeContractTests(unittest.TestCase):
         self.assertIn('"get_highlightly_feature_store_report_v2"', verifier)
         self.assertIn('"get_highlightly_feature_store_report_v3"', verifier)
         self.assertIn('"get_highlightly_feature_store_report_v4"', verifier)
+        self.assertIn('"get_highlightly_feature_store_report_v5"', verifier)
         self.assertIn('/storage/v1/object/highlightly-raw/', verifier)
 
     def test_nonce_rpc_is_service_role_only(self):

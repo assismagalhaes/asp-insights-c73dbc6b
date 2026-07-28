@@ -10,6 +10,21 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class HighlightlyPhaseEightFFeatureStoreTests(unittest.TestCase):
+    def test_phase8f21_preserves_structured_horizon_components(self):
+        migration = (
+            ROOT
+            / "supabase/migrations/20260728214534_fix_highlightly_phase8f2_component_payload.sql"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("get_highlightly_feature_store_report_v5", migration)
+        self.assertIn("get_highlightly_feature_store_report_v4", migration)
+        self.assertIn("get_highlightly_feature_store_report_v3", migration)
+        self.assertIn("jsonb_array_elements", migration)
+        self.assertIn("'required_for_horizon'", migration)
+        self.assertIn("'phase8f.2.1'", migration)
+        self.assertIn("SECURITY INVOKER", migration)
+        self.assertIn("FROM PUBLIC, anon", migration)
+
     def test_phase8f2_uses_horizon_adjusted_coverage_and_draft_v110(self):
         migration = (
             ROOT
@@ -111,7 +126,7 @@ class HighlightlyPhaseEightFFeatureStoreTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         repository.rpc.assert_called_once_with(
-            "get_highlightly_feature_store_report_v4",
+            "get_highlightly_feature_store_report_v5",
             {"p_sport": "football", "p_days": 30},
         )
         payload = json.loads(output.call_args.args[0])
@@ -162,7 +177,7 @@ class HighlightlyPhaseEightFFeatureStoreTests(unittest.TestCase):
         )
         self.assertEqual(
             repository.rpc.call_args_list[1].args[0],
-            "get_highlightly_feature_store_report_v4",
+            "get_highlightly_feature_store_report_v5",
         )
 
     @patch.object(phase8f.HighlightlyRepository, "from_environment")
