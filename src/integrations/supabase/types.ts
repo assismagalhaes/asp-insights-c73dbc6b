@@ -1111,6 +1111,84 @@ export type Database = {
           },
         ]
       }
+      hl_competition_feature_policies: {
+        Row: {
+          classification_source: string
+          competition_id: string
+          confidence: number
+          created_at: string
+          evidence: Json
+          id: string
+          is_model_eligible: boolean
+          profile_key: string
+          sport_id: string
+          standings_policy: string
+          updated_at: string
+        }
+        Insert: {
+          classification_source: string
+          competition_id: string
+          confidence?: number
+          created_at?: string
+          evidence?: Json
+          id?: string
+          is_model_eligible?: boolean
+          profile_key: string
+          sport_id: string
+          standings_policy: string
+          updated_at?: string
+        }
+        Update: {
+          classification_source?: string
+          competition_id?: string
+          confidence?: number
+          created_at?: string
+          evidence?: Json
+          id?: string
+          is_model_eligible?: boolean
+          profile_key?: string
+          sport_id?: string
+          standings_policy?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_competition_feature_policies_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: true
+            referencedRelation: "sports_baseball_match_summary_v"
+            referencedColumns: ["competition_id"]
+          },
+          {
+            foreignKeyName: "hl_competition_feature_policies_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: true
+            referencedRelation: "sports_basketball_match_summary_v"
+            referencedColumns: ["competition_id"]
+          },
+          {
+            foreignKeyName: "hl_competition_feature_policies_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: true
+            referencedRelation: "sports_competitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hl_competition_feature_policies_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: true
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["competition_id"]
+          },
+          {
+            foreignKeyName: "hl_competition_feature_policies_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hl_competition_scopes: {
         Row: {
           aliases: string[]
@@ -6730,6 +6808,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      classify_highlightly_football_competition: {
+        Args: { p_competition_type?: string; p_name: string }
+        Returns: string
+      }
       enqueue_highlightly_ingestion_job: {
         Args: {
           p_cursor_data?: Json
@@ -7006,6 +7088,10 @@ export type Database = {
         Args: { p_days?: number; p_sport?: string }
         Returns: Json
       }
+      get_highlightly_feature_store_report_v6: {
+        Args: { p_days?: number; p_sport?: string }
+        Returns: Json
+      }
       get_highlightly_match_lifecycle_candidates: {
         Args: { p_at?: string; p_include_disabled?: boolean; p_limit?: number }
         Returns: {
@@ -7101,6 +7187,15 @@ export type Database = {
         Returns: Json
       }
       materialize_highlightly_football_features_v2: {
+        Args: {
+          p_from: string
+          p_horizon_key?: string
+          p_limit?: number
+          p_to: string
+        }
+        Returns: Json
+      }
+      materialize_highlightly_football_features_v3: {
         Args: {
           p_from: string
           p_horizon_key?: string
