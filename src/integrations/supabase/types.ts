@@ -6998,6 +6998,10 @@ export type Database = {
         Args: { p_days?: number; p_sport?: string }
         Returns: Json
       }
+      get_highlightly_feature_store_report_v4: {
+        Args: { p_days?: number; p_sport?: string }
+        Returns: Json
+      }
       get_highlightly_match_lifecycle_candidates: {
         Args: { p_at?: string; p_include_disabled?: boolean; p_limit?: number }
         Returns: {
@@ -7084,6 +7088,15 @@ export type Database = {
         Returns: boolean
       }
       materialize_highlightly_football_features: {
+        Args: {
+          p_from: string
+          p_horizon_key?: string
+          p_limit?: number
+          p_to: string
+        }
+        Returns: Json
+      }
+      materialize_highlightly_football_features_v2: {
         Args: {
           p_from: string
           p_horizon_key?: string
