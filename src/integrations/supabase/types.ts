@@ -1277,6 +1277,122 @@ export type Database = {
           },
         ]
       }
+      hl_feature_materialization_runs: {
+        Row: {
+          created_at: string
+          diagnostics: Json
+          feature_set_id: string
+          finished_at: string | null
+          horizon_key: string
+          id: string
+          matches_considered: number
+          snapshots_blocked: number
+          snapshots_inserted: number
+          snapshots_skipped: number
+          sport_id: string
+          started_at: string
+          status: string
+          window_from: string
+          window_to: string
+        }
+        Insert: {
+          created_at?: string
+          diagnostics?: Json
+          feature_set_id: string
+          finished_at?: string | null
+          horizon_key: string
+          id?: string
+          matches_considered?: number
+          snapshots_blocked?: number
+          snapshots_inserted?: number
+          snapshots_skipped?: number
+          sport_id: string
+          started_at?: string
+          status?: string
+          window_from: string
+          window_to: string
+        }
+        Update: {
+          created_at?: string
+          diagnostics?: Json
+          feature_set_id?: string
+          finished_at?: string | null
+          horizon_key?: string
+          id?: string
+          matches_considered?: number
+          snapshots_blocked?: number
+          snapshots_inserted?: number
+          snapshots_skipped?: number
+          sport_id?: string
+          started_at?: string
+          status?: string
+          window_from?: string
+          window_to?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_feature_materialization_runs_feature_set_id_fkey"
+            columns: ["feature_set_id"]
+            isOneToOne: false
+            referencedRelation: "hl_feature_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hl_feature_materialization_runs_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hl_feature_sets: {
+        Row: {
+          code: string
+          created_at: string
+          cutoff_policy: string
+          feature_spec: Json
+          id: string
+          is_enabled: boolean
+          sport_id: string
+          status: string
+          updated_at: string
+          version: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          cutoff_policy: string
+          feature_spec?: Json
+          id?: string
+          is_enabled?: boolean
+          sport_id: string
+          status?: string
+          updated_at?: string
+          version: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          cutoff_policy?: string
+          feature_spec?: Json
+          id?: string
+          is_enabled?: boolean
+          sport_id?: string
+          status?: string
+          updated_at?: string
+          version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_feature_sets_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hl_ingestion_bridge_nonces: {
         Row: {
           expires_at: string
@@ -1445,6 +1561,155 @@ export type Database = {
             columns: ["job_id"]
             isOneToOne: false
             referencedRelation: "hl_ingestion_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hl_match_feature_snapshots: {
+        Row: {
+          coverage_pct: number
+          created_at: string
+          cutoff_at: string
+          feature_set_id: string
+          features: Json
+          generated_at: string
+          horizon_key: string
+          id: string
+          kickoff_at: string
+          leakage_status: string
+          lineage: Json
+          match_id: string
+          quality: Json
+        }
+        Insert: {
+          coverage_pct?: number
+          created_at?: string
+          cutoff_at: string
+          feature_set_id: string
+          features: Json
+          generated_at?: string
+          horizon_key: string
+          id?: string
+          kickoff_at: string
+          leakage_status?: string
+          lineage?: Json
+          match_id: string
+          quality?: Json
+        }
+        Update: {
+          coverage_pct?: number
+          created_at?: string
+          cutoff_at?: string
+          feature_set_id?: string
+          features?: Json
+          generated_at?: string
+          horizon_key?: string
+          id?: string
+          kickoff_at?: string
+          leakage_status?: string
+          lineage?: Json
+          match_id?: string
+          quality?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_match_feature_snapshots_feature_set_id_fkey"
+            columns: ["feature_set_id"]
+            isOneToOne: false
+            referencedRelation: "hl_feature_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hl_match_feature_snapshots_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_baseball_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "hl_match_feature_snapshots_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_basketball_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "hl_match_feature_snapshots_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "hl_match_feature_snapshots_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hl_match_labels: {
+        Row: {
+          created_at: string
+          id: string
+          label_available_at: string
+          label_version: string
+          labels: Json
+          match_id: string
+          outcome_at: string
+          quality_status: string
+          source_data_max_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label_available_at?: string
+          label_version: string
+          labels: Json
+          match_id: string
+          outcome_at: string
+          quality_status?: string
+          source_data_max_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label_available_at?: string
+          label_version?: string
+          labels?: Json
+          match_id?: string
+          outcome_at?: string
+          quality_status?: string
+          source_data_max_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_match_labels_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_baseball_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "hl_match_labels_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_basketball_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "hl_match_labels_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "hl_match_labels_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_matches"
             referencedColumns: ["id"]
           },
         ]
@@ -6410,6 +6675,15 @@ export type Database = {
         Args: never
         Returns: number
       }
+      build_highlightly_football_team_features: {
+        Args: {
+          p_competition_id: string
+          p_cutoff_at: string
+          p_season_id: string
+          p_team_id: string
+        }
+        Returns: Json
+      }
       cancel_highlightly_redundant_shadow_jobs: {
         Args: { p_endpoint_keys: string[]; p_reason?: string; p_scope: string }
         Returns: number
@@ -6712,6 +6986,10 @@ export type Database = {
         Args: { p_provider_id: string; p_request_date: string }
         Returns: number
       }
+      get_highlightly_feature_store_report: {
+        Args: { p_days?: number; p_sport?: string }
+        Returns: Json
+      }
       get_highlightly_match_lifecycle_candidates: {
         Args: { p_at?: string; p_include_disabled?: boolean; p_limit?: number }
         Returns: {
@@ -6796,6 +7074,15 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      materialize_highlightly_football_features: {
+        Args: {
+          p_from: string
+          p_horizon_key?: string
+          p_limit?: number
+          p_to: string
+        }
+        Returns: Json
       }
       prune_highlightly_ingestion_bridge_nonces: {
         Args: { p_before?: string; p_limit?: number }

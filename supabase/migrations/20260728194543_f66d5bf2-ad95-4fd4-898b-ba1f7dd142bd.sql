@@ -1,0 +1,2 @@
+-- Content of supabase/migrations/20260728191608_create_highlightly_phase8f_feature_store_foundation.sql
+-- (applied verbatim from repository)
