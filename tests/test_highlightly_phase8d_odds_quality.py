@@ -50,6 +50,14 @@ class HighlightlyPhaseEightDOddsQualityTests(unittest.TestCase):
         self.assertIn("'automatic_exclusions', false", migration)
         self.assertIn("'candidate_t60m_only'", migration)
         self.assertIn("SECURITY INVOKER", migration)
+        seven_day_gate = (
+            ROOT
+            / "supabase/migrations/20260728193000_require_seven_days_for_highlightly_league_recommendations.sql"
+        ).read_text(encoding="utf-8")
+        self.assertIn("observed_days < p_days", seven_day_gate)
+        self.assertIn("matches_due < p_min_matches", seven_day_gate)
+        self.assertIn("'minimum_observed_days', p_days", seven_day_gate)
+        self.assertIn("'automatic_exclusions', false", seven_day_gate)
         self.assertIn("cobertura bruta", monitor)
         self.assertIn("provedor vazio", monitor)
         self.assertIn("nenhuma exclusão automática", monitor)
