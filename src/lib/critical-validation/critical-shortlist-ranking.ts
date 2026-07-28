@@ -121,6 +121,16 @@ export type MlbOperationalGate = {
   reasons: string[];
 };
 
+export type MlbOperationalGateInput = {
+  esporte: string;
+  liga: string;
+  mercado: string;
+  pick: string;
+  edge: number | null;
+  edge_ajustado: number | null;
+  context: string;
+};
+
 export type MatchMatrixOperationalGate = {
   applicable: boolean;
   approved: boolean;
@@ -224,8 +234,10 @@ export function evaluateMatchMatrixOperationalGate(
   };
 }
 
-export function evaluateMlbOperationalGate(prognostico: Prognostico): MlbOperationalGate {
-  const sport = normalized(`${prognostico.esporte} ${prognostico.liga}`);
+export function evaluateMlbOperationalGateInput(
+  input: MlbOperationalGateInput,
+): MlbOperationalGate {
+  const sport = normalized(`${input.esporte} ${input.liga}`);
   if (!/baseball|mlb/.test(sport)) {
     return {
       applicable: false,
@@ -237,18 +249,18 @@ export function evaluateMlbOperationalGate(prognostico: Prognostico): MlbOperati
     };
   }
 
-  const market = normalized(`${prognostico.mercado} ${prognostico.pick}`);
+  const market = normalized(`${input.mercado} ${input.pick}`);
   const minimumEdge = /moneyline|vencedor|resultado/.test(market)
     ? 5
     : /total|corridas|runs|over|under/.test(market)
       ? 4
       : null;
-  const effectiveEdge = isFiniteNumber(prognostico.edge_ajustado)
-    ? prognostico.edge_ajustado
-    : isFiniteNumber(prognostico.edge)
-      ? prognostico.edge
+  const effectiveEdge = isFiniteNumber(input.edge_ajustado)
+    ? input.edge_ajustado
+    : isFiniteNumber(input.edge)
+      ? input.edge
       : null;
-  const text = combinedContext(prognostico);
+  const text = input.context;
   const enrichedPreview = text.includes("[MATCHUPS / PREVIEW ENRIQUECIDO]");
   const starterLines = text.match(/^Starter (?:visitante|mandante):.*$/gim) ?? [];
   const missingStarters =
@@ -270,6 +282,18 @@ export function evaluateMlbOperationalGate(prognostico: Prognostico): MlbOperati
     missingStarters,
     reasons,
   };
+}
+
+export function evaluateMlbOperationalGate(prognostico: Prognostico): MlbOperationalGate {
+  return evaluateMlbOperationalGateInput({
+    esporte: prognostico.esporte,
+    liga: prognostico.liga,
+    mercado: prognostico.mercado,
+    pick: prognostico.pick,
+    edge: prognostico.edge,
+    edge_ajustado: prognostico.edge_ajustado,
+    context: combinedContext(prognostico),
+  });
 }
 
 export function buildCriticalShortlist(

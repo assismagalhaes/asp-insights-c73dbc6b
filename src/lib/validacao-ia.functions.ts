@@ -8,6 +8,7 @@ import {
   parseStructuredAiOutput,
 } from "@/lib/ai-validation/generation-result";
 import { adaptLegacyAiResponse } from "@/lib/ai-validation/legacy-adapter";
+import { evaluateAiGroupOptionEligibility } from "@/lib/ai-validation/group-option-eligibility";
 import { sumAiTokenUsage } from "@/lib/ai-validation/observability";
 import { resolveAiValidationRollout, rolloutTelemetry } from "@/lib/ai-validation/rollout";
 import { AiLocalGenerationOutputSchema } from "@/lib/ai-validation/schema";
@@ -258,6 +259,8 @@ Regras:
 Regras para grupo de opções concorrentes:
 - Quando houver uma lista de opções concorrentes do mesmo jogo e mercado/família de mercado, você está validando o grupo inteiro, não apenas a primeira opção.
 - A opção selecionada na interface serve apenas para ajuste de odd pelo usuário. Não trate essa seleção como preferência ou decisão prévia.
+- Antes da comparação qualitativa, respeite o STATUS DETERMINÍSTICO de cada opção. É proibido selecionar uma opção BLOQUEADA, mesmo que ela ofereça maior proteção, probabilidade ou conforto narrativo.
+- Compare qualitativamente apenas opções marcadas como ELEGÍVEL. Se nenhuma opção for elegível, retorne PULAR. A existência de opção elegível não obriga confirmação.
 - Sua tarefa não é recalcular EV. Sua tarefa é comparar as opções disponíveis e decidir se existe uma opção tecnicamente superior para confirmação.
 - Escolha no máximo uma opção do grupo. Nunca confirme mais de uma opção.
 - Não escolha automaticamente a maior probabilidade, o maior edge ou a maior odd.
@@ -335,6 +338,7 @@ export const analisarValidacao = createServerFn({ method: "POST" })
     const oddFinal = p.odd_ajustada ?? p.odd_original;
     const edgeFinal = p.edge_ajustado ?? p.edge_original;
     const opcoesMesmoMercado = data.opcoes_mesmo_mercado ?? [];
+    const optionGateContext = data.contexto_local?.trim() || data.dados_tecnicos?.trim() || "";
     const isAspScreener =
       isAspScreenerMarket(p.mercado) ||
       isAspScreenerMarket(p.pick) ||
@@ -353,7 +357,20 @@ export const analisarValidacao = createServerFn({ method: "POST" })
           .map((c, index) => {
             const odd = c.odd_ajustada ?? c.odd_original;
             const edge = c.edge_ajustado ?? c.edge_original;
-            return `${index + 1}. ID: ${c.prognostico_id} | Mercado: ${c.mercado ?? p.mercado} | Pick: ${c.pick} | Odd ofertada: ${c.odd_original.toFixed(3)} | Odd usada: ${odd.toFixed(3)} | Odd mediana: ${formatNullableOdd(c.odd_mediana)} | Odd mercado base: ${formatNullableOdd(c.odd_mercado_base)} | Odd melhor: ${formatNullableOdd(c.odd_melhor)} | Bookmaker melhor: ${c.bookmaker_melhor ?? "-"} | Odd valor: ${c.odd_valor.toFixed(3)} | Prob: ${c.probabilidade.toFixed(2)}% | Edge: ${edge.toFixed(2)}%`;
+            const eligibility = evaluateAiGroupOptionEligibility({
+              esporte: p.esporte,
+              liga: p.liga,
+              mercado: c.mercado ?? p.mercado,
+              pick: c.pick,
+              odd_original: c.odd_original,
+              odd_ajustada: c.odd_ajustada,
+              odd_valor: c.odd_valor,
+              edge_original: c.edge_original,
+              edge_ajustado: c.edge_ajustado,
+              context: optionGateContext,
+            });
+            const gateReason = eligibility.reasons.join(" ") || "Sem bloqueio determinístico.";
+            return `${index + 1}. STATUS DETERMINÍSTICO: ${eligibility.status} | Motivo: ${gateReason} | ID: ${c.prognostico_id} | Mercado: ${c.mercado ?? p.mercado} | Pick: ${c.pick} | Odd ofertada: ${c.odd_original.toFixed(3)} | Odd usada: ${odd.toFixed(3)} | Odd mediana: ${formatNullableOdd(c.odd_mediana)} | Odd mercado base: ${formatNullableOdd(c.odd_mercado_base)} | Odd melhor: ${formatNullableOdd(c.odd_melhor)} | Bookmaker melhor: ${c.bookmaker_melhor ?? "-"} | Odd valor: ${c.odd_valor.toFixed(3)} | Prob: ${c.probabilidade.toFixed(2)}% | Edge: ${edge.toFixed(2)}%`;
           })
           .join("\n")
       : "(nenhuma lista explicita de opcoes do grupo foi informada)";
@@ -407,6 +424,7 @@ Toda análise de valor (edge, EV, comparação com odd justa e comentários no p
 Antes de sugerir CONFIRMA, procure motivos concretos nos dados fornecidos para PULAR. Se a tese contra a entrada for relevante com base nos dados internos, sugira PULAR. Não confirme apenas porque a entrada veio como EV+. Não trate ausência de informação externa pesquisável como motivo principal para PULAR no modo IA Local.
 Não use 1.0u como stake padrão. Se houver qualquer dúvida entre 1.0u e 0.5u, use 0.5u. Se houver dúvida entre 0.5u e PULAR, use PULAR.
 Se houver opcoes concorrentes listadas acima, compare mercado, picks, odds, probabilidade, edge, proteção e risco/retorno. A resposta deve indicar a melhor opcao para CONFIRMAR ou recomendar PULAR o grupo inteiro. Nunca confirme mais de uma opcao do mesmo jogo e mesma familia de mercado.
+É PROIBIDO selecionar uma opção com STATUS DETERMINÍSTICO BLOQUEADA. Faça a comparação qualitativa somente entre opções ELEGÍVEIS. Se nenhuma for elegível, retorne PULAR.
 Nao use a opcao selecionada na interface como preferencia. Ela serve apenas para ajuste de odd; sua decisao deve comparar todas as opcoes concorrentes.
 Se sugerir CONFIRMA, devolva obrigatoriamente o campo prognostico_id_escolhido com um ID exato da lista OPÇÕES CONCORRENTES. Se sugerir PULAR, use prognostico_id_escolhido: null.
 ${aspScreenerInstrucao}
