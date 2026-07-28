@@ -16,8 +16,8 @@ import { generateText, tool, stepCountIs } from "ai";
 import { z } from "zod";
 
 export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v14-compact-research";
-export const ONLINE_GATEWAY_MODEL_ID = "google/gemini-3.6-flash";
-export const ONLINE_REPAIR_MODEL_ID = "google/gemini-2.5-flash";
+export const ONLINE_GATEWAY_MODEL_ID = "gemini-2.5-flash";
+export const ONLINE_REPAIR_MODEL_ID = "gemini-2.5-flash";
 export const MAX_ONLINE_GATEWAY_STEPS = 3;
 export const MAX_ONLINE_CONTEXT_CHARACTERS = 10_000;
 
