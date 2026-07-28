@@ -1,0 +1,1 @@
+-- SEE FILE supabase/migrations/20260728221019_create_highlightly_phase8f3_competition_eligibility.sql
