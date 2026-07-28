@@ -1,0 +1,1 @@
+UPDATE public.sports_providers SET enabled = false, updated_at = now() WHERE code = 'highlightly';
