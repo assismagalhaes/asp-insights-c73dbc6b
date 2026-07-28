@@ -32,6 +32,21 @@ def context(sport: str):
 
 
 class HighlightlyPhaseEightDOddsQualityTests(unittest.TestCase):
+    def test_provider_empty_gate_preserves_raw_and_eligible_coverage(self):
+        migration = (
+            ROOT
+            / "supabase/migrations/20260728130930_refine_highlightly_odds_provider_empty_gate.sql"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("get_highlightly_odds_quality_report_v2", migration)
+        self.assertIn("'raw_availability_pct'", migration)
+        self.assertIn("'eligible_availability_pct'", migration)
+        self.assertIn("'provider_empty_pct'", migration)
+        self.assertIn("'provider_supported_matches'", migration)
+        self.assertIn("SECURITY INVOKER", migration)
+        self.assertIn("FROM PUBLIC, anon", migration)
+        self.assertIn("TO authenticated, service_role", migration)
+
     def test_systemd_timer_is_frequent_and_shares_the_future_collection_lock(self):
         timer = (
             ROOT / "config/systemd/highlightly-odds-refresh.timer"
@@ -197,7 +212,7 @@ class HighlightlyPhaseEightDOddsQualityTests(unittest.TestCase):
         quality_call = repository.rpc.call_args_list[-1]
         self.assertEqual(
             quality_call.args[0],
-            "get_highlightly_odds_quality_report",
+            "get_highlightly_odds_quality_report_v2",
         )
         self.assertEqual(
             quality_call.args[1],

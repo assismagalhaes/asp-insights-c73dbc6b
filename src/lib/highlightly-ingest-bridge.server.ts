@@ -88,6 +88,7 @@ export const HIGHLIGHTLY_BRIDGE_RPCS = new Set([
   "finalize_highlightly_shadow_window",
   "get_highlightly_odds_refresh_candidates",
   "get_highlightly_odds_quality_report",
+  "get_highlightly_odds_quality_report_v2",
   "get_highlightly_match_lifecycle_candidates",
   "get_highlightly_match_lifecycle_candidates_v2",
   "refresh_highlightly_match_lifecycle_states",

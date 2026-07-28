@@ -230,7 +230,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     # discovery window here repeatedly scans matches that are classified as
     # not_yet_due and can exhaust the PostgREST statement timeout.
     quality = repository.rpc(
-        "get_highlightly_odds_quality_report",
+        "get_highlightly_odds_quality_report_v2",
         {
             "p_from": at.isoformat(),
             "p_to": (at.replace(microsecond=0) + timedelta(hours=24)).isoformat(),
