@@ -194,6 +194,18 @@ class HighlightlyPhaseEightDOddsQualityTests(unittest.TestCase):
         repository.set_provider_enabled.assert_any_call("highlightly", True)
         repository.set_provider_enabled.assert_any_call("highlightly", False)
         self.assertEqual(worker_factory.call_args.kwargs["daily_quota_ceiling"], 850)
+        quality_call = repository.rpc.call_args_list[-1]
+        self.assertEqual(
+            quality_call.args[0],
+            "get_highlightly_odds_quality_report",
+        )
+        self.assertEqual(
+            quality_call.args[1],
+            {
+                "p_from": "2026-07-23T12:00:00+00:00",
+                "p_to": "2026-07-24T12:00:00+00:00",
+            },
+        )
 
     @patch.object(phase8d, "_active_jobs")
     @patch.object(phase8d.HighlightlyRepository, "from_environment")

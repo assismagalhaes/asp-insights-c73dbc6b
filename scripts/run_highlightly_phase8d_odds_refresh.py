@@ -226,11 +226,14 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     active_after = _active_jobs(repository, limit=args.max_jobs)
     provider_disabled = not bool(repository.ingestion_context(SPORTS[0])["provider"].get("enabled"))
+    # Only matches inside T-24h are due for odds. Querying the full five-day
+    # discovery window here repeatedly scans matches that are classified as
+    # not_yet_due and can exhaust the PostgREST statement timeout.
     quality = repository.rpc(
         "get_highlightly_odds_quality_report",
         {
             "p_from": at.isoformat(),
-            "p_to": (at.replace(microsecond=0) + timedelta(days=5)).isoformat(),
+            "p_to": (at.replace(microsecond=0) + timedelta(hours=24)).isoformat(),
         },
     )
     print(
