@@ -16,8 +16,8 @@ import { generateText, type LanguageModel } from "ai";
 import { z } from "zod";
 
 export const PROMPT_VERSAO = "validacao-critica-v15-mlb-evidence-gates";
-export const LOCAL_GATEWAY_MODEL_ID = "google/gemini-3.6-flash";
-export const LOCAL_REPAIR_MODEL_ID = "google/gemini-2.5-flash";
+export const LOCAL_GATEWAY_MODEL_ID = "gemini-2.5-flash";
+export const LOCAL_REPAIR_MODEL_ID = "gemini-2.5-flash";
 
 export const LOCAL_GATEWAY_JSON_TEMPLATE = `{
   "schema_version": "1.1.0",
@@ -423,12 +423,12 @@ ${aspScreenerInstrucao}
     const legacyRollbackEnabled = rollout.variant === "legacy";
 
     try {
-      const lovableApiKey = process.env.LOVABLE_API_KEY;
-      if (!lovableApiKey) {
-        throw new Error("LOVABLE_API_KEY não configurada.");
+      const googleApiKey = process.env.GOOGLE_AI_API_KEY;
+      if (!googleApiKey) {
+        throw new Error("GOOGLE_AI_API_KEY não configurada.");
       }
       const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
-      const gateway = createLovableAiGatewayProvider(lovableApiKey);
+      const gateway = createLovableAiGatewayProvider(googleApiKey);
       const model = gateway(LOCAL_GATEWAY_MODEL_ID);
       const repairModel = gateway(LOCAL_REPAIR_MODEL_ID);
 
@@ -447,7 +447,7 @@ ${aspScreenerInstrucao}
           ...generation,
           run_id: runId,
           prompt_versao: PROMPT_VERSAO,
-          provider: "lovable-ai-gateway",
+          provider: "google-ai-studio",
           model: LOCAL_GATEWAY_MODEL_ID,
           started_at: startedAtIso,
           finished_at: new Date().toISOString(),
@@ -481,7 +481,7 @@ ${aspScreenerInstrucao}
         ...generation,
         run_id: runId,
         prompt_versao: PROMPT_VERSAO,
-        provider: "lovable-ai-gateway",
+        provider: "google-ai-studio",
         model: LOCAL_GATEWAY_MODEL_ID,
         started_at: startedAtIso,
         finished_at: new Date().toISOString(),
@@ -498,7 +498,7 @@ ${aspScreenerInstrucao}
         }),
         run_id: runId,
         prompt_versao: PROMPT_VERSAO,
-        provider: "lovable-ai-gateway",
+        provider: "google-ai-studio",
         model: LOCAL_GATEWAY_MODEL_ID,
         started_at: startedAtIso,
         finished_at: new Date().toISOString(),

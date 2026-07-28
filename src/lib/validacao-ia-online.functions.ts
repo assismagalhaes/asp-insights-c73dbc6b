@@ -16,8 +16,8 @@ import { generateText, tool, stepCountIs } from "ai";
 import { z } from "zod";
 
 export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v14-compact-research";
-export const ONLINE_GATEWAY_MODEL_ID = "google/gemini-3.6-flash";
-export const ONLINE_REPAIR_MODEL_ID = "google/gemini-2.5-flash";
+export const ONLINE_GATEWAY_MODEL_ID = "gemini-2.5-flash";
+export const ONLINE_REPAIR_MODEL_ID = "gemini-2.5-flash";
 export const MAX_ONLINE_GATEWAY_STEPS = 3;
 export const MAX_ONLINE_CONTEXT_CHARACTERS = 10_000;
 
@@ -510,7 +510,7 @@ export const analisarValidacaoOnline = createServerFn({ method: "POST" })
         ),
         run_id: runId,
         prompt_versao: PROMPT_VERSAO_ONLINE,
-        provider: "lovable-ai-gateway",
+        provider: "google-ai-studio",
         model: ONLINE_GATEWAY_MODEL_ID,
         started_at: startedAtIso,
         finished_at: new Date().toISOString(),
@@ -520,16 +520,16 @@ export const analisarValidacaoOnline = createServerFn({ method: "POST" })
       };
     }
 
-    const lovableApiKey = process.env.LOVABLE_API_KEY;
-    if (!lovableApiKey) {
+    const googleApiKey = process.env.GOOGLE_AI_API_KEY;
+    if (!googleApiKey) {
       return {
         ...createAiGenerationFailure(
-          new Error("LOVABLE_API_KEY não configurada."),
+          new Error("GOOGLE_AI_API_KEY não configurada."),
           Date.now() - startedAt,
         ),
         run_id: runId,
         prompt_versao: PROMPT_VERSAO_ONLINE,
-        provider: "lovable-ai-gateway",
+        provider: "google-ai-studio",
         model: ONLINE_GATEWAY_MODEL_ID,
         started_at: startedAtIso,
         finished_at: new Date().toISOString(),
@@ -542,7 +542,7 @@ export const analisarValidacaoOnline = createServerFn({ method: "POST" })
     try {
       const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
       const { firecrawlSearch, firecrawlScrape } = await import("@/lib/firecrawl.server");
-      const gateway = createLovableAiGatewayProvider(lovableApiKey);
+      const gateway = createLovableAiGatewayProvider(googleApiKey);
       const model = gateway(ONLINE_GATEWAY_MODEL_ID);
       const repairModel = gateway(ONLINE_REPAIR_MODEL_ID);
 
@@ -750,7 +750,7 @@ ${ONLINE_GATEWAY_JSON_TEMPLATE}`;
           ...generation,
           run_id: runId,
           prompt_versao: PROMPT_VERSAO_ONLINE,
-          provider: "lovable-ai-gateway",
+          provider: "google-ai-studio",
           model: ONLINE_GATEWAY_MODEL_ID,
           started_at: startedAtIso,
           finished_at: new Date().toISOString(),
@@ -843,7 +843,7 @@ ${ONLINE_GATEWAY_JSON_TEMPLATE}`,
         ...generation,
         run_id: runId,
         prompt_versao: PROMPT_VERSAO_ONLINE,
-        provider: "lovable-ai-gateway",
+        provider: "google-ai-studio",
         model: ONLINE_GATEWAY_MODEL_ID,
         started_at: startedAtIso,
         finished_at: new Date().toISOString(),
@@ -869,7 +869,7 @@ ${ONLINE_GATEWAY_JSON_TEMPLATE}`,
         }),
         run_id: runId,
         prompt_versao: PROMPT_VERSAO_ONLINE,
-        provider: "lovable-ai-gateway",
+        provider: "google-ai-studio",
         model: ONLINE_GATEWAY_MODEL_ID,
         started_at: startedAtIso,
         finished_at: new Date().toISOString(),
