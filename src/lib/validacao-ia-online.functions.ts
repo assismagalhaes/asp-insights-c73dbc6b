@@ -16,8 +16,9 @@ import { generateText, tool, stepCountIs } from "ai";
 import { z } from "zod";
 
 export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v14-compact-research";
-export const ONLINE_GATEWAY_MODEL_ID = "gemini-2.5-flash";
-export const ONLINE_REPAIR_MODEL_ID = "gemini-2.5-flash";
+export const ONLINE_GATEWAY_MODEL_ID = "gemini-3.6-flash";
+export const ONLINE_REPAIR_MODEL_ID = "gemini-3.6-flash";
+export const ONLINE_FALLBACK_MODEL_ID = "gemini-2.5-flash";
 export const MAX_ONLINE_GATEWAY_STEPS = 3;
 export const MAX_ONLINE_CONTEXT_CHARACTERS = 10_000;
 
@@ -492,6 +493,7 @@ export const analisarValidacaoOnline = createServerFn({ method: "POST" })
     const buscasRealizadas: string[] = [];
     const fontesRastreaveis: OnlineSourceTrace[] = [];
     let repairAttempted = false;
+    let resolvedModelId = ONLINE_GATEWAY_MODEL_ID;
     let promptCharacters = 0;
     let generationPhase:
       | "INITIAL_GENERATION"
@@ -540,11 +542,10 @@ export const analisarValidacaoOnline = createServerFn({ method: "POST" })
     }
 
     try {
-      const { createGoogleAiStudioProvider } = await import("@/lib/ai-gateway.server");
+      const { createGoogleAiStudioProvider, isGoogleAiModelNotFoundError } =
+        await import("@/lib/ai-gateway.server");
       const { firecrawlSearch, firecrawlScrape } = await import("@/lib/firecrawl.server");
       const gateway = createGoogleAiStudioProvider(googleApiKey);
-      const model = gateway(ONLINE_GATEWAY_MODEL_ID);
-      const repairModel = gateway(ONLINE_REPAIR_MODEL_ID);
 
       let scrapeCount = 0;
 
@@ -728,13 +729,26 @@ ${ONLINE_GATEWAY_JSON_TEMPLATE}`;
 
       promptCharacters = userPayload.length;
       if (legacyRollbackEnabled) {
-        const legacyResult = await generateText({
-          model,
-          system: SYSTEM_PROMPT,
-          prompt: userPayload,
-          stopWhen: stepCountIs(MAX_ONLINE_GATEWAY_STEPS),
-          tools: researchTools,
-        });
+        let legacyResult;
+        try {
+          legacyResult = await generateText({
+            model: gateway(ONLINE_GATEWAY_MODEL_ID),
+            system: SYSTEM_PROMPT,
+            prompt: userPayload,
+            stopWhen: stepCountIs(MAX_ONLINE_GATEWAY_STEPS),
+            tools: researchTools,
+          });
+        } catch (error: unknown) {
+          if (!isGoogleAiModelNotFoundError(error)) throw error;
+          resolvedModelId = ONLINE_FALLBACK_MODEL_ID;
+          legacyResult = await generateText({
+            model: gateway(ONLINE_FALLBACK_MODEL_ID),
+            system: SYSTEM_PROMPT,
+            prompt: userPayload,
+            stopWhen: stepCountIs(MAX_ONLINE_GATEWAY_STEPS),
+            tools: researchTools,
+          });
+        }
         const generation = createLegacyRollbackResult({
           output: adaptLegacyAiResponse({
             text: legacyResult.text,
@@ -751,7 +765,7 @@ ${ONLINE_GATEWAY_JSON_TEMPLATE}`;
           run_id: runId,
           prompt_versao: PROMPT_VERSAO_ONLINE,
           provider: "google-ai-studio",
-          model: ONLINE_GATEWAY_MODEL_ID,
+          model: resolvedModelId,
           started_at: startedAtIso,
           finished_at: new Date().toISOString(),
           finish_reason: legacyResult.finishReason,
@@ -764,19 +778,28 @@ ${ONLINE_GATEWAY_JSON_TEMPLATE}`;
       }
 
       generationPhase = "ONLINE_RESEARCH";
-      const synthesisResult = await generateText({
-        model,
-        system: `${structuredSystemPrompt}
+      const generateSynthesis = (modelId: string) =>
+        generateText({
+          model: gateway(modelId),
+          system: `${structuredSystemPrompt}
 
 ORÇAMENTO OPERACIONAL:
 - Faça no máximo duas buscas e aprofunde no máximo uma página.
 - Use ferramentas somente para uma lacuna material e diretamente ligada ao mercado.
 - Não pesquise novamente dados já confirmados no Preview enriquecido.
 - Depois das ferramentas, produza imediatamente o JSON final do contrato.`,
-        prompt: userPayload,
-        stopWhen: stepCountIs(MAX_ONLINE_GATEWAY_STEPS),
-        tools: researchTools,
-      });
+          prompt: userPayload,
+          stopWhen: stepCountIs(MAX_ONLINE_GATEWAY_STEPS),
+          tools: researchTools,
+        });
+      let synthesisResult;
+      try {
+        synthesisResult = await generateSynthesis(ONLINE_GATEWAY_MODEL_ID);
+      } catch (error: unknown) {
+        if (!isGoogleAiModelNotFoundError(error)) throw error;
+        resolvedModelId = ONLINE_FALLBACK_MODEL_ID;
+        synthesisResult = await generateSynthesis(ONLINE_FALLBACK_MODEL_ID);
+      }
 
       generationPhase = "FINAL_SYNTHESIS";
       let finalResult = synthesisResult;
@@ -791,7 +814,7 @@ ORÇAMENTO OPERACIONAL:
         generationPhase = "REPAIR_GENERATION";
         try {
           finalResult = await generateText({
-            model: repairModel,
+            model: gateway(resolvedModelId),
             system: `Você atua somente como formatador do contrato JSON. Retorne
 exclusivamente o objeto JSON solicitado, sem markdown, comentários ou texto
 adicional. Preserve o conteúdo analítico recebido e ajuste apenas estrutura,
@@ -844,7 +867,7 @@ ${ONLINE_GATEWAY_JSON_TEMPLATE}`,
         run_id: runId,
         prompt_versao: PROMPT_VERSAO_ONLINE,
         provider: "google-ai-studio",
-        model: ONLINE_GATEWAY_MODEL_ID,
+        model: resolvedModelId,
         started_at: startedAtIso,
         finished_at: new Date().toISOString(),
         finish_reason: finalResult.finishReason,
@@ -870,7 +893,7 @@ ${ONLINE_GATEWAY_JSON_TEMPLATE}`,
         run_id: runId,
         prompt_versao: PROMPT_VERSAO_ONLINE,
         provider: "google-ai-studio",
-        model: ONLINE_GATEWAY_MODEL_ID,
+        model: resolvedModelId,
         started_at: startedAtIso,
         finished_at: new Date().toISOString(),
         repair_attempted: repairAttempted,

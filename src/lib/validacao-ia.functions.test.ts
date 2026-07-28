@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { AiLocalGenerationOutputSchema, AiOperationalOutputSchema } from "./ai-validation/schema";
 import {
   LOCAL_GATEWAY_JSON_TEMPLATE,
+  LOCAL_FALLBACK_MODEL_ID,
   LOCAL_GATEWAY_MODEL_ID,
   LOCAL_REPAIR_MODEL_ID,
   parseLocalGatewayJson,
@@ -9,8 +10,9 @@ import {
 
 describe("configuração do Structured Output local", () => {
   it("usa o Google AI Studio nativo com Gemini 2.5 Flash", () => {
-    expect(LOCAL_GATEWAY_MODEL_ID).toBe("gemini-2.5-flash");
-    expect(LOCAL_REPAIR_MODEL_ID).toBe("gemini-2.5-flash");
+    expect(LOCAL_GATEWAY_MODEL_ID).toBe("gemini-3.6-flash");
+    expect(LOCAL_REPAIR_MODEL_ID).toBe("gemini-3.6-flash");
+    expect(LOCAL_FALLBACK_MODEL_ID).toBe("gemini-2.5-flash");
     expect(parseLocalGatewayJson(LOCAL_GATEWAY_JSON_TEMPLATE)).toMatchObject({
       schema_version: "1.1.0",
       decision: "PULAR",
