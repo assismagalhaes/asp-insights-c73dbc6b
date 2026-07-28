@@ -6662,6 +6662,10 @@ export type Database = {
         Args: { p_from?: string; p_to?: string }
         Returns: Json
       }
+      get_highlightly_odds_quality_report_v2: {
+        Args: { p_from?: string; p_to?: string }
+        Returns: Json
+      }
       get_highlightly_odds_refresh_candidates: {
         Args: { p_at?: string; p_limit?: number }
         Returns: {
