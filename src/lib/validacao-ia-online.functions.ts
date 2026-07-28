@@ -197,7 +197,7 @@ function extractGatewayJson(text: string): unknown {
   const firstBrace = withoutFence.indexOf("{");
   const lastBrace = withoutFence.lastIndexOf("}");
   if (firstBrace < 0 || lastBrace <= firstBrace) {
-    throw new Error("JSON object não encontrado na resposta do Lovable AI Gateway.");
+    throw new Error("JSON object não encontrado na resposta do Google AI Studio.");
   }
   return JSON.parse(withoutFence.slice(firstBrace, lastBrace + 1)) as unknown;
 }
@@ -540,9 +540,9 @@ export const analisarValidacaoOnline = createServerFn({ method: "POST" })
     }
 
     try {
-      const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
+      const { createGoogleAiStudioProvider } = await import("@/lib/ai-gateway.server");
       const { firecrawlSearch, firecrawlScrape } = await import("@/lib/firecrawl.server");
-      const gateway = createLovableAiGatewayProvider(googleApiKey);
+      const gateway = createGoogleAiStudioProvider(googleApiKey);
       const model = gateway(ONLINE_GATEWAY_MODEL_ID);
       const repairModel = gateway(ONLINE_REPAIR_MODEL_ID);
 
