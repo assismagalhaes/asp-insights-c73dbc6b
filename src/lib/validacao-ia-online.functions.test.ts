@@ -8,6 +8,7 @@ import {
   MAX_ONLINE_GATEWAY_STEPS,
   normalizeOnlineHttpUrl,
   ONLINE_GATEWAY_JSON_TEMPLATE,
+  ONLINE_FALLBACK_MODEL_ID,
   ONLINE_GATEWAY_MODEL_ID,
   ONLINE_REPAIR_MODEL_ID,
   parseOnlineGatewayJson,
@@ -52,8 +53,9 @@ describe("Structured Output online", () => {
       searches: [],
     });
 
-    expect(ONLINE_GATEWAY_MODEL_ID).toBe("gemini-2.5-flash");
-    expect(ONLINE_REPAIR_MODEL_ID).toBe("gemini-2.5-flash");
+    expect(ONLINE_GATEWAY_MODEL_ID).toBe("gemini-3.6-flash");
+    expect(ONLINE_REPAIR_MODEL_ID).toBe("gemini-3.6-flash");
+    expect(ONLINE_FALLBACK_MODEL_ID).toBe("gemini-2.5-flash");
     expect(output).toMatchObject({
       schema_version: "1.1.0",
       decision: "PULAR",

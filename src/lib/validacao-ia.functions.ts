@@ -16,8 +16,9 @@ import { generateText, type LanguageModel } from "ai";
 import { z } from "zod";
 
 export const PROMPT_VERSAO = "validacao-critica-v15-mlb-evidence-gates";
-export const LOCAL_GATEWAY_MODEL_ID = "gemini-2.5-flash";
-export const LOCAL_REPAIR_MODEL_ID = "gemini-2.5-flash";
+export const LOCAL_GATEWAY_MODEL_ID = "gemini-3.6-flash";
+export const LOCAL_REPAIR_MODEL_ID = "gemini-3.6-flash";
+export const LOCAL_FALLBACK_MODEL_ID = "gemini-2.5-flash";
 
 export const LOCAL_GATEWAY_JSON_TEMPLATE = `{
   "schema_version": "1.1.0",
@@ -415,6 +416,7 @@ ${aspScreenerInstrucao}
     const startedAtIso = new Date(startedAt).toISOString();
     const runId = crypto.randomUUID();
     let repairAttempted = false;
+    let resolvedModelId = LOCAL_GATEWAY_MODEL_ID;
     const rollout = resolveAiValidationRollout({
       mode: "local",
       userId: context.userId,
@@ -427,17 +429,27 @@ ${aspScreenerInstrucao}
       if (!googleApiKey) {
         throw new Error("GOOGLE_AI_API_KEY não configurada.");
       }
-      const { createGoogleAiStudioProvider } = await import("@/lib/ai-gateway.server");
+      const { createGoogleAiStudioProvider, isGoogleAiModelNotFoundError } =
+        await import("@/lib/ai-gateway.server");
       const gateway = createGoogleAiStudioProvider(googleApiKey);
-      const model = gateway(LOCAL_GATEWAY_MODEL_ID);
-      const repairModel = gateway(LOCAL_REPAIR_MODEL_ID);
 
       if (legacyRollbackEnabled) {
-        const legacyResult = await generateText({
-          model,
-          system: `${SYSTEM_PROMPT}\n\n${LEGACY_ROLLBACK_FORMAT}`,
-          prompt: userPayload,
-        });
+        let legacyResult;
+        try {
+          legacyResult = await generateText({
+            model: gateway(LOCAL_GATEWAY_MODEL_ID),
+            system: `${SYSTEM_PROMPT}\n\n${LEGACY_ROLLBACK_FORMAT}`,
+            prompt: userPayload,
+          });
+        } catch (error: unknown) {
+          if (!isGoogleAiModelNotFoundError(error)) throw error;
+          resolvedModelId = LOCAL_FALLBACK_MODEL_ID;
+          legacyResult = await generateText({
+            model: gateway(LOCAL_FALLBACK_MODEL_ID),
+            system: `${SYSTEM_PROMPT}\n\n${LEGACY_ROLLBACK_FORMAT}`,
+            prompt: userPayload,
+          });
+        }
         const generation = createLegacyRollbackResult({
           output: adaptLegacyAiResponse({ text: legacyResult.text }),
           rawModelText: legacyResult.text,
@@ -448,7 +460,7 @@ ${aspScreenerInstrucao}
           run_id: runId,
           prompt_versao: PROMPT_VERSAO,
           provider: "google-ai-studio",
-          model: LOCAL_GATEWAY_MODEL_ID,
+          model: resolvedModelId,
           started_at: startedAtIso,
           finished_at: new Date().toISOString(),
           finish_reason: legacyResult.finishReason,
@@ -458,19 +470,30 @@ ${aspScreenerInstrucao}
         };
       }
 
+      const generateStructured = (modelId: string) =>
+        generateLocalStructuredOutput({
+          model: gateway(modelId),
+          repairModel: gateway(modelId),
+          prompt: userPayload,
+          onRepairAttempt: () => {
+            repairAttempted = true;
+          },
+        });
+      let structuredGeneration;
+      try {
+        structuredGeneration = await generateStructured(LOCAL_GATEWAY_MODEL_ID);
+      } catch (error: unknown) {
+        if (!isGoogleAiModelNotFoundError(error)) throw error;
+        resolvedModelId = LOCAL_FALLBACK_MODEL_ID;
+        repairAttempted = false;
+        structuredGeneration = await generateStructured(LOCAL_FALLBACK_MODEL_ID);
+      }
       const {
         result,
         repairAttempted: structuredRepairAttempted,
         usage,
         finishReason,
-      } = await generateLocalStructuredOutput({
-        model,
-        repairModel,
-        prompt: userPayload,
-        onRepairAttempt: () => {
-          repairAttempted = true;
-        },
-      });
+      } = structuredGeneration;
       repairAttempted = structuredRepairAttempted;
       const generation = parseStructuredAiOutput({
         output: result.output,
@@ -482,7 +505,7 @@ ${aspScreenerInstrucao}
         run_id: runId,
         prompt_versao: PROMPT_VERSAO,
         provider: "google-ai-studio",
-        model: LOCAL_GATEWAY_MODEL_ID,
+        model: resolvedModelId,
         started_at: startedAtIso,
         finished_at: new Date().toISOString(),
         finish_reason: finishReason,
@@ -499,7 +522,7 @@ ${aspScreenerInstrucao}
         run_id: runId,
         prompt_versao: PROMPT_VERSAO,
         provider: "google-ai-studio",
-        model: LOCAL_GATEWAY_MODEL_ID,
+        model: resolvedModelId,
         started_at: startedAtIso,
         finished_at: new Date().toISOString(),
         repair_attempted: repairAttempted,
