@@ -46,14 +46,14 @@ describe("Structured Output online", () => {
     ).toThrow("EMPTY_INITIAL_OUTPUT");
   });
 
-  it("usa o Lovable AI Gateway com Gemini 3.6 Flash e contrato 1.1.0", () => {
+  it("usa o Google AI Studio nativo com Gemini 2.5 Flash e contrato 1.1.0", () => {
     const output = parseOnlineGatewayJson(ONLINE_GATEWAY_JSON_TEMPLATE, {
       sourceTraces: [],
       searches: [],
     });
 
-    expect(ONLINE_GATEWAY_MODEL_ID).toBe("google/gemini-3.6-flash");
-    expect(ONLINE_REPAIR_MODEL_ID).toBe("google/gemini-2.5-flash");
+    expect(ONLINE_GATEWAY_MODEL_ID).toBe("gemini-2.5-flash");
+    expect(ONLINE_REPAIR_MODEL_ID).toBe("gemini-2.5-flash");
     expect(output).toMatchObject({
       schema_version: "1.1.0",
       decision: "PULAR",

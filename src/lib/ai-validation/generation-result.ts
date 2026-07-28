@@ -279,25 +279,32 @@ export function createAiGenerationFailure(
   } else if (
     httpStatus === 401 ||
     httpStatus === 403 ||
-    /LOVABLE_API_KEY|api.?key|authentication|unauthorized|forbidden/i.test(diagnosticText)
+    /GOOGLE_AI_API_KEY|api.?key|authentication|unauthorized|forbidden/i.test(diagnosticText)
   ) {
     errorCode = "PROVIDER_AUTH_ERROR";
     safeMessage =
-      "A configuração do Lovable AI Gateway está indisponível. A recomendação foi convertida para PULAR.";
+      "A autenticação do Google AI Studio está indisponível. A recomendação foi convertida para PULAR.";
+  } else if (
+    httpStatus === 404 ||
+    /not found|model.*(not found|unsupported)|endpoint.*not found/i.test(diagnosticText)
+  ) {
+    errorCode = "PROVIDER_NOT_FOUND";
+    safeMessage =
+      "O endpoint ou modelo configurado no Google AI Studio não foi encontrado. A recomendação foi convertida para PULAR.";
   } else if (
     httpStatus === 429 ||
     /rate.?limit|quota|resource.?exhausted|too many requests/i.test(diagnosticText)
   ) {
     errorCode = "PROVIDER_RATE_LIMIT";
     safeMessage =
-      "A cota ou o limite do Lovable AI Gateway foi atingido. A recomendação foi convertida para PULAR.";
+      "A cota ou o limite do Google AI Studio foi atingido. A recomendação foi convertida para PULAR.";
   } else if (
     httpStatus === 402 ||
     /payment|billing|insufficient.?credits|credit balance/i.test(diagnosticText)
   ) {
     errorCode = "PROVIDER_BILLING_ERROR";
     safeMessage =
-      "O Lovable AI Gateway recusou a geração por cobrança ou créditos. A recomendação foi convertida para PULAR.";
+      "O Google AI Studio recusou a geração por cobrança ou créditos. A recomendação foi convertida para PULAR.";
   } else if (
     httpStatus === 413 ||
     /payload too large|request too large|context length|context window|maximum context|max.?tokens|too many tokens/i.test(
@@ -306,7 +313,7 @@ export function createAiGenerationFailure(
   ) {
     errorCode = "PROVIDER_PAYLOAD_TOO_LARGE";
     safeMessage =
-      "O Lovable AI Gateway recusou a geração pelo tamanho do payload ou limite de contexto. A recomendação foi convertida para PULAR.";
+      "O Google AI Studio recusou a geração pelo tamanho do payload ou limite de contexto. A recomendação foi convertida para PULAR.";
   } else if (/timeout|timed.?out|abort|ETIMEDOUT/i.test(diagnosticText)) {
     errorCode = "PROVIDER_TIMEOUT";
     safeMessage = "A geração estruturada excedeu o tempo limite e foi convertida para PULAR.";
@@ -316,11 +323,11 @@ export function createAiGenerationFailure(
   ) {
     errorCode = "PROVIDER_SERVER_ERROR";
     safeMessage =
-      "O Lovable AI Gateway ou o provider ficou temporariamente indisponível. A recomendação foi convertida para PULAR.";
+      "O Google AI Studio ficou temporariamente indisponível. A recomendação foi convertida para PULAR.";
   } else if (/ECONNRESET|ECONNREFUSED|ENOTFOUND|network|fetch failed/i.test(diagnosticText)) {
     errorCode = "PROVIDER_NETWORK_ERROR";
     safeMessage =
-      "A conexão com o Lovable AI Gateway falhou. A recomendação foi convertida para PULAR.";
+      "A conexão com o Google AI Studio falhou. A recomendação foi convertida para PULAR.";
   } else if (
     /NoObjectGenerated|schema|parse|json|validation|structured output/i.test(diagnosticText)
   ) {

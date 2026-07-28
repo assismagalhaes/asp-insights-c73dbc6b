@@ -6,6 +6,22 @@ import {
 } from "./generation-result";
 
 describe("diagnóstico de falhas do provider", () => {
+  it("classifica HTTP 404 do Google Studio como endpoint ou modelo ausente", () => {
+    const result = createAiGenerationFailure(
+      {
+        statusCode: 404,
+        responseBody: '{"error":{"message":"models/gemini-x is not found"}}',
+      },
+      25,
+      { phase: "ONLINE_RESEARCH", promptCharacters: 14_353 },
+    );
+
+    expect(result.error_code).toBe("PROVIDER_NOT_FOUND");
+    expect(result.parse_error).toContain("endpoint ou modelo");
+    expect(result.parse_error).toContain("HTTP 404");
+    expect(result.parse_error).not.toContain("gemini-x");
+  });
+
   it("mantém o contexto operacional quando a saída inicial está vazia", () => {
     const prompt = buildStructuredRepairPrompt({
       operationalContext: "Jogo: Portland Timbers vs Real Salt Lake\nOdd: 1.48\nEdge: 6.59%",

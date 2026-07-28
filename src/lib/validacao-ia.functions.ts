@@ -58,7 +58,7 @@ export function parseLocalGatewayJson(text: string) {
   const firstBrace = withoutFence.indexOf("{");
   const lastBrace = withoutFence.lastIndexOf("}");
   if (firstBrace < 0 || lastBrace <= firstBrace) {
-    throw new Error("JSON object não encontrado na resposta do Lovable AI Gateway.");
+    throw new Error("JSON object não encontrado na resposta do Google AI Studio.");
   }
   const parsed: unknown = JSON.parse(withoutFence.slice(firstBrace, lastBrace + 1));
   return applyAiSemanticPolicy(parsed);
@@ -427,8 +427,8 @@ ${aspScreenerInstrucao}
       if (!googleApiKey) {
         throw new Error("GOOGLE_AI_API_KEY não configurada.");
       }
-      const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
-      const gateway = createLovableAiGatewayProvider(googleApiKey);
+      const { createGoogleAiStudioProvider } = await import("@/lib/ai-gateway.server");
+      const gateway = createGoogleAiStudioProvider(googleApiKey);
       const model = gateway(LOCAL_GATEWAY_MODEL_ID);
       const repairModel = gateway(LOCAL_REPAIR_MODEL_ID);
 
