@@ -10,6 +10,29 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class HighlightlyPhaseEightFFeatureStoreTests(unittest.TestCase):
+    def test_phase8f2_uses_horizon_adjusted_coverage_and_draft_v110(self):
+        migration = (
+            ROOT
+            / "supabase/migrations/20260728212259_create_highlightly_phase8f2_horizon_policy.sql"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("'1.1.0'", migration)
+        self.assertIn("'component_policy'", migration)
+        self.assertIn("'t24h'", migration)
+        self.assertIn("'t6h'", migration)
+        self.assertIn("'t60m'", migration)
+        self.assertIn("'required'", migration)
+        self.assertIn("'optional'", migration)
+        self.assertIn("materialize_highlightly_football_features_v2", migration)
+        self.assertIn("get_highlightly_feature_store_report_v4", migration)
+        self.assertIn("stored_average_coverage_pct", migration)
+        self.assertIn("policy_adjusted_average_coverage_pct", migration)
+        self.assertIn("ready_for_100_match_canary", migration)
+        self.assertIn("'automatic_training', false", migration)
+        self.assertIn("'automatic_predictions', false", migration)
+        self.assertIn("SECURITY INVOKER", migration)
+        self.assertIn("FROM PUBLIC, anon, authenticated", migration)
+
     def test_phase8f11_report_returns_structured_component_records(self):
         migration = (
             ROOT
@@ -88,7 +111,7 @@ class HighlightlyPhaseEightFFeatureStoreTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         repository.rpc.assert_called_once_with(
-            "get_highlightly_feature_store_report_v3",
+            "get_highlightly_feature_store_report_v4",
             {"p_sport": "football", "p_days": 30},
         )
         payload = json.loads(output.call_args.args[0])
@@ -128,7 +151,7 @@ class HighlightlyPhaseEightFFeatureStoreTests(unittest.TestCase):
         self.assertEqual(
             repository.rpc.call_args_list[0].args,
             (
-                "materialize_highlightly_football_features",
+                "materialize_highlightly_football_features_v2",
                 {
                     "p_from": "2026-07-20T00:00:00+00:00",
                     "p_to": "2026-07-21T00:00:00+00:00",
@@ -139,7 +162,7 @@ class HighlightlyPhaseEightFFeatureStoreTests(unittest.TestCase):
         )
         self.assertEqual(
             repository.rpc.call_args_list[1].args[0],
-            "get_highlightly_feature_store_report_v3",
+            "get_highlightly_feature_store_report_v4",
         )
 
     @patch.object(phase8f.HighlightlyRepository, "from_environment")

@@ -144,3 +144,47 @@ timer ou provider.
 `components`: cada item passa a conter componente, snapshots disponíveis,
 ausentes, percentual e status. A função reaproveita o relatório v2 e não altera
 snapshots existentes.
+
+## Fase 8F.2 - cobertura ajustada por horizonte
+
+O feature set Football `1.1.0` permanece `draft` e desabilitado. A versao
+`1.0.0` e seus snapshots imutaveis nao sao modificados.
+
+Politica de componentes:
+
+- `t24h`: historico e standings de mandante/visitante sao obrigatorios; odds
+  e escalacoes sao opcionais;
+- `t6h`: os quatro componentes centrais e odds pre-jogo sao obrigatorios;
+  escalacoes sao opcionais;
+- `t60m`: os seis componentes sao obrigatorios.
+
+`get_highlightly_feature_store_report_v4` apresenta lado a lado:
+
+- cobertura armazenada, que preserva o denominador historico de seis
+  componentes;
+- cobertura ajustada, que considera somente os componentes obrigatorios para
+  o horizonte;
+- catalogo das versoes `1.0.0` e `1.1.0`;
+- papel `required` ou `optional` de cada componente;
+- recomendacao deterministica para expansao do canario.
+
+O materializador `materialize_highlightly_football_features_v2` fica preparado
+para uso futuro. Quando explicitamente confirmado, reutiliza o builder
+point-in-time `1.0.0` e deriva snapshots `1.1.0` na mesma transacao, sem chamar
+o provedor, gerar labels, treinar modelos ou criar previsoes.
+
+Aplicar:
+
+```text
+supabase/migrations/20260728212259_create_highlightly_phase8f2_horizon_policy.sql
+```
+
+Validar:
+
+```text
+supabase/tests/highlightly_phase8f2_horizon_policy_smoke.sql
+```
+
+A migration e o smoke nao executam o materializador. O provider deve permanecer
+desligado e o feature set `1.1.0` deve continuar sem snapshots ate autorizacao
+especifica de um novo canario.
