@@ -47,7 +47,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         "event": "phase8f_feature_materialization",
         "sport": "football",
         "feature_set": "highlightly_football_prematch",
-        "version": "1.1.0",
+        "version": "1.2.0",
         "window_from": args.window_from.isoformat(),
         "window_to": args.window_to.isoformat(),
         "horizon": args.horizon,
@@ -58,14 +58,14 @@ def main(argv: Iterable[str] | None = None) -> int:
     }
     if not args.confirm_materialize:
         plan["current_report"] = repository.rpc(
-            "get_highlightly_feature_store_report_v5",
+            "get_highlightly_feature_store_report_v6",
             {"p_sport": "football", "p_days": 30},
         )
         print(json.dumps(plan, ensure_ascii=False, separators=(",", ":"), default=str))
         return 0
 
     plan["result"] = repository.rpc(
-        "materialize_highlightly_football_features_v2",
+        "materialize_highlightly_football_features_v3",
         {
             "p_from": args.window_from.isoformat(),
             "p_to": args.window_to.isoformat(),
@@ -74,7 +74,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         },
     )
     plan["report"] = repository.rpc(
-        "get_highlightly_feature_store_report_v5",
+        "get_highlightly_feature_store_report_v6",
         {"p_sport": "football", "p_days": 30},
     )
     print(json.dumps(plan, ensure_ascii=False, separators=(",", ":"), default=str))

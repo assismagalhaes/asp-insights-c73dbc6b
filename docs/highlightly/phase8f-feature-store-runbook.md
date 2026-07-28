@@ -203,3 +203,54 @@ objeto estruturado e acrescenta:
 O v5 preserva os calculos de cobertura do v4 e reutiliza os componentes
 estruturados auditados no v3. A correcao e somente leitura e nao materializa
 snapshots.
+
+## Fase 8F.3 - elegibilidade por tipo de competicao
+
+O canario de 100 partidas mostrou cobertura ajustada de `66%`. Historico de
+mandante/visitante ficou em `82%`/`71%`, mas standings em `56%`/`55%`.
+Amistosos e copas explicam parte relevante do gap porque standings nao sao uma
+fonte estruturalmente aplicavel a todas essas competicoes.
+
+A versao Football `1.2.0` resolve a diferenca sem excluir jogos da coleta:
+
+- `league`: standings obrigatorios;
+- `cup`, `tournament` e `friendly`: standings opcionais;
+- `unknown`: coleta preservada, mas modelagem bloqueada ate classificacao;
+- T-6h continua exigindo odds;
+- T-60m continua exigindo odds e escalacoes;
+- cobertura minima para elegibilidade: `70%`;
+- leakage diferente de `clean` sempre bloqueia modelagem.
+
+O catalogo `hl_competition_feature_policies` registra perfil, origem da
+classificacao, confianca e possibilidade de uso em modelo. Overrides manuais
+nao sao sobrescritos pelo seed automatico.
+
+Como `sports_competitions.competition_type` esta ausente nos dados atuais, a
+classificacao inicial usa regras deterministicas de nome. Valores desconhecidos
+falham de forma fechada e aparecem no relatorio para revisao.
+
+`get_highlightly_feature_store_report_v6` projeta a politica `1.2.0` sobre os
+snapshots imutaveis `1.1.0`, sem criar novos snapshots. O relatorio inclui:
+
+- cobertura e elegibilidade por perfil;
+- resumo do catalogo por perfil, origem e confianca;
+- componentes obrigatorios/opcionais por perfil;
+- elegibilidade por pais e competicao;
+- competicoes ainda nao classificadas;
+- recomendacao para um futuro canario `1.2.0`.
+
+`materialize_highlightly_football_features_v3` fica preparado, mas nao deve ser
+executado durante a implantacao. Ele deriva `1.2.0` de `1.1.0` sem chamadas ao
+provedor, labels, treinamento ou previsoes.
+
+Aplicar:
+
+```text
+supabase/migrations/20260728221019_create_highlightly_phase8f3_competition_eligibility.sql
+```
+
+Validar:
+
+```text
+supabase/tests/highlightly_phase8f3_competition_eligibility_smoke.sql
+```
