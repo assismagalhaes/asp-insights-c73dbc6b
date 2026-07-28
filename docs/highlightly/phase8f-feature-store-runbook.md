@@ -137,3 +137,10 @@ Gates iniciais:
 
 O relatório é somente leitura e não ativa treinamento, previsões, feature set,
 timer ou provider.
+
+### Contrato 8F.1.1
+
+`get_highlightly_feature_store_report_v3` corrige a serialização do array
+`components`: cada item passa a conter componente, snapshots disponíveis,
+ausentes, percentual e status. A função reaproveita o relatório v2 e não altera
+snapshots existentes.
