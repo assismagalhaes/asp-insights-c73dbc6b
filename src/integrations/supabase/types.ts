@@ -6666,10 +6666,6 @@ export type Database = {
         Args: { p_from?: string; p_to?: string }
         Returns: Json
       }
-      get_highlightly_odds_league_coverage_report: {
-        Args: { p_days?: number; p_min_matches?: number }
-        Returns: Json
-      }
       get_highlightly_odds_refresh_candidates: {
         Args: { p_at?: string; p_limit?: number }
         Returns: {
@@ -6700,14 +6696,6 @@ export type Database = {
       refresh_highlightly_match_lifecycle_states: {
         Args: { p_at?: string }
         Returns: Json
-      }
-      refresh_highlightly_odds_league_coverage: {
-        Args: {
-          p_from?: string
-          p_observed_on?: string
-          p_to?: string
-        }
-        Returns: number
       }
       refresh_highlightly_shadow_observation: {
         Args: {
