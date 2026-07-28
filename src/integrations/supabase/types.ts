@@ -6842,6 +6842,39 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      requeue_highlightly_dead_football_identity_jobs: {
+        Args: { p_limit?: number; p_scope: string }
+        Returns: {
+          attempts: number
+          created_at: string
+          cursor_data: Json
+          dedupe_key: string
+          endpoint_key: string
+          finished_at: string | null
+          id: string
+          last_error: string | null
+          lock_expires_at: string | null
+          locked_at: string | null
+          max_attempts: number
+          priority: number
+          reprocess_raw_object_id: string | null
+          request_params: Json
+          resource: string
+          scheduled_at: string
+          shadow_scope: string | null
+          sport: string
+          started_at: string | null
+          status: string
+          updated_at: string
+          worker_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "hl_ingestion_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       requeue_highlightly_dead_phase8e_missing_match_id_jobs: {
         Args: { p_limit?: number }
         Returns: {
