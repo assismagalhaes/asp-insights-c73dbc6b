@@ -32,6 +32,28 @@ def context(sport: str):
 
 
 class HighlightlyPhaseEightDOddsQualityTests(unittest.TestCase):
+    def test_league_coverage_contract_is_advisory_and_uses_safe_defaults(self):
+        migration = (
+            ROOT
+            / "supabase/migrations/20260728183931_create_highlightly_odds_league_coverage.sql"
+        ).read_text(encoding="utf-8")
+        monitor = (
+            ROOT
+            / "src/components/highlightly-analysis/odds-quality-monitor.tsx"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("hl_odds_league_coverage_daily", migration)
+        self.assertIn("refresh_highlightly_odds_league_coverage", migration)
+        self.assertIn("get_highlightly_odds_league_coverage_report", migration)
+        self.assertIn("p_days integer DEFAULT 7", migration)
+        self.assertIn("p_min_matches integer DEFAULT 20", migration)
+        self.assertIn("'automatic_exclusions', false", migration)
+        self.assertIn("'candidate_t60m_only'", migration)
+        self.assertIn("SECURITY INVOKER", migration)
+        self.assertIn("cobertura bruta", monitor)
+        self.assertIn("provedor vazio", monitor)
+        self.assertIn("nenhuma exclusão automática", monitor)
+
     def test_provider_empty_gate_preserves_raw_and_eligible_coverage(self):
         migration = (
             ROOT
@@ -181,7 +203,12 @@ class HighlightlyPhaseEightDOddsQualityTests(unittest.TestCase):
             "endpoint_key": "football.FootballOddsController_getOddsV2",
             "dedupe_key": "phase8d:odds:football:99:1:t24h",
         }
-        repository.rpc.side_effect = [[candidate], {"by_sport": [], "by_cause": []}]
+        repository.rpc.side_effect = [
+            [candidate],
+            {"by_sport": [], "by_cause": []},
+            3,
+            {"leagues": [], "automatic_exclusions": False},
+        ]
         repository.daily_request_usage.return_value = 100
         active_jobs.side_effect = [[], []]
         worker_factory.return_value.run_once.side_effect = [
@@ -209,7 +236,7 @@ class HighlightlyPhaseEightDOddsQualityTests(unittest.TestCase):
         repository.set_provider_enabled.assert_any_call("highlightly", True)
         repository.set_provider_enabled.assert_any_call("highlightly", False)
         self.assertEqual(worker_factory.call_args.kwargs["daily_quota_ceiling"], 850)
-        quality_call = repository.rpc.call_args_list[-1]
+        quality_call = repository.rpc.call_args_list[-3]
         self.assertEqual(
             quality_call.args[0],
             "get_highlightly_odds_quality_report_v2",
@@ -220,6 +247,17 @@ class HighlightlyPhaseEightDOddsQualityTests(unittest.TestCase):
                 "p_from": "2026-07-23T12:00:00+00:00",
                 "p_to": "2026-07-24T12:00:00+00:00",
             },
+        )
+        self.assertEqual(
+            repository.rpc.call_args_list[-2].args[0],
+            "refresh_highlightly_odds_league_coverage",
+        )
+        self.assertEqual(
+            repository.rpc.call_args_list[-1].args,
+            (
+                "get_highlightly_odds_league_coverage_report",
+                {"p_days": 7, "p_min_matches": 20},
+            ),
         )
 
     @patch.object(phase8d, "_active_jobs")

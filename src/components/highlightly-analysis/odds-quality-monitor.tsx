@@ -34,6 +34,13 @@ const CAUSE_LABELS: Record<string, string> = {
   no_supported_quote: "Sem cotação compatível",
 };
 
+const RECOMMENDATION_LABELS = {
+  insufficient_sample: "Amostra insuficiente",
+  candidate_t60m_only: "Candidata a somente T−60m",
+  monitor_provider_coverage: "Monitorar cobertura",
+  keep_full_cadence: "Manter cadência completa",
+} as const;
+
 function percentage(value: number | null): number {
   return Math.max(0, Math.min(100, value ?? 0));
 }
@@ -94,6 +101,9 @@ export function OddsQualityMonitor({ report }: { report: HighlightlyOddsQualityR
       <div className="grid gap-px bg-border md:grid-cols-3">
         {report.by_sport.map((row) => {
           const ready = row.gate_status === "ready";
+          const eligibleAvailability =
+            row.eligible_availability_pct ?? row.availability_pct;
+          const rawAvailability = row.raw_availability_pct ?? row.availability_pct;
           return (
             <article key={row.sport} className="bg-card p-4">
               <div className="flex items-center justify-between gap-3">
@@ -111,14 +121,14 @@ export function OddsQualityMonitor({ report }: { report: HighlightlyOddsQualityR
                 <strong
                   className={cn("font-mono text-2xl", ready ? "text-success" : "text-warning")}
                 >
-                  {(row.availability_pct ?? 0).toFixed(1)}%
+                  {(eligibleAvailability ?? 0).toFixed(1)}%
                 </strong>
                 <span className="text-[10px] text-muted-foreground">
                   meta {row.target_availability_pct.toFixed(0)}%
                 </span>
               </div>
-              <Progress value={percentage(row.availability_pct)} className="mt-2 h-1.5" />
-              <div className="mt-3 grid grid-cols-3 gap-2 text-[10px] text-muted-foreground">
+              <Progress value={percentage(eligibleAvailability)} className="mt-2 h-1.5" />
+              <div className="mt-3 grid grid-cols-4 gap-2 text-[10px] text-muted-foreground">
                 <span>
                   <strong className="block font-mono text-foreground">{row.matches_due}</strong>
                   devidos
@@ -131,10 +141,22 @@ export function OddsQualityMonitor({ report }: { report: HighlightlyOddsQualityR
                 </span>
                 <span>
                   <strong className="block font-mono text-foreground">
-                    {duration(row.freshness_p95_seconds)}
+                    {(rawAvailability ?? 0).toFixed(1)}%
                   </strong>
-                  frescor p95
+                  cobertura bruta
                 </span>
+                <span>
+                  <strong className="block font-mono text-foreground">
+                    {(row.provider_empty_pct ?? 0).toFixed(1)}%
+                  </strong>
+                  provedor vazio
+                </span>
+              </div>
+              <div className="mt-2 text-[10px] text-muted-foreground">
+                Frescor p95:{" "}
+                <strong className="font-mono text-foreground">
+                  {duration(row.freshness_p95_seconds)}
+                </strong>
               </div>
             </article>
           );
@@ -156,6 +178,8 @@ export function OddsQualityMonitor({ report }: { report: HighlightlyOddsQualityR
       <div className="hidden overflow-x-auto border-t border-border md:block">
         <CausesTable causes={relevantCauses} />
       </div>
+
+      <LeagueCoverageTable report={report} />
     </section>
   );
 }
@@ -197,5 +221,92 @@ function CausesTable({ causes }: { causes: HighlightlyOddsQualityReport["by_caus
         ) : null}
       </TableBody>
     </Table>
+  );
+}
+
+function LeagueCoverageTable({ report }: { report: HighlightlyOddsQualityReport }) {
+  const coverage = report.league_coverage;
+
+  return (
+    <details className="group border-t border-border" open>
+      <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <div>
+          <p className="text-xs font-semibold">Cobertura por país e liga</p>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            Janela de {coverage.window_days} dias · amostra mínima de{" "}
+            {coverage.minimum_sample} partidas · nenhuma exclusão automática
+          </p>
+        </div>
+        <Badge variant="outline" className="font-mono font-normal">
+          {coverage.leagues.length} ligas
+        </Badge>
+      </summary>
+
+      <div className="max-h-[520px] overflow-auto border-t border-border">
+        <Table>
+          <TableHeader className="sticky top-0 z-10 bg-card">
+            <TableRow>
+              <TableHead>Esporte</TableHead>
+              <TableHead>País / liga</TableHead>
+              <TableHead className="text-right">Amostra</TableHead>
+              <TableHead className="text-right">Bruta</TableHead>
+              <TableHead className="text-right">Provider empty</TableHead>
+              <TableHead className="text-right">Elegível</TableHead>
+              <TableHead>Recomendação</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {coverage.leagues.map((league) => (
+              <TableRow key={league.competition_id}>
+                <TableCell>
+                  <span className="flex items-center gap-2">
+                    <SportMark sport={SPORT_LABELS[league.sport] ?? league.sport} />
+                    {SPORT_LABELS[league.sport] ?? league.sport}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <span className="block text-xs font-medium">{league.competition_name}</span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {league.country_name ?? "País não informado"}
+                  </span>
+                </TableCell>
+                <TableCell className="text-right font-mono">{league.matches_due}</TableCell>
+                <TableCell className="text-right font-mono">
+                  {(league.raw_availability_pct ?? 0).toFixed(1)}%
+                </TableCell>
+                <TableCell className="text-right font-mono">
+                  {(league.provider_empty_pct ?? 0).toFixed(1)}%
+                </TableCell>
+                <TableCell className="text-right font-mono">
+                  {league.eligible_availability_pct === null
+                    ? "—"
+                    : `${league.eligible_availability_pct.toFixed(1)}%`}
+                </TableCell>
+                <TableCell>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      league.recommendation === "candidate_t60m_only" &&
+                        "border-warning/45 text-warning",
+                      league.recommendation === "keep_full_cadence" &&
+                        "border-success/45 text-success",
+                    )}
+                  >
+                    {RECOMMENDATION_LABELS[league.recommendation]}
+                  </Badge>
+                </TableCell>
+              </TableRow>
+            ))}
+            {!coverage.leagues.length ? (
+              <TableRow>
+                <TableCell colSpan={7} className="h-20 text-center text-muted-foreground">
+                  O histórico por liga começará a aparecer após o próximo ciclo de odds.
+                </TableCell>
+              </TableRow>
+            ) : null}
+          </TableBody>
+        </Table>
+      </div>
+    </details>
   );
 }
