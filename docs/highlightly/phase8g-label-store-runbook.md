@@ -239,7 +239,7 @@ treinamento ou previsão é gerada.
 Aplicar:
 
 ```text
-supabase/migrations/20260729202641_create_highlightly_phase8g4_training_readiness.sql
+supabase/migrations/20260729211402_33f38735-ffee-456d-99bf-88544117f175.sql
 ```
 
 Validar:
