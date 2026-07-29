@@ -86,3 +86,49 @@ Antes e depois da execução, confirmar:
 - `provider_calls=0`;
 - nenhum label de primeiro gol ou cantos;
 - nenhuma execução automática de treinamento ou previsão.
+
+## 8G.3 — Dataset auditável
+
+O contrato `highlightly_football_prematch_score` versão `1.0.0` liga:
+
+- feature set `highlightly_football_prematch@1.2.0`;
+- horizonte `t24h`;
+- label `highlightly_football_postmatch.score.1.0.0`.
+
+Somente entram no dataset snapshots `clean`, elegíveis para modelo, com
+cobertura mínima de 70%, fontes anteriores ao cutoff e labels válidos com 18
+resultados de placar. As linhas são imutáveis e cada execução usa divisão
+temporal determinística: 70% treino, 15% validação e 15% teste, sem shuffle.
+
+Aplicar:
+
+```text
+supabase/migrations/20260729190000_create_highlightly_phase8g3_training_dataset.sql
+```
+
+Validar:
+
+```text
+supabase/tests/highlightly_phase8g3_training_dataset_smoke.sql
+```
+
+Preview, sem escrita:
+
+```bash
+PYTHONPATH=. /home/ubuntu/asp-scraper-api/.venv/bin/python \
+  -m scripts.build_highlightly_phase8g3_dataset \
+  --days 365 \
+  --limit 100
+```
+
+Canário confirmado:
+
+```bash
+PYTHONPATH=. /home/ubuntu/asp-scraper-api/.venv/bin/python \
+  -m scripts.build_highlightly_phase8g3_dataset \
+  --days 365 \
+  --limit 100 \
+  --confirm-build
+```
+
+A Fase 8G.3 não chama o provider, não treina modelo e não produz previsões.
