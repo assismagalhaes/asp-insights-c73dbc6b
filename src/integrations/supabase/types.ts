@@ -7201,6 +7201,10 @@ export type Database = {
         Args: { p_limit?: number }
         Returns: Json
       }
+      backfill_highlightly_football_labeled_features_v2: {
+        Args: { p_limit?: number; p_max_candidates_per_kickoff?: number }
+        Returns: Json
+      }
       build_highlightly_football_team_features: {
         Args: {
           p_competition_id: string
@@ -7581,6 +7585,10 @@ export type Database = {
       }
       get_highlightly_labeled_feature_backfill_preview_v1: {
         Args: { p_limit?: number }
+        Returns: Json
+      }
+      get_highlightly_labeled_feature_backfill_preview_v2: {
+        Args: { p_limit?: number; p_max_candidates_per_kickoff?: number }
         Returns: Json
       }
       get_highlightly_labeled_feature_overlap_diagnostics_v2: {
