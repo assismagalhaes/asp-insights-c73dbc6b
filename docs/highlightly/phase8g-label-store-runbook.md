@@ -194,3 +194,42 @@ O relatório separa falhas de participantes, status, kickoff e snapshots
 intermediários 1.0.0/1.1.0/1.2.0. Ele usa somente dados armazenados, não
 escreve no banco, não chama o provider e não gera labels, treinamento ou
 previsões.
+
+### 8G.3.3 — Backfill agrupado por kickoff
+
+Quando o diagnóstico apontar `source_v100_snapshot_missing` em partidas que
+compartilham o mesmo horário, aplicar:
+
+```text
+supabase/migrations/20260729213000_create_highlightly_phase8g33_grouped_backfill.sql
+```
+
+Validar:
+
+```text
+supabase/tests/highlightly_phase8g33_grouped_backfill_smoke.sql
+```
+
+Preview:
+
+```bash
+PYTHONPATH=. /home/ubuntu/asp-scraper-api/.venv/bin/python \
+  -m scripts.backfill_highlightly_phase8g33_features \
+  --limit 20 \
+  --max-candidates-per-kickoff 200
+```
+
+Execução confirmada:
+
+```bash
+PYTHONPATH=. /home/ubuntu/asp-scraper-api/.venv/bin/python \
+  -m scripts.backfill_highlightly_phase8g33_features \
+  --limit 20 \
+  --max-candidates-per-kickoff 200 \
+  --confirm-backfill
+```
+
+O agrupamento executa uma única materialização por horário, usando como limite
+o número real de confrontos elegíveis naquele kickoff. Grupos acima do teto
+configurado são rejeitados. O provider permanece desligado e nenhuma label,
+treinamento ou previsão é gerada.

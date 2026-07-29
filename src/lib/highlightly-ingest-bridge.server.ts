@@ -113,6 +113,8 @@ export const HIGHLIGHTLY_BRIDGE_RPCS = new Set([
   "get_highlightly_labeled_feature_backfill_preview_v1",
   "backfill_highlightly_football_labeled_features_v1",
   "get_highlightly_labeled_feature_overlap_diagnostics_v2",
+  "get_highlightly_labeled_feature_backfill_preview_v2",
+  "backfill_highlightly_football_labeled_features_v2",
   "get_highlightly_match_lifecycle_candidates",
   "get_highlightly_match_lifecycle_candidates_v2",
   "refresh_highlightly_match_lifecycle_states",
