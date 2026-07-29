@@ -138,7 +138,7 @@ A Fase 8G.3 não chama o provider, não treina modelo e não produz previsões.
 Se o preview indicar `missing_feature_snapshot`, aplicar:
 
 ```text
-supabase/migrations/20260729200000_create_highlightly_phase8g31_labeled_feature_backfill.sql
+supabase/migrations/20260729185127_a3b7cee2-8618-47d9-bfe7-ca615333fa92.sql
 ```
 
 Validar:
