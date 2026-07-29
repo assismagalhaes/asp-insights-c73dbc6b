@@ -3134,6 +3134,74 @@ export type Database = {
           },
         ]
       }
+      hl_training_readiness_policies: {
+        Row: {
+          created_at: string
+          dataset_spec_id: string
+          id: string
+          is_enabled: boolean
+          maximum_outcome_class_pct: number
+          minimum_distinct_competitions: number
+          minimum_observation_days: number
+          minimum_outcome_class_pct: number
+          minimum_outcome_class_rows: number
+          minimum_test_rows: number
+          minimum_total_rows: number
+          minimum_train_rows: number
+          minimum_validation_rows: number
+          quality_contract: Json
+          required_outcome_classes: string[]
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          dataset_spec_id: string
+          id?: string
+          is_enabled?: boolean
+          maximum_outcome_class_pct?: number
+          minimum_distinct_competitions?: number
+          minimum_observation_days?: number
+          minimum_outcome_class_pct?: number
+          minimum_outcome_class_rows?: number
+          minimum_test_rows?: number
+          minimum_total_rows?: number
+          minimum_train_rows?: number
+          minimum_validation_rows?: number
+          quality_contract?: Json
+          required_outcome_classes?: string[]
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          dataset_spec_id?: string
+          id?: string
+          is_enabled?: boolean
+          maximum_outcome_class_pct?: number
+          minimum_distinct_competitions?: number
+          minimum_observation_days?: number
+          minimum_outcome_class_pct?: number
+          minimum_outcome_class_rows?: number
+          minimum_test_rows?: number
+          minimum_total_rows?: number
+          minimum_train_rows?: number
+          minimum_validation_rows?: number
+          quality_contract?: Json
+          required_outcome_classes?: string[]
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_training_readiness_policies_dataset_spec_id_fkey"
+            columns: ["dataset_spec_id"]
+            isOneToOne: true
+            referencedRelation: "hl_training_dataset_specs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ligas: {
         Row: {
           ativo: boolean
@@ -7678,6 +7746,10 @@ export type Database = {
         Returns: Json
       }
       get_highlightly_training_dataset_report_v1: {
+        Args: { p_days?: number; p_sport?: string }
+        Returns: Json
+      }
+      get_highlightly_training_readiness_report_v1: {
         Args: { p_days?: number; p_sport?: string }
         Returns: Json
       }
