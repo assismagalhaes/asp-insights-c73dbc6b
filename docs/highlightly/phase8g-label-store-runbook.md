@@ -259,3 +259,46 @@ PYTHONPATH=. /home/ubuntu/asp-scraper-api/.venv/bin/python \
 O relatório separa `data_ready` de `manual_training_authorized`. A política
 permanece `draft` e desabilitada, e nenhuma rotina desta fase executa
 treinamento ou previsão.
+
+### 8G.4.1 — Acumulador diário auditado
+
+Aplicar:
+
+```text
+supabase/migrations/20260729213012_create_highlightly_phase8g41_daily_accumulator.sql
+```
+
+Validar:
+
+```text
+supabase/tests/highlightly_phase8g41_daily_accumulator_smoke.sql
+```
+
+Executar primeiro em `dry-run`:
+
+```bash
+PYTHONPATH=. /home/ubuntu/asp-scraper-api/.venv/bin/python \
+  -m scripts.run_highlightly_phase8g41_accumulator \
+  --days 365 \
+  --label-limit 200 \
+  --feature-limit 200 \
+  --max-candidates-per-kickoff 200 \
+  --dataset-limit 5000
+```
+
+Instalar os units, mantendo o timer desabilitado até o canário:
+
+```bash
+sudo install -o root -g root -m 0644 \
+  config/systemd/highlightly-training-accumulator.service \
+  /etc/systemd/system/highlightly-training-accumulator.service
+sudo install -o root -g root -m 0644 \
+  config/systemd/highlightly-training-accumulator.timer \
+  /etc/systemd/system/highlightly-training-accumulator.timer
+sudo systemctl daemon-reload
+sudo systemctl disable highlightly-training-accumulator.timer
+```
+
+O unit compartilha `/run/lock/asp-highlightly-future.lock`, mantém o provider
+desligado e executa somente labels, features, dataset e relatório de prontidão
+com dados armazenados. Treinamento e previsões continuam proibidos.

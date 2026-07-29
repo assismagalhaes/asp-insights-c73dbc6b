@@ -1,0 +1,18 @@
+[Unit]
+Description=ASP Insights Highlightly Phase 8G.4.1 daily training-data accumulator
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/home/ubuntu/asp-insights-c73dbc6b
+EnvironmentFile=/etc/asp-scraper-api.env
+Environment=PYTHONPATH=.
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/flock --exclusive --wait 14400 --conflict-exit-code 75 /run/lock/asp-highlightly-future.lock /home/ubuntu/asp-scraper-api/.venv/bin/python -m scripts.run_highlightly_phase8g41_accumulator --days 365 --label-limit 200 --feature-limit 200 --max-candidates-per-kickoff 200 --dataset-limit 5000 --confirm-accumulate --output /home/ubuntu/asp-insights-c73dbc6b/outputs/highlightly_phase8g41_accumulation_latest.json
+ExecStopPost=/usr/bin/flock --exclusive --wait 300 --conflict-exit-code 0 /run/lock/asp-highlightly-future.lock /home/ubuntu/asp-scraper-api/.venv/bin/python -m scripts.ensure_highlightly_provider_disabled --reason phase8g41-systemd-stop
+TimeoutStartSec=18000
+TimeoutStopSec=360
+Nice=10
+UMask=0027

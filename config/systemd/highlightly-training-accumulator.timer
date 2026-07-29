@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the stored-data-only Highlightly training accumulator daily
+
+[Timer]
+OnCalendar=*-*-* 01:40:00 America/Sao_Paulo
+Persistent=true
+AccuracySec=1min
+RandomizedDelaySec=2min
+Unit=highlightly-training-accumulator.service
+
+[Install]
+WantedBy=timers.target
