@@ -8,10 +8,13 @@ from scripts import run_highlightly_phase8g41_accumulator as accumulator
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = (
+MIGRATIONS = (
     ROOT
     / "supabase/migrations/"
-    "20260729213012_create_highlightly_phase8g41_daily_accumulator.sql"
+    "20260729214751_77b91616-c2f3-4ebf-818c-73217c80616c.sql",
+    ROOT
+    / "supabase/migrations/"
+    "20260729214924_2444dad7-fe89-4bf2-b1af-12dcc50da8f3.sql",
 )
 SMOKE = (
     ROOT
@@ -34,7 +37,10 @@ BRIDGE = ROOT / "src/lib/highlightly-ingest-bridge.server.ts"
 class HighlightlyPhase8G41DailyAccumulatorTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.migration = MIGRATION.read_text(encoding="utf-8")
+        cls.migration = "\n".join(
+            migration.read_text(encoding="utf-8")
+            for migration in MIGRATIONS
+        )
         cls.smoke = SMOKE.read_text(encoding="utf-8")
         cls.service = SERVICE.read_text(encoding="utf-8")
         cls.timer = TIMER.read_text(encoding="utf-8")

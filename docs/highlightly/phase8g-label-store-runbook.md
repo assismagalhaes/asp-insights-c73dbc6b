@@ -265,7 +265,8 @@ treinamento ou previsão.
 Aplicar:
 
 ```text
-supabase/migrations/20260729213012_create_highlightly_phase8g41_daily_accumulator.sql
+supabase/migrations/20260729214751_77b91616-c2f3-4ebf-818c-73217c80616c.sql
+supabase/migrations/20260729214924_2444dad7-fe89-4bf2-b1af-12dcc50da8f3.sql
 ```
 
 Validar:
