@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = (
     ROOT
     / "supabase/migrations/"
-    "20260729190000_create_highlightly_phase8g3_training_dataset.sql"
+    "20260729183643_bca27b94-4893-4280-a2c5-42deeb3d6da2.sql"
 )
 SMOKE = (
     ROOT

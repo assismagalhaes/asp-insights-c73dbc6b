@@ -110,6 +110,8 @@ export const HIGHLIGHTLY_BRIDGE_RPCS = new Set([
   "get_highlightly_training_dataset_preview_v1",
   "build_highlightly_football_training_dataset_v1",
   "get_highlightly_training_dataset_report_v1",
+  "get_highlightly_labeled_feature_backfill_preview_v1",
+  "backfill_highlightly_football_labeled_features_v1",
   "get_highlightly_match_lifecycle_candidates",
   "get_highlightly_match_lifecycle_candidates_v2",
   "refresh_highlightly_match_lifecycle_states",

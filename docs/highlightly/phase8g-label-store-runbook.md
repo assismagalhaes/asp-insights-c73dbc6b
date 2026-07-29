@@ -103,7 +103,7 @@ temporal determinística: 70% treino, 15% validação e 15% teste, sem shuffle.
 Aplicar:
 
 ```text
-supabase/migrations/20260729190000_create_highlightly_phase8g3_training_dataset.sql
+supabase/migrations/20260729183643_bca27b94-4893-4280-a2c5-42deeb3d6da2.sql
 ```
 
 Validar:
@@ -132,3 +132,38 @@ PYTHONPATH=. /home/ubuntu/asp-scraper-api/.venv/bin/python \
 ```
 
 A Fase 8G.3 não chama o provider, não treina modelo e não produz previsões.
+
+### 8G.3.1 — Backfill direcionado de features
+
+Se o preview indicar `missing_feature_snapshot`, aplicar:
+
+```text
+supabase/migrations/20260729200000_create_highlightly_phase8g31_labeled_feature_backfill.sql
+```
+
+Validar:
+
+```text
+supabase/tests/highlightly_phase8g31_labeled_feature_backfill_smoke.sql
+```
+
+Preview:
+
+```bash
+PYTHONPATH=. /home/ubuntu/asp-scraper-api/.venv/bin/python \
+  -m scripts.backfill_highlightly_phase8g31_features \
+  --limit 20
+```
+
+Execução confirmada:
+
+```bash
+PYTHONPATH=. /home/ubuntu/asp-scraper-api/.venv/bin/python \
+  -m scripts.backfill_highlightly_phase8g31_features \
+  --limit 20 \
+  --confirm-backfill
+```
+
+Esse backfill processa somente partidas já rotuladas e reutiliza o
+materializador Football existente sobre dados armazenados. O provider continua
+desligado e nenhuma label, treinamento ou previsão é gerada.
