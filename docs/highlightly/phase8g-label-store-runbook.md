@@ -167,3 +167,30 @@ PYTHONPATH=. /home/ubuntu/asp-scraper-api/.venv/bin/python \
 Esse backfill processa somente partidas já rotuladas e reutiliza o
 materializador Football existente sobre dados armazenados. O provider continua
 desligado e nenhuma label, treinamento ou previsão é gerada.
+
+### 8G.3.2 — Diagnóstico de sobreposição
+
+Quando o backfill processar uma partida sem criar o snapshot esperado, aplicar:
+
+```text
+supabase/migrations/20260729210000_create_highlightly_phase8g32_overlap_diagnostics.sql
+```
+
+Validar:
+
+```text
+supabase/tests/highlightly_phase8g32_overlap_diagnostics_smoke.sql
+```
+
+Executar o relatório somente leitura:
+
+```bash
+PYTHONPATH=. /home/ubuntu/asp-scraper-api/.venv/bin/python \
+  -m scripts.report_highlightly_phase8g32_overlap \
+  --limit 200
+```
+
+O relatório separa falhas de participantes, status, kickoff e snapshots
+intermediários 1.0.0/1.1.0/1.2.0. Ele usa somente dados armazenados, não
+escreve no banco, não chama o provider e não gera labels, treinamento ou
+previsões.
