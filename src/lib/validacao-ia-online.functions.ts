@@ -16,7 +16,7 @@ import { applyAiSemanticPolicy } from "@/lib/ai-validation/semantic-policy";
 import { generateText, tool, stepCountIs } from "ai";
 import { z } from "zod";
 
-export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v14-compact-research";
+export const PROMPT_VERSAO_ONLINE = "validacao-critica-online-v15-deterministic-facts";
 export const ONLINE_GATEWAY_MODEL_ID = "gemini-3.6-flash";
 export const ONLINE_REPAIR_MODEL_ID = "gemini-3.6-flash";
 export const ONLINE_FALLBACK_MODEL_ID = "gemini-2.5-flash";
@@ -380,6 +380,12 @@ Regras analíticas:
 - Use os gates objetivos de decisão. A IA só pode sugerir CONFIRMA se todos os gates obrigatórios forem aprovados.
 - Não reavaliar se a entrada é EV+ (já foi filtrada).
 - Não recalcular EV, não substituir a pick e não substituir os dados do modelo Python/contexto manual.
+- Não recalcule probabilidade, edge, odd justa, divergência em pontos percentuais, médias ou contagens. Copie literalmente os valores canônicos exibidos no payload. Se uma contagem não estiver explicitamente pronta no payload, descreva a sequência sem afirmar "N de M".
+- O campo "Stake sugerida" é apenas estado operacional anterior da interface. É proibido usá-lo como evidência a favor de CONFIRMA ou PULAR e a stake final deve ser decidida independentemente.
+- Alertas OVERDISPERSION_* acompanhados de probabilidade final ou mistura conservadora já foram incorporados pelo modelo. Não desconte o mesmo risco novamente, não os use isoladamente como veto e trate-os apenas como risco residual para limitar a stake.
+- Diferencie rigorosamente métricas gerais e por mando. Não descreva uma média geral como média em casa/fora.
+- H2H curto é contexto auxiliar. Não afirme que ele sustenta um over/under sem informar a distribuição explícita dos resultados em relação à linha.
+- A condição de mudança e a condição de invalidação devem tratar somente da pick atual. Não proponha outra linha, outro mercado ou outra aposta como condição.
 - A IA apenas sugere decisão. A decisão final continua humana.
 - Avaliar coerência técnica, matchup, forma, projeções, pick, odd, risco e notícias encontradas.
 - Se informação crítica estiver ausente/incerta, sinalize claramente.
@@ -418,6 +424,7 @@ Gates obrigatórios:
 - Gate 2 — Risco estrutural: reprove apenas quando houver evidência atual, diretamente ligada ao mercado, de que uma premissa do modelo foi invalidada ou de que o edge deixou de ser executável. Risco normal do esporte pode limitar a stake, mas não é veto automático.
 - Gate 3 — Informação crítica ausente: reprove apenas se o dado ausente for indispensável para interpretar a pick ou tornar o preço executável. Lineup definitivo, vetor exato do vento, umpire e pitch count não são vetos automáticos quando starters, mercado, odd, probabilidade e edge já estão confirmados; trate-os como limitação ou limite a stake.
 - Gate 4 — Fonte online fraca: fonte fraca impede usar aquela alegação como fato. Não transforme ausência de confirmação de um fator auxiliar em evidência contrária à entrada.
+- Uma única prévia jornalística com escalação provável não equivale a súmula ou escalação oficial. Nesse caso, mantenha o gate de informação crítica como UNKNOWN quando a confirmação oficial for indispensável e registre a limitação.
 - Gate 5 — Risco > benefício: conte somente riscos independentes, materiais e sustentados por evidência. Não some descrições correlatas do mesmo fator para fabricar um veto.
 - Gate 6 — Duplicidade/correlação: se houver outras picks do mesmo jogo e mesmo grupo de mercado, trate como opções concorrentes. Você deve escolher no máximo uma opção para CONFIRMAR ou recomendar PULAR o grupo inteiro. Nunca sugira confirmar mais de uma opção do grupo.
 
@@ -554,7 +561,7 @@ export const analisarValidacaoOnline = createServerFn({ method: "POST" })
 
       const p = data.prognostico;
       const oddFinal = p.odd_ajustada ?? p.odd_original;
-      const edgeFinal = p.edge_ajustado ?? p.edge_original;
+      const edgeFinal = Number((((p.probabilidade_final / 100) * oddFinal - 1) * 100).toFixed(2));
       const checklistEsporte = getSportChecklist(p.esporte);
       const opcoesMesmoMercado = data.opcoes_mesmo_mercado ?? [];
       const optionGateContext = data.contexto_local?.trim() || data.dados_tecnicos?.trim() || "";
@@ -608,8 +615,7 @@ Odd melhor: ${formatNullableOdd(p.odd_melhor)}
 Bookmaker melhor: ${p.bookmaker_melhor ?? "-"}
 Odd de valor (fair): ${p.odd_valor.toFixed(3)}
 Probabilidade final: ${p.probabilidade_final.toFixed(2)}%
-Edge: ${edgeFinal.toFixed(2)}%
-Stake sugerida: ${p.stake_sugerida}u
+Edge canônico: ${edgeFinal.toFixed(2)}%
 
 CONTEXTO LOCAL / DADOS TÉCNICOS MANUAIS:
 ${compactOnlineContext(data.contexto_local || data.dados_tecnicos) || "(nenhum)"}
@@ -631,6 +637,7 @@ ${checklistEsporte}
 
 Instrução reforçada:
 Toda análise de valor (edge, EV, comparação com odd justa e comentários no parecer) DEVE usar exclusivamente a "Odd em uso" (que já reflete a odd ajustada quando existe). Não cite a "Odd ofertada" original como base para a decisão; ela é apenas referência histórica do modelo. Se mencionar odd no parecer, use a odd em uso.
+O "Edge canônico" foi recalculado deterministicamente pelo servidor com a probabilidade final e a odd em uso. Copie esse valor literalmente; não use edge antigo encontrado no contexto técnico.
 Você deve usar o checklist específico do esporte. Não faça apenas busca genérica por notícias. Busque os fatores que realmente podem confirmar ou invalidar a tese da aposta conforme esporte, liga, mercado e pick. Quando não encontrar uma informação crítica, diga claramente que ela não foi encontrada. Não invente dados. Diferencie fatos confirmados, informações ausentes e inferências.
 Antes de sugerir CONFIRMA, procure motivos concretos para PULAR. Se a tese contra a entrada for relevante ou houver informação crítica ausente/incerta, sugira PULAR. Não confirme apenas porque a entrada veio como EV+.
 Não use 1.0u como stake padrão. Se houver qualquer dúvida entre 1.0u e 0.5u, use 0.5u. Se houver dúvida entre 0.5u e PULAR, use PULAR.

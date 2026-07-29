@@ -60,6 +60,40 @@ describe("política semântica da validação de IA", () => {
     expect(result.limitations).toEqual([]);
   });
 
+  it("substitui proposta de mercado alternativo por invalidação da pick atual", () => {
+    const result = applyAiSemanticPolicy(
+      output({
+        narrative: {
+          ...output().narrative,
+          decision_change_condition: "Ajuste na linha principal para 2.0.",
+        },
+        invalidation_condition: "Mudança da linha de gols para 2.0 com odd competitiva.",
+      }),
+    );
+
+    expect(result.invalidation_condition).toContain("pré-jogo");
+    expect(result.invalidation_condition).not.toContain("2.0");
+    expect(result.narrative.decision_change_condition).toContain("pré-jogo");
+    expect(result.limitations).toContain(
+      "A condição produzida pela IA propunha outro mercado em vez de invalidar a pick atual e foi substituída pela política pré-jogo.",
+    );
+  });
+
+  it("remove seleção operacional residual quando a IA decide PULAR", () => {
+    const result = applyAiSemanticPolicy(
+      output({
+        selected_prediction_id: "prediction-1",
+        selected_pick: "Over 2.5",
+      }),
+    );
+
+    expect(result.selected_prediction_id).toBeNull();
+    expect(result.selected_pick).toBeNull();
+    expect(result.limitations).toContain(
+      "A seleção operacional residual da IA foi removida porque a decisão PULAR não possui ID ou pick selecionada.",
+    );
+  });
+
   it("move veto exclusivamente contextual do gate técnico para risco estrutural", () => {
     const result = applyAiSemanticPolicy(
       output({

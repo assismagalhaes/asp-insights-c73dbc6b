@@ -16,7 +16,7 @@ import { applyAiSemanticPolicy } from "@/lib/ai-validation/semantic-policy";
 import { generateText, type LanguageModel } from "ai";
 import { z } from "zod";
 
-export const PROMPT_VERSAO = "validacao-critica-v15-mlb-evidence-gates";
+export const PROMPT_VERSAO = "validacao-critica-v16-deterministic-facts";
 export const LOCAL_GATEWAY_MODEL_ID = "gemini-3.6-flash";
 export const LOCAL_REPAIR_MODEL_ID = "gemini-3.6-flash";
 export const LOCAL_FALLBACK_MODEL_ID = "gemini-2.5-flash";
@@ -232,6 +232,11 @@ Regras:
 - Sempre escreva uma seção chamada "Tese contra a entrada".
 - Use os gates objetivos de decisão. A IA só pode sugerir CONFIRMA se todos os gates obrigatórios forem aprovados.
 - Não reavaliar se é EV+.
+- Não recalcule probabilidade, edge, EV, odd justa, divergência em pontos percentuais, médias ou contagens. Copie literalmente os valores canônicos exibidos no payload. Se uma contagem não estiver explicitamente pronta no payload, descreva a sequência sem afirmar "N de M".
+- O campo "Stake sugerida pelo sistema" é apenas estado operacional anterior da interface. É proibido usá-lo como evidência a favor de CONFIRMA ou PULAR e a stake final deve ser decidida independentemente.
+- Alertas OVERDISPERSION_* acompanhados de probabilidade final ou mistura conservadora já foram incorporados pelo modelo. Não desconte o mesmo risco novamente, não os use isoladamente como veto e trate-os apenas como risco residual para limitar a stake.
+- Diferencie rigorosamente métricas gerais e por mando. Não descreva uma média geral como média em casa/fora.
+- H2H curto é contexto auxiliar. Não afirme que ele sustenta um over/under sem informar a distribuição explícita dos resultados em relação à linha.
 - Não buscar dados online.
 - Não inventar informações externas.
 - Analisar apenas os dados fornecidos.
@@ -289,6 +294,7 @@ Contrato estruturado obrigatório:
 - narrative.internal_history: amostra, greens/reds, ROI/Yield e conclusão. Com menos de 10 casos, inclua "Histórico interno insuficiente para conclusão estatística."
 - narrative.final_justification: justificativa objetiva da decisão.
 - narrative.decision_change_condition: condição que faria mudar a decisão, ou null.
+- narrative.decision_change_condition e invalidation_condition devem tratar somente da pick atual. Não proponha outra linha, outro mercado ou outra aposta como condição de invalidação.
 - rationale: síntese auditável que sustenta a decisão.
 - risks: liste de 3 a 5 riscos objetivos.
 - invalidation_condition: condição operacional que invalida a recomendação.
@@ -336,7 +342,7 @@ export const analisarValidacao = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const p = data.prognostico;
     const oddFinal = p.odd_ajustada ?? p.odd_original;
-    const edgeFinal = p.edge_ajustado ?? p.edge_original;
+    const edgeFinal = Number((((p.probabilidade_final / 100) * oddFinal - 1) * 100).toFixed(2));
     const opcoesMesmoMercado = data.opcoes_mesmo_mercado ?? [];
     const optionGateContext = data.contexto_local?.trim() || data.dados_tecnicos?.trim() || "";
     const isAspScreener =
@@ -402,10 +408,7 @@ Odd melhor: ${formatNullableOdd(p.odd_melhor)}
 Bookmaker melhor: ${p.bookmaker_melhor ?? "-"}
 Odd de valor (fair): ${p.odd_valor.toFixed(3)}
 Probabilidade final: ${p.probabilidade_final.toFixed(2)}%
-Edge original: ${p.edge_original.toFixed(2)}%
-Edge ajustado: ${p.edge_ajustado != null ? p.edge_ajustado.toFixed(2) + "%" : "—"}
-Edge em uso para análise: ${edgeFinal.toFixed(2)}%
-Stake sugerida pelo sistema: ${p.stake_sugerida}u
+Edge canônico em uso para análise: ${edgeFinal.toFixed(2)}%
 
 CONTEXTO LOCAL / DADOS TÉCNICOS MANUAIS:
 ${data.contexto_local?.trim() || data.dados_tecnicos?.trim() || "(nenhum contexto interno/manual informado — avalie somente os demais dados do prognóstico)"}
@@ -421,6 +424,7 @@ ${correlacionadosTexto}
 
 INSTRUÇÃO DE AUDITORIA:
 Toda análise de valor (edge, EV, comparação com odd justa e comentários no parecer) DEVE usar exclusivamente a "Odd em uso para análise" (que já reflete a odd ajustada quando existe). Não cite a "Odd ofertada" original como base para a decisão; ela é apenas referência histórica do modelo. Se mencionar odd no parecer, use a odd em uso.
+O "Edge canônico em uso para análise" foi recalculado deterministicamente pelo servidor com a probabilidade final e a odd em uso. Copie esse valor literalmente; não use edge antigo encontrado no contexto técnico.
 Antes de sugerir CONFIRMA, procure motivos concretos nos dados fornecidos para PULAR. Se a tese contra a entrada for relevante com base nos dados internos, sugira PULAR. Não confirme apenas porque a entrada veio como EV+. Não trate ausência de informação externa pesquisável como motivo principal para PULAR no modo IA Local.
 Não use 1.0u como stake padrão. Se houver qualquer dúvida entre 1.0u e 0.5u, use 0.5u. Se houver dúvida entre 0.5u e PULAR, use PULAR.
 Se houver opcoes concorrentes listadas acima, compare mercado, picks, odds, probabilidade, edge, proteção e risco/retorno. A resposta deve indicar a melhor opcao para CONFIRMAR ou recomendar PULAR o grupo inteiro. Nunca confirme mais de uma opcao do mesmo jogo e mesma familia de mercado.
