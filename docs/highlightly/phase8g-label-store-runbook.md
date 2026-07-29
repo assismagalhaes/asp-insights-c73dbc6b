@@ -201,7 +201,7 @@ Quando o diagnóstico apontar `source_v100_snapshot_missing` em partidas que
 compartilham o mesmo horário, aplicar:
 
 ```text
-supabase/migrations/20260729213000_create_highlightly_phase8g33_grouped_backfill.sql
+supabase/migrations/20260729200330_3c2ccb88-a50e-4277-81dd-72fb2564c2e1.sql
 ```
 
 Validar:
