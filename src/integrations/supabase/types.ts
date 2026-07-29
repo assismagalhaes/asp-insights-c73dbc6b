@@ -7210,6 +7210,10 @@ export type Database = {
         Args: { p_days?: number; p_sport?: string }
         Returns: Json
       }
+      get_highlightly_label_settlement_preview_v1: {
+        Args: { p_days?: number; p_limit?: number; p_sport?: string }
+        Returns: Json
+      }
       get_highlightly_match_lifecycle_candidates: {
         Args: { p_at?: string; p_include_disabled?: boolean; p_limit?: number }
         Returns: {
