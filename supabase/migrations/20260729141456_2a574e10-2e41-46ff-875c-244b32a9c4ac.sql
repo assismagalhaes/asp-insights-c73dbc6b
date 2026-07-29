@@ -1,0 +1,2 @@
+-- see repo file supabase/migrations/20260729135844_create_highlightly_phase8f32_stored_feature_report.sql
+-- inlined below in full
