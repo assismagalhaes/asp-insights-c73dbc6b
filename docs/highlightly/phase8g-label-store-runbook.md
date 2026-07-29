@@ -233,3 +233,29 @@ O agrupamento executa uma única materialização por horário, usando como limi
 o número real de confrontos elegíveis naquele kickoff. Grupos acima do teto
 configurado são rejeitados. O provider permanece desligado e nenhuma label,
 treinamento ou previsão é gerada.
+
+### 8G.4 — Gate de prontidão para treinamento
+
+Aplicar:
+
+```text
+supabase/migrations/20260729202641_create_highlightly_phase8g4_training_readiness.sql
+```
+
+Validar:
+
+```text
+supabase/tests/highlightly_phase8g4_training_readiness_smoke.sql
+```
+
+Gerar o relatório somente leitura:
+
+```bash
+PYTHONPATH=. /home/ubuntu/asp-scraper-api/.venv/bin/python \
+  -m scripts.report_highlightly_phase8g4_readiness \
+  --days 365
+```
+
+O relatório separa `data_ready` de `manual_training_authorized`. A política
+permanece `draft` e desabilitada, e nenhuma rotina desta fase executa
+treinamento ou previsão.
