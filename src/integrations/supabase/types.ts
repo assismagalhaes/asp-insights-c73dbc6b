@@ -7583,6 +7583,10 @@ export type Database = {
         Args: { p_limit?: number }
         Returns: Json
       }
+      get_highlightly_labeled_feature_overlap_diagnostics_v2: {
+        Args: { p_limit?: number }
+        Returns: Json
+      }
       get_highlightly_match_lifecycle_candidates: {
         Args: { p_at?: string; p_include_disabled?: boolean; p_limit?: number }
         Returns: {
