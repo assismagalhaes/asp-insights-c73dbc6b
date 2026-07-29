@@ -105,6 +105,8 @@ export const HIGHLIGHTLY_BRIDGE_RPCS = new Set([
   "get_highlightly_label_contract_report_v1",
   "get_highlightly_label_settlement_preview_v1",
   "get_highlightly_label_settlement_preview_v2",
+  "materialize_highlightly_football_score_labels_v1",
+  "get_highlightly_label_materialization_report_v1",
   "get_highlightly_match_lifecycle_candidates",
   "get_highlightly_match_lifecycle_candidates_v2",
   "refresh_highlightly_match_lifecycle_states",
