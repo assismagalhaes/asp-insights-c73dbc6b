@@ -147,7 +147,7 @@ class HighlightlyPhaseEightFFeatureStoreTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         repository.rpc.assert_called_once_with(
-            "get_highlightly_feature_store_report_v6",
+            "get_highlightly_feature_store_report_v7",
             {"p_sport": "football", "p_days": 30},
         )
         payload = json.loads(output.call_args.args[0])
@@ -198,7 +198,7 @@ class HighlightlyPhaseEightFFeatureStoreTests(unittest.TestCase):
         )
         self.assertEqual(
             repository.rpc.call_args_list[1].args[0],
-            "get_highlightly_feature_store_report_v6",
+            "get_highlightly_feature_store_report_v7",
         )
 
     @patch.object(phase8f.HighlightlyRepository, "from_environment")

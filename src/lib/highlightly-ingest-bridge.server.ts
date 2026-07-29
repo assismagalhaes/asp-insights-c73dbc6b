@@ -101,6 +101,7 @@ export const HIGHLIGHTLY_BRIDGE_RPCS = new Set([
   "get_highlightly_feature_store_report_v4",
   "get_highlightly_feature_store_report_v5",
   "get_highlightly_feature_store_report_v6",
+  "get_highlightly_feature_store_report_v7",
   "get_highlightly_match_lifecycle_candidates",
   "get_highlightly_match_lifecycle_candidates_v2",
   "refresh_highlightly_match_lifecycle_states",
