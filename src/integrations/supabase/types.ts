@@ -7825,6 +7825,10 @@ export type Database = {
         }
         Returns: Json
       }
+      get_highlightly_training_accumulation_report_v1: {
+        Args: { p_days?: number }
+        Returns: Json
+      }
       get_highlightly_training_dataset_preview_v1: {
         Args: { p_from: string; p_limit?: number; p_to: string }
         Returns: Json
@@ -8101,6 +8105,16 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      run_highlightly_football_training_accumulation_v1: {
+        Args: {
+          p_dataset_limit?: number
+          p_days?: number
+          p_feature_limit?: number
+          p_label_limit?: number
+          p_max_candidates_per_kickoff?: number
+        }
+        Returns: Json
       }
       set_highlightly_match_lifecycle_policy: {
         Args: { p_enabled: boolean; p_sport_code: string }
