@@ -1643,6 +1643,103 @@ export type Database = {
           },
         ]
       }
+      hl_label_definitions: {
+        Row: {
+          created_at: string
+          display_name: string
+          id: string
+          label_key: string
+          label_set_id: string
+          line_value: number | null
+          market_family: string
+          outcome_domain: string[]
+          required_sources: string[]
+          settlement_spec: Json
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_name: string
+          id?: string
+          label_key: string
+          label_set_id: string
+          line_value?: number | null
+          market_family: string
+          outcome_domain: string[]
+          required_sources: string[]
+          settlement_spec?: Json
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          id?: string
+          label_key?: string
+          label_set_id?: string
+          line_value?: number | null
+          market_family?: string
+          outcome_domain?: string[]
+          required_sources?: string[]
+          settlement_spec?: Json
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_label_definitions_label_set_id_fkey"
+            columns: ["label_set_id"]
+            isOneToOne: false
+            referencedRelation: "hl_label_sets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hl_label_sets: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          is_enabled: boolean
+          outcome_policy: Json
+          sport_id: string
+          status: string
+          updated_at: string
+          version: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          outcome_policy?: Json
+          sport_id: string
+          status?: string
+          updated_at?: string
+          version: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          outcome_policy?: Json
+          sport_id?: string
+          status?: string
+          updated_at?: string
+          version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_label_sets_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hl_match_feature_snapshots: {
         Row: {
           coverage_pct: number
@@ -1732,8 +1829,10 @@ export type Database = {
           created_at: string
           id: string
           label_available_at: string
+          label_set_id: string | null
           label_version: string
           labels: Json
+          lineage: Json
           match_id: string
           outcome_at: string
           quality_status: string
@@ -1743,8 +1842,10 @@ export type Database = {
           created_at?: string
           id?: string
           label_available_at?: string
+          label_set_id?: string | null
           label_version: string
           labels: Json
+          lineage?: Json
           match_id: string
           outcome_at: string
           quality_status?: string
@@ -1754,14 +1855,23 @@ export type Database = {
           created_at?: string
           id?: string
           label_available_at?: string
+          label_set_id?: string | null
           label_version?: string
           labels?: Json
+          lineage?: Json
           match_id?: string
           outcome_at?: string
           quality_status?: string
           source_data_max_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "hl_match_labels_label_set_id_fkey"
+            columns: ["label_set_id"]
+            isOneToOne: false
+            referencedRelation: "hl_label_sets"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "hl_match_labels_match_id_fkey"
             columns: ["match_id"]
@@ -7093,6 +7203,10 @@ export type Database = {
         Returns: Json
       }
       get_highlightly_feature_store_report_v7: {
+        Args: { p_days?: number; p_sport?: string }
+        Returns: Json
+      }
+      get_highlightly_label_contract_report_v1: {
         Args: { p_days?: number; p_sport?: string }
         Returns: Json
       }
