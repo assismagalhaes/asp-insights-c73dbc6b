@@ -7197,6 +7197,10 @@ export type Database = {
         Args: never
         Returns: number
       }
+      backfill_highlightly_football_labeled_features_v1: {
+        Args: { p_limit?: number }
+        Returns: Json
+      }
       build_highlightly_football_team_features: {
         Args: {
           p_competition_id: string
@@ -7573,6 +7577,10 @@ export type Database = {
       }
       get_highlightly_label_settlement_preview_v2: {
         Args: { p_days?: number; p_limit?: number; p_sport?: string }
+        Returns: Json
+      }
+      get_highlightly_labeled_feature_backfill_preview_v1: {
+        Args: { p_limit?: number }
         Returns: Json
       }
       get_highlightly_match_lifecycle_candidates: {
