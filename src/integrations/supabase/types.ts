@@ -2875,6 +2875,80 @@ export type Database = {
           },
         ]
       }
+      hl_training_accumulation_runs: {
+        Row: {
+          automatic_predictions: boolean
+          automatic_training: boolean
+          created_at: string
+          dataset_limit: number
+          dataset_result: Json
+          diagnostics: Json
+          feature_limit: number
+          feature_result: Json
+          finished_at: string | null
+          id: string
+          label_limit: number
+          label_result: Json
+          max_candidates_per_kickoff: number
+          provider_calls: number
+          readiness_result: Json
+          sport_id: string
+          started_at: string
+          status: string
+          window_days: number
+        }
+        Insert: {
+          automatic_predictions?: boolean
+          automatic_training?: boolean
+          created_at?: string
+          dataset_limit: number
+          dataset_result?: Json
+          diagnostics?: Json
+          feature_limit: number
+          feature_result?: Json
+          finished_at?: string | null
+          id?: string
+          label_limit: number
+          label_result?: Json
+          max_candidates_per_kickoff: number
+          provider_calls?: number
+          readiness_result?: Json
+          sport_id: string
+          started_at?: string
+          status?: string
+          window_days: number
+        }
+        Update: {
+          automatic_predictions?: boolean
+          automatic_training?: boolean
+          created_at?: string
+          dataset_limit?: number
+          dataset_result?: Json
+          diagnostics?: Json
+          feature_limit?: number
+          feature_result?: Json
+          finished_at?: string | null
+          id?: string
+          label_limit?: number
+          label_result?: Json
+          max_candidates_per_kickoff?: number
+          provider_calls?: number
+          readiness_result?: Json
+          sport_id?: string
+          started_at?: string
+          status?: string
+          window_days?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_training_accumulation_runs_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hl_training_dataset_build_runs: {
         Row: {
           created_at: string
@@ -7741,6 +7815,20 @@ export type Database = {
         Args: { p_request_date?: string }
         Returns: number
       }
+      get_highlightly_training_accumulation_preview_v1: {
+        Args: {
+          p_dataset_limit?: number
+          p_days?: number
+          p_feature_limit?: number
+          p_label_limit?: number
+          p_max_candidates_per_kickoff?: number
+        }
+        Returns: Json
+      }
+      get_highlightly_training_accumulation_report_v1: {
+        Args: { p_days?: number }
+        Returns: Json
+      }
       get_highlightly_training_dataset_preview_v1: {
         Args: { p_from: string; p_limit?: number; p_to: string }
         Returns: Json
@@ -8017,6 +8105,16 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      run_highlightly_football_training_accumulation_v1: {
+        Args: {
+          p_dataset_limit?: number
+          p_days?: number
+          p_feature_limit?: number
+          p_label_limit?: number
+          p_max_candidates_per_kickoff?: number
+        }
+        Returns: Json
       }
       set_highlightly_match_lifecycle_policy: {
         Args: { p_enabled: boolean; p_sport_code: string }
