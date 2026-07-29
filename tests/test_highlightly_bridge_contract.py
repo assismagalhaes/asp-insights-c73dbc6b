@@ -50,6 +50,7 @@ class HighlightlyBridgeContractTests(unittest.TestCase):
         self.assertIn('"get_highlightly_feature_store_report_v6"', verifier)
         self.assertIn('"get_highlightly_feature_store_report_v7"', verifier)
         self.assertIn('"get_highlightly_label_contract_report_v1"', verifier)
+        self.assertIn('"get_highlightly_label_settlement_preview_v1"', verifier)
         self.assertIn('"hl_competition_feature_policies"', verifier)
         self.assertIn('/storage/v1/object/highlightly-raw/', verifier)
 
