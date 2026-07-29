@@ -1696,6 +1696,81 @@ export type Database = {
           },
         ]
       }
+      hl_label_materialization_runs: {
+        Row: {
+          created_at: string
+          diagnostics: Json
+          finished_at: string | null
+          id: string
+          label_set_id: string
+          label_version: string
+          labels_blocked: number
+          labels_inserted: number
+          labels_skipped: number
+          matches_considered: number
+          matches_eligible: number
+          provider_calls: number
+          sample_limit: number
+          sport_id: string
+          started_at: string
+          status: string
+          window_days: number
+        }
+        Insert: {
+          created_at?: string
+          diagnostics?: Json
+          finished_at?: string | null
+          id?: string
+          label_set_id: string
+          label_version: string
+          labels_blocked?: number
+          labels_inserted?: number
+          labels_skipped?: number
+          matches_considered?: number
+          matches_eligible?: number
+          provider_calls?: number
+          sample_limit: number
+          sport_id: string
+          started_at?: string
+          status?: string
+          window_days: number
+        }
+        Update: {
+          created_at?: string
+          diagnostics?: Json
+          finished_at?: string | null
+          id?: string
+          label_set_id?: string
+          label_version?: string
+          labels_blocked?: number
+          labels_inserted?: number
+          labels_skipped?: number
+          matches_considered?: number
+          matches_eligible?: number
+          provider_calls?: number
+          sample_limit?: number
+          sport_id?: string
+          started_at?: string
+          status?: string
+          window_days?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_label_materialization_runs_label_set_id_fkey"
+            columns: ["label_set_id"]
+            isOneToOne: false
+            referencedRelation: "hl_label_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hl_label_materialization_runs_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hl_label_sets: {
         Row: {
           code: string
@@ -7210,6 +7285,10 @@ export type Database = {
         Args: { p_days?: number; p_sport?: string }
         Returns: Json
       }
+      get_highlightly_label_materialization_report_v1: {
+        Args: { p_days?: number; p_sport?: string }
+        Returns: Json
+      }
       get_highlightly_label_settlement_preview_v1: {
         Args: { p_days?: number; p_limit?: number; p_sport?: string }
         Returns: Json
@@ -7328,6 +7407,10 @@ export type Database = {
           p_limit?: number
           p_to: string
         }
+        Returns: Json
+      }
+      materialize_highlightly_football_score_labels_v1: {
+        Args: { p_days?: number; p_limit?: number }
         Returns: Json
       }
       prune_highlightly_ingestion_bridge_nonces: {
