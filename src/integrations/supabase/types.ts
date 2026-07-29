@@ -2875,6 +2875,265 @@ export type Database = {
           },
         ]
       }
+      hl_training_dataset_build_runs: {
+        Row: {
+          created_at: string
+          dataset_spec_id: string
+          diagnostics: Json
+          finished_at: string | null
+          id: string
+          matches_considered: number
+          provider_calls: number
+          rows_blocked: number
+          rows_eligible: number
+          rows_inserted: number
+          sample_limit: number
+          sport_id: string
+          started_at: string
+          status: string
+          window_from: string
+          window_to: string
+        }
+        Insert: {
+          created_at?: string
+          dataset_spec_id: string
+          diagnostics?: Json
+          finished_at?: string | null
+          id?: string
+          matches_considered?: number
+          provider_calls?: number
+          rows_blocked?: number
+          rows_eligible?: number
+          rows_inserted?: number
+          sample_limit: number
+          sport_id: string
+          started_at?: string
+          status?: string
+          window_from: string
+          window_to: string
+        }
+        Update: {
+          created_at?: string
+          dataset_spec_id?: string
+          diagnostics?: Json
+          finished_at?: string | null
+          id?: string
+          matches_considered?: number
+          provider_calls?: number
+          rows_blocked?: number
+          rows_eligible?: number
+          rows_inserted?: number
+          sample_limit?: number
+          sport_id?: string
+          started_at?: string
+          status?: string
+          window_from?: string
+          window_to?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_training_dataset_build_runs_dataset_spec_id_fkey"
+            columns: ["dataset_spec_id"]
+            isOneToOne: false
+            referencedRelation: "hl_training_dataset_specs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hl_training_dataset_build_runs_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hl_training_dataset_rows: {
+        Row: {
+          build_run_id: string
+          competition_profile: string
+          created_at: string
+          dataset_spec_id: string
+          feature_coverage_pct: number
+          feature_cutoff_at: string
+          feature_snapshot_id: string
+          horizon_key: string
+          id: string
+          kickoff_at: string
+          label_id: string
+          match_id: string
+          outcome_at: string
+          row_fingerprint: string
+          split_key: string
+        }
+        Insert: {
+          build_run_id: string
+          competition_profile: string
+          created_at?: string
+          dataset_spec_id: string
+          feature_coverage_pct: number
+          feature_cutoff_at: string
+          feature_snapshot_id: string
+          horizon_key: string
+          id?: string
+          kickoff_at: string
+          label_id: string
+          match_id: string
+          outcome_at: string
+          row_fingerprint: string
+          split_key: string
+        }
+        Update: {
+          build_run_id?: string
+          competition_profile?: string
+          created_at?: string
+          dataset_spec_id?: string
+          feature_coverage_pct?: number
+          feature_cutoff_at?: string
+          feature_snapshot_id?: string
+          horizon_key?: string
+          id?: string
+          kickoff_at?: string
+          label_id?: string
+          match_id?: string
+          outcome_at?: string
+          row_fingerprint?: string
+          split_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_training_dataset_rows_build_run_id_fkey"
+            columns: ["build_run_id"]
+            isOneToOne: false
+            referencedRelation: "hl_training_dataset_build_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hl_training_dataset_rows_dataset_spec_id_fkey"
+            columns: ["dataset_spec_id"]
+            isOneToOne: false
+            referencedRelation: "hl_training_dataset_specs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hl_training_dataset_rows_feature_snapshot_id_fkey"
+            columns: ["feature_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "hl_match_feature_snapshots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hl_training_dataset_rows_label_id_fkey"
+            columns: ["label_id"]
+            isOneToOne: false
+            referencedRelation: "hl_match_labels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hl_training_dataset_rows_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_baseball_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "hl_training_dataset_rows_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_basketball_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "hl_training_dataset_rows_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "hl_training_dataset_rows_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hl_training_dataset_specs: {
+        Row: {
+          code: string
+          created_at: string
+          feature_set_id: string
+          horizon_key: string
+          id: string
+          is_enabled: boolean
+          label_set_id: string
+          label_version: string
+          minimum_coverage_pct: number
+          quality_contract: Json
+          split_policy: Json
+          sport_id: string
+          status: string
+          updated_at: string
+          version: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          feature_set_id: string
+          horizon_key: string
+          id?: string
+          is_enabled?: boolean
+          label_set_id: string
+          label_version: string
+          minimum_coverage_pct?: number
+          quality_contract?: Json
+          split_policy?: Json
+          sport_id: string
+          status?: string
+          updated_at?: string
+          version: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          feature_set_id?: string
+          horizon_key?: string
+          id?: string
+          is_enabled?: boolean
+          label_set_id?: string
+          label_version?: string
+          minimum_coverage_pct?: number
+          quality_contract?: Json
+          split_policy?: Json
+          sport_id?: string
+          status?: string
+          updated_at?: string
+          version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hl_training_dataset_specs_feature_set_id_fkey"
+            columns: ["feature_set_id"]
+            isOneToOne: false
+            referencedRelation: "hl_feature_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hl_training_dataset_specs_label_set_id_fkey"
+            columns: ["label_set_id"]
+            isOneToOne: false
+            referencedRelation: "hl_label_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hl_training_dataset_specs_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ligas: {
         Row: {
           ativo: boolean
@@ -6947,6 +7206,10 @@ export type Database = {
         }
         Returns: Json
       }
+      build_highlightly_football_training_dataset_v1: {
+        Args: { p_from: string; p_limit?: number; p_to: string }
+        Returns: Json
+      }
       cancel_highlightly_redundant_shadow_jobs: {
         Args: { p_endpoint_keys: string[]; p_reason?: string; p_scope: string }
         Returns: number
@@ -7040,6 +7303,21 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      evaluate_highlightly_football_training_dataset_v1: {
+        Args: { p_from: string; p_limit?: number; p_to: string }
+        Returns: {
+          block_reason: string
+          competition_profile: string
+          feature_coverage_pct: number
+          feature_cutoff_at: string
+          feature_snapshot_id: string
+          kickoff_at: string
+          label_available_at: string
+          label_id: string
+          match_id: string
+          outcome_at: string
+        }[]
       }
       finalize_highlightly_shadow_window: {
         Args: { p_scope: string }
@@ -7374,6 +7652,14 @@ export type Database = {
       get_highlightly_phase8e_daily_request_usage: {
         Args: { p_request_date?: string }
         Returns: number
+      }
+      get_highlightly_training_dataset_preview_v1: {
+        Args: { p_from: string; p_limit?: number; p_to: string }
+        Returns: Json
+      }
+      get_highlightly_training_dataset_report_v1: {
+        Args: { p_days?: number; p_sport?: string }
+        Returns: Json
       }
       has_role: {
         Args: {
