@@ -7925,6 +7925,15 @@ export type Database = {
         }
         Returns: Json
       }
+      materialize_highlightly_football_score_labels_v2_phase8g43_lega: {
+        Args: {
+          p_before_at?: string
+          p_before_id?: string
+          p_days?: number
+          p_limit?: number
+        }
+        Returns: Json
+      }
       prune_highlightly_ingestion_bridge_nonces: {
         Args: { p_before?: string; p_limit?: number }
         Returns: number
