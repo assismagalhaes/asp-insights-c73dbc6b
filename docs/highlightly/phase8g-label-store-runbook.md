@@ -368,3 +368,16 @@ Somente `terminal_state_requires_manual_review` e
 `participant_identity_collision` são rejeitados permanentemente. Participantes
 ausentes, placar inválido ou observação terminal ausente continuam elegíveis
 para reavaliação após correção dos dados.
+
+Correção operacional para bloqueios permanentes sem
+`terminal_observed_at`:
+
+```text
+supabase/migrations/20260730162000_fix_highlightly_phase8g43_null_terminal_rejections.sql
+supabase/tests/highlightly_phase8g43_null_terminal_rejections_smoke.sql
+```
+
+Como `outcome_at` é obrigatório, labels rejeitados usam
+`terminal_observed_at`, depois `kickoff_at` e, somente como último fallback,
+o instante da decisão. O timestamp original permanece na linhagem; o registro
+continua excluído do treinamento por `quality_status='rejected'`.
