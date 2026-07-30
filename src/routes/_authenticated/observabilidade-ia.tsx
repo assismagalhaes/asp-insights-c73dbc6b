@@ -6,6 +6,8 @@ import {
   AlertTriangle,
   Bot,
   Braces,
+  ChevronRight,
+  CircleAlert,
   Clock3,
   Cpu,
   DatabaseZap,
@@ -32,6 +34,13 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -204,6 +213,7 @@ function DashboardSkeleton() {
 }
 
 type TelemetryTone = "blue" | "green" | "violet" | "amber" | "red" | "cyan";
+type TelemetryStatus = "healthy" | "attention" | "critical" | "neutral";
 
 const telemetryTone: Record<
   TelemetryTone,
@@ -253,14 +263,22 @@ function TelemetryCard({
   detail,
   icon: Icon,
   tone,
+  status = "neutral",
 }: {
   label: string;
   value: string;
   detail: string;
   icon: typeof Activity;
   tone: TelemetryTone;
+  status?: TelemetryStatus;
 }) {
   const colors = telemetryTone[tone];
+  const statusConfig = {
+    healthy: { label: "Saudável", className: "bg-success text-success" },
+    attention: { label: "Atenção", className: "bg-amber-400 text-amber-300" },
+    critical: { label: "Crítico", className: "bg-destructive text-destructive" },
+    neutral: { label: "Informativo", className: "bg-primary text-primary" },
+  }[status];
   return (
     <article className="group relative min-w-0 overflow-hidden rounded-xl border border-border/75 bg-card/85 p-4 shadow-[0_16px_42px_-34px_hsl(var(--primary)/0.7)] transition-colors hover:border-primary/35">
       <div
@@ -296,9 +314,47 @@ function TelemetryCard({
         <p className="mt-2 line-clamp-2 min-h-8 text-[10px] leading-4 text-muted-foreground">
           {detail}
         </p>
+        <div className="mt-2 flex items-center gap-1.5 border-t border-border/45 pt-2">
+          <span
+            className={cn(
+              "h-1.5 w-1.5 rounded-full shadow-[0_0_8px_currentColor]",
+              statusConfig.className,
+            )}
+          />
+          <span
+            className={cn(
+              "text-[9px] font-semibold uppercase tracking-wider",
+              statusConfig.className.split(" ")[1],
+            )}
+          >
+            {statusConfig.label}
+          </span>
+        </div>
       </div>
     </article>
   );
+}
+
+function higherIsBetter(
+  value: number | null,
+  healthyAt: number,
+  attentionAt: number,
+): TelemetryStatus {
+  if (value == null) return "neutral";
+  if (value >= healthyAt) return "healthy";
+  if (value >= attentionAt) return "attention";
+  return "critical";
+}
+
+function lowerIsBetter(
+  value: number | null,
+  healthyAt: number,
+  attentionAt: number,
+): TelemetryStatus {
+  if (value == null) return "neutral";
+  if (value <= healthyAt) return "healthy";
+  if (value <= attentionAt) return "attention";
+  return "critical";
 }
 
 function PanelTitle({
@@ -330,7 +386,9 @@ function AiObservabilityPage() {
   const [sport, setSport] = useState("all");
   const [mode, setMode] = useState("all");
   const [model, setModel] = useState("all");
+  const [prompt, setPrompt] = useState("all");
   const [rollout, setRollout] = useState("all");
+  const [selectedIssue, setSelectedIssue] = useState<string | null>(null);
   const { ini, fim } = rangeFromPeriodo(periodo, customIni, customFim);
 
   const observabilityQuery = useQuery({
@@ -345,6 +403,10 @@ function AiObservabilityPage() {
   const sports = useMemo(() => uniqueOptions(periodRuns.map((run) => run.esporte)), [periodRuns]);
   const modes = useMemo(() => uniqueOptions(periodRuns.map((run) => run.modo_ia)), [periodRuns]);
   const models = useMemo(() => uniqueOptions(periodRuns.map((run) => run.model_id)), [periodRuns]);
+  const prompts = useMemo(
+    () => uniqueOptions(periodRuns.map((run) => run.prompt_versao)),
+    [periodRuns],
+  );
   const rollouts = useMemo(
     () => uniqueOptions(periodRuns.map((run) => run.rollout_stage)),
     [periodRuns],
@@ -356,10 +418,11 @@ function AiObservabilityPage() {
         if (sport !== "all" && run.esporte !== sport) return false;
         if (mode !== "all" && run.modo_ia !== mode) return false;
         if (model !== "all" && run.model_id !== model) return false;
+        if (prompt !== "all" && run.prompt_versao !== prompt) return false;
         if (rollout !== "all" && run.rollout_stage !== rollout) return false;
         return true;
       }),
-    [periodRuns, sport, mode, model, rollout],
+    [periodRuns, sport, mode, model, prompt, rollout],
   );
   const filteredFeedback = useMemo(() => {
     const analysisIds = new Set(filteredRuns.map((run) => run.id));
@@ -373,6 +436,18 @@ function AiObservabilityPage() {
   );
   const summary = dashboard.summary;
   const totalBlockers = dashboard.blockers.reduce((sum, blocker) => sum + blocker.count, 0);
+  const selectedIssueRuns = useMemo(
+    () =>
+      selectedIssue
+        ? filteredRuns
+            .filter(
+              (run) =>
+                run.error_code === selectedIssue || run.blocking_codes.includes(selectedIssue),
+            )
+            .slice(0, 25)
+        : [],
+    [filteredRuns, selectedIssue],
+  );
   const resetFilters = () => {
     setPeriodo("30d");
     setCustomIni("");
@@ -380,6 +455,7 @@ function AiObservabilityPage() {
     setSport("all");
     setMode("all");
     setModel("all");
+    setPrompt("all");
     setRollout("all");
   };
 
@@ -447,7 +523,7 @@ function AiObservabilityPage() {
               Limpar filtros
             </Button>
           </div>
-          <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 xl:grid-cols-6">
             <PeriodFilter
               periodo={periodo}
               onPeriodoChange={setPeriodo}
@@ -478,6 +554,13 @@ function AiObservabilityPage() {
               onChange={setModel}
               options={models}
               allLabel="Todos os modelos"
+            />
+            <FilterSelect
+              label="Prompt"
+              value={prompt}
+              onChange={setPrompt}
+              options={prompts}
+              allLabel="Todos os prompts"
             />
             <FilterSelect
               label="Rollout"
@@ -518,6 +601,7 @@ function AiObservabilityPage() {
               detail={`${summary.instrumentedRuns.toLocaleString("pt-BR")} de ${summary.totalRuns.toLocaleString("pt-BR")} runs`}
               icon={Gauge}
               tone="blue"
+              status={higherIsBetter(summary.telemetryCoverageRate, 95, 80)}
             />
             <TelemetryCard
               label="Schema válido"
@@ -527,6 +611,7 @@ function AiObservabilityPage() {
               tone={
                 summary.validSchemaRate != null && summary.validSchemaRate >= 99 ? "green" : "amber"
               }
+              status={higherIsBetter(summary.validSchemaRate, 99, 95)}
             />
             <TelemetryCard
               label="Bloqueios do árbitro"
@@ -534,6 +619,7 @@ function AiObservabilityPage() {
               detail="CONFIRMA da IA convertido em PULAR"
               icon={ShieldAlert}
               tone="violet"
+              status={summary.arbiterBlockedConfirmations > 0 ? "attention" : "healthy"}
             />
             <TelemetryCard
               label="Divergência IA × humano"
@@ -541,6 +627,7 @@ function AiObservabilityPage() {
               detail={`Amostra de ${summary.feedbackSample.toLocaleString("pt-BR")} decisões`}
               icon={Split}
               tone="amber"
+              status={lowerIsBetter(summary.divergenceRate, 10, 20)}
             />
             <TelemetryCard
               label="Latência média / p95"
@@ -548,6 +635,7 @@ function AiObservabilityPage() {
               detail="Tempo observado por validação"
               icon={Clock3}
               tone="blue"
+              status={lowerIsBetter(summary.p95LatencyMs, 15_000, 45_000)}
             />
             <TelemetryCard
               label="Erro / reparo"
@@ -555,6 +643,7 @@ function AiObservabilityPage() {
               detail="Falhas estruturadas e tentativas de reparo"
               icon={AlertTriangle}
               tone={summary.errorRate != null && summary.errorRate > 1 ? "red" : "green"}
+              status={lowerIsBetter(summary.errorRate, 1, 5)}
             />
             <TelemetryCard
               label="Tokens consumidos"
@@ -562,6 +651,7 @@ function AiObservabilityPage() {
               detail={`Média ${formatInteger(summary.averageTokens)} por run informado`}
               icon={Bot}
               tone="cyan"
+              status="neutral"
             />
             <TelemetryCard
               label="Fontes no modo online"
@@ -569,6 +659,7 @@ function AiObservabilityPage() {
               detail={`${summary.onlineRunsWithSources}/${summary.onlineRuns} runs · média ${summary.averageSourcesPerOnlineRun?.toLocaleString("pt-BR", { maximumFractionDigits: 1 }) ?? "—"} fontes`}
               icon={DatabaseZap}
               tone="green"
+              status={higherIsBetter(summary.onlineSourceCoverageRate, 90, 75)}
             />
           </div>
 
@@ -708,7 +799,13 @@ function AiObservabilityPage() {
                     {dashboard.blockers.slice(0, 10).map((blocker, index) => {
                       const share = totalBlockers ? (blocker.count / totalBlockers) * 100 : 0;
                       return (
-                        <div key={blocker.code} className="group">
+                        <button
+                          type="button"
+                          key={blocker.code}
+                          className="group block w-full rounded-md p-1.5 text-left transition-colors hover:bg-primary/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          onClick={() => setSelectedIssue(blocker.code)}
+                          aria-label={`Detalhar ${blocker.code}, ${blocker.count} ocorrências`}
+                        >
                           <div className="mb-1.5 flex items-center gap-2">
                             <span className="w-4 font-mono text-[9px] text-muted-foreground">
                               {String(index + 1).padStart(2, "0")}
@@ -722,6 +819,7 @@ function AiObservabilityPage() {
                             <span className="font-mono text-[10px] text-amber-300">
                               {blocker.count}
                             </span>
+                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
                           </div>
                           <div className="ml-6 h-1.5 overflow-hidden rounded-full bg-muted/70">
                             <div
@@ -729,7 +827,7 @@ function AiObservabilityPage() {
                               style={{ width: `${Math.max(3, share)}%` }}
                             />
                           </div>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
@@ -888,7 +986,15 @@ function AiObservabilityPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <code className="text-[10px] text-destructive">{failure.errorCode}</code>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1.5 rounded px-1.5 py-1 font-mono text-[10px] text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
+                          onClick={() => setSelectedIssue(failure.errorCode)}
+                          aria-label={`Detalhar falha ${failure.errorCode}`}
+                        >
+                          {failure.errorCode}
+                          <ChevronRight className="h-3 w-3" />
+                        </button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -913,6 +1019,95 @@ function AiObservabilityPage() {
               texto do parecer.
             </AlertDescription>
           </Alert>
+
+          <Dialog
+            open={selectedIssue != null}
+            onOpenChange={(open) => {
+              if (!open) setSelectedIssue(null);
+            }}
+          >
+            <DialogContent className="max-w-4xl overflow-hidden p-0">
+              <DialogHeader className="border-b border-border/70 bg-[radial-gradient(circle_at_90%_0%,hsl(var(--destructive)/0.16),transparent_38%),hsl(var(--card))] p-5 pr-14">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-destructive/30 bg-destructive/10 text-destructive">
+                    <CircleAlert className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0">
+                    <DialogTitle className="truncate font-mono text-base">
+                      {selectedIssue ?? "Ocorrência"}
+                    </DialogTitle>
+                    <DialogDescription className="mt-1">
+                      Diagnóstico seguro das execuções relacionadas aos filtros atuais.
+                    </DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
+              <div className="max-h-[65vh] overflow-auto">
+                <Table className="min-w-[720px]">
+                  <TableHeader className="sticky top-0 z-10 bg-background">
+                    <TableRow>
+                      <TableHead>Data/hora</TableHead>
+                      <TableHead>Run ID</TableHead>
+                      <TableHead>Modelo / prompt</TableHead>
+                      <TableHead>Modo / esporte</TableHead>
+                      <TableHead>Parse</TableHead>
+                      <TableHead>Decisão</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedIssueRuns.map((run) => (
+                      <TableRow key={run.id}>
+                        <TableCell className="whitespace-nowrap text-xs">
+                          {formatDateTime(run.created_at)}
+                        </TableCell>
+                        <TableCell>
+                          <code className="text-[10px] text-primary">
+                            {(run.run_id || run.id).slice(0, 8)}
+                          </code>
+                        </TableCell>
+                        <TableCell className="max-w-72">
+                          <p className="truncate text-xs" title={run.model_id ?? undefined}>
+                            {run.model_id ?? "Modelo não informado"}
+                          </p>
+                          <p
+                            className="mt-1 truncate font-mono text-[9px] text-muted-foreground"
+                            title={run.prompt_versao ?? undefined}
+                          >
+                            {run.prompt_versao ?? "Prompt não informado"}
+                          </p>
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {run.modo_ia ?? "—"} · {run.esporte ?? "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={run.parse_status === "VALID" ? "outline" : "destructive"}
+                            className="font-mono text-[9px]"
+                          >
+                            {run.parse_status ?? "SEM STATUS"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-[10px]">
+                          {run.model_decision ?? "—"} → {run.final_decision ?? "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {!selectedIssueRuns.length ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="h-28 text-center text-muted-foreground">
+                          Nenhuma execução relacionada nos filtros atuais.
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="border-t border-border/70 bg-muted/20 px-5 py-3 text-[10px] text-muted-foreground">
+                Exibindo até 25 execuções. O painel não expõe prompts, respostas brutas ou dados
+                sensíveis.
+              </div>
+            </DialogContent>
+          </Dialog>
         </>
       ) : null}
     </div>
