@@ -111,11 +111,7 @@ export async function fetchHighlightlyOddsQualityReport(): Promise<HighlightlyOd
     throw new Error("A cobertura de odds por liga retornou um payload inválido.");
   }
   return {
-    ...(qualityResult.data as unknown as Omit<
-      HighlightlyOddsQualityReport,
-      "league_coverage"
-    >),
-    league_coverage:
-      leagueResult.data as unknown as HighlightlyOddsLeagueCoverageReport,
+    ...(qualityResult.data as unknown as Omit<HighlightlyOddsQualityReport, "league_coverage">),
+    league_coverage: leagueResult.data as unknown as HighlightlyOddsLeagueCoverageReport,
   };
 }

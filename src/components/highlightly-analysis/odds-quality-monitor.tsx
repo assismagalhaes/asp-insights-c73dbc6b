@@ -101,8 +101,7 @@ export function OddsQualityMonitor({ report }: { report: HighlightlyOddsQualityR
       <div className="grid gap-px bg-border md:grid-cols-3">
         {report.by_sport.map((row) => {
           const ready = row.gate_status === "ready";
-          const eligibleAvailability =
-            row.eligible_availability_pct ?? row.availability_pct;
+          const eligibleAvailability = row.eligible_availability_pct ?? row.availability_pct;
           const rawAvailability = row.raw_availability_pct ?? row.availability_pct;
           return (
             <article key={row.sport} className="bg-card p-4">
@@ -233,8 +232,8 @@ function LeagueCoverageTable({ report }: { report: HighlightlyOddsQualityReport 
         <div>
           <p className="text-xs font-semibold">Cobertura por país e liga</p>
           <p className="mt-1 text-[10px] text-muted-foreground">
-            Janela de {coverage.window_days} dias · amostra mínima de{" "}
-            {coverage.minimum_sample} partidas · nenhuma exclusão automática
+            Janela de {coverage.window_days} dias · amostra mínima de {coverage.minimum_sample}{" "}
+            partidas · nenhuma exclusão automática
           </p>
         </div>
         <Badge variant="outline" className="font-mono font-normal">
