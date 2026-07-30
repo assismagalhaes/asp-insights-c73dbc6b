@@ -124,6 +124,8 @@ class HighlightlyPhase8G42BatchedAccumulatorTests(unittest.TestCase):
                 "candidates_eligible": 2,
                 "candidates_blocked": 0,
                 "labels_inserted": 2,
+                "labels_rejected": 1,
+                "permanent_blockers_recorded": 1,
                 "labels_skipped": 0,
                 "has_more": False,
                 "next_cursor": None,
@@ -168,6 +170,11 @@ class HighlightlyPhase8G42BatchedAccumulatorTests(unittest.TestCase):
             1,
         )
         self.assertEqual(stored["result"]["cycle"]["status"], "completed")
+        self.assertEqual(stored["result"]["labels"]["labels_rejected"], 1)
+        self.assertEqual(
+            stored["result"]["labels"]["permanent_blockers_recorded"],
+            1,
+        )
         self.assertFalse(stored["automatic_training"])
 
     @patch.object(accumulator.HighlightlyRepository, "from_environment")

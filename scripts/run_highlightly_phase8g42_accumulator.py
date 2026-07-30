@@ -170,6 +170,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     generated_at = datetime.now(timezone.utc)
     payload: dict[str, Any] = {
         "event": "phase8g42_batched_training_accumulation",
+        "quality_contract_version": "phase8g.4.3",
         "mode": "execute" if args.confirm_accumulate else "dry-run",
         "generated_at": generated_at.isoformat(),
         "cycle_key": cycle_key,
@@ -187,6 +188,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         "provider_calls": 0,
         "stored_data_only": True,
         "cursor_pagination": True,
+        "deterministic_rejections_excluded": True,
         "automatic_training": False,
         "automatic_predictions": False,
     }
@@ -217,6 +219,8 @@ def main(argv: Iterable[str] | None = None) -> int:
         "candidates_eligible": 0,
         "candidates_blocked": 0,
         "labels_inserted": 0,
+        "labels_rejected": 0,
+        "permanent_blockers_recorded": 0,
         "labels_skipped": 0,
     }
     feature_result: dict[str, Any] = {
@@ -269,6 +273,8 @@ def main(argv: Iterable[str] | None = None) -> int:
             "candidates_eligible",
             "candidates_blocked",
             "labels_inserted",
+            "labels_rejected",
+            "permanent_blockers_recorded",
             "labels_skipped",
         ):
             label_result.setdefault(key, 0)
@@ -311,6 +317,8 @@ def main(argv: Iterable[str] | None = None) -> int:
                 "candidates_eligible",
                 "candidates_blocked",
                 "labels_inserted",
+                "labels_rejected",
+                "permanent_blockers_recorded",
                 "labels_skipped",
             ):
                 label_result[key] = int(label_result.get(key) or 0) + int(

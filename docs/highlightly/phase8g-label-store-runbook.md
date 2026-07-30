@@ -344,3 +344,27 @@ O timer deve permanecer desabilitado durante os canários:
 ```bash
 sudo systemctl disable --now highlightly-training-accumulator.timer
 ```
+
+### 8G.4.3 — Rejeições determinísticas
+
+Aplicar:
+
+```text
+supabase/migrations/20260730150000_create_highlightly_phase8g43_deterministic_rejections.sql
+```
+
+Validar:
+
+```text
+supabase/tests/highlightly_phase8g43_deterministic_rejections_smoke.sql
+```
+
+Bloqueios permanentes para a versão do label são gravados em
+`hl_match_labels` com `quality_status='rejected'`. A restrição única
+`(match_id, label_version)` faz o preview excluí-los dos ciclos seguintes, e
+o índice de treinamento continua aceitando somente `quality_status='valid'`.
+
+Somente `terminal_state_requires_manual_review` e
+`participant_identity_collision` são rejeitados permanentemente. Participantes
+ausentes, placar inválido ou observação terminal ausente continuam elegíveis
+para reavaliação após correção dos dados.
