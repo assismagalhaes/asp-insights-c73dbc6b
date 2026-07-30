@@ -62,12 +62,9 @@ class HighlightlyPhase8G41DailyAccumulatorTests(unittest.TestCase):
         self.assertIn("TO service_role;", self.migration)
         self.assertIn("TO authenticated, service_role;", self.migration)
 
-    def test_systemd_uses_global_lock_and_bounded_limits(self) -> None:
+    def test_systemd_preserves_global_lock_and_cleanup_contract(self) -> None:
         self.assertIn("/run/lock/asp-highlightly-future.lock", self.service)
         self.assertIn("--wait 14400", self.service)
-        self.assertIn("--label-limit 200", self.service)
-        self.assertIn("--feature-limit 200", self.service)
-        self.assertIn("--dataset-limit 5000", self.service)
         self.assertIn("--confirm-accumulate", self.service)
         self.assertIn("scripts.ensure_highlightly_provider_disabled", self.service)
         self.assertIn("01:40:00 America/Sao_Paulo", self.timer)

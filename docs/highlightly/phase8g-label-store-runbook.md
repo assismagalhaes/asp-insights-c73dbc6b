@@ -303,3 +303,42 @@ sudo systemctl disable highlightly-training-accumulator.timer
 O unit compartilha `/run/lock/asp-highlightly-future.lock`, mantém o provider
 desligado e executa somente labels, features, dataset e relatório de prontidão
 com dados armazenados. Treinamento e previsões continuam proibidos.
+
+### 8G.4.2 — Acumulação paginada e retomável
+
+Aplicar:
+
+```text
+supabase/migrations/20260729232251_create_highlightly_phase8g42_batched_accumulator.sql
+```
+
+Validar:
+
+```text
+supabase/tests/highlightly_phase8g42_batched_accumulator_smoke.sql
+```
+
+Executar o preview:
+
+```bash
+PYTHONPATH=. /home/ubuntu/asp-scraper-api/.venv/bin/python \
+  -m scripts.run_highlightly_phase8g42_accumulator \
+  --days 365 \
+  --batch-size 20 \
+  --max-batches 5 \
+  --feature-limit 20 \
+  --max-candidates-per-kickoff 20 \
+  --dataset-limit 500
+```
+
+O modo confirmado processa no máximo cinco lotes de 20 partidas por ciclo.
+Cada lote persiste um checkpoint keyset `(kickoff_at, match_id)`, exclui labels
+já existentes e pode ser retomado após falha sem reprocessar os lotes
+concluídos. O dataset e o gate de prontidão são reconstruídos uma única vez
+ao final do ciclo.
+
+O timer deve permanecer desabilitado durante os canários:
+
+```bash
+sudo systemctl disable --now highlightly-training-accumulator.timer
+```

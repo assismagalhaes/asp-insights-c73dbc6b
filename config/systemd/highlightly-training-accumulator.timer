@@ -1,5 +1,5 @@
 [Unit]
-Description=Run the stored-data-only Highlightly training accumulator daily
+Description=Run the keyset-batched Highlightly training accumulator daily
 
 [Timer]
 OnCalendar=*-*-* 01:40:00 America/Sao_Paulo
