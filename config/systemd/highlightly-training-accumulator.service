@@ -10,7 +10,7 @@ WorkingDirectory=/home/ubuntu/asp-insights-c73dbc6b
 EnvironmentFile=/etc/asp-scraper-api.env
 Environment=PYTHONPATH=.
 Environment=PYTHONDONTWRITEBYTECODE=1
-ExecStart=/usr/bin/flock --exclusive --wait 14400 --conflict-exit-code 75 /run/lock/asp-highlightly-future.lock /home/ubuntu/asp-scraper-api/.venv/bin/python -m scripts.run_highlightly_phase8g42_accumulator --days 365 --batch-size 20 --max-batches 5 --feature-limit 20 --max-candidates-per-kickoff 20 --dataset-limit 500 --confirm-accumulate --output /home/ubuntu/asp-insights-c73dbc6b/outputs/highlightly_phase8g42_accumulation_latest.json
+ExecStart=/usr/bin/flock --exclusive --wait 14400 --conflict-exit-code 75 /run/lock/asp-highlightly-future.lock /home/ubuntu/asp-scraper-api/.venv/bin/python -m scripts.run_highlightly_phase8g42_accumulator --days 365 --batch-size 20 --max-batches 5 --feature-limit 20 --max-candidates-per-kickoff 50 --dataset-limit 500 --confirm-accumulate --output /home/ubuntu/asp-insights-c73dbc6b/outputs/highlightly_phase8g42_accumulation_latest.json
 ExecStopPost=/usr/bin/flock --exclusive --wait 300 --conflict-exit-code 0 /run/lock/asp-highlightly-future.lock /home/ubuntu/asp-scraper-api/.venv/bin/python -m scripts.ensure_highlightly_provider_disabled --reason phase8g42-systemd-stop
 TimeoutStartSec=18000
 TimeoutStopSec=360

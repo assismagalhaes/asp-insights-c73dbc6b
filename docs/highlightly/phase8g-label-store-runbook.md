@@ -327,11 +327,13 @@ PYTHONPATH=. /home/ubuntu/asp-scraper-api/.venv/bin/python \
   --batch-size 20 \
   --max-batches 5 \
   --feature-limit 20 \
-  --max-candidates-per-kickoff 20 \
+  --max-candidates-per-kickoff 50 \
   --dataset-limit 500
 ```
 
 O modo confirmado processa no máximo cinco lotes de 20 partidas por ciclo.
+O limite de 50 candidatos por horário acomoda o grupo real observado de
+39 partidas no mesmo kickoff, sem ultrapassar o teto contratual de 100.
 Cada lote persiste um checkpoint keyset `(kickoff_at, match_id)`, exclui labels
 já existentes e pode ser retomado após falha sem reprocessar os lotes
 concluídos. O dataset e o gate de prontidão são reconstruídos uma única vez

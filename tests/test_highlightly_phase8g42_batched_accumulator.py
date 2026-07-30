@@ -65,6 +65,7 @@ class HighlightlyPhase8G42BatchedAccumulatorTests(unittest.TestCase):
         )
         self.assertIn("--batch-size 20", self.service)
         self.assertIn("--max-batches 5", self.service)
+        self.assertIn("--max-candidates-per-kickoff 50", self.service)
         self.assertIn("--dataset-limit 500", self.service)
         self.assertIn(
             "/run/lock/asp-highlightly-future.lock",
