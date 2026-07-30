@@ -1,6 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Send, Bell, BellOff, Loader2, RefreshCw, Save } from "lucide-react";
+import {
+  Bell,
+  BellOff,
+  ChevronLeft,
+  ChevronRight,
+  History,
+  Loader2,
+  RefreshCw,
+  Save,
+  Search,
+  Send,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -83,6 +94,25 @@ export function TelegramAlertsPanel({ className }: { className?: string }) {
   const [loading, setLoading] = useState(false);
   const [savingChat, setSavingChat] = useState(false);
   const [testingId, setTestingId] = useState<string | "profile" | null>(null);
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyStatus, setHistoryStatus] = useState("all");
+  const [historyPage, setHistoryPage] = useState(1);
+
+  const pageSize = 10;
+  const filteredAlerts = useMemo(() => {
+    const search = historySearch.trim().toLocaleLowerCase("pt-BR");
+    return alerts.filter((alert) => {
+      const matchesStatus = historyStatus === "all" || alert.status === historyStatus;
+      const haystack = [alert.matchup, alert.league, alert.market, alert.pick, alert.sport]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase("pt-BR");
+      return matchesStatus && (!search || haystack.includes(search));
+    });
+  }, [alerts, historySearch, historyStatus]);
+  const totalPages = Math.max(1, Math.ceil(filteredAlerts.length / pageSize));
+  const currentPage = Math.min(historyPage, totalPages);
+  const visibleAlerts = filteredAlerts.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const load = async () => {
     setLoading(true);
@@ -103,6 +133,10 @@ export function TelegramAlertsPanel({ className }: { className?: string }) {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    setHistoryPage(1);
+  }, [historySearch, historyStatus]);
 
   const doSync = async () => {
     setLoading(true);
@@ -268,108 +302,201 @@ export function TelegramAlertsPanel({ className }: { className?: string }) {
           prognósticos pendentes com data e horário definidos.
         </p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="text-muted-foreground">
-              <tr className="border-b border-border">
-                <th className="text-left py-2 pr-2">Jogo</th>
-                <th className="text-left py-2 pr-2">Liga</th>
-                <th className="text-left py-2 pr-2">Início</th>
-                <th className="text-left py-2 pr-2">Mercado / Pick</th>
-                <th className="text-left py-2 pr-2">Alerta em</th>
-                <th className="text-left py-2 pr-2">Antec.</th>
-                <th className="text-left py-2 pr-2">Status</th>
-                <th className="text-right py-2 pl-2">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {alerts.map((a) => {
-                const badge = statusBadge(a.status);
-                return (
-                  <tr key={a.id} className="border-b border-border/50 align-top">
-                    <td className="py-2 pr-2">{a.matchup || "-"}</td>
-                    <td className="py-2 pr-2">{a.league || "-"}</td>
-                    <td className="py-2 pr-2 whitespace-nowrap">{fmtDateTime(a.event_start_at)}</td>
-                    <td className="py-2 pr-2">
-                      <div>{a.market || "-"}</div>
-                      <div className="text-muted-foreground">
-                        {a.pick || "-"}
-                        {a.odd != null ? ` @ ${Number(a.odd).toFixed(2)}` : ""}
-                      </div>
-                    </td>
-                    <td className="py-2 pr-2 whitespace-nowrap">
-                      {fmtDateTime(a.alert_target_at)}
-                    </td>
-                    <td className="py-2 pr-2">
-                      <Select
-                        value={String(a.alert_minutes_before)}
-                        onValueChange={(v) => changeMinutes(a, Number(v))}
-                      >
-                        <SelectTrigger className="h-7 w-[70px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="15">15</SelectItem>
-                          <SelectItem value="30">30</SelectItem>
-                          <SelectItem value="45">45</SelectItem>
-                          <SelectItem value="60">60</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </td>
-                    <td className="py-2 pr-2">
-                      <span
-                        className={cn(
-                          "inline-block px-2 py-0.5 rounded text-[10px] font-medium",
-                          badge.className,
-                        )}
-                      >
-                        {badge.label}
-                      </span>
-                      {a.telegram_error && (
-                        <div className="text-[10px] text-destructive mt-1">{a.telegram_error}</div>
-                      )}
-                      {a.telegram_sent_at && (
-                        <div className="text-[10px] text-muted-foreground mt-1">
-                          {fmtDateTime(a.telegram_sent_at)}
-                        </div>
-                      )}
-                    </td>
-                    <td className="py-2 pl-2 text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 px-2"
-                          onClick={() => toggleEnabled(a)}
-                          title={a.alert_enabled ? "Desativar alerta" : "Ativar alerta"}
-                        >
-                          {a.alert_enabled ? (
-                            <Bell className="h-3 w-3" />
-                          ) : (
-                            <BellOff className="h-3 w-3 text-muted-foreground" />
-                          )}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 px-2"
-                          onClick={() => sendTest(a.id)}
-                          disabled={testingId === a.id || !chatIdSaved}
-                          title="Enviar teste agora"
-                        >
-                          {testingId === a.id ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <Send className="h-3 w-3" />
-                          )}
-                        </Button>
-                      </div>
-                    </td>
+        <div className="space-y-3">
+          <div className="flex flex-col gap-2 border-y border-border/70 py-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-2">
+              <span className="flex size-8 items-center justify-center rounded border border-primary/20 bg-primary/8 text-primary">
+                <History aria-hidden="true" className="size-4" />
+              </span>
+              <div>
+                <p className="text-sm font-medium">Histórico recente</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Últimos {alerts.length} registros, limitado a 50
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="relative min-w-0 sm:w-64">
+                <Search
+                  aria-hidden="true"
+                  className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+                />
+                <Input
+                  aria-label="Buscar no histórico Telegram"
+                  value={historySearch}
+                  onChange={(event) => setHistorySearch(event.target.value)}
+                  placeholder="Buscar jogo, liga ou mercado"
+                  className="h-8 pl-8 text-xs"
+                />
+              </div>
+              <Select value={historyStatus} onValueChange={setHistoryStatus}>
+                <SelectTrigger className="h-8 sm:w-40" aria-label="Filtrar status Telegram">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os status</SelectItem>
+                  <SelectItem value="pending">Aguardando</SelectItem>
+                  <SelectItem value="sent">Enviado</SelectItem>
+                  <SelectItem value="failed">Falhou</SelectItem>
+                  <SelectItem value="skipped">Ignorado</SelectItem>
+                  <SelectItem value="expired">Expirado</SelectItem>
+                  <SelectItem value="cancelled">Cancelado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {visibleAlerts.length ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="text-muted-foreground">
+                  <tr className="border-b border-border">
+                    <th className="text-left py-2 pr-2">Jogo</th>
+                    <th className="text-left py-2 pr-2">Liga</th>
+                    <th className="text-left py-2 pr-2">Início</th>
+                    <th className="text-left py-2 pr-2">Mercado / Pick</th>
+                    <th className="text-left py-2 pr-2">Alerta em</th>
+                    <th className="text-left py-2 pr-2">Antec.</th>
+                    <th className="text-left py-2 pr-2">Status</th>
+                    <th className="text-right py-2 pl-2">Ações</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {visibleAlerts.map((a) => {
+                    const badge = statusBadge(a.status);
+                    return (
+                      <tr key={a.id} className="border-b border-border/50 align-top">
+                        <td className="py-2 pr-2">{a.matchup || "-"}</td>
+                        <td className="py-2 pr-2">{a.league || "-"}</td>
+                        <td className="py-2 pr-2 whitespace-nowrap">
+                          {fmtDateTime(a.event_start_at)}
+                        </td>
+                        <td className="py-2 pr-2">
+                          <div>{a.market || "-"}</div>
+                          <div className="text-muted-foreground">
+                            {a.pick || "-"}
+                            {a.odd != null ? ` @ ${Number(a.odd).toFixed(2)}` : ""}
+                          </div>
+                        </td>
+                        <td className="py-2 pr-2 whitespace-nowrap">
+                          {fmtDateTime(a.alert_target_at)}
+                        </td>
+                        <td className="py-2 pr-2">
+                          <Select
+                            value={String(a.alert_minutes_before)}
+                            onValueChange={(v) => changeMinutes(a, Number(v))}
+                          >
+                            <SelectTrigger className="h-7 w-[70px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="15">15</SelectItem>
+                              <SelectItem value="30">30</SelectItem>
+                              <SelectItem value="45">45</SelectItem>
+                              <SelectItem value="60">60</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="py-2 pr-2">
+                          <span
+                            className={cn(
+                              "inline-block px-2 py-0.5 rounded text-[10px] font-medium",
+                              badge.className,
+                            )}
+                          >
+                            {badge.label}
+                          </span>
+                          {a.telegram_error && (
+                            <div className="text-[10px] text-destructive mt-1">
+                              {a.telegram_error}
+                            </div>
+                          )}
+                          {a.telegram_sent_at && (
+                            <div className="text-[10px] text-muted-foreground mt-1">
+                              {fmtDateTime(a.telegram_sent_at)}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-2 pl-2 text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2"
+                              onClick={() => toggleEnabled(a)}
+                              title={a.alert_enabled ? "Desativar alerta" : "Ativar alerta"}
+                            >
+                              {a.alert_enabled ? (
+                                <Bell className="h-3 w-3" />
+                              ) : (
+                                <BellOff className="h-3 w-3 text-muted-foreground" />
+                              )}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2"
+                              onClick={() => sendTest(a.id)}
+                              disabled={testingId === a.id || !chatIdSaved}
+                              title="Enviar teste agora"
+                            >
+                              {testingId === a.id ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Send className="h-3 w-3" />
+                              )}
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="rounded border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
+              Nenhum alerta corresponde aos filtros selecionados.
+            </p>
+          )}
+
+          <div className="flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              {filteredAlerts.length
+                ? `${(currentPage - 1) * pageSize + 1}–${Math.min(
+                    currentPage * pageSize,
+                    filteredAlerts.length,
+                  )} de ${filteredAlerts.length}`
+                : "0 registros"}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8"
+                onClick={() => setHistoryPage((page) => Math.max(1, page - 1))}
+                disabled={currentPage <= 1}
+              >
+                <ChevronLeft aria-hidden="true" className="size-3.5" />
+                Anterior
+              </Button>
+              <span className="numeric-value min-w-16 text-center">
+                {currentPage}/{totalPages}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8"
+                onClick={() => setHistoryPage((page) => Math.min(totalPages, page + 1))}
+                disabled={currentPage >= totalPages}
+              >
+                Próxima
+                <ChevronRight aria-hidden="true" className="size-3.5" />
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </section>

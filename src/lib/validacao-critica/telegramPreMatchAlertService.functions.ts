@@ -13,6 +13,7 @@ import {
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/telegram";
 const TELEGRAM_BOT_USERNAME = "asp_sentinel_bot";
+export const TELEGRAM_ALERT_HISTORY_LIMIT = 50;
 
 function parseTelegramSendError(raw: string): string {
   try {
@@ -192,8 +193,8 @@ export const listCriticalAlertsForUser = createServerFn({ method: "GET" })
       .from("validacao_critica_telegram_alerts")
       .select("*")
       .eq("user_id", context.userId)
-      .order("event_start_at", { ascending: true, nullsFirst: false })
-      .limit(500);
+      .order("created_at", { ascending: false })
+      .limit(TELEGRAM_ALERT_HISTORY_LIMIT);
     if (error) throw new Error(error.message);
     return data ?? [];
   });
