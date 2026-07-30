@@ -69,7 +69,7 @@ function statusBadge(status: string): { label: string; className: string } {
   }
 }
 
-export function TelegramAlertsPanel() {
+export function TelegramAlertsPanel({ className }: { className?: string }) {
   const callGetChat = useServerFn(getUserTelegramChatId);
   const callSetChat = useServerFn(setUserTelegramChatId);
   const callList = useServerFn(listCriticalAlertsForUser);
@@ -180,7 +180,7 @@ export function TelegramAlertsPanel() {
   const chatIdDirty = chatId.trim() !== (chatIdSaved ?? "").trim();
 
   return (
-    <section className="border border-border rounded-lg bg-card p-4 space-y-4">
+    <section className={cn("space-y-4 rounded-lg border border-border bg-card p-4", className)}>
       <header className="flex items-center justify-between gap-2">
         <div>
           <h3 className="font-semibold text-sm flex items-center gap-2">
