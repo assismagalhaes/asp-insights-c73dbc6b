@@ -7364,6 +7364,16 @@ export type Database = {
         Args: { p_endpoint_keys: string[]; p_reason?: string; p_scope: string }
         Returns: number
       }
+      checkpoint_highlightly_training_accumulation_cycle_v2: {
+        Args: {
+          p_batches: number
+          p_cursor_state: Json
+          p_feature_result: Json
+          p_label_result: Json
+          p_run_id: string
+        }
+        Returns: Json
+      }
       claim_highlightly_ingestion_bridge_nonce: {
         Args: {
           p_expires_at: string
@@ -7535,6 +7545,20 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      finish_highlightly_training_accumulation_cycle_v2: {
+        Args: {
+          p_batches: number
+          p_cursor_state?: Json
+          p_dataset_result: Json
+          p_error_summary?: Json
+          p_feature_result: Json
+          p_label_result: Json
+          p_readiness_result: Json
+          p_run_id: string
+          p_status: string
+        }
+        Returns: Json
       }
       get_baseball_daily_matches: {
         Args: {
@@ -7815,6 +7839,15 @@ export type Database = {
         Args: { p_request_date?: string }
         Returns: number
       }
+      get_highlightly_score_label_batch_preview_v1: {
+        Args: {
+          p_before_at?: string
+          p_before_id?: string
+          p_days?: number
+          p_limit?: number
+        }
+        Returns: Json
+      }
       get_highlightly_training_accumulation_preview_v1: {
         Args: {
           p_dataset_limit?: number
@@ -7826,6 +7859,10 @@ export type Database = {
         Returns: Json
       }
       get_highlightly_training_accumulation_report_v1: {
+        Args: { p_days?: number }
+        Returns: Json
+      }
+      get_highlightly_training_accumulation_report_v2: {
         Args: { p_days?: number }
         Returns: Json
       }
@@ -7877,6 +7914,15 @@ export type Database = {
       }
       materialize_highlightly_football_score_labels_v1: {
         Args: { p_days?: number; p_limit?: number }
+        Returns: Json
+      }
+      materialize_highlightly_football_score_labels_v2: {
+        Args: {
+          p_before_at?: string
+          p_before_id?: string
+          p_days?: number
+          p_limit?: number
+        }
         Returns: Json
       }
       prune_highlightly_ingestion_bridge_nonces: {
@@ -8118,6 +8164,18 @@ export type Database = {
       }
       set_highlightly_match_lifecycle_policy: {
         Args: { p_enabled: boolean; p_sport_code: string }
+        Returns: Json
+      }
+      start_highlightly_training_accumulation_cycle_v2: {
+        Args: {
+          p_batch_limit?: number
+          p_cycle_key: string
+          p_dataset_limit?: number
+          p_days?: number
+          p_feature_limit?: number
+          p_max_batches?: number
+          p_max_candidates_per_kickoff?: number
+        }
         Returns: Json
       }
       upsert_sports_odds_quote: {
