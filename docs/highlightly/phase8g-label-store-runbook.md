@@ -309,7 +309,7 @@ com dados armazenados. Treinamento e previsões continuam proibidos.
 Aplicar:
 
 ```text
-supabase/migrations/20260729232251_create_highlightly_phase8g42_batched_accumulator.sql
+supabase/migrations/20260730133521_472e72d6-e41c-487e-9996-84b241ff993b.sql
 ```
 
 Validar:
