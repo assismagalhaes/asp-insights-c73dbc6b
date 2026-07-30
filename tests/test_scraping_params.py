@@ -45,6 +45,10 @@ class ScrapingParamsTests(unittest.TestCase):
         self.assertEqual(params["source"], "OddsAgora")
         self.assertEqual(params["mercados"], DEFAULT_ODDSAGORA_FOOTBALL_MARKETS)
         self.assertTrue(params["mercados_padrao_aplicados"])
+        self.assertIn(
+            "https://www.oddsagora.com.br/football/argentina/liga-profesional/",
+            params["leagues"],
+        )
         self.assertIn("https://www.oddsagora.com.br/football/brazil/brasileirao-betano", params["leagues"])
 
     def test_hockey_empty_markets_uses_hockey_oddsagora_markets(self) -> None:

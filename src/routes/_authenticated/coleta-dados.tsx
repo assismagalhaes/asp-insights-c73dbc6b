@@ -213,10 +213,9 @@ function ColetaDadosPage() {
       const scraperPayload = {
         esporte: scraperSportName(remoteParams.esporte),
         source: "OddsAgora",
-        leagues:
-          selectedLeagues.length === 0
-            ? defaultLeagueValues(remoteParams.esporte)
-            : selectedLeagues,
+        // An empty list means "Todos" and lets the VM apply its canonical
+        // per-sport league catalog. Explicit selections remain unchanged.
+        leagues: selectedLeagues,
         mercados: defaultMarketsForSport(remoteParams.esporte),
         data_inicio: remoteParams.data_inicio,
         data_fim: remoteParams.data_fim,
@@ -1451,12 +1450,6 @@ function selectedLeagueLabels(esporte: string, selected: string[]) {
     leagueOptionsForSport(esporte).map((option) => [option.value, option.label]),
   );
   return values.map((value) => labels.get(value)).filter(Boolean) as string[];
-}
-
-function defaultLeagueValues(esporte: string) {
-  return leagueOptionsForSport(esporte)
-    .map((option) => option.value)
-    .filter((value) => value !== ALL_LEAGUES_VALUE);
 }
 
 function defaultMarketsForSport(esporte: string) {
