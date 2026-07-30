@@ -350,7 +350,7 @@ sudo systemctl disable --now highlightly-training-accumulator.timer
 Aplicar:
 
 ```text
-supabase/migrations/20260730150000_create_highlightly_phase8g43_deterministic_rejections.sql
+supabase/migrations/20260730151839_6318085a-d214-407a-8b6c-08771ec75259.sql
 ```
 
 Validar:
