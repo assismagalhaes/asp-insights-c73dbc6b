@@ -1349,6 +1349,10 @@ const LEAGUES_BY_SPORT: Record<string, LeagueOption[]> = {
   Futebol: [
     { label: "Todos", value: ALL_LEAGUES_VALUE },
     {
+      label: "Argentina Liga Profesional",
+      value: "https://www.oddsagora.com.br/football/argentina/liga-profesional/",
+    },
+    {
       label: "Germany 2. Bundesliga",
       value: "https://www.oddsagora.com.br/football/germany/2-bundesliga",
     },
