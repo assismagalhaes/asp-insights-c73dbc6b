@@ -1058,6 +1058,11 @@ def recalculate_wnba_handicap_pick(module: Any, row: pd.Series, res: dict, item:
     warnings = list(hist['warnings'])
     if disagreement_haircut > 0:
         warnings.append('COMPONENT_DISAGREEMENT_HAIRCUT')
+    if (
+        simulation.get('margin_calibration_status') == 'insufficient_walk_forward_sample'
+        and float(simulation.get('strength_margin_weight') or 0.0) == 0.0
+    ):
+        warnings.append('STRENGTH_MARGIN_DISABLED_INSUFFICIENT_WALK_FORWARD')
     if strong_market_conflict:
         warnings.append('CONFLITO_FORTE_COM_MERCADO')
     debug = {
@@ -1141,13 +1146,34 @@ def recalculate_wnba_total_pick(module: Any, row: pd.Series, res: dict, item: di
     )
     raw_prob = max(0.0, min(99.0, raw_prob))
     effective_games = float(hist.get('jogos_efetivos') or hist['jogos_considerados'])
-    conservative_prob, haircut = conservative_wnba_probability(raw_prob / 100.0, effective_games, 'total')
+    sample_adjusted_prob, sample_haircut = conservative_wnba_probability(
+        raw_prob / 100.0,
+        effective_games,
+        'total',
+    )
+    components = {
+        'hist': hist['taxa_com_shrinkage'],
+        'sim': sim_prob / 100.0,
+        'vig': vig_prob / 100.0,
+    }
+    conservative_prob, disagreement = wnba_component_disagreement_haircut(
+        sample_adjusted_prob,
+        components,
+        vig_prob / 100.0,
+    )
+    disagreement_haircut = float(disagreement['haircut'])
+    total_haircut = sample_haircut + disagreement_haircut
+    strong_market_conflict = (
+        abs((sim_prob - vig_prob) / 100.0)
+        >= WNBA_STRONG_MARKET_CONFLICT_THRESHOLD
+    )
     prob = conservative_prob * 100.0
     odd_valor = 100.0 / prob if prob else 0.0
     edge = (odd / odd_valor - 1.0) * 100.0 if odd_valor else 0.0
     selected_col = over_col if side == 'over' else under_col
     market_odd = over_odd if side == 'over' else under_odd
     item['probabilidade_final'] = round(prob, 2)
+    item['probabilidade'] = round(prob, 2)
     item['odd_valor'] = round(odd_valor, 2)
     item['edge'] = round(edge, 2)
     item['odd_mediana'] = round(market_odd, 3)
@@ -1160,6 +1186,22 @@ def recalculate_wnba_total_pick(module: Any, row: pd.Series, res: dict, item: di
     item['_median_ev'] = (market_odd * conservative_prob - 1.0) * 100.0
     item['_selection_side'] = side
     item['_market_anchor_line'] = simulation['market_anchor_line']
+    item['_strong_market_conflict'] = strong_market_conflict
+    item['selection_role'] = (
+        'RESERVA_CONFLITO_MERCADO'
+        if strong_market_conflict
+        else item.get('selection_role')
+    )
+    item['market_conflict_status'] = (
+        'CONFLITO_FORTE_COM_MERCADO'
+        if strong_market_conflict
+        else 'ALINHADO'
+    )
+    warnings = list(hist['warnings'])
+    if disagreement_haircut > 0:
+        warnings.append('COMPONENT_DISAGREEMENT_HAIRCUT')
+    if strong_market_conflict:
+        warnings.append('CONFLITO_FORTE_COM_MERCADO')
     debug = {
         'mercado': 'Total de Pontos',
         'linha_avaliada': line,
@@ -1168,7 +1210,13 @@ def recalculate_wnba_total_pick(module: Any, row: pd.Series, res: dict, item: di
         'prob_sim': round(sim_prob, 2),
         'prob_no_vig': round(vig_prob, 2),
         'prob_bruta_blend': round(raw_prob, 2),
-        'haircut_incerteza_pp': round(haircut * 100.0, 2),
+        'haircut_amostra_pp': round(sample_haircut * 100.0, 2),
+        'haircut_divergencia_pp': round(disagreement_haircut * 100.0, 2),
+        'haircut_incerteza_pp': round(total_haircut * 100.0, 2),
+        'amplitude_componentes_pp': round(
+            float(disagreement['component_spread']) * 100.0,
+            2,
+        ),
         'odd_mediana': round(market_odd, 3),
         'odd_mercado_base': round(market_odd, 3),
         'odd_melhor': round(odd, 2),
@@ -1191,7 +1239,9 @@ def recalculate_wnba_total_pick(module: Any, row: pd.Series, res: dict, item: di
         'taxa_com_shrinkage': round(hist['taxa_com_shrinkage'] * 100.0, 2),
         'componentes_historicos': compact_wnba_total_components(hist.get('componentes')),
         'fallback': hist['fallback'],
-        'warnings': hist['warnings'],
+        'market_conflict_status': item['market_conflict_status'],
+        'selection_role': item['selection_role'],
+        'warnings': warnings,
     }
     return item, debug
 
@@ -2510,7 +2560,7 @@ def build_wnba_active_technical_context(
             f"EV mediano {'PASS' if not low_sample or (median_ev is not None and median_ev >= WNBA_LOW_SAMPLE_MIN_MEDIAN_EV) else 'FAIL'} "
             f"({median_ev}% >= {WNBA_LOW_SAMPLE_MIN_MEDIAN_EV:.1f}% quando baixa amostra)"
         ),
-        f"confianca {'PASS' if float(item.get('probabilidade_final') or 0.0) < WNBA_OVERCONFIDENCE_CUTOFF else 'FAIL'} "
+        f"teto_sobreconfianca {'PASS' if float(item.get('probabilidade_final') or 0.0) < WNBA_OVERCONFIDENCE_CUTOFF else 'FAIL'} "
         f"({item.get('probabilidade_final')}% < {WNBA_OVERCONFIDENCE_CUTOFF:.1f}%)",
     ]
     if best_odd is not None and median_odd is not None and median_odd > 0:

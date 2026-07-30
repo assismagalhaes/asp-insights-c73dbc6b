@@ -56,6 +56,7 @@ import {
   useDeletePrognostico,
   useConfiguracao,
   calcEdge,
+  getEdgeEfetivo,
   getDadosTecnicos,
   saveAnaliseIaSnapshot,
   ESPORTES_DEFAULT,
@@ -2100,7 +2101,7 @@ function PreAiShortlistPanel({
                         {candidate.confidence_score.toFixed(1)}
                       </td>
                       <td className="px-3 py-2 text-right font-mono">
-                        {candidate.prognostico.edge.toFixed(2)}%
+                        {getEdgeEfetivo(candidate.prognostico).toFixed(2)}%
                       </td>
                     </tr>
                   ))}

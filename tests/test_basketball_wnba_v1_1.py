@@ -340,6 +340,10 @@ class BasketballWnbaV11Tests(unittest.TestCase):
         self.assertEqual(debug["pesos_probabilidade"], runner.WNBA_TOTAL_BLEND_WEIGHTS)
         self.assertEqual(debug["simulacoes"], runner.WNBA_TOTAL_SIMULATIONS)
         self.assertIn("total_calibrado", debug)
+        self.assertIn("haircut_amostra_pp", debug)
+        self.assertIn("haircut_divergencia_pp", debug)
+        self.assertIn("amplitude_componentes_pp", debug)
+        self.assertIn("market_conflict_status", debug)
         self.assertIn("home", debug["componentes_historicos"])
         self.assertIn("shrunk", debug["componentes_historicos"]["home"])
         self.assertIsInstance(adjusted["probabilidade_final"], float)
@@ -376,6 +380,51 @@ class BasketballWnbaV11Tests(unittest.TestCase):
         self.assertEqual(adjusted["odd_mercado_base"], 1.70)
         self.assertEqual(adjusted["bookmaker_melhor"], "BestBook")
         self.assertAlmostEqual(debug["prob_no_vig"], round(expected_no_vig * 100.0, 2))
+
+    def test_total_points_applies_disagreement_haircut_and_flags_strong_market_conflict(self) -> None:
+        module = FakeWnbaModule([
+            {"pontos_time": 90, "pontos_adversario": 80},
+            {"pontos_time": 88, "pontos_adversario": 82},
+        ])
+        row = pd.Series({
+            "date": "2026-07-30",
+            "time": "20:00",
+            "odds_OverUnder_FT_including_OT_180_5_Over": 1.91,
+            "odds_OverUnder_FT_including_OT_180_5_Under": 1.91,
+        })
+        res = {"ou": {180.5: {"odd_off_over": 1.91, "odd_off_under": 1.91}}}
+        item = {
+            "mercado": "Over/Under Pontos",
+            "pick": "Under 180.5",
+            "linha": 180.5,
+            "odd_ofertada": 1.91,
+        }
+        simulation = {
+            "probability": 0.78,
+            "market_anchor_line": 180.5,
+            "model_total_expected": 165.0,
+            "calibrated_total_expected": 168.0,
+            "home_expected": 84.0,
+            "away_expected": 84.0,
+            "home_sd": 8.0,
+            "away_sd": 8.0,
+            "simulations": 10000,
+            "average_total": 168.0,
+        }
+        with patch.object(
+            runner,
+            "wnba_simulated_total_probability",
+            return_value=simulation,
+        ):
+            adjusted, debug = runner.recalculate_wnba_total_pick(
+                module, row, res, item, "TOR", "PHO", lines=[180.5]
+            )
+
+        self.assertGreater(debug["haircut_divergencia_pp"], 0.0)
+        self.assertEqual(adjusted["market_conflict_status"], "CONFLITO_FORTE_COM_MERCADO")
+        self.assertTrue(adjusted["_strong_market_conflict"])
+        self.assertIn("COMPONENT_DISAGREEMENT_HAIRCUT", debug["warnings"])
+        self.assertIn("CONFLITO_FORTE_COM_MERCADO", debug["warnings"])
 
     def test_wnba_total_candidates_include_over_and_under_before_v1_2_filter(self) -> None:
         row = pd.Series({"home_sigla": "TOR", "away_sigla": "PHO", "date": "2026-06-27", "time": "20:00"})
