@@ -329,20 +329,23 @@ def _match_wide_row(df_wide: pd.DataFrame, row: pd.Series):
     if df_wide.empty:
         return None
 
-    mandante = _norm_text(row.get("mandante"))
-    visitante = _norm_text(row.get("visitante"))
+    # O core historico pode remover diacriticos dos nomes enquanto a coleta
+    # preserva a grafia original (ex.: Valerenga/Vålerenga). A conciliacao
+    # precisa usar a mesma chave comparavel nos dois lados.
+    mandante = _comparable_context_text(row.get("mandante"))
+    visitante = _comparable_context_text(row.get("visitante"))
     home_col = df_wide["home"] if "home" in df_wide.columns else pd.Series([""] * len(df_wide), index=df_wide.index)
     away_col = df_wide["away"] if "away" in df_wide.columns else pd.Series([""] * len(df_wide), index=df_wide.index)
 
     mask = (
-        home_col.map(_norm_text).eq(mandante)
-        & away_col.map(_norm_text).eq(visitante)
+        home_col.map(_comparable_context_text).eq(mandante)
+        & away_col.map(_comparable_context_text).eq(visitante)
     )
     matches = df_wide.loc[mask]
     if matches.empty:
-        jogo = _norm_text(row.get("jogo"))
+        jogo = _comparable_context_text(row.get("jogo"))
         if jogo:
-            mask = home_col.map(_norm_text).apply(lambda h: bool(h) and h in jogo) & away_col.map(_norm_text).apply(lambda a: bool(a) and a in jogo)
+            mask = home_col.map(_comparable_context_text).apply(lambda h: bool(h) and h in jogo) & away_col.map(_comparable_context_text).apply(lambda a: bool(a) and a in jogo)
             matches = df_wide.loc[mask]
 
     if matches.empty:
@@ -1424,6 +1427,30 @@ def limpar_json_nan(obj):
     return obj
 
 
+def _build_diagnostic_funnel(caminho_saida: Path, prognosticos: pd.DataFrame) -> dict:
+    discarded = LAST_V1_1_DISCARDED
+    reasons: dict[str, int] = {}
+    if not discarded.empty and "motivo_descarte_v1_1" in discarded.columns:
+        counts = discarded["motivo_descarte_v1_1"].fillna("NAO_INFORMADO").value_counts()
+        reasons = {str(reason): int(count) for reason, count in counts.items()}
+
+    all_candidates_path = caminho_saida.with_name(f"{caminho_saida.stem}_all_candidates.csv")
+    calculated = 0
+    if all_candidates_path.exists():
+        try:
+            calculated = len(pd.read_csv(all_candidates_path))
+        except Exception:
+            calculated = 0
+
+    return {
+        "candidatos_calculados": calculated,
+        "candidatos_pre_selecionados": int(len(prognosticos) + len(discarded)),
+        "aprovados": int(len(prognosticos)),
+        "descartados": int(len(discarded)),
+        "motivos_descarte": reasons,
+    }
+
+
 def limpar_contexto_modelo(texto: str) -> str:
     """
     Mantém apenas o bloco técnico útil para a Validação Crítica:
@@ -1788,6 +1815,7 @@ if __name__ == "__main__":
             "arquivo_contexto": str(caminho_contexto),
             "contexto_modelo": contexto_modelo,
             "dados_tecnicos": contexto_modelo,
+            "diagnostico_funil": _build_diagnostic_funnel(Path(caminho_saida), prognosticos),
             "prognosticos": prognosticos.to_dict(orient="records")
         }
 

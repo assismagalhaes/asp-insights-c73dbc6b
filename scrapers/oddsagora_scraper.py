@@ -629,8 +629,9 @@ def _game_from_json_ld_event(event: dict[str, Any], markets: list[str], sport_ke
     }
 
 
-def _games_from_json_ld(html: str, markets: list[str], data_inicio: str, data_fim: str, logs: list[dict[str, Any]], sport_key: str, sport_label: str, league_label: str) -> list[dict[str, Any]]:
+def _games_from_json_ld(html: str, markets: list[str], data_inicio: str, data_fim: str, logs: list[dict[str, Any]], sport_key: str, sport_label: str, league_label: str) -> tuple[list[dict[str, Any]], set[str]]:
     games_by_key: dict[str, dict[str, Any]] = {}
+    out_of_range_ids: set[str] = set()
     scripts = re.findall(r"<script\b[^>]*type=[\"']application/ld\+json[\"'][^>]*>(.*?)</script>", html, flags=re.IGNORECASE | re.DOTALL)
     candidates = 0
     for raw_script in scripts:
@@ -648,6 +649,7 @@ def _games_from_json_ld(html: str, markets: list[str], data_inicio: str, data_fi
                 continue
             candidates += 1
             if not _date_in_range(str(game.get("date") or ""), data_inicio, data_fim):
+                out_of_range_ids.add(str(game.get("game_id") or ""))
                 _log(
                     logs,
                     "league_json_ld_game_skipped_out_of_range",
@@ -660,7 +662,7 @@ def _games_from_json_ld(html: str, markets: list[str], data_inicio: str, data_fi
             games_by_key[_game_key(game)] = game
     games = list(games_by_key.values())
     _log(logs, "league_json_ld_parse_finished", scripts=len(scripts), candidates=candidates, games_count=len(games))
-    return games
+    return games, out_of_range_ids
 
 
 def parse_league_html(
@@ -685,7 +687,16 @@ def parse_league_html(
 
     _log(logs, "league_parse_started", league_url=league_url, rows=len(table_parser.rows), h2h_links=len(link_parser.links))
 
-    structured_games = _games_from_json_ld(html, markets, data_inicio, data_fim, logs, sport_key, sport_label, league_label)
+    structured_games, json_ld_out_of_range_ids = _games_from_json_ld(
+        html,
+        markets,
+        data_inicio,
+        data_fim,
+        logs,
+        sport_key,
+        sport_label,
+        league_label,
+    )
     for game in structured_games:
         games_by_key[_game_key(game)] = game
 
@@ -699,6 +710,9 @@ def parse_league_html(
             continue
         game = _game_from_row(row, current_date, markets, sport_key, sport_label, league_label)
         if not game:
+            continue
+        if str(game.get("game_id") or "") in json_ld_out_of_range_ids:
+            _log(logs, "league_game_skipped_json_ld_out_of_range", game=game)
             continue
         if _date_filter_requested(data_inicio, data_fim) and not game.get("date"):
             _log(logs, "league_game_skipped_missing_date", game=game)
@@ -725,6 +739,9 @@ def parse_league_html(
             continue
         game = _game_from_link(link, markets, fallback_year, sport_key, sport_label, league_label)
         if not game:
+            continue
+        if str(game.get("game_id") or "") in json_ld_out_of_range_ids:
+            _log(logs, "league_link_skipped_json_ld_out_of_range", title=link.get("title"), href=link.get("href"))
             continue
         if _date_filter_requested(data_inicio, data_fim) and not game.get("date"):
             _log(logs, "league_link_skipped_missing_date", title=link.get("title"), href=link.get("href"))
