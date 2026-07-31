@@ -269,6 +269,45 @@ class OddsAgoraScraperParserTests(unittest.TestCase):
         self.assertEqual(games[0]["home_team"], "Washington Nationals")
         self.assertEqual(games[0]["away_team"], "Pittsburgh Pirates")
 
+    def test_json_ld_out_of_range_game_is_not_reintroduced_by_table(self) -> None:
+        html = """
+        <html><head>
+          <script type="application/ld+json">
+          {
+            "@context": "https://schema.org",
+            "@type": "SportsEvent",
+            "name": "Coritiba - Cruzeiro",
+            "startDate": "2026-07-31T02:30:00+02:00",
+            "url": "https://www.oddsagora.com.br/football/h2h/cruzeiro-away/coritiba-home/#pt4NPzGE/"
+          }
+          </script>
+        </head><body>
+          <table>
+            <tr><th>Hoje, 31 Jul</th><th>1</th><th>X</th><th>2</th></tr>
+            <tr>
+              <td>21:30</td>
+              <td><a href="/football/h2h/cruzeiro-away/coritiba-home/#pt4NPzGE:1x2;2">Coritiba</a></td>
+              <td>Cruzeiro</td><td>2.80</td><td>3.10</td><td>2.60</td>
+            </tr>
+          </table>
+        </body></html>
+        """
+        logs: list[dict[str, object]] = []
+
+        games = parse_league_html(
+            "https://www.oddsagora.com.br/football/brazil/brasileirao-betano",
+            html,
+            ["1x2"],
+            data_inicio="2026-07-31",
+            data_fim="2026-07-31",
+            logs=logs,
+        )
+
+        self.assertEqual(games, [])
+        self.assertTrue(
+            any(log["event"] == "league_game_skipped_json_ld_out_of_range" for log in logs)
+        )
+
     def test_parse_home_away_market_table(self) -> None:
         html = """
         <table>

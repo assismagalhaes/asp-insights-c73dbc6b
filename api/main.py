@@ -1137,6 +1137,7 @@ def _executar_modelo_futebol(job_id: str):
             job_id=job_id,
         ),
         "total_prognosticos": resposta_script.get("total_prognosticos", 0),
+        "diagnostico_funil": resposta_script.get("diagnostico_funil"),
         "contexto_modelo": resposta_script.get("contexto_modelo", ""),
         "dados_tecnicos": resposta_script.get("dados_tecnicos", ""),
         "prognosticos": resposta_script.get("prognosticos", [])

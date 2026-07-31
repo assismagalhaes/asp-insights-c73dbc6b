@@ -101,6 +101,21 @@ class FootballRunnerV11Test(unittest.TestCase):
     def test_model_version_is_set(self):
         self.assertEqual(runner.MODEL_VERSION, "FOOTBALL_V1_5")
 
+    def test_match_wide_row_reconciles_diacritics(self):
+        wide = pd.DataFrame([
+            {"home": "Vålerenga", "away": "Lilleström", "odds_1X2_Full_Time_1": 1.62}
+        ])
+        row = output_row(
+            mandante="Valerenga",
+            visitante="Lillestrom",
+            jogo="Valerenga vs Lillestrom",
+        )
+
+        matched = runner._match_wide_row(wide, row)
+
+        self.assertIsNotNone(matched)
+        self.assertEqual(matched["home"], "Vålerenga")
+
     def test_no_vig_three_way_sums_to_one(self):
         probs = runner.no_vig_probability_three(2.0, 3.0, 4.0)
         self.assertAlmostEqual(sum(probs), 1.0, places=9)
