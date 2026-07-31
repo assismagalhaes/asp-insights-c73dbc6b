@@ -114,12 +114,44 @@ export function arbitrateAiSchemaFailure(reason?: string | null): ArbitratedAiVa
 }
 
 function blockedOutput(modelOutput: AiOperationalOutput, blocks: AiValidationBlock[]) {
+  const deterministicReason = blocks
+    .slice(0, 3)
+    .map((block) => `[${block.code}] ${block.reason}`)
+    .join(" ");
+  const finalJustification = `PULAR por bloqueio determinístico: ${deterministicReason}`;
+  const technicalBlock = blocks.find((block) =>
+    [
+      "EFFECTIVE_EDGE_INVALID",
+      "WNBA_EFFECTIVE_EDGE_BELOW_MIN",
+      "ODD_BELOW_FAIR_VALUE",
+      "PACKBALL_EXECUTABLE_ODD_MISSING",
+      "PACKBALL_EDGE_BELOW_MIN",
+    ].includes(block.code),
+  );
+
   return {
     ...modelOutput,
     decision: "PULAR" as const,
     stake: 0 as const,
     selected_prediction_id: null,
     selected_pick: null,
+    gates: technicalBlock
+      ? {
+          ...modelOutput.gates,
+          technical_consistency: {
+            status: "REJECTED" as const,
+            reason: technicalBlock.reason,
+          },
+        }
+      : modelOutput.gates,
+    narrative: {
+      ...modelOutput.narrative,
+      thesis_against: `${modelOutput.narrative.thesis_against}\nBloqueio determinístico: ${deterministicReason}`,
+      final_justification: finalJustification,
+      decision_change_condition: `Reavaliar somente após sanar o bloqueio: ${deterministicReason}`,
+    },
+    rationale: finalJustification,
+    invalidation_condition: `A entrada permanece inválida enquanto persistir: ${deterministicReason}`,
     limitations: Array.from(
       new Set([...modelOutput.limitations, ...blocks.map((block) => block.reason)]),
     ).slice(0, 10),

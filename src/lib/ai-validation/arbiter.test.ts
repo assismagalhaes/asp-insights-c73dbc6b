@@ -280,6 +280,18 @@ describe("arbitrateAiOutput", () => {
     );
 
     expect(result.output.decision).toBe("PULAR");
+    expect(result.output.stake).toBe(0);
+    expect(result.output.selected_pick).toBeNull();
+    expect(result.output.gates.technical_consistency).toEqual({
+      status: "REJECTED",
+      reason: "Edge efetivo de 4.76% abaixo do mínimo de 5.00% para WNBA com baixa amostra.",
+    });
+    expect(result.output.narrative.final_justification).toContain(
+      "PULAR por bloqueio determinístico",
+    );
+    expect(result.output.narrative.final_justification).not.toContain("confirma");
+    expect(result.output.rationale).toContain("WNBA_EFFECTIVE_EDGE_BELOW_MIN");
+    expect(result.output.narrative.decision_change_condition).toContain("sanar o bloqueio");
     expect(result.blocks).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
