@@ -30,6 +30,11 @@ try:
     from api.model_provenance import single_input_model_provenance
     from api.model_names import MODEL_NAME_BASEBALL, MODEL_NAME_FOOTBALL, basketball_model_name
     from api.odds_csv import consolidar_csv_odds
+    from api.football_shadow import (
+        build_storage_payload, central_candidates_to_long_rows,
+        compare_shadow_results, coverage_report, missing_required_fields, write_long_csv,
+    )
+    from api.highlightly_repository import HighlightlyRepository
     from scrapers.oddsagora_normalizer import normalize_oddsagora_raw
     from scrapers.oddsagora_scraper import executar_scraper_oddsagora
 except ModuleNotFoundError:
@@ -38,6 +43,11 @@ except ModuleNotFoundError:
     from model_provenance import single_input_model_provenance
     from model_names import MODEL_NAME_BASEBALL, MODEL_NAME_FOOTBALL, basketball_model_name
     from odds_csv import consolidar_csv_odds
+    from football_shadow import (
+        build_storage_payload, central_candidates_to_long_rows,
+        compare_shadow_results, coverage_report, missing_required_fields, write_long_csv,
+    )
+    from highlightly_repository import HighlightlyRepository
     from oddsagora_normalizer import normalize_oddsagora_raw
     from oddsagora_scraper import executar_scraper_oddsagora
 
@@ -1042,6 +1052,11 @@ class ExecutarModeloRequest(BaseModel):
     job_id: str
 
 
+class FootballShadowRequest(BaseModel):
+    target_date: str
+    traditional_job_id: str | None = None
+
+
 class ExecutarPackballModeloRequest(BaseModel):
     input_id: str
     run_mode: Literal["prognostico", "backtest"] = "prognostico"
@@ -1146,6 +1161,38 @@ def _executar_modelo_futebol(job_id: str):
     return limpar_json_nan(resposta_final)
 
 
+def _executar_modelo_futebol_csv(csv_path: Path, run_key: str) -> dict[str, Any]:
+    import subprocess
+
+    script_modelo = BASE_DIR / "modelos" / "football_runner_real.py"
+    output_path = BASE_DIR / "model_outputs" / f"prognosticos_futebol_{run_key}.csv"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if not script_modelo.exists():
+        raise HTTPException(status_code=500, detail=f"Script do modelo de futebol não encontrado em {script_modelo}")
+    result = subprocess.run(
+        [sys.executable, str(script_modelo), str(csv_path), str(output_path)],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise HTTPException(status_code=500, detail={
+            "erro": "Erro ao executar o modelo de futebol",
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+        })
+    try:
+        response = json.loads(result.stdout)
+    except Exception as error:
+        raise HTTPException(status_code=500, detail={
+            "erro": "O modelo executou, mas não retornou JSON válido",
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+        }) from error
+    if not response.get("ok"):
+        raise HTTPException(status_code=500, detail=response)
+    return limpar_json_nan(response)
+
+
 def _model_run_path(run_id: str) -> Path:
     safe_run_id = str(UUID(run_id))
     return MODEL_RUNS_DIR / f"{safe_run_id}.json"
@@ -1195,6 +1242,74 @@ def executar_modelo_futebol(
 ):
     verificar_token(authorization)
     return _executar_modelo_futebol(payload.job_id)
+
+
+@app.post("/modelos/futebol/shadow-central")
+def executar_shadow_central_futebol(
+    payload: FootballShadowRequest,
+    authorization: str | None = Header(default=None),
+):
+    verificar_token(authorization)
+    try:
+        target_date = datetime.strptime(payload.target_date, "%Y-%m-%d").date().isoformat()
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail="target_date deve usar YYYY-MM-DD") from error
+
+    repository = HighlightlyRepository.from_environment(timeout=45.0)
+    candidate_payload = repository.rpc(
+        "get_football_model_input_candidates_v1",
+        {"p_target_date": target_date},
+    ) or {}
+    candidates = list(candidate_payload.get("candidates") or [])
+    rows = central_candidates_to_long_rows(candidates)
+    if not rows:
+        raise HTTPException(status_code=409, detail="Nenhuma partida de Football possui odds elegíveis para o canário")
+
+    shadow_id = str(uuid4())
+    csv_path = MODEL_INPUTS_DIR / f"football_shadow_{target_date}_{shadow_id}.csv"
+    write_long_csv(rows, csv_path)
+    central_result = _executar_modelo_futebol_csv(csv_path, f"shadow_{shadow_id}")
+    traditional_result = _executar_modelo_futebol(payload.traditional_job_id) if payload.traditional_job_id else None
+    storage = build_storage_payload(candidates)
+    coverage = coverage_report(candidates, rows)
+    source_snapshot_at = max(
+        (str(item.get("snapshot_at")) for item in candidates if item.get("snapshot_at")),
+        default=datetime.now().astimezone().isoformat(),
+    )
+    build_id = repository.rpc("create_model_input_build_v1", {
+        "p_contract_key": "asp_matchmatrix_v1",
+        "p_target_date": target_date,
+        "p_source_snapshot_at": source_snapshot_at,
+        "p_matches": storage["matches"],
+        "p_features": storage["features"],
+        "p_odds": storage["odds"],
+        "p_mode": "shadow",
+        "p_coverage_report": coverage,
+        "p_missing_required": missing_required_fields(rows),
+        "p_lineage_summary": {
+            "source": "Highlightly/Central Esportiva",
+            "candidate_rpc": "get_football_model_input_candidates_v1",
+            "traditional_job_id": payload.traditional_job_id,
+        },
+    })
+    comparison = compare_shadow_results(central_result, traditional_result)
+    run_id = repository.rpc("record_football_shadow_run_v1", {
+        "p_build_id": build_id,
+        "p_traditional_job_id": payload.traditional_job_id,
+        "p_central_result": central_result,
+        "p_traditional_result": traditional_result,
+        "p_comparison": comparison,
+    })
+    return {
+        "ok": True,
+        "mode": "shadow",
+        "automatic_publication": False,
+        "run_id": run_id,
+        "build_id": build_id,
+        "target_date": target_date,
+        "coverage": coverage,
+        "comparison": comparison,
+    }
 
 
 @app.post("/modelos/futebol/iniciar")
