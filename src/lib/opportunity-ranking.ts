@@ -670,7 +670,8 @@ function calculateFinalOpportunityScore(
   const preScore = current?.opportunity_score_pre ?? numericOrZero(item.opportunity_score_pre);
   const confidence = current?.confidence_score ?? numericOrZero(item.confidence_score);
   const aiSignal = item.ai_decision === "CONFIRMA" ? 100 : 85;
-  const previewSignal = item.matchup_preview_status === "loaded" ? 100 : 45;
+  const previewNotApplicable = current?.prognostico.liga?.trim().toUpperCase() === "WNBA";
+  const previewSignal = previewNotApplicable || item.matchup_preview_status === "loaded" ? 100 : 45;
   const riskPenalty = asStringArray(item.risk_flags).length * 2.5;
   const finalScore =
     preScore * 0.5 + confidence * 0.2 + aiSignal * 0.22 + previewSignal * 0.08 - riskPenalty;

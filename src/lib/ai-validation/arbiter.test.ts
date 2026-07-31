@@ -253,10 +253,40 @@ describe("arbitrateAiOutput", () => {
   it("revalida edge efetivo e odd de valor", () => {
     const result = arbitrateAiOutput(
       output(),
-      context(prediction({ edge_ajustado: -1, odd_ajustada: 1.7 })),
+      context(prediction({ edge_ajustado: 20, odd_ajustada: 1.6 })),
     );
     expect(result.blocks.map((block) => block.code)).toEqual(
       expect.arrayContaining(["EFFECTIVE_EDGE_INVALID", "ODD_BELOW_FAIR_VALUE"]),
+    );
+  });
+
+  it("recalcula e bloqueia edge efetivo WNBA abaixo de 5% com baixa amostra", () => {
+    const result = arbitrateAiOutput(
+      output({ selected_pick: "HA Visitante +12.5" }),
+      context(
+        prediction({
+          esporte: "Basketball",
+          liga: "WNBA",
+          pick: "HA Visitante +12.5",
+          probabilidade_final: 56.02,
+          odd_ofertada: 1.95,
+          odd_ajustada: 1.87,
+          edge: 9.23,
+          edge_ajustado: 9.23,
+          odd_valor: 1.79,
+          dados_tecnicos: "Alertas: LOW_SAMPLE, LOW_SAMPLE_ATUAL",
+        }),
+      ),
+    );
+
+    expect(result.output.decision).toBe("PULAR");
+    expect(result.blocks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "WNBA_EFFECTIVE_EDGE_BELOW_MIN",
+          reason: expect.stringContaining("4.76%"),
+        }),
+      ]),
     );
   });
 

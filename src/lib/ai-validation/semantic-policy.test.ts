@@ -46,6 +46,7 @@ describe("política semântica da validação de IA", () => {
 
     expect(result.invalidation_condition).toContain("pré-jogo");
     expect(result.invalidation_condition).not.toContain("6ª entrada");
+    expect(result.invalidation_condition).not.toContain("clima");
     expect(result.limitations).toContain(
       "A condição de invalidação produzida pela IA dependia do jogo iniciado e foi substituída pela política pré-jogo.",
     );

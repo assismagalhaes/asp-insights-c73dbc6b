@@ -36,6 +36,7 @@ MODEL_NAMES = {
 MIN_ODD_EXPORT = 1.25
 MAX_ODD_EXPORT = 2.00
 BASKETBALL_WNBA_MODEL_VERSION = "BASKETBALL_WNBA_V2_2_ROBUST_GATES"
+WNBA_GATE_REVISION = "WNBA_EXECUTABLE_EDGE_GATES_2026_07_31"
 BASKETBALL_WNBA_HANDICAP_MODEL_VERSION = BASKETBALL_WNBA_MODEL_VERSION
 WNBA_CURRENT_SEASON_YEAR = datetime.now().year
 WNBA_PREVIOUS_SEASON_YEAR = WNBA_CURRENT_SEASON_YEAR - 1
@@ -2545,6 +2546,7 @@ def build_wnba_active_technical_context(
         f"bookmaker_melhor={item.get('bookmaker_melhor') or debug.get('bookmaker_melhor')}; "
         f"edge_melhor={item.get('edge')}%; ev_mediana={debug.get('ev_odd_mediana')}%"
     )
+    lines.append(f"Revisao operacional dos gates: {WNBA_GATE_REVISION}")
     market_key = 'handicap' if 'handicap' in normalize_text(item.get('mercado')) else 'total' if any(
         token in normalize_text(item.get('mercado')) for token in ('overunder', 'total', 'pontos')
     ) else 'moneyline'

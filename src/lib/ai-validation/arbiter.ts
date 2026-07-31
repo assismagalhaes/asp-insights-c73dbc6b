@@ -136,8 +136,17 @@ function effectiveOdd(prediction: Prognostico): number | null {
 }
 
 function effectiveEdge(prediction: Prognostico): number | null {
-  const value = prediction.edge_ajustado ?? prediction.edge;
-  return Number.isFinite(value) ? value : null;
+  const odd = effectiveOdd(prediction);
+  const probability = Number(prediction.probabilidade_final);
+  if (odd == null || !Number.isFinite(probability) || probability <= 0) return null;
+  return Number((((probability / 100) * odd - 1) * 100).toFixed(2));
+}
+
+function isWnbaLowSample(prediction: Prognostico): boolean {
+  if (normalize(prediction.liga) !== "wnba") return false;
+  return /\bLOW_SAMPLE(?:_ATUAL)?\b/i.test(
+    `${prediction.dados_tecnicos ?? ""}\n${prediction.contexto_modelo ?? ""}\n${prediction.observacoes ?? ""}`,
+  );
 }
 
 function validateConfirmation(
@@ -199,6 +208,13 @@ function validateConfirmation(
       blocks,
       "EFFECTIVE_EDGE_INVALID",
       `Edge efetivo ${edge?.toFixed(2) ?? "ausente"}% não permite confirmação.`,
+    );
+  }
+  if (edge != null && isWnbaLowSample(prediction) && edge < 5) {
+    addBlock(
+      blocks,
+      "WNBA_EFFECTIVE_EDGE_BELOW_MIN",
+      `Edge efetivo de ${edge.toFixed(2)}% abaixo do mínimo de 5.00% para WNBA com baixa amostra.`,
     );
   }
 

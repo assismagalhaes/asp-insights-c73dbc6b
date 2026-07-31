@@ -751,6 +751,7 @@ class BasketballWnbaV11Tests(unittest.TestCase):
         self.assertIn("bookmaker_melhor=Book A", context)
         self.assertIn("edge PASS (6.81% >= 5.0%)", context)
         self.assertIn("EV mediano PASS (5.09% >= 1.0% quando baixa amostra)", context)
+        self.assertIn(runner.WNBA_GATE_REVISION, context)
 
     def test_merge_technical_context_preserves_legacy_identification_and_active_decision(self) -> None:
         legacy = "\n".join((

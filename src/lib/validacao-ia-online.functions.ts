@@ -360,6 +360,8 @@ Política de pesquisa (use as ferramentas de forma proativa, mas eficiente):
 3. Faça no máximo 5 buscas e no máximo 3 scrapes. Evite scrape se o resultado de busca já trouxer informação suficiente.
 4. Priorize fontes confiáveis: sites oficiais de ligas/times, injury reports oficiais, páginas reconhecidas de lineups, previews de veículos esportivos confiáveis e clima de fonte meteorológica confiável.
 5. Evite usar como fonte principal: fórum aleatório, postagem sem contexto, site de baixa qualidade, conteúdo sem data, notícia antiga sem relação com o jogo.
+   - Redes sociais, agregadores e sites de prognósticos/apostas nunca confirmam sozinhos escalação, titularidade, lesão ou restrição de minutos.
+   - Para NBA/WNBA, diferencie explicitamente escalação provável de quinteto oficial. Sem fonte oficial da liga/equipe ou injury report confiável do dia, use "não confirmado" e registre a limitação.
 6. Janelas de recência:
    - Notícias: últimas 24 a 72 horas.
    - Lineups/starters/goalies: priorizar o dia do jogo.

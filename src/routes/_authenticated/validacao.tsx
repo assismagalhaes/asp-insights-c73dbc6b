@@ -1397,7 +1397,7 @@ function Validacao() {
                   value={edgeAj != null ? `${edgeAj.toFixed(1)}%` : "-"}
                   tone={edgeAj != null && edgeAj > 0 ? "good" : "bad"}
                 />
-                <Metric label="Stake sugerida" value={`${p.stake.toFixed(1)}u`} />
+                <Metric label="Stake pré-IA" value={`${p.stake.toFixed(1)}u`} />
               </div>
 
               <div className="relative grid gap-3 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-stretch">
@@ -1855,6 +1855,7 @@ function PreAiShortlistPanel({
   const loadedPreviewCount = savedItems.filter(
     (item) => item.matchup_preview_status === "loaded",
   ).length;
+  const previewApplicable = latest?.run.league_scope?.trim().toUpperCase() !== "WNBA";
   const decisionCounts = {
     confirmed: savedItems.filter((item) =>
       ["CONFIRMA_IA", "TOP_FINAL", "RESERVA"].includes(item.ranking_status),
@@ -1909,7 +1910,11 @@ function PreAiShortlistPanel({
           <Metric
             label="Preview"
             value={
-              loadingLatest ? "..." : `${String(latest?.items.length ?? 0)} / ${loadedPreviewCount}`
+              loadingLatest
+                ? "..."
+                : previewApplicable
+                  ? `${String(latest?.items.length ?? 0)} / ${loadedPreviewCount}`
+                  : "Não aplicável"
             }
           />
         </div>
@@ -1958,7 +1963,7 @@ function PreAiShortlistPanel({
           </span>
         </summary>
         <div className="flex flex-col gap-3 border-t border-border/70 p-3">
-          {savedItems.length > 0 && (
+          {savedItems.length > 0 && previewApplicable && (
             <div className="relative flex flex-col gap-3 rounded-lg border border-border/80 bg-background/35 p-3">
               <div className="flex flex-wrap items-end gap-3">
                 <div className="min-w-[260px] flex-1">
@@ -2022,6 +2027,13 @@ function PreAiShortlistPanel({
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {savedItems.length > 0 && !previewApplicable && (
+            <div className="rounded-lg border border-border/80 bg-background/35 p-3 text-xs text-muted-foreground">
+              Preview não aplicável à WNBA. A shortlist e a validação usam diretamente os dados
+              técnicos produzidos pelo ASP Court W, sem penalidade de score ou bloqueio operacional.
             </div>
           )}
 

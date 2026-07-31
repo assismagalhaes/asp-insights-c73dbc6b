@@ -13,7 +13,7 @@ const TECHNICAL_REASON_PATTERN =
   /\b(?:probabilidade|edge|odd|pre[cç]o|linha|mercado|pick|c[aá]lculo|matem[aá]tic|ev\b|valor esperado|incompat[ií]vel|incoerente)\b/i;
 
 const SAFE_PREGAME_INVALIDATION =
-  "Mudança material pré-jogo em starter ou escalação, clima, linha ou odd executável.";
+  "Mudança material pré-jogo em starter, escalação ou desfalque, linha ou odd executável.";
 
 const SEMANTIC_POLICY_LIMITATION =
   "A condição de invalidação produzida pela IA dependia do jogo iniciado e foi substituída pela política pré-jogo.";
