@@ -18,6 +18,16 @@ export type DailyMatch = (FootballMatch | BaseballMatch | BasketballMatch) & {
   country_name?: string | null;
 };
 
+export interface DailyMatchesFailure {
+  sport: AnalysisSport;
+  message: string;
+}
+
+export interface DailyMatchesResult {
+  matches: DailyMatch[];
+  failures: DailyMatchesFailure[];
+}
+
 export type JsonRecord = Record<string, Json | undefined>;
 
 export interface MatchDetail {
@@ -373,14 +383,36 @@ async function fetchSportMatches(sport: AnalysisSport, date: string): Promise<Da
 export async function fetchDailyMatches(
   sport: AnalysisSportFilter,
   date: string,
-): Promise<DailyMatch[]> {
+): Promise<DailyMatchesResult> {
   const sports: AnalysisSport[] =
     sport === "all" ? ["football", "baseball", "basketball"] : [sport];
-  const groups = await Promise.all(sports.map((item) => fetchSportMatches(item, date)));
-  return groups.flat().sort((a, b) => {
+  const settled = await Promise.allSettled(sports.map((item) => fetchSportMatches(item, date)));
+  const failures: DailyMatchesFailure[] = [];
+  const groups: DailyMatch[][] = [];
+
+  settled.forEach((result, index) => {
+    if (result.status === "fulfilled") groups.push(result.value);
+    else {
+      failures.push({
+        sport: sports[index],
+        message: result.reason instanceof Error ? result.reason.message : "Falha desconhecida",
+      });
+    }
+  });
+
+  if (!groups.length) {
+    throw new Error(
+      failures.length === 1
+        ? failures[0].message
+        : "Nenhum esporte respondeu. Tente atualizar os dados em alguns instantes.",
+    );
+  }
+
+  const matches = groups.flat().sort((a, b) => {
     const byTime = String(a.kickoff_at ?? "").localeCompare(String(b.kickoff_at ?? ""));
     return byTime || String(a.match_id).localeCompare(String(b.match_id));
   });
+  return { matches, failures };
 }
 
 function detailFromJson(value: Json): MatchDetail {
@@ -459,6 +491,9 @@ export function matchStatusLabel(status: string | null): string {
   const value = String(status ?? "").toLowerCase();
   if (["finished", "final", "ended", "complete"].includes(value)) return "Finalizado";
   if (["live", "in_progress", "playing", "halftime"].includes(value)) return "Ao vivo";
-  if (["cancelled", "canceled", "postponed"].includes(value)) return "Adiado";
+  if (["cancelled", "canceled"].includes(value)) return "Cancelado";
+  if (["postponed", "delayed"].includes(value)) return "Adiado";
+  if (["suspended", "interrupted"].includes(value)) return "Suspenso";
+  if (["abandoned", "aborted"].includes(value)) return "Abandonado";
   return "Agendado";
 }

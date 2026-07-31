@@ -8,7 +8,9 @@ import {
   Search,
   SlidersHorizontal,
   Star,
+  TriangleAlert,
 } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -102,7 +104,7 @@ export function CentralEsportiva({
     staleTime: 60_000,
     retry: 1,
   });
-  const matches = useMemo(() => matchesQuery.data ?? [], [matchesQuery.data]);
+  const matches = useMemo(() => matchesQuery.data?.matches ?? [], [matchesQuery.data?.matches]);
   const filteredMatches = useMemo(() => {
     return matches.filter((match) => {
       if (favoritesOnly && !favorites.has(String(match.match_id))) return false;
@@ -258,7 +260,7 @@ export function CentralEsportiva({
               </SelectContent>
             </Select>
             <span className="hidden text-[10px] text-muted-foreground lg:inline">
-              Atualizado{" "}
+              Lista atualizada{" "}
               {updatedAt
                 ? new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(
                     new Date(updatedAt),
@@ -272,69 +274,85 @@ export function CentralEsportiva({
       {matchesQuery.error ? (
         <AnalysisError message={matchesQuery.error.message} />
       ) : (
-        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(340px,42%)_minmax(0,1fr)]">
-          <aside
-            className={cn(
-              "min-h-0 border-r border-border bg-analysis-rail",
-              selectedMatch ? "hidden lg:flex" : "flex",
-              "flex-col",
-            )}
-            aria-label="Explorador de partidas"
-          >
-            <div className="flex h-9 shrink-0 items-center justify-between border-b border-border px-3 text-[10px] text-muted-foreground">
-              <span>Jogos de {formatAnalysisDate(search.date)}</span>
-              <span>{filteredMatches.length} resultados</span>
-            </div>
-            <MatchExplorer
-              matches={filteredMatches}
-              isLoading={matchesQuery.isLoading}
-              selectedMatchId={search.match}
-              onSelect={selectMatch}
-            />
-          </aside>
-          <section
-            className={cn("min-h-0", selectedMatch ? "block" : "hidden lg:block")}
-            aria-label="Detalhe da partida"
-          >
-            {selectedMatch ? (
-              <div className="relative h-full">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-12 top-2 z-10"
-                  onClick={() => toggle(String(selectedMatch.match_id))}
-                  aria-label={
-                    favorites.has(String(selectedMatch.match_id))
-                      ? "Remover dos favoritos"
-                      : "Adicionar aos favoritos"
-                  }
-                >
-                  <Star
-                    className={
-                      favorites.has(String(selectedMatch.match_id))
-                        ? "fill-current text-warning"
-                        : ""
-                    }
-                  />
-                </Button>
-                <MatchDetailView
-                  key={String(selectedMatch.match_id)}
-                  match={selectedMatch}
-                  detail={detailQuery.data}
-                  isLoading={detailQuery.isLoading}
-                  error={detailQuery.error}
-                  preset={activePreset}
-                  onClose={() => onSearchChange({ sport: search.sport, date: search.date }, true)}
-                />
+        <div className="flex min-h-0 flex-1 flex-col">
+          {matchesQuery.data?.failures.length ? (
+            <Alert className="m-3 shrink-0 border-warning/30 bg-warning/5">
+              <TriangleAlert className="text-warning" />
+              <AlertTitle>Dados parcialmente disponíveis</AlertTitle>
+              <AlertDescription>
+                Não foi possível consultar{" "}
+                {matchesQuery.data.failures
+                  .map((failure) => analysisSportLabels[failure.sport])
+                  .join(", ")}
+                . Os demais esportes continuam visíveis; não use este recorte como cobertura
+                completa.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(340px,42%)_minmax(0,1fr)]">
+            <aside
+              className={cn(
+                "min-h-0 border-r border-border bg-analysis-rail",
+                selectedMatch ? "hidden lg:flex" : "flex",
+                "flex-col",
+              )}
+              aria-label="Explorador de partidas"
+            >
+              <div className="flex h-9 shrink-0 items-center justify-between border-b border-border px-3 text-[10px] text-muted-foreground">
+                <span>Jogos de {formatAnalysisDate(search.date)}</span>
+                <span>{filteredMatches.length} resultados</span>
               </div>
-            ) : (
-              <AnalysisEmpty
-                title="Selecione uma partida"
-                description="Escolha um jogo para abrir estatísticas, forma, escalações, eventos, standings e evidências de odds."
-                className="h-full"
+              <MatchExplorer
+                matches={filteredMatches}
+                isLoading={matchesQuery.isLoading}
+                selectedMatchId={search.match}
+                onSelect={selectMatch}
               />
-            )}
-          </section>
+            </aside>
+            <section
+              className={cn("min-h-0", selectedMatch ? "block" : "hidden lg:block")}
+              aria-label="Detalhe da partida"
+            >
+              {selectedMatch ? (
+                <div className="relative h-full">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-12 top-2 z-10"
+                    onClick={() => toggle(String(selectedMatch.match_id))}
+                    aria-label={
+                      favorites.has(String(selectedMatch.match_id))
+                        ? "Remover dos favoritos"
+                        : "Adicionar aos favoritos"
+                    }
+                  >
+                    <Star
+                      className={
+                        favorites.has(String(selectedMatch.match_id))
+                          ? "fill-current text-warning"
+                          : ""
+                      }
+                    />
+                  </Button>
+                  <MatchDetailView
+                    key={String(selectedMatch.match_id)}
+                    match={selectedMatch}
+                    detail={detailQuery.data}
+                    isLoading={detailQuery.isLoading}
+                    error={detailQuery.error}
+                    preset={activePreset}
+                    onClose={() => onSearchChange({ sport: search.sport, date: search.date }, true)}
+                  />
+                </div>
+              ) : (
+                <AnalysisEmpty
+                  title="Selecione uma partida"
+                  description="Escolha um jogo para abrir estatísticas, forma, escalações, eventos, standings e evidências de odds."
+                  className="h-full"
+                />
+              )}
+            </section>
+          </div>
         </div>
       )}
     </div>

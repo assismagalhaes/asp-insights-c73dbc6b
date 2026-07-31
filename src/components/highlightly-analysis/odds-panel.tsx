@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import {
   CartesianGrid,
@@ -35,6 +35,7 @@ import {
   type JsonRecord,
   type MatchDetail,
 } from "@/lib/highlightly-analysis";
+import { choosePreferredLine, hasPublishableConsensus } from "@/lib/highlightly-odds-analysis";
 import { cn } from "@/lib/utils";
 import { AnalysisEmpty, SectionLabel } from "./analysis-primitives";
 
@@ -101,6 +102,10 @@ function marketFamily(record: JsonRecord): string {
   return key(record, "marketFamily", "market_family") ?? "mercado";
 }
 
+function marketIdentity(record: JsonRecord): string {
+  return key(record, "marketId", "market_id") ?? `family:${marketFamily(record)}`;
+}
+
 function marketLabel(value: string): string {
   const normalized = value.toLowerCase();
   if (normalized.includes("total")) return "Total";
@@ -159,54 +164,61 @@ export default function OddsPanel({
   detail: MatchDetail;
   preferredFamilies?: string[];
 }) {
-  const families = useMemo(() => [...new Set(detail.odds.map(marketFamily))], [detail.odds]);
-  const initialFamily =
-    families.find((value) =>
-      preferredFamilies.some((preferred) => value.toLowerCase().includes(preferred)),
+  const markets = useMemo(() => {
+    const values = new Map<string, { key: string; family: string; label: string }>();
+    for (const quote of detail.odds) {
+      const identity = marketIdentity(quote);
+      const family = marketFamily(quote);
+      values.set(identity, {
+        key: identity,
+        family,
+        label: key(quote, "market") ?? marketLabel(family),
+      });
+    }
+    return [...values.values()];
+  }, [detail.odds]);
+  const initialMarket =
+    markets.find((option) =>
+      preferredFamilies.some((preferred) => option.family.toLowerCase().includes(preferred)),
     ) ??
-    families.find((value) => value.toLowerCase().includes("total")) ??
-    families[0] ??
-    "";
-  const [family, setFamily] = useState(initialFamily);
+    markets.find((option) => option.family.toLowerCase().includes("total")) ??
+    markets[0];
+  const [requestedMarket, setRequestedMarket] = useState("");
+  const activeMarket = markets.find((option) => option.key === requestedMarket) ?? initialMarket;
+  const marketKey = activeMarket?.key ?? "";
 
-  useEffect(() => {
-    if (preferredFamilies.length || !families.includes(family)) setFamily(initialFamily);
-  }, [families, family, initialFamily, preferredFamilies]);
-
-  const familyOdds = useMemo(
-    () => detail.odds.filter((quote) => marketFamily(quote) === family),
-    [detail.odds, family],
+  const marketOdds = useMemo(
+    () => detail.odds.filter((quote) => marketIdentity(quote) === marketKey),
+    [detail.odds, marketKey],
   );
   const lines = useMemo(() => {
     const values = new Map<string, number | null>();
-    for (const quote of familyOdds)
+    for (const quote of marketOdds)
       values.set(lineIdentity(quote), number(quote, "lineValue", "line_value"));
     return [...values.entries()].sort((a, b) => (a[1] ?? -Infinity) - (b[1] ?? -Infinity));
-  }, [familyOdds]);
-  const preferredLine = lines.find(([, value]) => value === 172.5)?.[0] ?? lines[0]?.[0] ?? "";
-  const [selectedLine, setSelectedLine] = useState(preferredLine);
-
-  useEffect(() => {
-    if (!lines.some(([line]) => line === selectedLine)) setSelectedLine(preferredLine);
-  }, [lines, preferredLine, selectedLine]);
+  }, [marketOdds]);
+  const preferredLine = choosePreferredLine(marketOdds);
+  const [requestedLine, setRequestedLine] = useState("");
+  const selectedLine = lines.some(([line]) => line === requestedLine)
+    ? requestedLine
+    : preferredLine;
 
   const quotes = useMemo(
     () =>
-      familyOdds.filter(
+      marketOdds.filter(
         (quote) => lineIdentity(quote) === selectedLine && key(quote, "status") !== "closed",
       ),
-    [familyOdds, selectedLine],
+    [marketOdds, selectedLine],
   );
-  const marketId = quotes.length ? key(quotes[0], "marketId", "market_id") : null;
+  const marketId = activeMarket?.key.startsWith("family:") ? null : (activeMarket?.key ?? null);
   const selections = useMemo(
-    () =>
-      [
-        ...new Set(
-          quotes
-            .map((quote) => key(quote, "selectionKey", "selection_key"))
-            .filter((value): value is string => Boolean(value)),
-        ),
-      ].slice(0, 3),
+    () => [
+      ...new Set(
+        quotes
+          .map((quote) => key(quote, "selectionKey", "selection_key"))
+          .filter((value): value is string => Boolean(value)),
+      ),
+    ],
     [quotes],
   );
   const selectionLabels = useMemo(() => {
@@ -254,6 +266,25 @@ export default function OddsPanel({
     () => movementSeries(detail.oddsMovement, marketId, selectedLine, selections),
     [detail.oddsMovement, marketId, selectedLine, selections],
   );
+  const sourceCounts = useMemo(() => {
+    const values = new Map<string, number>();
+    for (const selection of selections) {
+      values.set(selection, quoteGroups.filter((group) => group.prices.has(selection)).length);
+    }
+    return values;
+  }, [quoteGroups, selections]);
+  const medianSelections = useMemo(() => {
+    const values = new Set<string>();
+    for (const selection of selections) {
+      const row = consensus.get(selection);
+      const medianValue = row
+        ? number(row, "medianOdds", "median_odds")
+        : median(quoteGroups.flatMap((group) => group.prices.get(selection) ?? []));
+      if (medianValue !== null) values.add(selection);
+    }
+    return values;
+  }, [consensus, quoteGroups, selections]);
+  const publishableConsensus = hasPublishableConsensus(selections, sourceCounts, medianSelections);
 
   if (!detail.odds.length) {
     return (
@@ -269,21 +300,21 @@ export default function OddsPanel({
       <div className="flex flex-col gap-2 border-b border-border pb-3">
         <ToggleGroup
           type="single"
-          value={family}
-          onValueChange={(value) => value && setFamily(value)}
+          value={marketKey}
+          onValueChange={(value) => value && setRequestedMarket(value)}
           variant="outline"
           size="sm"
           className="justify-start overflow-x-auto"
           aria-label="Mercado"
         >
-          {families.slice(0, 7).map((value) => (
-            <ToggleGroupItem key={value} value={value} className="min-w-24">
-              {marketLabel(value)}
+          {markets.map((option) => (
+            <ToggleGroupItem key={option.key} value={option.key} className="min-w-24">
+              {option.label}
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
         {lines.length > 1 ? (
-          <Select value={selectedLine} onValueChange={setSelectedLine}>
+          <Select value={selectedLine} onValueChange={setRequestedLine}>
             <SelectTrigger className="w-full sm:w-48" aria-label="Linha">
               <SelectValue placeholder="Escolha a linha" />
             </SelectTrigger>
@@ -300,12 +331,17 @@ export default function OddsPanel({
         ) : null}
       </div>
 
-      <section className="grid grid-cols-2 divide-x divide-border border-y border-border sm:grid-cols-4">
+      <section
+        className="grid divide-x divide-border overflow-x-auto border-y border-border"
+        style={{
+          gridTemplateColumns: `repeat(${Math.max(selections.length, 1)}, minmax(150px, 1fr))`,
+        }}
+      >
         {selections.map((selection, index) => {
           const row = consensus.get(selection);
           const sources = row
             ? number(row, "bookmakerCount", "bookmaker_count")
-            : quoteGroups.length;
+            : (sourceCounts.get(selection) ?? 0);
           return (
             <div key={selection} className="flex min-w-0 flex-col gap-1 px-3 py-2.5">
               <span
@@ -467,12 +503,12 @@ export default function OddsPanel({
         </Table>
       </section>
 
-      {quoteGroups.length >= 2 ? (
+      {publishableConsensus ? (
         <Alert className="border-success/25 bg-success/5">
           <CheckCircle2 className="text-success" />
           <AlertTitle>Consenso publicável</AlertTitle>
           <AlertDescription>
-            Mediana calculada com {quoteGroups.length} fontes para a mesma seleção e linha.
+            Todas as seleções exibidas possuem mediana e ao menos duas fontes na mesma linha.
           </AlertDescription>
         </Alert>
       ) : (
@@ -480,7 +516,8 @@ export default function OddsPanel({
           <AlertTriangle className="text-warning" />
           <AlertTitle>Consenso indisponível</AlertTitle>
           <AlertDescription>
-            São necessárias ao menos duas fontes para publicar a mediana.
+            Cada seleção precisa ter mediana e ao menos duas fontes na mesma linha. Seleções sem
+            quórum permanecem visíveis, mas não são publicáveis.
           </AlertDescription>
         </Alert>
       )}

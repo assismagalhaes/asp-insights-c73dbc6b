@@ -47,6 +47,18 @@ function formatDateTime(value: string | null): string {
     .replace(" de ", " ");
 }
 
+function latestRecordTimestamp(rows: JsonRecord[], keys: string[]): string | null {
+  let latest = 0;
+  for (const row of rows) {
+    for (const key of keys) {
+      const value = jsonString(row[key]);
+      const timestamp = value ? new Date(value).getTime() : 0;
+      if (Number.isFinite(timestamp) && timestamp > latest) latest = timestamp;
+    }
+  }
+  return latest ? new Date(latest).toISOString() : null;
+}
+
 function DetailSkeleton() {
   return (
     <div className="flex flex-col gap-4 p-4" aria-label="Carregando detalhe">
@@ -80,33 +92,45 @@ function SummaryPanel({ match, detail }: { match: DailyMatch; detail: MatchDetai
     return [...rows.values()];
   }, [detail.periodScores, match.home_team_id, match.away_team_id]);
 
-  const coverage = [
-    ["Métricas", detail.teamStatistics.length],
+  const availability = [
+    ["Estatísticas", detail.teamStatistics.length],
+    ["Forma", detail.teamFormStatistics.length],
     ["Odds", detail.odds.length],
     ["Consensos", detail.oddsConsensus.length],
-    ["Eventos", detail.events.length],
-    ["Box scores", detail.playerBoxScores.length],
-    ["Highlights", detail.highlights.length],
+    ["Escalações", detail.lineups.length],
+    ["Classificação", detail.standings.length],
   ] as const;
 
   return (
     <div className="flex flex-col gap-4 p-3 md:p-4">
       <section className="grid grid-cols-2 border-y border-border sm:grid-cols-3">
-        {coverage.map(([label, count]) => (
+        {availability.map(([label, count]) => (
           <div
             key={label}
             className="flex items-baseline justify-between gap-2 border-b border-border px-3 py-2.5 sm:nth-[n+4]:border-b-0"
           >
             <span className="text-xs text-muted-foreground">{label}</span>
             <span className="flex flex-col items-end">
-              <strong className="font-mono text-sm">{count || "—"}</strong>
+              <strong className={count ? "text-success" : "text-warning"}>
+                {count ? "Disponível" : "Ausente"}
+              </strong>
               <span className="text-[9px] text-muted-foreground">
-                {count ? "coletados" : "não coletado"}
+                {count ? `${count} registros` : "não coletado"}
               </span>
             </span>
           </div>
         ))}
       </section>
+
+      <Alert className="border-warning/30 bg-warning/5">
+        <ShieldAlert className="text-warning" />
+        <AlertTitle>Execução de modelos ainda bloqueada</AlertTitle>
+        <AlertDescription>
+          Disponibilidade de registros não equivale à cobertura das variáveis de um modelo. O
+          contrato versionado, a linhagem por campo e o snapshot imutável da Fase 8H ainda não foram
+          materializados para esta partida.
+        </AlertDescription>
+      </Alert>
 
       {periods.length ? (
         <section aria-labelledby="periods-title">
@@ -320,6 +344,19 @@ function StandingsPanel({ detail }: { detail: MatchDetail }) {
 }
 
 function SourcePanel({ match, detail }: { match: DailyMatch; detail: MatchDetail }) {
+  const freshness = [
+    ["Cadastro da partida", match.updated_at],
+    ["Odds", latestRecordTimestamp(detail.odds, ["lastSeenAt", "last_seen_at"])],
+    ["Consenso", latestRecordTimestamp(detail.oddsConsensus, ["snapshotAt", "snapshot_at"])],
+    [
+      "Estatísticas",
+      latestRecordTimestamp(
+        [...detail.teamStatistics, ...detail.teamFormStatistics],
+        ["collectedAt", "collected_at"],
+      ),
+    ],
+    ["Classificação", latestRecordTimestamp(detail.standings, ["snapshotAt", "snapshot_at"])],
+  ] as const;
   const facts = [
     ["ID canônico", match.match_id],
     ["Esporte", analysisSportLabels[match.sport]],
@@ -327,7 +364,6 @@ function SourcePanel({ match, detail }: { match: DailyMatch; detail: MatchDetail
     ["Competição", normalizeCompetitionName(match)],
     ["Temporada", match.season_label],
     ["Status do provider", match.provider_status],
-    ["Atualizado", match.updated_at ? formatDateTime(match.updated_at) : null],
     ["Métricas preservadas", detail.teamStatistics.length],
     ["Odds atuais", detail.odds.length],
   ] as const;
@@ -338,6 +374,15 @@ function SourcePanel({ match, detail }: { match: DailyMatch; detail: MatchDetail
           <div key={label} className="grid grid-cols-[140px_minmax(0,1fr)] gap-3 py-3 text-xs">
             <span className="text-muted-foreground">{label}</span>
             <span className="break-all font-mono">{value ?? "—"}</span>
+          </div>
+        ))}
+      </div>
+      <SectionLabel className="mb-2 mt-6">Atualidade por domínio</SectionLabel>
+      <div className="divide-y divide-border border-y border-border">
+        {freshness.map(([label, value]) => (
+          <div key={label} className="grid grid-cols-[140px_minmax(0,1fr)] gap-3 py-3 text-xs">
+            <span className="text-muted-foreground">{label}</span>
+            <span className="font-mono">{value ? formatDateTime(value) : "Não informado"}</span>
           </div>
         ))}
       </div>
