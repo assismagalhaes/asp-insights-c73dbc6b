@@ -1111,6 +1111,56 @@ export type Database = {
           },
         ]
       }
+      football_model_shadow_runs: {
+        Row: {
+          automatic_publication: boolean
+          build_id: string
+          central_result: Json
+          comparison: Json
+          created_at: string
+          id: string
+          model_name: string
+          model_version: string
+          run_mode: string
+          traditional_job_id: string | null
+          traditional_result: Json | null
+        }
+        Insert: {
+          automatic_publication?: boolean
+          build_id: string
+          central_result: Json
+          comparison: Json
+          created_at?: string
+          id?: string
+          model_name?: string
+          model_version?: string
+          run_mode?: string
+          traditional_job_id?: string | null
+          traditional_result?: Json | null
+        }
+        Update: {
+          automatic_publication?: boolean
+          build_id?: string
+          central_result?: Json
+          comparison?: Json
+          created_at?: string
+          id?: string
+          model_name?: string
+          model_version?: string
+          run_mode?: string
+          traditional_job_id?: string | null
+          traditional_result?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "football_model_shadow_runs_build_id_fkey"
+            columns: ["build_id"]
+            isOneToOne: true
+            referencedRelation: "model_input_builds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hl_competition_feature_policies: {
         Row: {
           classification_source: string
@@ -3530,6 +3580,337 @@ export type Database = {
           wins?: number | null
         }
         Relationships: []
+      }
+      model_input_builds: {
+        Row: {
+          content_sha256: string | null
+          contract_id: string
+          coverage_report: Json
+          created_at: string
+          created_by: string | null
+          id: string
+          lineage_summary: Json
+          missing_required: string[]
+          mode: string
+          sealed_at: string | null
+          source_snapshot_at: string
+          status: string
+          target_date: string
+        }
+        Insert: {
+          content_sha256?: string | null
+          contract_id: string
+          coverage_report?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lineage_summary?: Json
+          missing_required?: string[]
+          mode?: string
+          sealed_at?: string | null
+          source_snapshot_at: string
+          status?: string
+          target_date: string
+        }
+        Update: {
+          content_sha256?: string | null
+          contract_id?: string
+          coverage_report?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lineage_summary?: Json
+          missing_required?: string[]
+          mode?: string
+          sealed_at?: string | null
+          source_snapshot_at?: string
+          status?: string
+          target_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "model_input_builds_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "model_input_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      model_input_contracts: {
+        Row: {
+          active: boolean
+          adapter_contract: Json
+          contract_key: string
+          created_at: string
+          historical_dependencies: Json
+          id: string
+          input_contract: Json
+          league_code: string | null
+          model_name: string
+          model_version: string
+          schema_version: string
+          sport_code: string
+        }
+        Insert: {
+          active?: boolean
+          adapter_contract: Json
+          contract_key: string
+          created_at?: string
+          historical_dependencies?: Json
+          id?: string
+          input_contract: Json
+          league_code?: string | null
+          model_name: string
+          model_version: string
+          schema_version?: string
+          sport_code: string
+        }
+        Update: {
+          active?: boolean
+          adapter_contract?: Json
+          contract_key?: string
+          created_at?: string
+          historical_dependencies?: Json
+          id?: string
+          input_contract?: Json
+          league_code?: string | null
+          model_name?: string
+          model_version?: string
+          schema_version?: string
+          sport_code?: string
+        }
+        Relationships: []
+      }
+      model_input_features: {
+        Row: {
+          build_id: string
+          feature_key: string
+          feature_value: Json
+          id: string
+          is_required: boolean
+          match_id: string
+          observed_at: string | null
+          source_kind: string
+          source_lineage: Json
+          value_type: string
+        }
+        Insert: {
+          build_id: string
+          feature_key: string
+          feature_value: Json
+          id?: string
+          is_required?: boolean
+          match_id: string
+          observed_at?: string | null
+          source_kind: string
+          source_lineage?: Json
+          value_type: string
+        }
+        Update: {
+          build_id?: string
+          feature_key?: string
+          feature_value?: Json
+          id?: string
+          is_required?: boolean
+          match_id?: string
+          observed_at?: string | null
+          source_kind?: string
+          source_lineage?: Json
+          value_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "model_input_features_build_id_fkey"
+            columns: ["build_id"]
+            isOneToOne: false
+            referencedRelation: "model_input_builds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "model_input_features_build_id_match_id_fkey"
+            columns: ["build_id", "match_id"]
+            isOneToOne: false
+            referencedRelation: "model_input_matches"
+            referencedColumns: ["build_id", "match_id"]
+          },
+          {
+            foreignKeyName: "model_input_features_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_baseball_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "model_input_features_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_basketball_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "model_input_features_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "model_input_features_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      model_input_matches: {
+        Row: {
+          build_id: string
+          id: string
+          match_id: string
+          ordinal: number
+          payload: Json
+        }
+        Insert: {
+          build_id: string
+          id?: string
+          match_id: string
+          ordinal: number
+          payload: Json
+        }
+        Update: {
+          build_id?: string
+          id?: string
+          match_id?: string
+          ordinal?: number
+          payload?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "model_input_matches_build_id_fkey"
+            columns: ["build_id"]
+            isOneToOne: false
+            referencedRelation: "model_input_builds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "model_input_matches_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_baseball_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "model_input_matches_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_basketball_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "model_input_matches_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "model_input_matches_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      model_input_odds_snapshots: {
+        Row: {
+          bookmaker: string | null
+          build_id: string
+          decimal_odds: number
+          id: string
+          line_key: string
+          line_value: number | null
+          market_key: string
+          match_id: string
+          observed_at: string
+          selection_key: string
+          source_kind: string
+          source_lineage: Json
+        }
+        Insert: {
+          bookmaker?: string | null
+          build_id: string
+          decimal_odds: number
+          id?: string
+          line_key?: string
+          line_value?: number | null
+          market_key: string
+          match_id: string
+          observed_at: string
+          selection_key: string
+          source_kind?: string
+          source_lineage?: Json
+        }
+        Update: {
+          bookmaker?: string | null
+          build_id?: string
+          decimal_odds?: number
+          id?: string
+          line_key?: string
+          line_value?: number | null
+          market_key?: string
+          match_id?: string
+          observed_at?: string
+          selection_key?: string
+          source_kind?: string
+          source_lineage?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "model_input_odds_snapshots_build_id_fkey"
+            columns: ["build_id"]
+            isOneToOne: false
+            referencedRelation: "model_input_builds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "model_input_odds_snapshots_build_id_match_id_fkey"
+            columns: ["build_id", "match_id"]
+            isOneToOne: false
+            referencedRelation: "model_input_matches"
+            referencedColumns: ["build_id", "match_id"]
+          },
+          {
+            foreignKeyName: "model_input_odds_snapshots_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_baseball_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "model_input_odds_snapshots_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_basketball_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "model_input_odds_snapshots_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_football_match_summary_v"
+            referencedColumns: ["match_id"]
+          },
+          {
+            foreignKeyName: "model_input_odds_snapshots_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "sports_matches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       odds_jogos: {
         Row: {
@@ -7420,6 +7801,21 @@ export type Database = {
         Args: { p_competition_type?: string; p_name: string }
         Returns: string
       }
+      create_model_input_build_v1: {
+        Args: {
+          p_contract_key: string
+          p_coverage_report?: Json
+          p_features?: Json
+          p_lineage_summary?: Json
+          p_matches: Json
+          p_missing_required?: string[]
+          p_mode?: string
+          p_odds?: Json
+          p_source_snapshot_at: string
+          p_target_date: string
+        }
+        Returns: string
+      }
       enqueue_highlightly_ingestion_job: {
         Args: {
           p_cursor_data?: Json
@@ -7693,6 +8089,10 @@ export type Database = {
         }
       }
       get_football_match_detail: { Args: { p_match_id: string }; Returns: Json }
+      get_football_model_input_candidates_v1: {
+        Args: { p_target_date: string }
+        Returns: Json
+      }
       get_highlightly_collection_monitor: {
         Args: { p_scope?: string }
         Returns: Json
@@ -7937,6 +8337,16 @@ export type Database = {
       prune_highlightly_ingestion_bridge_nonces: {
         Args: { p_before?: string; p_limit?: number }
         Returns: number
+      }
+      record_football_shadow_run_v1: {
+        Args: {
+          p_build_id: string
+          p_central_result: Json
+          p_comparison: Json
+          p_traditional_job_id: string
+          p_traditional_result: Json
+        }
+        Returns: string
       }
       refresh_highlightly_match_lifecycle_states: {
         Args: { p_at?: string }
