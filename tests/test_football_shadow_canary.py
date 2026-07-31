@@ -37,6 +37,12 @@ def candidate(**overrides):
 
 
 class FootballShadowCanaryTests(unittest.TestCase):
+    def test_maps_moneyline_provider_keys_to_team_names(self):
+        rows = central_candidates_to_long_rows([
+            candidate(selection_key="home", selection_name="home", home="Valerenga", away="HamKam")
+        ])
+        self.assertEqual(rows[0]["pick"], "Valerenga")
+
     def test_builds_existing_matchmatrix_long_contract(self):
         rows = central_candidates_to_long_rows([candidate()])
         self.assertEqual(rows[0]["mercado"], "Resultado Final")

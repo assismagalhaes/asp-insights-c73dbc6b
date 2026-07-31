@@ -22,6 +22,20 @@ MARKET_NAMES = {
 }
 
 
+def _football_pick(candidate: Mapping[str, Any], home: str, away: str) -> str:
+    """Map provider selection keys to the public MatchMatrix pick contract."""
+
+    key = str(candidate.get("selection_key") or "").strip().lower()
+    if str(candidate.get("market_family") or "").strip().lower() == "moneyline":
+        if key in {"home", "1", "home_win"}:
+            return home
+        if key in {"away", "2", "away_win"}:
+            return away
+        if key in {"draw", "x", "tie"}:
+            return "Empate"
+    return str(candidate.get("selection_name") or candidate.get("selection_key") or "").strip()
+
+
 def central_candidates_to_long_rows(candidates: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for candidate in candidates:
@@ -47,7 +61,7 @@ def central_candidates_to_long_rows(candidates: Sequence[Mapping[str, Any]]) -> 
             "mandante": home,
             "visitante": away,
             "mercado": market,
-            "pick": candidate.get("selection_name") or candidate.get("selection_key"),
+            "pick": _football_pick(candidate, home, away),
             "linha": candidate.get("line_value"),
             "odd": median,
             "bookmaker": candidate.get("best_bookmaker") or "consensus",
