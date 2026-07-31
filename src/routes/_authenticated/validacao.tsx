@@ -382,6 +382,12 @@ function autoCheck(p: Prognostico, edgeFinal: number | null, executableOdd: numb
         reason: "Aplique o Preview enriquecido e confirme os dois starters antes da decisao final",
       };
   }
+  if (mlbGate.applicable && mlbGate.previewContextStatus === "REVIEW_REQUIRED") {
+    return {
+      auto: "ALERTA" as const,
+      reason: mlbGate.contextRiskFlags.map((flag) => flag.message).join(" "),
+    };
+  }
   const matchMatrixGate = evaluateMatchMatrixOperationalGate({
     ...p,
     odd_ajustada: executableOdd,
@@ -620,6 +626,7 @@ function Validacao() {
       return false;
     }
     try {
+      let previewRequiresReview = false;
       const updated = await enrichPreview.mutateAsync({
         itemId,
         prognostico,
@@ -635,6 +642,13 @@ function Validacao() {
             previewContext,
           );
           await updateProg.mutateAsync({ id: option.id, dados_tecnicos: persistedContext });
+          const postPreviewGate = evaluateMlbOperationalGate({
+            ...option,
+            dados_tecnicos: persistedContext,
+          });
+          previewRequiresReview ||=
+            postPreviewGate.applicable &&
+            postPreviewGate.previewContextStatus === "REVIEW_REQUIRED";
           await refreshRanking.mutateAsync({
             ...option,
             dados_tecnicos: persistedContext,
@@ -650,7 +664,13 @@ function Validacao() {
           return next;
         });
       }
-      toast.success("Matchups/Preview aplicado a oportunidade da shortlist.");
+      if (previewRequiresReview) {
+        toast.warning(
+          "Preview aplicado e shortlist requalificada: o contexto MLB exige revisao antes da decisao.",
+        );
+      } else {
+        toast.success("Matchups/Preview aplicado e shortlist requalificada.");
+      }
       return true;
     } catch (e) {
       toast.error((e as Error).message || "Erro ao aplicar Matchups/Preview.");
@@ -1302,6 +1322,12 @@ function Validacao() {
           const pickLabel = getOpportunityPickLabel(p);
           const sourceLabel = getOpportunitySourceLabel(p);
           const contextoAnalise = getContextoGrupo(g);
+          const mlbPreviewGate = evaluateMlbOperationalGate({
+            ...p,
+            odd_ajustada: oddAj,
+            edge_ajustado: edgeAj,
+            dados_tecnicos: contextoAnalise,
+          });
           const parecerCurrent = pareceres[g.key] ?? "";
           const ia = iaResults[g.key];
           const rankedCandidate = preliminaryCandidateById.get(p.id);
@@ -1380,6 +1406,9 @@ function Validacao() {
                   hasPositiveEdge={edgeAj != null && edgeAj > 0}
                   hasContext={Boolean(contextoAnalise.trim())}
                   isOperational={check?.auto !== "PULAR"}
+                  mlbPreviewStatus={
+                    mlbPreviewGate.applicable ? mlbPreviewGate.previewContextStatus : undefined
+                  }
                 />
                 {rankedCandidate ? (
                   <ValidationSignalBar
@@ -2068,7 +2097,7 @@ function PreAiShortlistPanel({
                     <th className="px-3 py-2 text-left font-semibold">Pick</th>
                     <th className="px-3 py-2 text-left font-semibold">Alternativas</th>
                     <th className="px-3 py-2 text-right font-semibold">Score</th>
-                    <th className="px-3 py-2 text-right font-semibold">Conf.</th>
+                    <th className="px-3 py-2 text-right font-semibold">Qual. dados</th>
                     <th className="px-3 py-2 text-right font-semibold">Edge</th>
                   </tr>
                 </thead>
@@ -2224,10 +2253,10 @@ function ValidationSignalBar({
     <div className="rounded-lg border border-border/80 bg-card/45 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="panel-kicker">Confiança / oportunidade</p>
+          <p className="panel-kicker">Qualidade dos dados / oportunidade</p>
           {compact ? null : (
             <p className="mt-1 text-xs text-muted-foreground">
-              Score pré-IA combinado com confiança do modelo
+              Score pré-IA combinado com completude e estrutura dos dados
             </p>
           )}
         </div>
@@ -2254,7 +2283,8 @@ function ValidationSignalBar({
           Score: <strong className="font-mono text-foreground">{score.toFixed(1)}</strong>
         </span>
         <span>
-          Confiança: <strong className="font-mono text-foreground">{confidence.toFixed(1)}</strong>
+          Qual. dados:{" "}
+          <strong className="font-mono text-foreground">{confidence.toFixed(1)}</strong>
         </span>
         <span className="col-span-2 sm:col-span-1">
           Riscos: <strong className="font-mono text-foreground">{riskCount}</strong>
@@ -2269,18 +2299,61 @@ function ValidationGateStrip({
   hasPositiveEdge,
   hasContext,
   isOperational,
+  mlbPreviewStatus,
 }: {
   hasPrice: boolean;
   hasPositiveEdge: boolean;
   hasContext: boolean;
   isOperational: boolean;
+  mlbPreviewStatus?: "MISSING" | "READY" | "REVIEW_REQUIRED";
 }) {
-  const gates = [
-    { label: "Preço", passed: hasPrice },
-    { label: "Edge", passed: hasPositiveEdge },
-    { label: "Contexto", passed: hasContext },
-    { label: "Limites", passed: isOperational },
-  ];
+  const gates = mlbPreviewStatus
+    ? [
+        { label: "Preço", passed: hasPrice, status: hasPrice ? "OK" : "ATENÇÃO" },
+        {
+          label: "Edge",
+          passed: hasPositiveEdge,
+          status: hasPositiveEdge ? "OK" : "ATENÇÃO",
+        },
+        {
+          label: "Preview",
+          passed: mlbPreviewStatus !== "MISSING",
+          status: mlbPreviewStatus === "MISSING" ? "AUSENTE" : "COMPLETO",
+        },
+        {
+          label: "Contexto",
+          passed: mlbPreviewStatus === "READY",
+          status:
+            mlbPreviewStatus === "READY"
+              ? "NEUTRO"
+              : mlbPreviewStatus === "REVIEW_REQUIRED"
+                ? "REVISÃO"
+                : "PENDENTE",
+        },
+        {
+          label: "Limites",
+          passed: isOperational,
+          status: isOperational ? "OK" : "ATENÇÃO",
+        },
+      ]
+    : [
+        { label: "Preço", passed: hasPrice, status: hasPrice ? "OK" : "ATENÇÃO" },
+        {
+          label: "Edge",
+          passed: hasPositiveEdge,
+          status: hasPositiveEdge ? "OK" : "ATENÇÃO",
+        },
+        {
+          label: "Contexto",
+          passed: hasContext,
+          status: hasContext ? "DISPONÍVEL" : "ATENÇÃO",
+        },
+        {
+          label: "Limites",
+          passed: isOperational,
+          status: isOperational ? "OK" : "ATENÇÃO",
+        },
+      ];
 
   return (
     <section
@@ -2288,7 +2361,12 @@ function ValidationGateStrip({
       className="rounded-lg border border-border/80 bg-background/35 p-3"
     >
       <p className="panel-kicker">Sinais operacionais</p>
-      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div
+        className={cn(
+          "mt-2 grid grid-cols-2 gap-2",
+          mlbPreviewStatus ? "sm:grid-cols-5" : "sm:grid-cols-4",
+        )}
+      >
         {gates.map((gate) => {
           const Icon = gate.passed ? CheckCircle2 : XCircle;
           return (
@@ -2304,9 +2382,7 @@ function ValidationGateStrip({
               <Icon className="size-4 shrink-0" />
               <span>
                 {gate.label}
-                <span className="block font-mono text-[9px] opacity-75">
-                  {gate.passed ? "OK" : "ATENÇÃO"}
-                </span>
+                <span className="block font-mono text-[9px] opacity-75">{gate.status}</span>
               </span>
             </div>
           );

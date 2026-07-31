@@ -118,6 +118,8 @@ export type MlbOperationalGate = {
   minimumEdge: number | null;
   effectiveEdge: number | null;
   missingStarters: boolean;
+  previewContextStatus: "MISSING" | "READY" | "REVIEW_REQUIRED";
+  contextRiskFlags: CriticalShortlistRiskFlag[];
   reasons: string[];
 };
 
@@ -130,6 +132,93 @@ export type MlbOperationalGateInput = {
   edge_ajustado: number | null;
   context: string;
 };
+
+type MlbStarterPreviewMetrics = {
+  seasonEra: number | null;
+  last7Era: number | null;
+  recentHr9: number | null;
+};
+
+function extractNamedMetric(value: string, pattern: RegExp): number | null {
+  const raw = value.match(pattern)?.[1];
+  if (!raw) return null;
+  const parsed = Number(raw.replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseMlbStarterPreviewMetrics(line: string): MlbStarterPreviewMetrics {
+  return {
+    seasonEra: extractNamedMetric(line, /\bERA\s+([0-9]+(?:[.,][0-9]+)?)/i),
+    last7Era: extractNamedMetric(line, /\bLast7_ERA\s+([0-9]+(?:[.,][0-9]+)?)/i),
+    recentHr9: extractNamedMetric(line, /\bRecent_HR9\s+([0-9]+(?:[.,][0-9]+)?)/i),
+  };
+}
+
+function assessMlbPreviewContext(
+  market: string,
+  text: string,
+  starterLines: string[],
+  missingStarters: boolean,
+): Pick<MlbOperationalGate, "previewContextStatus" | "contextRiskFlags"> {
+  if (missingStarters) return { previewContextStatus: "MISSING", contextRiskFlags: [] };
+
+  const flags: CriticalShortlistRiskFlag[] = [];
+  const starters = starterLines.map(parseMlbStarterPreviewMetrics);
+  const totalMarket = /total|corridas|runs|over|under/.test(market);
+  const underMarket = totalMarket && /under|menos|abaixo/.test(market);
+  const overMarket = totalMarket && /over|mais|acima/.test(market);
+
+  if (
+    underMarket &&
+    starters.some(
+      (starter) =>
+        (starter.seasonEra != null && starter.seasonEra >= 6) ||
+        (starter.last7Era != null && starter.last7Era >= 7) ||
+        (starter.recentHr9 != null && starter.recentHr9 >= 2),
+    )
+  ) {
+    flags.push({
+      code: "mlb_under_starter_run_risk",
+      severity: "high",
+      message:
+        "Under MLB conflita com ao menos um starter de alto risco de corridas; exige revalidacao contextual.",
+    });
+  }
+
+  if (
+    overMarket &&
+    starters.length >= 2 &&
+    starters.every(
+      (starter) =>
+        starter.seasonEra != null &&
+        starter.seasonEra <= 4.25 &&
+        (starter.last7Era == null || starter.last7Era <= 4.5),
+    )
+  ) {
+    flags.push({
+      code: "mlb_over_starter_suppression_risk",
+      severity: "high",
+      message:
+        "Over MLB enfrenta dois starters com perfil de supressao de corridas; exige revalidacao contextual.",
+    });
+  }
+
+  const coloradoHome = /^Mandante:\s*Colorado Rockies\b/im.test(text);
+  const explicitWeather = /(?:clima|weather|vento|wind|temperatura|temperature)\s*[:=]/i.test(text);
+  if (totalMarket && coloradoHome && !explicitWeather) {
+    flags.push({
+      code: "mlb_coors_weather_review_required",
+      severity: "medium",
+      message:
+        "Total MLB no mando do Colorado sem clima/vento estruturado; revisar volatilidade do parque antes da decisao.",
+    });
+  }
+
+  return {
+    previewContextStatus: flags.length ? "REVIEW_REQUIRED" : "READY",
+    contextRiskFlags: flags,
+  };
+}
 
 export type MatchMatrixOperationalGate = {
   applicable: boolean;
@@ -245,6 +334,8 @@ export function evaluateMlbOperationalGateInput(
       minimumEdge: null,
       effectiveEdge: null,
       missingStarters: false,
+      previewContextStatus: "READY",
+      contextRiskFlags: [],
       reasons: [],
     };
   }
@@ -267,6 +358,7 @@ export function evaluateMlbOperationalGateInput(
     !enrichedPreview ||
     starterLines.length < 2 ||
     starterLines.some((line) => /:\s*-\s*(?:ERA|$)|nao encontrado|não encontrado/i.test(line));
+  const previewAssessment = assessMlbPreviewContext(market, text, starterLines, missingStarters);
   const reasons: string[] = [];
   if (minimumEdge != null && (effectiveEdge == null || effectiveEdge < minimumEdge)) {
     reasons.push(
@@ -280,6 +372,7 @@ export function evaluateMlbOperationalGateInput(
     minimumEdge,
     effectiveEdge,
     missingStarters,
+    ...previewAssessment,
     reasons,
   };
 }
@@ -917,6 +1010,9 @@ export function detectCriticalShortlistRiskFlags(
     "medium",
     "MLB aguardando Preview enriquecido com os dois starters; obrigatorio apenas antes da confirmacao.",
   );
+  for (const contextRisk of mlbGate.contextRiskFlags) {
+    if (!flags.some((flag) => flag.code === contextRisk.code)) flags.push(contextRisk);
+  }
   pushIf(
     flags,
     isWnbaBasketball(prognostico) &&

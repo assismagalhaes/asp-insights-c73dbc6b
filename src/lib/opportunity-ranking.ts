@@ -349,6 +349,12 @@ export async function enrichOpportunityRankingItemPreview({
   const metadata = {
     ...asRecord(currentItem?.metadata),
     matchup_preview: preview.metadata,
+    preview_requalification: {
+      status: "pending",
+      required: true,
+      preview_applied_at: new Date().toISOString(),
+      reason: "preview_applied_after_pre_ai_ranking",
+    },
   };
 
   const { data, error } = await supabase
@@ -399,9 +405,18 @@ export async function refreshOpportunityRankingForPrognostico(
           approved: mlbGate.approved,
           minimum_edge: mlbGate.minimumEdge,
           effective_edge: mlbGate.effectiveEdge,
+          preview_context_status: mlbGate.previewContextStatus,
+          context_risk_flags: mlbGate.contextRiskFlags,
           reasons: mlbGate.reasons,
         }
       : null,
+    preview_requalification: {
+      status: "completed",
+      required: mlbGate.applicable && mlbGate.previewContextStatus === "REVIEW_REQUIRED",
+      requalified_at: requalifiedAt,
+      context_status: mlbGate.previewContextStatus,
+      risk_flags: mlbGate.contextRiskFlags.map((flag) => flag.code),
+    },
   };
 
   const { data, error } = await supabase
@@ -1136,8 +1151,22 @@ function formatStarter(starter: {
   throwing_hand?: string | null;
   era?: number | null;
   k_per_9?: number | null;
+  last_7_era?: number | null;
+  recent_hr_per_9?: number | null;
+  starter_quality_score?: number | null;
 }) {
-  return `${starter.name ?? "-"} ${starter.throwing_hand ?? ""} ERA ${starter.era ?? "-"} K/9 ${starter.k_per_9 ?? "-"}`.trim();
+  return [
+    starter.name ?? "-",
+    starter.throwing_hand ?? "",
+    `ERA ${starter.era ?? "-"}`,
+    `K/9 ${starter.k_per_9 ?? "-"}`,
+    `Last7_ERA ${starter.last_7_era ?? "-"}`,
+    `Recent_HR9 ${starter.recent_hr_per_9 ?? "-"}`,
+    `Quality ${starter.starter_quality_score ?? "-"}`,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
