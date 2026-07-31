@@ -1111,6 +1111,56 @@ export type Database = {
           },
         ]
       }
+      football_model_shadow_runs: {
+        Row: {
+          automatic_publication: boolean
+          build_id: string
+          central_result: Json
+          comparison: Json
+          created_at: string
+          id: string
+          model_name: string
+          model_version: string
+          run_mode: string
+          traditional_job_id: string | null
+          traditional_result: Json | null
+        }
+        Insert: {
+          automatic_publication?: boolean
+          build_id: string
+          central_result: Json
+          comparison: Json
+          created_at?: string
+          id?: string
+          model_name?: string
+          model_version?: string
+          run_mode?: string
+          traditional_job_id?: string | null
+          traditional_result?: Json | null
+        }
+        Update: {
+          automatic_publication?: boolean
+          build_id?: string
+          central_result?: Json
+          comparison?: Json
+          created_at?: string
+          id?: string
+          model_name?: string
+          model_version?: string
+          run_mode?: string
+          traditional_job_id?: string | null
+          traditional_result?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "football_model_shadow_runs_build_id_fkey"
+            columns: ["build_id"]
+            isOneToOne: true
+            referencedRelation: "model_input_builds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hl_competition_feature_policies: {
         Row: {
           classification_source: string
@@ -8039,6 +8089,10 @@ export type Database = {
         }
       }
       get_football_match_detail: { Args: { p_match_id: string }; Returns: Json }
+      get_football_model_input_candidates_v1: {
+        Args: { p_target_date: string }
+        Returns: Json
+      }
       get_highlightly_collection_monitor: {
         Args: { p_scope?: string }
         Returns: Json
@@ -8283,6 +8337,16 @@ export type Database = {
       prune_highlightly_ingestion_bridge_nonces: {
         Args: { p_before?: string; p_limit?: number }
         Returns: number
+      }
+      record_football_shadow_run_v1: {
+        Args: {
+          p_build_id: string
+          p_central_result: Json
+          p_comparison: Json
+          p_traditional_job_id: string
+          p_traditional_result: Json
+        }
+        Returns: string
       }
       refresh_highlightly_match_lifecycle_states: {
         Args: { p_at?: string }
