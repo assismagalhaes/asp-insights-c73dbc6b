@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = ROOT / "supabase/migrations/20260731145122_create_highlightly_phase8h2_football_shadow.sql"
+MIGRATION = ROOT / "supabase/migrations/20260731165146_246ceac6-9413-4a10-a25f-ddff799c2553.sql"
 SMOKE = ROOT / "supabase/tests/highlightly_phase8h2_football_shadow_smoke.sql"
 API = ROOT / "api/main.py"
 

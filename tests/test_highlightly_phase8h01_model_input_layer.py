@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = ROOT / "supabase/migrations/20260731130440_create_highlightly_phase8h01_model_input_layer.sql"
+MIGRATION = ROOT / "supabase/migrations/20260731165026_63ad5557-e12b-482e-8ba2-7961f089e95d.sql"
 DOC = ROOT / "docs/highlightly/phase-8h0-current-model-input-contracts.md"
 
 
