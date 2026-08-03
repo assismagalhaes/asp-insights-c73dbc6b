@@ -1088,7 +1088,7 @@ class ExecutarPackballModeloRequest(BaseModel):
     run_mode: Literal["prognostico", "backtest"] = "prognostico"
 
 
-def _executar_modelo_futebol(job_id: str):
+def _executar_modelo_futebol(job_id: str, reference_date: str | None = None):
     job = load_job(job_id)
     raw_path = job.get("raw_path")
 
@@ -1124,6 +1124,9 @@ def _executar_modelo_futebol(job_id: str):
 
     import subprocess
 
+    model_env = os.environ.copy()
+    if reference_date:
+        model_env["FOOTBALL_DATA_REF"] = datetime.strptime(reference_date, "%Y-%m-%d").strftime("%d_%m_%Y")
     resultado = subprocess.run(
         [
             sys.executable,
@@ -1133,6 +1136,7 @@ def _executar_modelo_futebol(job_id: str):
         ],
         capture_output=True,
         text=True
+        ,env=model_env
     )
 
     if resultado.returncode != 0:
@@ -1187,7 +1191,7 @@ def _executar_modelo_futebol(job_id: str):
     return limpar_json_nan(resposta_final)
 
 
-def _executar_modelo_futebol_csv(csv_path: Path, run_key: str) -> dict[str, Any]:
+def _executar_modelo_futebol_csv(csv_path: Path, run_key: str, reference_date: str | None = None) -> dict[str, Any]:
     import subprocess
 
     script_modelo = BASE_DIR / "modelos" / "football_runner_real.py"
@@ -1195,10 +1199,14 @@ def _executar_modelo_futebol_csv(csv_path: Path, run_key: str) -> dict[str, Any]
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if not script_modelo.exists():
         raise HTTPException(status_code=500, detail=f"Script do modelo de futebol não encontrado em {script_modelo}")
+    model_env = os.environ.copy()
+    if reference_date:
+        model_env["FOOTBALL_DATA_REF"] = datetime.strptime(reference_date, "%Y-%m-%d").strftime("%d_%m_%Y")
     result = subprocess.run(
         [sys.executable, str(script_modelo), str(csv_path), str(output_path)],
         capture_output=True,
         text=True,
+        env=model_env,
     )
     if result.returncode != 0:
         raise HTTPException(status_code=500, detail={
@@ -1294,8 +1302,8 @@ def executar_shadow_central_futebol(
     shadow_id = str(uuid4())
     csv_path = MODEL_INPUTS_DIR / f"football_shadow_{target_date}_{shadow_id}.csv"
     write_long_csv(rows, csv_path)
-    central_result = _executar_modelo_futebol_csv(csv_path, f"shadow_{shadow_id}")
-    traditional_result = _executar_modelo_futebol(payload.traditional_job_id) if payload.traditional_job_id else None
+    central_result = _executar_modelo_futebol_csv(csv_path, f"shadow_{shadow_id}", target_date)
+    traditional_result = _executar_modelo_futebol(payload.traditional_job_id, target_date) if payload.traditional_job_id else None
     storage = build_storage_payload(candidates)
     coverage = coverage_report(candidates, rows)
     source_snapshot_at = max(
