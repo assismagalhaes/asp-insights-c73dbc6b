@@ -1,34 +1,25 @@
-// Execute esta instrucao no projeto: Prossiga com a investigação da autenticação e quota da Highlightly, somente leitura.
+// Execute esta instrucao no projeto: Corrija o cliente Highlightly para suportar RapidAPI:
 //
-// 1. Confirme qual host está sendo usado efetivamente:
-//    - HIGHLIGHTLY_BASE_URL;
-//    - host RapidAPI usado pelo cliente;
-//    - endpoint completo da requisição.
+// 1. Usar como base URL:
+//    https://sport-highlights-api.p.rapidapi.com
 //
-// 2. Verifique, sem exibir a chave:
-//    - presença e comprimento de HIGHLIGHTLY_API_KEY;
-//    - status HTTP de um endpoint mínimo;
-//    - cabeçalhos de quota retornados;
-//    - diferença entre erro 401 e 429;
-//    - plano RapidAPI associado à chave, se disponível pelo conector.
+// 2. Enviar os headers:
+//    x-rapidapi-key: HIGHLIGHTLY_API_KEY
+//    x-rapidapi-host: sport-highlights-api.p.rapidapi.com
+//    accept: application/json
 //
-// 3. Não altere:
-//    - banco;
-//    - migrations;
-//    - dados;
-//    - secrets;
-//    - HIGHLIGHTLY_ANALYSIS_ENABLED;
-//    - automatic_publication.
+// 3. Tornar o host configurável por:
+//    HIGHLIGHTLY_RAPIDAPI_HOST
+//    com valor padrão sport-highlights-api.p.rapidapi.com.
 //
-// 4. Retorne:
-//    - host correto;
-//    - endpoint mínimo recomendado;
-//    - causa provável do 401;
-//    - causa provável do 429;
-//    - quota restante/limite;
-//    - ação necessária no painel RapidAPI ou Highlightly.
+// 4. Atualizar o exemplo de ambiente e a configuração da VM, sem exibir a chave.
 //
-// Não faça backfill, não publique prognósticos e não considere a cobertura validada enquanto nenhum endpoint estatístico retornar HTTP 200 com payload real.
+// 5. Executar somente um teste read-only:
+//    GET /football/matches?date=2026-08-01&limit=1
+//
+// 6. Retornar status, latência, quota restante e quantidade de registros.
+//
+// Não habilitar HIGHLIGHTLY_ANALYSIS_ENABLED, não fazer backfill, não alterar banco e não publicar prognósticos. Se retornar HTTP 200, repetir o mesmo teste para basquete e beisebol.
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
