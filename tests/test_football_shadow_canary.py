@@ -50,6 +50,12 @@ class FootballShadowCanaryTests(unittest.TestCase):
         self.assertEqual(rows[0]["odd_melhor"], 2.1)
         self.assertEqual(rows[0]["fonte"], "Highlightly/Central Esportiva")
 
+    def test_discards_non_half_goal_totals(self):
+        rows = central_candidates_to_long_rows([
+            candidate(market_family="total", selection_key="over", selection_name="Over 1.8", line_value=1.8)
+        ])
+        self.assertEqual(rows, [])
+
     def test_unknown_market_is_excluded_and_coverage_is_explicit(self):
         candidates = [candidate(market_family="corners_total")]
         rows = central_candidates_to_long_rows(candidates)

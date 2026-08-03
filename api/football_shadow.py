@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import math
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -20,6 +21,15 @@ MARKET_NAMES = {
     "both_teams_to_score": "Ambas Marcam",
     "handicap": "Handicap Asiatico",
 }
+
+
+def _supported_total_line(value: Any) -> bool:
+    try:
+        line = float(value)
+    except (TypeError, ValueError):
+        return False
+    doubled = line * 2
+    return math.isfinite(line) and abs(doubled - round(doubled)) < 1e-9
 
 
 def _football_pick(candidate: Mapping[str, Any], home: str, away: str) -> str:
@@ -42,6 +52,8 @@ def central_candidates_to_long_rows(candidates: Sequence[Mapping[str, Any]]) -> 
         family = str(candidate.get("market_family") or "").strip().lower()
         market = MARKET_NAMES.get(family)
         if not market:
+            continue
+        if family == "total" and not _supported_total_line(candidate.get("line_value")):
             continue
         home = str(candidate.get("home") or "").strip()
         away = str(candidate.get("away") or "").strip()
@@ -91,6 +103,11 @@ def build_storage_payload(candidates: Sequence[Mapping[str, Any]]) -> dict[str, 
     seen_matches: set[str] = set()
     for item in candidates:
         if str(item.get("market_family") or "").strip().lower() not in MARKET_NAMES:
+            continue
+        if (
+            str(item.get("market_family") or "").strip().lower() == "total"
+            and not _supported_total_line(item.get("line_value"))
+        ):
             continue
         match_id = str(item["match_id"])
         if match_id not in seen_matches:
