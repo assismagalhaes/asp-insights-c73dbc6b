@@ -1,4 +1,50 @@
-// Execute esta instrucao no projeto: Ótimo. A próxima ação é executar a auditoria read-only descrita no dashboard e trazer a matriz de resultados.
+// Execute esta instrucao no projeto: Execute agora a auditoria read-only da Highlightly usando o secret HIGHLIGHTLY_API_KEY configurado na VM.
+
+// Objetivo:
+// confirmar se a Highlightly fornece dados históricos e estatísticos suficientes para substituir football-data.co.uk, outras fontes externas e entrada manual na Central Esportiva.
+
+// Escopo obrigatório, sem alterar nada:
+// - não criar ou alterar migrations;
+// - não alterar tabelas, dados, RLS, secrets ou funções;
+// - não ativar HIGHLIGHTLY_ANALYSIS_ENABLED;
+// - manter automatic_publication=false;
+// - não executar backfill nem publicar prognósticos;
+// - não exibir a API key nem payloads completos.
+
+// Teste, para futebol, basquete e beisebol:
+// - partidas por data;
+// - detalhes de partida;
+// - estatísticas da partida;
+// - estatísticas históricas da equipe;
+// - últimos jogos;
+// - confrontos diretos;
+// - standings/classificação;
+// - box scores;
+// - estatísticas de jogadores, quando disponíveis;
+// - temporadas e profundidade histórica.
+
+// Para cada endpoint, informe somente:
+// - esporte;
+// - endpoint;
+// - parâmetros usados;
+// - status HTTP;
+// - latência;
+// - quantidade de registros;
+// - campos estatísticos encontrados;
+// - temporada/data mais antiga retornada;
+// - cobertura por liga;
+// - consumo e limite de quota;
+// - erros, lacunas ou restrições.
+
+// Faça também uma conclusão por esporte e liga:
+// 1. cobertura suficiente para uso canônico;
+// 2. cobertura parcial, exigindo bloqueio ou investigação;
+// 3. cobertura insuficiente.
+
+// Critério de decisão:
+// nenhuma fonte externa ou entrada manual será mantida como fallback permanente. Ligas sem cobertura histórica suficiente da Highlightly devem ser bloqueadas para modelagem, até que a cobertura seja comprovada.
+
+// Retorne a matriz completa da auditoria e uma recomendação objetiva para a próxima migration/backfill. Não aplique nenhuma alteração.
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
