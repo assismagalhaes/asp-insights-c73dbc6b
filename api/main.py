@@ -111,7 +111,28 @@ def _raw_games(raw_data: Any) -> list[Any]:
     return []
 
 
-def _collection_warning(params: dict[str, Any], total_jogos: int, total_odds: int) -> str | None:
+def _available_raw_markets(raw_data: Any) -> set[str]:
+    aliases = {
+        "asian-handicap": "ah", "handicap": "ah",
+        "both-teams-score": "bts", "double-chance": "double",
+        "home-away": "1x2", "moneyline": "1x2",
+    }
+    available: set[str] = set()
+    for game in _raw_games(raw_data):
+        for container_key in ("markets", "odds"):
+            container = game.get(container_key)
+            if not isinstance(container, dict):
+                continue
+            for market, payload in container.items():
+                if payload:
+                    key = str(market).strip().lower()
+                    available.add(aliases.get(key, key))
+    return available
+
+
+def _collection_warning(
+    params: dict[str, Any], total_jogos: int, total_odds: int, raw_data: Any = None
+) -> str | None:
     reasons = []
     if not params.get("mercados"):
         reasons.append("nenhum mercado efetivo informado")
@@ -119,6 +140,11 @@ def _collection_warning(params: dict[str, Any], total_jogos: int, total_odds: in
         reasons.append("nenhum jogo encontrado")
     if total_odds == 0:
         reasons.append("nenhuma odd normalizada")
+    requested = {str(value).strip().lower() for value in params.get("mercados") or []}
+    if requested and total_jogos > 0 and raw_data is not None:
+        missing = sorted(requested - _available_raw_markets(raw_data))
+        if missing:
+            reasons.append("mercados solicitados sem odds: " + ", ".join(missing))
     if not reasons:
         return None
     return "Coleta concluida com alerta: " + "; ".join(reasons) + "."
@@ -743,7 +769,7 @@ def executar_coleta_real(job_id: str, params: dict):
 
         total_jogos = len(_raw_games(raw_data))
         total_odds = int(normalized_data.get("total_linhas") or len(normalized_data.get("linhas") or []))
-        warning = _collection_warning(params, total_jogos, total_odds)
+        warning = _collection_warning(params, total_jogos, total_odds, raw_data)
         if debug_ctx.enabled:
             debug_ctx.save_json("resultado_scraper", resultado)
             debug_ctx.save_json("raw_payload", raw_data)

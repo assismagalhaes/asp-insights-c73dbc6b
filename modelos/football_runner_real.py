@@ -31,8 +31,8 @@ MODELOS_DIR = BASE_DIR / "modelos"
 REAL_MODEL_PATH = MODELOS_DIR / "prognosticos_football_real.py"
 
 MODEL_NAME = "ASP MatchMatrix"
-MODEL_VERSION = "FOOTBALL_V1_5"
-FOOTBALL_STAT_AUDIT_VERSION = "FOOTBALL_V1_5_A"
+MODEL_VERSION = "FOOTBALL_V1_6"
+FOOTBALL_STAT_AUDIT_VERSION = "FOOTBALL_V1_6_A"
 HANDICAP_ENABLED_FOOTBALL_V1_1 = True
 HANDICAP_ASIAN_ENABLED_FOOTBALL_V1_1 = True
 HANDICAP_EUROPEAN_ENABLED_FOOTBALL_V1_1 = False
@@ -42,6 +42,8 @@ MIN_ODD_FOOTBALL_V1_1 = 1.25
 MAX_ODD_FOOTBALL_V1_1 = 2.00
 OVERCONFIDENCE_CUTOFF_PCT = 70.0
 MIN_EDGE_FOOTBALL_V1_1 = 0.03
+MIN_EDGE_HANDICAP_FOOTBALL_V1_6 = 0.05
+MIN_MEDIAN_EDGE_HANDICAP_FOOTBALL_V1_6 = 0.02
 LOW_SAMPLE_MIN_EDGE_FOOTBALL_V1_1 = 0.05
 LOW_SAMPLE_THRESHOLD_FOOTBALL_V1_3 = 15
 OVERDISPERSION_THRESHOLD_FOOTBALL_V1_3 = 1.25
@@ -53,6 +55,11 @@ MARKET_DIVERGENCE_RISK_HAIRCUT_THRESHOLD = 0.10
 MARKET_DIVERGENCE_REVIEW_THRESHOLD = 0.15
 MARKET_DIVERGENCE_STRONG_THRESHOLD = 0.20
 MARKET_DIVERGENCE_HAIRCUT_SHARE = 0.25
+HANDICAP_DIVERGENCE_HAIRCUT_THRESHOLD = 0.07
+HANDICAP_DIVERGENCE_REVIEW_THRESHOLD = 0.12
+HANDICAP_DIVERGENCE_STRONG_THRESHOLD = 0.16
+HANDICAP_DIVERGENCE_HAIRCUT_SHARE = 0.50
+PREGAME_MIN_LEAD_MINUTES = 30
 SOURCE_BASE_STALE_DAYS = 30
 VENUE_SAMPLE_GAP_DAYS = 30
 VENUE_SAMPLE_HIGH_GAP_DAYS = 45
@@ -77,6 +84,7 @@ CALIBRATION_PATH = Path(
 )
 
 LAST_V1_1_DISCARDED = pd.DataFrame()
+LAST_INPUT_FILTER_DIAGNOSTIC = {}
 
 
 def _to_float(value, default=None):
@@ -490,9 +498,11 @@ def _find_asian_handicap_market_pair(wide_row, line: float, side: str):
         if abs(home_line + away_line) > 1e-9:
             continue
         if side == "home" and abs(home_line - line) < 1e-9:
-            return home_odd, away_odd, _bookmaker_melhor(wide_row, home_odd_col)
+            has_median = _to_float(wide_row.get(f"{home_odd_col}_MEDIANA")) is not None
+            return home_odd, away_odd, _bookmaker_melhor(wide_row, home_odd_col), has_median
         if side == "away" and abs(away_line - line) < 1e-9:
-            return away_odd, home_odd, _bookmaker_melhor(wide_row, away_odd_col)
+            has_median = _to_float(wide_row.get(f"{away_odd_col}_MEDIANA")) is not None
+            return away_odd, home_odd, _bookmaker_melhor(wide_row, away_odd_col), has_median
 
     return None
 
@@ -628,6 +638,9 @@ def _market_conflict_control(
     prob_original: float,
     prob_no_vig: float | None,
     haircut_threshold: float = MARKET_DIVERGENCE_HAIRCUT_THRESHOLD,
+    review_threshold: float = MARKET_DIVERGENCE_REVIEW_THRESHOLD,
+    strong_threshold: float = MARKET_DIVERGENCE_STRONG_THRESHOLD,
+    haircut_share: float = MARKET_DIVERGENCE_HAIRCUT_SHARE,
 ) -> dict:
     if prob_no_vig is None:
         return {
@@ -639,7 +652,7 @@ def _market_conflict_control(
         }
 
     divergence = abs(prob_original - prob_no_vig)
-    if divergence > MARKET_DIVERGENCE_STRONG_THRESHOLD:
+    if divergence > strong_threshold:
         return {
             "probability": prob_original,
             "divergence": divergence,
@@ -647,7 +660,7 @@ def _market_conflict_control(
             "status": "CONFLITO_FORTE_COM_MERCADO",
             "discard_reason": "CONFLITO_FORTE_COM_MERCADO",
         }
-    if divergence > MARKET_DIVERGENCE_REVIEW_THRESHOLD:
+    if divergence > review_threshold:
         return {
             "probability": prob_original,
             "divergence": divergence,
@@ -656,7 +669,7 @@ def _market_conflict_control(
             "discard_reason": "MARKET_CONFLICT_REVIEW_REQUIRED",
         }
     if divergence >= haircut_threshold:
-        adjusted = prob_no_vig + (prob_original - prob_no_vig) * (1.0 - MARKET_DIVERGENCE_HAIRCUT_SHARE)
+        adjusted = prob_no_vig + (prob_original - prob_no_vig) * (1.0 - haircut_share)
         return {
             "probability": adjusted,
             "divergence": divergence,
@@ -844,7 +857,9 @@ def _minimum_edge_required(market_type: str, warnings: list[str]) -> float:
         return LOW_SAMPLE_MIN_EDGE_FOOTBALL_V1_1
     if "OVERDISPERSION_POISSON" in warnings:
         return OVERDISPERSION_MIN_EDGE_FOOTBALL_V1_3
-    if market_type in {"handicap", "total_goals", "btts"}:
+    if market_type == "handicap":
+        return MIN_EDGE_HANDICAP_FOOTBALL_V1_6
+    if market_type in {"total_goals", "btts"}:
         return MIN_EDGE_FOOTBALL_V1_1
     return MIN_EDGE_FOOTBALL_V1_1
 
@@ -1070,7 +1085,7 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
                         if pair is None:
                             discard_reason = "HANDICAP_NO_PAIRED_ODDS"
                         else:
-                            selected_odd, opposite_odd, bookmaker_melhor = pair
+                            selected_odd, opposite_odd, bookmaker_melhor, handicap_has_median = pair
                             market_odd_base = selected_odd
                             prob_no_vig, _ = no_vig_probability_pair(selected_odd, opposite_odd)
                             prob_win = _to_float(row.get("prob_win"))
@@ -1111,23 +1126,38 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
         )
         debug["prob_calibrated"] = round(calibrated_prob, 4)
         debug["calibration_status"] = calibration_status
-        dynamic_haircut_threshold = (
-            MARKET_DIVERGENCE_RISK_HAIRCUT_THRESHOLD
-            if any(
+        risk_warning_present = any(
                 warning in warnings
                 for warning in (
                     "LOW_SAMPLE",
                     "OVERDISPERSION_POISSON",
                     "VENUE_SAMPLE_GAP_30D",
                 )
-            )
+        )
+        dynamic_haircut_threshold = (
+            0.05 if market_type == "handicap" and risk_warning_present
+            else HANDICAP_DIVERGENCE_HAIRCUT_THRESHOLD if market_type == "handicap"
+            else MARKET_DIVERGENCE_RISK_HAIRCUT_THRESHOLD if risk_warning_present
             else MARKET_DIVERGENCE_HAIRCUT_THRESHOLD
         )
         debug["market_divergence_haircut_threshold"] = dynamic_haircut_threshold
+        handicap_market = market_type == "handicap"
         market_control = _market_conflict_control(
             calibrated_prob,
             prob_no_vig,
             haircut_threshold=dynamic_haircut_threshold,
+            review_threshold=(
+                HANDICAP_DIVERGENCE_REVIEW_THRESHOLD
+                if handicap_market else MARKET_DIVERGENCE_REVIEW_THRESHOLD
+            ),
+            strong_threshold=(
+                HANDICAP_DIVERGENCE_STRONG_THRESHOLD
+                if handicap_market else MARKET_DIVERGENCE_STRONG_THRESHOLD
+            ),
+            haircut_share=(
+                HANDICAP_DIVERGENCE_HAIRCUT_SHARE
+                if handicap_market else MARKET_DIVERGENCE_HAIRCUT_SHARE
+            ),
         )
         prob_final = market_control["probability"]
         market_conflict_reason = market_control["discard_reason"]
@@ -1161,10 +1191,12 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
             prob_final = asian_equivalent_probability(prob_win, prob_loss)
             fair_odd = asian_fair_odd(prob_win, prob_loss)
             edge_decimal = asian_expected_value(prob_win, prob_loss, offered_odd)
+            median_edge_decimal = asian_expected_value(prob_win, prob_loss, market_odd_base)
             debug.update({
                 "prob_win": round(prob_win, 6),
                 "prob_push": round(prob_push, 6),
                 "prob_loss": round(prob_loss, 6),
+                "median_edge": round(median_edge_decimal, 4),
             })
         else:
             fair_odd = (1.0 / prob_final) if prob_final > 0 else None
@@ -1191,6 +1223,12 @@ def _evaluate_row_v1_1(row: pd.Series, wide_row) -> tuple[dict | None, dict | No
                 discard_reason = overconfidence_reason
             elif edge_decimal <= 0:
                 discard_reason = "NEGATIVE_EDGE_AFTER_V1_1"
+            elif (
+                market_type == "handicap"
+                and handicap_has_median
+                and median_edge_decimal < MIN_MEDIAN_EDGE_HANDICAP_FOOTBALL_V1_6
+            ):
+                discard_reason = "HANDICAP_MEDIAN_EDGE_BELOW_MIN"
             elif edge_decimal < min_edge_required:
                 if "LOW_SAMPLE" in warnings:
                     discard_reason = "LOW_SAMPLE_REQUIRES_HIGHER_EDGE"
@@ -1448,6 +1486,7 @@ def _build_diagnostic_funnel(caminho_saida: Path, prognosticos: pd.DataFrame) ->
         "aprovados": int(len(prognosticos)),
         "descartados": int(len(discarded)),
         "motivos_descarte": reasons,
+        "filtro_pre_kickoff": dict(LAST_INPUT_FILTER_DIAGNOSTIC),
     }
 
 
@@ -1617,6 +1656,39 @@ def selecionar_contexto_do_prognostico(row: pd.Series, contexto_modelo: str) -> 
     return ""
 
 
+def _filter_pregame_long_input(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+    """Remove odds capturadas durante/depois do jogo ou perto demais do kickoff."""
+    required = {"date", "time", "capturado_em"}
+    if df.empty or not required.issubset(df.columns):
+        return df.copy(), {
+            "jogos_bloqueados_pre_kickoff": 0,
+            "linhas_bloqueadas_pre_kickoff": 0,
+            "linhas_sem_timestamp_auditavel": int(len(df)),
+            "lead_minimo_minutos": PREGAME_MIN_LEAD_MINUTES,
+        }
+
+    capture = pd.to_datetime(df["capturado_em"], utc=True, errors="coerce")
+    kickoff_local = pd.to_datetime(
+        df["date"].astype(str) + " " + df["time"].astype(str), errors="coerce"
+    )
+    kickoff = kickoff_local.dt.tz_localize(
+        "America/Sao_Paulo", ambiguous="NaT", nonexistent="NaT"
+    ).dt.tz_convert("UTC")
+    cutoff = kickoff - pd.Timedelta(minutes=PREGAME_MIN_LEAD_MINUTES)
+    auditable = capture.notna() & kickoff.notna()
+    blocked = auditable & (capture > cutoff)
+    game_column = "game_id" if "game_id" in df.columns else "jogo"
+    blocked_games = int(df.loc[blocked, game_column].nunique()) if game_column in df.columns else 0
+    diagnostic = {
+        "jogos_bloqueados_pre_kickoff": blocked_games,
+        "linhas_bloqueadas_pre_kickoff": int(blocked.sum()),
+        "linhas_sem_timestamp_auditavel": int((~auditable).sum()),
+        "lead_minimo_minutos": PREGAME_MIN_LEAD_MINUTES,
+        "motivo": "MATCH_ALREADY_STARTED_OR_TOO_CLOSE_TO_KICKOFF",
+    }
+    return df.loc[~blocked].copy(), diagnostic
+
+
 def carregar_modulo_modelo_real():
     if not REAL_MODEL_PATH.exists():
         raise FileNotFoundError(f"Modelo real não encontrado em {REAL_MODEL_PATH}")
@@ -1671,9 +1743,20 @@ def executar_modelo_real(caminho_csv_longo, caminho_saida):
 
     caminho_wide = BASE_DIR / "model_outputs" / f"{caminho_csv_longo.stem}_wide.csv"
 
-    # 1. Converte CSV longo da coleta para CSV wide usado pelo modelo original
+    # 1. Aplica o gate temporal antes de formar candidatos.
+    df_longo = pd.read_csv(caminho_csv_longo)
+    df_longo, input_filter_diagnostic = _filter_pregame_long_input(df_longo)
+    global LAST_INPUT_FILTER_DIAGNOSTIC
+    LAST_INPUT_FILTER_DIAGNOSTIC = input_filter_diagnostic
+    if df_longo.empty:
+        raise ValueError("MATCH_ALREADY_STARTED_OR_TOO_CLOSE_TO_KICKOFF: nenhuma linha pre-jogo elegivel")
+    caminho_pregame = BASE_DIR / "model_outputs" / f"{caminho_csv_longo.stem}_pregame.csv"
+    caminho_pregame.parent.mkdir(parents=True, exist_ok=True)
+    df_longo.to_csv(caminho_pregame, index=False, encoding="utf-8-sig")
+
+    # 2. Converte CSV longo elegivel para CSV wide usado pelo modelo original
     df_wide = converter_csv_longo_para_wide(
-        caminho_entrada=str(caminho_csv_longo),
+        caminho_entrada=str(caminho_pregame),
         caminho_saida=str(caminho_wide)
     )
 

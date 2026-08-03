@@ -99,7 +99,7 @@ def output_row_with_core_debug(**overrides):
 
 class FootballRunnerV11Test(unittest.TestCase):
     def test_model_version_is_set(self):
-        self.assertEqual(runner.MODEL_VERSION, "FOOTBALL_V1_5")
+        self.assertEqual(runner.MODEL_VERSION, "FOOTBALL_V1_6")
 
     def test_match_wide_row_reconciles_diacritics(self):
         wide = pd.DataFrame([
@@ -127,8 +127,21 @@ class FootballRunnerV11Test(unittest.TestCase):
         selected, discarded = runner._evaluate_row_v1_1(output_row(), wide_row())
         self.assertIsNone(discarded)
         self.assertIsNotNone(selected)
-        self.assertEqual(selected["modelo_versao"], "FOOTBALL_V1_5")
-        self.assertIn("modelo_versao=FOOTBALL_V1_5", selected["observacoes"])
+        self.assertEqual(selected["modelo_versao"], "FOOTBALL_V1_6")
+        self.assertIn("modelo_versao=FOOTBALL_V1_6", selected["observacoes"])
+
+    def test_pregame_filter_blocks_started_and_near_kickoff_games(self):
+        frame = pd.DataFrame([
+            {"game_id": "started", "date": "2026-08-03", "time": "16:45", "capturado_em": "2026-08-03T21:39:00Z"},
+            {"game_id": "near", "date": "2026-08-03", "time": "19:00", "capturado_em": "2026-08-03T21:39:00Z"},
+            {"game_id": "future", "date": "2026-08-03", "time": "21:15", "capturado_em": "2026-08-03T21:39:00Z"},
+        ])
+
+        filtered, diagnostic = runner._filter_pregame_long_input(frame)
+
+        self.assertEqual(filtered["game_id"].tolist(), ["future"])
+        self.assertEqual(diagnostic["jogos_bloqueados_pre_kickoff"], 2)
+        self.assertEqual(diagnostic["lead_minimo_minutos"], 30)
 
     def test_core_lambda_debug_is_exposed_when_available(self):
         selected, discarded = runner._evaluate_row_v1_1(output_row_with_core_debug(), wide_row())
@@ -390,6 +403,40 @@ Data/Horario: 14/07/2026
         self.assertIn("HANDICAP_ASIAN_FULL_SETTLEMENT", selected["observacoes"])
         self.assertIn("edge_formula=prob_win*(odd-1)-prob_loss", selected["observacoes"])
 
+    def test_handicap_uses_stronger_market_haircut(self):
+        row = output_row(
+            mercado="Handicap Asiatico", pick="Home FC +0.5", linha=0.5,
+            odd_ofertada=1.95, probabilidade_final=68.0,
+        )
+
+        selected, discarded = runner._evaluate_row_v1_1(row, wide_row(
+            odds_Asian_handicap_Full_Time_Linha1_1=1.65,
+            odds_Asian_handicap_Full_Time_Linha1_1_MEDIANA=1.65,
+            odds_Asian_handicap_Full_Time_Linha1_Opp_Odd=2.35,
+            odds_Asian_handicap_Full_Time_Linha1_Opp_Odd_MEDIANA=2.35,
+        ))
+
+        self.assertIsNone(discarded)
+        self.assertLess(selected["probabilidade_final"], 68.0)
+        self.assertEqual(selected["market_conflict_status"], "DIVERGENTE_COM_HAIRCUT")
+        self.assertIn("market_divergence_haircut_threshold=0.07", selected["observacoes"])
+
+    def test_handicap_requires_positive_edge_at_median_odd(self):
+        row = output_row(
+            mercado="Handicap Asiatico", pick="Home FC +0.5", linha=0.5,
+            odd_ofertada=2.00, probabilidade_final=55.0,
+        )
+        wide = wide_row(
+            odds_Asian_handicap_Full_Time_Linha1_1=2.00,
+            odds_Asian_handicap_Full_Time_Linha1_1_MEDIANA=1.75,
+            odds_Asian_handicap_Full_Time_Linha1_Opp_Odd=1.90,
+        )
+
+        selected, discarded = runner._evaluate_row_v1_1(row, wide)
+
+        self.assertIsNone(selected)
+        self.assertEqual(discarded["motivo_descarte_v1_1"], "HANDICAP_MEDIAN_EDGE_BELOW_MIN")
+
     def test_handicap_minus_half_with_pair_is_supported(self):
         row = output_row(
             mercado="Handicap Asiatico",
@@ -409,9 +456,8 @@ Data/Horario: 14/07/2026
             prob_win=0.50, prob_push=0.10, prob_loss=0.40,
         )
         selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
-        self.assertIsNone(discarded)
-        self.assertIsNotNone(selected)
-        self.assertAlmostEqual(selected["edge"], 10.0, places=2)
+        self.assertIsNone(selected)
+        self.assertEqual(discarded["motivo_descarte_v1_1"], "EDGE_BELOW_MINIMUM_FOOTBALL_V1_1")
 
     def test_handicap_plus_one_is_supported(self):
         row = output_row(
@@ -420,8 +466,8 @@ Data/Horario: 14/07/2026
             prob_win=0.50, prob_push=0.10, prob_loss=0.40,
         )
         selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
-        self.assertIsNone(discarded)
-        self.assertIsNotNone(selected)
+        self.assertIsNone(selected)
+        self.assertEqual(discarded["motivo_descarte_v1_1"], "EDGE_BELOW_MINIMUM_FOOTBALL_V1_1")
 
     def test_handicap_minus_one_requires_matching_market_pair(self):
         row = output_row(mercado="Handicap Asiatico", pick="Home FC -1.0", linha=-1.0)
@@ -436,9 +482,8 @@ Data/Horario: 14/07/2026
             prob_win=0.45, prob_push=0.20, prob_loss=0.35,
         )
         selected, discarded = runner._evaluate_row_v1_1(row, wide_row())
-        self.assertIsNone(discarded)
-        self.assertIsNotNone(selected)
-        self.assertAlmostEqual(selected["edge"], 10.0, places=2)
+        self.assertIsNone(selected)
+        self.assertEqual(discarded["motivo_descarte_v1_1"], "EDGE_BELOW_MINIMUM_FOOTBALL_V1_1")
 
     def test_european_handicap_is_not_treated_as_asian(self):
         row = output_row(mercado="Handicap Europeu 3 vias", pick="Home FC +1", linha=1.0)
@@ -457,7 +502,7 @@ Data/Horario: 14/07/2026
     def test_handicap_pair_is_found_beyond_legacy_slot_nineteen(self):
         row = output_row(
             mercado="Handicap Asiatico", pick="Away FC +2.5", linha=2.5,
-            odd_ofertada=1.40, probabilidade_final=78.0,
+            odd_ofertada=1.40, probabilidade_final=82.0,
         )
         wide = wide_row(
             odds_Asian_handicap_Full_Time_Linha26_HANDICAP=-2.5,
@@ -468,11 +513,10 @@ Data/Horario: 14/07/2026
             odds_Asian_handicap_Full_Time_Linha26_Opp_Odd_MEDIANA=1.40,
         )
 
-        selected, discarded = runner._evaluate_row_v1_1(row, wide)
+        pair = runner._find_asian_handicap_market_pair(wide, 2.5, "away")
 
-        self.assertIsNone(discarded)
-        self.assertIsNotNone(selected)
-        self.assertEqual(selected["odd_mediana"], 1.40)
+        self.assertIsNotNone(pair)
+        self.assertEqual(pair[0], 1.40)
 
     def test_market_divergence_between_twelve_and_fifteen_points_gets_haircut(self):
         row = output_row(
