@@ -1,4 +1,4 @@
-// Execute esta instrucao no projeto: Perfeito. Agora peça ao Lovable para executar a auditoria e retornar a matriz de resultados.\n// Até recebermos essa matriz, mantenha:\n// HIGHLIGHTLY_ANALYSIS_ENABLED=false\n// automatic_publication=false\n// fontes externas e dados manuais sem remoção\n// nenhuma migration ou backfill aplicad
+// Execute esta instrucao no projeto: Ótimo. A próxima ação é executar a auditoria read-only descrita no dashboard e trazer a matriz de resultados.
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
