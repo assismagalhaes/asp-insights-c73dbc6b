@@ -13,7 +13,8 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 
-DEFAULT_BASE_URL = "https://sports.highlightly.net"
+DEFAULT_BASE_URL = "https://sport-highlights-api.p.rapidapi.com"
+DEFAULT_RAPIDAPI_HOST = "sport-highlights-api.p.rapidapi.com"
 DEFAULT_USER_AGENT = "ASP-Insights/0.1 (+https://highlightly.net)"
 
 
@@ -44,11 +45,19 @@ def _integer_header(headers: Mapping[str, str], name: str) -> int | None:
 
 
 class HighlightlyClient:
-    def __init__(self, api_key: str, *, base_url: str = DEFAULT_BASE_URL, timeout: float = 20.0):
+    def __init__(
+        self,
+        api_key: str,
+        *,
+        base_url: str = DEFAULT_BASE_URL,
+        rapidapi_host: str = DEFAULT_RAPIDAPI_HOST,
+        timeout: float = 20.0,
+    ):
         if not api_key.strip():
             raise ValueError("Highlightly API key must not be empty")
         self.api_key = api_key.strip()
         self.base_url = base_url.rstrip("/")
+        self.rapidapi_host = rapidapi_host.strip()
         self.timeout = timeout
 
     def get(self, path: str, params: Mapping[str, Any] | None = None) -> HighlightlyResponse:
@@ -62,6 +71,7 @@ class HighlightlyClient:
             url,
             headers={
                 "x-rapidapi-key": self.api_key,
+                "x-rapidapi-host": self.rapidapi_host,
                 "accept": "application/json",
                 "user-agent": DEFAULT_USER_AGENT,
             },
