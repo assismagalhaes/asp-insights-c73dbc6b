@@ -153,8 +153,15 @@ def extract_debug_metrics(raw_data: Any, normalized_data: Any) -> dict[str, Any]
     bookmaker_names: set[str] = set()
 
     for game in games:
-        odds = game.get("odds")
-        if isinstance(odds, dict):
+        primary_markets = game.get("odds")
+        market_containers = (
+            [primary_markets]
+            if isinstance(primary_markets, dict) and primary_markets
+            else [game.get("markets")]
+        )
+        for odds in market_containers:
+            if not isinstance(odds, dict):
+                continue
             for market_name, market_payload in odds.items():
                 rows = _market_rows(market_payload)
                 item = markets.setdefault(str(market_name), {"rows": 0, "bookmakers": set()})

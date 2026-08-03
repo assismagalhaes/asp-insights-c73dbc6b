@@ -41,6 +41,20 @@ class ScrapingDebugTests(unittest.TestCase):
         self.assertEqual(metrics["bookmakers_encontrados"], 2)
         self.assertEqual(metrics["odds_extraidas"], 2)
 
+    def test_extract_debug_metrics_from_oddsagora_markets_payload(self) -> None:
+        raw = {"games": [{
+            "match_url": "https://example.test/game",
+            "markets": {
+                "1x2": [{"bookmaker": "Book A", "home_odd": 2.0}],
+                "ah": [{"bookmaker": "Book B", "line": -0.5}],
+            },
+        }]}
+
+        metrics = extract_debug_metrics(raw, {"linhas": [{"odd": 2.0}]})
+
+        self.assertEqual(metrics["mercados_encontrados"], 2)
+        self.assertEqual(metrics["bookmakers_encontrados"], 2)
+
     def test_log_raw_debug_writes_events_and_empty_fixture_html(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             ctx = ScraperDebugContext("job-1", Path(tmp), enabled=True)
