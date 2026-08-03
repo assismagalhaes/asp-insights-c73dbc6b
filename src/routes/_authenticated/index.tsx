@@ -1,50 +1,34 @@
-// Execute esta instrucao no projeto: Execute agora a auditoria read-only da Highlightly usando o secret HIGHLIGHTLY_API_KEY configurado na VM.
-
-// Objetivo:
-// confirmar se a Highlightly fornece dados históricos e estatísticos suficientes para substituir football-data.co.uk, outras fontes externas e entrada manual na Central Esportiva.
-
-// Escopo obrigatório, sem alterar nada:
-// - não criar ou alterar migrations;
-// - não alterar tabelas, dados, RLS, secrets ou funções;
-// - não ativar HIGHLIGHTLY_ANALYSIS_ENABLED;
-// - manter automatic_publication=false;
-// - não executar backfill nem publicar prognósticos;
-// - não exibir a API key nem payloads completos.
-
-// Teste, para futebol, basquete e beisebol:
-// - partidas por data;
-// - detalhes de partida;
-// - estatísticas da partida;
-// - estatísticas históricas da equipe;
-// - últimos jogos;
-// - confrontos diretos;
-// - standings/classificação;
-// - box scores;
-// - estatísticas de jogadores, quando disponíveis;
-// - temporadas e profundidade histórica.
-
-// Para cada endpoint, informe somente:
-// - esporte;
-// - endpoint;
-// - parâmetros usados;
-// - status HTTP;
-// - latência;
-// - quantidade de registros;
-// - campos estatísticos encontrados;
-// - temporada/data mais antiga retornada;
-// - cobertura por liga;
-// - consumo e limite de quota;
-// - erros, lacunas ou restrições.
-
-// Faça também uma conclusão por esporte e liga:
-// 1. cobertura suficiente para uso canônico;
-// 2. cobertura parcial, exigindo bloqueio ou investigação;
-// 3. cobertura insuficiente.
-
-// Critério de decisão:
-// nenhuma fonte externa ou entrada manual será mantida como fallback permanente. Ligas sem cobertura histórica suficiente da Highlightly devem ser bloqueadas para modelagem, até que a cobertura seja comprovada.
-
-// Retorne a matriz completa da auditoria e uma recomendação objetiva para a próxima migration/backfill. Não aplique nenhuma alteração.
+// Execute esta instrucao no projeto: Prossiga com a investigação da autenticação e quota da Highlightly, somente leitura.
+//
+// 1. Confirme qual host está sendo usado efetivamente:
+//    - HIGHLIGHTLY_BASE_URL;
+//    - host RapidAPI usado pelo cliente;
+//    - endpoint completo da requisição.
+//
+// 2. Verifique, sem exibir a chave:
+//    - presença e comprimento de HIGHLIGHTLY_API_KEY;
+//    - status HTTP de um endpoint mínimo;
+//    - cabeçalhos de quota retornados;
+//    - diferença entre erro 401 e 429;
+//    - plano RapidAPI associado à chave, se disponível pelo conector.
+//
+// 3. Não altere:
+//    - banco;
+//    - migrations;
+//    - dados;
+//    - secrets;
+//    - HIGHLIGHTLY_ANALYSIS_ENABLED;
+//    - automatic_publication.
+//
+// 4. Retorne:
+//    - host correto;
+//    - endpoint mínimo recomendado;
+//    - causa provável do 401;
+//    - causa provável do 429;
+//    - quota restante/limite;
+//    - ação necessária no painel RapidAPI ou Highlightly.
+//
+// Não faça backfill, não publique prognósticos e não considere a cobertura validada enquanto nenhum endpoint estatístico retornar HTTP 200 com payload real.
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
