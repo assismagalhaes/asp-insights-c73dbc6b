@@ -152,7 +152,11 @@ class HighlightlyWorker:
         api_key = os.environ.get("HIGHLIGHTLY_API_KEY", "")
         raw_quota_ceiling = os.environ.get("HIGHLIGHTLY_DAILY_QUOTA_CEILING", "").strip()
         return cls(
-            HighlightlyClient(api_key, base_url=os.environ.get("HIGHLIGHTLY_BASE_URL", "https://sports.highlightly.net")),
+            HighlightlyClient(
+                api_key,
+                base_url=os.environ.get("HIGHLIGHTLY_BASE_URL", "https://sport-highlights-api.p.rapidapi.com"),
+                rapidapi_host=os.environ.get("HIGHLIGHTLY_RAPIDAPI_HOST", "sport-highlights-api.p.rapidapi.com"),
+            ),
             HighlightlyRepository.from_environment(),
             worker_id=worker_id,
             enabled=_truthy(os.environ.get("HIGHLIGHTLY_ANALYSIS_ENABLED")),

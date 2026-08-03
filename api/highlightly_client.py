@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+import os
 from typing import Any, Mapping
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -67,6 +68,13 @@ class HighlightlyClient:
             doseq=True,
         )
         url = f"{self.base_url}{clean_path}" + (f"?{query}" if query else "")
+        headers = {
+            "x-rapidapi-key": self.api_key,
+            "accept": "application/json",
+            "user-agent": DEFAULT_USER_AGENT,
+        }
+        if self.rapidapi_host:
+            headers["x-rapidapi-host"] = self.rapidapi_host
         request = Request(
             url,
             headers={
