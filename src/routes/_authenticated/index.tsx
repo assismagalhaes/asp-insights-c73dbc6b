@@ -1,4 +1,4 @@
-// Execute esta instrucao no projeto: A configuração da VM está confirmada. Execute agora uma auditoria read-only da Highlightly usando o secret HIGHLIGHTLY_API_KEY, sem alterar banco, migrations ou dados. Teste endpoints de partidas, estatísticas de partidas, estatísticas de equipes, últimos jogos, confrontos diretos, standings e box scores para futebol, basquete e beisebol. Retorne somente: endpoint, esporte, status HTTP, latência, quantidade de registros, campos disponíveis, profundidade histórica e consumo/limite de quota. Não exiba a chave nem payloads completos. Não habilite publicação automática nem HIGHLIGHTLY_ANALYSIS_ENABLED ainda.
+// Execute esta instrucao no projeto: Perfeito. Agora peça ao Lovable para executar a auditoria e retornar a matriz de resultados.\n// Até recebermos essa matriz, mantenha:\n// HIGHLIGHTLY_ANALYSIS_ENABLED=false\n// automatic_publication=false\n// fontes externas e dados manuais sem remoção\n// nenhuma migration ou backfill aplicad
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
