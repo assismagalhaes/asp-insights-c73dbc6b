@@ -840,8 +840,10 @@ def gerar_csv_coleta(job_id: str, raw_data: dict, job: dict, consolidar: bool = 
     df = pd.DataFrame(linhas)
 
     colunas = [
+        "game_id",
         "data",
         "hora",
+        "capturado_em",
         "esporte",
         "liga",
         "country",

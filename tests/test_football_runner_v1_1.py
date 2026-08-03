@@ -143,6 +143,18 @@ class FootballRunnerV11Test(unittest.TestCase):
         self.assertEqual(diagnostic["jogos_bloqueados_pre_kickoff"], 2)
         self.assertEqual(diagnostic["lead_minimo_minutos"], 30)
 
+    def test_pregame_filter_accepts_portuguese_export_columns(self):
+        frame = pd.DataFrame([
+            {"game_id": "started", "data": "2026-08-03", "hora": "16:45", "capturado_em": "2026-08-03T21:39:00Z"},
+            {"game_id": "future", "data": "2026-08-03", "hora": "21:15", "capturado_em": "2026-08-03T21:39:00Z"},
+        ])
+
+        filtered, diagnostic = runner._filter_pregame_long_input(frame)
+
+        self.assertEqual(filtered["game_id"].tolist(), ["future"])
+        self.assertEqual(diagnostic["jogos_bloqueados_pre_kickoff"], 1)
+        self.assertEqual(diagnostic["linhas_sem_timestamp_auditavel"], 0)
+
     def test_core_lambda_debug_is_exposed_when_available(self):
         selected, discarded = runner._evaluate_row_v1_1(output_row_with_core_debug(), wide_row())
         self.assertIsNone(discarded)

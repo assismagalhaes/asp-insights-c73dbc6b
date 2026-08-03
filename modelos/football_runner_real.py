@@ -1658,8 +1658,9 @@ def selecionar_contexto_do_prognostico(row: pd.Series, contexto_modelo: str) -> 
 
 def _filter_pregame_long_input(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     """Remove odds capturadas durante/depois do jogo ou perto demais do kickoff."""
-    required = {"date", "time", "capturado_em"}
-    if df.empty or not required.issubset(df.columns):
+    date_column = "date" if "date" in df.columns else "data" if "data" in df.columns else None
+    time_column = "time" if "time" in df.columns else "hora" if "hora" in df.columns else None
+    if df.empty or not date_column or not time_column or "capturado_em" not in df.columns:
         return df.copy(), {
             "jogos_bloqueados_pre_kickoff": 0,
             "linhas_bloqueadas_pre_kickoff": 0,
@@ -1669,7 +1670,7 @@ def _filter_pregame_long_input(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
 
     capture = pd.to_datetime(df["capturado_em"], utc=True, errors="coerce")
     kickoff_local = pd.to_datetime(
-        df["date"].astype(str) + " " + df["time"].astype(str), errors="coerce"
+        df[date_column].astype(str) + " " + df[time_column].astype(str), errors="coerce"
     )
     kickoff = kickoff_local.dt.tz_localize(
         "America/Sao_Paulo", ambiguous="NaT", nonexistent="NaT"
