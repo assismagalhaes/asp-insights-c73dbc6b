@@ -6,6 +6,17 @@ from scrapers.oddsagora_normalizer import is_half_point_line, normalize_oddsagor
 
 
 class OddsAgoraNormalizerTests(unittest.TestCase):
+    def test_expected_empty_collection_has_non_warning_terminal_status(self) -> None:
+        normalized = normalize_oddsagora_raw({"status": "EMPTY", "games": []})
+
+        self.assertEqual(normalized["status"], "CONCLUIDA_SEM_EVENTOS")
+        self.assertEqual(normalized["total_linhas"], 0)
+
+    def test_failed_empty_collection_remains_warning(self) -> None:
+        normalized = normalize_oddsagora_raw({"status": "WARNING", "games": []})
+
+        self.assertEqual(normalized["status"], "WARNING")
+
     def test_half_point_line_filter(self) -> None:
         self.assertTrue(is_half_point_line("8.5"))
         self.assertTrue(is_half_point_line("-1.5"))

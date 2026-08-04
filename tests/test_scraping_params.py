@@ -50,6 +50,9 @@ class ScrapingParamsTests(unittest.TestCase):
             params["leagues"],
         )
         self.assertIn("https://www.oddsagora.com.br/football/brazil/brasileirao-betano", params["leagues"])
+        self.assertIn("https://www.oddsagora.com.br/football/europe/liga-dos-campeoes/", params["leagues"])
+        self.assertIn("https://www.oddsagora.com.br/football/south-america/copa-libertadores/", params["leagues"])
+        self.assertIn("https://www.oddsagora.com.br/football/brazil/copa-betano-do-brasil/", params["leagues"])
 
     def test_hockey_empty_markets_uses_hockey_oddsagora_markets(self) -> None:
         params = normalize_scraping_params({"esporte": "Hockey", "mercados": []})

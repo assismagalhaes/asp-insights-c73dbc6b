@@ -470,8 +470,12 @@ def normalize_oddsagora_raw(raw: dict[str, Any], job_id: str | None = None) -> d
     status = "CONCLUIDA"
     mensagem = "Coleta OddsAgora concluida."
     if not games:
-        status = "WARNING"
-        mensagem = "Nenhum jogo encontrado na liga/data selecionada."
+        if str(raw.get("status") or "").upper() in {"EMPTY", "CONCLUIDA_SEM_EVENTOS"}:
+            status = "CONCLUIDA_SEM_EVENTOS"
+            mensagem = "Coleta concluida sem eventos na liga/data selecionada."
+        else:
+            status = "WARNING"
+            mensagem = "Nenhum jogo encontrado na liga/data selecionada."
     elif not rows:
         status = "WARNING"
         mensagem = "Jogos encontrados, mas nenhuma odd extraida."

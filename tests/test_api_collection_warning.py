@@ -4,6 +4,16 @@ from api.main import _collection_warning
 
 
 class CollectionWarningTests(unittest.TestCase):
+    def test_expected_empty_collection_does_not_create_warning(self) -> None:
+        warning = _collection_warning(
+            {"mercados": ["1x2", "over-under"]},
+            total_jogos=0,
+            total_odds=0,
+            raw_data={"status": "EMPTY", "games": []},
+        )
+
+        self.assertIsNone(warning)
+
     def test_home_away_alias_does_not_create_false_warning(self) -> None:
         raw = {
             "games": [
