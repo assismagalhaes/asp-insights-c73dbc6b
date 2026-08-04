@@ -1,0 +1,1527 @@
+{
+  "generated_at": "2026-08-04T01:13:08.315106+00:00",
+  "dates": [
+    "2026-08-01",
+    "2026-06-01",
+    "2025-08-01"
+  ],
+  "calls": 66,
+  "max_calls": 80,
+  "reserve": 750,
+  "rate_limit": 7500,
+  "rate_remaining": 7197,
+  "records": [
+    {
+      "sport": "football",
+      "endpoint": "matches",
+      "date": "2026-08-01",
+      "league": null,
+      "status": 200,
+      "latency_ms": 276,
+      "rows": 2,
+      "fields": [
+        "awayTeam",
+        "country",
+        "date",
+        "homeTeam",
+        "id",
+        "league",
+        "round",
+        "state"
+      ]
+    },
+    {
+      "sport": "football",
+      "endpoint": "match_coverage",
+      "date": "2026-08-01",
+      "league": "Major League Soccer:2026",
+      "status": 200,
+      "rows": 1,
+      "fields": [],
+      "latency_ms": 0
+    },
+    {
+      "sport": "football",
+      "endpoint": "standings",
+      "date": "2026-08-01",
+      "league": "Major League Soccer:2026",
+      "status": 200,
+      "latency_ms": 245,
+      "rows": 2,
+      "fields": [
+        "name",
+        "standings"
+      ],
+      "standing_rows": 30,
+      "quality_codes": []
+    },
+    {
+      "sport": "football",
+      "endpoint": "match_detail",
+      "date": "2026-08-01",
+      "league": "Major League Soccer:2026",
+      "status": 200,
+      "latency_ms": 236,
+      "rows": 1,
+      "fields": [
+        "awayTeam",
+        "country",
+        "date",
+        "events",
+        "forecast",
+        "homeTeam",
+        "id",
+        "league",
+        "news",
+        "predictions",
+        "referee",
+        "round",
+        "state",
+        "statistics",
+        "venue"
+      ]
+    },
+    {
+      "sport": "football",
+      "endpoint": "match_statistics",
+      "date": "2026-08-01",
+      "league": "Major League Soccer:2026",
+      "status": 200,
+      "latency_ms": 237,
+      "rows": 2,
+      "fields": [
+        "statistics",
+        "team"
+      ]
+    },
+    {
+      "sport": "football",
+      "endpoint": "box_scores",
+      "date": "2026-08-01",
+      "league": "Major League Soccer:2026",
+      "status": 200,
+      "latency_ms": 256,
+      "rows": 2,
+      "fields": [
+        "players",
+        "team"
+      ]
+    },
+    {
+      "sport": "football",
+      "endpoint": "team_statistics",
+      "date": "2026-08-01",
+      "league": "Major League Soccer:2026",
+      "status": 200,
+      "latency_ms": 217,
+      "rows": 1,
+      "fields": [
+        "away",
+        "home",
+        "leagueId",
+        "leagueName",
+        "season",
+        "total"
+      ]
+    },
+    {
+      "sport": "football",
+      "endpoint": "last_five_games",
+      "date": "2026-08-01",
+      "league": "Major League Soccer:2026",
+      "status": 200,
+      "latency_ms": 231,
+      "rows": 5,
+      "fields": [
+        "awayTeam",
+        "country",
+        "date",
+        "homeTeam",
+        "id",
+        "league",
+        "round",
+        "state"
+      ]
+    },
+    {
+      "sport": "football",
+      "endpoint": "player_statistics",
+      "date": "2026-08-01",
+      "league": "Major League Soccer:2026",
+      "status": 200,
+      "latency_ms": 234,
+      "rows": 1,
+      "fields": [
+        "fullName",
+        "id",
+        "logo",
+        "name",
+        "perClub",
+        "perCompetition"
+      ]
+    },
+    {
+      "sport": "football",
+      "endpoint": "match_coverage",
+      "date": "2026-08-01",
+      "league": "Major League Soccer:2026",
+      "status": 200,
+      "rows": 1,
+      "fields": [],
+      "latency_ms": 0
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "matches",
+      "date": "2026-08-01",
+      "league": null,
+      "status": 200,
+      "latency_ms": 242,
+      "rows": 2,
+      "fields": [
+        "awayTeam",
+        "country",
+        "date",
+        "homeTeam",
+        "id",
+        "league",
+        "stage",
+        "state",
+        "week"
+      ]
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "match_coverage",
+      "date": "2026-08-01",
+      "league": "CEBL:2026",
+      "status": 200,
+      "rows": 1,
+      "fields": [],
+      "latency_ms": 0
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "standings",
+      "date": "2026-08-01",
+      "league": "CEBL:2026",
+      "status": 200,
+      "latency_ms": 220,
+      "rows": 2,
+      "fields": [
+        "name",
+        "standings"
+      ],
+      "standing_rows": 10,
+      "quality_codes": []
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "match_detail",
+      "date": "2026-08-01",
+      "league": "CEBL:2026",
+      "status": 200,
+      "latency_ms": 222,
+      "rows": 1,
+      "fields": [
+        "awayTeam",
+        "country",
+        "date",
+        "forecast",
+        "homeTeam",
+        "id",
+        "league",
+        "news",
+        "predictions",
+        "stage",
+        "state",
+        "statistics",
+        "venue",
+        "week"
+      ]
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "match_statistics",
+      "date": "2026-08-01",
+      "league": "CEBL:2026",
+      "status": 200,
+      "latency_ms": 227,
+      "rows": 2,
+      "fields": [
+        "statistics",
+        "team"
+      ]
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "team_statistics",
+      "date": "2026-08-01",
+      "league": "CEBL:2026",
+      "status": 200,
+      "latency_ms": 263,
+      "rows": 1,
+      "fields": [
+        "away",
+        "home",
+        "leagueId",
+        "leagueName",
+        "season",
+        "total"
+      ]
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "last_five_games",
+      "date": "2026-08-01",
+      "league": "CEBL:2026",
+      "status": 200,
+      "latency_ms": 231,
+      "rows": 5,
+      "fields": [
+        "awayTeam",
+        "country",
+        "date",
+        "homeTeam",
+        "id",
+        "league",
+        "stage",
+        "state",
+        "week"
+      ]
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "match_coverage",
+      "date": "2026-08-01",
+      "league": "NBA Women:2026",
+      "status": 200,
+      "rows": 1,
+      "fields": [],
+      "latency_ms": 0
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "standings",
+      "date": "2026-08-01",
+      "league": "NBA Women:2026",
+      "status": 200,
+      "latency_ms": 222,
+      "rows": 3,
+      "fields": [
+        "name",
+        "standings"
+      ],
+      "standing_rows": 30,
+      "quality_codes": [
+        "BASKETBALL_STANDINGS_PROVIDER_QUARANTINED",
+        "STANDINGS_SINGLE_TEAM_REPEATED",
+        "STANDINGS_TEAM_DUPLICATED"
+      ]
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "matches",
+      "date": "2026-08-01",
+      "league": null,
+      "status": 200,
+      "latency_ms": 215,
+      "rows": 2,
+      "fields": [
+        "awayTeam",
+        "date",
+        "homeTeam",
+        "id",
+        "league",
+        "round",
+        "season",
+        "state"
+      ]
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "match_coverage",
+      "date": "2026-08-01",
+      "league": "MLB:2026",
+      "status": 200,
+      "rows": 1,
+      "fields": [],
+      "latency_ms": 0
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "standings",
+      "date": "2026-08-01",
+      "league": "MLB:2026",
+      "status": 200,
+      "latency_ms": 220,
+      "rows": 0,
+      "fields": [],
+      "standing_rows": 0,
+      "quality_codes": [
+        "STANDINGS_EMPTY"
+      ]
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "match_detail",
+      "date": "2026-08-01",
+      "league": "MLB:2026",
+      "status": 200,
+      "latency_ms": 331,
+      "rows": 1,
+      "fields": [
+        "awayTeam",
+        "date",
+        "forecast",
+        "homeTeam",
+        "id",
+        "league",
+        "news",
+        "plays",
+        "predictions",
+        "referees",
+        "rosters",
+        "round",
+        "season",
+        "state",
+        "stats",
+        "venue"
+      ]
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "match_statistics",
+      "date": "2026-08-01",
+      "league": "MLB:2026",
+      "status": 200,
+      "latency_ms": 224,
+      "rows": 2,
+      "fields": [
+        "team"
+      ]
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "box_scores",
+      "date": "2026-08-01",
+      "league": "MLB:2026",
+      "status": 200,
+      "latency_ms": 226,
+      "rows": 2,
+      "fields": [
+        "boxScores",
+        "team"
+      ]
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "team_statistics",
+      "date": "2026-08-01",
+      "league": "MLB:2026",
+      "status": 200,
+      "latency_ms": 215,
+      "rows": 1,
+      "fields": [
+        "away",
+        "home",
+        "leagueName",
+        "round",
+        "total"
+      ]
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "last_five_games",
+      "date": "2026-08-01",
+      "league": "MLB:2026",
+      "status": 200,
+      "latency_ms": 237,
+      "rows": 5,
+      "fields": [
+        "awayTeam",
+        "date",
+        "homeTeam",
+        "id",
+        "league",
+        "round",
+        "season",
+        "state"
+      ]
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "player_statistics",
+      "date": "2026-08-01",
+      "league": "MLB:2026",
+      "status": 200,
+      "latency_ms": 223,
+      "rows": 1,
+      "fields": [
+        "fullName",
+        "id",
+        "logo",
+        "perSeason"
+      ]
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "match_coverage",
+      "date": "2026-08-01",
+      "league": "MLB:2026",
+      "status": 200,
+      "rows": 1,
+      "fields": [],
+      "latency_ms": 0
+    },
+    {
+      "sport": "football",
+      "endpoint": "matches",
+      "date": "2026-06-01",
+      "league": null,
+      "status": 200,
+      "latency_ms": 261,
+      "rows": 2,
+      "fields": [
+        "awayTeam",
+        "country",
+        "date",
+        "homeTeam",
+        "id",
+        "league",
+        "round",
+        "state"
+      ]
+    },
+    {
+      "sport": "football",
+      "endpoint": "match_coverage",
+      "date": "2026-06-01",
+      "league": "Primera División - Apertura:2026",
+      "status": 200,
+      "rows": 1,
+      "fields": [],
+      "latency_ms": 0
+    },
+    {
+      "sport": "football",
+      "endpoint": "standings",
+      "date": "2026-06-01",
+      "league": "Primera División - Apertura:2026",
+      "status": 200,
+      "latency_ms": 265,
+      "rows": 1,
+      "fields": [
+        "name",
+        "standings"
+      ],
+      "standing_rows": 16,
+      "quality_codes": []
+    },
+    {
+      "sport": "football",
+      "endpoint": "match_detail",
+      "date": "2026-06-01",
+      "league": "Primera División - Apertura:2026",
+      "status": 200,
+      "latency_ms": 249,
+      "rows": 1,
+      "fields": [
+        "awayTeam",
+        "country",
+        "date",
+        "events",
+        "forecast",
+        "homeTeam",
+        "id",
+        "league",
+        "news",
+        "predictions",
+        "referee",
+        "round",
+        "state",
+        "statistics",
+        "venue"
+      ]
+    },
+    {
+      "sport": "football",
+      "endpoint": "match_statistics",
+      "date": "2026-06-01",
+      "league": "Primera División - Apertura:2026",
+      "status": 200,
+      "latency_ms": 223,
+      "rows": 2,
+      "fields": [
+        "statistics",
+        "team"
+      ]
+    },
+    {
+      "sport": "football",
+      "endpoint": "box_scores",
+      "date": "2026-06-01",
+      "league": "Primera División - Apertura:2026",
+      "status": 200,
+      "latency_ms": 247,
+      "rows": 0,
+      "fields": []
+    },
+    {
+      "sport": "football",
+      "endpoint": "team_statistics",
+      "date": "2026-06-01",
+      "league": "Primera División - Apertura:2026",
+      "status": 200,
+      "latency_ms": 264,
+      "rows": 1,
+      "fields": [
+        "away",
+        "home",
+        "leagueId",
+        "leagueName",
+        "season",
+        "total"
+      ]
+    },
+    {
+      "sport": "football",
+      "endpoint": "last_five_games",
+      "date": "2026-06-01",
+      "league": "Primera División - Apertura:2026",
+      "status": 200,
+      "latency_ms": 255,
+      "rows": 5,
+      "fields": [
+        "awayTeam",
+        "country",
+        "date",
+        "homeTeam",
+        "id",
+        "league",
+        "round",
+        "state"
+      ]
+    },
+    {
+      "sport": "football",
+      "endpoint": "match_coverage",
+      "date": "2026-06-01",
+      "league": "Primera B:2026",
+      "status": 200,
+      "rows": 1,
+      "fields": [],
+      "latency_ms": 0
+    },
+    {
+      "sport": "football",
+      "endpoint": "standings",
+      "date": "2026-06-01",
+      "league": "Primera B:2026",
+      "status": 200,
+      "latency_ms": 239,
+      "rows": 1,
+      "fields": [
+        "name",
+        "standings"
+      ],
+      "standing_rows": 16,
+      "quality_codes": []
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "matches",
+      "date": "2026-06-01",
+      "league": null,
+      "status": 200,
+      "latency_ms": 234,
+      "rows": 2,
+      "fields": [
+        "awayTeam",
+        "country",
+        "date",
+        "homeTeam",
+        "id",
+        "league",
+        "stage",
+        "state",
+        "week"
+      ]
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "match_coverage",
+      "date": "2026-06-01",
+      "league": "Superliga:2026",
+      "status": 200,
+      "rows": 1,
+      "fields": [],
+      "latency_ms": 0
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "standings",
+      "date": "2026-06-01",
+      "league": "Superliga:2026",
+      "status": 200,
+      "latency_ms": 226,
+      "rows": 1,
+      "fields": [
+        "name",
+        "standings"
+      ],
+      "standing_rows": 14,
+      "quality_codes": []
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "match_detail",
+      "date": "2026-06-01",
+      "league": "Superliga:2026",
+      "status": 200,
+      "latency_ms": 383,
+      "rows": 1,
+      "fields": [
+        "awayTeam",
+        "country",
+        "date",
+        "forecast",
+        "homeTeam",
+        "id",
+        "league",
+        "news",
+        "predictions",
+        "stage",
+        "state",
+        "statistics",
+        "venue",
+        "week"
+      ]
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "match_statistics",
+      "date": "2026-06-01",
+      "league": "Superliga:2026",
+      "status": 200,
+      "latency_ms": 241,
+      "rows": 2,
+      "fields": [
+        "statistics",
+        "team"
+      ]
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "team_statistics",
+      "date": "2026-06-01",
+      "league": "Superliga:2026",
+      "status": 200,
+      "latency_ms": 247,
+      "rows": 1,
+      "fields": [
+        "away",
+        "home",
+        "leagueId",
+        "leagueName",
+        "season",
+        "total"
+      ]
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "last_five_games",
+      "date": "2026-06-01",
+      "league": "Superliga:2026",
+      "status": 200,
+      "latency_ms": 297,
+      "rows": 5,
+      "fields": [
+        "awayTeam",
+        "country",
+        "date",
+        "homeTeam",
+        "id",
+        "league",
+        "stage",
+        "state",
+        "week"
+      ]
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "match_coverage",
+      "date": "2026-06-01",
+      "league": "LNB:2025",
+      "status": 200,
+      "rows": 1,
+      "fields": [],
+      "latency_ms": 0
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "standings",
+      "date": "2026-06-01",
+      "league": "LNB:2025",
+      "status": 200,
+      "latency_ms": 237,
+      "rows": 1,
+      "fields": [
+        "name",
+        "standings"
+      ],
+      "standing_rows": 16,
+      "quality_codes": []
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "matches",
+      "date": "2026-06-01",
+      "league": null,
+      "status": 200,
+      "latency_ms": 251,
+      "rows": 2,
+      "fields": [
+        "awayTeam",
+        "date",
+        "homeTeam",
+        "id",
+        "league",
+        "round",
+        "season",
+        "state"
+      ]
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "match_coverage",
+      "date": "2026-06-01",
+      "league": "MLB:2026",
+      "status": 200,
+      "rows": 1,
+      "fields": [],
+      "latency_ms": 0
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "match_detail",
+      "date": "2026-06-01",
+      "league": "MLB:2026",
+      "status": 200,
+      "latency_ms": 474,
+      "rows": 1,
+      "fields": [
+        "awayTeam",
+        "date",
+        "forecast",
+        "homeTeam",
+        "id",
+        "league",
+        "news",
+        "plays",
+        "predictions",
+        "referees",
+        "rosters",
+        "round",
+        "season",
+        "state",
+        "stats",
+        "venue"
+      ]
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "match_statistics",
+      "date": "2026-06-01",
+      "league": "MLB:2026",
+      "status": 200,
+      "latency_ms": 247,
+      "rows": 2,
+      "fields": [
+        "team"
+      ]
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "box_scores",
+      "date": "2026-06-01",
+      "league": "MLB:2026",
+      "status": 200,
+      "latency_ms": 242,
+      "rows": 2,
+      "fields": [
+        "boxScores",
+        "team"
+      ]
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "team_statistics",
+      "date": "2026-06-01",
+      "league": "MLB:2026",
+      "status": 200,
+      "latency_ms": 283,
+      "rows": 1,
+      "fields": [
+        "away",
+        "home",
+        "leagueName",
+        "round",
+        "total"
+      ]
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "last_five_games",
+      "date": "2026-06-01",
+      "league": "MLB:2026",
+      "status": 200,
+      "latency_ms": 394,
+      "rows": 5,
+      "fields": [
+        "awayTeam",
+        "date",
+        "homeTeam",
+        "id",
+        "league",
+        "round",
+        "season",
+        "state"
+      ]
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "match_coverage",
+      "date": "2026-06-01",
+      "league": "MLB:2026",
+      "status": 200,
+      "rows": 1,
+      "fields": [],
+      "latency_ms": 0
+    },
+    {
+      "sport": "football",
+      "endpoint": "matches",
+      "date": "2025-08-01",
+      "league": null,
+      "status": 200,
+      "latency_ms": 245,
+      "rows": 2,
+      "fields": [
+        "awayTeam",
+        "country",
+        "date",
+        "homeTeam",
+        "id",
+        "league",
+        "round",
+        "state"
+      ]
+    },
+    {
+      "sport": "football",
+      "endpoint": "match_coverage",
+      "date": "2025-08-01",
+      "league": "CONCACAF Caribbean Club Shield:2025",
+      "status": 200,
+      "rows": 1,
+      "fields": [],
+      "latency_ms": 0
+    },
+    {
+      "sport": "football",
+      "endpoint": "standings",
+      "date": "2025-08-01",
+      "league": "CONCACAF Caribbean Club Shield:2025",
+      "status": 200,
+      "latency_ms": 231,
+      "rows": 0,
+      "fields": [],
+      "standing_rows": 0,
+      "quality_codes": [
+        "STANDINGS_EMPTY"
+      ]
+    },
+    {
+      "sport": "football",
+      "endpoint": "match_detail",
+      "date": "2025-08-01",
+      "league": "CONCACAF Caribbean Club Shield:2025",
+      "status": 200,
+      "latency_ms": 255,
+      "rows": 1,
+      "fields": [
+        "awayTeam",
+        "country",
+        "date",
+        "events",
+        "forecast",
+        "homeTeam",
+        "id",
+        "league",
+        "news",
+        "predictions",
+        "referee",
+        "round",
+        "state",
+        "statistics",
+        "venue"
+      ]
+    },
+    {
+      "sport": "football",
+      "endpoint": "match_statistics",
+      "date": "2025-08-01",
+      "league": "CONCACAF Caribbean Club Shield:2025",
+      "status": 200,
+      "latency_ms": 241,
+      "rows": 2,
+      "fields": [
+        "statistics",
+        "team"
+      ]
+    },
+    {
+      "sport": "football",
+      "endpoint": "box_scores",
+      "date": "2025-08-01",
+      "league": "CONCACAF Caribbean Club Shield:2025",
+      "status": 200,
+      "latency_ms": 292,
+      "rows": 0,
+      "fields": []
+    },
+    {
+      "sport": "football",
+      "endpoint": "team_statistics",
+      "date": "2025-08-01",
+      "league": "CONCACAF Caribbean Club Shield:2025",
+      "status": 200,
+      "latency_ms": 258,
+      "rows": 4,
+      "fields": [
+        "away",
+        "home",
+        "leagueId",
+        "leagueName",
+        "season",
+        "total"
+      ]
+    },
+    {
+      "sport": "football",
+      "endpoint": "last_five_games",
+      "date": "2025-08-01",
+      "league": "CONCACAF Caribbean Club Shield:2025",
+      "status": 200,
+      "latency_ms": 299,
+      "rows": 5,
+      "fields": [
+        "awayTeam",
+        "country",
+        "date",
+        "homeTeam",
+        "id",
+        "league",
+        "round",
+        "state"
+      ]
+    },
+    {
+      "sport": "football",
+      "endpoint": "match_coverage",
+      "date": "2025-08-01",
+      "league": "Copa Argentina:2025",
+      "status": 200,
+      "rows": 1,
+      "fields": [],
+      "latency_ms": 0
+    },
+    {
+      "sport": "football",
+      "endpoint": "standings",
+      "date": "2025-08-01",
+      "league": "Copa Argentina:2025",
+      "status": 200,
+      "latency_ms": 223,
+      "rows": 0,
+      "fields": [],
+      "standing_rows": 0,
+      "quality_codes": [
+        "STANDINGS_EMPTY"
+      ]
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "matches",
+      "date": "2025-08-01",
+      "league": null,
+      "status": 200,
+      "latency_ms": 330,
+      "rows": 2,
+      "fields": [
+        "awayTeam",
+        "country",
+        "date",
+        "homeTeam",
+        "id",
+        "league",
+        "stage",
+        "state",
+        "week"
+      ]
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "match_coverage",
+      "date": "2025-08-01",
+      "league": "CEBL:2025",
+      "status": 200,
+      "rows": 1,
+      "fields": [],
+      "latency_ms": 0
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "standings",
+      "date": "2025-08-01",
+      "league": "CEBL:2025",
+      "status": 200,
+      "latency_ms": 282,
+      "rows": 2,
+      "fields": [
+        "name",
+        "standings"
+      ],
+      "standing_rows": 10,
+      "quality_codes": []
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "match_detail",
+      "date": "2025-08-01",
+      "league": "CEBL:2025",
+      "status": 200,
+      "latency_ms": 233,
+      "rows": 1,
+      "fields": [
+        "awayTeam",
+        "country",
+        "date",
+        "forecast",
+        "homeTeam",
+        "id",
+        "league",
+        "news",
+        "predictions",
+        "stage",
+        "state",
+        "statistics",
+        "venue",
+        "week"
+      ]
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "match_statistics",
+      "date": "2025-08-01",
+      "league": "CEBL:2025",
+      "status": 200,
+      "latency_ms": 241,
+      "rows": 2,
+      "fields": [
+        "statistics",
+        "team"
+      ]
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "team_statistics",
+      "date": "2025-08-01",
+      "league": "CEBL:2025",
+      "status": 200,
+      "latency_ms": 250,
+      "rows": 2,
+      "fields": [
+        "away",
+        "home",
+        "leagueId",
+        "leagueName",
+        "season",
+        "total"
+      ]
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "last_five_games",
+      "date": "2025-08-01",
+      "league": "CEBL:2025",
+      "status": 200,
+      "latency_ms": 256,
+      "rows": 5,
+      "fields": [
+        "awayTeam",
+        "country",
+        "date",
+        "homeTeam",
+        "id",
+        "league",
+        "stage",
+        "state",
+        "week"
+      ]
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "match_coverage",
+      "date": "2025-08-01",
+      "league": "NBA Women:2025",
+      "status": 200,
+      "rows": 1,
+      "fields": [],
+      "latency_ms": 0
+    },
+    {
+      "sport": "basketball",
+      "endpoint": "standings",
+      "date": "2025-08-01",
+      "league": "NBA Women:2025",
+      "status": 200,
+      "latency_ms": 239,
+      "rows": 3,
+      "fields": [
+        "name",
+        "standings"
+      ],
+      "standing_rows": 26,
+      "quality_codes": [
+        "BASKETBALL_STANDINGS_PROVIDER_QUARANTINED"
+      ]
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "matches",
+      "date": "2025-08-01",
+      "league": null,
+      "status": 200,
+      "latency_ms": 244,
+      "rows": 2,
+      "fields": [
+        "awayTeam",
+        "date",
+        "homeTeam",
+        "id",
+        "league",
+        "round",
+        "season",
+        "state"
+      ]
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "match_coverage",
+      "date": "2025-08-01",
+      "league": "MLB:2025",
+      "status": 200,
+      "rows": 1,
+      "fields": [],
+      "latency_ms": 0
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "standings",
+      "date": "2025-08-01",
+      "league": "MLB:2025",
+      "status": 200,
+      "latency_ms": 229,
+      "rows": 0,
+      "fields": [],
+      "standing_rows": 0,
+      "quality_codes": [
+        "STANDINGS_EMPTY"
+      ]
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "match_detail",
+      "date": "2025-08-01",
+      "league": "MLB:2025",
+      "status": 200,
+      "latency_ms": 451,
+      "rows": 1,
+      "fields": [
+        "awayTeam",
+        "date",
+        "forecast",
+        "homeTeam",
+        "id",
+        "league",
+        "news",
+        "plays",
+        "predictions",
+        "referees",
+        "rosters",
+        "round",
+        "season",
+        "state",
+        "stats",
+        "venue"
+      ]
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "match_statistics",
+      "date": "2025-08-01",
+      "league": "MLB:2025",
+      "status": 200,
+      "latency_ms": 240,
+      "rows": 2,
+      "fields": [
+        "team"
+      ]
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "box_scores",
+      "date": "2025-08-01",
+      "league": "MLB:2025",
+      "status": 200,
+      "latency_ms": 238,
+      "rows": 2,
+      "fields": [
+        "boxScores",
+        "team"
+      ]
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "team_statistics",
+      "date": "2025-08-01",
+      "league": "MLB:2025",
+      "status": 200,
+      "latency_ms": 246,
+      "rows": 2,
+      "fields": [
+        "away",
+        "home",
+        "leagueName",
+        "round",
+        "total"
+      ]
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "last_five_games",
+      "date": "2025-08-01",
+      "league": "MLB:2025",
+      "status": 200,
+      "latency_ms": 317,
+      "rows": 5,
+      "fields": [
+        "awayTeam",
+        "date",
+        "homeTeam",
+        "id",
+        "league",
+        "round",
+        "season",
+        "state"
+      ]
+    },
+    {
+      "sport": "baseball",
+      "endpoint": "match_coverage",
+      "date": "2025-08-01",
+      "league": "MLB:2025",
+      "status": 200,
+      "rows": 1,
+      "fields": [],
+      "latency_ms": 0
+    }
+  ],
+  "league_coverage": [
+    {
+      "sport": "baseball",
+      "league": "MLB:2025",
+      "dates": [
+        "2025-08-01"
+      ],
+      "endpoints": {
+        "match_coverage": 200,
+        "standings": 200,
+        "match_detail": 200,
+        "match_statistics": 200,
+        "box_scores": 200,
+        "team_statistics": 200,
+        "last_five_games": 200
+      }
+    },
+    {
+      "sport": "baseball",
+      "league": "MLB:2026",
+      "dates": [
+        "2026-06-01",
+        "2026-08-01"
+      ],
+      "endpoints": {
+        "match_coverage": 200,
+        "standings": 200,
+        "match_detail": 200,
+        "match_statistics": 200,
+        "box_scores": 200,
+        "team_statistics": 200,
+        "last_five_games": 200,
+        "player_statistics": 200
+      }
+    },
+    {
+      "sport": "basketball",
+      "league": "CEBL:2025",
+      "dates": [
+        "2025-08-01"
+      ],
+      "endpoints": {
+        "match_coverage": 200,
+        "standings": 200,
+        "match_detail": 200,
+        "match_statistics": 200,
+        "team_statistics": 200,
+        "last_five_games": 200
+      }
+    },
+    {
+      "sport": "basketball",
+      "league": "CEBL:2026",
+      "dates": [
+        "2026-08-01"
+      ],
+      "endpoints": {
+        "match_coverage": 200,
+        "standings": 200,
+        "match_detail": 200,
+        "match_statistics": 200,
+        "team_statistics": 200,
+        "last_five_games": 200
+      }
+    },
+    {
+      "sport": "basketball",
+      "league": "LNB:2025",
+      "dates": [
+        "2026-06-01"
+      ],
+      "endpoints": {
+        "match_coverage": 200,
+        "standings": 200
+      }
+    },
+    {
+      "sport": "basketball",
+      "league": "NBA Women:2025",
+      "dates": [
+        "2025-08-01"
+      ],
+      "endpoints": {
+        "match_coverage": 200,
+        "standings": 200
+      }
+    },
+    {
+      "sport": "basketball",
+      "league": "NBA Women:2026",
+      "dates": [
+        "2026-08-01"
+      ],
+      "endpoints": {
+        "match_coverage": 200,
+        "standings": 200
+      }
+    },
+    {
+      "sport": "basketball",
+      "league": "Superliga:2026",
+      "dates": [
+        "2026-06-01"
+      ],
+      "endpoints": {
+        "match_coverage": 200,
+        "standings": 200,
+        "match_detail": 200,
+        "match_statistics": 200,
+        "team_statistics": 200,
+        "last_five_games": 200
+      }
+    },
+    {
+      "sport": "football",
+      "league": "CONCACAF Caribbean Club Shield:2025",
+      "dates": [
+        "2025-08-01"
+      ],
+      "endpoints": {
+        "match_coverage": 200,
+        "standings": 200,
+        "match_detail": 200,
+        "match_statistics": 200,
+        "box_scores": 200,
+        "team_statistics": 200,
+        "last_five_games": 200
+      }
+    },
+    {
+      "sport": "football",
+      "league": "Copa Argentina:2025",
+      "dates": [
+        "2025-08-01"
+      ],
+      "endpoints": {
+        "match_coverage": 200,
+        "standings": 200
+      }
+    },
+    {
+      "sport": "football",
+      "league": "Major League Soccer:2026",
+      "dates": [
+        "2026-08-01"
+      ],
+      "endpoints": {
+        "match_coverage": 200,
+        "standings": 200,
+        "match_detail": 200,
+        "match_statistics": 200,
+        "box_scores": 200,
+        "team_statistics": 200,
+        "last_five_games": 200,
+        "player_statistics": 200
+      }
+    },
+    {
+      "sport": "football",
+      "league": "Primera B:2026",
+      "dates": [
+        "2026-06-01"
+      ],
+      "endpoints": {
+        "match_coverage": 200,
+        "standings": 200
+      }
+    },
+    {
+      "sport": "football",
+      "league": "Primera División - Apertura:2026",
+      "dates": [
+        "2026-06-01"
+      ],
+      "endpoints": {
+        "match_coverage": 200,
+        "standings": 200,
+        "match_detail": 200,
+        "match_statistics": 200,
+        "box_scores": 200,
+        "team_statistics": 200,
+        "last_five_games": 200
+      }
+    }
+  ]
+}
