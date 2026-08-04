@@ -57,17 +57,25 @@ def main():
             continue
         probe(client, sport, "match_detail", f"/{sport}/matches/{match_id}", {})
         probe(client, sport, "match_statistics", f"/{sport}/statistics/{match_id}", {})
+        box_payload = None
         if sport == "football":
-            probe(client, sport, "box_scores", f"/{sport}/box-score/{match_id}", {})
-        else:
-            probe(client, sport, "box_scores", f"/{sport}/box-scores/{match_id}", {})
+            box_payload = probe(client, sport, "box_scores", f"/{sport}/box-score/{match_id}", {})
+        elif sport == "baseball":
+            box_payload = probe(client, sport, "box_scores", f"/{sport}/box-scores/{match_id}", {})
         home = match.get("homeTeam") or match.get("home") or {}
         team_id = first_id(home)
         if team_id:
-            probe(client, sport, "team_statistics", f"/{sport}/teams/statistics/{team_id}", {})
+            probe(client, sport, "team_statistics", f"/{sport}/teams/statistics/{team_id}", {"fromDate": date})
             probe(client, sport, "last_five_games", f"/{sport}/last-five-games", {"teamId": team_id})
-            if sport != "baseball":
-                probe(client, sport, "player_statistics", f"/{sport}/players/{team_id}/statistics", {})
+        if sport in ("football", "baseball") and isinstance(box_payload, Mapping):
+            blocks = items(box_payload)
+            players = []
+            for block in blocks:
+                if isinstance(block, Mapping):
+                    players.extend(items(block.get("players") or block.get("boxScores")))
+            player_id = first_id(players[0]) if players else None
+            if player_id:
+                probe(client, sport, "player_statistics", f"/{sport}/players/{player_id}/statistics", {})
 
 
 if __name__ == "__main__":
