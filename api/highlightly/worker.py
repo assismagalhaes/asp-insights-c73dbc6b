@@ -154,8 +154,7 @@ class HighlightlyWorker:
         return cls(
             HighlightlyClient(
                 api_key,
-                base_url=os.environ.get("HIGHLIGHTLY_BASE_URL", "https://sport-highlights-api.p.rapidapi.com"),
-                rapidapi_host=os.environ.get("HIGHLIGHTLY_RAPIDAPI_HOST", "sport-highlights-api.p.rapidapi.com"),
+                base_url=os.environ.get("HIGHLIGHTLY_BASE_URL", "https://sports.highlightly.net"),
             ),
             HighlightlyRepository.from_environment(),
             worker_id=worker_id,
