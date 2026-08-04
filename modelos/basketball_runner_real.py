@@ -65,6 +65,7 @@ WNBA_KELLY_FRACTION = 0.125
 WNBA_MAX_PICK_UNITS = 1.0
 WNBA_MAX_MARKET_UNITS = 1.5
 WNBA_MAX_GAME_UNITS = 2.0
+WNBA_UNCALIBRATED_MAX_MARKET_UNITS = 0.5
 WNBA_MAX_BEST_TO_MEDIAN_RATIO = 1.20
 WNBA_LOW_SAMPLE_MIN_EDGE = 5.0
 WNBA_LOW_SAMPLE_MIN_MEDIAN_EV = 1.0
@@ -139,6 +140,8 @@ def main() -> None:
                     game_rows = montar_linhas_nba(module, row, res)
                 for item in game_rows:
                     if league == 'WNBA':
+                        item['capturado_em'] = row.get('capturado_em')
+                        item['wnba_operational_status'] = 'PENDENTE_ESCALACOES'
                         active_context = build_wnba_active_technical_context(item, res, home, away, row=row)
                         technical_context = merge_wnba_technical_context(context, active_context)
                         item['dados_tecnicos'] = technical_context
@@ -451,7 +454,11 @@ def long_csv_to_wide(csv_path: Path, league: str, module: Any) -> pd.DataFrame:
             'league': league,
             'odds_HomeAway_FT_including_OT_1': math.nan,
             'odds_HomeAway_FT_including_OT_2': math.nan,
+            'capturado_em': None,
         })
+        captured_at = clean(r.get('capturado_em'))
+        if captured_at and (not game['capturado_em'] or captured_at > game['capturado_em']):
+            game['capturado_em'] = captured_at
         mercado = normalize_text(r.get('mercado'))
         pick = clean(r.get('pick'))
         linha = to_float(r.get('linha'))
@@ -2334,7 +2341,13 @@ def apply_wnba_exposure_caps(rows: list[dict[str, Any]]) -> list[dict[str, Any]]
     game_used: dict[str, float] = {}
     market_used: dict[tuple[str, str], float] = {}
     kept: list[dict[str, Any]] = []
-    for row in sorted(rows, key=lambda item: -float(item.get('edge') or 0.0)):
+    calibration = load_wnba_margin_calibration()
+    market_cap = WNBA_MAX_MARKET_UNITS if calibration.get('active') else WNBA_UNCALIBRATED_MAX_MARKET_UNITS
+    role_priority = {'PRINCIPAL': 0, 'ALTERNATIVA': 1}
+    for row in sorted(rows, key=lambda item: (
+        role_priority.get(str(item.get('selection_role') or '').upper(), 2),
+        -float(item.get('edge') or 0.0),
+    )):
         if row.get('_strong_market_conflict'):
             continue
         game = str(row.get('jogo') or '')
@@ -2342,7 +2355,7 @@ def apply_wnba_exposure_caps(rows: list[dict[str, Any]]) -> list[dict[str, Any]]
         requested = parse_units(stake_sugerida(row.get('probabilidade_final'), row.get('edge'), row.get('odd_ofertada')))
         available = min(
             WNBA_MAX_GAME_UNITS - game_used.get(game, 0.0),
-            WNBA_MAX_MARKET_UNITS - market_used.get((game, market), 0.0),
+            market_cap - market_used.get((game, market), 0.0),
             WNBA_MAX_PICK_UNITS,
         )
         allocated = math.floor(max(0.0, min(requested, available)) * 4.0 + 1e-9) / 4.0
@@ -2639,6 +2652,8 @@ def normalize_rows(rows: list[dict[str, Any]], league: str) -> list[dict[str, An
             'stake': row.get('stake') or stake_sugerida(prob, edge, odd),
             'selection_role': row.get('selection_role'),
             'market_conflict_status': row.get('market_conflict_status'),
+            'capturado_em': row.get('capturado_em'),
+            'wnba_operational_status': row.get('wnba_operational_status'),
             'observacoes': enrich_wnba_observacoes(row, league),
             'dados_tecnicos': enrich_wnba_context(row.get('dados_tecnicos'), row, league),
             'contexto_adicional': enrich_wnba_context(row.get('contexto_modelo') or row.get('dados_tecnicos'), row, league),
@@ -2651,7 +2666,7 @@ def normalize_rows(rows: list[dict[str, Any]], league: str) -> list[dict[str, An
 
 def write_output_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    cols = ['data','hora','esporte','liga','jogo','mandante','visitante','mercado','pick','odd','odd_ofertada','odd_mediana','odd_mercado_base','odd_melhor','bookmaker_melhor','odd_valor','probabilidade','probabilidade_final','edge','stake','selection_role','market_conflict_status','observacoes','dados_tecnicos','contexto_adicional','parecer_validacao']
+    cols = ['data','hora','esporte','liga','jogo','mandante','visitante','mercado','pick','odd','odd_ofertada','odd_mediana','odd_mercado_base','odd_melhor','bookmaker_melhor','odd_valor','probabilidade','probabilidade_final','edge','stake','selection_role','market_conflict_status','capturado_em','wnba_operational_status','observacoes','dados_tecnicos','contexto_adicional','parecer_validacao']
     with path.open('w', encoding='utf-8-sig', newline='') as fh:
         writer = csv.DictWriter(fh, fieldnames=cols, extrasaction='ignore')
         writer.writeheader()
@@ -2839,7 +2854,6 @@ def observacoes(module: Any, res: dict, home: str, away: str) -> str:
     return (
         f"RPI {home} {res.get('rpi_c', 0):.3f} x {away} {res.get('rpi_f', 0):.3f}; "
         f"Delta RPI {res.get('delta_rpi', 0):+.3f}; "
-        f"Sim Win% {home} {res.get('win_c', 0):.1f}% x {away} {res.get('win_f', 0):.1f}%; "
         f"Delta pontos {res.get('delta_pontos', 0):+.2f}; "
         f"ORtg {home} {res.get('ortg_c', 0):.2f} x {away} {res.get('ortg_f', 0):.2f}; "
         f"DRtg {home} {res.get('drtg_c', 0):.2f} x {away} {res.get('drtg_f', 0):.2f}; "

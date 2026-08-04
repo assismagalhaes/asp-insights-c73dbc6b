@@ -127,6 +127,23 @@ class BasketballWnbaV11Tests(unittest.TestCase):
         selected = runner.apply_wnba_exposure_caps(rows)
         self.assertLessEqual(sum(runner.parse_units(row["stake"]) for row in selected), runner.WNBA_MAX_MARKET_UNITS)
 
+    def test_uncalibrated_margin_keeps_only_half_unit_on_principal_correlated_line(self) -> None:
+        rows = [
+            {"jogo": "A vs B", "mercado": "Handicap Asiatico", "pick": "B +12.5", "probabilidade_final": 56.0, "edge": 8.0, "odd_ofertada": 1.95, "selection_role": "PRINCIPAL"},
+            {"jogo": "A vs B", "mercado": "Handicap Asiatico", "pick": "B +13.5", "probabilidade_final": 60.0, "edge": 10.0, "odd_ofertada": 1.85, "selection_role": "ALTERNATIVA"},
+        ]
+
+        with patch.object(runner, "load_wnba_margin_calibration", return_value={"active": False}):
+            selected = runner.apply_wnba_exposure_caps(rows)
+
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected[0]["selection_role"], "PRINCIPAL")
+        self.assertEqual(selected[0]["stake"], "0.5u")
+
+    def test_wnba_observations_do_not_publish_legacy_sim_win_percent(self) -> None:
+        text = runner.observacoes(FakeWnbaModule(), {"rpi_c": 0.6, "rpi_f": 0.4, "win_c": 20.0, "win_f": 80.0}, "HOME", "AWAY")
+        self.assertNotIn("Sim Win%", text)
+
     def test_strong_market_conflict_is_not_published_or_staked(self) -> None:
         rows = [{
             "jogo": "A vs B",
