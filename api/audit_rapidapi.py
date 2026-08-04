@@ -49,13 +49,12 @@ def test_sport(client: HighlightlyClient, sport: str, date: str):
 def main():
     # Use dummy key if not set, but the request will likely 401/403
     api_key = os.getenv("HIGHLIGHTLY_API_KEY", "dummy-key-for-audit")
-    base_url = os.getenv("HIGHLIGHTLY_BASE_URL", "https://sport-highlights-api.p.rapidapi.com")
-    rapidapi_host = os.getenv("HIGHLIGHTLY_RAPIDAPI_HOST", "sport-highlights-api.p.rapidapi.com")
+    base_url = os.getenv("HIGHLIGHTLY_BASE_URL", "https://sports.highlightly.net")
     
     print(f"Auditing Host: {base_url}")
-    print(f"RapidAPI-Host Header: {rapidapi_host}")
+    print("Authentication: x-api-key")
     
-    client = HighlightlyClient(api_key, base_url=base_url, rapidapi_host=rapidapi_host)
+    client = HighlightlyClient(api_key, base_url=base_url)
     
     # Test Football
     success = test_sport(client, "football", "2026-08-01")
