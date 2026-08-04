@@ -61,7 +61,7 @@ class HighlightlyClient:
         request = Request(
             url,
             headers={
-                "x-api-key": self.api_key,
+                "x-rapidapi-key": self.api_key,
                 "accept": "application/json",
                 "user-agent": DEFAULT_USER_AGENT,
             },

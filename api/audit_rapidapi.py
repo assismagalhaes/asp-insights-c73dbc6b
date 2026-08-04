@@ -52,7 +52,7 @@ def main():
     base_url = os.getenv("HIGHLIGHTLY_BASE_URL", "https://sports.highlightly.net")
     
     print(f"Auditing Host: {base_url}")
-    print("Authentication: x-api-key")
+    print("Authentication: x-rapidapi-key (direct Highlightly host)")
     
     client = HighlightlyClient(api_key, base_url=base_url)
     
