@@ -130,6 +130,16 @@ def _available_raw_markets(raw_data: Any) -> set[str]:
     return available
 
 
+def _canonical_market_name(value: Any) -> str:
+    aliases = {
+        "asian-handicap": "ah", "handicap": "ah",
+        "both-teams-score": "bts", "double-chance": "double",
+        "home-away": "1x2", "moneyline": "1x2",
+    }
+    key = str(value).strip().lower()
+    return aliases.get(key, key)
+
+
 def _collection_warning(
     params: dict[str, Any], total_jogos: int, total_odds: int, raw_data: Any = None
 ) -> str | None:
@@ -140,7 +150,7 @@ def _collection_warning(
         reasons.append("nenhum jogo encontrado")
     if total_odds == 0:
         reasons.append("nenhuma odd normalizada")
-    requested = {str(value).strip().lower() for value in params.get("mercados") or []}
+    requested = {_canonical_market_name(value) for value in params.get("mercados") or []}
     if requested and total_jogos > 0 and raw_data is not None:
         missing = sorted(requested - _available_raw_markets(raw_data))
         if missing:
