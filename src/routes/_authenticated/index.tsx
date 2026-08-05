@@ -1,4 +1,83 @@
-// Execute esta instrucao no projeto: como está o consumo de creditos diários?
+// Execute esta instrucao no projeto: Analise o consumo de créditos deste projeto e me apresente um relatório detalhado do uso diário.
+//
+// Não crie nenhuma tela, aba, dashboard, tabela, componente ou nova funcionalidade dentro do projeto. Quero apenas uma análise técnica e a resposta em texto.
+//
+// Separe obrigatoriamente o consumo em duas categorias:
+//
+// 1. **Consumo da IA Gateway**
+// 2. **Consumo normal da infraestrutura do projeto**
+//
+// Na categoria **IA Gateway**, informe:
+//
+// * consumo diário de créditos;
+// * quantidade de chamadas realizadas;
+// * modelos de IA utilizados;
+// * tokens de entrada e saída, quando disponíveis;
+// * funcionalidades ou arquivos responsáveis pelas chamadas;
+// * datas e horários das chamadas;
+// * estimativa ou valor real consumido por cada chamada;
+// * total consumido por dia.
+//
+// Na categoria **Infraestrutura**, informe separadamente o consumo relacionado a:
+//
+// * banco de dados;
+// * consultas ao banco;
+// * Edge Functions;
+// * autenticação;
+// * storage;
+// * upload e download de arquivos;
+// * bandwidth;
+// * logs;
+// * funções agendadas;
+// * realtime;
+// * demais serviços que consumam créditos.
+//
+// Apresente os resultados por dia, preferencialmente considerando:
+//
+// * hoje;
+// * ontem;
+// * últimos 7 dias;
+// * últimos 30 dias.
+//
+// Para cada período, mostre:
+//
+// * total consumido pela IA Gateway;
+// * total consumido pela infraestrutura;
+// * percentual de cada categoria no consumo total;
+// * média diária;
+// * dias com maior consumo;
+// * possíveis picos ou comportamentos anormais.
+//
+// Também identifique:
+//
+// * qual funcionalidade mais utiliza IA;
+// * qual arquivo, função ou endpoint realiza mais chamadas;
+// * qual recurso de infraestrutura mais consome créditos;
+// * possíveis chamadas repetidas ou desnecessárias;
+// * consultas excessivas ao banco;
+// * loops, automações ou processos que possam estar consumindo créditos de forma anormal.
+//
+// Utilize dados reais disponíveis nos logs, métricas, painéis internos, banco de dados e configurações do projeto.
+//
+// Não invente ou estime informações quando não houver dados suficientes.
+//
+// Quando algum valor não puder ser identificado, informe claramente:
+//
+// * qual informação não está disponível;
+// * por que não é possível obtê-la;
+// * onde posso consultar esse dado;
+// * qual log ou ferramenta de monitoramento precisaria ser habilitado.
+//
+// Ao final, apresente uma conclusão objetiva neste formato:
+//
+// * Consumo total diário:
+// * Consumo da IA Gateway:
+// * Consumo da infraestrutura:
+// * Principal fonte de consumo:
+// * Possíveis desperdícios identificados:
+// * Recomendações para redução de consumo:
+//
+// Reforçando: não implemente nada no projeto. Apenas faça a análise e apresente o relatório em texto.
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
