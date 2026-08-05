@@ -1,25 +1,4 @@
-// Execute esta instrucao no projeto: Corrija o cliente Highlightly para suportar RapidAPI:
-//
-// 1. Usar como base URL:
-//    https://sport-highlights-api.p.rapidapi.com
-//
-// 2. Enviar os headers:
-//    x-rapidapi-key: HIGHLIGHTLY_API_KEY
-//    x-rapidapi-host: sport-highlights-api.p.rapidapi.com
-//    accept: application/json
-//
-// 3. Tornar o host configurável por:
-//    HIGHLIGHTLY_RAPIDAPI_HOST
-//    com valor padrão sport-highlights-api.p.rapidapi.com.
-//
-// 4. Atualizar o exemplo de ambiente e a configuração da VM, sem exibir a chave.
-//
-// 5. Executar somente um teste read-only:
-//    GET /football/matches?date=2026-08-01&limit=1
-//
-// 6. Retornar status, latência, quota restante e quantidade de registros.
-//
-// Não habilitar HIGHLIGHTLY_ANALYSIS_ENABLED, não fazer backfill, não alterar banco e não publicar prognósticos. Se retornar HTTP 200, repetir o mesmo teste para basquete e beisebol.
+// Execute esta instrucao no projeto: como está o consumo de creditos diários?
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
