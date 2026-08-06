@@ -1,117 +1,25 @@
-// Execute esta instrucao no projeto: Preciso concluir a migração integral do Storage deste projeto Lovable Cloud para um projeto Supabase externo de minha propriedade.
+// Execute esta instrucao no projeto: Corrija o cliente Highlightly para suportar RapidAPI:
 //
-// IMPORTANTE:
-// - Execute somente operações de leitura e exportação.
-// - Não altere banco, Auth, Storage, buckets, objetos, código, secrets, funções, deploy ou configurações.
-// - Não exclua, mova, renomeie ou sobrescreva nenhum objeto.
-// - O ambiente atual deve permanecer funcionando normalmente.
-// - Não gere apenas manifestos ou listagens: eu já possuo os manifestos.
-// - Preciso dos arquivos físicos armazenados, não apenas das linhas de storage.objects.
+// 1. Usar como base URL:
+//    https://sport-highlights-api.p.rapidapi.com
 //
-// ESCOPO
+// 2. Enviar os headers:
+//    x-rapidapi-key: HIGHLIGHTLY_API_KEY
+//    x-rapidapi-host: sport-highlights-api.p.rapidapi.com
+//    accept: application/json
 //
-// Exportar integralmente os objetos físicos destes buckets privados:
+// 3. Tornar o host configurável por:
+//    HIGHLIGHTLY_RAPIDAPI_HOST
+//    com valor padrão sport-highlights-api.p.rapidapi.com.
 //
-// 1. asp-validator-uploads
-// 2. highlightly-raw
+// 4. Atualizar o exemplo de ambiente e a configuração da VM, sem exibir a chave.
 //
-// Inventário atualmente conhecido:
-// - 73.694 objetos
-// - aproximadamente 155.951.499 bytes
-// - os caminhos, nomes e estrutura original de pastas devem ser preservados
-// - preservar content-type/MIME type e, quando disponíveis, cache-control e demais metadados
+// 5. Executar somente um teste read-only:
+//    GET /football/matches?date=2026-08-01&limit=1
 //
-// ENTREGA PREFERENCIAL
+// 6. Retornar status, latência, quota restante e quantidade de registros.
 //
-// Gere um arquivo compactado contendo todos os objetos físicos, organizado assim:
-//
-// storage-export/
-//   asp-validator-uploads/
-//     [caminhos originais dos objetos]
-//   highlightly-raw/
-//     [caminhos originais dos objetos]
-//   manifest.csv
-//   checksums-sha256.csv
-//   export-report.txt
-//
-// O arquivo `manifest.csv` deve conter, no mínimo:
-//
-// - bucket
-// - object_path
-// - size_bytes
-// - mime_type
-// - created_at
-// - updated_at
-// - sha256, se for tecnicamente possível calcular
-//
-// O arquivo `checksums-sha256.csv` deve conter o SHA-256 de cada arquivo exportado, se possível.
-//
-// O relatório final deve informar:
-//
-// - quantidade de objetos por bucket
-// - quantidade total de objetos
-// - tamanho total por bucket
-// - tamanho total da exportação
-// - objetos que não puderam ser exportados
-// - arquivos ausentes ou inconsistentes
-// - SHA-256 do arquivo compactado final
-// - data e hora UTC do início e término da exportação
-//
-// O arquivo compactado deve ser disponibilizado para download por meio seguro e temporário.
-//
-// ALTERNATIVA, SOMENTE SE A EXPORTAÇÃO COMPACTADA FOR IMPOSSÍVEL
-//
-// Se a infraestrutura não permitir gerar o arquivo compactado, forneça um mecanismo oficial, temporário e somente leitura para download automatizado dos objetos.
-//
-// Pode ser uma destas opções:
-//
-// 1. URLs assinadas para todos os objetos, com validade suficiente para baixar 73.694 arquivos; ou
-// 2. Credencial temporária restrita somente a leitura dos dois buckets; ou
-// 3. Endpoint oficial de exportação em massa.
-//
-// Nesse caso, entregue também:
-//
-// - URL base/endpoint
-// - método de autenticação
-// - prazo exato de validade
-// - limitações de paginação e taxa
-// - exemplo de download de um único objeto
-// - manifesto relacionando bucket, caminho e URL assinada, se aplicável
-//
-// NÃO ACEITO COMO CONCLUSÃO
-//
-// Não considere a solicitação atendida se entregar somente:
-//
-// - dump PostgreSQL;
-// - conteúdo de storage.objects;
-// - lista de buckets;
-// - manifesto de caminhos;
-// - contagens;
-// - instruções genéricas para usar a API;
-// - script que dependa de uma service_role inacessível;
-// - recomendação para baixar manualmente os arquivos um por um.
-//
-// Esses itens não contêm os objetos físicos e não permitem concluir a migração.
-//
-// VALIDAÇÃO OBRIGATÓRIA
-//
-// Antes de afirmar que concluiu:
-//
-// 1. Compare a exportação com o inventário completo do Storage.
-// 2. Confirme que todos os 73.694 objetos físicos foram incluídos ou liste precisamente cada falha.
-// 3. Confirme que os caminhos originais foram preservados.
-// 4. Informe a soma total dos bytes exportados.
-// 5. Informe onde o arquivo pode ser baixado e até quando o link estará válido.
-//
-// Se alguma permissão impedir a exportação, não tente contornar a segurança. Informe objetivamente:
-//
-// - qual permissão está faltando;
-// - qual equipe/suporte da Lovable consegue executar a exportação;
-// - o caminho exato no painel para solicitar ou gerar o export;
-// - quais dados devo fornecer ao suporte;
-// - número ou identificador da solicitação, se você conseguir abri-la.
-//
-// Responda de forma objetiva e não faça nenhuma alteração no projeto.
+// Não habilitar HIGHLIGHTLY_ANALYSIS_ENABLED, não fazer backfill, não alterar banco e não publicar prognósticos. Se retornar HTTP 200, repetir o mesmo teste para basquete e beisebol.
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
