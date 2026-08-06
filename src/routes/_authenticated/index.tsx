@@ -1,25 +1,127 @@
-// Execute esta instrucao no projeto: Corrija o cliente Highlightly para suportar RapidAPI:
+// Execute esta instrucao no projeto: Preciso realizar a migração completa e segura do backend deste projeto Lovable Cloud para uma conta própria do Supabase.
 //
-// 1. Usar como base URL:
-//    https://sport-highlights-api.p.rapidapi.com
+// PROJETO DE ORIGEM
+// - Nome: ASP Insights
+// - Project ID: 4dac6de8-943c-4948-9a8d-c134df0576c7
+// - Backend atual: Lovable Cloud, baseado em Supabase/PostgreSQL
+// - Banco atual: aproximadamente 3,95 GB
+// - Schema public: 84 tabelas
+// - Volume estimado: aproximadamente 6,8 milhões de registros
+// - Auth: 1 usuário
+// - Storage: 2 buckets, aproximadamente 73.694 objetos e 156 MB
 //
-// 2. Enviar os headers:
-//    x-rapidapi-key: HIGHLIGHTLY_API_KEY
-//    x-rapidapi-host: sport-highlights-api.p.rapidapi.com
-//    accept: application/json
+// PROJETO DE DESTINO
+// - Plataforma: Supabase Pro
+// - Project ref: qjcetldbguawmfijuxrq
+// - Região: sa-east-1
+// - O schema estrutural já foi recriado no destino.
+// - Preciso agora migrar dados, usuário e arquivos.
 //
-// 3. Tornar o host configurável por:
-//    HIGHLIGHTLY_RAPIDAPI_HOST
-//    com valor padrão sport-highlights-api.p.rapidapi.com.
+// PROBLEMA ENCONTRADO
+// A exportação manual pelo botão “Export CSV” não é adequada para este banco.
 //
-// 4. Atualizar o exemplo de ambiente e a configuração da VM, sem exibir a chave.
+// A tabela public.sports_odds_history possui aproximadamente 1,9 milhão de registros e sua exportação pelo painel não foi concluída. Outras tabelas também possuem centenas de milhares ou milhões de registros.
 //
-// 5. Executar somente um teste read-only:
-//    GET /football/matches?date=2026-08-01&limit=1
+// Não quero exportações limitadas à página visível, amostras, relatórios resumidos ou arquivos truncados.
 //
-// 6. Retornar status, latência, quota restante e quantidade de registros.
+// SOLICITAÇÃO PRINCIPAL
+// Forneça uma das opções abaixo, nesta ordem de preferência:
 //
-// Não habilitar HIGHLIGHTLY_ANALYSIS_ENABLED, não fazer backfill, não alterar banco e não publicar prognósticos. Se retornar HTTP 200, repetir o mesmo teste para basquete e beisebol.
+// 1. Um dump PostgreSQL completo feito com pg_dump, preferencialmente no formato custom:
+//    pg_dump --format=custom
+//
+// OU
+//
+// 2. Uma connection string PostgreSQL temporária e somente leitura, com acesso suficiente para executar pg_dump.
+//
+// OU, se nenhuma das opções anteriores for possível:
+//
+// 3. Exportações completas e paginadas dos dados, divididas em arquivos menores, sem truncamento e preservando todas as colunas, valores nulos, UUIDs, timestamps, JSON/JSONB e relacionamentos.
+//
+// REQUISITOS DO DUMP/EXPORTAÇÃO
+// O material precisa incluir:
+//
+// - Todos os dados das 84 tabelas do schema public.
+// - Sequências e respectivos valores atuais, se existirem.
+// - Dados necessários para preservar chaves primárias e estrangeiras.
+// - Dados dos schemas necessários à migração, quando permitidos.
+// - Manifesto com nome de cada tabela e quantidade exata de registros exportados.
+// - Codificação UTF-8.
+// - Datas e timestamps sem perda de timezone.
+// - Campos JSON e JSONB sem conversão destrutiva.
+// - Arquivos sem limitação silenciosa de linhas.
+// - Checksums SHA-256 dos arquivos gerados, se possível.
+//
+// Não é necessário recriar o schema public no destino, pois as migrations já foram aplicadas. Entretanto, o dump pode conter o schema caso seja mais seguro ou seja a única modalidade disponível.
+//
+// AUTH
+// Existe 1 usuário no Supabase Auth interno.
+//
+// Preciso receber:
+//
+// - Exportação dos dados permitidos do usuário.
+// - Identificador UUID original.
+// - E-mail, metadados, app_metadata, datas e demais campos exportáveis.
+// - Informação explícita sobre quais campos de autenticação não podem ser exportados.
+// - Procedimento recomendado para preservar o mesmo UUID ou, se isso não for possível, realizar redefinição de senha.
+//
+// Não exponha senha em texto puro. Não altere nem exclua o usuário atual.
+//
+// STORAGE
+// Existem 2 buckets e aproximadamente 73.694 objetos.
+//
+// Preciso receber:
+//
+// - Lista dos buckets e suas configurações.
+// - Exportação completa dos arquivos.
+// - Caminho original de cada objeto.
+// - MIME type, tamanho e metadados.
+// - Manifesto relacionando bucket, caminho e tamanho.
+// - Arquivos organizados por bucket.
+// - Se necessário, dividir a exportação em vários arquivos ZIP/TAR menores.
+//
+// Se os downloads gerados pela Lovable tiverem limite de 20 MB, divida os arquivos em múltiplas partes menores que esse limite. Não descarte arquivos e não gere apenas uma amostra.
+//
+// RESTRIÇÕES DE SEGURANÇA
+// Esta solicitação é estritamente de exportação e leitura.
+//
+// NÃO realizar:
+//
+// - DELETE, UPDATE, INSERT, TRUNCATE ou DROP no banco atual.
+// - Mudança de migrations, schema, índices, triggers ou políticas RLS.
+// - Alteração de usuários, senhas ou sessões.
+// - Alteração ou exclusão dos arquivos do Storage.
+// - Mudança de domínio, DNS, publicação ou deploy.
+// - Alteração das variáveis e secrets atuais.
+// - Modificação do código-fonte do projeto.
+// - Troca automática do backend para o novo Supabase.
+// - Desativação do Lovable Cloud.
+// - Criação de funções temporárias persistentes no banco.
+//
+// O ambiente atual deve continuar funcionando normalmente durante toda a exportação.
+//
+// CONTROLE DE CONSISTÊNCIA
+// Se possível, gere a exportação a partir de um snapshot consistente do banco.
+//
+// Ao concluir, informe:
+//
+// 1. Modalidade utilizada: dump, conexão temporária ou arquivos paginados.
+// 2. Data e horário UTC do snapshot/exportação.
+// 3. Quantidade exata de tabelas exportadas.
+// 4. Quantidade de registros por tabela.
+// 5. Tamanho total do banco exportado.
+// 6. Quantidade de usuários exportados.
+// 7. Quantidade de buckets e objetos exportados.
+// 8. Lista de qualquer item que não pôde ser exportado.
+// 9. Instruções objetivas para baixar os arquivos.
+// 10. Prazo de validade da conexão ou dos links de download.
+//
+// IMPORTANTE
+// Não responda apenas com instruções genéricas para usar o botão “Export CSV”. Esse método já foi testado e não concluiu para as tabelas grandes.
+//
+// Se o agente da Lovable não possuir capacidade técnica ou permissão para gerar esse material, encaminhe esta solicitação ao suporte técnico responsável pela infraestrutura Lovable Cloud e informe o protocolo do chamado.
+//
+// Antes de executar qualquer operação que possa modificar o ambiente atual, pare e solicite confirmação explícita.
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
