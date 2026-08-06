@@ -1,127 +1,117 @@
-// Execute esta instrucao no projeto: Preciso realizar a migração completa e segura do backend deste projeto Lovable Cloud para uma conta própria do Supabase.
+// Execute esta instrucao no projeto: Preciso concluir a migração integral do Storage deste projeto Lovable Cloud para um projeto Supabase externo de minha propriedade.
 //
-// PROJETO DE ORIGEM
-// - Nome: ASP Insights
-// - Project ID: 4dac6de8-943c-4948-9a8d-c134df0576c7
-// - Backend atual: Lovable Cloud, baseado em Supabase/PostgreSQL
-// - Banco atual: aproximadamente 3,95 GB
-// - Schema public: 84 tabelas
-// - Volume estimado: aproximadamente 6,8 milhões de registros
-// - Auth: 1 usuário
-// - Storage: 2 buckets, aproximadamente 73.694 objetos e 156 MB
+// IMPORTANTE:
+// - Execute somente operações de leitura e exportação.
+// - Não altere banco, Auth, Storage, buckets, objetos, código, secrets, funções, deploy ou configurações.
+// - Não exclua, mova, renomeie ou sobrescreva nenhum objeto.
+// - O ambiente atual deve permanecer funcionando normalmente.
+// - Não gere apenas manifestos ou listagens: eu já possuo os manifestos.
+// - Preciso dos arquivos físicos armazenados, não apenas das linhas de storage.objects.
 //
-// PROJETO DE DESTINO
-// - Plataforma: Supabase Pro
-// - Project ref: qjcetldbguawmfijuxrq
-// - Região: sa-east-1
-// - O schema estrutural já foi recriado no destino.
-// - Preciso agora migrar dados, usuário e arquivos.
+// ESCOPO
 //
-// PROBLEMA ENCONTRADO
-// A exportação manual pelo botão “Export CSV” não é adequada para este banco.
+// Exportar integralmente os objetos físicos destes buckets privados:
 //
-// A tabela public.sports_odds_history possui aproximadamente 1,9 milhão de registros e sua exportação pelo painel não foi concluída. Outras tabelas também possuem centenas de milhares ou milhões de registros.
+// 1. asp-validator-uploads
+// 2. highlightly-raw
 //
-// Não quero exportações limitadas à página visível, amostras, relatórios resumidos ou arquivos truncados.
+// Inventário atualmente conhecido:
+// - 73.694 objetos
+// - aproximadamente 155.951.499 bytes
+// - os caminhos, nomes e estrutura original de pastas devem ser preservados
+// - preservar content-type/MIME type e, quando disponíveis, cache-control e demais metadados
 //
-// SOLICITAÇÃO PRINCIPAL
-// Forneça uma das opções abaixo, nesta ordem de preferência:
+// ENTREGA PREFERENCIAL
 //
-// 1. Um dump PostgreSQL completo feito com pg_dump, preferencialmente no formato custom:
-//    pg_dump --format=custom
+// Gere um arquivo compactado contendo todos os objetos físicos, organizado assim:
 //
-// OU
+// storage-export/
+//   asp-validator-uploads/
+//     [caminhos originais dos objetos]
+//   highlightly-raw/
+//     [caminhos originais dos objetos]
+//   manifest.csv
+//   checksums-sha256.csv
+//   export-report.txt
 //
-// 2. Uma connection string PostgreSQL temporária e somente leitura, com acesso suficiente para executar pg_dump.
+// O arquivo `manifest.csv` deve conter, no mínimo:
 //
-// OU, se nenhuma das opções anteriores for possível:
+// - bucket
+// - object_path
+// - size_bytes
+// - mime_type
+// - created_at
+// - updated_at
+// - sha256, se for tecnicamente possível calcular
 //
-// 3. Exportações completas e paginadas dos dados, divididas em arquivos menores, sem truncamento e preservando todas as colunas, valores nulos, UUIDs, timestamps, JSON/JSONB e relacionamentos.
+// O arquivo `checksums-sha256.csv` deve conter o SHA-256 de cada arquivo exportado, se possível.
 //
-// REQUISITOS DO DUMP/EXPORTAÇÃO
-// O material precisa incluir:
+// O relatório final deve informar:
 //
-// - Todos os dados das 84 tabelas do schema public.
-// - Sequências e respectivos valores atuais, se existirem.
-// - Dados necessários para preservar chaves primárias e estrangeiras.
-// - Dados dos schemas necessários à migração, quando permitidos.
-// - Manifesto com nome de cada tabela e quantidade exata de registros exportados.
-// - Codificação UTF-8.
-// - Datas e timestamps sem perda de timezone.
-// - Campos JSON e JSONB sem conversão destrutiva.
-// - Arquivos sem limitação silenciosa de linhas.
-// - Checksums SHA-256 dos arquivos gerados, se possível.
+// - quantidade de objetos por bucket
+// - quantidade total de objetos
+// - tamanho total por bucket
+// - tamanho total da exportação
+// - objetos que não puderam ser exportados
+// - arquivos ausentes ou inconsistentes
+// - SHA-256 do arquivo compactado final
+// - data e hora UTC do início e término da exportação
 //
-// Não é necessário recriar o schema public no destino, pois as migrations já foram aplicadas. Entretanto, o dump pode conter o schema caso seja mais seguro ou seja a única modalidade disponível.
+// O arquivo compactado deve ser disponibilizado para download por meio seguro e temporário.
 //
-// AUTH
-// Existe 1 usuário no Supabase Auth interno.
+// ALTERNATIVA, SOMENTE SE A EXPORTAÇÃO COMPACTADA FOR IMPOSSÍVEL
 //
-// Preciso receber:
+// Se a infraestrutura não permitir gerar o arquivo compactado, forneça um mecanismo oficial, temporário e somente leitura para download automatizado dos objetos.
 //
-// - Exportação dos dados permitidos do usuário.
-// - Identificador UUID original.
-// - E-mail, metadados, app_metadata, datas e demais campos exportáveis.
-// - Informação explícita sobre quais campos de autenticação não podem ser exportados.
-// - Procedimento recomendado para preservar o mesmo UUID ou, se isso não for possível, realizar redefinição de senha.
+// Pode ser uma destas opções:
 //
-// Não exponha senha em texto puro. Não altere nem exclua o usuário atual.
+// 1. URLs assinadas para todos os objetos, com validade suficiente para baixar 73.694 arquivos; ou
+// 2. Credencial temporária restrita somente a leitura dos dois buckets; ou
+// 3. Endpoint oficial de exportação em massa.
 //
-// STORAGE
-// Existem 2 buckets e aproximadamente 73.694 objetos.
+// Nesse caso, entregue também:
 //
-// Preciso receber:
+// - URL base/endpoint
+// - método de autenticação
+// - prazo exato de validade
+// - limitações de paginação e taxa
+// - exemplo de download de um único objeto
+// - manifesto relacionando bucket, caminho e URL assinada, se aplicável
 //
-// - Lista dos buckets e suas configurações.
-// - Exportação completa dos arquivos.
-// - Caminho original de cada objeto.
-// - MIME type, tamanho e metadados.
-// - Manifesto relacionando bucket, caminho e tamanho.
-// - Arquivos organizados por bucket.
-// - Se necessário, dividir a exportação em vários arquivos ZIP/TAR menores.
+// NÃO ACEITO COMO CONCLUSÃO
 //
-// Se os downloads gerados pela Lovable tiverem limite de 20 MB, divida os arquivos em múltiplas partes menores que esse limite. Não descarte arquivos e não gere apenas uma amostra.
+// Não considere a solicitação atendida se entregar somente:
 //
-// RESTRIÇÕES DE SEGURANÇA
-// Esta solicitação é estritamente de exportação e leitura.
+// - dump PostgreSQL;
+// - conteúdo de storage.objects;
+// - lista de buckets;
+// - manifesto de caminhos;
+// - contagens;
+// - instruções genéricas para usar a API;
+// - script que dependa de uma service_role inacessível;
+// - recomendação para baixar manualmente os arquivos um por um.
 //
-// NÃO realizar:
+// Esses itens não contêm os objetos físicos e não permitem concluir a migração.
 //
-// - DELETE, UPDATE, INSERT, TRUNCATE ou DROP no banco atual.
-// - Mudança de migrations, schema, índices, triggers ou políticas RLS.
-// - Alteração de usuários, senhas ou sessões.
-// - Alteração ou exclusão dos arquivos do Storage.
-// - Mudança de domínio, DNS, publicação ou deploy.
-// - Alteração das variáveis e secrets atuais.
-// - Modificação do código-fonte do projeto.
-// - Troca automática do backend para o novo Supabase.
-// - Desativação do Lovable Cloud.
-// - Criação de funções temporárias persistentes no banco.
+// VALIDAÇÃO OBRIGATÓRIA
 //
-// O ambiente atual deve continuar funcionando normalmente durante toda a exportação.
+// Antes de afirmar que concluiu:
 //
-// CONTROLE DE CONSISTÊNCIA
-// Se possível, gere a exportação a partir de um snapshot consistente do banco.
+// 1. Compare a exportação com o inventário completo do Storage.
+// 2. Confirme que todos os 73.694 objetos físicos foram incluídos ou liste precisamente cada falha.
+// 3. Confirme que os caminhos originais foram preservados.
+// 4. Informe a soma total dos bytes exportados.
+// 5. Informe onde o arquivo pode ser baixado e até quando o link estará válido.
 //
-// Ao concluir, informe:
+// Se alguma permissão impedir a exportação, não tente contornar a segurança. Informe objetivamente:
 //
-// 1. Modalidade utilizada: dump, conexão temporária ou arquivos paginados.
-// 2. Data e horário UTC do snapshot/exportação.
-// 3. Quantidade exata de tabelas exportadas.
-// 4. Quantidade de registros por tabela.
-// 5. Tamanho total do banco exportado.
-// 6. Quantidade de usuários exportados.
-// 7. Quantidade de buckets e objetos exportados.
-// 8. Lista de qualquer item que não pôde ser exportado.
-// 9. Instruções objetivas para baixar os arquivos.
-// 10. Prazo de validade da conexão ou dos links de download.
+// - qual permissão está faltando;
+// - qual equipe/suporte da Lovable consegue executar a exportação;
+// - o caminho exato no painel para solicitar ou gerar o export;
+// - quais dados devo fornecer ao suporte;
+// - número ou identificador da solicitação, se você conseguir abri-la.
 //
-// IMPORTANTE
-// Não responda apenas com instruções genéricas para usar o botão “Export CSV”. Esse método já foi testado e não concluiu para as tabelas grandes.
-//
-// Se o agente da Lovable não possuir capacidade técnica ou permissão para gerar esse material, encaminhe esta solicitação ao suporte técnico responsável pela infraestrutura Lovable Cloud e informe o protocolo do chamado.
-//
-// Antes de executar qualquer operação que possa modificar o ambiente atual, pare e solicite confirmação explícita.
+// Responda de forma objetiva e não faça nenhuma alteração no projeto.
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
