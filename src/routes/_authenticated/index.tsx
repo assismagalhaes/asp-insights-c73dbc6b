@@ -1,83 +1,127 @@
-// Execute esta instrucao no projeto: Analise o consumo de créditos deste projeto e me apresente um relatório detalhado do uso diário.
+// Execute esta instrucao no projeto: Preciso realizar a migração completa e segura do backend deste projeto Lovable Cloud para uma conta própria do Supabase.
 //
-// Não crie nenhuma tela, aba, dashboard, tabela, componente ou nova funcionalidade dentro do projeto. Quero apenas uma análise técnica e a resposta em texto.
+// PROJETO DE ORIGEM
+// - Nome: ASP Insights
+// - Project ID: 4dac6de8-943c-4948-9a8d-c134df0576c7
+// - Backend atual: Lovable Cloud, baseado em Supabase/PostgreSQL
+// - Banco atual: aproximadamente 3,95 GB
+// - Schema public: 84 tabelas
+// - Volume estimado: aproximadamente 6,8 milhões de registros
+// - Auth: 1 usuário
+// - Storage: 2 buckets, aproximadamente 73.694 objetos e 156 MB
 //
-// Separe obrigatoriamente o consumo em duas categorias:
+// PROJETO DE DESTINO
+// - Plataforma: Supabase Pro
+// - Project ref: qjcetldbguawmfijuxrq
+// - Região: sa-east-1
+// - O schema estrutural já foi recriado no destino.
+// - Preciso agora migrar dados, usuário e arquivos.
 //
-// 1. **Consumo da IA Gateway**
-// 2. **Consumo normal da infraestrutura do projeto**
+// PROBLEMA ENCONTRADO
+// A exportação manual pelo botão “Export CSV” não é adequada para este banco.
 //
-// Na categoria **IA Gateway**, informe:
+// A tabela public.sports_odds_history possui aproximadamente 1,9 milhão de registros e sua exportação pelo painel não foi concluída. Outras tabelas também possuem centenas de milhares ou milhões de registros.
 //
-// * consumo diário de créditos;
-// * quantidade de chamadas realizadas;
-// * modelos de IA utilizados;
-// * tokens de entrada e saída, quando disponíveis;
-// * funcionalidades ou arquivos responsáveis pelas chamadas;
-// * datas e horários das chamadas;
-// * estimativa ou valor real consumido por cada chamada;
-// * total consumido por dia.
+// Não quero exportações limitadas à página visível, amostras, relatórios resumidos ou arquivos truncados.
 //
-// Na categoria **Infraestrutura**, informe separadamente o consumo relacionado a:
+// SOLICITAÇÃO PRINCIPAL
+// Forneça uma das opções abaixo, nesta ordem de preferência:
 //
-// * banco de dados;
-// * consultas ao banco;
-// * Edge Functions;
-// * autenticação;
-// * storage;
-// * upload e download de arquivos;
-// * bandwidth;
-// * logs;
-// * funções agendadas;
-// * realtime;
-// * demais serviços que consumam créditos.
+// 1. Um dump PostgreSQL completo feito com pg_dump, preferencialmente no formato custom:
+//    pg_dump --format=custom
 //
-// Apresente os resultados por dia, preferencialmente considerando:
+// OU
 //
-// * hoje;
-// * ontem;
-// * últimos 7 dias;
-// * últimos 30 dias.
+// 2. Uma connection string PostgreSQL temporária e somente leitura, com acesso suficiente para executar pg_dump.
 //
-// Para cada período, mostre:
+// OU, se nenhuma das opções anteriores for possível:
 //
-// * total consumido pela IA Gateway;
-// * total consumido pela infraestrutura;
-// * percentual de cada categoria no consumo total;
-// * média diária;
-// * dias com maior consumo;
-// * possíveis picos ou comportamentos anormais.
+// 3. Exportações completas e paginadas dos dados, divididas em arquivos menores, sem truncamento e preservando todas as colunas, valores nulos, UUIDs, timestamps, JSON/JSONB e relacionamentos.
 //
-// Também identifique:
+// REQUISITOS DO DUMP/EXPORTAÇÃO
+// O material precisa incluir:
 //
-// * qual funcionalidade mais utiliza IA;
-// * qual arquivo, função ou endpoint realiza mais chamadas;
-// * qual recurso de infraestrutura mais consome créditos;
-// * possíveis chamadas repetidas ou desnecessárias;
-// * consultas excessivas ao banco;
-// * loops, automações ou processos que possam estar consumindo créditos de forma anormal.
+// - Todos os dados das 84 tabelas do schema public.
+// - Sequências e respectivos valores atuais, se existirem.
+// - Dados necessários para preservar chaves primárias e estrangeiras.
+// - Dados dos schemas necessários à migração, quando permitidos.
+// - Manifesto com nome de cada tabela e quantidade exata de registros exportados.
+// - Codificação UTF-8.
+// - Datas e timestamps sem perda de timezone.
+// - Campos JSON e JSONB sem conversão destrutiva.
+// - Arquivos sem limitação silenciosa de linhas.
+// - Checksums SHA-256 dos arquivos gerados, se possível.
 //
-// Utilize dados reais disponíveis nos logs, métricas, painéis internos, banco de dados e configurações do projeto.
+// Não é necessário recriar o schema public no destino, pois as migrations já foram aplicadas. Entretanto, o dump pode conter o schema caso seja mais seguro ou seja a única modalidade disponível.
 //
-// Não invente ou estime informações quando não houver dados suficientes.
+// AUTH
+// Existe 1 usuário no Supabase Auth interno.
 //
-// Quando algum valor não puder ser identificado, informe claramente:
+// Preciso receber:
 //
-// * qual informação não está disponível;
-// * por que não é possível obtê-la;
-// * onde posso consultar esse dado;
-// * qual log ou ferramenta de monitoramento precisaria ser habilitado.
+// - Exportação dos dados permitidos do usuário.
+// - Identificador UUID original.
+// - E-mail, metadados, app_metadata, datas e demais campos exportáveis.
+// - Informação explícita sobre quais campos de autenticação não podem ser exportados.
+// - Procedimento recomendado para preservar o mesmo UUID ou, se isso não for possível, realizar redefinição de senha.
 //
-// Ao final, apresente uma conclusão objetiva neste formato:
+// Não exponha senha em texto puro. Não altere nem exclua o usuário atual.
 //
-// * Consumo total diário:
-// * Consumo da IA Gateway:
-// * Consumo da infraestrutura:
-// * Principal fonte de consumo:
-// * Possíveis desperdícios identificados:
-// * Recomendações para redução de consumo:
+// STORAGE
+// Existem 2 buckets e aproximadamente 73.694 objetos.
 //
-// Reforçando: não implemente nada no projeto. Apenas faça a análise e apresente o relatório em texto.
+// Preciso receber:
+//
+// - Lista dos buckets e suas configurações.
+// - Exportação completa dos arquivos.
+// - Caminho original de cada objeto.
+// - MIME type, tamanho e metadados.
+// - Manifesto relacionando bucket, caminho e tamanho.
+// - Arquivos organizados por bucket.
+// - Se necessário, dividir a exportação em vários arquivos ZIP/TAR menores.
+//
+// Se os downloads gerados pela Lovable tiverem limite de 20 MB, divida os arquivos em múltiplas partes menores que esse limite. Não descarte arquivos e não gere apenas uma amostra.
+//
+// RESTRIÇÕES DE SEGURANÇA
+// Esta solicitação é estritamente de exportação e leitura.
+//
+// NÃO realizar:
+//
+// - DELETE, UPDATE, INSERT, TRUNCATE ou DROP no banco atual.
+// - Mudança de migrations, schema, índices, triggers ou políticas RLS.
+// - Alteração de usuários, senhas ou sessões.
+// - Alteração ou exclusão dos arquivos do Storage.
+// - Mudança de domínio, DNS, publicação ou deploy.
+// - Alteração das variáveis e secrets atuais.
+// - Modificação do código-fonte do projeto.
+// - Troca automática do backend para o novo Supabase.
+// - Desativação do Lovable Cloud.
+// - Criação de funções temporárias persistentes no banco.
+//
+// O ambiente atual deve continuar funcionando normalmente durante toda a exportação.
+//
+// CONTROLE DE CONSISTÊNCIA
+// Se possível, gere a exportação a partir de um snapshot consistente do banco.
+//
+// Ao concluir, informe:
+//
+// 1. Modalidade utilizada: dump, conexão temporária ou arquivos paginados.
+// 2. Data e horário UTC do snapshot/exportação.
+// 3. Quantidade exata de tabelas exportadas.
+// 4. Quantidade de registros por tabela.
+// 5. Tamanho total do banco exportado.
+// 6. Quantidade de usuários exportados.
+// 7. Quantidade de buckets e objetos exportados.
+// 8. Lista de qualquer item que não pôde ser exportado.
+// 9. Instruções objetivas para baixar os arquivos.
+// 10. Prazo de validade da conexão ou dos links de download.
+//
+// IMPORTANTE
+// Não responda apenas com instruções genéricas para usar o botão “Export CSV”. Esse método já foi testado e não concluiu para as tabelas grandes.
+//
+// Se o agente da Lovable não possuir capacidade técnica ou permissão para gerar esse material, encaminhe esta solicitação ao suporte técnico responsável pela infraestrutura Lovable Cloud e informe o protocolo do chamado.
+//
+// Antes de executar qualquer operação que possa modificar o ambiente atual, pare e solicite confirmação explícita.
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
