@@ -93,6 +93,11 @@
 // - Alteração ou exclusão dos arquivos do Storage.
 // - Mudança de domínio, DNS, publicação ou deploy.
 // - Alteração das variáveis e secrets atuais.
+// - Mudança de migrations, schema, índices, triggers ou políticas RLS.
+// - Alteração de usuários, senhas ou sessões.
+// - Alteração ou exclusão dos arquivos do Storage.
+// - Mudança de domínio, DNS, publicação ou deploy.
+// - Alteração das variáveis e secrets atuais.
 // - Modificação do código-fonte do projeto.
 // - Troca automática do backend para o novo Supabase.
 // - Desativação do Lovable Cloud.
