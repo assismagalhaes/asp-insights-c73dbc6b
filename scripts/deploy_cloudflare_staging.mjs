@@ -4,10 +4,15 @@ import { spawnSync } from "node:child_process";
 const expectedWorker = "asp-insights-staging";
 const generatedConfig = "dist/server/wrangler.json";
 const dryRun = process.argv.includes("--dry-run");
+const commandEntrypoints = {
+  vite: "node_modules/vite/bin/vite.js",
+  wrangler: "node_modules/wrangler/bin/wrangler.js",
+};
 
 function run(command, args, env = process.env) {
-  const executable = process.platform === "win32" ? `${command}.cmd` : command;
-  const result = spawnSync(executable, args, {
+  const entrypoint = commandEntrypoints[command];
+  if (!entrypoint) throw new Error(`Unsupported command: ${command}`);
+  const result = spawnSync(process.execPath, [entrypoint, ...args], {
     env,
     stdio: "inherit",
   });
