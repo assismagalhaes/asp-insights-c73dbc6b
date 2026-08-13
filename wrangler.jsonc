@@ -5,11 +5,19 @@
   "compatibility_date": "2026-08-05",
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
-    "enabled": true
+    "enabled": true,
   },
   "env": {
     "staging": {
-      "name": "asp-insights-staging"
-    }
-  }
+      "name": "asp-insights-staging",
+      "workers_dev": true,
+      "preview_urls": false,
+      "routes": [
+        {
+          "pattern": "staging.asp-insights.com.br",
+          "custom_domain": true,
+        },
+      ],
+    },
+  },
 }
