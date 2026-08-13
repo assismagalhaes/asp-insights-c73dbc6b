@@ -239,9 +239,9 @@ function ColetaDadosPage() {
       await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
       toast.success(`Coleta enviada para VM: ${result.job_id}`);
       const finalStatus = await pollVmJob(coleta.id, result.job_id, setRemoteStatus);
-      if (finalStatus === "CONCLUIDA") {
+      if (finalStatus === "CONCLUIDA" || finalStatus === "CONCLUIDA_SEM_EVENTOS") {
         coletaConcluidaNaVm = true;
-        await importarNormalizedDaVm(coleta);
+        if (finalStatus === "CONCLUIDA") await importarNormalizedDaVm(coleta);
       } else if (finalStatus === "WARNING") {
         await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
         toast.warning("Coleta concluída com alerta. Revise o motivo antes de tentar novamente.");
@@ -997,7 +997,9 @@ function extractVmStatus(payload: unknown) {
   const raw = String(data.status ?? data.state ?? data.situacao ?? "").toUpperCase();
   const erro = data.erro ?? data.error ?? data.warning ?? data.mensagem ?? data.message;
   const status =
-    raw.includes("RUN") || raw.includes("ROD") || raw.includes("PROCESS")
+    raw.includes("SEM_EVENTOS") || raw.includes("NO_EVENTS") || raw === "EMPTY"
+      ? "CONCLUIDA_SEM_EVENTOS"
+      : raw.includes("RUN") || raw.includes("ROD") || raw.includes("PROCESS")
       ? "RODANDO"
       : raw.includes("DONE") ||
           raw.includes("CONCL") ||
@@ -1047,7 +1049,7 @@ async function pollVmJob(
     latestStatus = status;
     await updateCollectionStatus(coletaId, status, erro);
 
-    if (status === "CONCLUIDA") return status;
+    if (status === "CONCLUIDA" || status === "CONCLUIDA_SEM_EVENTOS") return status;
     if (status === "WARNING") return status;
     if (status === "ERRO") {
       throw new Error(erro || "Job da VM retornou ERRO.");
@@ -1353,6 +1355,12 @@ const LEAGUES_BY_SPORT: Record<string, LeagueOption[]> = {
   ],
   Futebol: [
     { label: "Todos", value: ALL_LEAGUES_VALUE },
+    { label: "UEFA Champions League", value: "https://www.oddsagora.com.br/football/europe/liga-dos-campeoes/" },
+    { label: "UEFA Europa League", value: "https://www.oddsagora.com.br/football/europe/liga-europa/" },
+    { label: "UEFA Conference League", value: "https://www.oddsagora.com.br/football/europe/liga-conferencia/" },
+    { label: "Copa Libertadores", value: "https://www.oddsagora.com.br/football/south-america/copa-libertadores/" },
+    { label: "Copa Sul-Americana", value: "https://www.oddsagora.com.br/football/south-america/copa-sul-americana/" },
+    { label: "Copa do Brasil", value: "https://www.oddsagora.com.br/football/brazil/copa-betano-do-brasil/" },
     {
       label: "Argentina Liga Profesional",
       value: "https://www.oddsagora.com.br/football/argentina/liga-profesional/",

@@ -22,7 +22,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-from scraper_flashscore import executar_scraper_real
+try:
+    from scraper_flashscore import executar_scraper_real
+except ModuleNotFoundError:
+    def executar_scraper_real(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError(
+            "scraper_flashscore is available only in the VM scraper runtime"
+        )
 
 try:
     from api.scraping_params import normalize_scraping_params, provider_block_error
@@ -130,17 +136,29 @@ def _available_raw_markets(raw_data: Any) -> set[str]:
     return available
 
 
+def _canonical_market_name(value: Any) -> str:
+    aliases = {
+        "asian-handicap": "ah", "handicap": "ah",
+        "both-teams-score": "bts", "double-chance": "double",
+        "home-away": "1x2", "moneyline": "1x2",
+    }
+    key = str(value).strip().lower()
+    return aliases.get(key, key)
+
+
 def _collection_warning(
     params: dict[str, Any], total_jogos: int, total_odds: int, raw_data: Any = None
 ) -> str | None:
     reasons = []
     if not params.get("mercados"):
         reasons.append("nenhum mercado efetivo informado")
-    if total_jogos == 0:
+    raw_status = str(raw_data.get("status") if isinstance(raw_data, dict) else "").upper()
+    expected_empty = raw_status in {"EMPTY", "CONCLUIDA_SEM_EVENTOS"}
+    if total_jogos == 0 and not expected_empty:
         reasons.append("nenhum jogo encontrado")
-    if total_odds == 0:
+    if total_odds == 0 and not expected_empty:
         reasons.append("nenhuma odd normalizada")
-    requested = {str(value).strip().lower() for value in params.get("mercados") or []}
+    requested = {_canonical_market_name(value) for value in params.get("mercados") or []}
     if requested and total_jogos > 0 and raw_data is not None:
         missing = sorted(requested - _available_raw_markets(raw_data))
         if missing:
@@ -787,7 +805,12 @@ def executar_coleta_real(job_id: str, params: dict):
             metrics = {}
 
         job = load_job(job_id)
-        job["status"] = "ERRO" if provider_error else "WARNING" if warning else "CONCLUIDA"
+        normalized_status = str(normalized_data.get("status") or "").upper()
+        job["status"] = "ERRO" if provider_error else "WARNING" if warning else (
+            "CONCLUIDA_SEM_EVENTOS"
+            if normalized_status == "CONCLUIDA_SEM_EVENTOS"
+            else "CONCLUIDA"
+        )
         job["total_jogos"] = total_jogos
         job["total_odds"] = total_odds
         job["raw_path"] = raw_path
@@ -800,7 +823,9 @@ def executar_coleta_real(job_id: str, params: dict):
             or (
                 "Nenhum jogo ou odd foi extraido. Consulte pasta debug."
                 if warning and debug_ctx.enabled
-                else warning or "Coleta real concluida com jogos e odds normalizadas."
+                else warning
+                or normalized_data.get("mensagem")
+                or "Coleta real concluida com jogos e odds normalizadas."
             )
         )
         if debug_ctx.enabled:

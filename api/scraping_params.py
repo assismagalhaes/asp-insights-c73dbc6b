@@ -16,6 +16,12 @@ DEFAULT_ODDSAGORA_BASEBALL_MARKETS = DEFAULT_ODDSAGORA_MARKETS
 ODDSAGORA_MLB_URL = "https://www.oddsagora.com.br/baseball/usa/mlb/"
 ODDSAGORA_LEAGUES_BY_SPORT = {
     "football": [
+        "https://www.oddsagora.com.br/football/europe/liga-dos-campeoes/",
+        "https://www.oddsagora.com.br/football/europe/liga-europa/",
+        "https://www.oddsagora.com.br/football/europe/liga-conferencia/",
+        "https://www.oddsagora.com.br/football/south-america/copa-libertadores/",
+        "https://www.oddsagora.com.br/football/south-america/copa-sul-americana/",
+        "https://www.oddsagora.com.br/football/brazil/copa-betano-do-brasil/",
         "https://www.oddsagora.com.br/football/argentina/liga-profesional/",
         "https://www.oddsagora.com.br/football/germany/2-bundesliga",
         "https://www.oddsagora.com.br/football/germany/bundesliga",

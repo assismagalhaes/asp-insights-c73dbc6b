@@ -29,6 +29,12 @@ DEFAULT_ODDSAGORA_FOOTBALL_MARKETS = ["1x2", "over-under", "ah", "bts", "double"
 DEFAULT_ODDSAGORA_HOCKEY_MARKETS = ["1x2", "home-away", "over-under", "ah", "bts"]
 DEFAULT_ODDSAGORA_LEAGUES = {
     "football": [
+        "https://www.oddsagora.com.br/football/europe/liga-dos-campeoes/",
+        "https://www.oddsagora.com.br/football/europe/liga-europa/",
+        "https://www.oddsagora.com.br/football/europe/liga-conferencia/",
+        "https://www.oddsagora.com.br/football/south-america/copa-libertadores/",
+        "https://www.oddsagora.com.br/football/south-america/copa-sul-americana/",
+        "https://www.oddsagora.com.br/football/brazil/copa-betano-do-brasil/",
         "https://www.oddsagora.com.br/football/germany/2-bundesliga",
         "https://www.oddsagora.com.br/football/germany/bundesliga",
         "https://www.oddsagora.com.br/football/austria/bundesliga",
@@ -1310,8 +1316,13 @@ def executar_scraper_oddsagora(
             else "OddsAgora retornou pagina de bloqueio/captcha em vez da lista de jogos."
         )
     elif not games:
-        status = "WARNING"
-        mensagem = "Nenhum jogo encontrado na pagina da liga OddsAgora."
+        fetch_failures = [log for log in logs if log.get("event") == "league_fetch_failed"]
+        if fetch_failures:
+            status = "WARNING"
+            mensagem = f"Nenhum jogo encontrado; {len(fetch_failures)} liga(s) falharam durante a consulta."
+        else:
+            status = "EMPTY"
+            mensagem = "Coleta concluida sem eventos na liga/data selecionada."
     elif raw_odds_count == 0:
         status = "WARNING"
         mensagem = "Jogos encontrados, mas nenhuma odd extraida."
