@@ -9,6 +9,7 @@ from api.scraping_params import (
     DEFAULT_ODDSAGORA_HOCKEY_MARKETS,
     ODDSAGORA_MLB_URL,
     normalize_scraping_params,
+    provider_block_error,
 )
 
 
@@ -63,3 +64,29 @@ class ScrapingParamsTests(unittest.TestCase):
 
         self.assertEqual(params["mercados"], [])
         self.assertFalse(params["mercados_padrao_aplicados"])
+
+    def test_provider_block_error_detects_captcha_log(self) -> None:
+        error = provider_block_error(
+            {
+                "source": "OddsAgora",
+                "mensagem": "OddsAgora retornou pagina de bloqueio/captcha.",
+                "logs": [{"event": "league_opened", "blocked_reason": "captcha"}],
+            }
+        )
+
+        self.assertEqual(
+            error,
+            "OddsAgora bloqueou a requisicao da VM com CAPTCHA. "
+            "A coleta nao foi importada e nao deve ser repetida automaticamente.",
+        )
+
+    def test_provider_block_error_ignores_legitimate_empty_day(self) -> None:
+        self.assertIsNone(
+            provider_block_error(
+                {
+                    "source": "OddsAgora",
+                    "mensagem": "Nenhum jogo encontrado na pagina da liga OddsAgora.",
+                    "logs": [],
+                }
+            )
+        )

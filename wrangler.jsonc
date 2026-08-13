@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "asp-insights",
+  "main": "./src/server.ts",
+  "compatibility_date": "2026-08-05",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  "env": {
+    "staging": {
+      "name": "asp-insights-staging"
+    }
+  }
+}

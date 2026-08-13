@@ -20,6 +20,7 @@ const ALLOWED_PREFER = new Set([
 ]);
 const PATCHABLE_TABLES = new Set([
   "sports_providers",
+  "hl_ingestion_jobs",
   "hl_ingestion_runs",
   "hl_raw_objects",
   "hl_shadow_windows",

@@ -242,6 +242,9 @@ function ColetaDadosPage() {
       if (finalStatus === "CONCLUIDA") {
         coletaConcluidaNaVm = true;
         await importarNormalizedDaVm(coleta);
+      } else if (finalStatus === "WARNING") {
+        await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
+        toast.warning("Coleta concluída com alerta. Revise o motivo antes de tentar novamente.");
       } else {
         await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
         toast.info("Coleta em andamento na VM. Você pode sair da tela e voltar depois.");
@@ -281,6 +284,9 @@ function ColetaDadosPage() {
       if (status === "ERRO" && erro) {
         setErro(erro);
         toast.error(erro);
+      } else if (status === "WARNING" && erro) {
+        setErro(erro);
+        toast.warning(erro);
       }
     } catch (e) {
       const message = formatVmError(e);
@@ -989,7 +995,7 @@ function extractVmStatus(payload: unknown) {
   const root = isObj(payload) ? payload : {};
   const data = isObj(root.data) ? root.data : isObj(root.result) ? root.result : root;
   const raw = String(data.status ?? data.state ?? data.situacao ?? "").toUpperCase();
-  const erro = data.erro ?? data.error ?? data.message;
+  const erro = data.erro ?? data.error ?? data.warning ?? data.mensagem ?? data.message;
   const status =
     raw.includes("RUN") || raw.includes("ROD") || raw.includes("PROCESS")
       ? "RODANDO"
