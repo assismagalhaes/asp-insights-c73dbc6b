@@ -1000,17 +1000,17 @@ function extractVmStatus(payload: unknown) {
     raw.includes("SEM_EVENTOS") || raw.includes("NO_EVENTS") || raw === "EMPTY"
       ? "CONCLUIDA_SEM_EVENTOS"
       : raw.includes("RUN") || raw.includes("ROD") || raw.includes("PROCESS")
-      ? "RODANDO"
-      : raw.includes("DONE") ||
-          raw.includes("CONCL") ||
-          raw.includes("SUCCESS") ||
-          raw.includes("FINISH")
-        ? "CONCLUIDA"
-        : raw.includes("ERR") || raw.includes("FAIL")
-          ? "ERRO"
-          : raw.includes("PEND") || raw.includes("QUEUE")
-            ? "PENDENTE"
-            : raw || "PENDENTE";
+        ? "RODANDO"
+        : raw.includes("DONE") ||
+            raw.includes("CONCL") ||
+            raw.includes("SUCCESS") ||
+            raw.includes("FINISH")
+          ? "CONCLUIDA"
+          : raw.includes("ERR") || raw.includes("FAIL")
+            ? "ERRO"
+            : raw.includes("PEND") || raw.includes("QUEUE")
+              ? "PENDENTE"
+              : raw || "PENDENTE";
   return { status, erro: erro ? String(erro) : null };
 }
 
@@ -1355,12 +1355,30 @@ const LEAGUES_BY_SPORT: Record<string, LeagueOption[]> = {
   ],
   Futebol: [
     { label: "Todos", value: ALL_LEAGUES_VALUE },
-    { label: "UEFA Champions League", value: "https://www.oddsagora.com.br/football/europe/liga-dos-campeoes/" },
-    { label: "UEFA Europa League", value: "https://www.oddsagora.com.br/football/europe/liga-europa/" },
-    { label: "UEFA Conference League", value: "https://www.oddsagora.com.br/football/europe/liga-conferencia/" },
-    { label: "Copa Libertadores", value: "https://www.oddsagora.com.br/football/south-america/copa-libertadores/" },
-    { label: "Copa Sul-Americana", value: "https://www.oddsagora.com.br/football/south-america/copa-sul-americana/" },
-    { label: "Copa do Brasil", value: "https://www.oddsagora.com.br/football/brazil/copa-betano-do-brasil/" },
+    {
+      label: "UEFA Champions League",
+      value: "https://www.oddsagora.com.br/football/europe/liga-dos-campeoes/",
+    },
+    {
+      label: "UEFA Europa League",
+      value: "https://www.oddsagora.com.br/football/europe/liga-europa/",
+    },
+    {
+      label: "UEFA Conference League",
+      value: "https://www.oddsagora.com.br/football/europe/liga-conferencia/",
+    },
+    {
+      label: "Copa Libertadores",
+      value: "https://www.oddsagora.com.br/football/south-america/copa-libertadores/",
+    },
+    {
+      label: "Copa Sul-Americana",
+      value: "https://www.oddsagora.com.br/football/south-america/copa-sul-americana/",
+    },
+    {
+      label: "Copa do Brasil",
+      value: "https://www.oddsagora.com.br/football/brazil/copa-betano-do-brasil/",
+    },
     {
       label: "Argentina Liga Profesional",
       value: "https://www.oddsagora.com.br/football/argentina/liga-profesional/",
