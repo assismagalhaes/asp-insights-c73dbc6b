@@ -22,10 +22,16 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-from scraper_flashscore import executar_scraper_real
+try:
+    from scraper_flashscore import executar_scraper_real
+except ModuleNotFoundError:
+    def executar_scraper_real(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError(
+            "scraper_flashscore is available only in the VM scraper runtime"
+        )
 
 try:
-    from api.scraping_params import normalize_scraping_params
+    from api.scraping_params import normalize_scraping_params, provider_block_error
     from api.scraping_debug import ScraperDebugContext, is_debug_enabled, log_raw_debug
     from api.model_provenance import single_input_model_provenance
     from api.model_names import MODEL_NAME_BASEBALL, MODEL_NAME_FOOTBALL, basketball_model_name
@@ -38,7 +44,7 @@ try:
     from scrapers.oddsagora_normalizer import normalize_oddsagora_raw
     from scrapers.oddsagora_scraper import executar_scraper_oddsagora
 except ModuleNotFoundError:
-    from scraping_params import normalize_scraping_params
+    from scraping_params import normalize_scraping_params, provider_block_error
     from scraping_debug import ScraperDebugContext, is_debug_enabled, log_raw_debug
     from model_provenance import single_input_model_provenance
     from model_names import MODEL_NAME_BASEBALL, MODEL_NAME_FOOTBALL, basketball_model_name
@@ -76,7 +82,7 @@ MODEL_INPUTS_DIR.mkdir(parents=True, exist_ok=True)
 MODEL_RUNS_DIR.mkdir(parents=True, exist_ok=True)
 DEBUG_DIR.mkdir(parents=True, exist_ok=True)
 
-API_KEY = os.getenv("SCRAPER_API_KEY", "asp-teste-123")
+API_KEY = os.getenv("SCRAPER_API_KEY", "").strip()
 
 class ScrapingParams(BaseModel):
     esporte: str
@@ -220,6 +226,8 @@ def _call_scraper_real(params: dict[str, Any], job_id: str, debug_ctx: ScraperDe
 
 
 def verificar_token(authorization: str | None):
+    if not API_KEY:
+        raise HTTPException(status_code=503, detail="SCRAPER_API_KEY não configurada")
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Token ausente")
 
@@ -781,6 +789,7 @@ def executar_coleta_real(job_id: str, params: dict):
 
         total_jogos = len(_raw_games(raw_data))
         total_odds = int(normalized_data.get("total_linhas") or len(normalized_data.get("linhas") or []))
+        provider_error = provider_block_error(raw_data)
         warning = _collection_warning(params, total_jogos, total_odds, raw_data)
         if debug_ctx.enabled:
             debug_ctx.save_json("resultado_scraper", resultado)
@@ -797,8 +806,10 @@ def executar_coleta_real(job_id: str, params: dict):
 
         job = load_job(job_id)
         normalized_status = str(normalized_data.get("status") or "").upper()
-        job["status"] = "WARNING" if warning else (
-            "CONCLUIDA_SEM_EVENTOS" if normalized_status == "CONCLUIDA_SEM_EVENTOS" else "CONCLUIDA"
+        job["status"] = "ERRO" if provider_error else "WARNING" if warning else (
+            "CONCLUIDA_SEM_EVENTOS"
+            if normalized_status == "CONCLUIDA_SEM_EVENTOS"
+            else "CONCLUIDA"
         )
         job["total_jogos"] = total_jogos
         job["total_odds"] = total_odds
@@ -806,10 +817,16 @@ def executar_coleta_real(job_id: str, params: dict):
         job["normalized_path"] = str(normalized_path)
         job["resultado_scraper"] = resultado
         job["warning"] = warning
+        job["erro"] = provider_error
         job["mensagem"] = (
-            "Nenhum jogo ou odd foi extraido. Consulte pasta debug."
-            if warning and debug_ctx.enabled
-            else warning or normalized_data.get("mensagem") or "Coleta real concluida com jogos e odds normalizadas."
+            provider_error
+            or (
+                "Nenhum jogo ou odd foi extraido. Consulte pasta debug."
+                if warning and debug_ctx.enabled
+                else warning
+                or normalized_data.get("mensagem")
+                or "Coleta real concluida com jogos e odds normalizadas."
+            )
         )
         if debug_ctx.enabled:
             job["debug_dir"] = str(debug_ctx.job_dir)
@@ -826,6 +843,7 @@ def executar_coleta_real(job_id: str, params: dict):
                 total_odds=total_odds,
                 status=job["status"],
                 warning=warning,
+                erro=provider_error,
                 debug=debug_ctx.enabled,
                 debug_dir=str(debug_ctx.job_dir) if debug_ctx.enabled else None,
                 debug_metrics=metrics,

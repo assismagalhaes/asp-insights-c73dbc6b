@@ -21,7 +21,12 @@ export const Route = createFileRoute("/api/public/hooks/highlightly-ingest")({
         const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
         const bridgeSecret = (process.env.HIGHLIGHTLY_INGEST_BRIDGE_SECRET ?? "").trim();
         if (!supabaseUrl || !serviceRoleKey || bridgeSecret.length < 32) {
-          return jsonError(503, "bridge_not_configured");
+          const missing = [
+            !supabaseUrl ? "SUPABASE_URL" : null,
+            !serviceRoleKey ? "SUPABASE_SERVICE_ROLE_KEY" : null,
+            bridgeSecret.length < 32 ? "HIGHLIGHTLY_INGEST_BRIDGE_SECRET" : null,
+          ].filter(Boolean);
+          return jsonError(503, `bridge_not_configured:${missing.join(",")}`);
         }
 
         const declaredLength = Number(request.headers.get("content-length") ?? "0");

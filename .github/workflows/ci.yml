@@ -18,6 +18,9 @@ jobs:
     name: TypeScript, build and Python
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      VITE_SUPABASE_URL: https://example.supabase.co
+      VITE_SUPABASE_PUBLISHABLE_KEY: ci-test-publishable-key
 
     steps:
       - name: Checkout
@@ -54,7 +57,10 @@ jobs:
         run: bun run eval:ai
 
       - name: Production build
-        run: bun run build
+        run: bun run build:cloudflare
+
+      - name: Cloudflare deployment dry run
+        run: bun run cloudflare:dry-run
 
       - name: Python tests
         run: python -m unittest discover -s tests -p "test_*.py"

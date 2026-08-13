@@ -242,6 +242,9 @@ function ColetaDadosPage() {
       if (finalStatus === "CONCLUIDA" || finalStatus === "CONCLUIDA_SEM_EVENTOS") {
         coletaConcluidaNaVm = true;
         if (finalStatus === "CONCLUIDA") await importarNormalizedDaVm(coleta);
+      } else if (finalStatus === "WARNING") {
+        await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
+        toast.warning("Coleta concluída com alerta. Revise o motivo antes de tentar novamente.");
       } else {
         await qc.invalidateQueries({ queryKey: ["coletas-odds"] });
         toast.info("Coleta em andamento na VM. Você pode sair da tela e voltar depois.");
@@ -281,6 +284,9 @@ function ColetaDadosPage() {
       if (status === "ERRO" && erro) {
         setErro(erro);
         toast.error(erro);
+      } else if (status === "WARNING" && erro) {
+        setErro(erro);
+        toast.warning(erro);
       }
     } catch (e) {
       const message = formatVmError(e);
@@ -989,22 +995,22 @@ function extractVmStatus(payload: unknown) {
   const root = isObj(payload) ? payload : {};
   const data = isObj(root.data) ? root.data : isObj(root.result) ? root.result : root;
   const raw = String(data.status ?? data.state ?? data.situacao ?? "").toUpperCase();
-  const erro = data.erro ?? data.error ?? data.message;
+  const erro = data.erro ?? data.error ?? data.warning ?? data.mensagem ?? data.message;
   const status =
     raw.includes("SEM_EVENTOS") || raw.includes("NO_EVENTS") || raw === "EMPTY"
       ? "CONCLUIDA_SEM_EVENTOS"
       : raw.includes("RUN") || raw.includes("ROD") || raw.includes("PROCESS")
-      ? "RODANDO"
-      : raw.includes("DONE") ||
-          raw.includes("CONCL") ||
-          raw.includes("SUCCESS") ||
-          raw.includes("FINISH")
-        ? "CONCLUIDA"
-        : raw.includes("ERR") || raw.includes("FAIL")
-          ? "ERRO"
-          : raw.includes("PEND") || raw.includes("QUEUE")
-            ? "PENDENTE"
-            : raw || "PENDENTE";
+        ? "RODANDO"
+        : raw.includes("DONE") ||
+            raw.includes("CONCL") ||
+            raw.includes("SUCCESS") ||
+            raw.includes("FINISH")
+          ? "CONCLUIDA"
+          : raw.includes("ERR") || raw.includes("FAIL")
+            ? "ERRO"
+            : raw.includes("PEND") || raw.includes("QUEUE")
+              ? "PENDENTE"
+              : raw || "PENDENTE";
   return { status, erro: erro ? String(erro) : null };
 }
 
@@ -1349,12 +1355,30 @@ const LEAGUES_BY_SPORT: Record<string, LeagueOption[]> = {
   ],
   Futebol: [
     { label: "Todos", value: ALL_LEAGUES_VALUE },
-    { label: "UEFA Champions League", value: "https://www.oddsagora.com.br/football/europe/liga-dos-campeoes/" },
-    { label: "UEFA Europa League", value: "https://www.oddsagora.com.br/football/europe/liga-europa/" },
-    { label: "UEFA Conference League", value: "https://www.oddsagora.com.br/football/europe/liga-conferencia/" },
-    { label: "Copa Libertadores", value: "https://www.oddsagora.com.br/football/south-america/copa-libertadores/" },
-    { label: "Copa Sul-Americana", value: "https://www.oddsagora.com.br/football/south-america/copa-sul-americana/" },
-    { label: "Copa do Brasil", value: "https://www.oddsagora.com.br/football/brazil/copa-betano-do-brasil/" },
+    {
+      label: "UEFA Champions League",
+      value: "https://www.oddsagora.com.br/football/europe/liga-dos-campeoes/",
+    },
+    {
+      label: "UEFA Europa League",
+      value: "https://www.oddsagora.com.br/football/europe/liga-europa/",
+    },
+    {
+      label: "UEFA Conference League",
+      value: "https://www.oddsagora.com.br/football/europe/liga-conferencia/",
+    },
+    {
+      label: "Copa Libertadores",
+      value: "https://www.oddsagora.com.br/football/south-america/copa-libertadores/",
+    },
+    {
+      label: "Copa Sul-Americana",
+      value: "https://www.oddsagora.com.br/football/south-america/copa-sul-americana/",
+    },
+    {
+      label: "Copa do Brasil",
+      value: "https://www.oddsagora.com.br/football/brazil/copa-betano-do-brasil/",
+    },
     {
       label: "Argentina Liga Profesional",
       value: "https://www.oddsagora.com.br/football/argentina/liga-profesional/",

@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import process from "node:process";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/lib/auth-middleware-public";
 

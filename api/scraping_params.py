@@ -96,6 +96,32 @@ def _is_oddsagora_supported(esporte: Any) -> bool:
     return _sport_key(esporte) in ODDSAGORA_LEAGUES_BY_SPORT
 
 
+def provider_block_error(raw_data: Any) -> str | None:
+    """Return an actionable error when the upstream served a blocking page."""
+    if not isinstance(raw_data, dict):
+        return None
+
+    blocked_reasons: list[str] = []
+    for entry in raw_data.get("logs") or []:
+        if not isinstance(entry, dict):
+            continue
+        reason = str(entry.get("blocked_reason") or "").strip()
+        if reason:
+            blocked_reasons.append(reason)
+
+    message = str(raw_data.get("mensagem") or "").strip()
+    searchable = " ".join([message, *blocked_reasons]).casefold()
+    blocking_terms = ("captcha", "cloudflare", "access denied", "verify you are human")
+    if not any(term in searchable for term in blocking_terms):
+        return None
+
+    source = str(raw_data.get("source") or "provedor").strip()
+    return (
+        f"{source} bloqueou a requisicao da VM com CAPTCHA. "
+        "A coleta nao foi importada e nao deve ser repetida automaticamente."
+    )
+
+
 def normalize_scraping_params(params: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(params)
     sport_key = _sport_key(normalized.get("esporte"))
