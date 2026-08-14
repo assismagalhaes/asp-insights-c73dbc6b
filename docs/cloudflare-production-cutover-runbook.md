@@ -4,7 +4,7 @@ Status: prepared, not executed. Last verified: 2026-08-13 (America/Sao_Paulo).
 
 ## Scope and safety boundary
 
-This runbook promotes the already validated Cloudflare/Supabase/VM architecture from staging to production. It does not migrate data during cutover, enable Telegram, enable model publication, delete Lovable resources, or alter mail DNS records.
+This runbook promotes the already validated Cloudflare/Supabase/VM architecture from staging to production. It does not migrate data during cutover, enable model publication, delete Lovable resources, or alter mail DNS records. Telegram has been removed from the application runtime.
 
 Production changes require a separate explicit approval. Until then:
 
@@ -46,7 +46,7 @@ Server-only secrets:
 - `FIRECRAWL_API_KEY`
 - `GOOGLE_AI_API_KEY`
 
-Do not configure Telegram/Lovable connector secrets unless Telegram is explicitly re-enabled in a later project decision.
+Do not configure Telegram or Lovable connector secrets; neither is part of the application runtime.
 
 ## Pre-deployment gate
 
@@ -65,7 +65,7 @@ Do not configure Telegram/Lovable connector secrets unless Telegram is explicitl
 3. Test Dashboard, Histórico, Central Esportiva, Base de Dados, Coleta and Monitor Highlightly.
 4. Verify Worker logs contain no secrets, authorization headers or sensitive payloads.
 5. Point a single VM bridge canary at the production hook, verify persistence, then restore the bridge to staging.
-6. Keep publication, training, Telegram and production DNS disabled.
+6. Keep publication, training and production DNS disabled.
 
 ## Public cutover gate
 

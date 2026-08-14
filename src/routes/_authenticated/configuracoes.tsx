@@ -21,7 +21,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { TelegramAlertsPanel } from "@/components/validacao-critica/TelegramAlertsPanel";
 import { supabase } from "@/lib/supabase-public";
 import {
   ESPORTES_DEFAULT,
@@ -509,8 +508,6 @@ function Configuracoes() {
           </Button>
         </div>
       </section>
-
-      <TelegramAlertsPanel className="data-surface" />
     </div>
   );
 }
