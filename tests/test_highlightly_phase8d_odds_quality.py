@@ -32,6 +32,30 @@ def context(sport: str):
 
 
 class HighlightlyPhaseEightDOddsQualityTests(unittest.TestCase):
+    def test_quality_report_uses_indexable_job_lookup_and_admin_execution_gate(self):
+        lookup_migration = (
+            ROOT
+            / "supabase/migrations/20260814121500_optimize_highlightly_odds_quality_job_lookup.sql"
+        ).read_text(encoding="utf-8")
+        security_migration = (
+            ROOT
+            / "supabase/migrations/20260814123000_secure_highlightly_odds_quality_report_execution.sql"
+        ).read_text(encoding="utf-8")
+
+        for endpoint in (
+            "football.FootballOddsController_getOddsV2",
+            "baseball.BaseballOddsController_getOddsV2",
+            "basketball.BasketballOddsController_getOddsV2",
+        ):
+            self.assertIn(endpoint, lookup_migration)
+        self.assertIn("ingestion_job.endpoint_key IN", lookup_migration)
+        self.assertIn("SECURITY DEFINER", security_migration)
+        self.assertIn("session_user <> 'postgres'", security_migration)
+        self.assertIn("(SELECT auth.uid()) IS NULL", security_migration)
+        self.assertIn("public.has_role", security_migration)
+        self.assertIn("FROM PUBLIC, anon", security_migration)
+        self.assertIn("TO authenticated, service_role", security_migration)
+
     def test_league_coverage_contract_is_advisory_and_uses_safe_defaults(self):
         migration = (
             ROOT
