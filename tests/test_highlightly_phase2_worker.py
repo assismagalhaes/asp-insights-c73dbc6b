@@ -257,6 +257,20 @@ class HighlightlyPhaseTwoWorkerTests(unittest.TestCase):
         self.assertTrue(any(issue["code"] == "STANDINGS_SINGLE_TEAM_REPEATED" for issue in batch.issues))
         self.assertTrue(all(row["quality_status"] == "quarantined" for row in batch.table_rows("sports_standings_snapshots")))
 
+    def test_standings_coerce_explicit_null_points_to_zero(self):
+        payload = {"league": {"id": 7, "name": "BGL League", "season": 2026}, "groups": [{
+            "name": "Regular", "standings": [{
+                "team": {"id": 16, "name": "Team"},
+                "position": 16,
+                "points": None,
+                "total": {"games": 2, "wins": 0, "draws": 0, "loses": 2, "scoredGoals": 2, "receivedGoals": 8},
+            }],
+        }]}
+
+        batch = normalize_football(payload, context("football.standings"))
+
+        self.assertEqual(batch.table_rows("sports_standings_snapshots")[0]["points"], 0)
+
     def test_schema_fingerprint_ignores_values_but_detects_shape(self):
         self.assertEqual(schema_fingerprint({"data": [{"id": 1}]}), schema_fingerprint({"data": [{"id": 2}]}))
         self.assertNotEqual(schema_fingerprint({"data": [{"id": 1}]}), schema_fingerprint({"data": [{"id": 1, "name": "x"}]}))
