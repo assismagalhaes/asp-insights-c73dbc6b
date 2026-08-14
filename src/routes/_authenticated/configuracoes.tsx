@@ -3,7 +3,9 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   BadgeDollarSign,
+  HardDrive,
   Landmark,
+  Loader2,
   Save,
   Settings2,
   ShieldCheck,
@@ -20,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { TelegramAlertsPanel } from "@/components/validacao-critica/TelegramAlertsPanel";
+import { supabase } from "@/lib/supabase-public";
 import {
   ESPORTES_DEFAULT,
   MERCADOS_DEFAULT,
@@ -52,6 +55,10 @@ function Configuracoes() {
   const [bancaInicial, setBancaInicial] = useState(1000);
   const [esportesAtivos, setEsportesAtivos] = useState<Record<string, boolean>>({});
   const [mercadosAtivos, setMercadosAtivos] = useState<Record<string, boolean>>({});
+  const [storageSmoke, setStorageSmoke] = useState<{
+    status: "idle" | "running" | "passed" | "failed";
+    message: string;
+  }>({ status: "idle", message: "Ainda não executado." });
 
   useEffect(() => {
     if (!cfg) return;
@@ -129,6 +136,64 @@ function Configuracoes() {
       toast.success("Configurações salvas");
     } catch (error) {
       toast.error((error as Error).message);
+    }
+  };
+
+  const testarStorage = async () => {
+    setStorageSmoke({ status: "running", message: "Executando upload autenticado..." });
+
+    const bucket = "asp-validator-uploads";
+    let path: string | null = null;
+    let uploaded = false;
+
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+      if (userError || !user) throw userError ?? new Error("Sessão autenticada não encontrada.");
+
+      path = `${user.id}/codex-smoke/${crypto.randomUUID()}.txt`;
+      const expected = `asp-storage-smoke:${new Date().toISOString()}`;
+      const file = new Blob([expected], { type: "text/plain;charset=utf-8" });
+
+      const { error: uploadError } = await supabase.storage.from(bucket).upload(path, file, {
+        contentType: "text/plain;charset=utf-8",
+        upsert: false,
+      });
+      if (uploadError) throw uploadError;
+      uploaded = true;
+
+      setStorageSmoke({ status: "running", message: "Upload concluído; validando download..." });
+      const { data: downloaded, error: downloadError } = await supabase.storage
+        .from(bucket)
+        .download(path);
+      if (downloadError) throw downloadError;
+      if ((await downloaded.text()) !== expected) {
+        throw new Error("O conteúdo baixado não corresponde ao conteúdo enviado.");
+      }
+
+      setStorageSmoke({ status: "running", message: "Conteúdo validado; removendo temporário..." });
+      const { error: removeError } = await supabase.storage.from(bucket).remove([path]);
+      if (removeError) throw removeError;
+      uploaded = false;
+
+      setStorageSmoke({
+        status: "passed",
+        message: "Upload, download, integridade e exclusão concluídos sem resíduos.",
+      });
+      toast.success("Storage autenticado validado");
+    } catch (error) {
+      let cleanupMessage = "";
+      if (uploaded && path) {
+        const { error: cleanupError } = await supabase.storage.from(bucket).remove([path]);
+        cleanupMessage = cleanupError
+          ? ` A limpeza também falhou: ${cleanupError.message}`
+          : " O arquivo temporário foi removido na limpeza de segurança.";
+      }
+      const message = `${error instanceof Error ? error.message : "Falha desconhecida."}${cleanupMessage}`;
+      setStorageSmoke({ status: "failed", message });
+      toast.error("Falha no teste de Storage", { description: message });
     }
   };
 
@@ -387,6 +452,54 @@ function Configuracoes() {
           </div>
         </section>
       </div>
+
+      <section className="data-surface p-4">
+        <PanelHeading
+          title="Diagnóstico do Storage"
+          icon={HardDrive}
+          value={
+            <span
+              className={cn(
+                "rounded border px-2 py-1 font-mono text-[10px] uppercase tracking-wider",
+                storageSmoke.status === "passed"
+                  ? "border-success/30 bg-success/10 text-success"
+                  : storageSmoke.status === "failed"
+                    ? "border-destructive/30 bg-destructive/10 text-destructive"
+                    : "border-border bg-background/40 text-muted-foreground",
+              )}
+            >
+              {storageSmoke.status === "idle"
+                ? "Não executado"
+                : storageSmoke.status === "running"
+                  ? "Executando"
+                  : storageSmoke.status === "passed"
+                    ? "Aprovado"
+                    : "Falhou"}
+            </span>
+          }
+        />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium">Bucket privado asp-validator-uploads</p>
+            <p className="mt-1 text-xs text-muted-foreground" aria-live="polite">
+              {storageSmoke.message}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={testarStorage}
+            disabled={storageSmoke.status === "running"}
+          >
+            {storageSmoke.status === "running" ? (
+              <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+            ) : (
+              <HardDrive aria-hidden="true" className="size-4" />
+            )}
+            Testar Storage
+          </Button>
+        </div>
+      </section>
 
       <TelegramAlertsPanel className="data-surface" />
     </div>
