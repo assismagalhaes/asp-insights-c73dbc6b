@@ -42,6 +42,9 @@ const moneyFormatter = new Intl.NumberFormat("pt-BR", {
   minimumFractionDigits: 2,
 });
 
+const STORAGE_SMOKE_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+
 function sameSelection(current: string[], saved: string[]) {
   return [...current].sort().join("|") === [...saved].sort().join("|");
 }
@@ -153,12 +156,14 @@ function Configuracoes() {
       } = await supabase.auth.getUser();
       if (userError || !user) throw userError ?? new Error("Sessão autenticada não encontrada.");
 
-      path = `${user.id}/codex-smoke/${crypto.randomUUID()}.txt`;
-      const expected = `asp-storage-smoke:${new Date().toISOString()}`;
-      const file = new Blob([expected], { type: "text/plain;charset=utf-8" });
+      path = `${user.id}/codex-smoke/${crypto.randomUUID()}.png`;
+      const expected = Uint8Array.from(atob(STORAGE_SMOKE_PNG_BASE64), (char) =>
+        char.charCodeAt(0),
+      );
+      const file = new Blob([expected], { type: "image/png" });
 
       const { error: uploadError } = await supabase.storage.from(bucket).upload(path, file, {
-        contentType: "text/plain;charset=utf-8",
+        contentType: "image/png",
         upsert: false,
       });
       if (uploadError) throw uploadError;
@@ -169,7 +174,11 @@ function Configuracoes() {
         .from(bucket)
         .download(path);
       if (downloadError) throw downloadError;
-      if ((await downloaded.text()) !== expected) {
+      const actual = new Uint8Array(await downloaded.arrayBuffer());
+      if (
+        actual.length !== expected.length ||
+        actual.some((byte, index) => byte !== expected[index])
+      ) {
         throw new Error("O conteúdo baixado não corresponde ao conteúdo enviado.");
       }
 
