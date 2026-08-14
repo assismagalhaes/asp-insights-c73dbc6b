@@ -82,7 +82,7 @@ async function generateLocalStructuredOutput({
       model,
       system: `${SYSTEM_PROMPT}
 
-FORMATO PARA O LOVABLE AI GATEWAY:
+FORMATO DE SAIDA PARA O GOOGLE AI STUDIO:
 Retorne somente um objeto JSON válido, sem markdown, comentários ou texto antes/depois.
 Use exatamente os nomes de campos, enums e tipos do template abaixo. Substitua os
 textos de exemplo pela análise. Para CONFIRMA, use um ID/pick exatos do payload e

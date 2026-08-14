@@ -2,8 +2,8 @@
 
 ## Estado
 
-Implementado para o modo **IA Local + Pesquisa**, usando o Lovable AI Gateway com
-`google/gemini-3.6-flash` e o contrato operacional `1.1.0`.
+Implementado para o modo **IA Local + Pesquisa**, usando diretamente o Google AI
+Studio com `gemini-3.6-flash` e o contrato operacional `1.1.0`.
 
 ## Fluxo
 

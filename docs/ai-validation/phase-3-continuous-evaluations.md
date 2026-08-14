@@ -3,7 +3,7 @@
 ## Estado
 
 Implementada para os modos **IA Local** e **IA Online + Pesquisa**, com o modelo
-`google/gemini-3.6-flash` via Lovable AI Gateway e contrato operacional `1.1.0`.
+`gemini-3.6-flash` via Google AI Studio e contrato operacional `1.1.0`.
 
 ## Política da migração de modelo
 
@@ -59,7 +59,7 @@ Limites atuais:
 - custo estimado total.
 
 Concordância e qualidade são observadas, mas não são hard gates nesta migração. Custo
-e latência devem ser preenchidos com telemetria real do Lovable AI Gateway; as
+e latência devem ser preenchidos com telemetria real do Google AI Studio; as
 estimativas anunciadas não são tratadas como comprovadas.
 
 ## Canário

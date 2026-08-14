@@ -68,7 +68,7 @@ describe("Fase 3 — avaliações contínuas", () => {
     const candidate: AiModelEvaluationSnapshot[] = [
       {
         case_id: "case-1",
-        model: "google/gemini-3.6-flash",
+        model: "gemini-3.6-flash",
         generation_valid: true,
         repaired: false,
         final_decision: "PULAR",

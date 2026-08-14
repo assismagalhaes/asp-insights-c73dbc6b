@@ -652,7 +652,7 @@ Faça pesquisas online conforme a política descrita e produza o parecer no form
 
       const structuredSystemPrompt = `${SYSTEM_PROMPT}
 
-FORMATO PARA O LOVABLE AI GATEWAY:
+FORMATO DE SAIDA PARA O GOOGLE AI STUDIO:
 As instruções JSON abaixo substituem qualquer formato textual legado descrito anteriormente.
 Depois de concluir as pesquisas, retorne somente um objeto JSON válido, sem markdown,
 comentários ou texto antes/depois. Use exatamente os nomes de campos, enums e tipos
