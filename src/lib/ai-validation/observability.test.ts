@@ -66,8 +66,8 @@ describe("observabilidade da validação IA", () => {
     const snapshot = buildAiObservabilitySnapshot({
       telemetry: {
         run_id: "7e464ea4-ad67-4e53-a3d8-99f9c1ad1a6d",
-        provider: "lovable-ai-gateway",
-        model: "google/gemini-3.6-flash",
+        provider: "google-ai-studio",
+        model: "gemini-3.6-flash",
         started_at: "2026-07-24T12:00:00.000Z",
         finished_at: "2026-07-24T12:00:03.000Z",
         latency_ms: 3_000,

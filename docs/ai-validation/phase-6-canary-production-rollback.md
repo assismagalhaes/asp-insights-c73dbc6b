@@ -60,8 +60,8 @@ de autorização. A RLS de `analises_ia` continua exigindo `has_role(..., 'admin
    - `rollout_variant = structured`;
    - `parse_status = VALID`;
    - contrato `1.1.0`;
-   - modelo `google/gemini-3.6-flash`;
-   - erro nulo e telemetria de latência/tokens presente quando o Gateway informar;
+   - modelo `gemini-3.6-flash`;
+   - erro nulo e telemetria de latência/tokens presente quando o provider informar;
    - decisão final coerente com o árbitro;
    - prognóstico ainda `PENDENTE`.
 7. Promover Local para `full`, repetir a verificação curta e então promover

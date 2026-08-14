@@ -23,7 +23,7 @@ prognóstico.
 
 O componente extraído recebe dados e callbacks. Ele não:
 
-- chama o Lovable AI Gateway;
+- chama o provider de IA;
 - escolhe prognóstico, pick ou stake;
 - executa o árbitro determinístico;
 - acessa Supabase;
@@ -32,8 +32,8 @@ O componente extraído recebe dados e callbacks. Ele não:
 
 A rota `validacao.tsx` continua responsável por todas essas operações.
 
-O Storybook usa uma configuração Vite isolada. O wrapper Vite do
-Lovable/TanStack não é carregado, evitando inicializar servidor, rotas ou
+O Storybook usa uma configuração Vite isolada. A configuração TanStack da
+aplicação não é carregada, evitando inicializar servidor, rotas ou
 integrações de produção durante a renderização de stories.
 
 ## Validação e aceite

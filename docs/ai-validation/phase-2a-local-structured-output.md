@@ -2,8 +2,9 @@
 
 ## Escopo
 
-O modo IA Local usa o Lovable AI Gateway com o modelo definido por
-`LOCAL_GATEWAY_MODEL_ID`. O Gateway recebe um template JSON estrito e a resposta
+O modo IA Local usa diretamente o Google AI Studio com o provider nativo
+`@ai-sdk/google` e o modelo definido por `LOCAL_GATEWAY_MODEL_ID`. O provider
+recebe um template JSON estrito e a resposta
 é validada pelo `AiOperationalOutputSchema`.
 
 O texto livre não participa mais do caminho operacional padrão. Decisão, stake,
@@ -14,7 +15,7 @@ para o árbitro determinístico.
 
 1. O payload autenticado é validado.
 2. O prompt recebe apenas dados internos e contexto manual.
-3. `generateText` chama o Lovable AI Gateway e exige JSON compatível com o template.
+3. `generateText` chama diretamente a API Gemini e exige JSON compatível com o template.
 4. A saída é novamente validada por Zod.
 5. O árbitro determinístico verifica invariantes, gates e regras operacionais.
 6. A apresentação A–G é reconstruída apenas a partir do resultado arbitrado.
@@ -25,17 +26,17 @@ com o bloqueio `SCHEMA_INVALID`; uma falha nunca confirma uma entrada.
 
 ## Provider
 
-- Secret: `LOVABLE_API_KEY`
-- Modelo atual: `google/gemini-3.6-flash`
-- Prompt: `validacao-critica-v13-structured-output-local`
+- Secret: `GOOGLE_AI_API_KEY`
+- Modelo atual: `gemini-3.6-flash`
+- Fallback por modelo indisponível: `gemini-2.5-flash`
+- Prompt: `validacao-critica-v16-deterministic-facts`
 
-O modo Local não depende de `GOOGLE_GENERATIVE_AI_API_KEY`.
+O modo Local não depende de gateway ou credencial da Lovable.
 
 ### Compatibilidade do schema com Gemini
 
-O Lovable AI Gateway não declara suporte confiável a `Output.object`. O modo
-Local solicita exclusivamente JSON em texto, extrai o primeiro objeto retornado
-e o valida com o schema de geração simplificado.
+O modo Local solicita exclusivamente JSON em texto, extrai o primeiro objeto
+retornado e o valida com o schema de geração simplificado.
 
 O objeto retornado continua sendo validado integralmente pelo
 `AiOperationalOutputSchema` antes de chegar ao árbitro. Não existe fallback
