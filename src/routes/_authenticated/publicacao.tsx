@@ -72,7 +72,7 @@ function PublicacaoPage() {
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [previewFor, setPreviewFor] = useState<Prognostico | null>(null);
-  const [canal, setCanal] = useState("Telegram");
+  const [canal, setCanal] = useState("Manual");
   const [fEsporte, setFEsporte] = useState("all");
   const [fLiga, setFLiga] = useState("all");
   const [fMercado, setFMercado] = useState("all");
@@ -191,7 +191,6 @@ function PublicacaoPage() {
                   <SelectValue placeholder="Canal" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Telegram">Telegram</SelectItem>
                   <SelectItem value="WhatsApp">WhatsApp</SelectItem>
                   <SelectItem value="Manual">Manual</SelectItem>
                 </SelectContent>

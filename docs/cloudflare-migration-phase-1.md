@@ -9,14 +9,14 @@ Status: staging deployed and authenticated smoke tests complete; production rema
 - Magalu VM: FastAPI, Python models, scrapers and long-running jobs.
 - Cloudflare DNS: application and API subdomains, SSL and traffic protection.
 
-## Current coupling to Lovable
+## Lovable coupling status
 
 | Area | Current dependency | Migration action |
 | --- | --- | --- |
 | Build/runtime | `@lovable.dev/vite-tanstack-config` | Replaced with official TanStack, React, Tailwind and Cloudflare Vite plugins. |
-| Development MCP | `@lovable.dev/mcp-js` and `.lovable/mcp` | Temporarily retained to preserve the existing MCP routes; migrate separately before final Lovable shutdown. |
+| Development MCP | `@lovable.dev/mcp-js` and `.lovable/mcp` | Removed from the application runtime and dependency graph. |
 | Highlightly ingest | `HIGHLIGHTLY_INGEST_BRIDGE_URL` points to the hosted app | Repoint the VM to the staging Worker hook, then production. |
-| Telegram | `LOVABLE_API_KEY` and `TELEGRAM_API_KEY` call Lovable's connector gateway | Replace with a direct server-side Telegram Bot API integration in a separate change. |
+| Telegram | Previously used the Lovable connector gateway | Removed by product decision; historical database records are preserved without active runtime routes or jobs. |
 | Naming only | Python exports and model functions containing `lovable` | Keep initially; these are data-contract names, not hosting dependencies. Rename later if useful. |
 
 ## Environment contract
@@ -37,14 +37,12 @@ Server-only configuration/secrets:
 - `HIGHLIGHTLY_INGEST_BRIDGE_SECRET`
 - `FIRECRAWL_API_KEY`
 - `GOOGLE_AI_API_KEY`
-- `LOVABLE_API_KEY` (temporary)
-- `TELEGRAM_API_KEY` (temporary)
 
 Never place `SUPABASE_SERVICE_ROLE_KEY`, VM credentials, AI keys or connector keys in a `VITE_*` variable.
 
 ## Server workload inventory
 
-- Three public hooks: Highlightly ingest and two Telegram alert hooks.
+- One public hook: Highlightly ingest.
 - Scraper/model server functions call the Magalu VM and include long timeouts.
 - AI validation server functions call Google AI and Firecrawl.
 - Authenticated server functions read and write Supabase using publishable or service-role clients depending on operation.
@@ -65,7 +63,7 @@ Secrets must be configured separately in both environments. Deployments must not
 - Supabase reads/writes and RLS behavior match production.
 - Scraper job create, polling, raw/normalized/CSV downloads and model execution pass.
 - Highlightly bridge canary reaches staging without enabling analysis or automatic publication.
-- Telegram behavior is either validated or explicitly held on the old endpoint during its migration.
+- Telegram UI, jobs, hooks and connector secrets are absent.
 - Worker logs contain no leaked secrets or sensitive payloads.
 - Rollback to the Lovable URL is tested before changing the primary DNS record.
 
@@ -91,7 +89,7 @@ Secrets must be configured separately in both environments. Deployments must not
 - Database, Auth and Storage were reconciled; the imported Storage snapshot has 73,694 objects and 155,951,499 bytes.
 - Authenticated smoke tests passed on all application routes without browser console errors.
 - The VM-to-Cloudflare Highlightly bridge persists data in the new Supabase project.
-- Highlightly remains disabled at rest; Telegram remains in standby.
+- Highlightly remains disabled at rest; Telegram was removed from the application runtime.
 - The apex `asp-insights.com.br` has no public A/AAAA application target and `www` is not defined. Production is therefore not cut over.
 
 ## Next controlled step

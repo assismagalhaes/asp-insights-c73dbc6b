@@ -9,35 +9,27 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as McpRouteImport } from './routes/mcp'
-import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
-import { Route as AuthenticatedValidacaoRouteImport } from './routes/_authenticated/validacao'
-import { Route as AuthenticatedPublicacaoRouteImport } from './routes/_authenticated/publicacao'
-import { Route as AuthenticatedPrognosticosRouteImport } from './routes/_authenticated/prognosticos'
-import { Route as AuthenticatedObservabilidadeIaRouteImport } from './routes/_authenticated/observabilidade-ia'
-import { Route as AuthenticatedMonitorHighlightlyRouteImport } from './routes/_authenticated/monitor-highlightly'
-import { Route as AuthenticatedModelosPreditivosRouteImport } from './routes/_authenticated/modelos-preditivos'
-import { Route as AuthenticatedImportarRouteImport } from './routes/_authenticated/importar'
-import { Route as AuthenticatedHistoricoRouteImport } from './routes/_authenticated/historico'
-import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
-import { Route as AuthenticatedColetaDadosRouteImport } from './routes/_authenticated/coleta-dados'
-import { Route as AuthenticatedCentralEsportivaRouteImport } from './routes/_authenticated/central-esportiva'
-import { Route as AuthenticatedBaseDadosRouteImport } from './routes/_authenticated/base-dados'
-import { Route as AuthenticatedBankrollRouteImport } from './routes/_authenticated/bankroll'
 import { Route as AuthenticatedAprendizadoIaRouteImport } from './routes/_authenticated/aprendizado-ia'
-import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
-import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
-import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
-import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
-import { Route as ApiPublicHooksSyncCriticalValidationTelegramAlertsRouteImport } from './routes/api/public/hooks/sync-critical-validation-telegram-alerts'
-import { Route as ApiPublicHooksSendCriticalValidationTelegramAlertsRouteImport } from './routes/api/public/hooks/send-critical-validation-telegram-alerts'
+import { Route as AuthenticatedBankrollRouteImport } from './routes/_authenticated/bankroll'
+import { Route as AuthenticatedBaseDadosRouteImport } from './routes/_authenticated/base-dados'
+import { Route as AuthenticatedCentralEsportivaRouteImport } from './routes/_authenticated/central-esportiva'
+import { Route as AuthenticatedColetaDadosRouteImport } from './routes/_authenticated/coleta-dados'
+import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
+import { Route as AuthenticatedHistoricoRouteImport } from './routes/_authenticated/historico'
+import { Route as AuthenticatedImportarRouteImport } from './routes/_authenticated/importar'
+import { Route as AuthenticatedModelosPreditivosRouteImport } from './routes/_authenticated/modelos-preditivos'
+import { Route as AuthenticatedMonitorHighlightlyRouteImport } from './routes/_authenticated/monitor-highlightly'
+import { Route as AuthenticatedObservabilidadeIaRouteImport } from './routes/_authenticated/observabilidade-ia'
+import { Route as AuthenticatedPrognosticosRouteImport } from './routes/_authenticated/prognosticos'
+import { Route as AuthenticatedPublicacaoRouteImport } from './routes/_authenticated/publicacao'
+import { Route as AuthenticatedValidacaoRouteImport } from './routes/_authenticated/validacao'
 import { Route as ApiPublicHooksHighlightlyIngestRouteImport } from './routes/api/public/hooks/highlightly-ingest'
 
-const McpRoute = McpRouteImport.update({
-  id: '/mcp',
-  path: '/mcp',
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -45,85 +37,9 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
-  id: '/_authenticated',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedValidacaoRoute = AuthenticatedValidacaoRouteImport.update({
-  id: '/validacao',
-  path: '/validacao',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedPublicacaoRoute = AuthenticatedPublicacaoRouteImport.update({
-  id: '/publicacao',
-  path: '/publicacao',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedPrognosticosRoute =
-  AuthenticatedPrognosticosRouteImport.update({
-    id: '/prognosticos',
-    path: '/prognosticos',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedObservabilidadeIaRoute =
-  AuthenticatedObservabilidadeIaRouteImport.update({
-    id: '/observabilidade-ia',
-    path: '/observabilidade-ia',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedMonitorHighlightlyRoute =
-  AuthenticatedMonitorHighlightlyRouteImport.update({
-    id: '/monitor-highlightly',
-    path: '/monitor-highlightly',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedModelosPreditivosRoute =
-  AuthenticatedModelosPreditivosRouteImport.update({
-    id: '/modelos-preditivos',
-    path: '/modelos-preditivos',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedImportarRoute = AuthenticatedImportarRouteImport.update({
-  id: '/importar',
-  path: '/importar',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedHistoricoRoute = AuthenticatedHistoricoRouteImport.update({
-  id: '/historico',
-  path: '/historico',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedConfiguracoesRoute =
-  AuthenticatedConfiguracoesRouteImport.update({
-    id: '/configuracoes',
-    path: '/configuracoes',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedColetaDadosRoute =
-  AuthenticatedColetaDadosRouteImport.update({
-    id: '/coleta-dados',
-    path: '/coleta-dados',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedCentralEsportivaRoute =
-  AuthenticatedCentralEsportivaRouteImport.update({
-    id: '/central-esportiva',
-    path: '/central-esportiva',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedBaseDadosRoute = AuthenticatedBaseDadosRouteImport.update({
-  id: '/base-dados',
-  path: '/base-dados',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedBankrollRoute = AuthenticatedBankrollRouteImport.update({
-  id: '/bankroll',
-  path: '/bankroll',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedAprendizadoIaRoute =
@@ -132,41 +48,78 @@ const AuthenticatedAprendizadoIaRoute =
     path: '/aprendizado-ia',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const Char91DotwellKnownChar93OauthProtectedResourceRoute =
-  Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
-    id: '/.well-known/oauth-protected-resource',
-    path: '/.well-known/oauth-protected-resource',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const Char91DotmcpChar93ListToolsRoute =
-  Char91DotmcpChar93ListToolsRouteImport.update({
-    id: '/.mcp/list-tools',
-    path: '/.mcp/list-tools',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const Char91DotmcpChar93InvokeToolToolRoute =
-  Char91DotmcpChar93InvokeToolToolRouteImport.update({
-    id: '/.mcp/invoke-tool/$tool',
-    path: '/.mcp/invoke-tool/$tool',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
-  id: '/.lovable/oauth/consent',
-  path: '/.lovable/oauth/consent',
-  getParentRoute: () => rootRouteImport,
+const AuthenticatedBankrollRoute = AuthenticatedBankrollRouteImport.update({
+  id: '/bankroll',
+  path: '/bankroll',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const ApiPublicHooksSyncCriticalValidationTelegramAlertsRoute =
-  ApiPublicHooksSyncCriticalValidationTelegramAlertsRouteImport.update({
-    id: '/api/public/hooks/sync-critical-validation-telegram-alerts',
-    path: '/api/public/hooks/sync-critical-validation-telegram-alerts',
-    getParentRoute: () => rootRouteImport,
+const AuthenticatedBaseDadosRoute = AuthenticatedBaseDadosRouteImport.update({
+  id: '/base-dados',
+  path: '/base-dados',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedCentralEsportivaRoute =
+  AuthenticatedCentralEsportivaRouteImport.update({
+    id: '/central-esportiva',
+    path: '/central-esportiva',
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const ApiPublicHooksSendCriticalValidationTelegramAlertsRoute =
-  ApiPublicHooksSendCriticalValidationTelegramAlertsRouteImport.update({
-    id: '/api/public/hooks/send-critical-validation-telegram-alerts',
-    path: '/api/public/hooks/send-critical-validation-telegram-alerts',
-    getParentRoute: () => rootRouteImport,
+const AuthenticatedColetaDadosRoute =
+  AuthenticatedColetaDadosRouteImport.update({
+    id: '/coleta-dados',
+    path: '/coleta-dados',
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedConfiguracoesRoute =
+  AuthenticatedConfiguracoesRouteImport.update({
+    id: '/configuracoes',
+    path: '/configuracoes',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedHistoricoRoute = AuthenticatedHistoricoRouteImport.update({
+  id: '/historico',
+  path: '/historico',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedImportarRoute = AuthenticatedImportarRouteImport.update({
+  id: '/importar',
+  path: '/importar',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedModelosPreditivosRoute =
+  AuthenticatedModelosPreditivosRouteImport.update({
+    id: '/modelos-preditivos',
+    path: '/modelos-preditivos',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedMonitorHighlightlyRoute =
+  AuthenticatedMonitorHighlightlyRouteImport.update({
+    id: '/monitor-highlightly',
+    path: '/monitor-highlightly',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedObservabilidadeIaRoute =
+  AuthenticatedObservabilidadeIaRouteImport.update({
+    id: '/observabilidade-ia',
+    path: '/observabilidade-ia',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedPrognosticosRoute =
+  AuthenticatedPrognosticosRouteImport.update({
+    id: '/prognosticos',
+    path: '/prognosticos',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedPublicacaoRoute = AuthenticatedPublicacaoRouteImport.update({
+  id: '/publicacao',
+  path: '/publicacao',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedValidacaoRoute = AuthenticatedValidacaoRouteImport.update({
+  id: '/validacao',
+  path: '/validacao',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const ApiPublicHooksHighlightlyIngestRoute =
   ApiPublicHooksHighlightlyIngestRouteImport.update({
     id: '/api/public/hooks/highlightly-ingest',
@@ -177,9 +130,6 @@ const ApiPublicHooksHighlightlyIngestRoute =
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
-  '/mcp': typeof McpRoute
-  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
-  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
   '/bankroll': typeof AuthenticatedBankrollRoute
   '/base-dados': typeof AuthenticatedBaseDadosRoute
@@ -194,17 +144,10 @@ export interface FileRoutesByFullPath {
   '/prognosticos': typeof AuthenticatedPrognosticosRoute
   '/publicacao': typeof AuthenticatedPublicacaoRoute
   '/validacao': typeof AuthenticatedValidacaoRoute
-  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
-  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/public/hooks/highlightly-ingest': typeof ApiPublicHooksHighlightlyIngestRoute
-  '/api/public/hooks/send-critical-validation-telegram-alerts': typeof ApiPublicHooksSendCriticalValidationTelegramAlertsRoute
-  '/api/public/hooks/sync-critical-validation-telegram-alerts': typeof ApiPublicHooksSyncCriticalValidationTelegramAlertsRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
-  '/mcp': typeof McpRoute
-  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
-  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
   '/bankroll': typeof AuthenticatedBankrollRoute
   '/base-dados': typeof AuthenticatedBaseDadosRoute
@@ -220,19 +163,12 @@ export interface FileRoutesByTo {
   '/publicacao': typeof AuthenticatedPublicacaoRoute
   '/validacao': typeof AuthenticatedValidacaoRoute
   '/': typeof AuthenticatedIndexRoute
-  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
-  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/public/hooks/highlightly-ingest': typeof ApiPublicHooksHighlightlyIngestRoute
-  '/api/public/hooks/send-critical-validation-telegram-alerts': typeof ApiPublicHooksSendCriticalValidationTelegramAlertsRoute
-  '/api/public/hooks/sync-critical-validation-telegram-alerts': typeof ApiPublicHooksSyncCriticalValidationTelegramAlertsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
-  '/mcp': typeof McpRoute
-  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
-  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/_authenticated/aprendizado-ia': typeof AuthenticatedAprendizadoIaRoute
   '/_authenticated/bankroll': typeof AuthenticatedBankrollRoute
   '/_authenticated/base-dados': typeof AuthenticatedBaseDadosRoute
@@ -248,20 +184,13 @@ export interface FileRoutesById {
   '/_authenticated/publicacao': typeof AuthenticatedPublicacaoRoute
   '/_authenticated/validacao': typeof AuthenticatedValidacaoRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
-  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
-  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/public/hooks/highlightly-ingest': typeof ApiPublicHooksHighlightlyIngestRoute
-  '/api/public/hooks/send-critical-validation-telegram-alerts': typeof ApiPublicHooksSendCriticalValidationTelegramAlertsRoute
-  '/api/public/hooks/sync-critical-validation-telegram-alerts': typeof ApiPublicHooksSyncCriticalValidationTelegramAlertsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/auth'
-    | '/mcp'
-    | '/.mcp/list-tools'
-    | '/.well-known/oauth-protected-resource'
     | '/aprendizado-ia'
     | '/bankroll'
     | '/base-dados'
@@ -276,17 +205,10 @@ export interface FileRouteTypes {
     | '/prognosticos'
     | '/publicacao'
     | '/validacao'
-    | '/.lovable/oauth/consent'
-    | '/.mcp/invoke-tool/$tool'
     | '/api/public/hooks/highlightly-ingest'
-    | '/api/public/hooks/send-critical-validation-telegram-alerts'
-    | '/api/public/hooks/sync-critical-validation-telegram-alerts'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
-    | '/mcp'
-    | '/.mcp/list-tools'
-    | '/.well-known/oauth-protected-resource'
     | '/aprendizado-ia'
     | '/bankroll'
     | '/base-dados'
@@ -302,18 +224,11 @@ export interface FileRouteTypes {
     | '/publicacao'
     | '/validacao'
     | '/'
-    | '/.lovable/oauth/consent'
-    | '/.mcp/invoke-tool/$tool'
     | '/api/public/hooks/highlightly-ingest'
-    | '/api/public/hooks/send-critical-validation-telegram-alerts'
-    | '/api/public/hooks/sync-critical-validation-telegram-alerts'
   id:
     | '__root__'
     | '/_authenticated'
     | '/auth'
-    | '/mcp'
-    | '/.mcp/list-tools'
-    | '/.well-known/oauth-protected-resource'
     | '/_authenticated/aprendizado-ia'
     | '/_authenticated/bankroll'
     | '/_authenticated/base-dados'
@@ -329,33 +244,22 @@ export interface FileRouteTypes {
     | '/_authenticated/publicacao'
     | '/_authenticated/validacao'
     | '/_authenticated/'
-    | '/.lovable/oauth/consent'
-    | '/.mcp/invoke-tool/$tool'
     | '/api/public/hooks/highlightly-ingest'
-    | '/api/public/hooks/send-critical-validation-telegram-alerts'
-    | '/api/public/hooks/sync-critical-validation-telegram-alerts'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
-  McpRoute: typeof McpRoute
-  Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
-  Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
-  DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
-  Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
   ApiPublicHooksHighlightlyIngestRoute: typeof ApiPublicHooksHighlightlyIngestRoute
-  ApiPublicHooksSendCriticalValidationTelegramAlertsRoute: typeof ApiPublicHooksSendCriticalValidationTelegramAlertsRoute
-  ApiPublicHooksSyncCriticalValidationTelegramAlertsRoute: typeof ApiPublicHooksSyncCriticalValidationTelegramAlertsRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/mcp': {
-      id: '/mcp'
-      path: '/mcp'
-      fullPath: '/mcp'
-      preLoaderRoute: typeof McpRouteImport
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -365,109 +269,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated': {
-      id: '/_authenticated'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof AuthenticatedRouteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_authenticated/': {
       id: '/_authenticated/'
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/validacao': {
-      id: '/_authenticated/validacao'
-      path: '/validacao'
-      fullPath: '/validacao'
-      preLoaderRoute: typeof AuthenticatedValidacaoRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/publicacao': {
-      id: '/_authenticated/publicacao'
-      path: '/publicacao'
-      fullPath: '/publicacao'
-      preLoaderRoute: typeof AuthenticatedPublicacaoRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/prognosticos': {
-      id: '/_authenticated/prognosticos'
-      path: '/prognosticos'
-      fullPath: '/prognosticos'
-      preLoaderRoute: typeof AuthenticatedPrognosticosRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/observabilidade-ia': {
-      id: '/_authenticated/observabilidade-ia'
-      path: '/observabilidade-ia'
-      fullPath: '/observabilidade-ia'
-      preLoaderRoute: typeof AuthenticatedObservabilidadeIaRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/monitor-highlightly': {
-      id: '/_authenticated/monitor-highlightly'
-      path: '/monitor-highlightly'
-      fullPath: '/monitor-highlightly'
-      preLoaderRoute: typeof AuthenticatedMonitorHighlightlyRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/modelos-preditivos': {
-      id: '/_authenticated/modelos-preditivos'
-      path: '/modelos-preditivos'
-      fullPath: '/modelos-preditivos'
-      preLoaderRoute: typeof AuthenticatedModelosPreditivosRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/importar': {
-      id: '/_authenticated/importar'
-      path: '/importar'
-      fullPath: '/importar'
-      preLoaderRoute: typeof AuthenticatedImportarRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/historico': {
-      id: '/_authenticated/historico'
-      path: '/historico'
-      fullPath: '/historico'
-      preLoaderRoute: typeof AuthenticatedHistoricoRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/configuracoes': {
-      id: '/_authenticated/configuracoes'
-      path: '/configuracoes'
-      fullPath: '/configuracoes'
-      preLoaderRoute: typeof AuthenticatedConfiguracoesRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/coleta-dados': {
-      id: '/_authenticated/coleta-dados'
-      path: '/coleta-dados'
-      fullPath: '/coleta-dados'
-      preLoaderRoute: typeof AuthenticatedColetaDadosRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/central-esportiva': {
-      id: '/_authenticated/central-esportiva'
-      path: '/central-esportiva'
-      fullPath: '/central-esportiva'
-      preLoaderRoute: typeof AuthenticatedCentralEsportivaRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/base-dados': {
-      id: '/_authenticated/base-dados'
-      path: '/base-dados'
-      fullPath: '/base-dados'
-      preLoaderRoute: typeof AuthenticatedBaseDadosRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/bankroll': {
-      id: '/_authenticated/bankroll'
-      path: '/bankroll'
-      fullPath: '/bankroll'
-      preLoaderRoute: typeof AuthenticatedBankrollRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/aprendizado-ia': {
@@ -477,47 +283,96 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAprendizadoIaRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/.well-known/oauth-protected-resource': {
-      id: '/.well-known/oauth-protected-resource'
-      path: '/.well-known/oauth-protected-resource'
-      fullPath: '/.well-known/oauth-protected-resource'
-      preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/bankroll': {
+      id: '/_authenticated/bankroll'
+      path: '/bankroll'
+      fullPath: '/bankroll'
+      preLoaderRoute: typeof AuthenticatedBankrollRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/.mcp/list-tools': {
-      id: '/.mcp/list-tools'
-      path: '/.mcp/list-tools'
-      fullPath: '/.mcp/list-tools'
-      preLoaderRoute: typeof Char91DotmcpChar93ListToolsRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/base-dados': {
+      id: '/_authenticated/base-dados'
+      path: '/base-dados'
+      fullPath: '/base-dados'
+      preLoaderRoute: typeof AuthenticatedBaseDadosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/.mcp/invoke-tool/$tool': {
-      id: '/.mcp/invoke-tool/$tool'
-      path: '/.mcp/invoke-tool/$tool'
-      fullPath: '/.mcp/invoke-tool/$tool'
-      preLoaderRoute: typeof Char91DotmcpChar93InvokeToolToolRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/central-esportiva': {
+      id: '/_authenticated/central-esportiva'
+      path: '/central-esportiva'
+      fullPath: '/central-esportiva'
+      preLoaderRoute: typeof AuthenticatedCentralEsportivaRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/.lovable/oauth/consent': {
-      id: '/.lovable/oauth/consent'
-      path: '/.lovable/oauth/consent'
-      fullPath: '/.lovable/oauth/consent'
-      preLoaderRoute: typeof DotlovableOauthConsentRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/coleta-dados': {
+      id: '/_authenticated/coleta-dados'
+      path: '/coleta-dados'
+      fullPath: '/coleta-dados'
+      preLoaderRoute: typeof AuthenticatedColetaDadosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/api/public/hooks/sync-critical-validation-telegram-alerts': {
-      id: '/api/public/hooks/sync-critical-validation-telegram-alerts'
-      path: '/api/public/hooks/sync-critical-validation-telegram-alerts'
-      fullPath: '/api/public/hooks/sync-critical-validation-telegram-alerts'
-      preLoaderRoute: typeof ApiPublicHooksSyncCriticalValidationTelegramAlertsRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/configuracoes': {
+      id: '/_authenticated/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof AuthenticatedConfiguracoesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/api/public/hooks/send-critical-validation-telegram-alerts': {
-      id: '/api/public/hooks/send-critical-validation-telegram-alerts'
-      path: '/api/public/hooks/send-critical-validation-telegram-alerts'
-      fullPath: '/api/public/hooks/send-critical-validation-telegram-alerts'
-      preLoaderRoute: typeof ApiPublicHooksSendCriticalValidationTelegramAlertsRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/historico': {
+      id: '/_authenticated/historico'
+      path: '/historico'
+      fullPath: '/historico'
+      preLoaderRoute: typeof AuthenticatedHistoricoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/importar': {
+      id: '/_authenticated/importar'
+      path: '/importar'
+      fullPath: '/importar'
+      preLoaderRoute: typeof AuthenticatedImportarRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/modelos-preditivos': {
+      id: '/_authenticated/modelos-preditivos'
+      path: '/modelos-preditivos'
+      fullPath: '/modelos-preditivos'
+      preLoaderRoute: typeof AuthenticatedModelosPreditivosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/monitor-highlightly': {
+      id: '/_authenticated/monitor-highlightly'
+      path: '/monitor-highlightly'
+      fullPath: '/monitor-highlightly'
+      preLoaderRoute: typeof AuthenticatedMonitorHighlightlyRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/observabilidade-ia': {
+      id: '/_authenticated/observabilidade-ia'
+      path: '/observabilidade-ia'
+      fullPath: '/observabilidade-ia'
+      preLoaderRoute: typeof AuthenticatedObservabilidadeIaRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/prognosticos': {
+      id: '/_authenticated/prognosticos'
+      path: '/prognosticos'
+      fullPath: '/prognosticos'
+      preLoaderRoute: typeof AuthenticatedPrognosticosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/publicacao': {
+      id: '/_authenticated/publicacao'
+      path: '/publicacao'
+      fullPath: '/publicacao'
+      preLoaderRoute: typeof AuthenticatedPublicacaoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/validacao': {
+      id: '/_authenticated/validacao'
+      path: '/validacao'
+      fullPath: '/validacao'
+      preLoaderRoute: typeof AuthenticatedValidacaoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/api/public/hooks/highlightly-ingest': {
       id: '/api/public/hooks/highlightly-ingest'
@@ -571,17 +426,7 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
-  McpRoute: McpRoute,
-  Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
-  Char91DotwellKnownChar93OauthProtectedResourceRoute:
-    Char91DotwellKnownChar93OauthProtectedResourceRoute,
-  DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
-  Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
   ApiPublicHooksHighlightlyIngestRoute: ApiPublicHooksHighlightlyIngestRoute,
-  ApiPublicHooksSendCriticalValidationTelegramAlertsRoute:
-    ApiPublicHooksSendCriticalValidationTelegramAlertsRoute,
-  ApiPublicHooksSyncCriticalValidationTelegramAlertsRoute:
-    ApiPublicHooksSyncCriticalValidationTelegramAlertsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
