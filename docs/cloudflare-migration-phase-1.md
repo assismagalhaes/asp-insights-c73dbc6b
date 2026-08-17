@@ -1,6 +1,6 @@
 # Cloudflare migration — Phase 1 baseline
 
-Status: staging deployed and authenticated smoke tests complete; production remains unbound.
+Status: completed; staging retained and production cut over to Cloudflare.
 
 ## Target architecture
 
@@ -82,7 +82,7 @@ Secrets must be configured separately in both environments. Deployments must not
 4. Added Cloudflare build and deployment dry-run checks to CI; CI does not deploy.
 5. Passed TypeScript, lint, 120 frontend tests, 80 AI release gates, 743 Python tests, the Cloudflare build and Wrangler dry-run.
 
-## Current verified staging state (2026-08-13)
+## Current verified state (2026-08-17)
 
 - Cloudflare account, `asp-insights-staging` Worker and `staging.asp-insights.com.br` are active.
 - Supabase project `qjcetldbguawmfijuxrq` is active in `sa-east-1` on the Pro plan.
@@ -90,8 +90,10 @@ Secrets must be configured separately in both environments. Deployments must not
 - Authenticated smoke tests passed on all application routes without browser console errors.
 - The VM-to-Cloudflare Highlightly bridge persists data in the new Supabase project.
 - Highlightly remains disabled at rest; Telegram was removed from the application runtime.
-- The apex `asp-insights.com.br` has no public A/AAAA application target and `www` is not defined. Production is therefore not cut over.
+- The apex `asp-insights.com.br` serves the production Cloudflare Worker and
+  `www` redirects to the canonical apex domain.
 
-## Next controlled step
+## Current controlled step
 
-Use `docs/cloudflare-production-cutover-runbook.md`. Preparation and dry-runs are allowed now; production Worker deployment, custom-domain binding and apex/`www` DNS changes remain a separate approval gate.
+Use `docs/cloudflare-production-cutover-runbook.md` for the verified post-cutover
+state, backup/restore inventory, Auth UUID mapping and Lovable retirement gate.

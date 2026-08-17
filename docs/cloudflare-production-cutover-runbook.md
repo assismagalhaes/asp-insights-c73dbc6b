@@ -1,28 +1,58 @@
 # Cloudflare production cutover runbook
 
-Status: prepared, not executed. Last verified: 2026-08-13 (America/Sao_Paulo).
+Status: production cutover completed. Last verified: 2026-08-17 (America/Sao_Paulo).
 
 ## Scope and safety boundary
 
 This runbook promotes the already validated Cloudflare/Supabase/VM architecture from staging to production. It does not migrate data during cutover, enable model publication, delete Lovable resources, or alter mail DNS records. Telegram has been removed from the application runtime.
 
-Production changes require a separate explicit approval. Until then:
-
-- keep `staging.asp-insights.com.br` serving `asp-insights-staging`;
-- do not deploy the default `asp-insights` Worker;
-- do not bind `asp-insights.com.br` or `www.asp-insights.com.br`;
-- keep the Lovable project and exports available for rollback;
-- keep Highlightly disabled at rest and subject to its quality gate.
+The production cutover was approved and completed. Keep
+`staging.asp-insights.com.br` serving `asp-insights-staging`, retain the Lovable
+project and exports only as a temporary rollback source, and keep Highlightly
+disabled at rest and subject to its independent quality gate.
 
 ## Verified baseline
 
 - Supabase project: `qjcetldbguawmfijuxrq`, region `sa-east-1`, Pro.
-- Database: 84 public tables, 8 security-invoker views and 366 valid indexes.
+- Database: 84 public tables, 96 public functions, 77 user triggers, RLS enabled
+  on every public table and no invalid indexes.
 - Storage import: 73,694 objects and 155,951,499 bytes; later Highlightly objects remain additive.
 - Auth: one active administrator; the historical profile identifier is preserved and `user_id` references point to the active Auth UUID.
-- Staging: authenticated smoke tests passed for all 14 protected routes with no browser console errors.
+- Staging and production: authenticated smoke tests passed for Dashboard,
+  Histórico, Base de Dados, Coleta de Odds, Monitor Highlightly, Validação,
+  Publicação and Configurações with no visible or browser console errors.
 - VM API and systemd timers: active; Highlightly provider flag is false at rest.
-- Public DNS baseline: apex has no application A/AAAA answer; `www` is NXDOMAIN; staging is proxied through Cloudflare.
+- Public application: `asp-insights.com.br` serves the production Cloudflare
+  Worker and `www` redirects to the canonical apex domain.
+
+## Auth identity mapping
+
+The migration preserved the historical profile record but not the Auth UUID
+literally. Do not attempt to re-key the live user after cutover unless a separate
+data migration is designed and tested.
+
+- historical `profiles.id`: `d2038ca5-ae17-40c9-8575-b3b363af5207`;
+- active `auth.users.id`: `87b2d283-d453-4942-afde-5b7f6f54145e`;
+- `profiles.user_id` points to the active Auth UUID;
+- the active user has the `admin` application role.
+
+Verified on 2026-08-17: session persistence after reload, logout, new login,
+protected-route access and a single active Auth session.
+
+## Backup and restore inventory
+
+- Supabase Pro physical backups run daily around midnight in the project region.
+- Completed backups were visible for 10 through 17 August 2026; the newest
+  verified backup was `17 Aug 2026 09:35:41 +0000`.
+- Database backups include Storage metadata but do not restore deleted Storage
+  object contents.
+- The independent Storage recovery artifact remains the verified export of
+  73,694 objects and 155,951,499 bytes. New Highlightly objects are additive and
+  require a newer export before Lovable retirement.
+- Never test restore over production. Use Supabase `Restore to new project` only
+  after confirming the additional project cost and a cleanup plan.
+- A restore drill passes only after schema counts, Auth mapping, critical row
+  counts and read-only application queries match the source snapshot.
 
 ## Production environment contract
 
@@ -107,3 +137,18 @@ Lovable can be cancelled only after the public site remains healthy through the 
 - source repository and reproducible Cloudflare build;
 - DNS export and rollback record;
 - no remaining runtime calls to Lovable-hosted APIs or connectors.
+
+### Retirement execution checklist
+
+Do not cancel or delete Lovable before the post-renewal Highlightly observation
+window (18-24 August 2026 UTC) is reviewed on or after 25 August 2026.
+
+1. Create a fresh database recovery point and a fresh incremental Storage export.
+2. Export Cloudflare DNS and record the active Worker version and secret names.
+3. Confirm staging and production login, protected routes, VM bridge persistence
+   and provider-disabled-at-rest behavior once more.
+4. Search the deployed code and Worker logs for Lovable hosts/connectors.
+5. Revoke Lovable-only tokens, connector credentials and deployment access.
+6. Cancel recurring Lovable billing only after steps 1-5 pass.
+7. Keep the source export and rollback documentation offline; do not delete the
+   Lovable project in the same operation as billing cancellation.
