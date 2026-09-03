@@ -137,6 +137,7 @@ export const HIGHLIGHTLY_BRIDGE_RPCS = new Set([
   "get_highlightly_phase8e_daily_request_usage",
   "requeue_highlightly_dead_phase8e_missing_match_id_jobs",
   "get_football_model_input_candidates_v1",
+  "plan_football_selective_enrichment_v1",
   "create_model_input_build_v1",
   "record_football_shadow_run_v1",
 ]);
