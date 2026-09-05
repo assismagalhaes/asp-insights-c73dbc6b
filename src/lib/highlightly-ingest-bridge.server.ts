@@ -1,6 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
-
 export const HIGHLIGHTLY_BRIDGE_VERSION = "v1";
 export const HIGHLIGHTLY_BRIDGE_MAX_SKEW_SECONDS = 300;
 export const HIGHLIGHTLY_BRIDGE_MAX_BODY_BYTES = 26_214_400;
@@ -142,7 +141,7 @@ export const HIGHLIGHTLY_BRIDGE_RPCS = new Set([
   "requeue_highlightly_dead_phase8e_missing_match_id_jobs",
   "get_football_model_input_candidates_v1",
   "plan_football_selective_enrichment_v1",
-    "claim_highlightly_ingestion_job_by_id",
+  "claim_highlightly_ingestion_job_by_id",
   "create_model_input_build_v1",
   "record_football_shadow_run_v1",
 ]);
