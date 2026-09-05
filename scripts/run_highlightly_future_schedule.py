@@ -15,13 +15,13 @@ from api.highlightly_repository import HighlightlyRepository
 from scripts.run_highlightly_phase7_shadow import (
     DAILY_LIMIT,
     RESERVE_REQUESTS,
-    SPORTS,
     _active_jobs,
 )
 from scripts.run_highlightly_future_continuation import resolve_future_scope
 
 
 LOCAL_TIMEZONE = ZoneInfo("America/Sao_Paulo")
+FUTURE_SPORTS = ("football",)
 
 
 @dataclass(frozen=True)
@@ -100,6 +100,8 @@ def build_phase7_command(plan: FutureWindowPlan) -> list[str]:
         plan.start_date.isoformat(),
         "--backfill-days",
         str(plan.slot.horizon_days),
+        "--sport",
+        "football",
         "--all-football-leagues",
         "--fanout-mode",
         "pregame",
@@ -126,7 +128,7 @@ def build_continuation_command() -> list[str]:
 
 
 def _provider(repository: HighlightlyRepository) -> dict[str, Any]:
-    contexts = [repository.ingestion_context(sport) for sport in SPORTS]
+    contexts = [repository.ingestion_context(sport) for sport in FUTURE_SPORTS]
     provider_ids = {str(context["provider"]["id"]) for context in contexts}
     if len(provider_ids) != 1:
         raise RuntimeError("Selected sports do not resolve to one Highlightly provider")
@@ -149,7 +151,7 @@ def _report(plan: FutureWindowPlan, *, mode: str, event: str, **extra: Any) -> d
         "timezone": str(LOCAL_TIMEZONE),
         "date_start": plan.start_date.isoformat(),
         "date_end": plan.end_date.isoformat(),
-        "sports": list(SPORTS),
+        "sports": list(FUTURE_SPORTS),
         "fanout_mode": "pregame",
         "request_budget": plan.slot.request_budget,
         "max_jobs": plan.slot.max_jobs,
