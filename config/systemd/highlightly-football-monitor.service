@@ -1,0 +1,14 @@
+[Unit]
+Description=ASP Insights football canary and market rollups
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/home/ubuntu/jupyter/asp-insights-publish-20260904
+EnvironmentFile=/etc/asp-scraper-api.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/home/ubuntu/asp-scraper-api/.venv/bin/python -m scripts.refresh_highlightly_football_monitor
+TimeoutStartSec=300
+Nice=10

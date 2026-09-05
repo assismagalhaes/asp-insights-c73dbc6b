@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh ASP Insights football monitoring rollups every 15 minutes
+
+[Timer]
+OnCalendar=*-*-* *:02/15:00 America/Sao_Paulo
+Persistent=true
+AccuracySec=1min
+RandomizedDelaySec=30s
+Unit=highlightly-football-monitor.service
+
+[Install]
+WantedBy=timers.target
