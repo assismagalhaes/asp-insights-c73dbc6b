@@ -94,6 +94,7 @@ export const HIGHLIGHTLY_BRIDGE_RPCS = new Set([
   "get_highlightly_odds_quality_report_v2",
   "refresh_highlightly_odds_league_coverage",
   "get_highlightly_odds_league_coverage_report",
+  "get_highlightly_football_canary_gate_v1",
   "materialize_highlightly_football_features",
   "materialize_highlightly_football_features_v2",
   "materialize_highlightly_football_features_v3",
