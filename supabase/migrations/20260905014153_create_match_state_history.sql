@@ -28,17 +28,19 @@ ALTER TABLE public.sports_match_state_history ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.sports_match_state_history FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON TABLE public.sports_match_state_history TO service_role;
 
-CREATE OR REPLACE FUNCTION public.capture_sports_match_state_history()
+CREATE SCHEMA IF NOT EXISTS private;
+
+CREATE OR REPLACE FUNCTION private.capture_sports_match_state_history()
 RETURNS trigger
 LANGUAGE plpgsql
-SECURITY INVOKER
-SET search_path = pg_catalog, public
+SECURITY DEFINER
+SET search_path = ''
 AS $function$
 DECLARE
   fingerprint_value text;
 BEGIN
-  fingerprint_value := md5(
-    jsonb_build_object(
+  fingerprint_value := pg_catalog.md5(
+    pg_catalog.jsonb_build_object(
       'kickoff_at', NEW.kickoff_at,
       'status', NEW.status,
       'provider_status', NEW.provider_status,
@@ -59,7 +61,7 @@ BEGIN
     state_fingerprint
   ) VALUES (
     NEW.id,
-    now(),
+    pg_catalog.now(),
     'canonical_change',
     NEW.kickoff_at,
     NEW.status,
@@ -74,8 +76,8 @@ BEGIN
 END;
 $function$;
 
-REVOKE ALL ON FUNCTION public.capture_sports_match_state_history()
-  FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION private.capture_sports_match_state_history()
+  FROM PUBLIC, anon, authenticated, service_role;
 
 DROP TRIGGER IF EXISTS capture_sports_match_state_history_insert
   ON public.sports_matches;
@@ -84,7 +86,7 @@ CREATE TRIGGER capture_sports_match_state_history_insert
 AFTER INSERT
 ON public.sports_matches
 FOR EACH ROW
-EXECUTE FUNCTION public.capture_sports_match_state_history();
+EXECUTE FUNCTION private.capture_sports_match_state_history();
 
 DROP TRIGGER IF EXISTS capture_sports_match_state_history_update
   ON public.sports_matches;
@@ -100,7 +102,7 @@ WHEN (
   OR OLD.score_data IS DISTINCT FROM NEW.score_data
   OR OLD.state_data IS DISTINCT FROM NEW.state_data
 )
-EXECUTE FUNCTION public.capture_sports_match_state_history();
+EXECUTE FUNCTION private.capture_sports_match_state_history();
 
 INSERT INTO public.sports_match_state_history (
   match_id,
@@ -115,15 +117,15 @@ INSERT INTO public.sports_match_state_history (
 )
 SELECT
   match_row.id,
-  now(),
+  pg_catalog.now(),
   'migration_baseline',
   match_row.kickoff_at,
   match_row.status,
   match_row.provider_status,
   COALESCE(match_row.score_data, '{}'::jsonb),
   COALESCE(match_row.state_data, '{}'::jsonb),
-  md5(
-    jsonb_build_object(
+  pg_catalog.md5(
+    pg_catalog.jsonb_build_object(
       'kickoff_at', match_row.kickoff_at,
       'status', match_row.status,
       'provider_status', match_row.provider_status,

@@ -21,8 +21,11 @@ class MatchStateHistoryMigrationTests(unittest.TestCase):
         self.assertNotIn("GRANT INSERT", self.sql)
         self.assertNotIn("GRANT UPDATE", self.sql)
         self.assertNotIn("GRANT DELETE", self.sql)
-        self.assertIn("SECURITY INVOKER", self.sql)
-        self.assertNotIn("SECURITY DEFINER", self.sql)
+        self.assertIn("private.capture_sports_match_state_history", self.sql)
+        self.assertIn("SECURITY DEFINER", self.sql)
+        self.assertIn("SET search_path = ''", self.sql)
+        self.assertIn("FROM PUBLIC, anon, authenticated, service_role", self.sql)
+        self.assertNotIn("public.capture_sports_match_state_history", self.sql)
 
     def test_trigger_tracks_only_material_state_fields(self) -> None:
         self.assertIn(
