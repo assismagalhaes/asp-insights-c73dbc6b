@@ -244,9 +244,21 @@ def main(argv: Iterable[str] | None = None) -> int:
             "p_to": (at.replace(microsecond=0) + timedelta(hours=24)).isoformat(),
         },
     )
+    refreshed_markets = repository.rpc(
+        "refresh_highlightly_football_market_coverage",
+        {
+            "p_observed_on": at.date().isoformat(),
+            "p_from": at.isoformat(),
+            "p_to": (at.replace(microsecond=0) + timedelta(hours=24)).isoformat(),
+        },
+    )
     league_coverage = repository.rpc(
         "get_highlightly_odds_league_coverage_report",
         {"p_days": 7, "p_min_matches": 20},
+    )
+    market_coverage = repository.rpc(
+        "get_highlightly_football_market_coverage_report",
+        {"p_days": 14, "p_coverage_sla": 90},
     )
     print(
         json.dumps(
@@ -266,6 +278,8 @@ def main(argv: Iterable[str] | None = None) -> int:
                 quality=quality,
                 league_snapshots_refreshed=refreshed_leagues,
                 league_coverage=league_coverage,
+                market_snapshots_refreshed=refreshed_markets,
+                market_coverage=market_coverage,
             ),
             ensure_ascii=False,
             separators=(",", ":"),

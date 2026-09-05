@@ -299,6 +299,8 @@ def _normalize_catalog(payload: Any, ctx: NormalizationContext, resource: str) -
 
 def _market_family(name: str) -> str:
     lowered = name.casefold()
+    if "double chance" in lowered:
+        return "double_chance"
     if "first team" in lowered and "score" in lowered:
         return "first_team_to_score"
     if "both teams" in lowered:

@@ -191,6 +191,23 @@ class HighlightlyPhaseTwoWorkerTests(unittest.TestCase):
         self.assertEqual({row["p_line_key"] for row in batch.odds_quotes}, {"2.5"})
         self.assertTrue(all(row["p_source_raw_object_id"] == RAW_ID for row in batch.odds_quotes))
 
+    def test_double_chance_is_normalized_as_supported_canonical_market(self):
+        payload = {"data": [{"matchId": 99, "odds": [{
+            "bookmakerId": 2,
+            "bookmakerName": "bet365",
+            "type": "prematch",
+            "market": "Double Chance",
+            "values": [
+                {"value": "1X", "odd": 1.25},
+                {"value": "X2", "odd": 1.45},
+                {"value": "12", "odd": 1.30},
+            ],
+        }]}]}
+        batch = normalize_football(payload, context("football.odds"))
+        definitions = batch.table_rows("sports_market_definitions")
+        self.assertEqual(definitions[0]["canonical_family"], "double_chance")
+        self.assertEqual(len(batch.odds_quotes), 3)
+
     def test_unavailable_odds_sentinel_is_informational_without_poisoning_the_batch(self):
         payload = {"matchId": 99, "odds": [{
             "bookmakerId": 2,

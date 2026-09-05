@@ -239,7 +239,9 @@ class HighlightlyPhaseEightDOddsQualityTests(unittest.TestCase):
             [candidate],
             {"by_sport": [], "by_cause": []},
             3,
+            42,
             {"leagues": [], "automatic_exclusions": False},
+            {"markets": [], "automatic_exclusions": False},
         ]
         repository.daily_request_usage.return_value = 100
         active_jobs.side_effect = [[], []]
@@ -268,7 +270,7 @@ class HighlightlyPhaseEightDOddsQualityTests(unittest.TestCase):
         repository.set_provider_enabled.assert_any_call("highlightly", True)
         repository.set_provider_enabled.assert_any_call("highlightly", False)
         self.assertEqual(worker_factory.call_args.kwargs["daily_quota_ceiling"], 850)
-        quality_call = repository.rpc.call_args_list[-3]
+        quality_call = repository.rpc.call_args_list[-5]
         self.assertEqual(
             quality_call.args[0],
             "get_highlightly_odds_quality_report_v2",
@@ -281,14 +283,25 @@ class HighlightlyPhaseEightDOddsQualityTests(unittest.TestCase):
             },
         )
         self.assertEqual(
-            repository.rpc.call_args_list[-2].args[0],
+            repository.rpc.call_args_list[-4].args[0],
             "refresh_highlightly_odds_league_coverage",
+        )
+        self.assertEqual(
+            repository.rpc.call_args_list[-3].args[0],
+            "refresh_highlightly_football_market_coverage",
+        )
+        self.assertEqual(
+            repository.rpc.call_args_list[-2].args,
+            (
+                "get_highlightly_odds_league_coverage_report",
+                {"p_days": 7, "p_min_matches": 20},
+            ),
         )
         self.assertEqual(
             repository.rpc.call_args_list[-1].args,
             (
-                "get_highlightly_odds_league_coverage_report",
-                {"p_days": 7, "p_min_matches": 20},
+                "get_highlightly_football_market_coverage_report",
+                {"p_days": 14, "p_coverage_sla": 90},
             ),
         )
 

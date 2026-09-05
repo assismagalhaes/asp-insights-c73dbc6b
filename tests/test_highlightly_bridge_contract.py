@@ -39,6 +39,8 @@ class HighlightlyBridgeContractTests(unittest.TestCase):
         self.assertIn('"get_highlightly_odds_quality_report_v2"', verifier)
         self.assertIn('"refresh_highlightly_odds_league_coverage"', verifier)
         self.assertIn('"get_highlightly_odds_league_coverage_report"', verifier)
+        self.assertIn('"refresh_highlightly_football_market_coverage"', verifier)
+        self.assertIn('"get_highlightly_football_market_coverage_report"', verifier)
         self.assertIn('"get_highlightly_football_canary_gate_v1"', verifier)
         self.assertIn('"materialize_highlightly_football_features"', verifier)
         self.assertIn('"materialize_highlightly_football_features_v2"', verifier)

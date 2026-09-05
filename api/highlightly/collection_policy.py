@@ -22,7 +22,7 @@ PREFERRED_BOOKMAKERS = frozenset(
 )
 SUPPORTED_ODDS_FAMILIES = {
     "football": frozenset(
-        {"moneyline", "total", "both_teams_to_score", "first_team_to_score", "handicap", "corners_total"}
+        {"moneyline", "total", "both_teams_to_score", "double_chance", "first_team_to_score", "handicap", "corners_total"}
     ),
     "baseball": frozenset({"moneyline", "total", "run_line"}),
     "basketball": frozenset({"moneyline", "total", "spread"}),
