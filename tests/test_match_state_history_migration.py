@@ -3,7 +3,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = ROOT / "supabase" / "migrations" / "20260905014000_create_match_state_history.sql"
+MIGRATION = ROOT / "supabase" / "migrations" / "20260905014153_create_match_state_history.sql"
 
 
 class MatchStateHistoryMigrationTests(unittest.TestCase):
@@ -21,6 +21,8 @@ class MatchStateHistoryMigrationTests(unittest.TestCase):
         self.assertNotIn("GRANT INSERT", self.sql)
         self.assertNotIn("GRANT UPDATE", self.sql)
         self.assertNotIn("GRANT DELETE", self.sql)
+        self.assertIn("SECURITY INVOKER", self.sql)
+        self.assertNotIn("SECURITY DEFINER", self.sql)
 
     def test_trigger_tracks_only_material_state_fields(self) -> None:
         self.assertIn(

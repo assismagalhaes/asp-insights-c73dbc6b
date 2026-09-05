@@ -31,7 +31,7 @@ GRANT SELECT ON TABLE public.sports_match_state_history TO service_role;
 CREATE OR REPLACE FUNCTION public.capture_sports_match_state_history()
 RETURNS trigger
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
 SET search_path = pg_catalog, public
 AS $function$
 DECLARE
