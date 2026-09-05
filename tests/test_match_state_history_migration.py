@@ -3,7 +3,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = ROOT / "supabase" / "migrations" / "20260905014153_create_match_state_history.sql"
+MIGRATION = ROOT / "supabase" / "migrations" / "20260905015030_create_match_state_history.sql"
 
 
 class MatchStateHistoryMigrationTests(unittest.TestCase):
