@@ -101,6 +101,24 @@ class HighlightlyPhaseEightDOddsQualityTests(unittest.TestCase):
         self.assertIn("FROM PUBLIC, anon", migration)
         self.assertIn("TO authenticated, service_role", migration)
 
+    def test_market_coverage_uses_the_same_provider_empty_eligibility_rule(self):
+        migration = (
+            ROOT
+            / "supabase/migrations/20260908180000_align_football_market_eligible_coverage.sql"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("matches_provider_empty", migration)
+        self.assertIn("eligible_availability_pct", migration)
+        self.assertIn("'ODDS_PROVIDER_EMPTY'", migration)
+        self.assertIn("'ODDS_QUOTE_UNAVAILABLE'", migration)
+        self.assertIn("latest_run.records_received", migration)
+        self.assertIn("AS raw_coverage_pct", migration)
+        self.assertIn("AS eligible_coverage_pct", migration)
+        self.assertIn("'coverage_basis', 'eligible_matches_due'", migration)
+        self.assertIn("'provider_unavailable'", migration)
+        self.assertIn("FROM PUBLIC, anon, authenticated", migration)
+        self.assertIn("TO service_role", migration)
+
     def test_systemd_timer_is_frequent_and_shares_the_future_collection_lock(self):
         timer = (
             ROOT / "config/systemd/highlightly-odds-refresh.timer"
