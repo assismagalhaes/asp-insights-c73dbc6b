@@ -22,6 +22,7 @@ from scripts.run_highlightly_future_continuation import resolve_future_scope
 
 LOCAL_TIMEZONE = ZoneInfo("America/Sao_Paulo")
 FUTURE_SPORTS = ("football",)
+MVP_FOOTBALL_LEAGUE_IDS = (33973, 119924, 84182)
 
 
 @dataclass(frozen=True)
@@ -102,7 +103,11 @@ def build_phase7_command(plan: FutureWindowPlan) -> list[str]:
         str(plan.slot.horizon_days),
         "--sport",
         "football",
-        "--all-football-leagues",
+        *(
+            argument
+            for league_id in MVP_FOOTBALL_LEAGUE_IDS
+            for argument in ("--football-league-id", str(league_id))
+        ),
         "--fanout-mode",
         "pregame",
         "--window-kind",
@@ -152,6 +157,7 @@ def _report(plan: FutureWindowPlan, *, mode: str, event: str, **extra: Any) -> d
         "date_start": plan.start_date.isoformat(),
         "date_end": plan.end_date.isoformat(),
         "sports": list(FUTURE_SPORTS),
+        "football_league_ids": list(MVP_FOOTBALL_LEAGUE_IDS),
         "fanout_mode": "pregame",
         "request_budget": plan.slot.request_budget,
         "max_jobs": plan.slot.max_jobs,

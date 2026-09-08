@@ -32,13 +32,19 @@ class HighlightlyFutureScheduleTests(unittest.TestCase):
         self.assertEqual((midday.slot.name, midday.start_date.isoformat(), midday.end_date.isoformat()), ("midday", "2026-07-22", "2026-07-23"))
         self.assertEqual((evening.slot.name, evening.start_date.isoformat(), evening.end_date.isoformat()), ("evening", "2026-07-22", "2026-07-23"))
 
-    def test_command_uses_pregame_fanout_and_football_only(self):
+    def test_command_uses_pregame_fanout_and_mvp_football_leagues_only(self):
         plan = future.build_plan(
             datetime(2026, 7, 22, 1, 15, tzinfo=timezone.utc)
         )
         command = future.build_phase7_command(plan)
 
-        self.assertIn("--all-football-leagues", command)
+        self.assertNotIn("--all-football-leagues", command)
+        league_ids = [
+            command[index + 1]
+            for index, value in enumerate(command)
+            if value == "--football-league-id"
+        ]
+        self.assertEqual(league_ids, ["33973", "119924", "84182"])
         self.assertEqual(command[command.index("--fanout-mode") + 1], "pregame")
         self.assertEqual(command[command.index("--window-kind") + 1], "future")
         self.assertIn("--finalize-window", command)
@@ -73,6 +79,7 @@ class HighlightlyFutureScheduleTests(unittest.TestCase):
         self.assertEqual(report["date_start"], "2026-07-22")
         self.assertEqual(report["date_end"], "2026-07-26")
         self.assertEqual(report["sports"], ["football"])
+        self.assertEqual(report["football_league_ids"], [33973, 119924, 84182])
 
     @patch.object(future.subprocess, "run")
     @patch.object(future, "_active_jobs")
