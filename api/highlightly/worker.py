@@ -56,6 +56,13 @@ def reprocess_request_params(
     metadata = raw_record.get("request_metadata")
     raw_params = metadata.get("params") if isinstance(metadata, Mapping) else None
     restored = dict(raw_params) if isinstance(raw_params, Mapping) else {}
+    if isinstance(metadata, Mapping) and not ({"matchId", "id"} & restored.keys()):
+        path = str(metadata.get("path") or "").rstrip("/")
+        path_parts = path.split("/")
+        if len(path_parts) >= 4 and path_parts[-2] in {"statistics", "lineups"}:
+            provider_match_id = path_parts[-1]
+            if provider_match_id.isdigit():
+                restored["matchId"] = int(provider_match_id)
     restored.update(job_params)
     return restored
 

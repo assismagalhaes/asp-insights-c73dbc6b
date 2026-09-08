@@ -54,6 +54,15 @@ class HighlightlyPhaseTwoWorkerTests(unittest.TestCase):
             {"normalizer_version": "stats-v2"},
         )
 
+    def test_reprocess_restores_match_id_from_historical_request_path(self):
+        restored = reprocess_request_params(
+            {"normalizer_version": "stats-v3"},
+            {"request_metadata": {"path": "/football/statistics/1381252076", "params": {}}},
+        )
+
+        self.assertEqual(restored["matchId"], 1381252076)
+        self.assertEqual(restored["normalizer_version"], "stats-v3")
+
     def test_registry_resolves_path_and_keeps_only_documented_query_params(self):
         registry = EndpointRegistry()
         operation = registry.get("football.FootballLineupsController_getLineups", sport="football")
