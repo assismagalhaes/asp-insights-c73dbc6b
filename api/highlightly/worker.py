@@ -48,6 +48,17 @@ TABLE_ORDER = (
     "sports_odds_consensus",
 )
 
+
+def reprocess_request_params(
+    job_params: Mapping[str, Any], raw_record: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Restore the provider request identity needed by canonical normalizers."""
+    metadata = raw_record.get("request_metadata")
+    raw_params = metadata.get("params") if isinstance(metadata, Mapping) else None
+    restored = dict(raw_params) if isinstance(raw_params, Mapping) else {}
+    restored.update(job_params)
+    return restored
+
 _PAGINATION_INTERNAL_KEYS = frozenset(
     (
         "_fanout",
@@ -730,6 +741,7 @@ class HighlightlyWorker:
                 if not raw_rows:
                     raise ValueError(f"Raw object not found for replay: {reprocess_id}")
                 raw_record = raw_rows[0]
+                request_params = reprocess_request_params(request_params, raw_record)
                 payload = self.repository.load_raw_payload(raw_record)
                 raw_object_id = str(raw_record["id"])
             else:

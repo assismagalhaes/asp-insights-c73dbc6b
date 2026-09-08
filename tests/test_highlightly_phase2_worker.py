@@ -13,7 +13,7 @@ from api.highlightly.collection_policy import (
     football_collection_decision,
 )
 from api.highlightly.registry import EndpointRegistry
-from api.highlightly.worker import HighlightlyWorker
+from api.highlightly.worker import HighlightlyWorker, reprocess_request_params
 from api.highlightly_client import HighlightlyResponse
 
 
@@ -38,6 +38,22 @@ def context(normalizer: str, params=None, bookmakers=None):
 
 
 class HighlightlyPhaseTwoWorkerTests(unittest.TestCase):
+    def test_reprocess_restores_original_provider_params_and_keeps_job_overrides(self):
+        restored = reprocess_request_params(
+            {"normalizer_version": "stats-v2", "_shadow_scope": "reprocess-canary"},
+            {"request_metadata": {"path": "/football/statistics/123", "params": {"matchId": 123}}},
+        )
+
+        self.assertEqual(restored["matchId"], 123)
+        self.assertEqual(restored["normalizer_version"], "stats-v2")
+        self.assertEqual(restored["_shadow_scope"], "reprocess-canary")
+
+    def test_reprocess_params_fail_closed_when_raw_metadata_is_missing(self):
+        self.assertEqual(
+            reprocess_request_params({"normalizer_version": "stats-v2"}, {}),
+            {"normalizer_version": "stats-v2"},
+        )
+
     def test_registry_resolves_path_and_keeps_only_documented_query_params(self):
         registry = EndpointRegistry()
         operation = registry.get("football.FootballLineupsController_getLineups", sport="football")
