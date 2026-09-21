@@ -6,6 +6,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class HighlightlyBridgeContractTests(unittest.TestCase):
+    def test_staging_deploy_requires_public_supabase_build_variables(self):
+        deploy = (ROOT / "scripts/deploy_cloudflare_staging.mjs").read_text(encoding="utf-8")
+        self.assertIn('"VITE_SUPABASE_URL"', deploy)
+        self.assertIn('"VITE_SUPABASE_PUBLISHABLE_KEY"', deploy)
+        self.assertIn("Refusing staging build without public variable(s)", deploy)
+
     def test_route_keeps_service_role_server_side_and_claims_nonce(self):
         route = (ROOT / "src/routes/api/public/hooks/highlightly-ingest.ts").read_text(encoding="utf-8")
         self.assertIn('process.env.SUPABASE_SERVICE_ROLE_KEY', route)

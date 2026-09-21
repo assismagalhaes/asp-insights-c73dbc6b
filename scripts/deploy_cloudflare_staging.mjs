@@ -9,6 +9,19 @@ const commandEntrypoints = {
   wrangler: "node_modules/wrangler/bin/wrangler.js",
 };
 
+const requiredPublicBuildVariables = [
+  "VITE_SUPABASE_URL",
+  "VITE_SUPABASE_PUBLISHABLE_KEY",
+];
+const missingPublicBuildVariables = requiredPublicBuildVariables.filter(
+  (name) => !process.env[name]?.trim(),
+);
+if (missingPublicBuildVariables.length > 0) {
+  throw new Error(
+    `Refusing staging build without public variable(s): ${missingPublicBuildVariables.join(", ")}`,
+  );
+}
+
 function run(command, args, env = process.env) {
   const entrypoint = commandEntrypoints[command];
   if (!entrypoint) throw new Error(`Unsupported command: ${command}`);
