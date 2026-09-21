@@ -20,6 +20,11 @@ def test_process_jogos_replaces_strict_string_btts_column():
     assert result["BTTS"].tolist() == ["Yes", "No"]
 
 
+def test_team_resolution_accepts_one_unambiguous_containment():
+    frame = pd.DataFrame({"HomeTeam": ["Celta", "Getafe"], "AwayTeam": ["Getafe", "Celta"]})
+    assert subject.core.resolve_team_in_base_liga("Celta de Vigo", frame) == "Celta"
+
+
 def test_legacy_adapter_is_offline_and_uses_shared_shadow_thresholds(monkeypatch):
     monkeypatch.setattr(subject.core, "clean_completed_matches", lambda frame: frame)
     monkeypatch.setattr(subject.core, "configure_reference_date", lambda value: None)

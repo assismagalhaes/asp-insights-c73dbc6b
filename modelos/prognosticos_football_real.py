@@ -593,6 +593,16 @@ def resolve_team_in_base_liga(raw_team: str, base_liga) -> str:
         logging.info(f"[debug] resolve exact -> '{resolved}'")
         return resolved
 
+    # A canonical provider may include a geographic suffix omitted by
+    # Football-Data (for example, "Celta de Vigo" versus "Celta").  Accept a
+    # containment match only when it identifies exactly one team in the
+    # competition, avoiding an ambiguous fuzzy substitution.
+    containment = [key for key in lookup if raw_norm in key or key in raw_norm]
+    if len(containment) == 1:
+        resolved = lookup[containment[0]]
+        logging.info(f"[debug] resolve unique containment -> '{resolved}'")
+        return resolved
+
     # 2) Aliases (adicione os que você quiser aqui)
     ALIASES = {
         # --- PORTUGAL / football-data ---
