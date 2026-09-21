@@ -118,6 +118,9 @@ def freeze_history_bundle_at_cutoff(
     for name in ("current", "previous", "extra"):
         frame = getattr(bundle, name)
         if "Date" not in frame.columns:
+            if frame.empty:
+                frozen_frames[name] = frame.copy(deep=True).reset_index(drop=True)
+                continue
             raise ValueError(f"history bundle {name} requires Date for cutoff freezing")
         dates = pd.to_datetime(frame["Date"], utc=True, errors="coerce")
         invalid = int(dates.isna().sum())

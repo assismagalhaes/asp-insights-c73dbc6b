@@ -140,6 +140,19 @@ def test_freeze_legacy_history_removes_future_outcomes_and_hashes_input():
     assert manifest["file_availability_time_certified"] is False
 
 
+def test_freeze_allows_empty_optional_frame_without_date():
+    bundle = build_history_bundle(
+        current=frame(), previous=frame(),
+        extra=pd.DataFrame(columns=[column for column in COLUMNS if column != "Date"]),
+        source="football_data_legacy", source_max_at=None,
+    )
+    frozen, manifest = freeze_history_bundle_at_cutoff(
+        bundle, cutoff_at="2026-08-10T10:00:00Z", kickoff_at="2026-08-10T12:00:00Z"
+    )
+    assert frozen.extra.empty
+    assert manifest["extra_rows"] == 0
+
+
 def test_freeze_rejects_missing_or_invalid_dates():
     bad = build_history_bundle(
         current=frame().assign(Date="not-a-date"),
