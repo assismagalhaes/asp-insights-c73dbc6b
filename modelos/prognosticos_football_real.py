@@ -21,6 +21,11 @@ warnings.simplefilter("ignore", category=FutureWarning)
 # Third-party imports
 # =========================
 import pandas as pd
+from football_history_source import (
+    FootballHistoryBundle,
+    build_history_bundle,
+    history_bundle_manifest,
+)
 import numpy as np
 import requests
 from math import ceil
@@ -2773,7 +2778,68 @@ def print_analysis(res: dict, standings: pd.DataFrame):
 # -------------------------------------------------------
 # Main
 # -------------------------------------------------------
-def main():
+def _load_legacy_history_bundle(leagues) -> FootballHistoryBundle:
+    """Load the historical baseline. Canonical shadow runs never call this."""
+    cur_urls = {league: LEAGUES_CURRENT[league] for league in leagues if league in LEAGUES_CURRENT}
+    prev_urls = {league: LEAGUES_PREVIOUS[league] for league in leagues if league in LEAGUES_PREVIOUS}
+    ext_urls = {league: LEAGUES_EXTRA[league] for league in leagues if league in LEAGUES_EXTRA}
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        current_future = executor.submit(
+            carregar_dados_temporada, cur_urls, SEASON_CTX["current_split"]
+        )
+        previous_future = executor.submit(
+            carregar_dados_temporada, prev_urls, SEASON_CTX["prev_split"]
+        )
+        extra_future = executor.submit(
+            lambda: pd.concat(
+                [carregar_dados_liga(league, url, VALID_SEASONS) for league, url in ext_urls.items()],
+                ignore_index=True,
+            ) if ext_urls else pd.DataFrame(columns=["HomeTeam", "AwayTeam", "FTHG", "FTAG", "FTR", "Season", "Liga"])
+        )
+        current = current_future.result()
+        previous = previous_future.result()
+        extra = extra_future.result()
+
+    expected = ["HomeTeam", "AwayTeam", "FTHG", "FTAG", "FTR", "Season", "Liga"]
+    if not set(expected).issubset(current.columns):
+        current = pd.DataFrame(columns=expected)
+    if not set(expected).issubset(previous.columns):
+        previous = pd.DataFrame(columns=expected)
+    if not set(expected).issubset(extra.columns):
+        extra = pd.DataFrame(columns=expected)
+    return build_history_bundle(
+        current=current,
+        previous=previous,
+        extra=extra,
+        source="football_data_legacy",
+        source_max_at=None,
+        provider_calls=0,
+        canonical_ids=False,
+    )
+
+
+def _resolve_history_bundle(
+    leagues, supplied: FootballHistoryBundle | None
+) -> FootballHistoryBundle:
+    """Select history explicitly; supplied canonical data always wins without I/O."""
+    if supplied is not None:
+        if not isinstance(supplied, FootballHistoryBundle):
+            raise TypeError("history_bundle must be a FootballHistoryBundle")
+        # Rebuild to validate and deep-copy the caller-owned frames.
+        return build_history_bundle(
+            current=supplied.current,
+            previous=supplied.previous,
+            extra=supplied.extra,
+            source=supplied.source,
+            source_max_at=supplied.source_max_at,
+            provider_calls=supplied.provider_calls,
+            canonical_ids=supplied.canonical_ids,
+        )
+    return _load_legacy_history_bundle(leagues)
+
+
+def main(history_bundle: FootballHistoryBundle | None = None):
     if not MATCHES_CSV.exists():
         logging.error(f"Não encontrou CSV de jogos: {MATCHES_CSV.name}")
         return
@@ -2832,28 +2898,13 @@ def main():
 
     leagues = df_matches["league_key"].dropna().unique()
 
-    # 4) URLs históricas (mmz current/previous já estão automáticos)
-    cur_urls  = {l: LEAGUES_CURRENT[l]  for l in leagues if l in LEAGUES_CURRENT}
-    prev_urls = {l: LEAGUES_PREVIOUS[l] for l in leagues if l in LEAGUES_PREVIOUS}
-    ext_urls  = {l: LEAGUES_EXTRA[l]    for l in leagues if l in LEAGUES_EXTRA}
-
-    # 5) Carrega históricos
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        current_future = executor.submit(
-            carregar_dados_temporada, cur_urls, SEASON_CTX["current_split"]
-        )
-        previous_future = executor.submit(
-            carregar_dados_temporada, prev_urls, SEASON_CTX["prev_split"]
-        )
-        extra_future = executor.submit(
-            lambda: pd.concat(
-                [carregar_dados_liga(l, u, VALID_SEASONS) for l, u in ext_urls.items()],
-                ignore_index=True,
-            ) if ext_urls else pd.DataFrame()
-        )
-        df_cur = current_future.result()
-        df_prev = previous_future.result()
-        df_extra = extra_future.result()
+    # 4/5) Resolve a fonte histórica. Bundle fornecido = zero aquisição externa.
+    resolved_history = _resolve_history_bundle(leagues, history_bundle)
+    history_manifest = history_bundle_manifest(resolved_history)
+    logging.info("Fonte histórica: %s", history_manifest)
+    df_cur = resolved_history.current
+    df_prev = resolved_history.previous
+    df_extra = resolved_history.extra
 
     # 6) Prepara df_extra somente com temporadas atuais
     if df_extra.empty:

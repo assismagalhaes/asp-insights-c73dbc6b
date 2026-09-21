@@ -27,7 +27,13 @@ class HighlightlyShadowDrainTests(unittest.TestCase):
         repository_factory.from_environment.return_value = repository
         repository.ingestion_context.side_effect = [self._context(), self._context()]
         repository.select_rows.side_effect = [
-            [{"id": "job-1", "status": "pending", "endpoint_key": "players", "dedupe_key": "scope-1:players"}],
+            [{
+                "id": "job-1",
+                "status": "pending",
+                "endpoint_key": "players",
+                "dedupe_key": "phase1:selective:players:123",
+                "shadow_scope": "scope-1",
+            }],
             [],
             [],
             [],
@@ -62,7 +68,13 @@ class HighlightlyShadowDrainTests(unittest.TestCase):
         repository_factory.from_environment.return_value = repository
         repository.ingestion_context.return_value = self._context()
         repository.select_rows.side_effect = [
-            [{"id": "job-1", "status": "pending", "endpoint_key": "players", "dedupe_key": "other:players"}],
+            [{
+                "id": "job-1",
+                "status": "pending",
+                "endpoint_key": "players",
+                "dedupe_key": "scope-1:players",
+                "shadow_scope": "other",
+            }],
             [],
             [],
         ]

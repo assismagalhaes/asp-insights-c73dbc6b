@@ -14,7 +14,9 @@ dist-ssr
 coverage
 storybook-static
 .codex_tmp/
+.ua/
 .pnpm-store/
+supabase/.temp/
 .output
 .vinxi
 .tanstack/**

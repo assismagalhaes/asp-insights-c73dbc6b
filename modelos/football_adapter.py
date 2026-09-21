@@ -250,9 +250,10 @@ def adicionar_handicaps_asiaticos(row, handicap_items, jogo):
             )
 
 
-def converter_csv_longo_para_wide(caminho_entrada, caminho_saida):
+def converter_dataframe_longo_para_wide(df):
+    """Convert the long market contract to MatchMatrix wide rows in memory."""
     ADAPTER_WARNINGS.clear()
-    df = pd.read_csv(caminho_entrada)
+    df = df.copy()
 
     obrigatorias = [
         "data",
@@ -395,7 +396,12 @@ def converter_csv_longo_para_wide(caminho_entrada, caminho_saida):
 
     df_wide = pd.DataFrame(linhas_saida)
 
+    return df_wide
+
+
+def converter_csv_longo_para_wide(caminho_entrada, caminho_saida):
+    """Legacy file wrapper kept for the existing production runner."""
+    df_wide = converter_dataframe_longo_para_wide(pd.read_csv(caminho_entrada))
     Path(caminho_saida).parent.mkdir(parents=True, exist_ok=True)
     df_wide.to_csv(caminho_saida, index=False, encoding="utf-8-sig")
-
     return df_wide

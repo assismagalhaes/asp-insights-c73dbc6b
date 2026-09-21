@@ -22,7 +22,7 @@ def _active_jobs(repository: HighlightlyRepository, *, limit: int) -> list[dict]
         rows.extend(
             repository.select_rows(
                 "hl_ingestion_jobs",
-                columns="id,status,endpoint_key,dedupe_key,lock_expires_at",
+                columns="id,status,endpoint_key,dedupe_key,shadow_scope,lock_expires_at",
                 filters={"status": status},
                 limit=limit + 1,
                 order="created_at.asc",
@@ -33,7 +33,7 @@ def _active_jobs(repository: HighlightlyRepository, *, limit: int) -> list[dict]
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--scope", required=True, help="Exact shadow scope embedded in every dedupe key")
+    parser.add_argument("--scope", required=True, help="Exact shadow_scope required for every active job")
     parser.add_argument("--sport", choices=("football", "baseball", "basketball"), default="baseball")
     parser.add_argument("--max-jobs", type=int, default=100)
     parser.add_argument("--confirm-bounded-drain", action="store_true", required=True)
@@ -50,7 +50,11 @@ def main() -> int:
     running = [row for row in active_before if running_lock_blocks_start(row)]
     if running:
         raise RuntimeError("An ingestion job is already running; refusing concurrent drain")
-    outsiders = [row for row in active_before if args.scope not in str(row.get("dedupe_key") or "")]
+    outsiders = [
+        row
+        for row in active_before
+        if str(row.get("shadow_scope") or "").strip() != args.scope
+    ]
     if outsiders:
         raise RuntimeError("Active ingestion queue contains jobs outside the requested shadow scope")
 

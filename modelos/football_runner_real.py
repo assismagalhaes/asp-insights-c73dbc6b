@@ -1729,7 +1729,7 @@ def salvar_contexto_modelo(texto_contexto: str, caminho_saida: Path):
     return caminho_contexto
 
 
-def executar_modelo_real(caminho_csv_longo, caminho_saida):
+def executar_modelo_real(caminho_csv_longo, caminho_saida, history_bundle=None):
     caminho_csv_longo = Path(caminho_csv_longo)
     caminho_saida = Path(caminho_saida)
 
@@ -1784,7 +1784,7 @@ def executar_modelo_real(caminho_csv_longo, caminho_saida):
     buffer_saida = io.StringIO()
 
     with contextlib.redirect_stdout(buffer_saida):
-        modelo.main()
+        modelo.main(history_bundle=history_bundle)
 
     contexto_bruto = buffer_saida.getvalue()
     contexto_modelo = limpar_contexto_modelo(contexto_bruto)
