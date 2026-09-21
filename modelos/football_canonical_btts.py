@@ -11,6 +11,9 @@ import prognosticos_football_real as core
 
 
 CONTRACT = "football_canonical_btts_shadow@1.0.0"
+MIN_ODD = 1.25
+MAX_ODD = 2.00
+MIN_EDGE = 0.03
 
 
 def _weighted(team: Mapping[str, Any], field: str) -> tuple[float, int]:
@@ -84,13 +87,13 @@ def infer_canonical_btts(snapshot: Mapping[str, Any]) -> dict[str, Any]:
         offered = None if quote is None else float(quote["best_odds"])
         fair = 100.0 / probability if probability > 0 else None
         edge = None if offered is None else offered * probability / 100.0 - 1.0
-        eligible = offered is not None and core.MIN_ODD_FOOTBALL_V1_1 <= offered <= core.MAX_ODD_FOOTBALL_V1_1
+        eligible = offered is not None and MIN_ODD <= offered <= MAX_ODD
         outputs.append({
             "mercado": "Ambas Marcam", "pick": "Sim" if key == "yes" else "Não",
             "linha": None, "probabilidade_final": round(probability, 4),
             "odd_valor": None if fair is None else round(fair, 4),
             "odd_ofertada": offered, "edge": None if edge is None else round(edge, 6),
-            "decision": "SHADOW_CANDIDATE" if eligible and edge >= core.MIN_EDGE_FOOTBALL_V1_1 else "PASS",
+            "decision": "SHADOW_CANDIDATE" if eligible and edge >= MIN_EDGE else "PASS",
         })
     return {
         "contract": CONTRACT, "mode": "shadow", "provider_calls": 0, "published": False,
