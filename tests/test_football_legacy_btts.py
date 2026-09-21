@@ -2,12 +2,22 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 MODELOS = Path(__file__).resolve().parents[1] / "modelos"
 if str(MODELOS) not in sys.path:
     sys.path.insert(0, str(MODELOS))
 
 import football_legacy_btts as subject
+
+
+def test_process_jogos_replaces_strict_string_btts_column():
+    frame = pd.DataFrame({
+        "FTHG": [1, 0], "FTAG": [1, 2], "FTR": ["H", "A"],
+        "BTTS": pd.Series(["Yes", "Yes"], dtype="str"),
+    })
+    result = subject.core.process_jogos(frame, "home")
+    assert result["BTTS"].tolist() == ["Yes", "No"]
 
 
 def test_legacy_adapter_is_offline_and_uses_shared_shadow_thresholds(monkeypatch):

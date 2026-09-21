@@ -1056,7 +1056,14 @@ def process_jogos(df: pd.DataFrame, venue: str) -> pd.DataFrame:
         df.loc[:, "Result"] = df["FTR"].map({"A": "W", "D": "D"}).fillna("L")
 
     df.loc[:, "TotalGoals"] = df["FTHG"] + df["FTAG"]
-    df.loc[:, "BTTS"] = np.where((df["FTHG"] > 0) & (df["FTAG"] > 0), "Yes", "No")
+    # Replace the column instead of assigning through ``loc``.  Frozen JSON
+    # replays may infer pandas' strict string dtype from an existing BTTS
+    # column; in-place assignment then rejects a value absent from that dtype.
+    df["BTTS"] = pd.Series(
+        np.where((df["FTHG"] > 0) & (df["FTAG"] > 0), "Yes", "No"),
+        index=df.index,
+        dtype="object",
+    )
     return df
 
 def obter_jogos_por_temporada(base: pd.DataFrame, team: str, venue: str,
