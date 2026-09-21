@@ -67,6 +67,8 @@ export const HIGHLIGHTLY_BRIDGE_TABLES = new Set([
   "hl_match_lifecycle_states",
   "hl_match_lifecycle_resources",
   "hl_competition_feature_policies",
+  "hl_training_dataset_rows",
+  "hl_match_feature_snapshots",
   "hl_phase7_window_health_v",
   "hl_highlightly_future_gate_v",
 ]);

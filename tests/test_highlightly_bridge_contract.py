@@ -64,6 +64,11 @@ class HighlightlyBridgeContractTests(unittest.TestCase):
             verifier,
         )
         self.assertIn('"hl_competition_feature_policies"', verifier)
+        self.assertIn('"hl_training_dataset_rows"', verifier)
+        self.assertIn('"hl_match_feature_snapshots"', verifier)
+        patchable = verifier.split("export const HIGHLIGHTLY_BRIDGE_TABLES", 1)[0]
+        self.assertNotIn('"hl_training_dataset_rows"', patchable)
+        self.assertNotIn('"hl_match_feature_snapshots"', patchable)
         self.assertIn('/storage/v1/object/highlightly-raw/', verifier)
 
     def test_nonce_rpc_is_service_role_only(self):
