@@ -12,6 +12,11 @@ import prognosticos_football_real as core
 
 CONTRACT = "football_legacy_btts_shadow@1.0.0"
 LEAGUE_MAP = {"Premier League": "ENG - Premier League", "La Liga": "SPA - La Liga"}
+LEGACY_TEAM_NAMES = {
+    "athletic club": "Ath Bilbao",
+    "atletico madrid": "Ath Madrid",
+    "manchester united": "Man United",
+}
 MIN_ODD = 1.25
 MAX_ODD = 2.00
 MIN_EDGE = 0.03
@@ -23,6 +28,10 @@ def _consensus(snapshot: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
         for row in snapshot["markets"].get("consensus", [])
         if row.get("market_family") == "both_teams_to_score"
     }
+
+
+def _legacy_team_name(name: str) -> str:
+    return LEGACY_TEAM_NAMES.get(core.normalize_str(name), name)
 
 
 def infer_legacy_btts(
@@ -43,8 +52,8 @@ def infer_legacy_btts(
     }
     result = core.analyze_match(
         base=base,
-        home_team=identity["home_name"],
-        away_team=identity["away_name"],
+        home_team=_legacy_team_name(identity["home_name"]),
+        away_team=_legacy_team_name(identity["away_name"]),
         kickoff_date=kickoff.strftime("%Y-%m-%d"),
         kickoff_time=kickoff.strftime("%H:%M"),
         league_key=LEAGUE_MAP[identity["competition_name"]],

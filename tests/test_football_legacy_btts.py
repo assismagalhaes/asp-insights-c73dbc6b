@@ -25,6 +25,12 @@ def test_team_resolution_accepts_one_unambiguous_containment():
     assert subject.core.resolve_team_in_base_liga("Celta de Vigo", frame) == "Celta"
 
 
+def test_canonical_names_map_to_cross_season_football_data_names():
+    assert subject._legacy_team_name("Athletic Club") == "Ath Bilbao"
+    assert subject._legacy_team_name("Atlético Madrid") == "Ath Madrid"
+    assert subject._legacy_team_name("Manchester United") == "Man United"
+
+
 def test_legacy_adapter_is_offline_and_uses_shared_shadow_thresholds(monkeypatch):
     monkeypatch.setattr(subject.core, "clean_completed_matches", lambda frame: frame)
     monkeypatch.setattr(subject.core, "configure_reference_date", lambda value: None)
