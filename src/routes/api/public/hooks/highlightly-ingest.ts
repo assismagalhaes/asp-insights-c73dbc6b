@@ -50,68 +50,73 @@ export const Route = createFileRoute("/api/public/hooks/highlightly-ingest")({
           return jsonError(status, reason);
         }
 
-        const serviceHeaders = {
-          apikey: serviceRoleKey,
-          authorization: `Bearer ${serviceRoleKey}`,
-          "content-type": "application/json",
-        };
-        const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
-        let claimResponse: Response;
         try {
-          claimResponse = await fetch(
-            `${supabaseUrl}/rest/v1/rpc/claim_highlightly_ingestion_bridge_nonce`,
-            {
-              method: "POST",
-              headers: serviceHeaders,
-              body: JSON.stringify({
-                p_nonce: auth.nonce,
-                p_request_hash: auth.requestHash,
-                p_signed_at: auth.signedAt.toISOString(),
-                p_expires_at: expiresAt,
-              }),
+          const serviceHeaders = {
+            apikey: serviceRoleKey,
+            authorization: `Bearer ${serviceRoleKey}`,
+            "content-type": "application/json",
+          };
+          const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
+          let claimResponse: Response;
+          try {
+            claimResponse = await fetch(
+              `${supabaseUrl}/rest/v1/rpc/claim_highlightly_ingestion_bridge_nonce`,
+              {
+                method: "POST",
+                headers: serviceHeaders,
+                body: JSON.stringify({
+                  p_nonce: auth.nonce,
+                  p_request_hash: auth.requestHash,
+                  p_signed_at: auth.signedAt.toISOString(),
+                  p_expires_at: expiresAt,
+                }),
+                signal: AbortSignal.timeout(SUPABASE_UPSTREAM_TIMEOUT_MS),
+              },
+            );
+          } catch {
+            return jsonError(503, "nonce_store_unavailable");
+          }
+          if (!claimResponse.ok) return jsonError(503, "nonce_store_unavailable");
+          let claimed = false;
+          try {
+            claimed = (await claimResponse.json()) === true;
+          } catch {
+            return jsonError(503, "nonce_store_invalid_response");
+          }
+          if (!claimed) return jsonError(409, "request_replayed");
+
+          const forwardHeaders: Record<string, string> = {
+            apikey: serviceRoleKey,
+            authorization: `Bearer ${serviceRoleKey}`,
+          };
+          if (auth.contentType) forwardHeaders["content-type"] = auth.contentType;
+          if (auth.prefer) forwardHeaders.prefer = auth.prefer;
+          if (auth.upsert) forwardHeaders["x-upsert"] = auth.upsert;
+
+          let upstream: Response;
+          try {
+            const forwardBody = new ArrayBuffer(body.byteLength);
+            new Uint8Array(forwardBody).set(body);
+            upstream = await fetch(`${supabaseUrl}${auth.path}`, {
+              method: auth.method,
+              headers: forwardHeaders,
+              body: auth.method === "GET" ? undefined : forwardBody,
               signal: AbortSignal.timeout(SUPABASE_UPSTREAM_TIMEOUT_MS),
-            },
-          );
-        } catch {
-          return jsonError(503, "nonce_store_unavailable");
-        }
-        if (!claimResponse.ok) return jsonError(503, "nonce_store_unavailable");
-        let claimed = false;
-        try {
-          claimed = (await claimResponse.json()) === true;
-        } catch {
-          return jsonError(503, "nonce_store_invalid_response");
-        }
-        if (!claimed) return jsonError(409, "request_replayed");
-
-        const forwardHeaders: Record<string, string> = {
-          apikey: serviceRoleKey,
-          authorization: `Bearer ${serviceRoleKey}`,
-        };
-        if (auth.contentType) forwardHeaders["content-type"] = auth.contentType;
-        if (auth.prefer) forwardHeaders.prefer = auth.prefer;
-        if (auth.upsert) forwardHeaders["x-upsert"] = auth.upsert;
-
-        let upstream: Response;
-        try {
-          const forwardBody = new ArrayBuffer(body.byteLength);
-          new Uint8Array(forwardBody).set(body);
-          upstream = await fetch(`${supabaseUrl}${auth.path}`, {
-            method: auth.method,
-            headers: forwardHeaders,
-            body: auth.method === "GET" ? undefined : forwardBody,
-            signal: AbortSignal.timeout(SUPABASE_UPSTREAM_TIMEOUT_MS),
+            });
+          } catch {
+            return jsonError(502, "supabase_unavailable");
+          }
+          const responseHeaders: Record<string, string> = { "cache-control": "no-store" };
+          const upstreamContentType = upstream.headers.get("content-type");
+          if (upstreamContentType) responseHeaders["content-type"] = upstreamContentType;
+          return new Response(await upstream.arrayBuffer(), {
+            status: upstream.status,
+            headers: responseHeaders,
           });
-        } catch {
-          return jsonError(502, "supabase_unavailable");
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : "unknown";
+          return jsonError(500, `bridge_forward_internal_error:${reason}`);
         }
-        const responseHeaders: Record<string, string> = { "cache-control": "no-store" };
-        const upstreamContentType = upstream.headers.get("content-type");
-        if (upstreamContentType) responseHeaders["content-type"] = upstreamContentType;
-        return new Response(await upstream.arrayBuffer(), {
-          status: upstream.status,
-          headers: responseHeaders,
-        });
       },
     },
   },
