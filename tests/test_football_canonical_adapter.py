@@ -123,6 +123,13 @@ def test_is_deterministic_and_does_not_mutate_input():
     assert source == original
 
 
+def test_accepts_database_zero_for_provider_calls():
+    source = snapshot()
+    source["lineage"]["provider_calls"] = 0
+    result = canonical_snapshot_to_matchmatrix(source, identity())
+    assert result["manifest"]["provider_calls"] == 0
+
+
 @pytest.mark.parametrize(
     "mutation,error",
     [

@@ -93,7 +93,8 @@ def _validate(snapshot: Mapping[str, Any], identity: Mapping[str, Any]) -> dict[
         raise ValueError("unsupported canonical feature schema")
     if snapshot.get("quality", {}).get("match_state") != READY_STATE:
         raise ValueError("canonical adapter accepts READY snapshots only")
-    if snapshot.get("lineage", {}).get("provider_calls") is not False:
+    provider_calls = snapshot.get("lineage", {}).get("provider_calls")
+    if provider_calls not in (False, 0):
         raise ValueError("snapshot must be stored-data-only")
     if snapshot.get("lineage", {}).get("target_match_forbidden") is not True:
         raise ValueError("snapshot does not certify target-match exclusion")
