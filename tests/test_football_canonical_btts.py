@@ -12,6 +12,15 @@ def block(sample=10, gf=1.5, ga=1.0, btts=5):
     return {"sample": sample, "goals_for": gf, "goals_against": ga, "btts_yes": btts}
 
 
+def canonical_block(sample=10, gf=1.5, ga=1.0, btts=5):
+    return {
+        "sample": sample,
+        "goals_for": {"mean": gf, "sum": gf * sample, "variance": 0.5},
+        "goals_against": {"mean": ga, "sum": ga * sample, "variance": 0.5},
+        "btts_yes": btts,
+    }
+
+
 def snapshot():
     team = {
         "current_season": block(), "previous_season": block(),
@@ -43,3 +52,18 @@ def test_missing_quote_passes_without_invalidating_other_side():
     assert len(result["predictions"]) == 2
     assert result["predictions"][1]["decision"] == "PASS"
     assert result["predictions"][1]["odd_ofertada"] is None
+
+
+def test_real_canonical_metric_shape_uses_means_and_btts_rates():
+    data = snapshot()
+    team = {
+        "current_season": canonical_block(sample=10, btts=6),
+        "previous_season": canonical_block(sample=20, btts=10),
+        "recent_overall": canonical_block(sample=5, btts=3),
+    }
+    data["home"] = team
+    data["away"] = team
+    result = infer_canonical_btts(data)
+    assert result["inputs"]["home"]["sample"] == 30
+    assert 0.0 <= result["history_btts_yes"] <= 100.0
+    assert abs(sum(row["probabilidade_final"] for row in result["predictions"]) - 100.0) < 1e-6

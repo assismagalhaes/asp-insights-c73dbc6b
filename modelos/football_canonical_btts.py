@@ -16,14 +16,24 @@ MAX_ODD = 2.00
 MIN_EDGE = 0.03
 
 
-def _weighted(team: Mapping[str, Any], field: str) -> tuple[float, int]:
+def _metric_value(value: Any) -> float | None:
+    """Return the canonical scalar, accepting both stored and legacy test shapes."""
+    if isinstance(value, Mapping):
+        value = value.get("mean")
+    if value is None:
+        return None
+    numeric = float(value)
+    return numeric if np.isfinite(numeric) else None
+
+
+def _weighted(team: Mapping[str, Any], field: str, *, rate: bool = False) -> tuple[float, int]:
     values = []
     for period in ("current_season", "previous_season"):
         block = team[period]
         sample = int(block.get("sample") or 0)
-        value = block.get(field)
-        if sample > 0 and value is not None and np.isfinite(float(value)):
-            values.append((float(value), sample))
+        value = _metric_value(block.get(field))
+        if sample > 0 and value is not None:
+            values.append((value / sample if rate else value, sample))
     if not values:
         raise ValueError(f"canonical metric unavailable: {field}")
     sample = sum(weight for _, weight in values)
@@ -33,11 +43,13 @@ def _weighted(team: Mapping[str, Any], field: str) -> tuple[float, int]:
 def _team_inputs(team: Mapping[str, Any]) -> dict[str, float | int]:
     gf_venue, sample = _weighted(team, "goals_for")
     ga_venue, _ = _weighted(team, "goals_against")
-    btts_venue, _ = _weighted(team, "btts_yes")
+    btts_venue, _ = _weighted(team, "btts_yes", rate=True)
     recent = team["recent_overall"]
     recent_sample = int(recent.get("sample") or 0)
-    gf, recent_weight = core.blend_venue_with_recent(gf_venue, recent.get("goals_for"), recent_sample)
-    ga, _ = core.blend_venue_with_recent(ga_venue, recent.get("goals_against"), recent_sample)
+    recent_gf = _metric_value(recent.get("goals_for"))
+    recent_ga = _metric_value(recent.get("goals_against"))
+    gf, recent_weight = core.blend_venue_with_recent(gf_venue, recent_gf, recent_sample)
+    ga, _ = core.blend_venue_with_recent(ga_venue, recent_ga, recent_sample)
     recent_btts = (100.0 * float(recent.get("btts_yes") or 0) / recent_sample) if recent_sample else None
     btts_pct, btts_recent_weight = core.blend_venue_with_recent(
         100.0 * btts_venue, recent_btts, recent_sample
