@@ -2983,8 +2983,10 @@ def main(history_bundle: FootballHistoryBundle | None = None):
             ou_odds[l] = {"over": over, "under": under}
 
         if not ou_odds:
-            logging.warning(f"Nenhuma linha de OU válida para {row['home_norm']} vs {row['away_norm']}, pulando.")
-            continue
+            logging.warning(
+                f"Nenhuma linha de OU válida para {row['home_norm']} vs "
+                f"{row['away_norm']}; continuando com os demais mercados disponíveis."
+            )
 
         # Handicap Asiatico completo em incrementos de 0.25, de -5.5 a +5.5.
         def is_allowed_asian_handicap(h: float) -> bool:

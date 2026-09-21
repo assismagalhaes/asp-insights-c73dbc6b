@@ -153,6 +153,12 @@ def test_freeze_allows_empty_optional_frame_without_date():
     assert manifest["extra_rows"] == 0
 
 
+def test_model_does_not_require_over_under_market_to_process_match():
+    source = (MODELOS / "prognosticos_football_real.py").read_text(encoding="utf-8")
+    assert "continuando com os demais mercados disponíveis" in source
+    assert "Nenhuma linha de OU válida para {row['home_norm']} vs {row['away_norm']}, pulando." not in source
+
+
 def test_freeze_rejects_missing_or_invalid_dates():
     bad = build_history_bundle(
         current=frame().assign(Date="not-a-date"),
