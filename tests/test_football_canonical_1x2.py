@@ -1,3 +1,10 @@
+import sys
+from pathlib import Path
+
+MODELOS = Path(__file__).resolve().parents[1] / "modelos"
+if str(MODELOS) not in sys.path:
+    sys.path.insert(0, str(MODELOS))
+
 from football_canonical_1x2 import infer_canonical_1x2
 
 
