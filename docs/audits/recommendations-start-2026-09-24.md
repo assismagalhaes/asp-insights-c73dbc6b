@@ -9,7 +9,10 @@
 - Vitest não iniciou: o sandbox bloqueou o acesso do esbuild ao diretório pai. A suíte Python
   executou 782 casos, mas terminou com quatro erros de importação porque este ambiente não tem
   `fastapi`/`requests`; um caso foi ignorado. O build e a avaliação de IA não foram executados.
-  A correção ainda não foi publicada em `origin/main`.
+- O commit `d78ad07` foi publicado em `origin/main`. O CI passou em lint, typecheck, testes
+  unitários, avaliação de IA, build e dry run do Cloudflare, mas falhou em Python porque a imagem
+  do CI não instalou `pytest`, requerido por dois módulos de teste. Correção pendente: adicionar
+  dependências exclusivas de teste, sem incorporá-las ao runtime da API.
 - A inspeção do código confirmou que a janela móvel de partidas futuras já está implementada:
   `scripts/run_highlightly_future_schedule.py` define quatro horários em `America/Sao_Paulo` e
   inclui uma execução noturna de D+1 a D+5. Os units correspondentes estão versionados em
@@ -27,7 +30,7 @@
 
 ## Próximos passos seguros
 
-1. Publicar a correção de lint após executar os checks locais/CI previstos no fluxo do projeto.
+1. Concluir a configuração das dependências Python de teste e confirmar que o CI fica verde.
 2. Confirmar o acesso ao checkout operacional da VM e o término do backfill; então comparar e
    instalar os timers versionados de janela futura, continuação e atualização de odds conforme os
    runbooks.
