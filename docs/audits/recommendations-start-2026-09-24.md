@@ -9,10 +9,12 @@
 - Vitest não iniciou: o sandbox bloqueou o acesso do esbuild ao diretório pai. A suíte Python
   executou 782 casos, mas terminou com quatro erros de importação porque este ambiente não tem
   `fastapi`/`requests`; um caso foi ignorado. O build e a avaliação de IA não foram executados.
-- O commit `d78ad07` foi publicado em `origin/main`. O CI passou em lint, typecheck, testes
-  unitários, avaliação de IA, build e dry run do Cloudflare, mas falhou em Python porque a imagem
-  do CI não instalou `pytest`, requerido por dois módulos de teste. Correção pendente: adicionar
-  dependências exclusivas de teste, sem incorporá-las ao runtime da API.
+- O commit `d78ad07` corrigiu o lint e revelou uma lacuna preexistente no CI: dois módulos Python
+  de teste importavam `pytest`, ausente da instalação do job.
+- O commit `3dfd9df` adicionou `requirements-test.txt` com `pytest==9.1.1` e configurou o workflow
+  para instalar esse arquivo. A dependência de produção da API continua separada.
+- A execução CI `36065345874` passou integralmente: lint, typecheck, testes unitários, avaliação
+  de IA, build de produção, dry run Cloudflare e suíte Python.
 - A inspeção do código confirmou que a janela móvel de partidas futuras já está implementada:
   `scripts/run_highlightly_future_schedule.py` define quatro horários em `America/Sao_Paulo` e
   inclui uma execução noturna de D+1 a D+5. Os units correspondentes estão versionados em
@@ -30,16 +32,16 @@
 
 ## Próximos passos seguros
 
-1. Concluir a configuração das dependências Python de teste e confirmar que o CI fica verde.
-2. Confirmar o acesso ao checkout operacional da VM e o término do backfill; então comparar e
+1. Confirmar o acesso ao checkout operacional da VM e o término do backfill; então comparar e
    instalar os timers versionados de janela futura, continuação e atualização de odds conforme os
    runbooks.
-3. Consultar novamente o gate e os registros recentes de coleta no Supabase. Só alterar a lógica
+2. Consultar novamente o gate e os registros recentes de coleta no Supabase. Só alterar a lógica
    se a evidência mostrar que respostas vazias estão sendo contadas como cobertura saudável.
-4. Depois que a janela D0–D5 e odds estiverem operacionais, validar partidas e mercados reais,
+3. Depois que a janela D0–D5 e odds estiverem operacionais, validar partidas e mercados reais,
    mantendo provider e publicação de prognósticos sujeitos aos gates existentes.
 
 ## Limites desta atualização
 
-Não houve chamada à Highlightly, alteração na VM ou migration. A publicação em `origin/main`
-permanece pendente até o CI remoto avaliar a correção.
+Não houve chamada à Highlightly, alteração na VM ou migration. As alterações de código e CI foram
+publicadas em `origin/main`; a etapa operacional da VM continua pendente por falta de acesso
+confirmado ao checkout correto.
