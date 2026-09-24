@@ -9,10 +9,7 @@ const commandEntrypoints = {
   wrangler: "node_modules/wrangler/bin/wrangler.js",
 };
 
-const requiredPublicBuildVariables = [
-  "VITE_SUPABASE_URL",
-  "VITE_SUPABASE_PUBLISHABLE_KEY",
-];
+const requiredPublicBuildVariables = ["VITE_SUPABASE_URL", "VITE_SUPABASE_PUBLISHABLE_KEY"];
 const missingPublicBuildVariables = requiredPublicBuildVariables.filter(
   (name) => !process.env[name]?.trim(),
 );
